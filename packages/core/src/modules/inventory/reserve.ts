@@ -15,7 +15,6 @@ import {
 } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
 import { resolveTrackedBuyerAvailabilityBand } from "@scalius/shared/buyer-availability";
-import { recordMovement } from "./movements";
 import type { StockOperationResult } from "./types";
 import { validatePositiveQuantity } from "./validation";
 import {
@@ -32,200 +31,6 @@ const BASE_BACKOFF_MS = 50;
 const INVENTORY_RESERVATION_CONFLICT = "INVENTORY_RESERVATION_CONFLICT";
 type ReservationPool = "regular" | "preorder" | "backorder";
 type SQLiteBatchItem = BatchItem<"sqlite">;
-
-/**
- * Reserve stock for a single variant using optimistic locking.
- * Uses the `version` field to detect concurrent modifications and retries.
- *
- * For pre-orders: deducts from preorderStock instead of regular stock.
- * For backorders: allows order even when stock = 0 (up to backorderLimit).
- */
-export async function reserveStock(
-  db: Database,
-  variantId: string,
-  quantity: number,
-  orderId?: string,
-  pool: "regular" | "preorder" | "backorder" = "regular"
-): Promise<StockOperationResult> {
-  validatePositiveQuantity(quantity);
-
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    // 1. Read current state with version
-    const variant = await db
-      .select({
-        id: productVariants.id,
-        stock: productVariants.stock,
-        reservedStock: productVariants.reservedStock,
-        preorderStock: productVariants.preorderStock,
-        allowPreorder: productVariants.allowPreorder,
-        allowBackorder: productVariants.allowBackorder,
-        backorderLimit: productVariants.backorderLimit,
-        trackInventory: productVariants.trackInventory,
-        stockVersion: productVariants.stockVersion,
-      })
-      .from(productVariants)
-      .innerJoin(products, eq(products.id, productVariants.productId))
-      .where(
-        and(
-          eq(productVariants.id, variantId),
-          isNull(productVariants.deletedAt),
-          eq(products.isActive, true),
-          isNull(products.deletedAt),
-        ),
-      )
-      .get();
-
-    if (!variant) {
-      return {
-        success: false,
-        variantId,
-        previousStock: 0,
-        newStock: 0,
-        error: `Variant ${variantId} not found`,
-      };
-    }
-
-    if (!variant.trackInventory) {
-      return {
-        success: true,
-        variantId,
-        previousStock: variant.stock,
-        newStock: variant.stock,
-      };
-    }
-
-    // 2. Check available stock based on pool
-    if (pool === "preorder") {
-      if (!variant.allowPreorder) {
-        return {
-          success: false,
-          variantId,
-          previousStock: variant.preorderStock,
-          newStock: variant.preorderStock,
-          error: `Pre-order not allowed for variant ${variantId}`,
-        };
-      }
-      if (variant.preorderStock < quantity) {
-        return {
-          success: false,
-          variantId,
-          previousStock: variant.preorderStock,
-          newStock: variant.preorderStock,
-          error: `Insufficient pre-order stock for variant ${variantId}. Available: ${variant.preorderStock}, Requested: ${quantity}`,
-        };
-      }
-    } else if (pool === "backorder") {
-      if (!variant.allowBackorder) {
-        return {
-          success: false,
-          variantId,
-          previousStock: variant.stock,
-          newStock: variant.stock,
-          error: `Backorder not allowed for variant ${variantId}`,
-        };
-      }
-      // Check backorder limit (0 = unlimited)
-      if (variant.backorderLimit > 0 && variant.reservedStock + quantity > variant.backorderLimit) {
-        return {
-          success: false,
-          variantId,
-          previousStock: variant.stock,
-          newStock: variant.stock,
-          error: `Backorder limit exceeded for variant ${variantId}`,
-        };
-      }
-    } else {
-      // Regular stock: available = stock - reservedStock
-      const available = variant.stock - variant.reservedStock;
-      if (available < quantity) {
-        return {
-          success: false,
-          variantId,
-          previousStock: variant.stock,
-          newStock: variant.stock,
-          error: `Insufficient stock for variant ${variantId}. Available: ${available}, Requested: ${quantity}`,
-        };
-      }
-    }
-
-    // 3. Attempt optimistic update with version check
-    const previousStock = pool === "preorder" ? variant.preorderStock : variant.stock;
-
-    const updateSet =
-      pool === "preorder"
-        ? {
-          preorderStock: sql`${productVariants.preorderStock} - ${quantity}`,
-          reservedStock: sql`${productVariants.reservedStock} + ${quantity}`,
-          stockVersion: sql`${productVariants.stockVersion} + 1`,
-          updatedAt: sql`unixepoch()`,
-        }
-        : {
-          reservedStock: sql`${productVariants.reservedStock} + ${quantity}`,
-          stockVersion: sql`${productVariants.stockVersion} + 1`,
-          updatedAt: sql`unixepoch()`,
-        };
-    const mutationAvailability = pool === "preorder"
-      ? sql`${productVariants.allowPreorder} = 1
-          AND ${productVariants.preorderStock} >= ${quantity}`
-      : pool === "backorder"
-        ? sql`${productVariants.allowBackorder} = 1
-            AND (
-              ${productVariants.backorderLimit} = 0
-              OR ${productVariants.reservedStock} + ${quantity}
-                <= ${productVariants.backorderLimit}
-            )`
-        : sql`${productVariants.stock} - ${productVariants.reservedStock} >= ${quantity}`;
-
-    const [result] = await safeBatch(db, [
-      db
-        .update(productVariants)
-        .set(updateSet)
-        .where(
-            and(
-              eq(productVariants.id, variantId),
-              isNull(productVariants.deletedAt),
-              eq(productVariants.stockVersion, variant.stockVersion),
-              mutationAvailability,
-            )
-          )
-        .returning({ id: productVariants.id }),
-      ...catalogBuyerStateRefreshStatementsForSkus(db, [variantId]),
-    ] as never) as [Array<{ id: string }>];
-
-    if (result.length > 0) {
-      // Success — log movement
-      const newStock = pool === "preorder"
-        ? variant.preorderStock - quantity
-        : variant.stock;
-
-      await recordMovement(db, {
-        variantId,
-        orderId,
-        type: pool === "preorder" ? "preorder_reserved" : "reserved",
-        quantity,
-        previousStock,
-        newStock,
-        notes: `Reserved ${quantity} units for order${orderId ? ` ${orderId}` : ""}`,
-      });
-
-      return { success: true, variantId, previousStock, newStock };
-    }
-
-    // Concurrent modification detected — wait and retry
-    if (attempt < MAX_RETRIES - 1) {
-      const backoff = BASE_BACKOFF_MS * Math.pow(2, attempt);
-      await new Promise((resolve) => setTimeout(resolve, backoff));
-    }
-  }
-
-  return {
-    success: false,
-    variantId,
-    previousStock: 0,
-    newStock: 0,
-    error: `Failed to reserve stock after ${MAX_RETRIES} retries due to concurrent modifications`,
-  };
-}
 
 export type ReservationBatchItem = {
   variantId: string;
@@ -1103,34 +908,6 @@ async function resolveDuplicateReservationBatch(
   };
 }
 
-export async function validateStockBatchAvailability(
-  db: Database,
-  items: ReservationBatchItem[],
-  pool: ReservationPool = "regular",
-): Promise<{ success: boolean; results: StockOperationResult[]; error?: string }> {
-  if (items.length === 0) {
-    return { success: true, results: [] };
-  }
-
-  const entries = mergeReservationItemsByVariant(items);
-  const variantLoad = await loadReservationVariantStates(db, entries);
-  if (!variantLoad.success) return variantLoad;
-
-  const validationErrors = getStockAvailabilityErrors(entries, variantLoad.variants, pool);
-  if (validationErrors.length > 0) {
-    return {
-      success: false,
-      results: validationErrors,
-      error: validationErrors[0]?.error,
-    };
-  }
-
-  return {
-    success: true,
-    results: buildReservationSuccessResults(entries, variantLoad.variants, pool),
-  };
-}
-
 function buildReservationSuccessResults(
   entries: ReservationBatchItem[],
   variants: Map<string, ReservationVariantState>,
@@ -1199,16 +976,6 @@ export function selectReservationVariantStates(
         sql`+${products.deletedAt} IS NULL`,
       ),
     );
-}
-
-async function loadReservationVariantStates(
-  db: Database,
-  entries: ReservationBatchItem[],
-) {
-  return resolveReservationVariantStates(
-    entries,
-    await selectReservationVariantStates(db, entries.map((entry) => entry.variantId)).all(),
-  );
 }
 
 function resolveReservationVariantStates(

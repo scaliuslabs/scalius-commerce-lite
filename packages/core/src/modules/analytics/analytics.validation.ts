@@ -84,7 +84,7 @@ export function normalizeCloudflareWebAnalyticsConfig(config: string): string {
     return buildCloudflareWebAnalyticsScript(trimmedConfig);
 }
 
-function isValidCloudflareWebAnalyticsConfig(config: string): boolean {
+export function isValidCloudflareWebAnalyticsConfig(config: string): boolean {
     const trimmedConfig = config.trim();
     if (!trimmedConfig) {
         return false;

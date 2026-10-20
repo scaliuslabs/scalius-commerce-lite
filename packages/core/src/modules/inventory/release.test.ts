@@ -1,48 +1,16 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { inventoryMovements, productVariants } from "@scalius/database/schema";
-import { releaseReservedStockBatch } from "./release";
+import { prepareReservedStockReleaseBatch } from "./release";
 
 // The fake databases here carry no projection SQL; catalog-projections.d1.test.ts covers it.
 vi.mock("../products/catalog-projections", () => ({ catalogBuyerStateRefreshStatementsForSkus: () => [] }));
-
-const alertMocks = vi.hoisted(() => ({
-  checkAndAlertLowStock: vi.fn(async () => undefined),
-}));
-
-vi.mock("./alerts", () => ({
-  checkAndAlertLowStock: alertMocks.checkAndAlertLowStock,
-}));
 
 type ReleaseStats = {
   reservedQuantity: number;
   releasedQuantity: number;
   reservationGenerations: number;
 };
-
-async function createExpectedReleaseId(input: {
-  releaseKey: string;
-  orderId: string;
-  variantId: string;
-  pool: "regular" | "preorder" | "backorder";
-  generation: number;
-}): Promise<string> {
-  const payload = [
-    input.releaseKey,
-    input.orderId,
-    input.variantId,
-    input.pool,
-    String(input.generation),
-  ].join("\0");
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(payload),
-  );
-  const hex = Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
-  return `release:${hex}`;
-}
 
 /** The ledger v2 rows that stand for a reservation of `reservedQuantity` units, `releasedQuantity` of them released. */
 function ledgerRows(stats: ReleaseStats) {
@@ -66,28 +34,11 @@ function ledgerRows(stats: ReleaseStats) {
   return rows;
 }
 
-function createReleaseBatchDb(options: {
-  stats?: ReleaseStats[];
-  batchError?: Error;
-  existingMovements?: Array<{
-    id: string;
-    variantId: string;
-    orderId: string | null;
-    type: string;
-    quantity: number;
-  }>;
-  insertResults?: Array<Array<{ id: string }>>;
-  updateResults?: Array<Array<{ id: string }>>;
-} = {}) {
-  const batchCalls: unknown[][] = [];
-  const statsQueue = [...(options.stats ?? [{
-    reservedQuantity: 2,
-    releasedQuantity: 0,
-    reservationGenerations: 1,
-  }])];
-  const insertResults = [...(options.insertResults ?? [])];
-  const updateResults = [...(options.updateResults ?? [])];
-
+function createReleaseBatchDb(stats: ReleaseStats = {
+  reservedQuantity: 2,
+  releasedQuantity: 0,
+  reservationGenerations: 1,
+}) {
   const db = {
     select(projection: Record<string, unknown>) {
       return {
@@ -96,22 +47,16 @@ function createReleaseBatchDb(options: {
             where() {
               return {
                 all: async () => {
-                  if ("ledgerVersion" in projection) {
-                    return ledgerRows(statsQueue.shift() ?? statsQueue.at(-1) ?? { reservedQuantity: 2, releasedQuantity: 0, reservationGenerations: 1 });
-                  }
-                  if ("stockVersion" in projection) {
-                    return [{
-                      id: "var_a",
-                      stock: 10,
-                      reservedStock: 2,
-                      preorderStock: 0,
-                      trackInventory: true,
-                      stockVersion: 4,
-                    }];
-                  }
-                  return options.existingMovements ?? [];
+                  if ("ledgerVersion" in projection) return ledgerRows(stats);
+                  return [{
+                    id: "var_a",
+                    stock: 10,
+                    reservedStock: 2,
+                    preorderStock: 0,
+                    trackInventory: true,
+                    stockVersion: 4,
+                  }];
                 },
-                get: async () => null,
               };
             },
           };
@@ -119,70 +64,19 @@ function createReleaseBatchDb(options: {
       };
     },
     insert(table: unknown) {
-      return {
-        select(statement: unknown) {
-          return {
-            returning() {
-              return { kind: "insertMovement" as const, table, statement };
-            },
-          };
-        },
-      };
+      return { select: (statement: unknown) => ({ returning: () => ({ kind: "insertMovement" as const, table, statement }) }) };
     },
     update(table: unknown) {
-      return {
-        set(values: Record<string, unknown>) {
-          return {
-            where() {
-              return {
-                returning() {
-                  return { kind: "updateVariant" as const, table, values };
-                },
-              };
-            },
-          };
-        },
-      };
-    },
-    delete(table: unknown) {
-      return {
-        where() {
-          return {
-            returning() {
-              return { kind: "deleteMovement" as const, table };
-            },
-          };
-        },
-      };
-    },
-    batch: async (statements: Array<{ kind?: string; table?: unknown }>) => {
-      batchCalls.push(statements);
-      if (options.batchError) throw options.batchError;
-      return statements.map((statement) => {
-        if (statement.kind === "insertMovement") {
-          return insertResults.shift() ?? [{ id: "release_1" }];
-        }
-        if (statement.kind === "updateVariant") {
-          return updateResults.shift() ?? [{ id: "var_a" }];
-        }
-        return [];
-      });
+      return { set: (values: Record<string, unknown>) => ({ where: () => ({ returning: () => ({ kind: "updateVariant" as const, table, values }) }) }) };
     },
   };
-
-  return { db: db as unknown as Database, batchCalls };
+  return db as unknown as Database;
 }
 
-describe("releaseReservedStockBatch", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
+describe("prepareReservedStockReleaseBatch", () => {
   it("rejects two pools for the same SKU because one CAS edge can have only one ledger event", async () => {
-    const { db, batchCalls } = createReleaseBatchDb();
-
-    const result = await releaseReservedStockBatch(
-      db,
+    const result = await prepareReservedStockReleaseBatch(
+      createReleaseBatchDb(),
       [
         { variantId: "var_a", quantity: 1, pool: "regular" },
         { variantId: "var_a", quantity: 1, pool: "preorder" },
@@ -194,151 +88,40 @@ describe("releaseReservedStockBatch", () => {
       success: false,
       manualReconciliationRequired: true,
       error: expect.stringContaining("multiple inventory pools"),
+      statements: [],
     });
-    expect(batchCalls).toHaveLength(0);
   });
 
-  it("writes the release movement claim and stock counter update in one batch", async () => {
-    const { db, batchCalls } = createReleaseBatchDb();
-
-    const result = await releaseReservedStockBatch(
-      db,
+  it("prepares the release movement claim, its counter update and their guard together", async () => {
+    const result = await prepareReservedStockReleaseBatch(
+      createReleaseBatchDb(),
       [{ variantId: "var_a", quantity: 2, pool: "regular" }],
       "order_1",
-      { releaseKey: "checkout-rollback:v1" },
     );
 
     expect(result.success).toBe(true);
-    expect(batchCalls).toHaveLength(1);
-    expect(batchCalls[0]).toEqual([
+    expect(result.statements.slice(0, 2)).toEqual([
       expect.objectContaining({ kind: "insertMovement", table: inventoryMovements }),
       expect.objectContaining({ kind: "updateVariant", table: productVariants }),
     ]);
-    expect(alertMocks.checkAndAlertLowStock).toHaveBeenCalledWith(db, "var_a");
+    expect(result.statements).toHaveLength(3);
   });
 
-  it("treats an exact duplicate deterministic release claim as idempotent success", async () => {
-    const movementId = await createExpectedReleaseId({
-      releaseKey: "checkout-rollback:v1",
-      orderId: "order_1",
-      variantId: "var_a",
-      pool: "regular",
-      generation: 1,
-    });
-    const { db, batchCalls } = createReleaseBatchDb({
-      stats: [
-        { reservedQuantity: 2, releasedQuantity: 0, reservationGenerations: 1 },
-        { reservedQuantity: 2, releasedQuantity: 2, reservationGenerations: 1 },
-      ],
-      batchError: new Error("D1_ERROR: UNIQUE constraint failed: inventory_movements.id release:claim_1"),
-      existingMovements: [{
-        id: movementId,
-        variantId: "var_a",
-        orderId: "order_1",
-        type: "released",
-        quantity: -2,
-      }],
-    });
-
-    const result = await releaseReservedStockBatch(
-      db,
+  it.each([
+    ["there is no reservation movement", { reservedQuantity: 0, releasedQuantity: 0, reservationGenerations: 0 }],
+    ["the reservation is already fully released", { reservedQuantity: 2, releasedQuantity: 2, reservationGenerations: 1 }],
+  ])("fails closed with no statements when %s", async (_label, stats) => {
+    const result = await prepareReservedStockReleaseBatch(
+      createReleaseBatchDb(stats),
       [{ variantId: "var_a", quantity: 2, pool: "regular" }],
       "order_1",
-      { releaseKey: "checkout-rollback:v1" },
-    );
-
-    expect(result.success).toBe(true);
-    expect(batchCalls).toHaveLength(1);
-  });
-
-  it("does not decrement stock again when the reservation is already fully released", async () => {
-    const { db, batchCalls } = createReleaseBatchDb({
-      stats: [{ reservedQuantity: 2, releasedQuantity: 2, reservationGenerations: 1 }],
-    });
-
-    const result = await releaseReservedStockBatch(
-      db,
-      [{ variantId: "var_a", quantity: 2, pool: "regular" }],
-      "order_1",
-      { releaseKey: "checkout-rollback:v1" },
-    );
-
-    expect(result.success).toBe(true);
-    expect(batchCalls).toHaveLength(0);
-    expect(alertMocks.checkAndAlertLowStock).not.toHaveBeenCalled();
-  });
-
-  it("fails closed when a duplicate deterministic release claim has different contents", async () => {
-    const movementId = await createExpectedReleaseId({
-      releaseKey: "checkout-rollback:v1",
-      orderId: "order_1",
-      variantId: "var_a",
-      pool: "regular",
-      generation: 1,
-    });
-    const { db } = createReleaseBatchDb({
-      batchError: new Error("D1_ERROR: UNIQUE constraint failed: inventory_movements.id release:claim_1"),
-      existingMovements: [{
-        id: movementId,
-        variantId: "var_a",
-        orderId: "order_1",
-        type: "released",
-        quantity: -1,
-      }],
-    });
-
-    const result = await releaseReservedStockBatch(
-      db,
-      [{ variantId: "var_a", quantity: 2, pool: "regular" }],
-      "order_1",
-      { releaseKey: "checkout-rollback:v1" },
     );
 
     expect(result).toMatchObject({
       success: false,
       manualReconciliationRequired: true,
-      error: "Reservation release batch failed",
+      error: "Reservation evidence is insufficient for order order_1 and variant var_a",
+      statements: [],
     });
-  });
-
-  it("fails closed when there is no reservation movement to release", async () => {
-    const { db, batchCalls } = createReleaseBatchDb({
-      stats: [{ reservedQuantity: 0, releasedQuantity: 0, reservationGenerations: 0 }],
-    });
-
-    const result = await releaseReservedStockBatch(
-      db,
-      [{ variantId: "var_a", quantity: 2, pool: "regular" }],
-      "order_1",
-      { releaseKey: "checkout-rollback:v1" },
-    );
-
-    expect(result).toMatchObject({
-      success: false,
-      manualReconciliationRequired: true,
-      error: "No reservation movement found for order order_1 and variant var_a",
-    });
-    expect(batchCalls).toHaveLength(0);
-  });
-
-  it("requires manual reconciliation when a partial release rollback loses CAS", async () => {
-    const { db, batchCalls } = createReleaseBatchDb({
-      insertResults: [[{ id: "release_1" }]],
-      updateResults: [[], []],
-    });
-
-    const result = await releaseReservedStockBatch(
-      db,
-      [{ variantId: "var_a", quantity: 2, pool: "regular" }],
-      "order_1",
-      { releaseKey: "checkout-rollback:v1" },
-    );
-
-    expect(result).toMatchObject({
-      success: false,
-      manualReconciliationRequired: true,
-      error: "Reservation release rollback could not be proven; manual reconciliation is required",
-    });
-    expect(batchCalls).toHaveLength(2);
   });
 });

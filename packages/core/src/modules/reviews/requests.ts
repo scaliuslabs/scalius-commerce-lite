@@ -1,17 +1,16 @@
-// Review requests (Wave B §2.3) and the coalesced cache bump (§2.5).
+// Review requests (Wave B §2.3).
 //
 // A trigger records every order -> delivered transition in
 // `order_review_requests`. The 15-minute sweep turns due rows (the store's
 // delay after delivery) into `review_request` outbox rows, one per order, and
 // the send-time check decides again whether there is anything to ask about.
 // Links point at the order page or /track-order, never at a token.
-import { and, asc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
 import { safeBatch, type Database } from "@scalius/database/client";
 import {
   orderItems,
   orderReviewRequests,
   orders,
-  productReviewStats,
 } from "@scalius/database/schema";
 import { readReviewSettings } from "../settings";
 import { buildNotificationOutboxInsert } from "../notifications";
@@ -145,19 +144,3 @@ export async function reviewRequestSendCheck(db: Database, orderId: string): Pro
   return { productNames: names, accountOwned: Boolean(rows[0]!.accountOwnerCustomerId) };
 }
 
-/**
- * Whether any published review changed at or after `sinceEpochSeconds` (the
- * stats projection's indexed `updated_at`; every change to a published
- * review, including a text-only edit, rewrites its product's row). The cron
- * bumps the cache generation once when this is true (§2.5). `>=`, because
- * the generation and a review can move in the same second.
- */
-export async function reviewsChangedSince(db: Database, sinceEpochSeconds: number): Promise<boolean> {
-  const row = await db
-    .select({ productId: productReviewStats.productId })
-    .from(productReviewStats)
-    .where(gte(productReviewStats.updatedAt, sinceEpochSeconds))
-    .limit(1)
-    .get();
-  return Boolean(row);
-}

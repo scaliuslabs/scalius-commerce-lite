@@ -307,21 +307,7 @@ async function selectDeliveryReceiptByKey(
 }
 
 async function hashNotificationRecipient(recipient: string): Promise<string> {
-  const normalized = recipient.trim().toLowerCase();
-
-  if (typeof crypto !== "undefined" && crypto.subtle) {
-    return sha256Hex(normalized);
-  }
-
-  return fallbackHash(normalized);
-}
-
-function fallbackHash(value: string): string {
-  let hash = 5381;
-  for (let index = 0; index < value.length; index += 1) {
-    hash = ((hash << 5) + hash) ^ value.charCodeAt(index);
-  }
-  return `fallback${(hash >>> 0).toString(16).padStart(8, "0")}`.padEnd(64, "0");
+  return sha256Hex(recipient.trim().toLowerCase());
 }
 
 function maskNotificationRecipient(recipient: string): string {
@@ -350,10 +336,7 @@ function createDeliveryReceiptClaimId(): string {
 }
 
 function createRandomId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID().replace(/-/g, "");
-  }
-  return `${Date.now().toString(36)}${fallbackHash(String(Date.now())).slice(0, 12)}`;
+  return crypto.randomUUID().replace(/-/g, "");
 }
 
 function normalizeError(error: unknown): string {

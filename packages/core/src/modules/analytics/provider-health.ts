@@ -1,14 +1,13 @@
 import { isNull } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { analytics } from "@scalius/database/schema";
-import { readQuotedHtmlAttribute } from "@scalius/shared/html-attributes";
 
 import { readStoredCredentialStrict } from "../../utils/credential-encryption";
 import { metaConversionsDocument } from "../settings";
 import {
-  CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC,
   analyticsScriptTypes,
   getActiveAnalyticsConfigError,
+  isValidCloudflareWebAnalyticsConfig,
   type AnalyticsScriptType,
 } from "./analytics.validation";
 
@@ -99,9 +98,6 @@ interface GetAnalyticsProviderHealthOptions {
   credentialEncryptionKey?: string;
 }
 
-const CLOUDFLARE_WEB_ANALYTICS_TOKEN_PLACEHOLDER =
-  "YOUR_CLOUDFLARE_WEB_ANALYTICS_TOKEN";
-const CLOUDFLARE_WEB_ANALYTICS_TOKEN_PATTERN = /^[A-Za-z0-9_-]{8,128}$/;
 const META_PIXEL_ID_PATTERN = /^\d{5,30}$/;
 
 const BROWSER_ONLY_GOOGLE_ANALYTICS: AnalyticsProviderServerReadiness = {
@@ -192,49 +188,6 @@ function unique(values: string[]): string[] {
   return Array.from(new Set(values));
 }
 
-function extractCloudflareWebAnalyticsToken(config: string): string | null {
-  if (!config.includes(CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC)) {
-    return null;
-  }
-
-  const beaconJson = readQuotedHtmlAttribute(config, "data-cf-beacon");
-  if (!beaconJson) {
-    return null;
-  }
-
-  try {
-    const beaconConfig = JSON.parse(beaconJson) as { token?: unknown };
-    return typeof beaconConfig.token === "string" ? beaconConfig.token : null;
-  } catch {
-    return null;
-  }
-}
-
-function isValidCloudflareWebAnalyticsToken(token: string): boolean {
-  return (
-    token !== CLOUDFLARE_WEB_ANALYTICS_TOKEN_PLACEHOLDER &&
-    CLOUDFLARE_WEB_ANALYTICS_TOKEN_PATTERN.test(token)
-  );
-}
-
-function getCloudflareWebAnalyticsConfigError(config: string): string | null {
-  const trimmedConfig = config.trim();
-  if (!trimmedConfig) {
-    return "Active analytics scripts must include a saved browser snippet.";
-  }
-
-  if (/<script/i.test(trimmedConfig)) {
-    const token = extractCloudflareWebAnalyticsToken(trimmedConfig);
-    return token && isValidCloudflareWebAnalyticsToken(token)
-      ? null
-      : "Active Cloudflare Web Analytics scripts must use a valid site token or official beacon snippet.";
-  }
-
-  return isValidCloudflareWebAnalyticsToken(trimmedConfig)
-    ? null
-    : "Active Cloudflare Web Analytics scripts must use a valid site token or official beacon snippet.";
-}
-
 function getActiveScriptIssue(script: AnalyticsProviderHealthScript): string | null {
   if (!script.isActive) {
     return null;
@@ -255,8 +208,8 @@ function getActiveScriptIssue(script: AnalyticsProviderHealthScript): string | n
       config,
       isActive: true,
     }) ??
-    (script.type === "cloudflare_web_analytics"
-      ? getCloudflareWebAnalyticsConfigError(config)
+    (script.type === "cloudflare_web_analytics" && !isValidCloudflareWebAnalyticsConfig(config)
+      ? "Active Cloudflare Web Analytics scripts must use a valid site token or official beacon snippet."
       : null)
   );
 }

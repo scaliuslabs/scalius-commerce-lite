@@ -48,14 +48,6 @@ const MAX_TRANSITION_RETRIES = 3;
 const BASE_TRANSITION_BACKOFF_MS = 50;
 const INVENTORY_DB_CONCURRENCY = 4;
 
-export function isStockRestoreStatus(status: string): boolean {
-    return STOCK_RESTORE_STATUSES.has(status);
-}
-
-export function isStockDeductStatus(status: string): boolean {
-    return STOCK_DEDUCT_STATUSES.has(status);
-}
-
 export function isStockReservableStatus(status: string): boolean {
     return STOCK_RESERVABLE_STATUSES.has(status);
 }
@@ -363,22 +355,11 @@ export async function applyInventoryForStatusChangeWithImpact(
 
 /**
  * Apply an explicit order-item inventory delta with a deterministic movement
- * claim and a stockVersion CAS update in the same D1 batch.
- *
- * Manual order edits need to apply only the item delta before their guarded
- * order write. Callers must derive `claimKey` from that immutable logical edit
- * attempt (normally the order id, expected version, and operation purpose).
- * Replaying the same key/order/variant/operation/pool tuple is idempotent; a
- * different quantity for that tuple fails closed in the strict engine.
+ * claim and a stockVersion CAS update in the same D1 batch. Callers derive
+ * `claimKey` from the immutable logical attempt; replaying the same
+ * key/order/variant/operation/pool tuple is idempotent, and a different
+ * quantity for that tuple fails closed.
  */
-export async function applyClaimedInventoryEntryBatch(
-    db: Database,
-    input: ClaimedInventoryEntryBatchInput,
-): Promise<string[]> {
-    const result = await applyClaimedInventoryEntryBatchWithImpact(db, input);
-    return result.movementIds;
-}
-
 export async function applyClaimedInventoryEntryBatchWithImpact(
     db: Database,
     input: ClaimedInventoryEntryBatchInput,

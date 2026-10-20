@@ -34,6 +34,7 @@ import {
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { digitalStockError, isDigitalKind, variantOptionLabelSql } from "../products";
 import { inventoryOperationKeySchema } from "./inventory.validation";
+import { blankToNull, dateOnlySchema, optionalTextSchema, parseInventoryInput } from "./validation";
 import { resolveActiveInventoryLocation, type InventoryLocationRef } from "./locations";
 import { addedQuantitySql, commandActorUserIdSql, executeStockCommand, idsFromJsonSql, readStockCommandSkus, type StockCommandEdge } from "./stock-commands";
 
@@ -42,10 +43,6 @@ export const INVENTORY_TRANSFER_OPEN_STATUSES = ["in_transit", "partially_receiv
 const STALE = "INVENTORY_TRANSFER_STALE";
 const NUMBER_START = 1000;
 
-const dateOnlySchema = z.string().trim()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date like 2026-10-31.")
-  .refine((value) => !Number.isNaN(Date.parse(`${value}T00:00:00Z`)) && new Date(`${value}T00:00:00Z`).toISOString().startsWith(value), "Use a real calendar date.");
-const optionalText = (max: number) => z.string().trim().max(max).nullable().optional();
 const locationIdSchema = z.string().trim().min(1).max(100);
 
 export const transferLineInputSchema = z.object({
@@ -57,8 +54,8 @@ export const createTransferSchema = z.object({
   originLocationId: locationIdSchema,
   destinationLocationId: locationIdSchema,
   expectedOn: dateOnlySchema.nullable().optional(),
-  reference: optionalText(100),
-  notes: optionalText(2000),
+  reference: optionalTextSchema(100),
+  notes: optionalTextSchema(2000),
   lines: z.array(transferLineInputSchema).max(INVENTORY_TRANSFER_MAX_LINES).optional(),
 });
 export type CreateTransferInput = z.input<typeof createTransferSchema>;
@@ -67,8 +64,8 @@ export const updateTransferSchema = z.object({
   originLocationId: locationIdSchema.optional(),
   destinationLocationId: locationIdSchema.optional(),
   expectedOn: dateOnlySchema.nullable().optional(),
-  reference: optionalText(100),
-  notes: optionalText(2000),
+  reference: optionalTextSchema(100),
+  notes: optionalTextSchema(2000),
   /** Replaces every line (drafts only). Omit to keep them. */
   lines: z.array(transferLineInputSchema).max(INVENTORY_TRANSFER_MAX_LINES).optional(),
   expectedRevision: z.number().int().min(1),
@@ -104,16 +101,6 @@ export const listTransfersQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional().default(50),
 });
 export type ListTransfersQuery = z.input<typeof listTransfersQuerySchema>;
-
-function parse<T>(schema: z.ZodType<T>, input: unknown, fallback = "Invalid transfer"): T {
-  const parsed = schema.safeParse(input);
-  if (!parsed.success) {
-    throw new ValidationError(parsed.error.issues[0]?.message ?? fallback, {
-      issues: parsed.error.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message })),
-    });
-  }
-  return parsed.data;
-}
 
 export function formatTransferNumber(number: number): string {
   return `T${number}`;
@@ -262,7 +249,7 @@ function headerQuery(db: Database) {
 }
 
 export async function listTransfers(db: Database, query: ListTransfersQuery = {}) {
-  const { q, status, locationId, page, limit } = parse(listTransfersQuerySchema, query);
+  const { q, status, locationId, page, limit } = parseInventoryInput(listTransfersQuerySchema, query, "Invalid transfer");
   const conditions: SQL[] = [];
   if (status === "open") conditions.push(inArray(inventoryTransfers.status, [...INVENTORY_TRANSFER_OPEN_STATUSES]));
   else if (status !== "all") conditions.push(eq(inventoryTransfers.status, status));
@@ -505,18 +492,13 @@ async function runGuarded(db: Database, statements: BatchItem<"sqlite">[]): Prom
   }
 }
 
-function textOrNull(value: string | null | undefined): string | null | undefined {
-  if (value === undefined) return undefined;
-  return value ? value : null;
-}
-
 function isNumberConflict(error: unknown): boolean {
   const text = String((error as Error)?.message ?? "") + String((error as { cause?: Error })?.cause?.message ?? "");
   return /inventory_transfers_number_unique|inventory_transfers\.number/i.test(text);
 }
 
 export async function createTransfer(db: Database, input: CreateTransferInput, actorId?: string | null): Promise<TransferDetail> {
-  const data = parse(createTransferSchema, input);
+  const data = parseInventoryInput(createTransferSchema, input, "Invalid transfer");
   const { origin, destination } = await assertDistinctActive(db, data.originLocationId, data.destinationLocationId);
   const lines = await planLines(db, data.lines ?? []);
   const id = `trf_${nanoid(16)}`;
@@ -530,8 +512,8 @@ export async function createTransfer(db: Database, input: CreateTransferInput, a
           destinationLocationId: destination.id,
           status: "draft",
           expectedOn: data.expectedOn ?? null,
-          reference: textOrNull(data.reference) ?? null,
-          notes: textOrNull(data.notes) ?? null,
+          reference: blankToNull(data.reference),
+          notes: blankToNull(data.notes),
           revision: 1,
           createdBy: actorId ?? null,
           createdAt: sql`unixepoch()`,
@@ -550,7 +532,7 @@ export async function createTransfer(db: Database, input: CreateTransferInput, a
 
 /** Edits a draft at the revision the merchant saw (lines are replaced when sent). */
 export async function updateTransfer(db: Database, id: string, input: UpdateTransferInput): Promise<TransferDetail> {
-  const data = parse(updateTransferSchema, input);
+  const data = parseInventoryInput(updateTransferSchema, input, "Invalid transfer");
   const header = await readHeader(db, id);
   assertRevision(header, data.expectedRevision);
   assertStatus(header, ["draft"], "edited");
@@ -566,8 +548,8 @@ export async function updateTransfer(db: Database, id: string, input: UpdateTran
       originLocationId: originId,
       destinationLocationId: destinationId,
       ...(data.expectedOn !== undefined ? { expectedOn: data.expectedOn } : {}),
-      ...(data.reference !== undefined ? { reference: textOrNull(data.reference) } : {}),
-      ...(data.notes !== undefined ? { notes: textOrNull(data.notes) } : {}),
+      ...(data.reference !== undefined ? { reference: blankToNull(data.reference) } : {}),
+      ...(data.notes !== undefined ? { notes: blankToNull(data.notes) } : {}),
       revision: sql`${inventoryTransfers.revision} + 1`,
       updatedAt: sql`unixepoch()`,
     }).where(and(eq(inventoryTransfers.id, id), eq(inventoryTransfers.revision, data.expectedRevision))) as unknown as BatchItem<"sqlite">,
@@ -683,7 +665,7 @@ function commandResult(
  * they are committed to orders.
  */
 export async function shipTransfer(db: Database, id: string, input: ShipTransferInput, actorId?: string | null): Promise<TransferCommandResult> {
-  const data = parse(shipTransferSchema, input);
+  const data = parseInventoryInput(shipTransferSchema, input, "Invalid transfer");
   const operationKey = data.operationKey.trim();
   return executeStockCommand<TransferCommandResult>(db, {
     operationKey,
@@ -734,7 +716,7 @@ export async function shipTransfer(db: Database, id: string, input: ShipTransfer
 
 /** Books some or all in-transit units at the destination (`transfer_in`). */
 export async function receiveTransfer(db: Database, id: string, input: ReceiveTransferInput, actorId?: string | null): Promise<TransferCommandResult> {
-  const data = parse(receiveTransferSchema, input);
+  const data = parseInventoryInput(receiveTransferSchema, input, "Invalid transfer");
   if (new Set(data.lines.map((line) => line.lineId)).size !== data.lines.length) {
     throw new ValidationError("Each transfer line appears once in a receipt.");
   }
@@ -808,7 +790,7 @@ export async function receiveTransfer(db: Database, id: string, input: ReceiveTr
  * is still on the road to the origin (`transfer_in` there) in one batch.
  */
 export async function cancelTransfer(db: Database, id: string, input: CancelTransferInput, actorId?: string | null): Promise<TransferCommandResult> {
-  const data = parse(cancelTransferSchema, input);
+  const data = parseInventoryInput(cancelTransferSchema, input, "Invalid transfer");
   const operationKey = data.operationKey.trim();
   const header = await readHeader(db, id);
   if (header.status === "draft") {

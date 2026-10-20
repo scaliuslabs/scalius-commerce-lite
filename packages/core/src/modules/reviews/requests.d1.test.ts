@@ -1,9 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { reviewsDocument } from "../settings/documents";
 import {
-  moderateReviews,
   reviewRequestSendCheck,
-  reviewsChangedSince,
   submitReview,
   sweepReviewRequests,
 } from "./index";
@@ -11,7 +9,7 @@ import { createReviewStore, type ReviewStore } from "./testing/fixture";
 
 const DAY = 86_400;
 
-describe("review requests (R8) and the coalesced cache bump", () => {
+describe("review requests (R8)", () => {
   let store: ReviewStore;
 
   beforeEach(() => {
@@ -65,19 +63,5 @@ describe("review requests (R8) and the coalesced cache bump", () => {
     expect(await reviewRequestSendCheck(store.db, "ord_guest")).toBeNull();
     await reviewsDocument.write(store.db, { enabled: false });
     expect(await reviewRequestSendCheck(store.db, "ord_1")).toBeNull();
-  });
-
-  it("reports published-review changes at or after a time (>=), including text-only edits", async () => {
-    await reviewsDocument.write(store.db, { moderation: "hold" });
-    store.deliveredOrder("ord_1", [{ item: "item_1", product: "prod_shirt" }]);
-    const start = now();
-    const { review } = await submitReview(store.db, { kind: "customer", customerId: "acct_rahim" }, { orderItemId: "item_1", rating: 5 });
-    // A pending review only creates the empty stats row; backdate it to prove the check.
-    store.sqlite.exec("UPDATE product_review_stats SET updated_at = updated_at - 3600");
-    expect(await reviewsChangedSince(store.db, start)).toBe(false);
-    await moderateReviews(store.db, { ids: [review.id], action: "publish" });
-    const updatedAt = Number(store.scalar("SELECT updated_at FROM product_review_stats"));
-    expect(await reviewsChangedSince(store.db, updatedAt)).toBe(true);
-    expect(await reviewsChangedSince(store.db, updatedAt + 1)).toBe(false);
   });
 });

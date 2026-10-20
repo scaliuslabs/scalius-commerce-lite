@@ -2,12 +2,10 @@
 // low-stock alerts and the stock-adjustment services.
 
 export {
-  reserveStock,
   reserveStockBatch,
   prepareStockReservationBatch,
   selectReservationVariantStates,
   isInventoryReservationConflictError,
-  validateStockBatchAvailability,
 } from "./reserve";
 export type {
   PreparedStockReservationBatch,
@@ -15,9 +13,6 @@ export type {
   ReserveStockBatchResult,
 } from "./reserve";
 export {
-  releaseReservation,
-  releaseMultiple,
-  releaseReservedStockBatch,
   prepareReservedStockReleaseBatch,
   isPreparedReservedStockReleaseConflictError,
 } from "./release";
@@ -25,7 +20,6 @@ export type {
   PreparedReservedStockReleaseBatch,
   ReleaseReservedStockBatchResult,
 } from "./release";
-export { recordMovement } from "./movements";
 export { checkAndAlertLowStock, setLowStockThreshold } from "./alerts";
 export type { LowStockAlertResult } from "./alerts";
 export { releaseExpiredReservations } from "./expiry";

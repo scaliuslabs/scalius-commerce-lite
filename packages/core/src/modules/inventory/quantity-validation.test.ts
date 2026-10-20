@@ -1,11 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
-import {
-  releaseMultiple,
-  releaseReservation,
-  releaseReservedStockBatch,
-} from "./release";
-import { reserveStock, reserveStockBatch } from "./reserve";
+import { prepareReservedStockReleaseBatch } from "./release";
+import { reserveStockBatch } from "./reserve";
 
 const invalidQuantities = [
   ["zero", 0],
@@ -18,13 +14,10 @@ const invalidQuantities = [
 type QuantityMutation = (db: Database, quantity: number) => Promise<unknown>;
 
 const quantityMutations: Array<[string, QuantityMutation]> = [
-  ["reserveStock", (db, quantity) => reserveStock(db, "variant_1", quantity)],
   ["reserveStockBatch", (db, quantity) => reserveStockBatch(db, [{ variantId: "variant_1", quantity }])],
-  ["releaseReservation", (db, quantity) => releaseReservation(db, "variant_1", quantity)],
-  ["releaseMultiple", (db, quantity) => releaseMultiple(db, [{ variantId: "variant_1", quantity }])],
   [
-    "releaseReservedStockBatch",
-    (db, quantity) => releaseReservedStockBatch(
+    "prepareReservedStockReleaseBatch",
+    (db, quantity) => prepareReservedStockReleaseBatch(
       db,
       [{ variantId: "variant_1", quantity }],
       "order_1",
@@ -54,15 +47,8 @@ describe("inventory mutation quantity validation", () => {
       ]),
     ],
     [
-      "releaseMultiple",
-      (db: Database) => releaseMultiple(db, [
-        { variantId: "variant_1", quantity: 1 },
-        { variantId: "variant_2", quantity: 0 },
-      ]),
-    ],
-    [
-      "releaseReservedStockBatch",
-      (db: Database) => releaseReservedStockBatch(db, [
+      "prepareReservedStockReleaseBatch",
+      (db: Database) => prepareReservedStockReleaseBatch(db, [
         { variantId: "variant_1", quantity: 1 },
         { variantId: "variant_2", quantity: 0 },
       ], "order_1"),
