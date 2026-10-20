@@ -114,7 +114,7 @@ export function commissionOf(amountMinor: number, bps: number): number {
 }
 
 /** Splits count toward a payout once fulfilled; cancelled and refunded ones never do. */
-export const payable = (split: Pick<OrderSplit, "status" | "payout_id">) => split.status === "fulfilled" && split.payout_id === null;
+export const payable = (split: Pick<OrderSplit, "status" | "payout_id">) => split.status === "fulfilled" && !split.payout_id;
 
 /** Plain text for one line of a dashboard table or an email. */
 export function plain(value: unknown, max = 120): string {

@@ -239,6 +239,9 @@ function bodyOf(request: PluginRouteRequest): Record<string, unknown> {
   return typeof request.body === "object" && request.body !== null ? request.body as Record<string, unknown> : {};
 }
 
+/** The product card's select value for "the store sells it" (select values cannot be empty). */
+const STORE_SELLS = "store";
+
 const percent = (bps: number | null) => (bps === null ? "Default" : `${bps / 100}%`);
 
 function sellerRows(records: Array<{ id: string; data: { name: string; handle: string; email: string | null; status: SellerStatus; commission_bps: number | null; created_at: number } }>) {
@@ -451,7 +454,7 @@ const routes = {
           ? ui.keyValue([{ label: "Sold by", value: current.seller_name }, { label: "Seller status", value: current.seller_status }])
           : ui.text("The store sells this product itself.", { tone: "neutral", size: "sm" }),
         approved.records.length > 0 ? ui.form({ route: "product-assign" }, "Save seller", [
-          ui.select("seller", "Seller", [{ value: "", label: "The store" }, ...approved.records.map((record) => ({ value: record.id, label: record.data.name.slice(0, 80) }))], { value: current?.seller_id ?? "" }),
+          ui.select("seller", "Seller", [{ value: STORE_SELLS, label: "The store" }, ...approved.records.map((record) => ({ value: record.id, label: record.data.name.slice(0, 80) }))], { value: current?.seller_id ?? STORE_SELLS }),
         ]) : ui.text("Approve a seller to give them products.", { tone: "neutral", size: "sm" }),
       ]),
     };
@@ -459,7 +462,8 @@ const routes = {
   "product-assign": async (request: PluginRouteRequest, ctx: PluginContext) => {
     const { id, values } = adminContext(request);
     if (!id) return { status: 422, body: ui.result({ toast: { message: "Open a product first.", tone: "critical" } }) };
-    const result = await assignProduct(ctx, id, plain(values.seller, 128) || null);
+    const chosen = plain(values.seller, 128);
+    const result = await assignProduct(ctx, id, chosen && chosen !== STORE_SELLS ? chosen : null);
     return { status: result.ok ? 200 : 422, body: ui.result({ toast: { message: result.message, tone: result.ok ? "success" : "critical" }, refresh: result.ok }) };
   },
   "order-card": async (request: PluginRouteRequest, ctx: PluginContext) => {
