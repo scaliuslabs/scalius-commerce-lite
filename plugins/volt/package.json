@@ -1,0 +1,24 @@
+{
+  "name": "@scalius/plugin-volt",
+  "version": "1.0.0",
+  "description": "Volt Gadgets: a gadget-store theme as an app (category mega menu, offer cards, spec-table product page) with a removable demo store",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "oxlint -c ../../.oxlintrc.json src/",
+    "test": "vitest run",
+    "typecheck": "../../node_modules/typescript7/bin/tsc --build"
+  },
+  "dependencies": {
+    "@scalius/plugin-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@scalius/shared": "workspace:*",
+    "@scalius/tsconfig": "workspace:*",
+    "vitest": "^5.0.4"
+  }
+}
