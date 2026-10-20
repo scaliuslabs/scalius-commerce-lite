@@ -188,7 +188,7 @@ function writeRules(operation: AgentOperationManifestEntry): string[] {
   const rules: string[] = [];
   if (operation.revision === "required") rules.push("Send the revision from a fresh read; a stale one is a 409 carrying current.");
   if (operation.idempotency !== "none") rules.push("scalius_write adds an idempotency key; retry with meta.idempotencyKey.");
-  if (isConfirmGated(operation)) rules.push("Needs confirmation: dryRun:true, show confirmation.summary to the merchant, then send confirmToken.");
+  if (isConfirmGated(operation)) rules.push("Needs the merchant's approval: they open confirmation.approvalUrl, then repeat the call with approvalId.");
   if (operation.batch === "forbidden") rules.push("Not allowed in steps[].");
   if (operation.artifactOutput) rules.push("Returns a one-use artifact resource link.");
   return rules;

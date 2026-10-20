@@ -66896,6 +66896,116 @@ export type PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses = {
 
 export type PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponse = PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses[keyof PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses];
 
+export type GetApiV1AdminAgentAccessApprovalsByApprovalIdData = {
+    body?: never;
+    path: {
+        approvalId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/agent-access/approvals/{approvalId}';
+};
+
+export type GetApiV1AdminAgentAccessApprovalsByApprovalIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminAgentAccessApprovalsByApprovalIdError = GetApiV1AdminAgentAccessApprovalsByApprovalIdErrors[keyof GetApiV1AdminAgentAccessApprovalsByApprovalIdErrors];
+
+export type GetApiV1AdminAgentAccessApprovalsByApprovalIdResponses = {
+    /**
+     * The change to approve
+     */
+    200: {
+        success: true;
+        data: {
+            approvalId: string;
+            status: 'pending' | 'approved';
+            summary: string;
+            operationIds: Array<string>;
+            expiresAt: string;
+        };
+    };
+};
+
+export type GetApiV1AdminAgentAccessApprovalsByApprovalIdResponse = GetApiV1AdminAgentAccessApprovalsByApprovalIdResponses[keyof GetApiV1AdminAgentAccessApprovalsByApprovalIdResponses];
+
+export type PostApiV1AdminAgentAccessApprovalsByApprovalIdData = {
+    body?: {
+        decision: 'approve' | 'decline';
+    };
+    path: {
+        approvalId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/agent-access/approvals/{approvalId}';
+};
+
+export type PostApiV1AdminAgentAccessApprovalsByApprovalIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminAgentAccessApprovalsByApprovalIdError = PostApiV1AdminAgentAccessApprovalsByApprovalIdErrors[keyof PostApiV1AdminAgentAccessApprovalsByApprovalIdErrors];
+
+export type PostApiV1AdminAgentAccessApprovalsByApprovalIdResponses = {
+    /**
+     * The answer was recorded
+     */
+    200: {
+        success: true;
+        data: {
+            decision: 'approve' | 'decline';
+        };
+    };
+};
+
+export type PostApiV1AdminAgentAccessApprovalsByApprovalIdResponse = PostApiV1AdminAgentAccessApprovalsByApprovalIdResponses[keyof PostApiV1AdminAgentAccessApprovalsByApprovalIdResponses];
+
 export type GetApiV1AdminWebhooksData = {
     body?: never;
     path?: never;

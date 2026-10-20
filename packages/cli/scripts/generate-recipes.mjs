@@ -116,7 +116,7 @@ function renderRecipe(manifest, operations, recipe, skill) {
 
 const LEGEND = [
   "Each step is one call. answer = scalius_answer, search = scalius_search, read/verify = scalius_read, write = scalius_write, resource = an MCP resource, cli = the scalius CLI (ask, search, read, write, bulk, export).",
-  "Every write: dryRun first. [approval] = destructive or financial: show confirmation.summary to the merchant, then send its confirmToken (CLI: --yes after they approve). [ask first] = a security change: confirm with the merchant before it. rev = send the revision your read returned. needs = required inputs; scalius_describe gives the exact shape and an example.",
+  "Every write: dryRun first. [approval] = destructive or financial: the write answers with confirmation.approvalUrl: the merchant approves it there (or in the terminal dialog), then repeat the write with approvalId (CLI: --approval <id>). [ask first] = a security change: confirm with the merchant before it. rev = send the revision your read returned. needs = required inputs; scalius_describe gives the exact shape and an example.",
 ].join("\n");
 
 function catalogVersion(manifest) {

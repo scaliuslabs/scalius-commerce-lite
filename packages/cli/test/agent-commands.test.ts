@@ -22,7 +22,9 @@ beforeEach(() => {
   api.state.refunds.length = 0;
   api.state.products.length = 0;
   api.state.failNextProductCreate = 0;
-  api.state.usedTokens.clear();
+  api.state.approvals.clear();
+  api.state.dialogs = 0;
+  api.state.approvalOff = false;
   api.state.bulkWrites.length = 0;
   api.state.bulkDryRuns.length = 0;
   api.state.bulkRunReads = 0;
@@ -86,41 +88,51 @@ describe("agent commands over the store's MCP tools", () => {
     expect(allRows.stdoutText().trim().split("\n").map(Number)).toEqual(api.state.orders.map((order) => order.number));
   });
 
-  it("(c) a gated write without --yes gets the server's 428: its summary, exit 10, nothing sent after it", async () => {
+  it("(c) a gated write off a terminal gets the server's approval link: exit 10, nothing sent after it, --yes changes nothing", async () => {
     const runtime = await pairedRuntime();
     const exit = await runProgram(runtime, ["write", "dashboard.orders.refund", "--input", '{"path":{"id":"ord_1"},"body":{"amount":500}}']);
     expect(exit).toBe(10);
     const writes = toolCalls().filter((call) => call.tool === "scalius_write");
     expect(writes).toHaveLength(1);
-    expect(writes[0]!.arguments).not.toHaveProperty("confirmToken");
+    expect(writes[0]!.arguments).not.toHaveProperty("approvalId");
     expect(writes[0]!.arguments).not.toHaveProperty("dryRun");
     expect(api.state.refunds).toEqual([]);
-    expect(api.state.usedTokens.size).toBe(0);
+    expect(api.state.dialogs).toBe(0);
     const error = JSON.parse(runtime.stderrText()) as { ok: boolean; error: Record<string, unknown> };
     expect(error).toMatchObject({ ok: false, error: { code: "confirmation_required", status: 428 } });
     expect(String(error.error.message)).toContain("Process order refund: id=ord_1, amount=500");
-    expect(String(error.error.hint)).toContain("--yes");
+    expect(String(error.error.message)).toContain(`${api.origin}/admin/settings/agent-access/approve/abh_`);
+    expect(String(error.error.hint)).toContain("--approval abh_");
+
+    // An agent's --yes off a terminal is refused, pointing at the approval link.
+    const agent = await pairedRuntime();
+    expect(await runProgram(agent, ["write", "dashboard.orders.refund", "--yes", "--input", '{"path":{"id":"ord_1"},"body":{"amount":500}}'])).toBe(10);
+    expect(String((JSON.parse(agent.stderrText()) as { error: { message: string } }).error.message)).toMatch(/--yes cannot approve this change.*approve\/abh_/);
+    expect(api.state.refunds).toEqual([]);
   });
 
-  it("previews with --dry-run (exit 11, nothing written) and writes once with --yes", async () => {
+  it("previews with --dry-run (exit 11, nothing written) and writes once with the merchant's --approval", async () => {
     const preview = await pairedRuntime();
     expect(await runProgram(preview, ["write", "dashboard.orders.refund", "--dry-run", "--input", '{"path":{"id":"ord_1"},"body":{"amount":500}}'])).toBe(11);
-    expect(JSON.parse(preview.stdoutText())).toMatchObject({ ok: true, dryRun: true, written: false, confirmation: { summary: expect.any(String), confirmToken: expect.any(String) } });
+    expect(JSON.parse(preview.stdoutText())).toMatchObject({ ok: true, dryRun: true, written: false, confirmation: { summary: expect.any(String), approvalRequired: true } });
     expect(api.state.refunds).toHaveLength(0);
 
+    const refused = await pairedRuntime();
+    expect(await runProgram(refused, ["write", "dashboard.orders.refund", "--input", '{"path":{"id":"ord_1"},"body":{"amount":500}}'])).toBe(10);
+    const [approvalId] = [...api.state.approvals.keys()];
+    // Not approved yet: still exit 10, nothing written.
+    const early = await pairedRuntime();
+    expect(await runProgram(early, ["write", "dashboard.orders.refund", "--approval", approvalId!, "--input", '{"path":{"id":"ord_1"},"body":{"amount":500}}'])).toBe(10);
+    expect(api.state.refunds).toHaveLength(0);
+
+    api.state.approvals.set(approvalId!, "approved");
     const approved = await pairedRuntime();
-    expect(await runProgram(approved, ["write", "dashboard.orders.refund", "--yes", "--input", '{"path":{"id":"ord_1"},"body":{"amount":500}}'])).toBe(0);
+    expect(await runProgram(approved, ["write", "dashboard.orders.refund", "--approval", approvalId!, "--input", '{"path":{"id":"ord_1"},"body":{"amount":500}}'])).toBe(0);
     expect(api.state.refunds).toHaveLength(1);
-    // The change is sent, answered 428, then repeated identically with the token: no separate dry run.
-    const writes = toolCalls().filter((call) => call.tool === "scalius_write").slice(-2);
-    const { confirmToken, ...repeated } = writes[1]!.arguments as Record<string, unknown>;
-    expect(writes[0]!.arguments).toEqual(repeated);
-    expect(confirmToken).toMatch(/^sct_/);
-    expect(approved.stderrText()).toContain("Approved with --yes: Process order refund: id=ord_1, amount=500");
     expect(JSON.parse(approved.stdoutText())).toMatchObject({ ok: true, data: { refundId: "rfd_1" } });
   });
 
-  it("asks the merchant at a terminal and repeats the request on a yes; a no writes nothing", async () => {
+  it("asks the merchant at a terminal through the server's dialog; a no writes nothing", async () => {
     const answer = async (line: string) => {
       const directory = await mkdtemp(join(tmpdir(), "scalius-agent-cli-"));
       const runtime = createTestRuntime({ directory, fetch: globalThis.fetch, tty: true, stdin: line });
@@ -134,29 +146,32 @@ describe("agent commands over the store's MCP tools", () => {
     const yes = await answer("y\n");
     expect(await runProgram(yes, ["write", "dashboard.orders.refund", "--input", '{"path":{"id":"ord_1"},"body":{"amount":500}}'])).toBe(0);
     expect(yes.stderrText()).toContain("Approve: Process order refund: id=ord_1, amount=500");
+    expect(api.state.dialogs).toBe(1);
     expect(api.state.refunds).toHaveLength(1);
+    const call = toolCalls().filter((request) => request.tool === "scalius_write").at(-1)!;
+    expect(JSON.parse(call.body).params).toMatchObject({ inputResponses: { confirm: { action: "accept", content: { confirm: true } } }, requestState: "dialog-state" });
 
     const no = await answer("n\n");
     expect(await runProgram(no, ["write", "dashboard.orders.refund", "--input", '{"path":{"id":"ord_1"},"body":{"amount":500}}'])).toBe(10);
     expect(api.state.refunds).toHaveLength(1);
   });
 
-  it("batch: the 428 covers the whole batch; --yes repeats the identical steps once with the token", async () => {
+  it("batch: the 428 covers the whole batch; --approval repeats the identical steps once", async () => {
     const steps = '{"steps":[{"id":"refund","operationId":"dashboard.orders.refund","input":{"path":{"id":"ord_1"},"body":{"amount":500}}}]}';
     const refused = await pairedRuntime();
-    expect(await runProgram(refused, ["batch", "--input", steps])).toBe(10);
+    expect(await runProgram(refused, ["batch", "--yes", "--input", steps])).toBe(10);
     expect(toolCalls().filter((call) => call.tool === "scalius_write")).toHaveLength(1);
     expect(api.state.batchWrites).toBe(0);
     expect(JSON.parse(refused.stderrText())).toMatchObject({ ok: false, error: { code: "confirmation_required", status: 428 } });
 
+    const [approvalId] = [...api.state.approvals.keys()];
+    api.state.approvals.set(approvalId!, "approved");
     api.requests.length = 0;
     const approved = await pairedRuntime();
-    expect(await runProgram(approved, ["batch", "--yes", "--input", steps])).toBe(0);
+    expect(await runProgram(approved, ["batch", "--approval", approvalId!, "--input", steps])).toBe(0);
     const writes = toolCalls().filter((call) => call.tool === "scalius_write");
-    expect(writes).toHaveLength(2);
-    const { confirmToken, ...repeated } = writes[1]!.arguments as Record<string, unknown>;
-    expect(writes[0]!.arguments).toEqual(repeated);
-    expect(confirmToken).toMatch(/^sct_/);
+    expect(writes).toHaveLength(1);
+    expect(writes[0]!.arguments).toMatchObject({ approvalId });
     expect(api.state.batchWrites).toBe(1);
   });
 
@@ -209,6 +224,8 @@ describe("agent commands over the store's MCP tools", () => {
 
 describe("scalius bulk", () => {
   const bulkBody = () => api.state.bulkWrites.at(-1)!.input;
+  // These grants run price changes without asking (their owner turned approval off); the gated case turns it on.
+  beforeEach(() => { api.state.approvalOff = true; });
 
   it("builds the prices body from friendly flags: --set, --percent and --amount, by ids or filter", async () => {
     const set = await pairedRuntime();
@@ -365,33 +382,38 @@ describe("scalius bulk", () => {
     expect(percent.stdoutText()).toContain("Currency: BDT (2 decimal places); change every price by 5%.");
   });
 
-  it("a gated bulk change: 428 with the server's summary, then the identical request with the token and the same Idempotency-Key", async () => {
+  it("a gated bulk change: 428 with the server's summary, then the identical request with the approval and the same Idempotency-Key", async () => {
+    api.state.approvalOff = false;
     const refused = await pairedRuntime();
-    expect(await runProgram(refused, ["bulk", "prices", "--ids", "var_1,var_2", "--percent", "5"])).toBe(10);
+    expect(await runProgram(refused, ["bulk", "prices", "--ids", "var_1,var_2", "--percent", "5", "--yes"])).toBe(10);
     expect(JSON.parse(refused.stderrText())).toMatchObject({ error: { code: "confirmation_required", status: 428, message: expect.stringContaining("Change the price of 2 SKUs by 5%") } });
     expect(api.state.bulkWrites).toEqual([]);
     expect(toolCalls().filter((call) => call.tool === "scalius_write")).toHaveLength(1);
 
+    const [approvalId] = [...api.state.approvals.keys()];
+    api.state.approvals.set(approvalId!, "approved");
     api.requests.length = 0;
     const approved = await pairedRuntime();
-    expect(await runProgram(approved, ["bulk", "prices", "--ids", "var_1,var_2", "--percent", "5", "--yes"])).toBe(0);
+    expect(await runProgram(approved, ["bulk", "prices", "--ids", "var_1,var_2", "--percent", "5", "--approval", approvalId!])).toBe(0);
     const writes = toolCalls().filter((call) => call.tool === "scalius_write");
-    expect(writes).toHaveLength(2);
-    const { confirmToken, ...repeated } = writes[1]!.arguments as Record<string, unknown>;
-    expect(writes[0]!.arguments).toEqual(repeated);
-    expect(repeated.idempotencyKey).toMatch(/^sck_[0-9a-f-]{36}$/);
-    expect(confirmToken).toMatch(/^sct_/);
+    expect(writes).toHaveLength(1);
+    expect(writes[0]!.arguments).toMatchObject({ approvalId, idempotencyKey: expect.stringMatching(/^sck_[0-9a-f-]{36}$/) });
     expect(api.state.bulkWrites).toHaveLength(1);
-    expect(api.state.bulkWrites[0]).toMatchObject({ idempotencyKey: repeated.idempotencyKey, confirmToken });
+    expect(api.state.bulkWrites[0]).toMatchObject({ approvalId });
     expect(JSON.parse(approved.stdoutText())).toMatchObject({ ok: true, data: { id: "bulk_bbbb", status: "done" }, meta: { status: 200 } });
+
+    // An approval works once.
+    const again = await pairedRuntime();
+    expect(await runProgram(again, ["bulk", "prices", "--ids", "var_1,var_2", "--percent", "5", "--approval", approvalId!])).not.toBe(0);
+    expect(api.state.bulkWrites).toHaveLength(1);
   });
 
-  it("a spent token (409) is replaced by a fresh one under the same Idempotency-Key: the first run comes back, never a second", async () => {
+  it("the same Idempotency-Key replays the first run, never a second", async () => {
     const first = await pairedRuntime();
     expect(await runProgram(first, ["bulk", "prices", "--ids", "var_1", "--set", "900", "--yes"])).toBe(0);
-    const { idempotencyKey, confirmToken } = api.state.bulkWrites[0]!;
+    const { idempotencyKey } = api.state.bulkWrites[0]!;
     const replay = await pairedRuntime();
-    expect(await runProgram(replay, ["write", "dashboard.resources.variants.bulk_set_prices", "--confirm-token", confirmToken!, "--idempotency-key", idempotencyKey!, "--input", JSON.stringify({ body: api.state.bulkWrites[0]!.input })])).toBe(0);
+    expect(await runProgram(replay, ["write", "dashboard.resources.variants.bulk_set_prices", "--idempotency-key", idempotencyKey!, "--input", JSON.stringify({ body: api.state.bulkWrites[0]!.input })])).toBe(0);
     expect(api.state.bulkWrites).toHaveLength(1);
     expect(JSON.parse(replay.stdoutText())).toMatchObject({ meta: { replayed: true } });
   });

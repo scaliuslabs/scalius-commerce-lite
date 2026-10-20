@@ -39,7 +39,7 @@ scalius ask "<question>"                                 = scalius_answer
 scalius search "<goal>" [--limit 1-10]                   = scalius_search
 scalius describe <operationId...> [--full|--examples]    = scalius_describe
 scalius read <operationId> [--input j|@f|-] [--limit n] [--cursor c] [--all] [--ndjson] [--max-bytes n]
-scalius write <operationId> [--input ...] [--dry-run] [--yes] [--confirm-token t] [--idempotency-key auto|<key>]
+scalius write <operationId> [--input ...] [--dry-run] [--yes] [--approval <id>] [--idempotency-key auto|<key>]
 scalius batch --input '{"steps":[...]}' [--dry-run] [--yes]
 scalius bulk prices  (--ids sku,.. | --filter 'category=<id>') (--set <amount> | --percent <n> | --amount <amount>) [--minor] [--dry-run] [--yes] [--wait]
 scalius bulk stock   (--items sku=qty,.. | --ids sku,.. --quantity <n>) [--location <id>] [--reason <text>]
@@ -74,7 +74,7 @@ Global: --profile <name>  --output human|json  --select <pointers>  --jq <expres
 ## Changes and approval
 
 - `--dry-run` validates and previews a change and writes nothing (exit 11). A prices dry run names the store currency and shows the change in it (`Currency: BDT (2 decimal places); set every price to 1500.00 BDT.`); the server's before and after rows stay in minor units.
-- A destructive or financial change (and any operation the registry marks `confirmation: required`, plus security changes) needs the merchant's approval, and applies to `write`, `batch` and `bulk` alike. The store answers the change with 428 `confirmation_required`, its summary and a one-use token. The CLI shows the summary; with `--yes` (or a yes at the interactive prompt) it repeats the identical request with that token and the same idempotency key. Without either, a non-interactive run sends nothing more and exits 10. A token works once, for exactly that input (`--confirm-token` passes one you already hold).
+- A destructive or financial change, a security change (a security read needs none), and any operation the registry marks `confirmation: required` needs a person's approval while the grant's approval policy is on; it applies to `write`, `batch` and `bulk` alike. On a terminal the CLI offers the store's dialog and asks you there. Elsewhere (a pipe, an agent) the store answers 428 `confirmation_required` with the summary and an approval link for the grant's owner; the command sends nothing more and exits 10. Once they approve in the dashboard (within 5 minutes), run the same command again with `--approval <id>`: it runs once, for exactly that input. `--yes` never approves a gated change. A personal access token always gets the dashboard link.
 - Every write that takes an idempotency key gets one automatically (`sck_...`), reused for every retry within the invocation and printed in `meta.idempotencyKey`; pass `--idempotency-key <key>` to replay an earlier attempt.
 
 ## Exit codes

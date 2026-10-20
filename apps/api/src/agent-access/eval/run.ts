@@ -40,7 +40,7 @@ export interface TaskReport {
   /** Up to 3 new or changed rows of each wrongly written table. */
   wrongWriteRows: Record<string, string[]>;
   changedTables: string[];
-  calls: Array<{ tool: string; operationIds: string[]; dryRun: boolean; confirmToken: boolean; isError: boolean; resultBytes: number }>;
+  calls: Array<{ tool: string; operationIds: string[]; dryRun: boolean; approved: boolean; isError: boolean; resultBytes: number }>;
 }
 
 export interface EvalReport {
@@ -161,7 +161,7 @@ async function runTask(store: EvalStore, fx: EvalFixtures, task: MerchantTask): 
       tool: record.tool,
       operationIds: record.operationIds,
       dryRun: record.dryRun,
-      confirmToken: record.confirmToken,
+      approved: record.approved,
       isError: record.isError,
       resultBytes: record.resultBytes,
     })),

@@ -2,6 +2,11 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { nanoid } from "nanoid";
 import { deleteAgentArtifactObjects } from "../../agent-access/artifact-delivery";
 import { claimAgentBrowserHandoff } from "../../agent-access/browser-handoffs";
+import {
+  APPROVAL_ID_PATTERN,
+  decideAgentApproval,
+  readAgentApproval,
+} from "../../agent-access/approvals";
 import { loadAgentAccessBackend } from "../../agent-access/backend";
 import { resolveAgentPrincipalFromGrant } from "../../agent-access/principal";
 import {
@@ -643,6 +648,68 @@ app.openapi(claimBrowserHandoffRoute, async (c) => {
   }
   noStore(c);
   return ok(c, { action: claimed.action });
+});
+
+// A person approves one gated agent change (audit R2 F3): only the grant's
+// owner, in the same 2FA-verified dashboard session, never an agent.
+const approvalParams = z.object({
+  approvalId: z.string().regex(APPROVAL_ID_PATTERN),
+});
+const approvalSchema = z.object({
+  approvalId: z.string(),
+  status: z.enum(["pending", "approved"]),
+  summary: z.string(),
+  operationIds: z.array(z.string()),
+  expiresAt: z.string(),
+});
+const getApprovalRoute = createRoute({
+  method: "get",
+  path: "/approvals/{approvalId}",
+  operationId: "dashboard.agent_access.approval.get",
+  tags: ["Admin - Agent Access"],
+  summary: "Read a change an agent asks to make",
+  description: "Browser-only: the summary of one gated agent change waiting for (or given) its owner's approval.",
+  request: { params: approvalParams },
+  responses: {
+    200: { description: "The change to approve", content: { "application/json": { schema: successEnvelope(approvalSchema) } } },
+    ...errorResponses,
+  },
+});
+app.openapi(getApprovalRoute, async (c) => {
+  const ownerUserId = assertBrowserHandoffSession(c);
+  const approval = await readAgentApproval(c.get("db"), c.env, c.req.valid("param").approvalId, ownerUserId);
+  if (!approval) throw new NotFoundError("This approval request is unavailable or expired");
+  noStore(c);
+  return ok(c, approval);
+});
+
+const decideApprovalRoute = createRoute({
+  method: "post",
+  path: "/approvals/{approvalId}",
+  operationId: "dashboard.agent_access.approval.decide",
+  tags: ["Admin - Agent Access"],
+  summary: "Approve or decline a change an agent asks to make",
+  description: "Browser-only: the grant's owner approves (the agent's retry then runs once) or declines one gated agent change.",
+  request: {
+    params: approvalParams,
+    body: { content: { "application/json": { schema: z.object({ decision: z.enum(["approve", "decline"]) }) } } },
+  },
+  responses: {
+    200: {
+      description: "The answer was recorded",
+      content: { "application/json": { schema: successEnvelope(z.object({ decision: z.enum(["approve", "decline"]) })) } },
+    },
+    ...errorResponses,
+  },
+});
+app.openapi(decideApprovalRoute, async (c) => {
+  const ownerUserId = assertBrowserHandoffSession(c);
+  const { decision } = c.req.valid("json");
+  const applied = await decideAgentApproval(c.get("db"), c.req.valid("param").approvalId, ownerUserId, decision);
+  if (!applied) throw new NotFoundError("This approval request is unavailable, already answered, or expired");
+  logOpsEvent("info", "agent_access.approval_decided", { decision });
+  noStore(c);
+  return ok(c, { decision });
 });
 
 export const adminAgentAccessRoutes = app;

@@ -49,4 +49,14 @@ export const AGENT_ACCESS_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/agent-access/device-authorizations/*/deny": {
     POST: { permission: PERMISSIONS.AGENT_ACCESS_MANAGE },
   },
+  // Browser-only ceremonies for the grant's owner (2FA-verified human session,
+  // never an agent): a secure continuation and the approval of a gated change.
+  "/api/v1/admin/agent-access/browser-handoffs/*": {
+    GET: { permission: PERMISSIONS.AGENT_ACCESS_MANAGE },
+    POST: { permission: PERMISSIONS.AGENT_ACCESS_MANAGE },
+  },
+  "/api/v1/admin/agent-access/approvals/*": {
+    GET: { permission: PERMISSIONS.AGENT_ACCESS_MANAGE },
+    POST: { permission: PERMISSIONS.AGENT_ACCESS_MANAGE },
+  },
 };

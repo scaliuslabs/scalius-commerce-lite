@@ -4,7 +4,7 @@ A failed call returns `{ok:false, error:{code, status, message, retryable, hint,
 
 | Code or status | What to do |
 |---|---|
-| `confirmation_required` (428; CLI exit 10) | Nothing was written. Show `confirmation.summary` to the merchant; after their yes, resend with `confirmToken` (CLI `--yes`). |
+| `confirmation_required` (428; CLI exit 10) | Nothing was written. Give the merchant `confirmation.approvalUrl`; after they approve there, resend with `approvalId` (CLI `--approval <id>`). `--yes` never approves. |
 | `confirmation_declined` | The merchant said no. Stop. |
 | `confirm_token_invalid` | The input changed or the token expired (10 minutes): dry run again and ask again. |
 | `confirm_token_used` | The approved write already ran. Read to verify; do not repeat it. |
