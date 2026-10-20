@@ -163,7 +163,7 @@ export const productRepresentationSchema = z.object({
   deletedAt: iso.nullable(),
 });
 
-/** `inventory.level_changed` is about one SKU: its on-hand units per location. */
+/** `variant.inventory_changed` is about one SKU: its on-hand units per location. */
 export const variantRepresentationSchema = z.object({
   id,
   productId: id,
@@ -363,7 +363,7 @@ export const giftCardRepresentationSchema = z.object({
   updatedAt: iso,
 });
 
-export const transactionRepresentationSchema = z.object({
+export const giftCardTransactionRepresentationSchema = z.object({
   id,
   giftCardId: id,
   kind: state,
@@ -403,7 +403,7 @@ export const EVENT_REPRESENTATION_SCHEMAS = {
   discount: discountRepresentationSchema,
   review: reviewRepresentationSchema,
   gift_card: giftCardRepresentationSchema,
-  transaction: transactionRepresentationSchema,
+  gift_card_transaction: giftCardTransactionRepresentationSchema,
   object: objectRepresentationSchema,
 } as const;
 
@@ -451,7 +451,7 @@ const FETCH_HINTS: Record<EventRepresentationType, (resourceId: string, facts: R
   discount: (resource) => ({ operationId: "dashboard.discounts.get", path: `/api/v1/admin/discounts/${segment(resource)}` }),
   review: (resource) => ({ operationId: "dashboard.reviews.get", path: `/api/v1/admin/reviews/${segment(resource)}` }),
   gift_card: (resource) => ({ operationId: "dashboard.gift_cards.get", path: `/api/v1/admin/gift-cards/${segment(resource)}` }),
-  transaction: (_resource, facts) => ({ operationId: "dashboard.gift_cards.get", path: `/api/v1/admin/gift-cards/${segment(facts.giftCardId)}` }),
+  gift_card_transaction: (_resource, facts) => ({ operationId: "dashboard.gift_cards.get", path: `/api/v1/admin/gift-cards/${segment(facts.giftCardId)}` }),
   object: (resource, facts) => ({ operationId: "objects.get", path: `/api/v1/admin/objects/${segment(facts.objectType)}/${segment(resource)}` }),
 };
 

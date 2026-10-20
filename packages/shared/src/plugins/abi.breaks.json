@@ -154,5 +154,29 @@
   "from": "9c8cbfd88bfd3cbc",
   "change": "providers.sms.send input clientReference: the field was removed.",
   "reason": "Pre-lock (audit R2 item 10): every send port (sms, email, messaging, push) names its fields to, text and idempotencyKey."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "652c2620e31b39ad",
+  "change": "events.inventory.level_changed: the topic was removed.",
+  "reason": "Pre-lock rename (audit R2 item 11): each topic's prefix names its resource, so inventory.level_changed is variant.inventory_changed; migration 0164 rewrites stored topics, grants, registrations and subscriptions."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "652c2620e31b39ad",
+  "change": "events.inventory.purchase_order_updated: the topic was removed.",
+  "reason": "Pre-lock rename (audit R2 item 11): each topic's prefix names its resource, so inventory.purchase_order_updated is purchase_order.updated; migration 0164 rewrites stored topics, grants, registrations and subscriptions."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "652c2620e31b39ad",
+  "change": "events.inventory.transfer_updated: the topic was removed.",
+  "reason": "Pre-lock rename (audit R2 item 11): each topic's prefix names its resource, so inventory.transfer_updated is inventory_transfer.updated; migration 0164 rewrites stored topics, grants, registrations and subscriptions."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "652c2620e31b39ad",
+  "change": "events.gift_card.transaction: the topic was removed.",
+  "reason": "Pre-lock rename (audit R2 item 11): each topic's prefix names its resource, so gift_card.transaction is gift_card_transaction.created; migration 0164 rewrites stored topics, grants, registrations and subscriptions."
  }
 ]

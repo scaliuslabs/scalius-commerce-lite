@@ -43,7 +43,7 @@ describe("event catalog", () => {
       ["discount.redeemed", { promotionId: "d", orderId: "o", codeId: null }],
       ...(["created", "updated"] as const).map((kind) => [`review.${kind}`, { reviewId: "r", productId: "p", previousStatus: null, status: "pending", rating: 5 }] as const),
       ...(["created", "updated"] as const).map((kind) => [`gift_card.${kind}`, { giftCardId: "g", previousStatus: null, status: "active" }] as const),
-      ["gift_card.transaction", { giftCardId: "g", transactionId: "t", kind: "issue", orderId: null }],
+      ["gift_card_transaction.created", { giftCardId: "g", transactionId: "t", kind: "issue", orderId: null }],
       ...(["created", "updated", "deleted"] as const).map((kind) => [`object.${kind}`, { objectType: "ot", objectId: "obj", revision: 1, status: "active" }] as const),
       ["customer.redact_requested", { customerId: "c" }],
       ["customer.data_requested", { customerId: "c" }],
@@ -70,7 +70,7 @@ describe("event catalog", () => {
   });
 
   it("parses stored facts strictly by type and tolerates additive keys", () => {
-    expect(parseEventFacts("inventory.level_changed", JSON.stringify({
+    expect(parseEventFacts("variant.inventory_changed", JSON.stringify({
       variantId: "var_1",
       productId: "prod_1",
       locationId: null,
@@ -79,7 +79,7 @@ describe("event catalog", () => {
       movementType: "deducted",
       future: "ignored by older readers",
     }))).toMatchObject({ variantId: "var_1", quantityDelta: -2, locationId: null });
-    expect(parseEventFacts("inventory.level_changed", { variantId: "var_1", quantityDelta: "-2" })).toBeNull();
+    expect(parseEventFacts("variant.inventory_changed", { variantId: "var_1", quantityDelta: "-2" })).toBeNull();
     expect(parseEventFacts("order.created", "{not json")).toBeNull();
     expect(parseEventFacts("product.deleted", { productId: "p", deletion: "gone" })).toBeNull();
   });
@@ -91,7 +91,8 @@ describe("topic filters", () => {
     expect(topicMatchesFilter("order.paid", "order.*")).toBe(true);
     expect(topicMatchesFilter("order.paid", "*")).toBe(true);
     expect(topicMatchesFilter("order.paid", "product.*")).toBe(false);
-    expect(topicMatchesFilter("inventory.level_changed", "inventory.*")).toBe(true);
+    expect(topicMatchesFilter("variant.inventory_changed", "variant.*")).toBe(true);
+    expect(topicMatchesFilter("gift_card_transaction.created", "gift_card.*")).toBe(false);
     expect(topicMatchesAnyFilter("customer.updated", ["order.*", "customer.updated"])).toBe(true);
     expect(topicMatchesAnyFilter("customer.created", ["order.*", "customer.updated"])).toBe(false);
   });

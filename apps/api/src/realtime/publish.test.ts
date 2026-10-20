@@ -19,10 +19,10 @@ describe("changesForEvent", () => {
     expect(changesForEvent({ topic: "product.updated", resourceId: "prd_1", facts: { productId: "prd_1", revision: 7 } as never }))
       .toEqual([{ topic: "products", kind: "product.updated", id: "prd_1", rev: 7 }]);
     expect(changesForEvent({
-      topic: "inventory.level_changed",
+      topic: "variant.inventory_changed",
       resourceId: "var_1",
       facts: { variantId: "var_1", productId: "prd_1", locationId: null, quantityDelta: -2, movementId: "mov_1", movementType: "sale" } as never,
-    })).toEqual([{ topic: "inventory", kind: "inventory.level_changed", id: "prd_1" }]);
+    })).toEqual([{ topic: "inventory", kind: "variant.inventory_changed", id: "prd_1" }]);
   });
 
   it("never copies other facts (no quantities, consents or channels)", () => {
@@ -41,13 +41,13 @@ describe("publishRealtime", () => {
     const env = { REALTIME_HUB: { idFromName: () => ({}), get: () => ({ publish }) } } as unknown as Env;
     await publishRealtime(env, [
       ...tableChanges(["inbox", "inbox"]),
-      { topic: "inventory", kind: "inventory.level_changed", id: "prd_1" },
-      { topic: "inventory", kind: "inventory.level_changed", id: "prd_1" },
+      { topic: "inventory", kind: "variant.inventory_changed", id: "prd_1" },
+      { topic: "inventory", kind: "variant.inventory_changed", id: "prd_1" },
     ]);
     expect(publish).toHaveBeenCalledTimes(1);
     expect(publish).toHaveBeenCalledWith([
       { topic: "inbox", kind: "changed" },
-      { topic: "inventory", kind: "inventory.level_changed", id: "prd_1" },
+      { topic: "inventory", kind: "variant.inventory_changed", id: "prd_1" },
     ]);
     await publishRealtime(env, []);
     await publishRealtime({} as Env, tableChanges(["inbox"]));

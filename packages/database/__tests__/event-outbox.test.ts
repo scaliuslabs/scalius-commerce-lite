@@ -122,7 +122,7 @@ describe(`${MIGRATION} triggers (D1)`, () => {
 
   beforeEach(() => {
     sqlite = createMigratedSqlite();
-    sqlite.exec("INSERT INTO event_demand (filter) VALUES ('order.*'), ('return.*'), ('product.*'), ('inventory.*'), ('customer.*')");
+    sqlite.exec("INSERT INTO event_demand (filter) VALUES ('order.*'), ('return.*'), ('product.*'), ('variant.*'), ('purchase_order.*'), ('inventory_transfer.*'), ('customer.*')");
   });
   afterEach(() => sqlite.close());
 

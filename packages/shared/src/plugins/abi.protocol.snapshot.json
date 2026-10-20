@@ -9879,9 +9879,9 @@
    "product.updated": "product",
    "product.deleted": "product",
    "product.publication_changed": "product",
-   "inventory.level_changed": "variant",
-   "inventory.purchase_order_updated": "purchase_order",
-   "inventory.transfer_updated": "inventory_transfer",
+   "variant.inventory_changed": "variant",
+   "purchase_order.updated": "purchase_order",
+   "inventory_transfer.updated": "inventory_transfer",
    "customer.created": "customer",
    "customer.updated": "customer",
    "customer.consent_changed": "customer",
@@ -9898,7 +9898,7 @@
    "review.updated": "review",
    "gift_card.created": "gift_card",
    "gift_card.updated": "gift_card",
-   "gift_card.transaction": "transaction",
+   "gift_card_transaction.created": "gift_card_transaction",
    "object.created": "object",
    "object.updated": "object",
    "object.deleted": "object",
@@ -10234,7 +10234,7 @@
     ],
     "additionalProperties": false
    },
-   "inventory.level_changed": {
+   "variant.inventory_changed": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "properties": {
@@ -10293,7 +10293,7 @@
     ],
     "additionalProperties": false
    },
-   "inventory.purchase_order_updated": {
+   "purchase_order.updated": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "properties": {
@@ -10333,7 +10333,7 @@
     ],
     "additionalProperties": false
    },
-   "inventory.transfer_updated": {
+   "inventory_transfer.updated": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "properties": {
@@ -10948,7 +10948,7 @@
     ],
     "additionalProperties": false
    },
-   "gift_card.transaction": {
+   "gift_card_transaction.created": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "properties": {

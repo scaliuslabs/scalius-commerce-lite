@@ -136,7 +136,7 @@ describe.runIf(postgresUrl)("0103 order channel and event outbox on PostgreSQL",
     const rows = (await client.query("SELECT id, topic, data FROM event_outbox ORDER BY topic, id")).rows as Array<{ id: string; topic: string; data: string }>;
     expect(rows.map((row) => row.topic)).toEqual([
       "customer.created",
-      "inventory.level_changed",
+      "variant.inventory_changed",
       "order.created",
       "order.paid",
       "order.updated",
@@ -146,7 +146,7 @@ describe.runIf(postgresUrl)("0103 order channel and event outbox on PostgreSQL",
       expect(row.id).toMatch(/^evt_\d{13}[0-9a-f]{12}$/);
       expect(parseEventFacts(row.topic as EventTopic, row.data), row.data).not.toBeNull();
     }
-    expect(JSON.parse(rows.find((row) => row.topic === "inventory.level_changed")!.data)).toMatchObject({
+    expect(JSON.parse(rows.find((row) => row.topic === "variant.inventory_changed")!.data)).toMatchObject({
       quantityDelta: 4,
       productId: "p1",
       locationId: "loc_default",

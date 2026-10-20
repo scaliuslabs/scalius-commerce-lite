@@ -1991,7 +1991,7 @@ export const patchApiV1AdminResourcesProductsById = <ThrowOnError extends boolea
 /**
  * Get a SKU's stock
  *
- * The SKU's on-hand units in total and per location, as `inventory.level_changed` carries it.
+ * The SKU's on-hand units in total and per location, as `variant.inventory_changed` carries it.
  */
 export const getApiV1AdminResourcesVariantsById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminResourcesVariantsByIdData, ThrowOnError>): RequestResult<GetApiV1AdminResourcesVariantsByIdResponses, GetApiV1AdminResourcesVariantsByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminResourcesVariantsByIdResponses, GetApiV1AdminResourcesVariantsByIdErrors, ThrowOnError>({ url: '/api/v1/admin/resources/variants/{id}', ...options });
 

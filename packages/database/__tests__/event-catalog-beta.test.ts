@@ -137,6 +137,7 @@ describe("beta event catalog on the migrated schema", () => {
 
   it("emits gift card lifecycle and ledger ids without credentials, recipients or money", () => {
     demand("gift_card.*");
+    demand("gift_card_transaction.*");
     sqlite.exec(`
       INSERT INTO gift_cards (id, code_hash, code_ciphertext, code_last4, currency_code, initial_amount_minor, source, recipient_email)
         VALUES ('gc_beta_00001', 'Private hash', 'Private ciphertext', '1234', 'BDT', 1000, 'manual', 'private@example.test');
@@ -148,7 +149,7 @@ describe("beta event catalog on the migrated schema", () => {
     `);
     expect(facts()).toEqual([
       { topic: "gift_card.created", resourceId: "gc_beta_00001", giftCardId: "gc_beta_00001", previousStatus: null, status: "active" },
-      { topic: "gift_card.transaction", resourceId: "gct_beta_00001", giftCardId: "gc_beta_00001", transactionId: "gct_beta_00001", kind: "issue", orderId: null },
+      { topic: "gift_card_transaction.created", resourceId: "gct_beta_00001", giftCardId: "gc_beta_00001", transactionId: "gct_beta_00001", kind: "issue", orderId: null },
       { topic: "gift_card.updated", resourceId: "gc_beta_00001", giftCardId: "gc_beta_00001", previousStatus: "active", status: "disabled" },
     ]);
   });

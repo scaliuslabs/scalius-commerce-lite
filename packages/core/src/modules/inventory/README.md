@@ -22,7 +22,7 @@ The `inventory` domain owns SKU stock: reservations, deductions, releases and re
 
 - Settings document `inventory` (`inventorySettingsDocument`, field `defaultLowStockThreshold`) is declared in `products/low-stock-policy.ts`, because buyer availability bands read it. `deps.inventoryBands()` depends on it.
 - DVC: the ledger, location, purchasing and transfer tables register no dependency of their own (`packages/shared/src/cache-deps.ts`). Their buyer-visible effect is the SKU availability band, which `product_variants` and `product_buyer_state` register. A write that keeps a SKU in its band advances no dependency. Exception: a level at a location that some sales channel does not sell advances its SKU's product, because that channel's sellable stock subtracts it (0122).
-- Events (emitted by triggers): `inventory.level_changed` (each movement with a non-zero `stock_delta`), `inventory.purchase_order_updated` and `inventory.transfer_updated` (one per revision).
+- Events (emitted by triggers): `variant.inventory_changed` (each movement with a non-zero `stock_delta`), `purchase_order.updated` and `inventory_transfer.updated` (one per revision).
 - A product with SKU movements, purchase-order lines or transfer lines keeps its history: the permanent delete is blocked.
 
 ## Stock model

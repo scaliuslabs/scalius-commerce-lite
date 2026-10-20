@@ -670,7 +670,7 @@ async function giftCardRepresentation(db: Database, giftCardId: string) {
   });
 }
 
-async function transactionRepresentation(db: Database, transactionId: string, giftCardId: string) {
+async function giftCardTransactionRepresentation(db: Database, transactionId: string, giftCardId: string) {
   const row = await db.select({
     id: giftCardTransactions.id,
     giftCardId: giftCardTransactions.giftCardId,
@@ -684,7 +684,7 @@ async function transactionRepresentation(db: Database, transactionId: string, gi
   }).from(giftCardTransactions).innerJoin(giftCards, eq(giftCards.id, giftCardTransactions.giftCardId))
     .where(and(eq(giftCardTransactions.id, transactionId), eq(giftCardTransactions.giftCardId, giftCardId))).get();
   if (!row) return null;
-  return sealed("transaction", { ...row, orderId: row.orderId ?? null, createdAt: isoRequired(row.createdAt) });
+  return sealed("gift_card_transaction", { ...row, orderId: row.orderId ?? null, createdAt: isoRequired(row.createdAt) });
 }
 
 async function objectRepresentation(db: Database, objectType: string, objectId: string) {
@@ -739,9 +739,9 @@ export function createWebhookRepresentationResolver(db: Database): WebhookRepres
         return reviewRepresentation(db, event.resourceId);
       case "gift_card":
         return giftCardRepresentation(db, event.resourceId);
-      case "transaction": {
+      case "gift_card_transaction": {
         const giftCardId = factString(event, "giftCardId");
-        return giftCardId ? transactionRepresentation(db, event.resourceId, giftCardId) : null;
+        return giftCardId ? giftCardTransactionRepresentation(db, event.resourceId, giftCardId) : null;
       }
       case "object": {
         const objectType = factString(event, "objectType");

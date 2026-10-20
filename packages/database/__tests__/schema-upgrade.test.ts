@@ -855,6 +855,12 @@ describe("provider-neutral schema upgrades", { timeout: 30_000 }, () => {
         sqliteStatements: 3,
         postgresStatements: 3,
       },
+      {
+        version: 164,
+        name: "0164_event_topic_names",
+        sqliteStatements: 43,
+        postgresStatements: 43,
+      },
     ]);
   });
 
@@ -1109,6 +1115,7 @@ describe("provider-neutral schema upgrades", { timeout: 30_000 }, () => {
           { version: 161, name: "0161_payment_terms" },
           { version: 162, name: "0162_app_webhook_subscriptions" },
           { version: 163, name: "0163_payment_due_live_index" },
+          { version: 164, name: "0164_event_topic_names" },
         ],
       });
     } finally {
