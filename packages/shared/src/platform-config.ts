@@ -414,22 +414,25 @@ export function normalizeStoreDefaults(source: {
 }
 
 /**
- * Local development runs the three Workers on fixed loopback ports. When the
- * current request arrives on a loopback origin, unset platform URLs fall back
- * to those ports so `pnpm dev` needs no configuration. Production origins are
- * never guessed.
+ * Local development: when the current request arrives on a loopback origin,
+ * unset platform URLs fall back so `pnpm dev` needs no configuration. The API
+ * and media origins are the API's own request origin, so a parallel stack on
+ * a non-default port never points its storefront at another stack's :8787;
+ * the storefront and dashboard fall back to the fixed default ports
+ * (`scripts/dev.sh` saves the real ones). Production origins are never guessed.
  */
 export function withLocalDevelopmentDefaults(
   config: PlatformConfig,
   requestOrigin: string | null | undefined,
 ): PlatformConfig {
-  if (!isLoopbackUrl(requestOrigin)) return config;
+  if (!requestOrigin || !isLoopbackUrl(requestOrigin)) return config;
+  const apiOrigin = new URL(requestOrigin).origin;
   return {
     ...config,
     storefrontUrl: config.storefrontUrl || LOCAL_DEVELOPMENT_PLATFORM_CONFIG.storefrontUrl,
-    apiUrl: config.apiUrl || LOCAL_DEVELOPMENT_PLATFORM_CONFIG.apiUrl,
+    apiUrl: config.apiUrl || apiOrigin,
     dashboardUrl: config.dashboardUrl || LOCAL_DEVELOPMENT_PLATFORM_CONFIG.dashboardUrl,
-    mediaUrl: config.mediaUrl || LOCAL_DEVELOPMENT_PLATFORM_CONFIG.mediaUrl,
+    mediaUrl: config.mediaUrl || `${apiOrigin}/api/v1/media`,
   };
 }
 

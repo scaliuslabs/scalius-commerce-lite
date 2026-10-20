@@ -491,8 +491,18 @@ describe("withLocalDevelopmentDefaults", () => {
     );
     expect(config).toEqual({
       ...PRODUCTION_CONFIG,
-      mediaUrl: LOCAL_DEVELOPMENT_PLATFORM_CONFIG.mediaUrl,
+      mediaUrl: "http://127.0.0.1:8787/api/v1/media",
     });
+  });
+
+  it("points the API and media at the API's own origin on a non-default port", () => {
+    const config = withLocalDevelopmentDefaults(
+      { ...EMPTY_PLATFORM_CONFIG, corsAllowedOrigins: [] },
+      "http://localhost:8811",
+    );
+    expect(config.apiUrl).toBe("http://localhost:8811");
+    expect(config.mediaUrl).toBe("http://localhost:8811/api/v1/media");
+    expect(config.storefrontUrl).toBe(LOCAL_DEVELOPMENT_PLATFORM_CONFIG.storefrontUrl);
   });
 
   it("never guesses origins for non-loopback, service-binding, or missing request origins", () => {
