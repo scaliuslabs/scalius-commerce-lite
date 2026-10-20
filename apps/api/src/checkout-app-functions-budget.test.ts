@@ -17,6 +17,7 @@ vi.mock("./plugins/bundled.gen", async (importOriginal) => (await import("./plug
 import { getDb } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { activatePlugin, installPlugin, writePluginSettings } from "@scalius/core/modules/plugins";
+import { hashCustomerSessionToken } from "@scalius/core/modules/customers";
 import { errorResponseFromError } from "./utils/api-response";
 import { BUNDLED_PLUGINS } from "./plugins/bundled.gen";
 import { PLUGIN_TEST_CREDENTIAL_KEY } from "./plugins/testing/fixtures";
@@ -100,7 +101,9 @@ const ENV = {
   CREDENTIAL_ENCRYPTION_KEY: PLUGIN_TEST_CREDENTIAL_KEY,
   PUBLIC_API_BASE_URL: "https://api.shop.test",
   STOREFRONT_URL: "https://shop.test",
+  CUSTOMER_SESSION_HASH_KEY: "checkout-budget-session-key-0123456789abcdef",
 };
+const SESSION = "checkout-budget-signed-in-buyer";
 
 const QUOTE = {
   items: [{ productId: "p_tea", variantId: "v_tea", quantity: 4 }, { productId: "p_mug", variantId: "v_mug", quantity: 1 }],
@@ -146,7 +149,7 @@ describe("checkout route D1 budget with app checkout functions", () => {
     await activatePlugin(db, "acme.bulk-discount", { actorUserId: "owner", expectedRevision: configured.revision });
   }
 
-  async function meter(path: string, body: unknown) {
+  async function meter(path: string, body: unknown, session?: string) {
     const metered = meteredBinding(binding);
     const env = { ...ENV, DB: metered.binding } as unknown as Env;
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
@@ -164,12 +167,14 @@ describe("checkout route D1 budget with app checkout functions", () => {
     const ctx = { waitUntil: (promise: Promise<unknown>) => void waits.push(promise), passThroughOnException: () => undefined };
     const response = await app.request(`/api/v1${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(session ? { "X-Customer-Session": session } : {}) },
       body: JSON.stringify(body),
     }, env, ctx as never);
+    // The buyer's wait: what the response cost before its after-response work.
+    const beforeResponse = [metered.roundTrips, metered.waves];
     const json = await response.json() as { success: boolean; data: Record<string, unknown> };
     await Promise.all(waits);
-    return { status: response.status, json, roundTrips: metered.roundTrips, waves: metered.waves, batchSizes: metered.batchSizes };
+    return { status: response.status, json, roundTrips: metered.roundTrips, waves: metered.waves, batchSizes: metered.batchSizes, beforeResponse };
   }
 
   async function withAndWithoutRegistrationRead(path: string, body: unknown) {
@@ -203,23 +208,24 @@ describe("checkout route D1 budget with app checkout functions", () => {
     expect({ roundTrips: after.roundTrips - before.roundTrips, waves: after.waves - before.waves }).toEqual({ roundTrips: 1, waves: 1 });
   });
 
+  const order = (fingerprint: string) => ({
+    checkoutRequestId: `budget_${crypto.randomUUID()}`,
+    expectedQuoteFingerprint: fingerprint,
+    customerName: "Budget Buyer",
+    customerPhone: "+8801712345678",
+    customerEmail: null,
+    shippingAddress: "House 1, Road 2, Gulshan",
+    city: "city_1",
+    zone: "zone_1",
+    notes: null,
+    items: CART.items,
+    discountCodes: [],
+    shippingCharge: 60,
+    shippingMethodId: "m_std",
+    paymentMethod: "cod",
+  });
+
   it("order placement through the real route: the registrations ride the read batch, the order carries the app discount", async () => {
-    const order = (fingerprint: string) => ({
-      checkoutRequestId: `budget_${crypto.randomUUID()}`,
-      expectedQuoteFingerprint: fingerprint,
-      customerName: "Budget Buyer",
-      customerPhone: "+8801712345678",
-      customerEmail: null,
-      shippingAddress: "House 1, Road 2, Gulshan",
-      city: "city_1",
-      zone: "zone_1",
-      notes: null,
-      items: CART.items,
-      discountCodes: [],
-      shippingCharge: 60,
-      shippingMethodId: "m_std",
-      paymentMethod: "cod",
-    });
     const plain = await meter("/orders/tax-quote", QUOTE);
     const placedPlain = await meter("/orders", order(String(plain.json.data.quoteFingerprint)));
     expect(placedPlain.status, JSON.stringify(placedPlain.json)).toBe(201);
@@ -234,6 +240,31 @@ describe("checkout route D1 budget with app checkout functions", () => {
     expect(placed.batchSizes[0]).toBe(placedPlain.batchSizes[0]);
     // With an app: one more wave (the app cart's facts); the commit is still one batch.
     expect({ roundTrips: placed.roundTrips - placedPlain.roundTrips, waves: placed.waves - placedPlain.waves }).toEqual({ roundTrips: 1, waves: 1 });
+  });
+
+  it("records the order placement round trips a buyer waits for, guest and signed in", async () => {
+    sqlite.exec(`INSERT INTO customers (id, name, email, phone, account_claimed_at, phone_verified_at)
+      VALUES ('cust_signed_in', 'Signed In', 'signed@shop.test', '+8801712345678', unixepoch(), unixepoch())`);
+    sqlite.prepare("INSERT INTO customer_sessions (token_hash, customer_id, expires_at) VALUES (?, ?, ?)")
+      .run(await hashCustomerSessionToken(SESSION, ENV.CUSTOMER_SESSION_HASH_KEY), "cust_signed_in", Math.floor(Date.now() / 1000) + 3_600);
+    const quote = await meter("/orders/tax-quote", QUOTE);
+    const guest = await meter("/orders", order(String(quote.json.data.quoteFingerprint)));
+    const signedIn = await meter("/orders", order(String(quote.json.data.quoteFingerprint)), SESSION);
+    expect([guest.status, signedIn.status], JSON.stringify([guest.json, signedIn.json])).toEqual([201, 201]);
+    expect(sqlite.prepare("SELECT account_owner_customer_id AS owner FROM orders WHERE id = ?").get(String(signedIn.json.data.orderId))).toEqual({ owner: "cust_signed_in" });
+    // [round trips, waves] the buyer waits for (before the after-response work).
+    expect({ guest: guest.beforeResponse, signedIn: signedIn.beforeResponse }).toMatchInlineSnapshot(`
+      {
+        "guest": [
+          3,
+          3,
+        ],
+        "signedIn": [
+          3,
+          3,
+        ],
+      }
+    `);
   });
 
   it("records the measured budgets (a new query or sequential await fails here first)", async () => {

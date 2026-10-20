@@ -95,8 +95,6 @@ describe("atomic checkout attempts", () => {
     const attempt = createAtomicCheckoutAttempt(identity);
 
     expect(attempt).toMatchObject({
-      commitMode: "atomic",
-      origin: "new",
       requestKey: identity.requestKey,
       requestHash: identity.requestHash,
       statusToken: identity.statusToken,
@@ -106,10 +104,9 @@ describe("atomic checkout attempts", () => {
     expect(attempt.orderId).toHaveLength(16);
   });
 
-  it("replays committed rows and exposes active legacy processing rows", async () => {
+  it("replays committed rows; no row starts a new attempt", async () => {
     const identity = await buildCheckoutAttemptIdentity(buildInput());
     const committed = createAttemptRow(identity, {
-      status: "committed",
       linkedOrderId: "order_committed",
       responsePayload: JSON.stringify({ orderId: "order_committed" }),
     });
@@ -120,44 +117,7 @@ describe("atomic checkout attempts", () => {
       status: "replay",
       response: { orderId: "order_committed" },
     });
-
-    const active = createAttemptRow(identity, {
-      status: "processing",
-      claimExpiresAt: Math.floor(Date.now() / 1_000) + 60,
-    });
-    await expect(resolveExistingCheckoutAttempt(
-      createResolverDb(active),
-      identity,
-    )).resolves.toEqual({
-      status: "processing",
-      orderId: active.orderId,
-      statusToken: identity.statusToken,
-    });
-  });
-
-  it("reuses failed and stale legacy identities in the new atomic commit", async () => {
-    const identity = await buildCheckoutAttemptIdentity(buildInput());
-    for (const row of [
-      createAttemptRow(identity, { status: "failed", claimExpiresAt: null }),
-      createAttemptRow(identity, {
-        status: "processing",
-        claimExpiresAt: Math.floor(Date.now() / 1_000) - 1,
-      }),
-    ]) {
-      await expect(resolveExistingCheckoutAttempt(
-        createResolverDb(row),
-        identity,
-      )).resolves.toMatchObject({
-        status: "retry",
-        attempt: {
-          commitMode: "atomic",
-          origin: "retry",
-          id: row.id,
-          orderId: row.orderId,
-          checkoutToken: row.checkoutToken,
-        },
-      });
-    }
+    await expect(resolveExistingCheckoutAttempt(createResolverDb(undefined), identity)).resolves.toBeNull();
   });
 
   it("rejects reuse of a request id for different checkout facts", async () => {
@@ -202,10 +162,10 @@ describe("atomic checkout attempts", () => {
     }
   });
 
-  it.each(["failed", "processing", "committed"])("does not reopen a mismatched %s attempt with a missing order", async (status) => {
+  it("does not reopen a mismatched attempt with a missing order", async () => {
     const identity = await buildCheckoutAttemptIdentity(buildInput());
     const changed = await buildCheckoutAttemptIdentity(buildInput({ shippingCharge: 60 }));
-    const row = createAttemptRow(identity, { status, claimExpiresAt: 0 });
+    const row = createAttemptRow(identity);
 
     try {
       resolveCheckoutAttemptRow(row, changed);
@@ -235,7 +195,7 @@ describe("atomic checkout attempts", () => {
       });
       for (const request of [identity, changed]) {
         try {
-          await resolveExistingCheckoutAttempt(createResolverDb(row), request, undefined, Promise.resolve(customerId));
+          await resolveExistingCheckoutAttempt(createResolverDb(row), request, Promise.resolve(customerId));
           expect.fail("A different account must not recover the checkout");
         } catch (error) {
           expect(error).toMatchObject({ status: 403, code: "FORBIDDEN", details: undefined });
@@ -252,7 +212,7 @@ describe("atomic checkout attempts", () => {
       status: "committed", linkedOrderId: "order_existing", linkedOrderAccountOwnerCustomerId: "customer_owner",
       responsePayload: JSON.stringify(response),
     });
-    await expect(resolveExistingCheckoutAttempt(createResolverDb(row), identity, undefined, Promise.resolve("customer_owner")))
+    await expect(resolveExistingCheckoutAttempt(createResolverDb(row), identity, Promise.resolve("customer_owner")))
       .resolves.toEqual({ status: "replay", response });
   });
 
@@ -263,8 +223,8 @@ describe("atomic checkout attempts", () => {
     const row = createAttemptRow(identity, {
       status: "committed", linkedOrderId: "order_existing", responsePayload: JSON.stringify(response),
     });
-    await expect(resolveExistingCheckoutAttempt(createResolverDb(undefined), identity, undefined, customerId)).resolves.toBeNull();
-    await expect(resolveExistingCheckoutAttempt(createResolverDb(row), identity, undefined, customerId))
+    await expect(resolveExistingCheckoutAttempt(createResolverDb(undefined), identity, customerId)).resolves.toBeNull();
+    await expect(resolveExistingCheckoutAttempt(createResolverDb(row), identity, customerId))
       .resolves.toEqual({ status: "replay", response });
   });
 
@@ -341,15 +301,15 @@ describe("atomic checkout attempts", () => {
         responsePayload: JSON.stringify(response),
       });
       await expect(resolveExistingCheckoutAttempt(db, identity)).rejects.toMatchObject({ status: 403 });
-      await expect(resolveExistingCheckoutAttempt(db, identity, undefined, "customer_other")).rejects.toMatchObject({ status: 403 });
-      await expect(resolveExistingCheckoutAttempt(db, identity, undefined, "customer_owner"))
+      await expect(resolveExistingCheckoutAttempt(db, identity, "customer_other")).rejects.toMatchObject({ status: 403 });
+      await expect(resolveExistingCheckoutAttempt(db, identity, "customer_owner"))
         .resolves.toEqual({ status: "replay", response });
       const [rows] = await db.batch([selectCheckoutAttemptByKey(db, identity.requestKey)]);
       expect(rows[0]?.linkedOrderAccountOwnerCustomerId).toBe("customer_owner");
-      expect(() => resolveCheckoutAttemptRow(rows[0], identity, undefined, "customer_other")).toThrow("Sign in to the account");
-      expect(resolveCheckoutAttemptRow(rows[0], identity, undefined, "customer_owner")).toEqual({ status: "replay", response });
+      expect(() => resolveCheckoutAttemptRow(rows[0], identity, "customer_other")).toThrow("Sign in to the account");
+      expect(resolveCheckoutAttemptRow(rows[0], identity, "customer_owner")).toEqual({ status: "replay", response });
       const changed = await buildCheckoutAttemptIdentity(buildInput({ customerWhatsapp: "+8801912345678" }));
-      await expect(resolveExistingCheckoutAttempt(db, changed, undefined, "customer_owner"))
+      await expect(resolveExistingCheckoutAttempt(db, changed, "customer_owner"))
         .rejects.toMatchObject({ code: "CHECKOUT_ATTEMPT_CONFLICT" });
     } finally {
       sqlite.close();
@@ -374,8 +334,6 @@ describe("atomic checkout attempts", () => {
       ] as never);
     };
     const winner: AtomicCheckoutAttempt = {
-      commitMode: "atomic",
-      origin: "new",
       id: "attempt_winner",
       requestKey: "checkout_submit:v1:shared_key",
       requestHash: "shared_hash",
@@ -413,13 +371,13 @@ function createAttemptRow(
     requestHash: identity.requestHash,
     checkoutToken: "chk_existing_secret",
     orderId: "order_existing",
-    status: "processing",
+    status: "committed",
     paymentMethod: null,
     totalAmountMinor: null,
     responsePayload: null,
     attempts: 1,
-    claimId: "legacy_claim",
-    claimExpiresAt: Math.floor(Date.now() / 1_000) + 60,
+    claimId: null,
+    claimExpiresAt: null,
     lastError: null,
     createdAt: 1_700_000_000,
     updatedAt: 1_700_000_000,

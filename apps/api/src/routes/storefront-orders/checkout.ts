@@ -2,7 +2,6 @@ import { checkoutAttributesSchema, readCheckoutAttributes } from "@scalius/share
 import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 // Checkout: the idempotent storefront order commit.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import type { Database } from "@scalius/database/client";
 import { PaymentMethod, PaymentStatus, InventoryPool } from "@scalius/database/schema";
 import { discountCodesSchema } from "../../schemas/storefront-discounts";
 import { isOnlinePaymentMethod, isPaymentMethodId, type PaymentProviders } from "@scalius/core/modules/payments";
@@ -15,7 +14,6 @@ import { requestCourierProviders } from "../../plugins/providers/courier";
 import { GIFT_CARD_PAYMENT_METHOD } from "@scalius/core/modules/gift-cards";
 import { recordCheckoutMarketingConsent } from "@scalius/core/modules/customer-marketing";
 import { getDecimalPlaces } from "@scalius/shared/currency";
-import { getCustomerBySession } from "@scalius/core/modules/customers";
 import { fromMinor } from "@scalius/shared/money";
 import type { CheckoutPaymentMethodId } from "@scalius/core/modules/checkout";
 import {
@@ -65,7 +63,6 @@ import { billingAddressBodyShape } from "../../schemas/billing-address";
 import {
     getCustomerSessionTokenFromRequest,
     giftCardHandlesSchema,
-    lazySessionCustomerId,
     persistedStorefrontVariantIdSchema,
 } from "./shared";
 import { notificationSender } from "../../background/notification-sender";
@@ -139,12 +136,7 @@ async function enforceCheckoutRateLimits(
   }
 }
 
-async function assertCheckoutOrderPolicy(
-  c: {
-    env: Env;
-    get: (key: "db") => Database;
-    req: { header: (name: string) => string | undefined };
-  },
+function assertCheckoutOrderPolicy(
   customerPhone: string | null,
   paymentMethod: CheckoutPaymentMethodId,
   authority: Pick<
@@ -152,8 +144,9 @@ async function assertCheckoutOrderPolicy(
     "checkoutSettings" | "allowedCountries" | "activePaymentMethods"
   >,
   providers: PaymentProviders,
-): Promise<CheckoutOrderPolicyResult> {
-  const db = c.get("db");
+  /** The request's session, read in the checkout's batch: whether one was sent and whom it signs in. */
+  session: { sent: boolean; customerId: string | null },
+): CheckoutOrderPolicyResult {
   const checkoutSettings = authority.checkoutSettings;
   const checkoutSettingsSnapshot = paymentMethod === GIFT_CARD_PAYMENT_METHOD
     ? assertGiftCardCheckoutPolicy(customerPhone, authority)
@@ -164,15 +157,7 @@ async function assertCheckoutOrderPolicy(
       providers,
     );
 
-  const sessionToken = getCustomerSessionTokenFromRequest(c);
-  const session = sessionToken
-    ? await getCustomerBySession(
-      db,
-      sessionToken,
-      getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>),
-    )
-    : null;
-  if (session?.customerId) {
+  if (session.customerId) {
     return {
       customerIdentity: { customerId: session.customerId, source: "authenticated" },
       checkoutSettings: checkoutSettingsSnapshot,
@@ -183,7 +168,7 @@ async function assertCheckoutOrderPolicy(
   // browser still holds a session that ended (Shopify): an old cookie is no
   // reason to stop a buyer who never asked to sign in.
   if (checkoutSettings?.guestCheckoutEnabled ?? true) {
-    return { customerIdentity: null, checkoutSettings: checkoutSettingsSnapshot, sessionEnded: Boolean(sessionToken) };
+    return { customerIdentity: null, checkoutSettings: checkoutSettingsSnapshot, sessionEnded: session.sent };
   }
   throw new AppError(401, "CUSTOMER_SIGN_IN_REQUIRED", CUSTOMER_SIGN_IN_REQUIRED_MESSAGE);
 }
@@ -492,18 +477,18 @@ app.openapi(createOrderRoute, async (c) => {
 
   try {
     const attemptIdentity = await buildCheckoutAttemptIdentity(data);
-    const sessionCustomerId = lazySessionCustomerId(c, (token) =>
-      getCustomerBySession(db, token, getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>)));
-    // What the apps' line prices and cart transforms see besides the cart.
+    const sessionToken = getCustomerSessionTokenFromRequest(c);
+    // What the apps' line prices and cart transforms see besides the cart
+    // (and the signed-in buyer, from the read batch).
     const appContext = {
       attributes: data.attributes,
       channel: "online_store" as const,
-      customerId: sessionCustomerId,
       destination: data.shippingCountryCode ? { country: data.shippingCountryCode, city: null, zone: null } : null,
       discountCodes: data.discountCodes,
     };
-    // One read round trip: idempotency row, checkout authority, and the rows
-    // the commit needs. A committed request replays before any policy check.
+    // One read round trip: idempotency row, checkout authority, the buyer's
+    // session and the rows the commit needs. A committed request replays
+    // before any policy check.
     const checkoutReads = await loadStorefrontCheckoutReads<CheckoutCreatedPayload>(
       db,
       attemptIdentity,
@@ -536,13 +521,15 @@ app.openapi(createOrderRoute, async (c) => {
         },
         customerEmail: data.customerEmail,
         customerPhone: data.customerPhone,
-        // The order's market prices the lines (MARKETS-DESIGN D5); the
-        // session is read only when a segment price list applies.
+        // The order's market prices the lines (MARKETS-DESIGN D5); a segment
+        // price list reads the session row of this batch.
         billingCountryCode: data.billingCountryCode,
-        customerId: sessionCustomerId,
       },
       getCredentialEncryptionKey(c.env as Record<string, unknown>),
       {
+        session: sessionToken
+          ? { token: sessionToken, hashKey: getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>) }
+          : null,
         // App payment providers join from the registrations the read batch carries.
         paymentProviders: (registrations) => paymentProvidersFromRegistrations(requestProviderRuntime(c), registrations),
         // The apps' checkout functions, from the registrations the read batch
@@ -554,32 +541,17 @@ app.openapi(createOrderRoute, async (c) => {
           db,
           registrations,
         }),
-        linePricer: (apps) => createAppLinePricer(db, apps, appContext),
-        transformer: (apps) => createCartTransformer(db, apps, appContext),
+        linePricer: (apps, customerId) => createAppLinePricer(db, apps, { ...appContext, customerId }),
+        transformer: (apps, customerId) => createCartTransformer(db, apps, { ...appContext, customerId }),
       },
     );
     const existingAttempt = checkoutReads.existingAttempt;
     const paymentProviders = checkoutReads.paymentProviders;
     diagnostics?.mark("attempt");
 
-    if (existingAttempt?.status === "replay") {
+    if (existingAttempt) {
       return created(c, existingAttempt.response);
     }
-
-    if (existingAttempt?.status === "processing") {
-      return c.json({
-        success: true,
-        data: {
-          statusToken: existingAttempt.statusToken,
-          orderId: existingAttempt.orderId,
-          status: "processing" as const,
-          message: "Order creation is already processing.",
-        },
-      }, 202);
-    }
-    const retryAttempt = existingAttempt?.status === "retry"
-      ? existingAttempt.attempt
-      : null;
 
     const checkoutAuthority = checkoutReads.authority();
     const { currency, cartValidation, deliveryPreflight } = checkoutAuthority;
@@ -590,12 +562,12 @@ app.openapi(createOrderRoute, async (c) => {
       customerIdentity: checkoutCustomerIdentity,
       checkoutSettings,
       sessionEnded,
-    } = await assertCheckoutOrderPolicy(
-      c,
+    } = assertCheckoutOrderPolicy(
       data.customerPhone,
       data.paymentMethod as CheckoutPaymentMethodId,
       checkoutAuthority,
       paymentProviders,
+      { sent: sessionToken !== null, customerId: sessionToken ? checkoutReads.session()?.customerId ?? null : null },
     );
     // A gateway must charge the order's currency: its market's (MARKETS-DESIGN step 6).
     // (A cart validated before step 6 carries no money: the authority's shop currency.)
@@ -614,7 +586,7 @@ app.openapi(createOrderRoute, async (c) => {
     // This remains memory-only until the authoritative order batch. The
     // idempotency row, order, inventory mutation, and receipt either all commit
     // or all roll back together.
-    const checkoutAttempt = retryAttempt ?? createAtomicCheckoutAttempt(attemptIdentity);
+    const checkoutAttempt = createAtomicCheckoutAttempt(attemptIdentity);
 
     const result = await createStorefrontOrder(
       db,
@@ -775,28 +747,17 @@ app.openapi(createOrderRoute, async (c) => {
         checkoutReads.commitReads,
       );
     } catch (commitError) {
+      // A concurrent same-key submit committed first: replay its order.
       const recoveredAttempt = await resolveExistingCheckoutAttempt<typeof responsePayload>(
         db,
         attemptIdentity,
-        undefined,
-        sessionCustomerId,
+        checkoutCustomerIdentity?.customerId ?? null,
       ).catch((recoveryError: unknown) => {
         console.warn("[Orders] Failed to resolve checkout after an uncertain commit:", recoveryError);
         return null;
       });
-      if (recoveredAttempt?.status === "replay") {
+      if (recoveredAttempt) {
         return created(c, recoveredAttempt.response);
-      }
-      if (recoveredAttempt?.status === "processing") {
-        return c.json({
-          success: true,
-          data: {
-            statusToken: recoveredAttempt.statusToken,
-            orderId: recoveredAttempt.orderId,
-            status: "processing" as const,
-            message: "Order creation is already processing.",
-          },
-        }, 202);
       }
       throw commitError;
     }

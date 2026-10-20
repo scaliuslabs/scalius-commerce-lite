@@ -1,49 +1,34 @@
-// The single storefront order commit: one guarded batch for the order, lines, stock, discounts and receipt.
-import { MAX_ORDER_LINE_ITEMS, nextOrderNumberSql, type StorefrontOrderCommitPayload } from "../orders";
-import { buildBatchGuard, chunkRowsForD1, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
+// The storefront order commit: the checkout's policy (authority fence,
+// idempotency attempt and receipt, promotions, gift cards, app records,
+// outbox claims) around the one order commit (orders/commit-order.ts).
+import {
+    commitOrder,
+    MAX_ORDER_LINE_ITEMS,
+    type OrderCommitResult,
+    type OrderCustomer,
+    type StorefrontOrderCommitPayload,
+} from "../orders";
+import { buildBatchGuard, chunkRowsForD1, isBatchGuardError, type Database } from "@scalius/database/client";
 import {
     agentStorefrontContexts,
     agentStorefrontContinuations,
     agentStorefrontOrderGrants,
     checkoutAuthority,
-    customers,
-    customerHistory,
-    orderItems,
     orderDiscountAllocations,
-    orderItemTaxSnapshots,
     notificationOutbox,
-    orderTaxSnapshots,
-    orders,
-    codTracking,
     OrderStatus,
-    products,
     promotionRedemptions,
-    warrantyPolicies,
 } from "@scalius/database/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { storedPhone } from "@scalius/shared/customer-auth-policy";
-import type { OrderChannel } from "@scalius/shared/order-channel";
-import { defaultOrderSalesChannelId, ONLINE_STORE_CHANNEL_ID } from "@scalius/shared/sales-channels";
-import { orderMoneyChainColumns } from "@scalius/shared/money-chain";
-import { ConflictError, ServiceUnavailableError, ValidationError } from "../../errors";
-import {
-    isInventoryReservationConflictError,
-    prepareStockReservationBatch,
-    type PreparedStockReservationBatch,
-    type ReservationVariantState,
-} from "../inventory";
+import { defaultOrderSalesChannelId } from "@scalius/shared/sales-channels";
+import { ConflictError, ValidationError } from "../../errors";
+import type { PreparedStockReservationBatch } from "../inventory";
 import {
     buildMetaPurchaseOutboxClaimInsert,
     isOrderEligibleForMetaPurchase,
 } from "../../integrations/meta/purchase-outbox";
 import { buildOrderTrackingCommitStatements } from "../../integrations/tracking/signals";
-import { createCODTrackingInsertValues } from "../payments";
-import {
-    ORDER_ITEM_TAX_SNAPSHOT_PARAMETERS_PER_ROW,
-    orderItemTaxSnapshotColumns,
-    orderTaxSnapshotColumns,
-} from "../tax";
 import {
   buildOrderCreatedNotificationDedupeKey,
   orderCreatedNotificationOutboxId,
@@ -53,11 +38,9 @@ import {
 import { shouldCreateOrderCreatedNotification } from "./created-notification-policy";
 import {
   chooseOrderCustomer,
-  linkedOrderHistory,
   normalizeContactEmail,
   type OrderContact,
   selectContactCustomerCandidates,
-  type VerifiedContact,
 } from "../customers";
 import type { StorefrontCartItemIssue } from "./cart-validation";
 import { getPromotionRedemptionConstraintError, verifyPromotionCheckoutSnapshot } from "../promotions";
@@ -67,10 +50,7 @@ import {
     isCheckoutAttemptCommitConflictError,
     type AtomicCheckoutAttempt,
 } from "./attempts";
-import { buildAppDiscountFactInserts } from "../order-kernel";
 import { appObjectCommitStatements, isAppObjectCommitConflict } from "../objects";
-import { orderMarketIdSql } from "../markets";
-import { deferredOrderColumns, orderBillingAddressInsertColumns, orderShippingAddressInsertColumns, orderShippingCountry } from "../orders";
 import { readCheckoutCopy } from "./store-copy";
 import type { StorefrontOrderCommitReads, SQLiteBatchItem } from "./reads";
 import {
@@ -79,8 +59,6 @@ import {
     isGiftCardLedgerError,
 } from "../gift-cards";
 
-type ReservationPool = "regular" | "preorder" | "backorder";
-
 export interface StorefrontOrderCommitRuntime {
     /** Sends the order_created notification right after the commit. */
     sendNotifications?: NotificationSender;
@@ -88,14 +66,7 @@ export interface StorefrontOrderCommitRuntime {
     CREDENTIAL_ENCRYPTION_KEY?: string;
 }
 
-export interface StorefrontOrderCommitResult {
-    orderId: string;
-    customerId: string | null;
-    accountOwnerCustomerId: string | null;
-    alreadyCommitted: boolean;
-    /** Reserved variants whose buyer availability band changed in this commit. */
-    availabilityTransitionVariantIds: string[];
-}
+export type StorefrontOrderCommitResult = OrderCommitResult;
 
 export interface StorefrontOrderCheckoutCommit<TResponse = unknown> {
     attempt: AtomicCheckoutAttempt;
@@ -114,26 +85,9 @@ export interface StorefrontOrderCheckoutCommit<TResponse = unknown> {
     };
 }
 
-type ReservationEntry = {
-    variantId: string;
-    quantity: number;
-    pool: ReservationPool;
-    orderId: string;
-};
-
-// Durable reservation identity from the old queued checkout path. Keep the
-// value stable so crash retries can recognize reservations created before this
-// source-level queue retirement.
+// The checkout's ledger-v2 reservation identity (movement ids hash it with
+// the order id); stable, so movement ids stay what they always were.
 const CHECKOUT_RESERVATION_KEY = "checkout-ingest:v1";
-const INVENTORY_COMMIT_MAX_CONFLICTS = 3;
-const INVENTORY_COMMIT_BASE_BACKOFF_MS = 5;
-// Bound values per order line (the constant columns are SQL literals, the
-// warranty lookup binds the product id once more); the D1 limit is 100 per
-// statement, so 5 rows a statement (95 values).
-export const ORDER_ITEM_INSERT_PARAMETERS_PER_ROW = 19;
-// order_item_id, order_id, tax_class_id, tax_class_name, rate_snapshot,
-// tax_region_id (the order's flag, country and provider are SQL literals).
-const ORDER_ITEM_TAX_INSERT_PARAMETERS_PER_ROW = ORDER_ITEM_TAX_SNAPSHOT_PARAMETERS_PER_ROW;
 const ORDER_DISCOUNT_ALLOCATION_INSERT_PARAMETERS_PER_ROW = 18;
 const CHECKOUT_AUTHORITY_CHANGED = "CHECKOUT_AUTHORITY_CHANGED";
 /** An app's offer (a record its function read) changed between the quote and the commit. */
@@ -160,75 +114,20 @@ function checkoutGuardError(error: unknown): Error | null {
     return null;
 }
 
-/** Two guest checkouts raced to create the same phone's (or phoneless email's) guest record. */
-function isCustomerPhoneConstraintError(error: unknown): boolean {
-    let current = error;
-    for (let depth = 0; depth < 5 && current; depth += 1) {
-        const message = current instanceof Error
-            ? current.message
-            : typeof current === "string"
-                ? current
-                : "";
-        if (
-            message.includes("UNIQUE constraint failed: customers.phone")
-            || message.includes("customers_guest_phone_unique")
-            || message.includes("customers_guest_email_unique")
-        ) {
-            return true;
-        }
-        current = current instanceof Error
-            ? (current as Error & { cause?: unknown }).cause
-            : null;
-    }
-    return false;
-}
-
-async function loadExistingCommittedOrder(db: Database, orderId: string) {
-    return db
-        .select({
-            id: orders.id,
-            customerId: orders.customerId,
-            accountOwnerCustomerId: orders.accountOwnerCustomerId,
-        })
-        .from(orders)
-        .where(eq(orders.id, orderId))
-        .get();
-}
-
-interface ResolvedOrderCustomer {
-    id: string;
-    accountOwnerCustomerId: string | null;
-    /** No customer owns this contact yet: a new guest record is created. */
-    createProfile: boolean;
-    /** A signed-out order filed to an account by its verified email/phone (logged on the account). */
-    linkedBy?: VerifiedContact | null;
-}
-
-async function loadActiveAccountById(db: Database, id: string) {
-    return db
-        .select({ id: customers.id, accountClaimedAt: customers.accountClaimedAt })
-        .from(customers)
-        .where(and(eq(customers.id, id), isNull(customers.deletedAt)))
-        .get();
-}
-
 /**
- * Signed in: the account. Guest: the customer who PROVED the order's phone or
- * email, else the phone's guest record, else a new guest record. A guest
- * checkout never writes to an existing customer's profile (see
- * customers/customer-identity.ts).
+ * Signed in: the account (the commit fences it is still live and claimed).
+ * Guest: the customer who PROVED the order's phone or email, else the phone's
+ * guest record, else a new guest record. A guest checkout never writes to an
+ * existing customer's profile (see customers/customer-identity.ts).
  */
 async function resolveCustomerForOrder(
     db: Database,
     payload: StorefrontOrderCommitPayload,
     reads?: StorefrontOrderCommitReads,
-): Promise<ResolvedOrderCustomer> {
+): Promise<OrderCustomer> {
     if (payload.existingCustomer?.id) {
-        const account = await loadActiveAccountById(db, payload.existingCustomer.id);
-        if (!account?.accountClaimedAt) {
-            throw new ValidationError("Customer account is no longer active. Please sign in again.");
-        }
-        return { id: account.id, accountOwnerCustomerId: account.id, createProfile: false, linkedBy: null };
+        const id = payload.existingCustomer.id;
+        return { id, accountOwnerCustomerId: id, requireLiveAccount: true };
     }
 
     const contact: OrderContact = { phone: payload.orderData.customerPhone, email: payload.orderData.customerEmail };
@@ -239,20 +138,29 @@ async function resolveCustomerForOrder(
         : await selectContactCustomerCandidates(db, contact);
     const chosen = chooseOrderCustomer(candidates, contact);
     return chosen
-        ? { id: chosen.customerId, accountOwnerCustomerId: chosen.accountOwnerCustomerId, createProfile: false, linkedBy: chosen.linkedBy }
-        : { id: "cust_" + nanoid(), accountOwnerCustomerId: null, createProfile: true, linkedBy: null };
+        ? { id: chosen.customerId, accountOwnerCustomerId: chosen.accountOwnerCustomerId, linkedBy: chosen.linkedBy }
+        : { id: "cust_" + nanoid(), accountOwnerCustomerId: null, createdBy: "buyer" };
 }
 
-function getReservationEntries(payload: StorefrontOrderCommitPayload): ReservationEntry[] {
-    if (payload.orderData.inventoryAction !== "reserved") return [];
-    return payload.items
-        .filter((item): item is StorefrontOrderCommitPayload["items"][number] & { variantId: string } => item.variantId !== null && item.inventoryTracked !== false)
-        .map((item) => ({
-            variantId: item.variantId,
-            quantity: item.quantity,
-            pool: payload.orderData.inventoryPool as ReservationPool,
-            orderId: payload.orderData.id,
-        }));
+/** Stock the cart can no longer hold, as the cart's item issues. */
+function cartStockError(payload: StorefrontOrderCommitPayload, reservation: PreparedStockReservationBatch): ValidationError {
+    const itemIssues = buildReservationItemIssues(payload, reservation.results);
+    return new ValidationError("Some items in your cart need attention.", {
+        itemIssues: itemIssues.length > 0
+            ? itemIssues
+            : [{
+                index: 0,
+                productId: "",
+                variantId: null,
+                code: "QUANTITY_UNAVAILABLE",
+                action: "remove",
+                message: "One or more items are no longer available in the requested quantity.",
+                productName: null,
+                variantLabel: null,
+                requestedQuantity: 0,
+            }],
+        inventoryError: reservation.error,
+    });
 }
 
 function buildReservationItemIssues(
@@ -281,274 +189,20 @@ function buildReservationItemIssues(
         });
 }
 
-async function prepareOrderInventory(
-    db: Database,
-    payload: StorefrontOrderCommitPayload,
-    freshOrder = false,
-    variantStates?: readonly ReservationVariantState[],
-    salesChannelId: string = ONLINE_STORE_CHANNEL_ID,
-): Promise<PreparedStockReservationBatch> {
-    const entries = getReservationEntries(payload);
-    const result = await prepareStockReservationBatch(
-        db,
-        entries.map((entry) => ({
-            variantId: entry.variantId,
-            quantity: entry.quantity,
-            orderId: entry.orderId,
-        })),
-        payload.orderData.inventoryPool as ReservationPool,
-        {
-            reservationKey: CHECKOUT_RESERVATION_KEY,
-            freshOrderIds: freshOrder
-                ? new Set([payload.orderData.id])
-                : undefined,
-            variantStates,
-            // Units at the locations the order's channel sells from (MARKETS-DESIGN D6).
-            salesChannelId,
-        },
-    );
-
-    if (!result.success) {
-        const itemIssues = buildReservationItemIssues(payload, result.results);
-        throw new ValidationError("Some items in your cart need attention.", {
-            itemIssues: itemIssues.length > 0
-                ? itemIssues
-                : [{
-                    index: 0,
-                    productId: "",
-                    variantId: null,
-                    code: "QUANTITY_UNAVAILABLE",
-                    action: "remove",
-                    message: "One or more items are no longer available in the requested quantity.",
-                    productName: null,
-                    variantLabel: null,
-                    requestedQuantity: 0,
-                }],
-            inventoryError: result.error,
-        });
-    }
-
-    return result;
-}
-
 /**
- * The product's warranty as bought: its policy's current revision, read in
- * the commit batch itself (no round trip) so the line freezes whatever is
- * current at commit (design §5.1). No policy or an archived one is NULL.
- * The warranty is not price-relevant, so it is outside the authority fence.
+ * The checkout's facts after the order's own rows: the order-created
+ * notification claim, promotion allocations and redemptions, app record
+ * writes, the gift-card hold, the Meta claim and the tracking snapshot. The
+ * payload's discounts must agree with its lines and tax quote.
  */
-function currentWarrantyRevisionSql(productId: string) {
-    return sql<string | null>`(
-        SELECT ${warrantyPolicies.currentRevisionId}
-        FROM ${products}
-        JOIN ${warrantyPolicies} ON ${warrantyPolicies.id} = ${products.warrantyPolicyId}
-        WHERE ${products.id} = ${productId}
-          AND ${warrantyPolicies.archivedAt} IS NULL
-    )`;
-}
-
-function buildOrderWriteBatch(
+function checkoutOrderFacts(
     db: Database,
     payload: StorefrontOrderCommitPayload,
-    customer: ResolvedOrderCustomer,
+    customer: OrderCustomer,
     appliedPromotion: AppliedPromotion | null,
-    channel: Extract<OrderChannel, "online_store" | "agent">,
 ): SQLiteBatchItem[] {
     const od = payload.orderData;
     const writes: SQLiteBatchItem[] = [];
-
-    if (customer.createProfile) {
-        writes.push(
-            db.insert(customers).values({
-                id: customer.id,
-                name: od.customerName,
-                email: od.customerEmail,
-                phone: storedPhone(od.customerPhone),
-                totalOrders: 1,
-                lastOrderAt: sql`unixepoch()`,
-                createdAt: sql`unixepoch()`,
-                updatedAt: sql`unixepoch()`,
-            }),
-        );
-        writes.push(
-            db.insert(customerHistory).values({
-                id: "hist_" + nanoid(),
-                customerId: customer.id,
-                name: od.customerName,
-                email: od.customerEmail,
-                phone: storedPhone(od.customerPhone),
-                changeType: "created",
-                actor: "buyer",
-                createdAt: sql`unixepoch()`,
-            }),
-        );
-    } else {
-        // Counters only: the order's contact never rewrites the customer.
-        writes.push(
-            db
-            .update(customers)
-            .set({
-                totalOrders: sql`${customers.totalOrders} + 1`,
-                lastOrderAt: sql`unixepoch()`,
-                updatedAt: sql`unixepoch()`,
-            })
-            .where(eq(customers.id, customer.id)),
-        );
-        if (customer.linkedBy && customer.accountOwnerCustomerId) {
-            writes.push(linkedOrderHistory(db, {
-                accountId: customer.accountOwnerCustomerId,
-                orderId: od.id,
-                via: customer.linkedBy,
-            }) as SQLiteBatchItem);
-        }
-    }
-
-    writes.push(
-        db.insert(orders).values({
-            orderNumber: nextOrderNumberSql(db),
-            id: od.id,
-            customerName: od.customerName,
-            customerPhone: storedPhone(od.customerPhone),
-            customerEmail: od.customerEmail,
-            customerWhatsapp: od.customerWhatsapp ?? null,
-            // The address snapshot (a guest record's first one also seeds its
-            // address book: trigger orders_seed_customer_address).
-            ...orderShippingAddressInsertColumns(od),
-            // The billing snapshot; "same as shipping" is an SQL literal, so a
-            // shipped order binds nothing more than it did before 0119.
-            ...orderBillingAddressInsertColumns(od),
-            notes: od.notes,
-            attributes: od.attributes ?? "{}",
-            currencyCode: od.currencyCode,
-            currencyDecimalPlaces: od.currencyDecimalPlaces,
-            subtotalAmountMinor: od.subtotalAmountMinor,
-            shippingAmountMinor: od.shippingAmountMinor,
-            shippingMethodId: od.shippingMethodId,
-            shippingMethodName: od.shippingMethodName,
-            shippingMethodDescription: od.shippingMethodDescription,
-            shippingMethodBaseAmountMinor: od.shippingMethodBaseAmountMinor,
-            shippingFeeWaived: od.shippingFeeWaived,
-            // Pre-Wave A payloads (a prepared payload in flight) carry an
-            // address and ship; the orders trigger re-checks the address.
-            requiresShipping: od.requiresShipping ?? true,
-            shippingMethodKind: od.shippingMethodKind ?? null,
-            pickupAddress: od.pickupAddress ?? null,
-            pickupHours: od.pickupHours ?? null,
-            discountAmountMinor: od.discountAmountMinor,
-            taxAmountMinor: od.taxAmountMinor,
-            totalAmountMinor: od.totalAmountMinor,
-            // The money chain, in this same insert: a same-currency order has rate
-            // 1 and shop amounts equal to its own; an order in a market's currency
-            // keeps its locked rate and its exact shop amounts (MARKETS-DESIGN D3).
-            ...orderMoneyChainColumns(od, od.fx ? {
-                shopCurrency: od.fx.shopCurrency,
-                fxRate: od.fx.fxRate,
-                fxSource: od.fx.fxSource,
-                fxAsOf: od.fx.fxAsOf === null ? null : new Date(od.fx.fxAsOf * 1_000),
-                fxLockedUntil: od.fx.fxLockedUntil === null ? null : new Date(od.fx.fxLockedUntil * 1_000),
-            } : undefined),
-            taxLabel: od.taxLabel,
-            pricesIncludeTax: od.pricesIncludeTax,
-            status: od.status,
-            paymentMethod: od.paymentMethod,
-            paymentStatus: od.paymentStatus,
-            paidAmountMinor: od.paidAmountMinor,
-            balanceDueMinor: od.balanceDueMinor,
-            // A deferred order's terms and due date, as SQL literals (a checked
-            // whole number of days): every other order binds nothing more.
-            ...deferredOrderColumns(od.paymentTermsDays),
-            fulfillmentStatus: od.fulfillmentStatus,
-            inventoryPool: od.inventoryPool,
-            inventoryAction: od.inventoryAction,
-            customerId: customer.id,
-            accountOwnerCustomerId: customer.accountOwnerCustomerId,
-            // Set once here; the orders trigger keeps it immutable.
-            channel,
-            channelSource: null,
-            // The channel whose publications the order sold from (MARKETS-DESIGN
-            // D6), an SQL literal like the channel: no bound value.
-            salesChannelId: sql.raw(`'${defaultOrderSalesChannelId(channel)}'`),
-            // The market of the shipping country, else the backup market, read
-            // inside this insert (MARKETS-DESIGN D4); the authority fence covers
-            // a market change between the quote and this commit.
-            // An order that ships nothing is placed in its billing country, where it is taxed.
-            marketId: orderMarketIdSql(orderShippingCountry(od) ?? (
-                payload.taxQuote.jurisdiction?.addressSource === "billing" ? od.billingCountryCode ?? null : null
-            )),
-            createdAt: sql`unixepoch()`,
-            updatedAt: sql`unixepoch()`,
-        }),
-    );
-
-    if (od.paymentMethod === "cod") {
-        writes.push(
-            db.insert(codTracking).values(createCODTrackingInsertValues(od.id)),
-        );
-    }
-
-    if (payload.items.length > 0) {
-        const itemRows = payload.items.map((item) => ({
-            id: item.id,
-            orderId: od.id,
-            productId: item.productId,
-            variantId: item.variantId,
-            productImageMediaId: item.productImageMediaId,
-            quantity: item.quantity,
-            productName: item.productName,
-            variantLabel: item.variantLabel,
-            inventoryTracked: item.variantId !== null && item.inventoryTracked !== false,
-            unitPriceMinor: item.unitPriceMinor,
-            lineSubtotalMinor: item.lineSubtotalMinor,
-            discountAmountMinor: item.discountAmountMinor,
-            taxableAmountMinor: item.taxableAmountMinor,
-            taxAmountMinor: item.taxAmountMinor,
-            // Constant columns are SQL literals, not bound values: a
-            // multi-row insert binds every defaulted column otherwise, and
-            // 18 bound values a row keep 5 rows a statement (D1 allows 100).
-            // The ledger alone moves fulfilled_quantity afterwards.
-            fulfilledQuantity: sql`0`,
-            fulfillmentType: item.fulfillmentType ?? "ship",
-            properties: item.properties ?? null,
-            propertiesPriceMinor: item.propertiesPriceMinor ?? 0,
-            baseUnitPriceMinor: item.baseUnitPriceMinor
-                ?? item.unitPriceMinor - (item.propertiesPriceMinor ?? 0),
-            warrantyRevisionId: currentWarrantyRevisionSql(item.productId),
-            createdAt: sql`unixepoch()`,
-        }));
-        for (const chunk of chunkRowsForD1(
-            itemRows,
-            ORDER_ITEM_INSERT_PARAMETERS_PER_ROW,
-        )) {
-            writes.push(db.insert(orderItems).values(chunk));
-        }
-
-        const taxRows = payload.items.map((item) => {
-            const line = payload.taxQuote.lines.find(
-                (candidate) => candidate.lineId === item.taxAllocationLineId,
-            );
-            if (!line) {
-                throw new ValidationError("Committed tax allocation is missing an order line.");
-            }
-            return {
-                orderItemId: item.id,
-                orderId: od.id,
-                ...orderItemTaxSnapshotColumns(payload.taxQuote, line),
-                createdAt: sql`unixepoch()`,
-            };
-        });
-        for (const chunk of chunkRowsForD1(
-            taxRows,
-            ORDER_ITEM_TAX_INSERT_PARAMETERS_PER_ROW,
-        )) {
-            writes.push(db.insert(orderItemTaxSnapshots).values(chunk));
-        }
-    }
-
-    writes.push(db.insert(orderTaxSnapshots).values({
-        orderId: od.id,
-        ...orderTaxSnapshotColumns(payload.taxQuote),
-        createdAt: sql`unixepoch()`,
-    }));
 
     if (wantsOrderCreatedNotification(payload)) {
         writes.push(
@@ -713,15 +367,6 @@ function buildOrderWriteBatch(
         }
     }
 
-    if (appDiscounts.length > 0) {
-        writes.push(...buildAppDiscountFactInserts(db, {
-            orderId: od.id,
-            currencyCode: od.currencyCode,
-            discounts: appDiscounts,
-            orderItemIdByLineId: itemIdByLineId,
-        }) as SQLiteBatchItem[]);
-    }
-
     // App record writes (a balance the discount spends) commit with the
     // order, each at the revision its app saw: a lost race fails the order.
     const storageCommits = payload.appObjectCommits ?? [];
@@ -807,6 +452,12 @@ function isStorefrontOrderPayloadEligibleForMetaPurchase(
     });
 }
 
+/**
+ * The storefront's (and a buyer agent's) order commit: the checkout's policy
+ * around `commitOrder()`. Before the stock moves: the authority fence, the
+ * idempotency attempt and the agent context; after the order: the checkout's
+ * facts, the receipt and the agent's grant.
+ */
 export async function commitStorefrontOrderPayload(
     db: Database,
     payload: StorefrontOrderCommitPayload,
@@ -827,195 +478,83 @@ export async function commitStorefrontOrderPayload(
     ) {
         throw new ValidationError("Checkout attempt identity does not match the prepared order.");
     }
+    if (
+        !Number.isSafeInteger(payload.checkoutAuthorityRevision)
+        || (payload.checkoutAuthorityRevision ?? 0) < 1
+    ) {
+        throw new ValidationError("Checkout authority revision is unavailable. Please retry checkout.");
+    }
 
-    let guestProfileRaceRetried = false;
-    let inventoryConflictCount = 0;
+    // A buyer agent's checkout carries its storefront context; every other
+    // commit is the storefront's own checkout (COMMERCE-HOOKS H2).
+    const channel = checkoutCommit?.agentContext ? "agent" : "online_store";
     // Prefetched rows serve the first attempt only; a retry re-reads.
     let reads = prefetchedReads;
 
-    while (true) {
-        // A brand-new atomic candidate cannot already own an order. Retried
-        // legacy identities retain the read so an uncertain historical commit
-        // can still converge without creating a duplicate.
-        const existing = checkoutCommit?.attempt.origin === "new"
-            ? undefined
-            : await loadExistingCommittedOrder(db, payload.orderData.id);
-        if (existing) {
-            await finalizeCheckoutAttemptForExistingOrder(db, payload, checkoutCommit);
+    return commitOrder(db, {
+        channel,
+        salesChannelId: defaultOrderSalesChannelId(channel),
+        order: payload.orderData,
+        lines: payload.items,
+        taxQuote: payload.taxQuote,
+        appDiscounts: payload.appDiscounts,
+        reservationKey: CHECKOUT_RESERVATION_KEY,
+    }, {
+        variantStates: prefetchedReads?.variantStates,
+        async prepare() {
+            const customer = await resolveCustomerForOrder(db, payload, reads);
+            reads = undefined;
+            const [appliedPromotion, attemptPlan] = await Promise.all([
+                payload.promotion
+                    ? verifyPromotionCheckoutSnapshot(db, payload.promotion, {
+                        customerId: customer.id,
+                        // The account the checkout was prepared for, never a record matched by contact.
+                        segmentCustomerId: payload.existingCustomer?.id ?? null,
+                    })
+                    : null,
+                checkoutCommit
+                    ? prepareAtomicCheckoutAttemptCommit(db, checkoutCommit.attempt, {
+                        paymentMethod: payload.orderData.paymentMethod,
+                        totalAmountMinor: payload.orderData.totalAmountMinor,
+                        response: checkoutCommit.response,
+                    })
+                    : null,
+            ]);
+            const agentPlan = checkoutCommit?.agentContext
+                ? prepareAgentStorefrontCheckoutCommit(db, payload, checkoutCommit.agentContext)
+                : null;
+            const authorityGuard = buildBatchGuard(db, sql`EXISTS (
+                SELECT 1 FROM ${checkoutAuthority}
+                WHERE ${checkoutAuthority.id} = 'default'
+                  AND ${checkoutAuthority.revision} = ${payload.checkoutAuthorityRevision}
+            )`, CHECKOUT_AUTHORITY_CHANGED) as SQLiteBatchItem;
             return {
-                orderId: existing.id,
-                customerId: existing.customerId,
-                accountOwnerCustomerId: existing.accountOwnerCustomerId,
-                alreadyCommitted: true,
-                availabilityTransitionVariantIds: [],
+                customer,
+                before: [
+                    authorityGuard,
+                    ...(attemptPlan?.writesBeforeOrder ?? []),
+                    ...(agentPlan?.writesBeforeOrder ?? []),
+                ],
+                after: [
+                    ...checkoutOrderFacts(db, payload, customer, appliedPromotion),
+                    ...(attemptPlan?.writesAfterOrder ?? []),
+                    ...(agentPlan?.writesAfterOrder ?? []),
+                ],
             };
-        }
-
-        if (
-            !Number.isSafeInteger(payload.checkoutAuthorityRevision)
-            || (payload.checkoutAuthorityRevision ?? 0) < 1
-        ) {
-            throw new ValidationError("Checkout authority revision is unavailable. Please retry checkout.");
-        }
-        const authorityGuard = buildBatchGuard(db, sql`EXISTS (
-            SELECT 1 FROM ${checkoutAuthority}
-            WHERE ${checkoutAuthority.id} = 'default'
-              AND ${checkoutAuthority.revision} = ${payload.checkoutAuthorityRevision}
-        )`, CHECKOUT_AUTHORITY_CHANGED);
-
-        // A buyer agent's checkout carries its storefront context; every other
-        // commit is the storefront's own checkout (COMMERCE-HOOKS H2).
-        const orderChannel = checkoutCommit?.agentContext ? "agent" : "online_store";
-        const [customer, inventoryPlan] = await Promise.all([
-            resolveCustomerForOrder(db, payload, reads),
-            prepareOrderInventory(
-                db,
-                payload,
-                checkoutCommit?.attempt.origin === "new",
-                reads?.variantStates,
-                defaultOrderSalesChannelId(orderChannel),
-            ),
-        ]);
-        reads = undefined;
-        const appliedPromotion = payload.promotion
-            ? await verifyPromotionCheckoutSnapshot(db, payload.promotion, {
-                customerId: customer.id,
-                // The account the checkout was prepared for, never a record matched by contact.
-                segmentCustomerId: payload.existingCustomer?.id ?? null,
-            })
-            : null;
-
-        const checkoutAttemptPlan = checkoutCommit
-            ? await prepareAtomicCheckoutAttemptCommit(db, checkoutCommit.attempt, {
-                paymentMethod: payload.orderData.paymentMethod,
-                totalAmountMinor: payload.orderData.totalAmountMinor,
-                response: checkoutCommit.response,
-            })
-            : null;
-        const agentContextPlan = checkoutCommit?.agentContext
-            ? prepareAgentStorefrontCheckoutCommit(db, payload, checkoutCommit.agentContext)
-            : null;
-        const orderWrites = buildOrderWriteBatch(
-            db,
-            payload,
-            customer,
-            appliedPromotion,
-            orderChannel,
-        );
-        const writesBeforeInventory: SQLiteBatchItem[] = [
-            authorityGuard,
-            ...(checkoutAttemptPlan?.writesBeforeOrder ?? []),
-            ...(agentContextPlan?.writesBeforeOrder ?? []),
-        ];
-        const atomicWrites: SQLiteBatchItem[] = [
-            ...writesBeforeInventory,
-            ...inventoryPlan.statements,
-            ...orderWrites,
-            ...(checkoutAttemptPlan?.writesAfterOrder ?? []),
-            ...(agentContextPlan?.writesAfterOrder ?? []),
-        ];
-        let batchResults: readonly unknown[];
-        try {
-            batchResults = await safeBatch(db, atomicWrites) as readonly unknown[];
-        } catch (error) {
-            const committedAfterError = await loadExistingCommittedOrder(db, payload.orderData.id)
-                .catch(() => undefined);
-            if (committedAfterError) {
-                return {
-                    orderId: committedAfterError.id,
-                    customerId: committedAfterError.customerId,
-                    accountOwnerCustomerId: committedAfterError.accountOwnerCustomerId,
-                    alreadyCommitted: true,
-                    availabilityTransitionVariantIds: [],
-                };
-            }
-
+        },
+        stockUnavailable: (reservation) => cartStockError(payload, reservation),
+        async mapError(error) {
             // Checked first: its marker is specific; the others' fallbacks are not.
             if (isAppObjectCommitConflict(error)) {
-                throw new ValidationError(await readCheckoutCopy(db, "checkoutAppOfferChangedText"), { reason: APP_OFFER_CHANGED_REASON });
+                return new ValidationError(await readCheckoutCopy(db, "checkoutAppOfferChangedText"), { reason: APP_OFFER_CHANGED_REASON });
             }
-            const guardError = checkoutGuardError(error);
-            if (guardError) throw guardError;
-
-            const discountConstraintError = getPromotionRedemptionConstraintError(error);
-            if (discountConstraintError) throw discountConstraintError;
-
-            if (
-                !guestProfileRaceRetried
-                && customer.createProfile
-                && isCustomerPhoneConstraintError(error)
-            ) {
-                guestProfileRaceRetried = true;
-                continue;
-            }
-
-            if (checkoutAttemptPlan && isCheckoutAttemptCommitConflictError(error)) {
-                throw new ConflictError("Checkout attempt changed before the order could be committed. Please retry.");
-            }
-
-            const idempotentReservation = await inventoryPlan.resolveIdempotentReplay(error);
-            if (idempotentReservation?.success) {
-                try {
-                    await safeBatch(db, [
-                        authorityGuard,
-                        ...(checkoutAttemptPlan?.writesBeforeOrder ?? []),
-                        ...(agentContextPlan?.writesBeforeOrder ?? []),
-                        ...orderWrites,
-                        ...(checkoutAttemptPlan?.writesAfterOrder ?? []),
-                        ...(agentContextPlan?.writesAfterOrder ?? []),
-                    ] as SQLiteBatchItem[]);
-                } catch (replayError) {
-                    throw checkoutGuardError(replayError)
-                        ?? getPromotionRedemptionConstraintError(replayError)
-                        ?? replayError;
-                }
-                return {
-                    orderId: payload.orderData.id,
-                    customerId: customer.id,
-                    accountOwnerCustomerId: customer.accountOwnerCustomerId,
-                    alreadyCommitted: false,
-                    // The reservation committed in an earlier request whose
-                    // band outcome is unknown here; invalidate conservatively.
-                    availabilityTransitionVariantIds: getReservationEntries(payload)
-                        .map((entry) => entry.variantId),
-                };
-            }
-            if (idempotentReservation?.manualReconciliationRequired) {
-                throw new ServiceUnavailableError(
-                    "Checkout inventory state needs reconciliation before this order can be retried.",
-                );
-            }
-
-            if (isInventoryReservationConflictError(error)) {
-                inventoryConflictCount += 1;
-                if (inventoryConflictCount < INVENTORY_COMMIT_MAX_CONFLICTS) {
-                    await new Promise((resolve) => setTimeout(
-                        resolve,
-                        INVENTORY_COMMIT_BASE_BACKOFF_MS * Math.pow(2, inventoryConflictCount - 1),
-                    ));
-                    continue;
-                }
-                throw new ServiceUnavailableError(
-                    "Inventory is changing quickly. Please retry checkout.",
-                );
-            }
-
-            throw error;
-        }
-
-        return {
-            orderId: payload.orderData.id,
-            customerId: customer.id,
-            accountOwnerCustomerId: customer.accountOwnerCustomerId,
-            alreadyCommitted: false,
-            availabilityTransitionVariantIds: inventoryPlan.availabilityTransitions(
-                batchResults.slice(
-                    writesBeforeInventory.length,
-                    writesBeforeInventory.length + inventoryPlan.statements.length,
-                ),
-            ),
-        };
-    }
+            return checkoutGuardError(error)
+                ?? getPromotionRedemptionConstraintError(error)
+                ?? (checkoutCommit && isCheckoutAttemptCommitConflictError(error)
+                    ? new ConflictError("Checkout attempt changed before the order could be committed. Please retry.")
+                    : null);
+        },
+    });
 }
 
 function prepareAgentStorefrontCheckoutCommit(
@@ -1080,31 +619,4 @@ function prepareAgentStorefrontCheckoutCommit(
             ...(continuationWrite ? [continuationWrite] : []),
         ],
     };
-}
-
-async function finalizeCheckoutAttemptForExistingOrder(
-    db: Database,
-    payload: StorefrontOrderCommitPayload,
-    checkoutCommit: StorefrontOrderCheckoutCommit | undefined,
-): Promise<void> {
-    if (!checkoutCommit) return;
-
-    const plan = await prepareAtomicCheckoutAttemptCommit(db, checkoutCommit.attempt, {
-        paymentMethod: payload.orderData.paymentMethod,
-        totalAmountMinor: payload.orderData.totalAmountMinor,
-        response: checkoutCommit.response,
-    });
-    try {
-        await safeBatch(db, [
-            ...plan.writesBeforeOrder,
-            ...plan.writesAfterOrder,
-        ] as SQLiteBatchItem[]);
-    } catch (error) {
-        // A committed matching attempt is already durable after an uncertain
-        // response; a different winner owns the replay payload.
-        if (isCheckoutAttemptCommitConflictError(error)) {
-            return;
-        }
-        throw error;
-    }
 }

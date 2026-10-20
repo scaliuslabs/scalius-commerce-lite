@@ -47,7 +47,6 @@
     "checkout -> markets",
     "checkout -> notifications",
     "checkout -> objects",
-    "checkout -> order-kernel",
     "checkout -> orders",
     "checkout -> payments",
     "checkout -> plugins",

@@ -393,8 +393,9 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     expect(JSON.stringify(db.conflictIgnoredInserts)).not.toContain("+8801712345678");
   });
 
-  it("rejects an inactive authenticated customer without executing the prepared inventory writes", async () => {
-    const db = createDbMock({ activeCustomer: null });
+  it("fences an inactive authenticated customer in the order batch instead of a pre-read", async () => {
+    const db = createDbMock();
+    mocks.safeBatch.mockRejectedValue(new Error("D1_ERROR: bad JSON path: 'ORDER_CUSTOMER_ACCOUNT_INACTIVE'"));
 
     await expect(commitStorefrontOrderPayload(db, createPayload()))
       .rejects.toMatchObject({
@@ -402,8 +403,8 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
         message: "Customer account is no longer active. Please sign in again.",
       });
 
-    expect(mocks.prepareStockReservationBatch).toHaveBeenCalledOnce();
-    expect(mocks.safeBatch).not.toHaveBeenCalled();
+    expect(mocks.safeBatch).toHaveBeenCalledOnce();
+    expect(db.select).not.toHaveBeenCalledWith(expect.objectContaining({ accountClaimedAt: expect.anything() }));
   });
 
   it("maps one-per-customer trigger aborts even when D1 nests the cause", async () => {
@@ -537,31 +538,6 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     expect(mocks.safeBatch).toHaveBeenCalledOnce();
   });
 
-  it("returns the committed order on a checkout retry without re-claiming the promotion", async () => {
-    const db = createDbMock({
-      existingOrder: {
-        id: "order_discount",
-        customerId: "cust_existing",
-        accountOwnerCustomerId: "cust_existing",
-      },
-    });
-    const payload = createPayload({
-      checkoutAuthorityRevision: null,
-      promotion: { cart: {} as never, applied: {} as never },
-    });
-
-    await expect(commitStorefrontOrderPayload(db, payload)).resolves.toEqual({
-      orderId: "order_discount",
-      customerId: "cust_existing",
-      accountOwnerCustomerId: "cust_existing",
-      alreadyCommitted: true,
-      availabilityTransitionVariantIds: [],
-    });
-    expect(mocks.verifyPromotionCheckoutSnapshot).not.toHaveBeenCalled();
-    expect(mocks.prepareStockReservationBatch).not.toHaveBeenCalled();
-    expect(mocks.safeBatch).not.toHaveBeenCalled();
-  });
-
   it("preserves unrelated atomic commit errors", async () => {
     const db = createDbMock();
     const rawError = new Error("D1 batch unavailable");
@@ -672,8 +648,6 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
 
     await commitStorefrontOrderPayload(db, createPayload(), {
       attempt: {
-        commitMode: "atomic",
-        origin: "new",
         id: "attempt_atomic_1",
         requestKey: "checkout_submit:v1:key",
         requestHash: "request_hash",
@@ -715,8 +689,6 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
 
     const result = await commitStorefrontOrderPayload(db, createPayload(), {
       attempt: {
-        commitMode: "atomic",
-        origin: "new",
         id: "attempt_atomic_uncertain",
         requestKey: "checkout_submit:v1:uncertain",
         requestHash: "request_hash",
@@ -750,24 +722,6 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     await expect(commitStorefrontOrderPayload(createDbMock(), createPayload()))
       .rejects.toThrow("Checkout details changed while the order was being placed");
     expect(mocks.safeBatch).toHaveBeenCalledOnce();
-  });
-
-  it("guards the order-only batch after an idempotent inventory replay", async () => {
-    mocks.prepareStockReservationBatch.mockResolvedValue({
-      success: true,
-      results: [],
-      statements: [{ kind: "inventory-replay" }],
-      resolveIdempotentReplay: vi.fn(async () => ({ success: true })),
-    });
-    mocks.safeBatch
-      .mockRejectedValueOnce(new Error("inventory reservation already committed"))
-      .mockRejectedValueOnce(new Error("CHECKOUT_AUTHORITY_CHANGED"));
-
-    await expect(commitStorefrontOrderPayload(createDbMock(), createPayload()))
-      .rejects.toThrow("Checkout details changed while the order was being placed");
-    const replayStatements = mocks.safeBatch.mock.calls[1]?.[1] as unknown[];
-    expect(replayStatements[0]).toEqual({ kind: "batch-guard" });
-    expect(replayStatements).not.toContainEqual({ kind: "inventory-replay" });
   });
 
   it("maps reservation failures to structured cart item issues", async () => {
