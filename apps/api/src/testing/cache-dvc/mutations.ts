@@ -182,6 +182,7 @@ export class RowMutator {
   update(tableName: string, column?: string, targetRow?: Row): Mutation | null {
     const table = this.model.get(tableName);
     if (!table || !writableByGenerator(tableName)) return null;
+    if (tableName === "product_variant_option_values") return this.updateVariantOptionValue();
     const rows = targetRow ? [targetRow] : this.rows(tableName);
     if (rows.length === 0) return this.insert(tableName);
     const writable = table.columns.filter((each) => (each.pk === 0 || table.pkColumns.length > 1)
@@ -243,6 +244,40 @@ export class RowMutator {
       }
     }
     void lastError;
+    return null;
+  }
+
+  /**
+   * A SKU's option assignment can only move to another value of the same axis
+   * (the update guard refuses any other value, so a random foreign key almost
+   * never lands). Re-point one assignment at a sibling value of its own axis,
+   * so every seed can update this table.
+   */
+  private updateVariantOptionValue(): Mutation | null {
+    const table = this.model.get("product_variant_option_values")!;
+    const rows = this.rng.sample(this.rows("product_variant_option_values"), 12);
+    for (const row of rows) {
+      const siblings = this.sqlite.prepare(
+        "SELECT id FROM product_option_values WHERE option_definition_id = ? AND id != ? ORDER BY id",
+      ).all(row.option_definition_id as string, row.option_value_id as string) as Array<{ id: string }>;
+      for (const sibling of this.rng.sample(siblings, siblings.length)) {
+        const where = this.pkWhere(table, row);
+        try {
+          const changes = this.run(`UPDATE "product_variant_option_values" SET "option_value_id" = ? WHERE ${where.sql}`, [sibling.id, ...where.values]);
+          if (changes === 0) continue;
+          const mutation: Mutation = {
+            kind: "update",
+            table: "product_variant_option_values",
+            columns: ["option_value_id"],
+            description: `UPDATE product_variant_option_values SET option_value_id=${preview(sibling.id)} WHERE ${describeRow(table, row)}`,
+          };
+          this.coverage.record(mutation);
+          return mutation;
+        } catch (error) {
+          this.coverage.refused("product_variant_option_values", errorText(error));
+        }
+      }
+    }
     return null;
   }
 
