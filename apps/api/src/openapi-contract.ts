@@ -555,12 +555,30 @@ function normalizeUnconstrainedOpenApiSchemas(value: unknown): void {
   }
 }
 
+/**
+ * `@asteasolutions/zod-to-openapi` writes a Zod regex as `regex.toString()`
+ * with only the slashes trimmed, so `/^[A-Z]{3}$/u` becomes `^[A-Z]{3}$/u`, a
+ * pattern no value can match. OpenAPI `pattern` is the bare ECMA-262 source:
+ * strip the trailing `/<flags>` once here, for every generated document.
+ */
+export function stripRegexFlagsFromPatterns(value: unknown): void {
+  if (Array.isArray(value)) {
+    for (const item of value) stripRegexFlagsFromPatterns(item);
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  const record = value as Record<string, unknown>;
+  if (typeof record.pattern === "string") record.pattern = record.pattern.replace(/(?<!\\)\/[dgimsuvy]+$/u, "");
+  for (const item of Object.values(record)) stripRegexFlagsFromPatterns(item);
+}
+
 export function finalizeOpenApiContract<T extends { components?: unknown; paths?: unknown }>(spec: T): T {
   const document = spec as OpenApiDocument;
   applyApiStability(document);
   applySecuritySchemes(document);
   applyOperationContract(document);
   normalizeUnconstrainedOpenApiSchemas(document);
+  stripRegexFlagsFromPatterns(document);
   document["x-scalius-workflows"] = buildAgentWorkflowCatalog(
     buildAgentOperationManifest(document),
     { componentSchemas: document.components?.schemas as Record<string, unknown> | undefined },

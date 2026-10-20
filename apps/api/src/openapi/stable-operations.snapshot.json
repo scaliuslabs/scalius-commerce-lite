@@ -7557,7 +7557,7 @@
          "budgetCurrencyCode": {
           "type": "string",
           "nullable": true,
-          "pattern": "^[A-Z]{3}$/u",
+          "pattern": "^[A-Z]{3}$",
           "default": null
          },
          "codes": {
@@ -7569,7 +7569,7 @@
              "type": "string",
              "minLength": 3,
              "maxLength": 50,
-             "pattern": "^[A-Za-z0-9_-]+$/u"
+             "pattern": "^[A-Za-z0-9_-]+$"
             },
             "isActive": {
              "type": "boolean",
@@ -7608,7 +7608,7 @@
                 },
                 "currencyCode": {
                  "type": "string",
-                 "pattern": "^[A-Z]{3}$/u"
+                 "pattern": "^[A-Z]{3}$"
                 },
                 "productIds": {
                  "type": "array",
@@ -7770,7 +7770,7 @@
                   },
                   "currencyCode": {
                    "type": "string",
-                   "pattern": "^[A-Z]{3}$/u"
+                   "pattern": "^[A-Z]{3}$"
                   },
                   "productIds": {
                    "type": "array",
@@ -7855,7 +7855,7 @@
                 },
                 "currencyCode": {
                  "type": "string",
-                 "pattern": "^[A-Z]{3}$/u"
+                 "pattern": "^[A-Z]{3}$"
                 },
                 "productIds": {
                  "type": "array",
@@ -8944,7 +8944,7 @@
          "budgetCurrencyCode": {
           "type": "string",
           "nullable": true,
-          "pattern": "^[A-Z]{3}$/u",
+          "pattern": "^[A-Z]{3}$",
           "default": null
          },
          "codes": {
@@ -8956,7 +8956,7 @@
              "type": "string",
              "minLength": 3,
              "maxLength": 50,
-             "pattern": "^[A-Za-z0-9_-]+$/u"
+             "pattern": "^[A-Za-z0-9_-]+$"
             },
             "isActive": {
              "type": "boolean",
@@ -8995,7 +8995,7 @@
                 },
                 "currencyCode": {
                  "type": "string",
-                 "pattern": "^[A-Z]{3}$/u"
+                 "pattern": "^[A-Z]{3}$"
                 },
                 "productIds": {
                  "type": "array",
@@ -9157,7 +9157,7 @@
                   },
                   "currencyCode": {
                    "type": "string",
-                   "pattern": "^[A-Z]{3}$/u"
+                   "pattern": "^[A-Z]{3}$"
                   },
                   "productIds": {
                    "type": "array",
@@ -9242,7 +9242,7 @@
                 },
                 "currencyCode": {
                  "type": "string",
-                 "pattern": "^[A-Z]{3}$/u"
+                 "pattern": "^[A-Z]{3}$"
                 },
                 "productIds": {
                  "type": "array",
@@ -11017,14 +11017,14 @@
           "nullable": true,
           "minLength": 8,
           "maxLength": 160,
-          "pattern": "^[A-Za-z0-9_-]+$/u"
+          "pattern": "^[A-Za-z0-9_-]+$"
          },
          "folderId": {
           "type": "string",
           "nullable": true,
           "minLength": 8,
           "maxLength": 160,
-          "pattern": "^[A-Za-z0-9_-]+$/u"
+          "pattern": "^[A-Za-z0-9_-]+$"
          }
         },
         "required": [
@@ -13048,7 +13048,7 @@
      {
       "schema": {
        "type": "string",
-       "pattern": "^bulk_[a-f0-9]{32}$/u",
+       "pattern": "^bulk_[a-f0-9]{32}$",
        "description": "The `nextCursor` of the page before."
       },
       "required": false,
@@ -13315,7 +13315,7 @@
      {
       "schema": {
        "type": "string",
-       "pattern": "^\\+[1-9]\\d{6,14}$/u",
+       "pattern": "^\\+[1-9]\\d{6,14}$",
        "description": "The customer's phone in E.164, matched whole. Needs read_customer_phones."
       },
       "required": false,
@@ -14611,7 +14611,7 @@
      {
       "schema": {
        "type": "string",
-       "pattern": "^\\+[1-9]\\d{6,14}$/u",
+       "pattern": "^\\+[1-9]\\d{6,14}$",
        "description": "The buyer's phone in E.164, matched whole. Needs read_customer_phones."
       },
       "required": false,
@@ -15833,7 +15833,7 @@
           "type": "string",
           "minLength": 3,
           "maxLength": 100,
-          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$/u",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
           "description": "Omit to derive the web address from the name; a taken one gets a -2, -3… suffix."
          },
          "status": {
@@ -16295,7 +16295,7 @@
           "type": "string",
           "minLength": 3,
           "maxLength": 100,
-          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$/u"
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
          },
          "status": {
           "type": "string",
