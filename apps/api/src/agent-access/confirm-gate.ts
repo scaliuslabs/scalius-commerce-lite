@@ -3,7 +3,7 @@
 // (a PAT or CLI credential calling /api/v1/admin/... itself) both reach the
 // admin boundary, which calls this before the route runs.
 //
-// A destructive or financial operation (or one the registry marks
+// A destructive, financial or security operation (or one the registry marks
 // `confirmation: "required"`), under a grant whose confirm policy is on,
 // runs only when:
 //   - the dispatcher already settled it (MCP consumed the merchant's confirm
