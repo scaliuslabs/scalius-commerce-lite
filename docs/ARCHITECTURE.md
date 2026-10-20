@@ -104,7 +104,7 @@ Other code reaches a domain only through these entries: `../<domain>` or `../<do
 | `order-kernel` | What every order writer shares: state machine, shipment claim lease, payment-session and refund-attempt locks, app facts |
 | `orders` | The order record: lists, manual orders, edits, status lifecycle, app holds, returns, invoices, receipts, payment recovery, account orders |
 | `pages` | CMS pages, articles, store policy pages |
-| `payments` | Gateway port and adapters, sessions, payment application, refunds, COD records |
+| `payments` | Gateway port and adapters, sessions, payment application, refunds, COD records, net terms and recorded payments |
 | `platform` | The `platform` settings document: origins, CORS, identity handoff |
 | `plugins` | Installed apps' state and lifecycle |
 | `product-admin` | The dashboard product editor under one aggregate revision |
@@ -173,7 +173,7 @@ Shared composition files are split so that features in different domains never e
 
 ## Provider ports
 
-`@scalius/shared/plugins/providers` defines one port per provider kind: `payment`, `courier`, `sms`, `email`, `fraud` and `tax`. Built-in adapters (Stripe, the email senders) and app providers (the Bangladesh pack's SSLCommerz, couriers, SMS gateways and fraud checkers, bKash, Nagad) implement the same port. Core resolves a provider by id and never asks which kind it got. A built-in id never contains a colon. An app provider id is `<plugin id>:<provider id>`.
+`@scalius/shared/plugins/providers` defines one port per provider kind: `payment`, `courier`, `sms`, `email`, `courier_history` and `tax`. Built-in adapters (Stripe, the email senders) and app providers (the Bangladesh pack's SSLCommerz, couriers, SMS gateways and fraud checkers, bKash, Nagad) implement the same port. Core resolves a provider by id and never asks which kind it got. A built-in id never contains a colon. An app provider id is `<plugin id>:<provider id>`.
 
 - The API builds each request's app providers from `plugin_registrations` rows of kind `provider` (`apps/api/src/plugins/providers/`). Payment and courier providers join their registries (`payments/gateways/registry.ts`, `delivery/couriers/registry.ts`). SMS, email and fraud providers reach core through the `AppProviders` lookup (`packages/core/src/integrations/provider-port.ts`).
 - Core asks for an app provider only when the saved choice names one, so a store on built-in providers reads no plugin table. Without a lookup an app choice fails closed.

@@ -56,3 +56,14 @@ The eight tables affected by the pre-beta reset were exported immediately before
 - **Lint:** dashboard lint passed; storefront lint passed with 17 existing warnings. Oxlint passed with existing warnings.
 
 Opt-in scale/load/noise benchmarks were not rerun. Production checks were read-only: no real payment, courier booking, OTP delivery or production order was created. Independent review sweeps, real-device accessibility and live provider transactions remain separate evidence; passing automated checks does not establish those outcomes.
+
+## Since the baseline
+
+Additions to the sealed contract (all additive; the snapshots were updated and reviewed):
+
+- Deferred payment: the built-in invoice (`net_terms`), an app's `flow: "deferred"` payment provider, recorded payments against an invoice and overdue invoices (migration 0161).
+- The stable app API grew from 124 to 136 operations: product create and update, gift cards (`read_gift_cards`, `write_gift_cards`), an app's own webhook endpoints (`write_webhooks`, migration 0162), and recorded payments. A money custom field or object field is `{ amountMinor, currency }` at every app boundary.
+- SDK: `defineManifest` types handler contexts from the manifest; `createContractApi` checks `ctx.api.call` in tests; standalone apps are scaffolded outside the repository (`pnpm plugin create <id> --dir <folder>`) and `pnpm plugin validate` renders the storefront part.
+- Agents confirm security changes (access keys, roles, webhooks, platform origins) like destructive and financial ones. `node scripts/agent-eval.mjs` runs the 30-task agent evaluation.
+- `pnpm test` runs the suite in two passes (`scripts/test-runner.mjs`).
+- Reference apps `plugins/volt`, `plugins/bazaar` and `plugins/sellers` (not bundled).
