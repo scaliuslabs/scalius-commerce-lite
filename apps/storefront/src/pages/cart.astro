@@ -838,12 +838,15 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
                 type="submit"
                 class="flex h-12 w-full items-center justify-center rounded-lg bg-primary px-4 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50"
                 id="submitButton"
+                aria-describedby={checkoutUnavailable ? "submitButtonReason" : undefined}
                 disabled
               >
                 <span id="submitButtonText">
                   {isProcessing ? copy.processingText : submitLabel}
                 </span>
               </button>
+              {/* Why Place order is disabled, in the checkout language (lib/cart/checkout-button-state.ts). */}
+              <p id="submitButtonReason" class="mt-2 text-center text-sm font-medium text-muted-foreground" hidden={!checkoutUnavailable}>{checkoutUnavailable ? checkoutUnavailableMessage : ""}</p>
 
               {
                 // A cash-on-delivery-only store places the order here; a gift

@@ -183,6 +183,7 @@ function renderCartDom() {
           <input id="cartItemsInput" name="cartItems" type="hidden" />
           <input id="discountCodesInput" name="discountCodes" type="hidden" />
           <button id="submitButton" type="submit" disabled>Place Order</button>
+          <p id="submitButtonReason" hidden></p>
         </form>
       </div>
       <div id="cartSummary" class="hidden">
@@ -1340,7 +1341,10 @@ describe("initCartFunctionality", () => {
       // Said once: the summary's availability box stays quiet for rules alone.
       expect(document.getElementById("cartValidationMessage")?.classList).toContain("hidden");
       expect(submit().disabled).toBe(true);
-      expect(submit().title).toBe("This order can't be placed yet.");
+      // The reason is a visible line the button names, not a tooltip.
+      expect(document.getElementById("submitButtonReason")?.textContent).toBe("This order can't be placed yet.");
+      expect(document.getElementById("submitButtonReason")?.hidden).toBe(false);
+      expect(submit().getAttribute("aria-describedby")).toBe("submitButtonReason");
       expect(window.hasCartRuleErrors?.()).toBe(true);
       expect((window as typeof window & { __rulePwned?: boolean }).__rulePwned).toBeUndefined();
 

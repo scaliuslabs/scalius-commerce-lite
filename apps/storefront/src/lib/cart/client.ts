@@ -1521,17 +1521,22 @@ export function updateCheckoutButtonState() {
   const cartReady =
     document.getElementById("cartPageRoot")?.dataset.cartReady !== "false";
   const isEmpty = Object.keys(cartStore.get().items).length === 0;
+  const copy = activeCheckoutCopy();
   applyCheckoutButtonState(submitButton, {
     checkoutUnavailable,
     unavailableMessage,
     isEmpty: isEmpty || !cartReady,
+    emptyMessage: copy.cartEmptyErrorText,
     cartBlocked: hasBlockingCartIssues(),
     cartBlockedMessage: cartBlockedMessage(),
+    cartAttentionMessage: copy.cartAttentionText,
     cartRulesBlocked: hasCartRuleErrors(),
-    cartRulesBlockedMessage: activeCheckoutCopy().cartRulesBlockedText,
+    cartRulesBlockedMessage: copy.cartRulesBlockedText,
     checkoutPending: pendingCheckoutForThisTab() !== null,
+    checkoutPendingMessage: copy.existingCheckoutTitle,
     discountValidationPending: isDiscountValidationPending(),
-    discountValidationPendingMessage: activeCheckoutCopy().processingText,
+    discountValidationPendingMessage: copy.processingText,
+    reasonElement: document.getElementById("submitButtonReason"),
   });
 }
 
