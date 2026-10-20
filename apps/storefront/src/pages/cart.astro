@@ -327,8 +327,8 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
 const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
 // The cart template's own sections (Online store, theme editor), around the cart.
 const cartRequestTheme = await resolveRequestTheme(Astro, layoutData);
-// An empty cart points to the store's top categories and popular products.
-const emptyCartCopy = shopCopy(checkoutLanguageBaseCode(lang.code)).cart;
+// The cart page's own words: Clear cart, the phone summary bar, and the empty cart's categories and popular products.
+const cartWords = shopCopy(checkoutLanguageBaseCode(lang.code)).cart;
 const emptyCartCategories = (layoutData?.categoryTree?.nodes ?? []).filter((node) => node.parentId === null).slice(0, 8);
 const cartTemplate = cartRequestTheme.resolved.pages.templates.cart;
 const templateData = await templateSectionData("cart", cartRequestTheme);
@@ -944,6 +944,16 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
               </div>
             </div>
           </div>
+          {/* Clear cart is here, not in the drawer (one action there); lib/cart/client.ts offers Undo. */}
+          <div class="hidden px-4 pb-3 text-end group-data-[cart-state=items]:block">
+            <button
+              type="button"
+              id="clearCartButton"
+              class="inline-flex min-h-11 items-center text-sm text-muted-foreground underline decoration-border underline-offset-2 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:min-h-9"
+            >
+              {cartWords.clearCart}
+            </button>
+          </div>
           <p id="cartUndo" class="mx-4 mb-3 text-sm text-muted-foreground" role="status" hidden></p>
 
           <div
@@ -1023,7 +1033,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
         <div class="mx-auto mt-8 hidden max-w-3xl space-y-8 group-data-[cart-state=empty]:block" data-cart-empty-extras>
           {emptyCartCategories.length > 0 && (
             <nav aria-labelledby="cartEmptyCategoriesTitle">
-              <h2 id="cartEmptyCategoriesTitle" class="mb-3 text-base font-semibold text-foreground">{emptyCartCopy.shopByCategory}</h2>
+              <h2 id="cartEmptyCategoriesTitle" class="mb-3 text-base font-semibold text-foreground">{cartWords.shopByCategory}</h2>
               <ul class="flex flex-wrap gap-2">
                 {emptyCartCategories.map((node) => (
                   <li>
@@ -1037,7 +1047,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
             </nav>
           )}
           <EmptyCartPopular
-            title={emptyCartCopy.popularNow}
+            title={cartWords.popularNow}
             recommendations={popularProducts}
             currencySymbol={layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol}
             currencyCode={layoutData?.currency?.code ?? DEFAULT_CURRENCY.code}

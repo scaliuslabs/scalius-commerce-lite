@@ -12,6 +12,7 @@ import {
   removeCartItemByKey,
   removeDiscountCode,
   restoreCart,
+  clearCart,
   updateCartItemByKey,
   getEffectiveCartShippingFee,
   cartItemsSubtotal,
@@ -1890,6 +1891,18 @@ export async function initCartFunctionality() {
   document.getElementById("discountCodeInput")?.addEventListener(
     "input",
     clearDiscountMessage,
+    { signal: runtimeSignal },
+  );
+  // Clear cart lives on the cart page (the drawer keeps one action), with Undo.
+  document.getElementById("clearCartButton")?.addEventListener(
+    "click",
+    () => {
+      const snapshot = cartStore.get();
+      if (Object.keys(snapshot.items).length === 0) return;
+      clearCartValidationSummary();
+      clearCart();
+      offerUndo(activeCheckoutCopy().cartClearedText, snapshot);
+    },
     { signal: runtimeSignal },
   );
 

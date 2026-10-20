@@ -11,7 +11,6 @@ import {
   hydrateCartFromStorage,
   updateCartItemByKey,
   removeCartItemByKey,
-  clearCart,
   addToCart,
   cartLineKeyFor,
   restoreCart,
@@ -436,8 +435,8 @@ export default function CartFlyout({ onReady }: Props) {
         }}
         className={cn(
           "flex flex-col p-0 bg-card shadow-2xl gap-0 transition-transform duration-300 ease-out border-none focus:outline-none z-100",
-          // Mobile: Bottom Half Sheet
-          "fixed inset-x-0 bottom-0 h-auto max-h-[55dvh] top-auto rounded-t-[20px] border-t-0",
+          // Mobile: a bottom sheet of most of the screen (Shopify: room for the lines)
+          "fixed inset-x-0 bottom-0 h-[85dvh] max-h-[85dvh] top-auto rounded-t-[20px] border-t-0",
           // Desktop: Side Sheet
           "sm:fixed sm:inset-y-0 sm:inset-e-0 sm:inset-s-auto sm:h-full sm:max-h-none sm:w-full sm:max-w-[380px] sm:rounded-none sm:border-s",
         )}
@@ -471,7 +470,7 @@ export default function CartFlyout({ onReady }: Props) {
           <div className="flex items-center gap-2">
             <SheetTitle className="text-[15px] sm:text-lg font-bold text-foreground tracking-tight flex items-center gap-2">
               {copy.title}
-              <span aria-hidden="true" className="bg-primary text-primary-foreground text-[10px] sm:text-xs font-bold px-1.5 py-0.5 rounded-full leading-none min-w-[18px] text-center">
+              <span aria-hidden="true" className="bg-primary text-primary-foreground text-sm font-bold px-2 py-0.5 rounded-full leading-none min-w-[18px] text-center">
                 {formatCount(cart.totalItems)}
               </span>
               <span className="sr-only">{itemsText}</span>
@@ -613,11 +612,11 @@ export default function CartFlyout({ onReady }: Props) {
                           )}
                           {issues[key] && (
                             <div className="space-y-1" role="alert">
-                              <p className="text-xs font-medium text-destructive">{issues[key].message}</p>
+                              <p className="text-sm font-medium text-destructive">{issues[key].message}</p>
                               {issues[key].action === "reduce_quantity" && (issues[key].availableQuantity ?? 0) >= 1 ? (
                                 <button
                                   type="button"
-                                  className="min-h-9 rounded-md border border-border px-2 text-xs font-medium text-foreground hover:bg-muted cursor-pointer"
+                                  className="min-h-9 rounded-md border border-border px-2 text-sm font-medium text-foreground hover:bg-muted cursor-pointer"
                                   onClick={() => {
                                     updateCartItemByKey(key, { quantity: Math.floor(issues[key]!.availableQuantity!) });
                                   }}
@@ -627,7 +626,7 @@ export default function CartFlyout({ onReady }: Props) {
                               ) : issues[key].action === "remove" || issues[key].action === "reduce_quantity" ? (
                                 <button
                                   type="button"
-                                  className="min-h-9 rounded-md border border-border px-2 text-xs font-medium text-foreground hover:bg-muted cursor-pointer"
+                                  className="min-h-9 rounded-md border border-border px-2 text-sm font-medium text-foreground hover:bg-muted cursor-pointer"
                                   onClick={() => {
                                     removeWithUndo(copy.removed(item.name), () => removeCartItemByKey(key));
                                   }}
@@ -638,7 +637,7 @@ export default function CartFlyout({ onReady }: Props) {
                             </div>
                           )}
                           {(rules.lines[key] ?? []).map((rule, position) => (
-                            <p key={`${rule.code}:${position}`} className="text-xs font-medium text-destructive" role="alert">
+                            <p key={`${rule.code}:${position}`} className="text-sm font-medium text-destructive" role="alert">
                               {rule.message}
                             </p>
                           ))}
@@ -666,7 +665,7 @@ export default function CartFlyout({ onReady }: Props) {
                           >
                             <Minus className="h-3 w-3" />
                           </button>
-                          <span className="flex h-full w-7 items-center justify-center text-center text-xs font-bold leading-none text-foreground tabular-nums sm:w-6">
+                          <span className="flex h-full w-8 items-center justify-center text-center text-sm font-bold leading-none text-foreground tabular-nums">
                             {formatCount(item.quantity)}
                           </span>
                           <button
@@ -810,44 +809,40 @@ export default function CartFlyout({ onReady }: Props) {
                 </div>
               </div>
               {checkoutBlocked && (
-                <p id="drawerCheckoutBlocked" className="text-xs text-destructive sm:text-sm" role="status">{blockedText}</p>
+                <p id="drawerCheckoutBlocked" className="text-sm text-destructive" role="status">{blockedText}</p>
               )}
-              <div className="flex flex-col gap-2 sm:gap-3">
-                <Button asChild variant="outline" className="h-11 w-full rounded-xl text-[14px] font-bold cursor-pointer">
-                  <a href={cartHref} onClick={() => setCartOpen(false)}>{copy.viewCart}</a>
+              {/* One primary action (Shopify): Check out. The cart page is a link beside Continue shopping; Clear cart lives there. */}
+              {checkoutBlocked ? (
+                <Button
+                  disabled
+                  aria-describedby="drawerCheckoutBlocked"
+                  className="h-12 w-full rounded-xl text-base font-bold bg-primary text-primary-foreground shadow-md flex items-center justify-center gap-2"
+                >
+                  <span>{copy.checkout}</span>
+                  <ArrowRight className="h-4 w-4" />
                 </Button>
-                {checkoutBlocked ? (
-                  <Button
-                    disabled
-                    aria-describedby="drawerCheckoutBlocked"
-                    className="h-11 w-full rounded-xl text-[14px] font-bold bg-primary text-primary-foreground shadow-md flex items-center justify-center gap-2"
-                  >
+              ) : (
+                <Button asChild className="h-12 w-full rounded-xl text-base font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer">
+                  <a href={checkoutHref} onClick={() => setCartOpen(false)}>
                     <span>{copy.checkout}</span>
                     <ArrowRight className="h-4 w-4" />
-                  </Button>
-                ) : (
-                  <Button asChild className="h-11 w-full rounded-xl text-[14px] font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer">
-                    <a href={checkoutHref} onClick={() => setCartOpen(false)}>
-                      <span>{copy.checkout}</span>
-                      <ArrowRight className="h-4 w-4" />
-                    </a>
-                  </Button>
-                )}
-              </div>
-              <div className="flex items-center justify-between px-1">
+                  </a>
+                </Button>
+              )}
+              <div className="flex items-center justify-between gap-3 px-1">
+                <a
+                  href={cartHref}
+                  onClick={() => setCartOpen(false)}
+                  className="inline-flex min-h-11 items-center text-sm font-medium text-foreground underline underline-offset-2 hover:text-primary sm:min-h-9"
+                >
+                  {copy.viewCart}
+                </a>
                 <button
                   type="button"
                   onClick={() => setCartOpen(false)}
                   className="min-h-11 text-sm text-muted-foreground hover:text-foreground underline decoration-border underline-offset-2 cursor-pointer sm:min-h-9"
                 >
                   {copy.continueShopping}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => removeWithUndo(copy.cleared, clearCart)}
-                  className="min-h-11 text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer sm:min-h-9"
-                >
-                  {copy.clearCart}
                 </button>
               </div>
             </div>

@@ -20,6 +20,6 @@ describe("the cart drawer's words", () => {
 
   it("follows the page's language: Bangla for bn-BD, English otherwise", () => {
     expect(cartDrawerCopy("bn-BD").checkout).toBe("চেকআউট");
-    expect(cartDrawerCopy("fr").checkout).toBe("Checkout");
+    expect(cartDrawerCopy("fr").checkout).toBe("Check out");
   });
 });

@@ -46,6 +46,8 @@ export interface ShopCopy {
   cart: {
     popularNow: string;
     shopByCategory: string;
+    /** Under the cart page's lines (the drawer has only Check out). */
+    clearCart: string;
   };
 }
 
@@ -82,6 +84,7 @@ const EN: ShopCopy = {
   cart: {
     popularNow: "Popular now",
     shopByCategory: "Shop by category",
+    clearCart: "Clear cart",
   },
 };
 
@@ -118,6 +121,7 @@ const BN: ShopCopy = {
   cart: {
     popularNow: "এখন জনপ্রিয়",
     shopByCategory: "ক্যাটাগরি অনুযায়ী কিনুন",
+    clearCart: "কার্ট খালি করুন",
   },
 };
 

@@ -72,8 +72,11 @@ describe("cart drawer after an add", () => {
     expect(document.getElementById(dialog().getAttribute("aria-describedby")!)?.textContent).toContain("Blue Shirt was added");
 
     expect(link("View cart")?.getAttribute("href")).toBe("/cart");
-    expect(link("Checkout")?.getAttribute("href")).toBe("/cart#checkoutFormCard");
+    expect(link("Check out")?.getAttribute("href")).toBe("/cart#checkoutFormCard");
     expect(dialog().textContent).toContain("Continue shopping");
+    // One primary action; Clear cart lives on the cart page; the phone sheet has room for lines.
+    expect(dialog().textContent).not.toContain("Clear cart");
+    expect(dialog().className).toContain("h-[85dvh]");
     expect(dialog().textContent).toContain("Subtotal");
   });
 
@@ -115,7 +118,7 @@ describe("cart drawer after an add", () => {
     expect(status().some((region) => region.textContent?.includes("added to your cart"))).toBe(false);
     expect(dialog().querySelector("[aria-current]")).toBeNull();
     expect(link("View cart")).toBeDefined();
-    expect(link("Checkout")).toBeDefined();
+    expect(link("Check out")).toBeDefined();
   });
 
   it("drops the confirmation when the drawer is opened plainly afterwards", async () => {

@@ -107,8 +107,8 @@ describe("the cart drawer on a Bangla page", () => {
     expect(dialog().textContent).toContain("সুতির পাঞ্জাবি সরানো হয়েছে");
     expect(englishTexts(dialog())).toEqual([]);
 
-    const clear = [...dialog().querySelectorAll("button")].find((button) => button.textContent === "কার্ট খালি করুন");
-    await act(async () => clear!.click());
+    // Clear cart is on the cart page now; the drawer follows the emptied cart.
+    await act(async () => clearCart());
     expect(dialog().textContent).toContain("কার্ট খালি");
     expect(englishTexts(dialog())).toEqual([]);
     expect(latinNumbers(dialog())).toEqual([]);

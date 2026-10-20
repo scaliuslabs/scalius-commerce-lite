@@ -1099,6 +1099,22 @@ describe("initCartFunctionality", () => {
     expect(cartStore.get().items[CART_LINE_KEY]?.quantity).toBe(1);
   });
 
+  it("clears the cart from the cart page's Clear cart, with Undo", async () => {
+    document.getElementById("cartItems")!.insertAdjacentHTML(
+      "afterend",
+      `<button id="clearCartButton" type="button">Clear cart</button><p id="cartUndo" hidden></p>`,
+    );
+    await initCartFunctionality();
+
+    document.getElementById("clearCartButton")!.click();
+    expect(Object.keys(cartStore.get().items)).toEqual([]);
+    const undo = document.getElementById("cartUndo")!;
+    expect(undo.hidden).toBe(false);
+    expect(undo.textContent).toContain(ENGLISH_CHECKOUT_LANGUAGE_DATA.cartClearedText);
+    undo.querySelector("button")!.click();
+    expect(cartStore.get().items[CART_LINE_KEY]?.quantity).toBe(1);
+  });
+
   const withAddress = () =>
     document.getElementById("checkoutForm")?.insertAdjacentHTML(
       "beforeend",
