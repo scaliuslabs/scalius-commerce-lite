@@ -12,7 +12,7 @@ import {
     selectCheckoutAttemptByKey,
     type CheckoutAttemptIdentity,
     type CheckoutAttemptRow,
-    type ExistingCheckoutAttemptResult,
+    type CheckoutAttemptReplayResult,
 } from "./attempts";
 import {
   type ActiveFunctionRegistrationRow,
@@ -90,9 +90,8 @@ export async function loadStorefrontCheckoutReads<TResponse>(
         // apps price the lines once, as the order holds them.
         return { linePricer: () => (transformer ? undefined : linePricer), deferSubmittedPriceCheck: () => transformer !== undefined };
     });
-    // A replayed or in-flight attempt resolves nothing new.
-    const status = reads.existingAttempt?.status;
-    if (!transformer || status === "replay" || status === "processing") return reads;
+    // A replayed attempt resolves nothing new.
+    if (!transformer || reads.existingAttempt) return reads;
     let first: StorefrontCheckoutAuthoritySnapshot;
     try {
         first = reads.authority();
@@ -135,7 +134,7 @@ export async function loadStorefrontCheckoutReads<TResponse>(
 type CheckoutReadsAuthorityInput = StorefrontCheckoutAuthorityInput & { customerPhone: string | null; customerEmail?: string | null };
 
 export interface StorefrontCheckoutReads<TResponse> {
-    existingAttempt: ExistingCheckoutAttemptResult<TResponse> | null;
+    existingAttempt: CheckoutAttemptReplayResult<TResponse> | null;
     commitReads: StorefrontOrderCommitReads;
     authority(): StorefrontCheckoutAuthoritySnapshot;
     /** Active checkout function registrations, every point. */
@@ -200,7 +199,7 @@ async function readCheckoutOnce<TResponse>(
         ActiveFunctionRegistrationRow[] | undefined,
     ];
     const existingAttempt = resolveCheckoutAttemptRow<TResponse>(
-        attemptRows[0], identity, undefined,
+        attemptRows[0], identity,
         attemptRows[0]?.linkedOrderAccountOwnerCustomerId ? await authorityInput.customerId : undefined,
     );
     const registrations = resolveActiveFunctionRegistrations(registrationRows ?? []);
@@ -211,7 +210,7 @@ async function readCheckoutOnce<TResponse>(
     const functionRegistrations = registrations.filter((registration) => registration.kind !== "provider");
     const apps = options.apps?.(functionRegistrations) ?? NO_CHECKOUT_APP_FUNCTIONS;
     bound = bind(apps);
-    const settled: SettledAuthority = existingAttempt?.status === "replay"
+    const settled: SettledAuthority = existingAttempt
         ? { ok: false, error: new Error("Replayed checkout does not resolve authority.") }
         : await plan.resolve(
             results.slice(0, plan.statements.length),

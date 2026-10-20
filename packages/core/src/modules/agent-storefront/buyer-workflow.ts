@@ -288,18 +288,6 @@ async function replayCommittedCheckout(
     .get();
   if (!attempt) return null;
   assertAgentStorefrontCheckoutReplayHash(attempt.requestHash, requestHash);
-  if (attempt.status === "processing") {
-    const context = await db.select({ revision: agentStorefrontContexts.revision })
-      .from(agentStorefrontContexts)
-      .where(eq(agentStorefrontContexts.id, contextId))
-      .get();
-    return {
-      status: "processing",
-      contextRevision: context?.revision ?? 1,
-      orderId: attempt.orderId,
-      message: "Order creation is already processing.",
-    };
-  }
   if (attempt.status !== "committed") return null;
   const grant = await db.select({ orderId: agentStorefrontOrderGrants.orderId })
     .from(agentStorefrontOrderGrants)
@@ -526,24 +514,10 @@ export async function submitAgentStorefrontCheckout(
   };
   const existing = await withCheckoutStage("AGENT_CHECKOUT_REPLAY", () =>
     resolveExistingCheckoutAttempt<AgentStorefrontCheckoutSubmitView>(db, attemptIdentity));
-  if (existing?.status === "replay") {
+  if (existing) {
     return { response: existing.response, postCommitPayload: null, availabilityVariantIds: [] };
   }
-  if (existing?.status === "processing") {
-    return {
-      response: {
-        status: "processing",
-        contextRevision: owned.revision,
-        orderId: existing.orderId,
-        message: "Order creation is already processing.",
-      },
-      postCommitPayload: null,
-      availabilityVariantIds: [],
-    };
-  }
-  const attempt = existing?.status === "retry"
-    ? existing.attempt
-    : createAtomicCheckoutAttempt(attemptIdentity);
+  const attempt = createAtomicCheckoutAttempt(attemptIdentity);
 
   const prepared = await withCheckoutStage("AGENT_CHECKOUT_PREPARE", () => createStorefrontOrder(
     db,
@@ -641,7 +615,7 @@ export async function submitAgentStorefrontCheckout(
       db,
       attemptIdentity,
     ).catch(() => null);
-    if (recovered?.status === "replay") {
+    if (recovered) {
       return { response: recovered.response, postCommitPayload: null, availabilityVariantIds: [] };
     }
     throw error;

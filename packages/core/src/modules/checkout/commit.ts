@@ -284,7 +284,6 @@ function buildReservationItemIssues(
 async function prepareOrderInventory(
     db: Database,
     payload: StorefrontOrderCommitPayload,
-    freshOrder = false,
     variantStates?: readonly ReservationVariantState[],
     salesChannelId: string = ONLINE_STORE_CHANNEL_ID,
 ): Promise<PreparedStockReservationBatch> {
@@ -299,9 +298,9 @@ async function prepareOrderInventory(
         payload.orderData.inventoryPool as ReservationPool,
         {
             reservationKey: CHECKOUT_RESERVATION_KEY,
-            freshOrderIds: freshOrder
-                ? new Set([payload.orderData.id])
-                : undefined,
+            // The order is new: its id holds no reservation yet (an earlier
+            // batch for it committed or rolled back as a whole).
+            freshOrderIds: new Set([payload.orderData.id]),
             variantStates,
             // Units at the locations the order's channel sells from (MARKETS-DESIGN D6).
             salesChannelId,
@@ -834,23 +833,6 @@ export async function commitStorefrontOrderPayload(
     let reads = prefetchedReads;
 
     while (true) {
-        // A brand-new atomic candidate cannot already own an order. Retried
-        // legacy identities retain the read so an uncertain historical commit
-        // can still converge without creating a duplicate.
-        const existing = checkoutCommit?.attempt.origin === "new"
-            ? undefined
-            : await loadExistingCommittedOrder(db, payload.orderData.id);
-        if (existing) {
-            await finalizeCheckoutAttemptForExistingOrder(db, payload, checkoutCommit);
-            return {
-                orderId: existing.id,
-                customerId: existing.customerId,
-                accountOwnerCustomerId: existing.accountOwnerCustomerId,
-                alreadyCommitted: true,
-                availabilityTransitionVariantIds: [],
-            };
-        }
-
         if (
             !Number.isSafeInteger(payload.checkoutAuthorityRevision)
             || (payload.checkoutAuthorityRevision ?? 0) < 1
@@ -871,7 +853,6 @@ export async function commitStorefrontOrderPayload(
             prepareOrderInventory(
                 db,
                 payload,
-                checkoutCommit?.attempt.origin === "new",
                 reads?.variantStates,
                 defaultOrderSalesChannelId(orderChannel),
             ),
@@ -951,39 +932,6 @@ export async function commitStorefrontOrderPayload(
 
             if (checkoutAttemptPlan && isCheckoutAttemptCommitConflictError(error)) {
                 throw new ConflictError("Checkout attempt changed before the order could be committed. Please retry.");
-            }
-
-            const idempotentReservation = await inventoryPlan.resolveIdempotentReplay(error);
-            if (idempotentReservation?.success) {
-                try {
-                    await safeBatch(db, [
-                        authorityGuard,
-                        ...(checkoutAttemptPlan?.writesBeforeOrder ?? []),
-                        ...(agentContextPlan?.writesBeforeOrder ?? []),
-                        ...orderWrites,
-                        ...(checkoutAttemptPlan?.writesAfterOrder ?? []),
-                        ...(agentContextPlan?.writesAfterOrder ?? []),
-                    ] as SQLiteBatchItem[]);
-                } catch (replayError) {
-                    throw checkoutGuardError(replayError)
-                        ?? getPromotionRedemptionConstraintError(replayError)
-                        ?? replayError;
-                }
-                return {
-                    orderId: payload.orderData.id,
-                    customerId: customer.id,
-                    accountOwnerCustomerId: customer.accountOwnerCustomerId,
-                    alreadyCommitted: false,
-                    // The reservation committed in an earlier request whose
-                    // band outcome is unknown here; invalidate conservatively.
-                    availabilityTransitionVariantIds: getReservationEntries(payload)
-                        .map((entry) => entry.variantId),
-                };
-            }
-            if (idempotentReservation?.manualReconciliationRequired) {
-                throw new ServiceUnavailableError(
-                    "Checkout inventory state needs reconciliation before this order can be retried.",
-                );
             }
 
             if (isInventoryReservationConflictError(error)) {
@@ -1080,31 +1028,4 @@ function prepareAgentStorefrontCheckoutCommit(
             ...(continuationWrite ? [continuationWrite] : []),
         ],
     };
-}
-
-async function finalizeCheckoutAttemptForExistingOrder(
-    db: Database,
-    payload: StorefrontOrderCommitPayload,
-    checkoutCommit: StorefrontOrderCheckoutCommit | undefined,
-): Promise<void> {
-    if (!checkoutCommit) return;
-
-    const plan = await prepareAtomicCheckoutAttemptCommit(db, checkoutCommit.attempt, {
-        paymentMethod: payload.orderData.paymentMethod,
-        totalAmountMinor: payload.orderData.totalAmountMinor,
-        response: checkoutCommit.response,
-    });
-    try {
-        await safeBatch(db, [
-            ...plan.writesBeforeOrder,
-            ...plan.writesAfterOrder,
-        ] as SQLiteBatchItem[]);
-    } catch (error) {
-        // A committed matching attempt is already durable after an uncertain
-        // response; a different winner owns the replay payload.
-        if (isCheckoutAttemptCommitConflictError(error)) {
-            return;
-        }
-        throw error;
-    }
 }

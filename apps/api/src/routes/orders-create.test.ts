@@ -310,8 +310,6 @@ beforeEach(() => {
   });
   mocks.resolveExistingCheckoutAttempt.mockResolvedValue(null);
   mocks.createAtomicCheckoutAttempt.mockReturnValue({
-    commitMode: "atomic",
-    origin: "new",
     id: "coa_1",
     requestKey: "checkout_submit:v1:test",
     requestHash: "request_hash_1",
@@ -1402,8 +1400,6 @@ describe("create order commit ordering", () => {
         expect.objectContaining({
           attempt: expect.objectContaining({
             id: "coa_1",
-            commitMode: "atomic",
-            origin: "new",
             orderId: "order_1",
             checkoutToken: "chk_order_1",
           }),
@@ -1515,44 +1511,6 @@ describe("create order commit ordering", () => {
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
   });
 
-  it("returns a pollable processing response for an active duplicate despite later policy changes", async () => {
-    mocks.resolveExistingCheckoutAttempt.mockResolvedValue({
-      status: "processing",
-      orderId: "order_processing",
-      statusToken: DEFAULT_STATUS_TOKEN,
-    });
-    mocks.limiter.limit.mockResolvedValue({ success: false });
-    const { app } = createTestApp({ guestCheckoutEnabled: false });
-
-    const response = await app.request(
-      "/api/v1/orders",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(validOrderBody),
-      },
-      {} as never,
-    );
-
-    const json = await response.json() as { data: { checkoutToken?: string; statusToken: string; orderId: string; status: string } };
-    expect(response.status).toBe(202);
-    expect(json.data).toEqual({
-      statusToken: DEFAULT_STATUS_TOKEN,
-      orderId: "order_processing",
-      status: "processing",
-      message: "Order creation is already processing.",
-    });
-    expect(json.data.statusToken).not.toMatch(/^chk_/);
-    expect(json.data).not.toHaveProperty("checkoutToken");
-    expect(mocks.buildCheckoutAttemptIdentity).toHaveBeenCalledOnce();
-    expect(mocks.resolveExistingCheckoutAttempt).toHaveBeenCalledOnce();
-    expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
-    expect(mocks.getCustomerBySession).not.toHaveBeenCalled();
-    expect(mocks.limiter.limit).not.toHaveBeenCalled();
-    expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
-    expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
-  });
-
   it("replays the winner when atomic commit arbitration loses a race", async () => {
     mocks.resolveExistingCheckoutAttempt
       .mockResolvedValueOnce(null)
@@ -1589,44 +1547,6 @@ describe("create order commit ordering", () => {
       orderId: "order_race_replay",
       receiptToken: "chk_race_replay",
     });
-    expect(mocks.resolveExistingCheckoutAttempt).toHaveBeenCalledTimes(2);
-    expect(mocks.createStorefrontOrder).toHaveBeenCalledOnce();
-    expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
-  });
-
-  it("returns an active legacy winner when atomic commit arbitration loses a race", async () => {
-    mocks.resolveExistingCheckoutAttempt
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({
-      status: "processing",
-      orderId: "order_race_processing",
-      statusToken: DEFAULT_STATUS_TOKEN,
-    });
-    mocks.commitStorefrontOrderPayload.mockRejectedValue(
-      new ConflictError("Another checkout submit committed first."),
-    );
-    const { app } = createTestApp();
-
-    const response = await app.request(
-      "/api/v1/orders",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(validOrderBody),
-      },
-      {} as never,
-    );
-
-    const json = await response.json() as { data: { checkoutToken?: string; statusToken: string; orderId: string; status: string } };
-    expect(response.status).toBe(202);
-    expect(json.data).toEqual({
-      statusToken: DEFAULT_STATUS_TOKEN,
-      orderId: "order_race_processing",
-      status: "processing",
-      message: "Order creation is already processing.",
-    });
-    expect(json.data.statusToken).not.toMatch(/^chk_/);
-    expect(json.data).not.toHaveProperty("checkoutToken");
     expect(mocks.resolveExistingCheckoutAttempt).toHaveBeenCalledTimes(2);
     expect(mocks.createStorefrontOrder).toHaveBeenCalledOnce();
     expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();

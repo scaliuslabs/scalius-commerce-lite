@@ -1,10 +1,10 @@
 import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { safeBatch, type Database } from "@scalius/database/client";
+import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { ConflictError } from "../../errors";
-import { createAtomicCheckoutAttempt } from "./attempts";
+import { createAtomicCheckoutAttempt, resolveExistingCheckoutAttempt } from "./attempts";
 import { commitStorefrontOrderPayload, type StorefrontOrderCheckoutCommit } from "./commit";
 import type { StorefrontOrderCommitPayload } from "../orders/types";
 import {
@@ -17,7 +17,6 @@ import {
   updatePromotionDraft,
   type CreatePromotionDraftInput,
 } from "../promotions";
-import { prepareStockReservationBatch } from "../inventory";
 
 function createPayload(checkoutAuthorityRevision: number): StorefrontOrderCommitPayload {
   return {
@@ -189,6 +188,15 @@ describe("storefront checkout authority at the atomic commit", () => {
     payload.checkoutToken = attempt.checkoutToken;
     return { payload, commit: { attempt, response: { orderId: attempt.orderId } } };
   }
+
+  /** What a retry of the same submit reads: the committed attempt's replay. */
+  const replayOf = (commit: ReturnType<typeof checkout>["commit"]) => resolveExistingCheckoutAttempt(db, {
+    checkoutRequestId: "authority-test",
+    requestKey: commit.attempt.requestKey,
+    requestHash: commit.attempt.requestHash,
+    customerWhatsapp: null,
+    statusToken: commit.attempt.statusToken,
+  });
 
   async function discountedCheckout(overrides: Partial<CreatePromotionDraftInput> = {}) {
     const rule = createPromotionDraftSchema.parse({
@@ -374,7 +382,7 @@ describe("storefront checkout authority at the atomic commit", () => {
     await expect(commitStorefrontOrderPayload(db, payload, commit)).resolves.toMatchObject({ alreadyCommitted: false });
     expect(revision()).toBe(payload.checkoutAuthorityRevision);
     await pausePromotion(db, promotion.id, promotion.revision);
-    await expect(commitStorefrontOrderPayload(db, payload)).resolves.toMatchObject({ alreadyCommitted: true });
+    await expect(replayOf(commit)).resolves.toEqual({ status: "replay", response: commit.response });
     expect(sqlite.prepare("SELECT discount_amount_minor, total_amount_minor FROM orders").all())
       .toEqual([{ discount_amount_minor: 10_000, total_amount_minor: 16_000 }]);
     for (const table of ["promotion_redemptions", "order_discount_allocations", "order_receipts", "inventory_movements"]) {
@@ -402,38 +410,6 @@ describe("storefront checkout authority at the atomic commit", () => {
     },
   );
 
-  it("rejects a discount change before the order-only replay batch and preserves the existing reservation", async () => {
-    const { payload, commit, promotion } = await discountedCheckout();
-    const reservation = await prepareStockReservationBatch(db, [{
-      variantId: "variant_1", quantity: 2, orderId: payload.orderData.id,
-    }], "regular", {
-      reservationKey: "checkout-ingest:v1",
-      salesChannelId: "sc_online_store",
-      freshOrderIds: new Set([payload.orderData.id]),
-    });
-    await safeBatch(db, reservation.statements);
-    const movements = sqlite.prepare("SELECT * FROM inventory_movements").all();
-    const stock = sqlite.prepare("SELECT stock, reserved_stock, stock_version FROM product_variants WHERE id = 'variant_1'").get();
-    let commitBatches = 0;
-    beforeWriteBatch = () => {
-      commitBatches += 1;
-      // The first batch discovers the already-committed reservation. Change
-      // the discount only when the committer retries without inventory writes.
-      beforeWriteBatch = async () => {
-        commitBatches += 1;
-        await pausePromotion(db, promotion.id, promotion.revision);
-      };
-    };
-    await expect(commitStorefrontOrderPayload(db, payload, commit))
-      .rejects.toThrow("This discount changed or expired during checkout");
-    expect(commitBatches).toBe(2);
-    expect(sqlite.prepare("SELECT * FROM inventory_movements").all()).toEqual(movements);
-    expect(sqlite.prepare("SELECT stock, reserved_stock, stock_version FROM product_variants WHERE id = 'variant_1'").get()).toEqual(stock);
-    for (const table of ["orders", "order_items", "order_receipts", "checkout_attempts", "promotion_redemptions", "customers", "customer_history"]) {
-      expect(sqlite.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()?.count, table).toBe(0);
-    }
-  });
-
   it("rejects a SKU price edit after preparation and leaves no checkout side effects", async () => {
     const { payload, commit } = checkout();
     beforeWriteBatch = () => {
@@ -459,9 +435,7 @@ describe("storefront checkout authority at the atomic commit", () => {
     expect(sqlite.prepare("SELECT status FROM checkout_attempts").get()?.status).toBe("committed");
 
     sqlite.exec("UPDATE product_variants SET price_minor = 90000 WHERE id = 'variant_1'");
-    payload.checkoutAuthorityRevision = null;
-    await expect(commitStorefrontOrderPayload(db, payload))
-      .resolves.toMatchObject({ alreadyCommitted: true, orderId: payload.orderData.id });
+    await expect(replayOf(commit)).resolves.toEqual({ status: "replay", response: { orderId: payload.orderData.id } });
     expect(sqlite.prepare("SELECT COUNT(*) AS count FROM orders").get()?.count).toBe(1);
     expect(sqlite.prepare("SELECT COUNT(*) AS count FROM inventory_movements").get()?.count).toBe(1);
     expect(sqlite.prepare("SELECT reserved_stock FROM product_variants WHERE id = 'variant_1'").get()?.reserved_stock).toBe(2);

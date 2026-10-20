@@ -562,24 +562,9 @@ app.openapi(createOrderRoute, async (c) => {
     const paymentProviders = checkoutReads.paymentProviders;
     diagnostics?.mark("attempt");
 
-    if (existingAttempt?.status === "replay") {
+    if (existingAttempt) {
       return created(c, existingAttempt.response);
     }
-
-    if (existingAttempt?.status === "processing") {
-      return c.json({
-        success: true,
-        data: {
-          statusToken: existingAttempt.statusToken,
-          orderId: existingAttempt.orderId,
-          status: "processing" as const,
-          message: "Order creation is already processing.",
-        },
-      }, 202);
-    }
-    const retryAttempt = existingAttempt?.status === "retry"
-      ? existingAttempt.attempt
-      : null;
 
     const checkoutAuthority = checkoutReads.authority();
     const { currency, cartValidation, deliveryPreflight } = checkoutAuthority;
@@ -614,7 +599,7 @@ app.openapi(createOrderRoute, async (c) => {
     // This remains memory-only until the authoritative order batch. The
     // idempotency row, order, inventory mutation, and receipt either all commit
     // or all roll back together.
-    const checkoutAttempt = retryAttempt ?? createAtomicCheckoutAttempt(attemptIdentity);
+    const checkoutAttempt = createAtomicCheckoutAttempt(attemptIdentity);
 
     const result = await createStorefrontOrder(
       db,
@@ -775,28 +760,17 @@ app.openapi(createOrderRoute, async (c) => {
         checkoutReads.commitReads,
       );
     } catch (commitError) {
+      // A concurrent same-key submit committed first: replay its order.
       const recoveredAttempt = await resolveExistingCheckoutAttempt<typeof responsePayload>(
         db,
         attemptIdentity,
-        undefined,
         sessionCustomerId,
       ).catch((recoveryError: unknown) => {
         console.warn("[Orders] Failed to resolve checkout after an uncertain commit:", recoveryError);
         return null;
       });
-      if (recoveredAttempt?.status === "replay") {
+      if (recoveredAttempt) {
         return created(c, recoveredAttempt.response);
-      }
-      if (recoveredAttempt?.status === "processing") {
-        return c.json({
-          success: true,
-          data: {
-            statusToken: recoveredAttempt.statusToken,
-            orderId: recoveredAttempt.orderId,
-            status: "processing" as const,
-            message: "Order creation is already processing.",
-          },
-        }, 202);
       }
       throw commitError;
     }
