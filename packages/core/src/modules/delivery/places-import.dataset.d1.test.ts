@@ -89,11 +89,14 @@ describe("the Bangladesh dataset", () => {
   it("seeds a new store under the dataset's ids", async () => {
     const { db, sqlite } = createSqliteD1Database();
     expect(await importDataset(db)).toMatchObject({ created: places.length, conflictCount: 0 });
-    expect(sqlite.prepare("SELECT level, count(*) AS n, sum(is_active = 0) AS inactive FROM places GROUP BY level ORDER BY level").all()).toEqual([
-      { level: 1, n: manifest.counts["1"], inactive: 0 },
+    const levels = sqlite.prepare("SELECT level, count(*) AS n, sum(is_active = 0) AS inactive FROM places GROUP BY level ORDER BY level").all() as Array<{ level: number; n: number; inactive: number }>;
+    // Junk cities (repeated letters, placeholders) and childless cities are switched off with their ids kept.
+    expect(levels).toEqual([
+      { level: 1, n: manifest.counts["1"], inactive: 2 },
       { level: 2, n: manifest.counts["2"], inactive: 11 },
       { level: 3, n: manifest.counts["3"], inactive: 41 },
     ]);
+    expect(levels.reduce((sum, level) => sum + level.inactive, 0)).toBe(manifest.inactive);
     expect(sqlite.prepare("SELECT id FROM places WHERE source_key = 'pathao:city:1'").get()).toEqual({ id: places[places.findIndex((place) => place.key === "pathao:city:1")]!.legacyId });
   }, 120_000);
 });
