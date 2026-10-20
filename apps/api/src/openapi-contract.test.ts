@@ -49,7 +49,6 @@ describe("finalizeOpenApiContract", () => {
         },
       },
       "/api/v1/auth/token": { get: { responses: {} } },
-      "/api/v1/auth/me": { get: { responses: {} } },
       "/api/v1/agent-auth/device/start": {
         post: { operationId: "system.agent_auth.device_start", responses: {} },
       },
@@ -108,9 +107,6 @@ describe("finalizeOpenApiContract", () => {
     });
     expect(operation(spec, "/api/v1/auth/token", "get").security).toEqual([
       { apiTokenHeader: [] },
-    ]);
-    expect(operation(spec, "/api/v1/auth/me", "get").security).toEqual([
-      { bearerAuth: [] },
     ]);
     expect(operation(spec, "/api/v1/agent-auth/device/start", "post").security).toEqual([]);
     expect(operation(spec, "/api/v1/agent-auth/revoke", "post").security).toEqual([

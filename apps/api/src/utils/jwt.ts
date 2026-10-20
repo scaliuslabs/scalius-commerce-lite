@@ -108,21 +108,3 @@ export function extractTokenFromHeader(
   if (!authHeader?.startsWith("Bearer ")) return null;
   return authHeader.substring(7);
 }
-
-/**
- * Get token statistics (for diagnostics).
- * Does NOT expose any part of the secret — only reports whether it is configured
- * and whether its length/entropy appears sufficient.
- */
-export function getTokenStats(
-  env?: JwtSigningEnv,
-): {
-  isConfigured: boolean;
-  secretLengthSufficient: boolean;
-} {
-  const secret = env?.JWT_SECRET ?? "";
-  return {
-    isConfigured: typeof secret === "string" && secret.length > 0,
-    secretLengthSufficient: typeof secret === "string" && secret.length >= 32,
-  };
-}

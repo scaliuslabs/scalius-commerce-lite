@@ -1,20 +1,11 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { generateToken, getTokenStats } from "../utils/jwt";
-import { authMiddleware } from "../middleware/auth";
+import { generateToken } from "../utils/jwt";
 import { firebaseDocument } from "@scalius/core/modules/settings";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
-import { UnauthorizedError, ForbiddenError } from "../utils/api-error";
+import { UnauthorizedError } from "../utils/api-error";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 
 import { ok } from "../utils/api-response";
-// Define the user type for type safety
-interface User {
-  id: string;
-  email: string;
-  name: string;
-  role: string;
-}
-
 // Constant-time secret comparison
 async function timingSafeCompare(a: string, b: string): Promise<boolean> {
   const encoder = new TextEncoder();
@@ -32,12 +23,7 @@ async function timingSafeCompare(a: string, b: string): Promise<boolean> {
   return result === 0;
 }
 
-const app = new OpenAPIHono<{
-  Bindings: Env;
-  Variables: {
-    user: User;
-  };
-}>();
+const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // ─── GET /token ──────────────────────────────────────────────────────────────
 
@@ -102,67 +88,6 @@ app.openapi(firebaseConfigRoute, async (c) => {
     encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
   });
   return ok(c, publicConfig);
-});
-
-// Apply auth middleware to all routes below
-app.use("/*", authMiddleware);
-
-// ─── GET /me ─────────────────────────────────────────────────────────────────
-
-const getMeRoute = createRoute({
-  method: "get",
-  path: "/me",
-  tags: ["Auth"],
-  summary: "Get current user/service info",
-  responses: {
-    200: {
-      description: "Current user info",
-      content: {
-        "application/json": {
-          schema: successEnvelope(z.object({
-            user: z.object({
-              id: z.string(),
-              email: z.string(),
-              name: z.string(),
-              role: z.string(),
-            }),
-          })),
-        },
-      },
-    },
-    ...errorResponses,
-  },
-});
-
-app.openapi(getMeRoute, (c) => {
-  const user = c.get("user");
-  return ok(c, { user });
-});
-
-// ─── GET /token-stats ────────────────────────────────────────────────────────
-
-const tokenStatsRoute = createRoute({
-  method: "get",
-  path: "/token-stats",
-  tags: ["Auth"],
-  summary: "Get token stats (admin/system only)",
-  responses: {
-    200: {
-      description: "Token stats",
-      content: { "application/json": { schema: successEnvelope(z.object({}).passthrough()) } },
-    },
-    ...errorResponses,
-  },
-});
-
-app.openapi(tokenStatsRoute, (c) => {
-  const user = c.get("user");
-
-  if (user.role !== "admin" && user.role !== "system") {
-    throw new ForbiddenError("You do not have permission to access this resource");
-  }
-
-  return ok(c, getTokenStats(c.env));
 });
 
 export default app;

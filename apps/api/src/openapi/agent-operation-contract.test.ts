@@ -572,22 +572,20 @@ describe("agent operation contract", () => {
     }
   });
 
-  it("keeps shipment status duplicate routes out of execution", () => {
+  it("has one shipment status refresh, the duplicates deleted", () => {
     expect(byId(manifest, "dashboard.orders.shipment_refresh")).toMatchObject({
       exposure: "execute",
       pathTemplate:
         "/api/v1/admin/orders/{id}/shipments/{shipmentId}/refresh",
     });
+    const ids = new Set(manifest.map((operation) => operation.operationId));
     for (const operationId of [
       "dashboard.orders.shipment_status_sync",
       "dashboard.shipments.status_sync",
+      "dashboard.shipments.get",
+      "dashboard.shipments.delete",
     ]) {
-      expect(byId(manifest, operationId)).toMatchObject({
-        exposure: "excluded",
-        inputSchema: null,
-        outputSchema: null,
-        exclusionReason: expect.stringContaining("shipment"),
-      });
+      expect(ids.has(operationId), operationId).toBe(false);
     }
   });
 

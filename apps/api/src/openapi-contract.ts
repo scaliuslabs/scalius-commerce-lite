@@ -354,9 +354,6 @@ function isCustomerSessionEndpoint(path: string): boolean {
 function securityForOperation(path: string, method: string): OpenApiSecurityRequirement[] | null {
   if (isScannerEndpoint(path, method)) return SCANNER_SECURITY;
   if (path === "/auth/token") return API_TOKEN_SECURITY;
-  if (path === "/auth/me" || path === "/auth/token-stats") {
-    return BEARER_SECURITY;
-  }
   if (isCustomerSessionEndpoint(path)) return CUSTOMER_SECURITY;
   if (path === "/agent-artifacts" || path.startsWith("/agent-artifacts/")) {
     return AGENT_SECURITY;

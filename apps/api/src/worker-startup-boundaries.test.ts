@@ -196,7 +196,7 @@ describe("API Worker startup boundaries", () => {
     ["direct", "/api/v1/health"],
     ["probe", "/api/v1/readyz"],
     ["admin", "/api/v1/admin/dashboard/activity"],
-    ["system", "/api/v1/auth/me"],
+    ["system", "/api/v1/auth/token"],
     ["system", "/api/v1/payment/stripe/session"],
     ["system", "/api/v1/webhooks/stripe"],
     ["docs", "/api/v1/openapi.json"],
@@ -428,7 +428,7 @@ describe("API Worker startup boundaries", () => {
   describe("missing SCALIUS_SECRET", () => {
     it.each([
       ["/api/v1/admin/dashboard/activity"],
-      ["/api/v1/auth/me"],
+      ["/api/v1/auth/token"],
       ["/api/v1/products"],
       ["/api/v1/mcp/dashboard"],
       ["/api/v1/unknown"],

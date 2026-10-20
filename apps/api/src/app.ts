@@ -75,7 +75,6 @@ import { adminPurchaseOrderRoutes, adminSupplierRoutes, adminTransferRoutes } fr
 import { adminNavigationRoutes } from "./routes/admin/navigation";
 import { adminTranslationRoutes } from "./routes/admin/translations";
 import { adminSearchRoutes } from "./routes/admin/search";
-import { adminShipmentRoutes } from "./routes/admin/shipments";
 import { adminAnalyticsRoutes } from "./routes/admin/analytics";
 import { adminFraudCheckerRoutes } from "./routes/admin/fraud-checker";
 import { adminWebhookRoutes } from "./routes/admin/webhooks";
@@ -243,7 +242,6 @@ app.route("/admin/inventory", adminInventoryRoutes);
 app.route("/admin/navigation", adminNavigationRoutes);
 app.route("/admin/translations", adminTranslationRoutes);
 app.route("/admin/search", adminSearchRoutes);
-app.route("/admin/shipments", adminShipmentRoutes);
 app.route("/admin/analytics", adminAnalyticsRoutes);
 app.route("/admin/dashboard", adminDashboardRoutes);
 app.route("/admin/reports", adminReportRoutes);
@@ -277,7 +275,6 @@ app.route("/admin/notifications", adminStaffAlertRoutes);
 app.route("/admin", adminSystemUtilsRoutes);
 app.route("/admin/settings/delivery-locations", adminLocationRoutes);
 app.route("/admin/settings/checkout-languages", checkoutLanguageRoutes);
-app.route("/admin/settings/abandoned-checkouts", abandonedCheckoutsRoutes);
 
 // Setup routes - bypassing normal auth rules, used only during initial deployment
 app.route("/setup", authSetupRoutes);

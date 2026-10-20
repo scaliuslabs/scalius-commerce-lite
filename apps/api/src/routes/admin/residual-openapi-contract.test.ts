@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 import { finalizeOpenApiContract, type OpenApiDocument } from "../../openapi-contract";
 import { adminCustomerRoutes } from "./customers";
 import { adminInventoryRoutes } from "./inventory";
-import { adminShipmentRoutes } from "./shipments";
 import { metaConversionsAdminRoutes } from "./settings/meta-conversions-admin";
 import { smsSettingsRoutes } from "./settings/sms";
 import { systemSettingsRoutes } from "./settings/system";
@@ -49,7 +48,6 @@ function buildResidualSpec(): OpenApiDocument {
 
   app.route("/admin/customers", adminCustomerRoutes);
   app.route("/admin/inventory", adminInventoryRoutes);
-  app.route("/admin/shipments", adminShipmentRoutes);
   app.route("/admin/settings/meta-conversions", metaConversionsAdminRoutes);
   app.route("/admin/settings", smsSettingsRoutes);
   app.route("/admin/settings", systemSettingsRoutes);
@@ -61,7 +59,7 @@ function buildResidualSpec(): OpenApiDocument {
 }
 
 describe("admin residual OpenAPI mutation responses", () => {
-  it("documents verified inventory and shipment conflict/unavailable failures", () => {
+  it("documents verified inventory conflict failures", () => {
     const spec = buildResidualSpec();
 
     expectResponses(spec, "/api/v1/admin/inventory/{variantId}/adjust", "post", ["200", "404", "409"]);
@@ -69,17 +67,6 @@ describe("admin residual OpenAPI mutation responses", () => {
     expectResponses(spec, "/api/v1/admin/inventory/stock-adjust", "post", ["200", "404", "409"]);
 
     expectResponses(spec, "/api/v1/admin/inventory/stock-set", "post", ["200", "404", "409"]);
-
-    expectResponses(spec, "/api/v1/admin/shipments/{id}", "get", ["200", "404"]);
-    expectNoResponses(spec, "/api/v1/admin/shipments/{id}", "get", ["409"]);
-    expectResponses(spec, "/api/v1/admin/shipments/{id}", "delete", ["200", "404", "409"]);
-
-    expectResponses(spec, "/api/v1/admin/shipments/{id}/check-status", "post", [
-      "200",
-      "404",
-      "409",
-      "503",
-    ]);
   });
 
   it("documents verified settings and customer mutation failures", () => {

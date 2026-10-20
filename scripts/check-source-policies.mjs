@@ -213,8 +213,8 @@ export const policies = [
   },
   {
     rule: "admin shipment status routes never call the carrier status sync directly",
-    why: "carrier sync mutates order status and stock; both routes must share checkAndSyncShipmentStatus (shipment-status-sync.ts)",
-    paths: ["apps/api/src/routes/admin/orders-status.ts", "apps/api/src/routes/admin/shipments.ts"],
+    why: "carrier sync mutates order status and stock; every status route must use checkAndSyncShipmentStatus (shipment-status-sync.ts)",
+    paths: ["apps/api/src/routes/admin/orders-status.ts"],
     forbid: [/\b(?:checkShipmentStatus|updateOrderStatusFromShipment)\s*\(/],
     sample: "await updateOrderStatusFromShipment(db, shipment);",
   },

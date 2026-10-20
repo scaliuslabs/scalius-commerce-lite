@@ -35,17 +35,10 @@ export const DASHBOARD_ROUTE_PERMISSIONS: RoutePermissionMap = {
   // =============================================
   // Search API
   // =============================================
-  "/api/v1/admin/search": {
-    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
-    POST: { permission: PERMISSIONS.PRODUCTS_VIEW },
-  },
   // The ⌘K search: open to any staff member; each kind of record is searched
   // only when the caller may read that kind's list (checked in the route).
   "/api/v1/admin/search/global": {
     GET: { allowAnyAdmin: true },
-  },
-  "/api/v1/admin/search/reindex": {
-    POST: { permission: PERMISSIONS.PRODUCTS_BULK_OPERATIONS },
   },
   // =============================================
   // Dashboard API

@@ -1,5 +1,4 @@
 import { createAdminRuntimeApiApp } from "./admin-base-app";
-import { abandonedCheckoutsRoutes } from "../routes/abandoned-checkouts";
 import { checkoutLanguageRoutes } from "../routes/checkout-languages";
 import { adminNavigationRoutes } from "../routes/admin/navigation";
 import { adminPageRoutes } from "../routes/admin/pages";
@@ -19,6 +18,5 @@ app.route("/admin/objects", adminObjectRoutes);
 app.route("/admin/settings", adminSettingsRoutes);
 app.route("/admin/settings/delivery-locations", adminLocationRoutes);
 app.route("/admin/settings/checkout-languages", checkoutLanguageRoutes);
-app.route("/admin/settings/abandoned-checkouts", abandonedCheckoutsRoutes);
 
 export default app;

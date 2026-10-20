@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   generateToken,
-  getTokenStats,
   verifyToken,
 } from "./jwt";
 
@@ -20,7 +19,6 @@ describe("JWT secret source", () => {
     expect(() => generateToken({ id: "system" }, "1h", { JWT_SECRET: "" })).toThrow(
       "Failed to generate authentication token",
     );
-    expect(getTokenStats({})).toMatchObject({ isConfigured: false });
     expect(
       generateToken({ id: "system" }, "1h", {
         JWT_SECRET: "runtime-env-secret-with-at-least-thirty-two-chars",

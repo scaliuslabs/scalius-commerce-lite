@@ -1,4 +1,4 @@
-import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import {
     assertShipmentDeletable,
@@ -44,9 +44,6 @@ import { ORDER_STATUSES } from "@scalius/shared/order-state";
 import { notificationSender } from "../../background/notification-sender";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
-
-type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
-type AdminRouteContext<R extends RouteConfig> = Parameters<AdminRouteHandler<R>>[0];
 
 // ─── Inline response schemas ────────────────────────────────────────────────
 
@@ -588,46 +585,6 @@ app.openapi(deleteShipmentRoute, async (c) => {
     await deleteShipmentRecord(db, shipmentId);
     return ok(c, {});
 });
-
-// ─── POST /:id/shipments/{shipmentId}/status ──────────────────────────────────
-
-const checkShipmentStatusRoute = createRoute({
-    operationId: "dashboard.orders.shipment_status_sync",
-    method: "post",
-    path: "/{id}/shipments/{shipmentId}/status",
-    tags: ["Admin - Orders"],
-    summary: "Check shipment status from provider and sync order",
-    request: {
-        params: z.object({ id: z.string(), shipmentId: z.string() }),
-    },
-    responses: {
-        200: {
-            description: "Status checked",
-            content: { "application/json": { schema: successEnvelope(refreshedShipmentSchema) } },
-        },
-        ...adminProviderMutationErrorResponses,
-    }
-});
-
-app.openapi(checkShipmentStatusRoute, (async (c: AdminRouteContext<typeof checkShipmentStatusRoute>) => {
-    const { id: orderId, shipmentId } = c.req.valid("param");
-    const db = c.get("db");
-
-    const shipment = await getShipment(db, shipmentId);
-    if (!shipment) throw new NotFoundError("Shipment not found");
-    if (shipment.orderId !== orderId) throw new ForbiddenError("Shipment does not belong to this order");
-
-    const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-    const result = await checkAndSyncShipmentStatus({
-        db,
-        shipment,
-        encryptionKey,
-        couriers: requestCourierProviders(c),
-        c,
-        source: "orders-shipment-status",
-    });
-    return ok(c, result.payload);
-}) as unknown as AdminRouteHandler<typeof checkShipmentStatusRoute>);
 
 // ─── POST /:id/shipments/{shipmentId}/refresh ─────────────────────────────────
 

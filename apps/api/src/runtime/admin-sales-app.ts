@@ -4,7 +4,6 @@ import { adminCustomerMarketingRoutes } from "../routes/admin/customer-marketing
 import { adminDiscountRoutes } from "../routes/admin/discounts";
 import { adminConversationRoutes } from "../routes/admin/conversations";
 import { adminOrdersRoutes } from "../routes/admin/orders";
-import { adminShipmentRoutes } from "../routes/admin/shipments";
 import { adminTaxRoutes } from "../routes/admin/taxes";
 import { adminGiftCardRoutes } from "../routes/admin/gift-cards";
 import { adminWarrantyClaimRoutes } from "../routes/admin/warranty-claims";
@@ -18,7 +17,6 @@ const app = createAdminRuntimeApiApp();
 app.route("/admin/customers", adminCustomerMarketingRoutes);
 app.route("/admin/customers", adminCustomerRoutes);
 app.route("/admin/discounts", adminDiscountRoutes);
-app.route("/admin/shipments", adminShipmentRoutes);
 app.route("/admin/orders", adminOrdersRoutes);
 app.route("/admin/conversations", adminConversationRoutes);
 app.route("/admin/taxes", adminTaxRoutes);
