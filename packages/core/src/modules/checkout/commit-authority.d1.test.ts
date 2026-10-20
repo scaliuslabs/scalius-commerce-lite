@@ -408,6 +408,7 @@ describe("storefront checkout authority at the atomic commit", () => {
       variantId: "variant_1", quantity: 2, orderId: payload.orderData.id,
     }], "regular", {
       reservationKey: "checkout-ingest:v1",
+      salesChannelId: "sc_online_store",
       freshOrderIds: new Set([payload.orderData.id]),
     });
     await safeBatch(db, reservation.statements);

@@ -116,11 +116,11 @@ describe("digital stock rules on inventory paths", () => {
 
         // The reservation itself refuses a third key (the batch guard), and takes two.
         const before = movements();
-        expect(await reserveStockBatch(db, [{ variantId: "var_app", quantity: 3, orderId: "order_over" }]))
+        expect(await reserveStockBatch(db, [{ variantId: "var_app", quantity: 3, orderId: "order_over" }], "regular", { salesChannelId: "sc_online_store" }))
             .toMatchObject({ success: false });
         expect(one("SELECT reserved_stock AS r FROM product_variants WHERE id = 'var_app'")).toEqual({ r: 0 });
         expect(movements()).toBe(before);
-        expect(await reserveStockBatch(db, [{ variantId: "var_app", quantity: 2, orderId: "order_ok" }]))
+        expect(await reserveStockBatch(db, [{ variantId: "var_app", quantity: 2, orderId: "order_ok" }], "regular", { salesChannelId: "sc_online_store" }))
             .toMatchObject({ success: true });
         expect(one("SELECT reserved_stock AS r FROM product_variants WHERE id = 'var_app'")).toEqual({ r: 2 });
     });

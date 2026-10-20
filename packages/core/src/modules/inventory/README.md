@@ -64,7 +64,7 @@ Types: `reserved`, `preorder_reserved`, `released`, `deducted`, `preorder_deduct
 - A deduct needs `reserved >= q`, and for the regular pool `stock >= q`. Drift fails closed.
 - A deduct leaves from the order's `fulfillment_location_id` (the default when null). A restore returns to the location the generation was deducted from, else the order's location, else the default. A return receipt names its own restock location.
 - `assertOrderStockCoverable()` refuses before the last parcel, a courier booking or the last pickup is recorded when the order's location lacks the units.
-- Checkout and admin order creation call `prepareStockReservationBatch()` and compose its statements into their own batch. Order returns use `applyClaimedInventoryEntryBatchWithImpact()` for an explicit deduct or restore under a stable claim key.
+- Checkout and admin order creation call `prepareStockReservationBatch()` and compose its statements into their own batch. Every reservation names the order's `salesChannelId` (required): a regular reservation takes only units at the locations that channel sells from, for checkout, staff orders, amendments and re-reservation alike. Order returns use `applyClaimedInventoryEntryBatchWithImpact()` for an explicit deduct or restore under a stable claim key.
 - Results list `availabilityTransitionVariantIds`, the SKUs whose band changed. The API removes the field from responses. Cache freshness does not read it: SQL triggers advance the dependencies.
 
 ## Locations

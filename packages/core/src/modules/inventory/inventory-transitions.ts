@@ -24,6 +24,7 @@ import {
 } from "./ledger-v2";
 import { mapWithBoundedConcurrency } from "../../utils/bounded-concurrency";
 import { resolveTrackedBuyerAvailabilityBand } from "@scalius/shared/buyer-availability";
+import { ONLINE_STORE_CHANNEL_ID } from "@scalius/shared/sales-channels";
 import {
     assertInventoryLocationCovers,
     inventoryLocationErrorFrom,
@@ -102,6 +103,8 @@ type InventoryTransitionOrder = {
     version: number;
     /** Where the order's stock leaves from; null = the default location. */
     fulfillmentLocationId: string | null;
+    /** The channel the order sells from: a re-reservation takes only units it can sell. */
+    salesChannelId: string;
 };
 
 type InventoryVariantState = {
@@ -206,6 +209,7 @@ export async function buildInventoryStatements(
             inventoryPool: orders.inventoryPool,
             version: orders.version,
             fulfillmentLocationId: orders.fulfillmentLocationId,
+            salesChannelId: orders.salesChannelId,
         })
         .from(orders)
         .where(eq(orders.id, orderId))
@@ -290,6 +294,7 @@ export async function assertOrderStockCoverable(db: Database, orderId: string): 
             inventoryPool: orders.inventoryPool,
             version: orders.version,
             fulfillmentLocationId: orders.fulfillmentLocationId,
+            salesChannelId: orders.salesChannelId,
         })
         .from(orders)
         .where(eq(orders.id, orderId))
@@ -380,7 +385,10 @@ export async function applyClaimedInventoryEntryBatchWithImpact(
         throw new ValidationError("Only a restore can name the location units return to.");
     }
 
-    const order = await db.select({ fulfillmentLocationId: orders.fulfillmentLocationId })
+    const order = await db.select({
+        fulfillmentLocationId: orders.fulfillmentLocationId,
+        salesChannelId: orders.salesChannelId,
+    })
         .from(orders)
         .where(eq(orders.id, input.orderId))
         .get();
@@ -393,6 +401,7 @@ export async function applyClaimedInventoryEntryBatchWithImpact(
             inventoryPool: input.pool,
             version: 0,
             fulfillmentLocationId: order?.fulfillmentLocationId ?? null,
+            salesChannelId: order?.salesChannelId ?? ONLINE_STORE_CHANNEL_ID,
         },
         input.operation,
         entries,
@@ -479,7 +488,9 @@ async function reserveOrderItems(
 
     if (entries.length > 0) {
         const batchItems = await buildTransitionReservationBatchItems(db, order, entries);
-        const result = await reserveStockBatch(db, batchItems, normalizeInventoryPool(order.inventoryPool));
+        const result = await reserveStockBatch(db, batchItems, normalizeInventoryPool(order.inventoryPool), {
+            salesChannelId: order.salesChannelId,
+        });
         assertInventoryTransitionSucceeded(order.id, "reserve", result);
         // Reactivation is an administrative edge case. The reservation helper
         // does not expose its pre-commit capacity bands, so conservatively

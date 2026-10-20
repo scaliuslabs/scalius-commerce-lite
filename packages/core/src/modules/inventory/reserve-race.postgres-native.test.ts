@@ -21,7 +21,7 @@ describe.runIf(nativePostgresUrl())("concurrent reservations on PostgreSQL", { t
 
     const clients = 16;
     const results = await Promise.all(Array.from({ length: clients }, () =>
-      reserveStockBatch(db, [{ variantId: "var_hot", quantity: 1 }])));
+      reserveStockBatch(db, [{ variantId: "var_hot", quantity: 1 }], "regular", { salesChannelId: "sc_online_store" })));
 
     // A batch that failed on the database (not on the stock it found) is the 500 a checkout would answer.
     expect(results.filter((result) => result.error === "Batch execution failed")).toEqual([]);

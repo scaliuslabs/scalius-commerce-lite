@@ -14,7 +14,7 @@ const invalidQuantities = [
 type QuantityMutation = (db: Database, quantity: number) => Promise<unknown>;
 
 const quantityMutations: Array<[string, QuantityMutation]> = [
-  ["reserveStockBatch", (db, quantity) => reserveStockBatch(db, [{ variantId: "variant_1", quantity }])],
+  ["reserveStockBatch", (db, quantity) => reserveStockBatch(db, [{ variantId: "variant_1", quantity }], "regular", { salesChannelId: "sc_online_store" })],
   [
     "prepareReservedStockReleaseBatch",
     (db, quantity) => prepareReservedStockReleaseBatch(
@@ -44,7 +44,7 @@ describe("inventory mutation quantity validation", () => {
       (db: Database) => reserveStockBatch(db, [
         { variantId: "variant_1", quantity: 1 },
         { variantId: "variant_2", quantity: 0 },
-      ]),
+      ], "regular", { salesChannelId: "sc_online_store" }),
     ],
     [
       "prepareReservedStockReleaseBatch",

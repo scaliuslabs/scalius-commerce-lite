@@ -68,12 +68,13 @@ export interface ReserveStockBatchOptions {
    */
   variantStates?: readonly ReservationVariantState[];
   /**
-   * The sales channel the order sells from (MARKETS-DESIGN D6): a regular
-   * reservation needs the units at its linked locations, less every
-   * reservation (`channelUnlinkedOnHandSql`, 0 while it links every
-   * location). Omitted: the SKU's whole stock.
+   * The sales channel the order sells from (`orders.sales_channel_id`,
+   * MARKETS-DESIGN D6): a regular reservation needs the units at its linked
+   * locations, less every reservation (`channelUnlinkedOnHandSql`, 0 while it
+   * links every location). Required: every reservation belongs to an order's
+   * channel, so no caller can reserve units its channel cannot sell.
    */
-  salesChannelId?: string;
+  salesChannelId: string;
 }
 
 export type ReserveStockBatchResult = {
@@ -157,7 +158,7 @@ export async function prepareStockReservationBatch(
   db: Database,
   items: ReservationBatchItem[],
   pool: ReservationPool = "regular",
-  options: ReserveStockBatchOptions = {},
+  options: ReserveStockBatchOptions,
 ): Promise<PreparedStockReservationBatch> {
   for (const item of items) validatePositiveQuantity(item.quantity);
 
@@ -339,7 +340,7 @@ export async function reserveStockBatch(
   db: Database,
   items: ReservationBatchItem[],
   pool: ReservationPool = "regular",
-  options: ReserveStockBatchOptions = {},
+  options: ReserveStockBatchOptions,
 ): Promise<ReserveStockBatchResult> {
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     const plan = await prepareStockReservationBatch(db, items, pool, options);
@@ -424,8 +425,8 @@ function licenceKeysCoverSql(variantId: SQL, fulfillmentKind: SQL, reservedStock
 }
 
 /** Units a regular reservation may not take: the SKU's on-hand at locations its channel does not sell. */
-function channelGapSql(variantId: SQL, salesChannelId: string | undefined): SQL {
-  return salesChannelId ? sql` - ${channelUnlinkedOnHandSql(variantId, salesChannelId)}` : sql``;
+function channelGapSql(variantId: SQL, salesChannelId: string): SQL {
+  return sql` - ${channelUnlinkedOnHandSql(variantId, salesChannelId)}`;
 }
 
 function buildReservationBatchGuard(
@@ -433,7 +434,7 @@ function buildReservationBatchGuard(
   entry: ReservationBatchItem,
   variant: ReservationVariantState,
   pool: ReservationPool,
-  salesChannelId?: string,
+  salesChannelId: string,
 ): SQLiteBatchItem {
   const availability = pool === "preorder"
     ? sql`${productVariants.allowPreorder} = 1
@@ -661,7 +662,7 @@ function buildFreshReservationMovementInsert(
   db: Database,
   claim: ReservationMovementClaim,
   pool: ReservationPool,
-  salesChannelId?: string,
+  salesChannelId: string,
 ) {
   const variant = {
     id: sql.raw('"product_variants"."id"'),
