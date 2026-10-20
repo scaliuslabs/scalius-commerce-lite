@@ -185,7 +185,8 @@ export function validatedEvent(
 
   const identity = { eventType: "ipn", eventId: `${tranId}:${valId}`, orderId, providerRef: valId };
   if (TERMINAL_FAILURE_STATUSES.has(status)) {
-    return { status: "event", event: { ...identity, kind: "failed", details: { tranId, validationStatus: status } } };
+    // tran_id is the platform's correlation id: the attempt this failure ends.
+    return { status: "event", event: { ...identity, kind: "failed", correlationId: tranId, details: { tranId, validationStatus: status } } };
   }
   if (!VALID_STATUSES.has(status)) {
     return { status: "ignored", reason: `SSLCommerz status ${status.slice(0, 40) || "unknown"} is not final` };

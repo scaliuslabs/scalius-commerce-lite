@@ -1,11 +1,12 @@
 // src/modules/payments/process-payment.ts
 // Applies provider-authenticated payment events to orders, for every gateway.
 
-import { and, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import {
   orders,
   orderPayments,
   paymentPlans,
+  paymentSessionAttempts,
   PaymentStatus,
   OrderStatus,
   PaymentRecordStatus,
@@ -19,7 +20,7 @@ import {
 } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
 import { ConflictError } from "@scalius/core/errors";
-import { applyInventoryForStatusChange } from "../inventory";
+import { applyInventoryForStatusChange, isOrderInventoryReserveFailure, isStockReservableStatus } from "../inventory";
 import type { PaymentType, ProcessPaymentParams } from "./types";
 import { GIFT_CARD_TENDER_METHOD, isOnlinePaymentMethod } from "./gateways/registry";
 import {
@@ -354,6 +355,8 @@ export async function processPaymentConfirmed(
   retryable?: boolean;
   alreadyProcessed?: boolean;
   paymentType?: PaymentType;
+  /** The payment was recorded, but the order's released stock could not be reserved again: staff must resolve it. */
+  inventoryShortfall?: true;
 }> {
   try {
     const shipmentClaim = await db
@@ -426,6 +429,7 @@ export async function processPaymentConfirmed(
         paymentStatus: orders.paymentStatus,
         status: orders.status,
         inventoryPool: orders.inventoryPool,
+        inventoryAction: orders.inventoryAction,
         version: orders.version,
         deletedAt: orders.deletedAt,
         currencyCode: orders.currencyCode,
@@ -466,6 +470,25 @@ export async function processPaymentConfirmed(
     );
     if (initialPaymentStateError) {
       return { success: false, error: initialPaymentStateError, retryable: false };
+    }
+    // An open order whose stock was released (before payment events were tied
+    // to the current attempt, a provider cancel released it) holds nothing:
+    // reserve it again before the money lands, so shipping deducts it. The
+    // transition is idempotent on `inventory_action`, so a retried event
+    // reserves once. Units another buyer took cannot be invented: the payment
+    // is still recorded (the money is real) and staff resolve the shortfall.
+    let inventoryShortfall = false;
+    if (initialOrder.inventoryAction === "restored" && isStockReservableStatus(initialOrder.status)) {
+      try {
+        await applyInventoryForStatusChange(
+          db,
+          params.orderId,
+          initialOrder.status === OrderStatus.INCOMPLETE ? OrderStatus.PENDING : initialOrder.status,
+        );
+      } catch (error) {
+        if (!isOrderInventoryReserveFailure(error)) throw error;
+        inventoryShortfall = true;
+      }
     }
     // A balance with no plan is a gift-card remainder (validated above): it
     // has no plan to complete, and the CAS re-proves there is still none.
@@ -738,7 +761,7 @@ export async function processPaymentConfirmed(
       return { success: false, error: "Order was modified concurrently while applying payment; retry required" };
     }
 
-    return { success: true, paymentType };
+    return inventoryShortfall ? { success: true, paymentType, inventoryShortfall: true } : { success: true, paymentType };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Payment processing error";
     console.error(`[process-payment] Error for order ${params.orderId}:`, err);
@@ -746,17 +769,71 @@ export async function processPaymentConfirmed(
   }
 }
 
+/** A provider's report that one payment attempt failed or was cancelled. */
+export interface PaymentFailureEvent {
+  orderId: string;
+  provider: string;
+  providerRef?: string;
+  /** The merchant reference the provider authenticated (the attempt's correlation id). */
+  correlationId?: string;
+}
+
+const OPEN_UNPAID_ORDER_STATUSES = [OrderStatus.INCOMPLETE, OrderStatus.PENDING] as const;
+
 /**
- * Process a failed payment event.
- * Updates order.paymentStatus to FAILED if no prior payments exist.
+ * The order's current attempt with this provider: its newest session
+ * attempts (one, unless two started in the same second). An event names it by
+ * the correlation id the platform sent, or by the provider's session reference.
+ */
+async function currentPaymentAttempt(
+  db: Database,
+  event: PaymentFailureEvent,
+): Promise<{ createdAt: number } | null> {
+  const rows = await db
+    .select({
+      createdAt: paymentSessionAttempts.createdAt,
+      providerSessionId: paymentSessionAttempts.providerSessionId,
+      providerCorrelationId: paymentSessionAttempts.providerCorrelationId,
+    })
+    .from(paymentSessionAttempts)
+    .where(and(
+      eq(paymentSessionAttempts.orderId, event.orderId),
+      eq(paymentSessionAttempts.gateway, event.provider),
+    ))
+    .orderBy(desc(paymentSessionAttempts.createdAt))
+    .limit(5)
+    .all();
+  const newest = rows[0]?.createdAt;
+  const named = rows.some((row) =>
+    row.createdAt === newest && (
+      (Boolean(event.correlationId) && row.providerCorrelationId === event.correlationId) ||
+      (Boolean(event.providerRef) && row.providerSessionId === event.providerRef)
+    )
+  );
+  return named && newest !== undefined ? { createdAt: newest } : null;
+}
+
+/**
+ * Apply a provider's failed or cancelled payment. Only the order's current
+ * attempt counts: the event's provider must be the order's payment method, it
+ * must name the newest session attempt, and the order must be open and unpaid.
+ * Anything else (a cancel for an old intent, another app's provider, an order
+ * already paid) changes nothing. Stock is never touched here: an open order
+ * keeps its reservation for the buyer's retry, and it is released only when
+ * the order is cancelled (by staff or the stale-checkout sweep).
+ *
+ * Marks the attempt failed and an unpaid order's payment status failed, so
+ * the buyer can retry or switch gateway.
  */
 export async function processPaymentFailed(
   db: Database,
-  orderId: string,
-  provider: string,
-  providerRef?: string
-): Promise<void> {
+  event: PaymentFailureEvent,
+): Promise<{ applied: boolean }> {
+  const { orderId, provider, providerRef } = event;
   try {
+    const attempt = await currentPaymentAttempt(db, event);
+    if (!attempt) return { applied: false };
+
     let existing: {
       id: string;
       status: string;
@@ -783,12 +860,15 @@ export async function processPaymentFailed(
         existing.status !== PaymentRecordStatus.PENDING &&
         existing.status !== PaymentRecordStatus.FAILED
       ) {
-        return;
+        return { applied: false };
       }
     }
 
     const order = await db
       .select({
+        status: orders.status,
+        paymentMethod: orders.paymentMethod,
+        deletedAt: orders.deletedAt,
         paidAmountMinor: orders.paidAmountMinor,
         paymentStatus: orders.paymentStatus,
         shipmentClaimId: orders.shipmentClaimId,
@@ -806,7 +886,14 @@ export async function processPaymentFailed(
       .where(eq(orders.id, orderId))
       .get();
 
-    if (!order) return;
+    if (
+      !order ||
+      order.deletedAt ||
+      order.paymentMethod !== provider ||
+      !(OPEN_UNPAID_ORDER_STATUSES as readonly string[]).includes(order.status)
+    ) {
+      return { applied: false };
+    }
     assertNoActiveShipmentClaim(order);
     const paidAmountMinor = order.paidAmountMinor;
     const paymentType = inferFailedPaymentType({
@@ -824,7 +911,7 @@ export async function processPaymentFailed(
     // updating the order. Re-run the order side instead of treating that row as
     // proof that the whole failure transition completed.
     if (existing?.status === PaymentRecordStatus.FAILED && !shouldMarkOrderFailed) {
-      return;
+      return { applied: true };
     }
 
     const batchStatements: SQLiteBatchItem[] = [
@@ -843,9 +930,18 @@ export async function processPaymentFailed(
         })
         .where(and(
           eq(orders.id, orderId),
+          eq(orders.paymentMethod, provider),
+          inArray(orders.status, [...OPEN_UNPAID_ORDER_STATUSES]),
           eq(orders.paymentStatus, PaymentStatus.UNPAID),
           sql`${orders.paidAmountMinor} <= 0`,
           noActiveShipmentClaimCondition(),
+          // A newer attempt started since the read: this failure is not its.
+          sql`NOT EXISTS (
+            SELECT 1 FROM ${paymentSessionAttempts}
+            WHERE ${paymentSessionAttempts.orderId} = ${orderId}
+              AND ${paymentSessionAttempts.gateway} = ${provider}
+              AND ${paymentSessionAttempts.createdAt} > ${attempt.createdAt}
+          )`,
           sql`NOT EXISTS (
             SELECT 1
             FROM ${orderPayments}
@@ -897,33 +993,9 @@ export async function processPaymentFailed(
       }
       throw error;
     }
+    return { applied: true };
   } catch (err: unknown) {
     console.error(`[process-payment] Failed payment recording error:`, err);
-    throw err;
-  }
-}
-
-/**
- * Release inventory reservations when an order is fully cancelled.
- * Called when: order cancelled before payment, payment refunded and order voided.
- */
-export async function releaseOrderInventory(
-  db: Database,
-  orderId: string
-): Promise<void> {
-  try {
-    const order = await db
-      .select({
-        shipmentClaimId: orders.shipmentClaimId,
-        shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
-      })
-      .from(orders)
-      .where(eq(orders.id, orderId))
-      .get();
-    if (order) assertNoActiveShipmentClaim(order);
-    await applyInventoryForStatusChange(db, orderId, OrderStatus.CANCELLED);
-  } catch (err: unknown) {
-    console.error(`[process-payment] Inventory release error for order ${orderId}:`, err);
     throw err;
   }
 }

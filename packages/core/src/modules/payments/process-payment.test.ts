@@ -19,14 +19,14 @@ const mocks = vi.hoisted(() => ({
   applyInventoryForStatusChange: vi.fn(),
 }));
 
-vi.mock("../inventory/inventory-transitions", () => ({
+vi.mock("../inventory/inventory-transitions", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../inventory/inventory-transitions")>()),
   applyInventoryForStatusChange: mocks.applyInventoryForStatusChange,
 }));
 
 import {
   processPaymentConfirmed,
   processPaymentFailed,
-  releaseOrderInventory,
 } from "./process-payment";
 import type { ProcessPaymentParams } from "./types";
 
@@ -62,6 +62,28 @@ async function insertOrder(overrides: Partial<typeof orders.$inferInsert> = {}) 
     currencyDecimalPlaces: 2,
     ...overrides,
   });
+}
+
+/** The session the platform opened with the provider: what a failure must name. */
+function insertAttempt(input: { gateway?: string; providerSessionId?: string; correlationId?: string; createdAt?: number } = {}) {
+  sqlite.prepare(`
+    INSERT INTO payment_session_attempts
+      (id, attempt_key, order_id, gateway, payment_type, amount_minor, currency, request_hash, status,
+       provider_session_id, provider_correlation_id, created_at, updated_at)
+    VALUES (?, ?, 'order_1', ?, 'full', 100, 'BDT', 'hash', 'created', ?, ?, ?, ?)
+  `).run(
+    crypto.randomUUID(),
+    crypto.randomUUID(),
+    input.gateway ?? "stripe",
+    input.providerSessionId ?? null,
+    input.correlationId ?? null,
+    input.createdAt ?? 1_700_000_000,
+    input.createdAt ?? 1_700_000_000,
+  );
+}
+
+function fail(provider: string, providerRef?: string, correlationId?: string) {
+  return processPaymentFailed(db, { orderId: "order_1", provider, providerRef, correlationId });
 }
 
 function confirm(overrides: Partial<ProcessPaymentParams> = {}) {
@@ -126,7 +148,8 @@ describe("confirmed payments", () => {
 
   it("promotes an earlier failed attempt for the same provider reference", async () => {
     await insertOrder({ status: OrderStatus.PENDING });
-    await processPaymentFailed(db, "order_1", "stripe", "pi_1");
+    insertAttempt({ providerSessionId: "pi_1" });
+    await expect(fail("stripe", "pi_1")).resolves.toEqual({ applied: true });
     expect(order()).toMatchObject({ payment_status: PaymentStatus.FAILED });
 
     await expect(confirm()).resolves.toMatchObject({ success: true });
@@ -249,8 +272,9 @@ describe("failed payments", () => {
       providerRef: "pi_deposit",
     });
 
-    await processPaymentFailed(db, "order_1", "stripe", "pi_deposit");
-    await processPaymentFailed(db, "order_1", "stripe", "pi_deposit");
+    insertAttempt({ providerSessionId: "pi_deposit" });
+    await fail("stripe", "pi_deposit");
+    await fail("stripe", "pi_deposit");
 
     expect(sqlite.prepare("SELECT payment_status, version FROM orders WHERE id = 'order_1'").get())
       .toEqual({ payment_status: PaymentStatus.FAILED, version: 4 });
@@ -269,13 +293,15 @@ describe("failed payments", () => {
       status: PaymentPlanStatus.DEPOSIT_PAID,
     });
 
-    await processPaymentFailed(db, "order_1", "sslcommerz", "val_balance");
+    sqlite.exec("UPDATE orders SET payment_method = 'scalius.bangladesh:sslcommerz'");
+    insertAttempt({ gateway: "scalius.bangladesh:sslcommerz", correlationId: "order_1_balance_ABCD" });
+    await fail("scalius.bangladesh:sslcommerz", "val_balance", "order_1_balance_ABCD");
 
     expect(order()).toMatchObject({ payment_status: PaymentStatus.PARTIAL, paid_amount_minor: 25, balance_due_minor: 75 });
     expect(payments()).toEqual([expect.objectContaining({
       status: PaymentRecordStatus.FAILED,
       payment_type: "balance",
-      payment_method: "sslcommerz",
+      payment_method: "scalius.bangladesh:sslcommerz",
       provider_ref: "val_balance",
     })]);
   });
@@ -299,16 +325,65 @@ describe("failed payments", () => {
       providerRef: "pi_race",
     });
 
-    await processPaymentFailed(db, "order_1", "stripe", "pi_race");
+    insertAttempt({ providerSessionId: "pi_race" });
+    await fail("stripe", "pi_race");
 
     expect(order()).toMatchObject({ payment_status: PaymentStatus.PAID, paid_amount_minor: 100 });
     expect(sqlite.prepare("SELECT status FROM order_payments WHERE id = 'pay_1'").get())
       .toEqual({ status: PaymentRecordStatus.SUCCEEDED });
   });
 
-  it("releases a cancelled payment's inventory through the central transition", async () => {
-    await insertOrder();
-    await releaseOrderInventory(db, "order_1");
-    expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.CANCELLED);
+  it("applies only to the order's current attempt with its own provider, while the order is open and unpaid", async () => {
+    await insertOrder({ status: OrderStatus.PENDING });
+    insertAttempt({ providerSessionId: "pi_old", createdAt: 1_700_000_000 });
+    insertAttempt({ providerSessionId: "pi_new", correlationId: "order_1_full_NEW00001", createdAt: 1_700_000_100 });
+
+    // An old intent, another provider, or a reference no attempt carries.
+    await expect(fail("stripe", "pi_old")).resolves.toEqual({ applied: false });
+    await expect(fail("scalius.other:pay", "pi_new")).resolves.toEqual({ applied: false });
+    await expect(fail("stripe", "pi_forged")).resolves.toEqual({ applied: false });
+    expect(order()).toMatchObject({ payment_status: PaymentStatus.UNPAID });
+    expect(payments()).toEqual([]);
+
+    // A paid order is never failed, whatever the event names.
+    sqlite.exec("UPDATE orders SET payment_status = 'paid', paid_amount_minor = 100, balance_due_minor = 0, status = 'shipped'");
+    await expect(fail("stripe", "pi_new")).resolves.toEqual({ applied: false });
+    sqlite.exec("UPDATE orders SET payment_status = 'unpaid', paid_amount_minor = 0, balance_due_minor = 100, status = 'pending'");
+
+    // The current attempt, by its provider reference or its correlation id.
+    await expect(fail("stripe", "pi_other_ref", "order_1_full_NEW00001")).resolves.toEqual({ applied: true });
+    expect(order()).toMatchObject({ payment_status: PaymentStatus.FAILED });
+    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+  });
+});
+
+describe("confirmed payment on an order whose stock was released", () => {
+  it("reserves the stock again before the money lands", async () => {
+    await insertOrder({ inventoryAction: "restored" });
+    mocks.applyInventoryForStatusChange.mockResolvedValueOnce("reserved");
+
+    await expect(confirm()).resolves.toEqual({ success: true, paymentType: "full" });
+    expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.PENDING);
+    expect(order()).toMatchObject({ payment_status: PaymentStatus.PAID });
+  });
+
+  it("records the money but reports the shortfall when the units are gone", async () => {
+    await insertOrder({ inventoryAction: "restored" });
+    const { ValidationError } = await import("@scalius/core/errors");
+    mocks.applyInventoryForStatusChange.mockRejectedValueOnce(
+      new ValidationError("Inventory reserve failed for order order_1: Insufficient stock", { orderId: "order_1", operation: "reserve" }),
+    );
+
+    await expect(confirm()).resolves.toEqual({ success: true, paymentType: "full", inventoryShortfall: true });
+    expect(order()).toMatchObject({ payment_status: PaymentStatus.PAID });
+  });
+
+  it("retries rather than records when the reservation hits a database error", async () => {
+    await insertOrder({ inventoryAction: "restored" });
+    mocks.applyInventoryForStatusChange.mockRejectedValueOnce(new Error("D1 unavailable"));
+
+    await expect(confirm()).resolves.toMatchObject({ success: false });
+    expect(order()).toMatchObject({ payment_status: PaymentStatus.UNPAID });
+    expect(payments()).toEqual([]);
   });
 });

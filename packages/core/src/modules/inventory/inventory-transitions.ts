@@ -1548,6 +1548,12 @@ function normalizeInventoryPool(inventoryPool: string): InventoryPoolName {
     return (inventoryPool ?? InventoryPool.REGULAR) as InventoryPoolName;
 }
 
+/** An order's stock could not be reserved again (a SKU lacks the units): not a race, retrying does not help. */
+export function isOrderInventoryReserveFailure(error: unknown): boolean {
+    return error instanceof ValidationError &&
+        (error.details as { operation?: unknown } | undefined)?.operation === "reserve";
+}
+
 function assertInventoryTransitionSucceeded(
     orderId: string,
     operation: InventoryTransitionOperation,

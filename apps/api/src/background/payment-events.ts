@@ -11,7 +11,6 @@ import { runWithReadObserver } from "@scalius/database/read-observer";
 import {
   processPaymentConfirmed,
   processPaymentFailed,
-  releaseOrderInventory,
   type PaymentEvent,
 } from "@scalius/core/modules/payments";
 import { processExistingMetaPurchaseOutboxForOrder } from "@scalius/core/integrations/meta/purchase-outbox";
@@ -161,21 +160,40 @@ async function applyPaymentEvent(
         }).catch((error: unknown) => {
           console.error(`[payments] Server tracking side effect failed for confirmed ${provider} order ${event.orderId}:`, error instanceof Error ? error.name : "error");
         }));
-        ctx.waitUntil(runOrderAutoFulfil(db, env, ctx, event.orderId).catch((error: unknown) => {
-          console.warn(`[payments] Automatic fulfilment of ${event.orderId} failed; the scheduled sweep retries:`, error instanceof Error ? error.name : "error");
-        }));
+        // Nothing ships for an order whose stock could not be reserved again.
+        if (!result.inventoryShortfall) {
+          ctx.waitUntil(runOrderAutoFulfil(db, env, ctx, event.orderId).catch((error: unknown) => {
+            console.warn(`[payments] Automatic fulfilment of ${event.orderId} failed; the scheduled sweep retries:`, error instanceof Error ? error.name : "error");
+          }));
+        }
+      }
+      if (result.inventoryShortfall) {
+        console.warn(`[payments] ${provider} payment confirmed for order ${event.orderId}, but its released stock could not be reserved again`);
+        return { status: "manual_reconciliation", result: { ...refs, outcome: "confirmed_stock_unavailable" } };
       }
       console.log(`[payments] ${provider} payment confirmed for order ${event.orderId}`);
       return { status: "processed", result: { ...refs, outcome: "confirmed" } };
     }
     case "failed":
-      await processPaymentFailed(db, event.orderId, provider, event.providerRef);
-      console.log(`[payments] ${provider} payment failed for order ${event.orderId}`);
-      return { status: "processed", result: { ...refs, outcome: "failed", ...event.details } };
-    case "cancelled":
-      await releaseOrderInventory(db, event.orderId);
-      console.log(`[payments] ${provider} payment cancelled, inventory released for order ${event.orderId}`);
-      return { status: "processed", result: { ...refs, outcome: "canceled" } };
+    case "cancelled": {
+      // Either ends one attempt. It applies only to the order's current
+      // attempt with this provider while the order is open and unpaid; the
+      // order keeps its stock for the buyer's retry (released only when the
+      // order is cancelled).
+      const outcome = event.kind === "failed" ? "failed" : "canceled";
+      const { applied } = await processPaymentFailed(db, {
+        orderId: event.orderId,
+        provider,
+        providerRef: event.providerRef,
+        correlationId: event.correlationId,
+      });
+      if (!applied) {
+        console.log(`[payments] ${provider} ${outcome} event for order ${event.orderId} does not name its current payment attempt; ignored`);
+        return { status: "processed", result: { ...refs, outcome: `${outcome}_ignored`, ...event.details } };
+      }
+      console.log(`[payments] ${provider} payment ${outcome} for order ${event.orderId}`);
+      return { status: "processed", result: { ...refs, outcome, ...event.details } };
+    }
     case "refund_observed":
       // Refunds made in the provider dashboard stay audit-only here; scheduled
       // reconciliation imports provider-confirmed refunds into the ledger.

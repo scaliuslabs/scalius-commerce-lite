@@ -13,7 +13,6 @@ import { sql } from "drizzle-orm";
 const mocks = vi.hoisted(() => ({
   processPaymentConfirmed: vi.fn(),
   processPaymentFailed: vi.fn(),
-  releaseOrderInventory: vi.fn(),
   processExistingMetaPurchaseOutboxForOrder: vi.fn(),
   sendOrderCreatedNotification: vi.fn(),
   sendOrderBalancePaidNotification: vi.fn(),
@@ -25,7 +24,6 @@ vi.mock("@scalius/core/modules/payments", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/payments")>()),
   processPaymentConfirmed: mocks.processPaymentConfirmed,
   processPaymentFailed: mocks.processPaymentFailed,
-  releaseOrderInventory: mocks.releaseOrderInventory,
 }));
 vi.mock("@scalius/core/integrations/meta/purchase-outbox", () => ({
   processExistingMetaPurchaseOutboxForOrder: mocks.processExistingMetaPurchaseOutboxForOrder,
@@ -138,6 +136,45 @@ describe("payment events applied after the response and retried from their row",
     await settle();
     expect(row()).toMatchObject({ status: "manual_reconciliation" });
     expect(JSON.parse(String(row().result))).toMatchObject({ outcome: "external_refund_observed", amountRefunded: 1500 });
+  });
+
+  it("ends a cancelled attempt through the failure kernel without touching stock", async () => {
+    const cancelled: PaymentEvent = {
+      kind: "cancelled",
+      orderId: "order_1",
+      providerRef: "pi_1",
+      correlationId: "order_1_full_ABCDEF12",
+      eventType: "payment_intent.canceled",
+      eventId: "evt_c",
+    };
+    mocks.processPaymentFailed.mockResolvedValueOnce({ applied: true });
+    await claimAndApplyPaymentEvent({ db, caller, provider: "stripe", event: cancelled, source: "webhook" });
+    await settle();
+    expect(mocks.processPaymentFailed).toHaveBeenCalledWith(db, {
+      orderId: "order_1",
+      provider: "stripe",
+      providerRef: "pi_1",
+      correlationId: "order_1_full_ABCDEF12",
+    });
+    expect(JSON.parse(String(row().result))).toMatchObject({ outcome: "canceled" });
+
+    // An event for another attempt (an old intent, another app's provider) is recorded and ignored.
+    sqlite.exec("DELETE FROM webhook_events");
+    mocks.processPaymentFailed.mockResolvedValueOnce({ applied: false });
+    await claimAndApplyPaymentEvent({ db, caller, provider: "stripe", event: { ...cancelled, eventId: "evt_c2" }, source: "webhook" });
+    await settle();
+    expect(row()).toMatchObject({ status: "processed" });
+    expect(JSON.parse(String(row().result))).toMatchObject({ outcome: "canceled_ignored" });
+  });
+
+  it("records a payment whose released stock could not be reserved again, and ships nothing", async () => {
+    mocks.processPaymentConfirmed.mockResolvedValue({ success: true, paymentType: "full", inventoryShortfall: true });
+    await claimAndApplyPaymentEvent({ db, caller, provider: "stripe", event: confirmed, source: "webhook" });
+    await settle();
+    expect(row()).toMatchObject({ status: "manual_reconciliation" });
+    expect(JSON.parse(String(row().result))).toMatchObject({ outcome: "confirmed_stock_unavailable" });
+    expect(mocks.sendOrderCreatedNotification).toHaveBeenCalled();
+    expect(mocks.runOrderAutoFulfil).not.toHaveBeenCalled();
   });
 
   it("retries a failed attempt from the row with backoff until it fails after six attempts", async () => {

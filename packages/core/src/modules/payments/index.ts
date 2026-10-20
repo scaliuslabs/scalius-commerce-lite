@@ -41,7 +41,7 @@ export type {
 export { recordCODCollection, recordCODFailure, markCODReturned } from "./cod";
 
 // --- Payment processing ---
-export { processPaymentConfirmed, processPaymentFailed, releaseOrderInventory } from "./process-payment";
+export { processPaymentConfirmed, processPaymentFailed, type PaymentFailureEvent } from "./process-payment";
 export {
   assertOrderPaymentCurrency,
   createOrderCurrencySnapshot,
