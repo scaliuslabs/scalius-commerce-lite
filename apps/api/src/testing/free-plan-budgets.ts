@@ -30,6 +30,9 @@
  * Bulk runs (2026-10-19): every tick's drain looks for a due bulk run (one
  * indexed read of bulk_runs, no rows on an idle store): +1 call per tick,
  * 24 Free / 63 Paid idle.
+ * Server tracking (2026-10-19): the GA4/TikTok due rows and the hourly purges
+ * ride in the Meta outbox's batch (no new call): +3 statements on the Paid
+ * idle tick that runs it, 69 with bulk runs; Free is unchanged.
  */
 import type { WorkersPlan } from "@scalius/shared/plan-limits";
 
@@ -104,7 +107,7 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "order-status-change": { d1Calls: 50, d1Statements: 42, externalFetches: 0, rowsWritten: 35, rowsRead: 1286, fullScans: 5 },
     "order-refund": { d1Calls: 50, d1Statements: 53, externalFetches: 0, rowsWritten: 73, rowsRead: 1292, fullScans: 6 },
     "sku-stock-change": { d1Calls: 13, d1Statements: 17, externalFetches: 0, rowsWritten: 53, rowsRead: 21, fullScans: 7 },
-    "cron-idle": { d1Calls: 63, d1Statements: 66, externalFetches: 0, rowsWritten: 175, rowsRead: 7976, fullScans: 21, meanRowsWritten: 0, meanRowsRead: 28.77 },
+    "cron-idle": { d1Calls: 63, d1Statements: 69, externalFetches: 0, rowsWritten: 175, rowsRead: 7976, fullScans: 21, meanRowsWritten: 0, meanRowsRead: 28.77 },
     "cron-nightly": { d1Calls: 210, d1Statements: 311, externalFetches: 0, rowsWritten: 432, rowsRead: 27538, fullScans: 430 },
     "drain-busy": { d1Calls: 13, d1Statements: 25, externalFetches: 0, rowsWritten: 118, rowsRead: 236, fullScans: 17 },
     "order-3-line-commit": { d1Calls: 34, d1Statements: 80, externalFetches: 0, rowsWritten: 106, rowsRead: 73, fullScans: 26 },
