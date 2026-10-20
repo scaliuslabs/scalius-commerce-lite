@@ -157,19 +157,19 @@ export function prebuildMigratedImages(targets: readonly MigratedImageTarget[]):
     // "￿" sorts after every file name: no cut-off is the whole chain.
     const cutOffs = [...new Set(targets
       .filter((target) => (target.provider ?? "d1") === provider)
-      .map((target) => target.beforeMigration ?? "￿"))].sort();
+      .map((target) => target.beforeMigration ?? "\uffff"))].sort();
     const compiled = files.map((name) => compileSqliteMigrationForProvider(readFileSync(join(migrationDirectory, name), "utf8"), provider));
     // One running hash over the joined script; a copy at each cut-off is that prefix's digest.
     const hash: Hash = createHash("sha256").update(`${process.version}\n`);
     const plan: Array<{ applied: number; file: string }> = [];
     let next = 0;
     for (let index = 0; index <= files.length; index += 1) {
-      while (next < cutOffs.length && (index === files.length || files[index] >= cutOffs[next])) {
+      while (next < cutOffs.length && (index === files.length || files[index]! >= cutOffs[next]!)) {
         const file = imageFileForDigest(hash.copy().digest("hex"));
         if (!plan.some((step) => step.file === file)) plan.push({ applied: index, file });
         next += 1;
       }
-      if (index < files.length) hash.update(index === 0 ? compiled[index] : `\n${compiled[index]}`);
+      if (index < files.length) hash.update(index === 0 ? compiled[index]! : `\n${compiled[index]!}`);
     }
     const missing = plan.filter((step) => {
       if (!fileExists(step.file)) return true;
@@ -188,7 +188,7 @@ export function prebuildMigratedImages(targets: readonly MigratedImageTarget[]):
       if (!sqlite.serialize) continue;
       let applied = 0;
       for (const step of missing) {
-        for (; applied < step.applied; applied += 1) sqlite.exec(compiled[applied]);
+        for (; applied < step.applied; applied += 1) sqlite.exec(compiled[applied]!);
         writeImageFileAt(step.file, sqlite.serialize());
         built += 1;
       }
