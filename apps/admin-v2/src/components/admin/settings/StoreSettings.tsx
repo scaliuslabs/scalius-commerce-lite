@@ -27,7 +27,7 @@ import { Input } from "~/components/ui/input";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Textarea } from "~/components/ui/textarea";
-import { useHasPermission } from "~/contexts/PermissionContext";
+import { useHasPermission, usePermissions } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { apiData, type ApiResult } from "~/lib/api";
@@ -42,6 +42,7 @@ import {
   platformQuery,
 } from "~/lib/api-query-options/settings-screens";
 import { queryKeys } from "~/lib/query-keys";
+import { toast } from "~/lib/toast";
 import { getLocale, useMessages } from "~/i18n";
 import { settingsMessages } from "~/i18n/settings";
 import { storeSettingsMessages } from "~/i18n/settings-store";
@@ -50,7 +51,7 @@ import { MediaManager } from "../media-manager";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { AdminPhoneInput, adminPhoneProblem, normalizeAdminPhone, type PhoneCountryPolicy } from "../shared/AdminPhoneInput";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
-import { FieldSet } from "~/components/ui/field";
+import { FieldSet, ReadOnlyValue } from "~/components/ui/field";
 
 const loadStoreDefaultsFields = () => import("./StoreDefaultsFields");
 const TimeZoneFields = lazy(() => loadStoreDefaultsFields().then((module) => ({ default: module.TimeZoneFields })));
@@ -481,23 +482,48 @@ const URL_LABELS = {
   mediaUrl: ["mediaUrl", "mediaUrlHelp"],
 } as const;
 
+/**
+ * After a save, whether the store address answers its `/health` page. The
+ * storefront is another origin, so the check is a no-cors request: it fails
+ * only when nothing answers there (a typo, a domain not set up yet).
+ */
+async function storefrontAnswers(url: string): Promise<boolean> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), 8000);
+  try {
+    await fetch(`${url.replace(/\/+$/, "")}/health`, { mode: "no-cors", cache: "no-store", credentials: "omit", signal: controller.signal });
+    return true;
+  } catch {
+    return false;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
 function WebAddressFields() {
   const t = useMessages(storeSettingsMessages);
   const common = useMessages(settingsMessages);
+  // The developer's addresses (payment return, image hosting) are the store owner's to change.
+  const isOwner = usePermissions().isSuperAdmin;
   const { values, setValue } = useSettingsForm<Platform, Platform>({
     queryKey: platformQuery.queryKey,
     fetchFn: platformQuery.queryFn,
-    // PUT is a partial update: only the web addresses travel from this form.
-    saveFn: (draft, expectedRevision) =>
-      apiData(putApiV1AdminSettingsPlatform({
-        body: { ...Object.fromEntries(URL_KEYS.map((key) => [key, draft[key].trim()])), expectedRevision },
-      })),
+    // PUT is a partial update: only the web addresses this person may change travel.
+    saveFn: async (draft, expectedRevision) => {
+      const keys = isOwner ? URL_KEYS : MAIN_URL_KEYS;
+      const saved = await apiData(putApiV1AdminSettingsPlatform({
+        body: { ...Object.fromEntries(keys.map((key) => [key, draft[key].trim()])), expectedRevision },
+      }));
+      const storeUrl = draft.storefrontUrl.trim();
+      if (storeUrl && !(await storefrontAnswers(storeUrl))) toast.warning(t("storeUnreachable", { url: storeUrl }));
+      return saved;
+    },
     resolveSavedValues: (payload) => payload,
     invalidateQueryKeys: [queryKeys.settings.storefrontUrl(), queryKeys.settings.security(), queryKeys.settings.storeDefaults()],
     defaultValues: {} as Platform,
     errorMessage: common("saveFailed"),
     canEdit: useCanEditStore(),
-    isValid: (draft) => URL_KEYS.every((key) => !urlError(key, draft[key] ?? "")),
+    isValid: (draft) => (isOwner ? URL_KEYS : MAIN_URL_KEYS).every((key) => !urlError(key, draft[key] ?? "")),
     fields: (path) => `platform-${path}`,
   });
   const field = (key: UrlKey) => {
@@ -528,10 +554,14 @@ function WebAddressFields() {
       <Suspense fallback={null}>
         <SettingsAdvanced
           label={t("advancedAddresses")}
-          forceOpen={ADVANCED_URL_KEYS.some((key) => Boolean(urlError(key, values[key] ?? "")))}
+          forceOpen={isOwner && ADVANCED_URL_KEYS.some((key) => Boolean(urlError(key, values[key] ?? "")))}
           defaultOpen={ADVANCED_URL_KEYS.some((key) => Boolean(values[key]))}
         >
-          {ADVANCED_URL_KEYS.map(field)}
+          {isOwner
+            ? ADVANCED_URL_KEYS.map(field)
+            : ADVANCED_URL_KEYS.map((key) => (
+              <ReadOnlyValue key={key} label={t(URL_LABELS[key][0])} value={values[key] || t("notSet")} help={t("ownerOnly")} />
+            ))}
         </SettingsAdvanced>
       </Suspense>
     </>
