@@ -322,7 +322,7 @@ describe("storefront feed category search", () => {
              VALUES ('page_classic', 'Classic care guide', 'classic-care', ?, 1)`,
         ).run("A long rich-text body that predictive search must not return.");
 
-        const result = await searchCatalog(db, "classic", { limit: 10 });
+        const result = await withProjections(db, () => searchCatalog(db, "classic", { limit: 10 }));
 
         expect(result.products.find((product) => product.id === "prod_runner")).toMatchObject({
             id: "prod_runner",
@@ -348,7 +348,7 @@ describe("storefront feed category search", () => {
              VALUES ('pmed_runner_video', 'prod_runner', 'media_runner_video', NULL, 1, 0)`,
         ).run();
 
-        const result = await searchCatalog(db, "classic", { limit: 10 });
+        const result = await withProjections(db, () => searchCatalog(db, "classic", { limit: 10 }));
 
         expect(result.products.find((product) => product.id === "prod_runner")).toMatchObject({
             imageMediaId: "media_runner_poster",

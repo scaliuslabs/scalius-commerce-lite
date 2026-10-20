@@ -49,9 +49,16 @@ function setup(onQuery?: () => void) {
   return harness;
 }
 
+/** The fixture with its buyer state, which decides the public set and each hit's price. */
+async function searchDb(open: () => Database = () => setup().db): Promise<Database> {
+  const db = open();
+  await rebuildCatalogProjections(db);
+  return db;
+}
+
 describe("public search", () => {
   it("returns only buyer-resolvable products with their own identity, category, and image projection", async () => {
-    const { db } = setup();
+    const db = await searchDb();
 
     const result = await search(db, "runner");
 
@@ -70,7 +77,7 @@ describe("public search", () => {
   });
 
   it("prices and filters by the buyer SKU price, not the product row price", async () => {
-    const { db } = setup();
+    const db = await searchDb();
 
     const inRange = await search(db, "runner", { minPrice: 10, maxPrice: 30 });
     expect(inRange.products).toEqual([expect.objectContaining({ id: "p_runner", discountedPrice: 20, priceVaries: false })]);
@@ -140,7 +147,7 @@ describe("search ranked by a search app", () => {
     expect(ranked.products.map((product) => product.id)).toEqual(["p_kettle", "p_tote", "p_mouse"]);
     expect(ranked.products[0]).toMatchObject({ discountedPrice: 10, availableForSale: true });
     expect((await search(db, "bag", { productIds: [] })).products).toEqual([]);
-    const { db: hidden } = setup();
+    const hidden = await searchDb();
     expect((await search(hidden, "runner", { productIds: ["p_hidden", "p_runner"] })).products.map((product) => product.id)).toEqual(["p_runner"]);
   });
 });
@@ -151,17 +158,18 @@ describe("search ranked by a search app", () => {
 describe("site search dependency coverage", { timeout: NATIVE_POSTGRES_TEST_TIMEOUT }, () => {
   afterAll(closeNativePostgres);
   const providers: Array<[string, () => Promise<Database>]> = [
-    ["d1", async () => setup().db],
-    ["turso", async () => {
+    ["d1", () => searchDb()],
+    ["turso", () => searchDb(() => {
       const { sqlite } = createSqliteD1Database({ provider: "turso" });
       sqlite.exec(SEARCH_FIXTURE);
       return createSqliteTursoDatabase(sqlite);
-    }],
+    })],
   ];
   if (nativePostgresUrl()) {
     providers.push(["postgres", async () => {
       const { db, client } = await createNativePostgres({ label: "site_search_deps" });
       await client.query(SEARCH_FIXTURE);
+      await rebuildCatalogProjections(db);
       return db;
     }]);
   }

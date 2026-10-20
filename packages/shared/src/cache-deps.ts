@@ -965,7 +965,7 @@ const CACHE_DEP_TABLE_RULES = {
   product_channel_publications: {
     kinds: ["p", "lm", "srch"],
     noise: ["published_at"],
-    note: "A product is published to a channel while its row has no unpublished_at. Any channel: the product's own keys and the discovery key (feeds and UCP read their channel's rows). The online store's rows also decide public membership for live readers (site search, collection lists, a product page's 404), so they advance `lm:all` and `srch`; listings and sitemaps read the buyer-state projection, refreshed in the same batch.",
+    note: "A product is published to a channel while its row has no unpublished_at. Any channel: the product's own keys and the discovery key (feeds and UCP read their channel's rows). The online store's rows also decide public membership for live readers (a product page's 404, pinned collection members), so they advance `lm:all` and `srch`; listings, site search, dynamic collections and sitemaps read the buyer-state projection, refreshed in the same batch.",
     rules: [
       ...everyChange([p("product_id"), { dep: "lm:seo" }]),
       ...everyChange([{ dep: "lm:all" }, { dep: "srch" }]).map((rule): CacheDepRule => ({

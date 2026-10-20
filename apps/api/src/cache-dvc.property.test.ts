@@ -254,6 +254,70 @@ describe("DVC directed scenarios", () => {
     expect(verdict).toEqual({ cached: true, valid: false, equal: false });
   }, 120_000);
 
+  // A direct SQL write leaves the buyer state (product_buyer_state, whose
+  // rows the `lm:` keys track) as it was. A product's public membership is
+  // the buyer state's, so no such write may bring a product a read did not
+  // show, and so declared no key of, into its answer (dvc-2 step 701: a raw
+  // SKU delete made p_linen buyable to site search's live eligibility while
+  // the cached answer held only its hits' keys). Each setup makes the live
+  // rows disagree with the buyer state; each write puts them back.
+  // `changes`: the write changes the answer.
+  const LINEN_SKUS_GONE = "UPDATE product_variants SET deleted_at = 1790000000 WHERE product_id = 'p_linen'";
+  const LINEN_SKUS_BACK = "UPDATE product_variants SET deleted_at = NULL WHERE product_id = 'p_linen'";
+  const LINEN_OFF = "UPDATE products SET is_active = 0 WHERE id = 'p_linen'";
+  const LINEN_ON = "UPDATE products SET is_active = 1 WHERE id = 'p_linen'";
+  // A draft in the Panjabi category (search matches it by category name).
+  const DRAFT_ON = "UPDATE products SET is_active = 1 WHERE id = 'p_draft'";
+  // The buyer state lists the draft in the Panjabi window, but it has no live
+  // SKU: no card shows it until its SKU is back. As the newest Panjabi
+  // product (with a photo) it is the whole one-product window of the
+  // collection directory's Panjabi edit, its cover: only that window's own
+  // keys can see the cover change.
+  const DRAFT_LISTED_WITHOUT_SKU = `
+    UPDATE product_buyer_state SET is_public = 1, product_created_at = ${DVC_SEED_EPOCH + 86_400} WHERE product_id = 'p_draft';
+    UPDATE product_variants SET deleted_at = 1790000000 WHERE product_id = 'p_draft';
+    INSERT INTO product_media (id, product_id, media_id, is_primary, sort_order, alt_text) VALUES ('pmed_draft01', 'p_draft', 'media_story', 1, 0, NULL);`;
+  const DRAFT_SKU_BACK = "UPDATE product_variants SET deleted_at = NULL WHERE product_id = 'p_draft'";
+  const SEARCH = "/api/v1/search?q=panjabi";
+  const HOME = "/api/v1/storefront/homepage";
+  const FEED = "/api/v1/products/feed";
+  const DYNAMIC = "/api/v1/collections/col_dynamic";
+  it.each([
+    ["site search: a SKU back makes a product buyable", SEARCH, LINEN_SKUS_GONE, LINEN_SKUS_BACK, false],
+    ["site search: a product switched back on", SEARCH, LINEN_OFF, LINEN_ON, false],
+    ["site search: a draft switched on", SEARCH, null, DRAFT_ON, false],
+    ["site search with a price range: a SKU back", `${SEARCH}&minPrice=1000&maxPrice=3000`, LINEN_SKUS_GONE, LINEN_SKUS_BACK, true],
+    ["dynamic collection: a SKU back", DYNAMIC, LINEN_SKUS_GONE, LINEN_SKUS_BACK, true],
+    ["dynamic collection: a draft switched on", DYNAMIC, null, DRAFT_ON, false],
+    ["home collections: a product switched back on", HOME, LINEN_OFF, LINEN_ON, true],
+    ["home collections: a draft switched on", HOME, null, DRAFT_ON, false],
+    ["home collections: a window member's SKU back", HOME, DRAFT_LISTED_WITHOUT_SKU, DRAFT_SKU_BACK, true],
+    ["collection directory: a window member's SKU back", "/api/v1/collections/directory", DRAFT_LISTED_WITHOUT_SKU, DRAFT_SKU_BACK, true],
+    ["category listing: a draft switched on", "/api/v1/categories/panjabi/products?page=1&limit=20&sort=newest", null, DRAFT_ON, false],
+    ["product feed: a SKU back makes a product buyable", FEED, LINEN_SKUS_GONE, LINEN_SKUS_BACK, true],
+    ["product feed: a product switched back on", FEED, LINEN_OFF, LINEN_ON, true],
+  ] as Array<[string, string, string | null, string, boolean]>)("membership is the buyer state's: %s", async (name, path, setup, write, changes) => {
+    const verdict = await staleAfter(`scenario-membership-${name}`, path, (sqlite) => sqlite.exec(write), setup ? (sqlite) => sqlite.exec(setup) : undefined);
+    expect(verdict.cached).toBe(true);
+    expect(verdict.equal, "the write changes the answer").toBe(!changes);
+    // A cached entry the validator keeps must equal a fresh render.
+    expect(verdict.valid && !verdict.equal, "a stale entry validated").toBe(false);
+  }, 120_000);
+
+  it("brand listing: a facet value's label and order come from a product of the brand", async () => {
+    // The tote's SKU (no brand, and before the linen by id) also carries the
+    // linen's size M. Its row's edit advances only the tote's own scopes, so
+    // the Aarong listing must not take that value's label or order from it
+    // (dvc-5: a SKU row of a product outside the scope reordered the brand
+    // page's size values).
+    const verdict = await staleAfter("scenario-facet-sample", "/api/v1/brands/aarong/products?page=1&limit=20", (sqlite) => {
+      sqlite.exec("UPDATE product_facet_values SET value_label = 'Medium', sort_order = 9 WHERE owner_id = 'v_bag' AND facet_key = 'option.size'");
+    }, (sqlite) => sqlite.exec(`INSERT INTO product_facet_values (owner_id, product_id, variant_id, facet_kind, facet_key, value_key, value_label, value_number, sort_order)
+      SELECT 'v_bag', 'p_bag', 'v_bag', facet_kind, facet_key, value_key, value_label, value_number, sort_order
+      FROM product_facet_values WHERE owner_id = 'v_linen_m' AND facet_key = 'option.size'`));
+    expect(verdict).toEqual({ cached: true, valid: true, equal: true });
+  }, 120_000);
+
   it("published menu: a draft edit (menu revision) invalidates nothing", async () => {
     const verdict = await staleAfter("scenario-nav-draft", "/api/v1/storefront/layout", (sqlite) => {
       sqlite.exec("UPDATE navigation_menus SET revision = revision + 1 WHERE id = 'menu_main'");

@@ -76,6 +76,7 @@ function otherParts(): string[] {
     "/api/v1/brands/yellow",
     `/api/v1/brands/aarong/products?${LIST}`,
     "/api/v1/collections",
+    "/api/v1/collections/directory",
     "/api/v1/collections/col_manual",
     "/api/v1/collections/col_dynamic",
     "/api/v1/collections/col_hidden",
