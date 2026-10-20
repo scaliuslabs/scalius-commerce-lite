@@ -6,26 +6,25 @@ The SDK for Scalius apps (plugins), for plugin authors. An app declares what it 
 
 An app is an ordinary npm package that depends on `@scalius/plugin-sdk`. It can live in its own repository; it does not need a clone of Scalius to build or test.
 
+`@scalius/plugin-sdk` is not on the npm registry yet. `pnpm plugin create` with a `--dir` outside this repository packs this checkout's SDK (`pnpm pack`, the published layout: `dist/` with declarations, no workspace dependencies) into the app's `vendor/` folder, and the app depends on `"@scalius/plugin-sdk": "file:vendor/scalius-plugin-sdk-<version>.tgz"`. Keep the tarball in the app's repository so a clone installs it too. The command prints these steps with your paths (here the checkout is `~/scalius`):
+
 ```sh
-pnpm plugin create acme.tally --dir ~/code/acme-tally   # from a Scalius checkout: scaffold a standalone app
-cd ~/code/acme-tally
-npm install                                             # @scalius/plugin-sdk, TypeScript, Vitest
+pnpm plugin create acme.tally --dir ~/code/acme-tally   # from a Scalius checkout
+cd ~/code/acme-tally && npm install                     # the SDK build, TypeScript and Vitest
 npm test                                                # the harness: the platform's runtime, in memory
 npm run typecheck
+pnpm --dir ~/scalius plugin validate ~/code/acme-tally  # every check a store makes, including the storefront render
+pnpm --dir ~/scalius plugin preview ~/code/acme-tally   # dist/preview.html with fixture data
+pnpm --dir ~/scalius plugin pack ~/code/acme-tally --key <folder>   # dist/ and the signed upload ZIP
 ```
 
-The scaffold writes `package.json` (`"@scalius/plugin-sdk": "^<SDK version>"`, no workspace protocol), its own `tsconfig.json`, `src/index.ts` (manifest and handlers), `src/storefront.tsx` (a section), `src/index.test.ts` and a `.gitignore` that keeps `*.pem` out of version control. Inside this repository, `--dir plugins/<name>` (the default) makes a workspace package instead.
-
-Check, preview and pack it with the Scalius checkout's tooling, from any folder:
+`pnpm --dir ~/scalius plugin keygen ~/.scalius-keys` makes the Ed25519 signing key `--key` takes (once). The tooling uses the SDK the app installed; before `npm install` it uses the checkout's own SDK. For a newer SDK build, repack it, point `package.json` at the new file and run `npm install` again:
 
 ```sh
-pnpm --dir ~/scalius plugin validate ~/code/acme-tally          # every check a store makes, including the storefront render
-pnpm --dir ~/scalius plugin preview ~/code/acme-tally           # dist/preview.html with fixture data
-pnpm --dir ~/scalius plugin keygen ~/.scalius-keys              # once: an Ed25519 signing key
-pnpm --dir ~/scalius plugin pack ~/code/acme-tally --key ~/.scalius-keys   # dist/ and the signed upload ZIP
+pnpm --dir ~/scalius/packages/plugin-sdk pack --pack-destination ~/code/acme-tally/vendor
 ```
 
-The tooling uses the SDK the app installed; before `npm install` it uses the checkout's own SDK. Until `@scalius/plugin-sdk` is on the npm registry, install a local build: `pnpm --dir ~/scalius/packages/plugin-sdk pack` writes `scalius-plugin-sdk-<version>.tgz` (the published layout: `dist/` with declarations, no workspace dependencies), and `npm install ~/scalius/packages/plugin-sdk/scalius-plugin-sdk-<version>.tgz` adds it to the app.
+The scaffold writes `package.json` (no workspace protocol), its own `tsconfig.json`, `src/index.ts` (manifest and handlers), `src/storefront.tsx` (a section), `src/index.test.ts` and a `.gitignore` that keeps `*.pem` out of version control. Inside this repository, `--dir plugins/<name>` (the default) makes a workspace package instead.
 
 ## Install and activate an app locally
 

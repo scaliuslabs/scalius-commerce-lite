@@ -6,7 +6,7 @@
 // (assets.gen.ts), the catalog of first-party plugins not bundled
 // (catalog.gen.ts) and the sandbox wrapper in step.
 //
-//   pnpm plugin create <vendor.name> [--dir <folder>]          scaffold an app (outside this repo: on the published SDK)
+//   pnpm plugin create <vendor.name> [--dir <folder>]          scaffold an app (outside this repo: on a packed SDK build)
 //   pnpm plugin validate [path]                                check a plugin the way a store loads it
 //   pnpm plugin preview <path> [--out <html>] [--fixture <json>]   render storefront fixtures to a static HTML file
 //   pnpm plugin dev <path> [--fixture <json>]                 rebuild and preview fixtures as sources change
@@ -22,7 +22,9 @@
 //   pnpm plugin sandbox <on|off>                               record the operator's sandbox choice
 //   pnpm plugin wrangler-config [--local] [--plan paid]        print the API Wrangler config to use
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { basename, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -54,7 +56,15 @@ import {
   trustedKeysWith,
   userPath,
 } from "./plugin-registry.mjs";
-import { scaffoldFiles } from "./plugin-scaffold.mjs";
+import { resolvePnpmExecutable } from "./dev-local-utils.mjs";
+import {
+  scaffoldFiles,
+  sdkRefreshCommand,
+  sdkTarballName,
+  SDK_VENDOR_DIR,
+  standaloneNextSteps,
+  vendoredSdkDependency,
+} from "./plugin-scaffold.mjs";
 import { runValidate } from "./plugin-validate.mjs";
 import { devPlugin, previewPlugin, readPreviewFixture } from "./plugin-dev.mjs";
 import { stripJsonc } from "./check-worker-env.mjs";
@@ -190,9 +200,32 @@ export function isWorkspacePackageDir(directory) {
   return /^(?:apps|packages|plugins)\/[^/]+$/.test(path);
 }
 
-/** The SDK release a standalone app depends on (`^<version>`). */
+/** The SDK release a standalone app is scaffolded on. */
 export function sdkVersion() {
   return JSON.parse(readFileSync(join(root, "packages/plugin-sdk/package.json"), "utf8")).version;
+}
+
+/** An absolute path as a user types it in a shell: `~` for the home folder, quoted when it has a space. */
+export function shellPath(path, home = homedir()) {
+  if (/[\s'"]/.test(path)) return `'${path.replaceAll("'", "'\\''")}'`;
+  return path === home || path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path;
+}
+
+/**
+ * `@scalius/plugin-sdk` is not on the npm registry yet, so a standalone app
+ * installs this checkout's SDK build: `pnpm pack` (its prepack builds
+ * `dist/`, the published layout) into `<app>/vendor/`.
+ */
+function packSdkInto(directory) {
+  const destination = join(directory, SDK_VENDOR_DIR);
+  mkdirSync(destination, { recursive: true });
+  const result = spawnSync(resolvePnpmExecutable(), ["--dir", join(root, "packages/plugin-sdk"), "pack", "--pack-destination", destination], {
+    stdio: ["ignore", "ignore", "inherit"],
+  });
+  const tarball = join(destination, sdkTarballName(sdkVersion()));
+  if (result.status !== 0 || !existsSync(tarball)) {
+    throw new Error(`Could not pack the SDK into ${destination} (pnpm pack exited ${result.status ?? "by signal"}).`);
+  }
 }
 
 function create(id, args) {
@@ -204,19 +237,29 @@ function create(id, args) {
   const shown = relative(process.env.INIT_CWD || process.cwd(), directory) || ".";
   if (existsSync(directory)) throw new Error(`${shown} already exists.`);
   const standalone = !isWorkspacePackageDir(directory);
-  for (const [file, contents] of Object.entries(scaffoldFiles(id, basename(directory), { standalone, sdkVersion: sdkVersion() }))) {
+  const version = sdkVersion();
+  if (standalone) {
+    try {
+      packSdkInto(directory);
+    } catch (error) {
+      rmSync(directory, { recursive: true, force: true });
+      throw error;
+    }
+  }
+  const options = standalone ? { standalone, sdkVersion: version, sdkDependency: vendoredSdkDependency(version) } : { standalone };
+  for (const [file, contents] of Object.entries(scaffoldFiles(id, basename(directory), options))) {
     const path = join(directory, file);
     mkdirSync(resolve(path, ".."), { recursive: true });
     writeFileSync(path, contents);
   }
   if (standalone) {
-    console.log(`Created ${shown}: a standalone app on @scalius/plugin-sdk@^${sdkVersion()}. Then:
-  cd ${shown} && npm install      install the SDK, TypeScript and Vitest
-  npm test                        run its tests
-  npm run typecheck               check its types
-  pnpm plugin validate ${shown}   check it the way a store loads it (from this repository)
-  pnpm plugin preview ${shown}    render its storefront parts with fixture data
-  pnpm plugin pack ${shown} --key <folder>   pack and sign the upload package`);
+    const paths = { repo: shellPath(root), app: shellPath(directory) };
+    const steps = standaloneNextSteps({ ...paths, version });
+    console.log(`Created ${paths.app}: a standalone app on this checkout's SDK build, ${SDK_VENDOR_DIR}/${sdkTarballName(version)}.
+@scalius/plugin-sdk is not on npm yet: keep the tarball in the app's repository. Then:
+${steps.map(([command, purpose]) => `  ${purpose}:\n    ${command}`).join("\n")}
+For a newer SDK build, repack it, point package.json at the new file and npm install:
+    ${sdkRefreshCommand(paths)}`);
     return;
   }
   const where = relative(root, directory);

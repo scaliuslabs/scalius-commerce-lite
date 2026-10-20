@@ -6,9 +6,11 @@ import { isPathSource, packPlugin, renderBundledGen, renderCatalogGen, renderLoc
 import { BUNDLE_MAX_BYTES } from "./plugin-registry.mjs";
 import { editSource, makeTempPlugin } from "./plugin-test-helpers.mjs";
 import { BUNDLE_WARN_BYTES, formatChecks, validatePlugin } from "./plugin-validate.mjs";
-import { isWorkspacePackageDir, pluginSandboxEnabled, scaffoldFiles, withPluginSandbox } from "./plugins.mjs";
+import { isWorkspacePackageDir, pluginSandboxEnabled, scaffoldFiles, shellPath, withPluginSandbox } from "./plugins.mjs";
+import { sdkRefreshCommand, standaloneNextSteps, vendoredSdkDependency } from "./plugin-scaffold.mjs";
 import { root } from "./plugin-build.mjs";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -118,6 +120,45 @@ describe("a standalone app (outside this repository)", () => {
     expect(JSON.parse(files["tsconfig.json"]).compilerOptions).toMatchObject({ jsxImportSource: "@scalius/plugin-sdk/storefront", moduleResolution: "Bundler" });
     expect(files[".gitignore"]).toContain("*.pem");
     expect(files["src/index.ts"]).toContain("defineManifest({");
+  });
+
+  it("installs the SDK build packed into its own vendor folder while the SDK is not on npm", () => {
+    const files = scaffoldFiles("acme.loyalty", "loyalty", { standalone: true, sdkVersion: "0.4.2", sdkDependency: vendoredSdkDependency("0.4.2") });
+    // A path inside the app (`pnpm pack`'s file name), so a clone of the app's repository installs it.
+    expect(JSON.parse(files["package.json"]).dependencies).toEqual({ "@scalius/plugin-sdk": "file:vendor/scalius-plugin-sdk-0.4.2.tgz" });
+    expect(files[".gitignore"]).not.toMatch(/vendor|\.tgz/);
+  });
+
+  it("pnpm plugin create packs the SDK into the app and depends on that tarball", () => {
+    const parent = mkdtempSync(join(tmpdir(), "scalius-create-"));
+    const dir = join(parent, "tally");
+    try {
+      const result = spawnSync(process.execPath, [join(root, "scripts/plugins.mjs"), "create", "acme.tally", "--dir", dir], { encoding: "utf8", env: { ...process.env, INIT_CWD: parent } });
+      expect(result.status, result.stderr).toBe(0);
+      const dependency = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")).dependencies["@scalius/plugin-sdk"];
+      expect(dependency).toMatch(/^file:vendor\/scalius-plugin-sdk-\d+\.\d+\.\d+\.tgz$/);
+      expect(existsSync(join(dir, dependency.slice("file:".length)))).toBe(true);
+      expect(result.stdout).toContain("npm install");
+      expect(result.stdout).toContain(" plugin validate ");
+    } finally {
+      rmSync(parent, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  it("prints the steps the SDK README shows", () => {
+    const readme = readFileSync(join(root, "packages/plugin-sdk/README.md"), "utf8");
+    const paths = { repo: "~/scalius", app: "~/code/acme-tally" };
+    for (const [command] of standaloneNextSteps({ ...paths, version: "0.1.0" })) {
+      expect(readme, command).toContain(command);
+    }
+    expect(readme).toContain(sdkRefreshCommand(paths));
+    expect(readme).toContain(vendoredSdkDependency("<version>"));
+  });
+
+  it("prints paths as a shell takes them", () => {
+    expect(shellPath("/home/ada/code/x", "/home/ada")).toBe("~/code/x");
+    expect(shellPath("/home/adam/x", "/home/ada")).toBe("/home/adam/x");
+    expect(shellPath("/srv/my apps/x", "/home/ada")).toBe("'/srv/my apps/x'");
   });
 
   it("is chosen for any folder that is not a workspace package", () => {

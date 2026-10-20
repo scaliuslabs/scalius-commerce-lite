@@ -4,12 +4,55 @@
 // patterns in packages/plugin-sdk/README.md for the rest (settings, storage, cron, webhooks).
 
 /**
- * `standalone` scaffolds an app that lives anywhere (its own repository):
- * it depends on the published `@scalius/plugin-sdk@^<sdkVersion>` and has
- * a self-contained tsconfig, no workspace protocol and no repo-relative path.
- * Without it the app is a package of this workspace (`plugins/<name>`).
+ * Where a standalone app keeps the SDK build it installs while
+ * `@scalius/plugin-sdk` is not on the npm registry: `pnpm plugin create`
+ * packs this checkout's SDK into `<app>/vendor/` and the app depends on it as
+ * `file:vendor/<tarball>`, a path inside the app, so a clone of the app's own
+ * repository installs it too.
  */
-export function scaffoldFiles(id, name, { standalone = false, sdkVersion = "0.1.0" } = {}) {
+export const SDK_VENDOR_DIR = "vendor";
+
+/** The file `pnpm pack` writes for the SDK at `version`. */
+export function sdkTarballName(version) {
+  return `scalius-plugin-sdk-${version}.tgz`;
+}
+
+/** The dependency a standalone app declares on the SDK build in its vendor folder. */
+export function vendoredSdkDependency(version) {
+  return `file:${SDK_VENDOR_DIR}/${sdkTarballName(version)}`;
+}
+
+/**
+ * The steps `pnpm plugin create` prints for a standalone app, as
+ * [command, what it does] pairs. `repo` is the Scalius checkout, `app` the
+ * new app's folder (both as the user should type them). The SDK README's
+ * Quick start shows the same commands (`plugins.test.mjs` keeps them equal).
+ */
+export function standaloneNextSteps({ repo, app, version }) {
+  return [
+    [`cd ${app} && npm install`, `install the SDK build (${SDK_VENDOR_DIR}/${sdkTarballName(version)}), TypeScript and Vitest`],
+    ["npm test", "run its tests"],
+    ["npm run typecheck", "check its types"],
+    [`pnpm --dir ${repo} plugin validate ${app}`, "check it the way a store loads it"],
+    [`pnpm --dir ${repo} plugin preview ${app}`, "render its storefront parts with fixture data"],
+    [`pnpm --dir ${repo} plugin pack ${app} --key <folder>`, "pack and sign the upload package"],
+  ];
+}
+
+/** How a standalone app takes a newer SDK build: repack it into the vendor folder. */
+export function sdkRefreshCommand({ repo, app }) {
+  return `pnpm --dir ${repo}/packages/plugin-sdk pack --pack-destination ${app}/${SDK_VENDOR_DIR}`;
+}
+
+/**
+ * `standalone` scaffolds an app that lives anywhere (its own repository):
+ * it depends on `sdkDependency` (default the published
+ * `@scalius/plugin-sdk@^<sdkVersion>`; `pnpm plugin create` passes the
+ * vendored build, `vendoredSdkDependency`) and has a self-contained
+ * tsconfig, no workspace protocol and no repo-relative path. Without it the
+ * app is a package of this workspace (`plugins/<name>`).
+ */
+export function scaffoldFiles(id, name, { standalone = false, sdkVersion = "0.1.0", sdkDependency = `^${sdkVersion}` } = {}) {
   const title = name.split("-").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
   const vendor = id.split(".")[0];
   const project = standalone
@@ -22,7 +65,7 @@ export function scaffoldFiles(id, name, { standalone = false, sdkVersion = "0.1.
         license: "UNLICENSED",
         exports: { ".": "./src/index.ts" },
         scripts: { test: "vitest run", typecheck: "tsc --noEmit" },
-        dependencies: { "@scalius/plugin-sdk": `^${sdkVersion}` },
+        dependencies: { "@scalius/plugin-sdk": sdkDependency },
         devDependencies: { typescript: "^6.0.3", vitest: "^5.0.4" },
       }, null, 2)}\n`,
       "tsconfig.json": `${JSON.stringify({
