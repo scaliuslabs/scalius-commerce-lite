@@ -77,7 +77,7 @@ export function activePluginStorefrontScripts(installations: Iterable<PluginInst
 /**
  * Active apps with storefront components, as the layout payload lists them
  * (`appExtensions`, `StorefrontExtension`): their release, the component
- * sections, component product blocks and skins their storefront module
+ * sections, components and skins their storefront module
  * draws (with the settings schemas the storefront resolves), islands,
  * stylesheet and browser hosts.
  * An app whose approved grant does not cover storefront code (approved
@@ -98,8 +98,7 @@ export function activePluginStorefrontExtensions(installations: Iterable<PluginI
       sections: storefront.sections.map((section) => section.type),
       sectionSettings: Object.fromEntries(storefront.sections.map((section) => [section.type, section.settings])),
       skins: storefront.skins.map((skin) => ({ id: skin.id, target: skin.target as StorefrontSkinTarget, settings: skin.settings })),
-      blocks: storefront.productBlocks
-        .map((block) => ({ type: block.type, target: block.placement, settings: block.settings })),
+      components: storefront.components.map((component) => ({ type: component.type, targets: [...component.targets], settings: component.settings })),
       islands: storefront.islands.map((island) => island.name),
       stylesheet: storefront.stylesheet,
       connect: storefront.connect.filter((host) => granted.has(host)),

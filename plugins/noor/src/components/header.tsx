@@ -18,6 +18,7 @@ import {
   CartCount,
   Image,
   Island,
+  Slot,
   accountLink,
   menuDrawer,
   openCart,
@@ -286,6 +287,7 @@ export function Header({ data, settings, context }: HeaderProps<HeaderSettings>)
                   <Icon name="search" size={21} />
                 </button>
               ) : null}
+              <Slot name="header.actions" />
               {settings.show_account ? (
                 <a class="noor-icon-btn noor-desk-only" href={data.routes.account} {...accountLink()} aria-label={t(context, { en: "Account", bn: "অ্যাকাউন্ট" })}>
                   <Icon name="user" size={21} />

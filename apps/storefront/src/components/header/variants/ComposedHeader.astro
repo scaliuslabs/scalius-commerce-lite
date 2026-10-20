@@ -4,7 +4,7 @@
 // main row or its own row). Tokens paint it: a toned row uses the header
 // colours (`--theme-header-*`, an AA pair); the search field is always the
 // card or muted surface. One icon set, one gap, one order everywhere:
-// menu, logo, search, account, cart.
+// menu, logo, search, apps (the `header.actions` slot), account, cart.
 //
 // Sticky: the whole header, or only the menu row when it has one of its own
 // (`stickyMenuRow`): the top row scrolls away and the category bar stays;
@@ -16,6 +16,7 @@ import type {
   StorefrontNavigationRenderer,
 } from "@scalius/shared/storefront-theme";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
+import AppSlot from "@/components/apps/AppSlot.astro";
 import {
   getMobileHeaderLogoWidth,
   normalizeHeaderLogoWidth,
@@ -162,6 +163,7 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
             <HeaderSearch shape="icon" id="header-search-input" />
           </div>
         )}
+        <AppSlot name="header.actions" />
         <a
           id="account-link"
           href="/account"

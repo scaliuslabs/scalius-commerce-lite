@@ -42,17 +42,13 @@ export type StorefrontSkinTarget = StorefrontSkinUnit | `section:${string}`;
 //
 // A slot nobody fills renders nothing and costs no read.
 
-/** Where an app's component product block draws: in the buy box after the buttons, or after the page's modules. */
-export const STOREFRONT_BLOCK_TARGETS = ["product.buy-box", "product.below"] as const;
-export type StorefrontBlockTarget = (typeof STOREFRONT_BLOCK_TARGETS)[number];
-
 /** Slots on public pages that app components fill. */
 export const STOREFRONT_COMPONENT_SLOTS = [
   // In the header, beside search, account and cart.
   "header.actions",
   // The product's buy box: before the price and options, and after the buttons.
-  "product.buy-box.before",
-  "product.buy-box.after",
+  "product.buy_box.before",
+  "product.buy_box.after",
   // After the product page's modules.
   "product.below",
   // Footer columns, after the store's menus.
@@ -61,8 +57,13 @@ export const STOREFRONT_COMPONENT_SLOTS = [
 export type StorefrontComponentSlot = (typeof STOREFRONT_COMPONENT_SLOTS)[number];
 
 /** The component slots the merchant arranges in the theme (the product page's app blocks). */
-export const STOREFRONT_PRODUCT_SLOTS = ["product.buy-box.before", "product.buy-box.after", "product.below"] as const satisfies readonly StorefrontComponentSlot[];
+export const STOREFRONT_PRODUCT_SLOTS = ["product.buy_box.before", "product.buy_box.after", "product.below"] as const satisfies readonly StorefrontComponentSlot[];
 export type StorefrontProductSlot = (typeof STOREFRONT_PRODUCT_SLOTS)[number];
+
+/** The product slot a component targets, if any: where its product-page placements render (a component has at most one). */
+export function storefrontComponentProductSlot(targets: readonly string[]): StorefrontProductSlot | null {
+  return (targets.find((target) => (STOREFRONT_PRODUCT_SLOTS as readonly string[]).includes(target)) as StorefrontProductSlot | undefined) ?? null;
+}
 
 /** Where an app component renders: a component slot, or `page` (an app page its proxy route answers). */
 export const STOREFRONT_COMPONENT_TARGETS = [...STOREFRONT_COMPONENT_SLOTS, "page"] as const;
@@ -110,8 +111,11 @@ export function storefrontUiSlotsOn(page: StorefrontUiSlotPage): StorefrontUiSlo
  * - `order-form`: the single-page order form of a landing page, for a
  *   product the section was given (`data-product`, `data-max-quantity`,
  *   `data-submit-label`).
+ * - `slot`: a component slot of the unit (`data-name`, `<Slot name="…" />`),
+ *   where active apps' components render (a header skin places
+ *   `header.actions`, a footer skin `footer.columns`).
  */
-export const STOREFRONT_EMBED_KINDS = ["buy-form", "reviews", "recommendations", "filters", "toolbar", "pagination", "order-form", "gallery"] as const;
+export const STOREFRONT_EMBED_KINDS = ["buy-form", "reviews", "recommendations", "filters", "toolbar", "pagination", "order-form", "gallery", "slot"] as const;
 export type StorefrontEmbedKind = (typeof STOREFRONT_EMBED_KINDS)[number];
 export const STOREFRONT_EMBED_TAG = "scalius-embed";
 
@@ -120,21 +124,27 @@ export const STOREFRONT_EMBED_TAG = "scalius-embed";
  * beyond render nothing, as does a kind not listed), the kinds it must place
  * (without one, core draws the unit instead), and the kinds the host appends
  * when the markup leaves them out (a listing always pages, so crawlers reach
- * every product).
+ * every product). `slots` names the component slots a `slot` embed may be
+ * (each renders once).
  */
 export interface StorefrontEmbedRule {
   allowed: Partial<Record<StorefrontEmbedKind, number>>;
   required: readonly StorefrontEmbedKind[];
   appended: readonly StorefrontEmbedKind[];
+  slots?: readonly StorefrontComponentSlot[];
 }
 
 const NO_EMBEDS: StorefrontEmbedRule = { allowed: {}, required: [], appended: [] };
 
-/** The embed rule of a render: a component section, a skin's target or a product block. */
-export function storefrontEmbedRule(unit: "section" | "block" | StorefrontSkinTarget): StorefrontEmbedRule {
+/** The embed rule of a render: a component section, a skin's target or an app component (which embeds nothing). */
+export function storefrontEmbedRule(unit: "section" | "component" | StorefrontSkinTarget): StorefrontEmbedRule {
   switch (unit) {
     case "section":
       return { allowed: { "order-form": 2 }, required: [], appended: [] };
+    case "header":
+      return { allowed: { slot: 1 }, required: [], appended: [], slots: ["header.actions"] };
+    case "footer":
+      return { allowed: { slot: 1 }, required: [], appended: [], slots: ["footer.columns"] };
     case "product-main":
       return { allowed: { "buy-form": 1, reviews: 1, recommendations: 1, gallery: 1 }, required: ["buy-form"], appended: [] };
     case "listing-main":
@@ -749,18 +759,31 @@ export type StorefrontRenderJob =
     settings: StorefrontResolvedSettings;
   }
   | StorefrontSkinJob
-  | {
-    id: string;
-    /** A product block (a `productBlocks` entry). */
-    kind: "block";
-    target: StorefrontBlockTarget;
-    /** The manifest block type. */
-    type: string;
-    /** The theme's id of this placement. */
+  | StorefrontComponentJob;
+
+interface ComponentJobBase {
+  id: string;
+  kind: "component";
+  /** The manifest component type (`storefront.components`). */
+  type: string;
+  /** The merchant's values for its placement (product slots), else its defaults; no images or products. */
+  settings: StorefrontResolvedSettings;
+}
+
+/** An app component, at one of its targets. */
+export type StorefrontComponentJob =
+  | (ComponentJobBase & {
+    target: StorefrontProductSlot;
+    /** The theme's id of this placement (the product page's app blocks). */
     instanceId: string;
-    settings: StorefrontResolvedSettings;
     data: StorefrontProductPage;
-  };
+  })
+  | (ComponentJobBase & { target: Exclude<StorefrontComponentSlot, StorefrontProductSlot> })
+  | (ComponentJobBase & {
+    target: "page";
+    /** What the app's proxy route answered as the page's `props` (JSON; escaped like any other text). */
+    props: Record<string, unknown>;
+  });
 
 export interface StorefrontRenderBatch {
   abi: typeof STOREFRONT_COMPONENT_ABI;

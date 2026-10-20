@@ -34,6 +34,19 @@ const API_PLUGINS_DIR = join(root, "apps/api/src/plugins");
 
 const requireFromRoot = createRequire(join(root, "package.json"));
 
+/**
+ * Smoke and preview jobs for every component at each of its slots (default
+ * values, fixture data). A page component draws what its own route answers,
+ * so it has no fixture: test it with `renderComponent(module, type, "page", {}, { props })`.
+ */
+export function componentJobs(contract, components, instanceId) {
+  return components.flatMap((component) => component.targets.filter((target) => target !== "page").map((target) => ({
+    id: `component:${component.type}@${target}`, kind: "component", type: component.type, target,
+    settings: smokeSettings(contract, component.settings),
+    ...(target.startsWith("product.") ? { instanceId, data: contract.fixtureProductPage() } : {}),
+  })));
+}
+
 /** esbuild, resolved from the repo root. */
 export async function loadEsbuild() {
   return import(pathToFileURL(requireFromRoot.resolve("esbuild")).href);
@@ -317,10 +330,10 @@ export async function packStorefront(contract, manifest, source) {
     const definition = contract.storefrontDefinitionOf(loaded.default);
     if (!definition) fail("src/storefront has no default export from defineStorefront().");
     const { sections } = storefront;
-    const blocks = storefront.productBlocks;
+    const { components } = storefront;
     const expected = [
       ...sections.map((section) => ({ kind: "section", key: section.type, components: definition.sections ?? {} })),
-      ...blocks.map((block) => ({ kind: "block", key: block.type, components: definition.blocks ?? {} })),
+      ...components.map((component) => ({ kind: "component", key: component.type, components: definition.components ?? {} })),
       ...storefront.skins.map((skin) => ({ kind: "skin", key: skin.id, components: definition.skins ?? {} })),
     ];
     for (const { kind, key, components } of expected) {
@@ -329,8 +342,8 @@ export async function packStorefront(contract, manifest, source) {
     for (const key of Object.keys(definition.sections ?? {})) {
       if (!sections.some((section) => section.type === key)) fail(`defineStorefront has a section ${key} the manifest does not declare as a component section.`);
     }
-    for (const key of Object.keys(definition.blocks ?? {})) {
-      if (!blocks.some((block) => block.type === key)) fail(`defineStorefront has a block ${key} the manifest does not declare as a component product block.`);
+    for (const key of Object.keys(definition.components ?? {})) {
+      if (!components.some((component) => component.type === key)) fail(`defineStorefront has a component ${key} the manifest does not declare in storefront.components.`);
     }
     for (const key of Object.keys(definition.skins ?? {})) {
       if (!storefront.skins.some((skin) => skin.id === key)) fail(`defineStorefront has a skin ${key} the manifest does not declare.`);
@@ -338,10 +351,7 @@ export async function packStorefront(contract, manifest, source) {
     // Smoke render: every component draws its defaults over the fixture data.
     const jobs = [
       ...sections.map((section) => ({ id: `section:${section.type}`, kind: "section", type: section.type, instanceId: "smoke", settings: smokeSettings(contract, section.settings) })),
-      ...blocks.map((block) => ({
-        id: `block:${block.type}`, kind: "block", target: block.placement, type: block.type, instanceId: "smoke",
-        settings: smokeSettings(contract, block.settings), data: contract.fixtureProductPage(),
-      })),
+      ...componentJobs(contract, components, "smoke"),
       ...storefront.skins.map((skin) => ({
         id: `skin:${skin.id}`, kind: "skin", target: skin.target, component: skin.id, settings: smokeSettings(contract, skin.settings),
         data: contract.fixtureSkinData(skin.target),
@@ -353,6 +363,11 @@ export async function packStorefront(contract, manifest, source) {
       if ("error" in result) fail(`${result.id} fails to render its defaults: ${result.error}`);
       if (Buffer.byteLength(result.html) > limits.htmlBytes) fail(`${result.id} renders ${Buffer.byteLength(result.html)} bytes of HTML; the limit is ${limits.htmlBytes}.`);
       const job = jobs.find((each) => each.id === result.id);
+      if (job?.kind === "component") {
+        // A component embeds nothing: the storefront drops what it places.
+        const dropped = contract.splitStorefrontEmbeds(result.html, contract.storefrontEmbedRule("component")).dropped;
+        if (dropped > 0) fail(`${result.id} places ${dropped} embed(s); a component renders none (slots belong to skins).`);
+      }
       if (job?.kind !== "skin") continue;
       // The storefront would draw the core unit instead of a skin that breaks its target's embed rule.
       const issues = contract.checkSkinHtml(job.target, result.html);

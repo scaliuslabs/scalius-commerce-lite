@@ -43,4 +43,22 @@ describe("core embeds", () => {
     ), storefrontEmbedRule("section"));
     expect(section.parts).toEqual([{ kind: "embed", embed: "order-form", data: { product: "prod_1", "max-quantity": "3", "submit-label": "Order & pay" }, index: 0 }]);
   });
+
+  it("lets a header and footer skin place their own slots once, and nothing else place a slot", () => {
+    const header = splitStorefrontEmbeds(checked(
+      '<nav><scalius-embed kind="slot" data-name="header.actions"></scalius-embed><scalius-embed kind="slot" data-name="header.actions"></scalius-embed>'
+      + '<scalius-embed kind="slot" data-name="footer.columns"></scalius-embed></nav>',
+    ), storefrontEmbedRule("header"));
+    expect(header.parts).toEqual([
+      { kind: "html", html: "<nav>" },
+      { kind: "embed", embed: "slot", data: { name: "header.actions" }, index: 0 },
+      { kind: "html", html: "</nav>" },
+    ]);
+    expect(header.dropped).toBe(2);
+    expect(splitStorefrontEmbeds('<scalius-embed kind="slot" data-name="footer.columns"></scalius-embed>', storefrontEmbedRule("footer")).parts)
+      .toEqual([{ kind: "embed", embed: "slot", data: { name: "footer.columns" }, index: 0 }]);
+    for (const unit of ["component", "section", "product-card", "product-main"] as const) {
+      expect(splitStorefrontEmbeds('<scalius-embed kind="slot" data-name="header.actions"></scalius-embed>', storefrontEmbedRule(unit)).parts).toEqual([]);
+    }
+  });
 });

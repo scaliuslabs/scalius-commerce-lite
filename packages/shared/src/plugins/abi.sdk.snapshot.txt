@@ -577,7 +577,7 @@ export declare class PluginPlatformError extends Error {
 export declare function invokePluginDefinition(module: unknown, invocation: PluginInvocation, seed: PluginContextSeed, bridge: PluginRuntimeBridge | null): Promise<PluginInvocationResult>;
 
 // packages/plugin-sdk/src/storefront/components.d.ts
-import type { StorefrontImage, StorefrontIslandHydration, StorefrontMoney, StorefrontProductCard, StorefrontRenderContext } from "@scalius/shared/plugins/storefront-protocol";
+import type { StorefrontComponentSlot, StorefrontImage, StorefrontIslandHydration, StorefrontMoney, StorefrontProductCard, StorefrontRenderContext } from "@scalius/shared/plugins/storefront-protocol";
 import { type Html, type Renderable } from "./html";
 type Attributes = Record<string, string | number | boolean | null | undefined>;
 export interface ImageProps {
@@ -632,10 +632,14 @@ export interface OrderFormProps {
     submitLabel?: string;
 }
 export declare function OrderForm(props: OrderFormProps): Html;
+export interface SlotProps {
+    name: StorefrontComponentSlot;
+}
+export declare function Slot(props: SlotProps): Html;
 export {};
 
 // packages/plugin-sdk/src/storefront/define.d.ts
-import { type StorefrontBlockTarget, type StorefrontFooterData, type StorefrontHeaderData, type StorefrontListingPage, type StorefrontModule, type StorefrontProductCardData, type StorefrontProductPage, type StorefrontRenderContext, type StorefrontRenderJob, type StorefrontResolvedSettings, type StorefrontSectionSkinData, type StorefrontSectionSkinSettings, type StorefrontSkinnableSection } from "@scalius/shared/plugins/storefront-protocol";
+import { type StorefrontComponentSlot, type StorefrontFooterData, type StorefrontHeaderData, type StorefrontListingPage, type StorefrontModule, type StorefrontProductCardData, type StorefrontProductPage, type StorefrontProductSlot, type StorefrontRenderContext, type StorefrontRenderJob, type StorefrontResolvedSettings, type StorefrontSectionSkinData, type StorefrontSectionSkinSettings, type StorefrontSkinnableSection } from "@scalius/shared/plugins/storefront-protocol";
 import { type Renderable } from "./html";
 export interface SectionProps<Settings = StorefrontResolvedSettings> {
     objects: NonNullable<Extract<StorefrontRenderJob, {
@@ -658,13 +662,22 @@ export type ListingMainProps<Settings = StorefrontResolvedSettings> = SkinProps<
 export type SectionSkinProps<Type extends StorefrontSkinnableSection = StorefrontSkinnableSection, Settings = StorefrontResolvedSettings> = SkinProps<StorefrontSectionSkinData<StorefrontSectionSkinSettings[Type]>, Settings> & {
     instanceId: string;
 };
-export interface BlockProps<Settings = StorefrontResolvedSettings> {
+export type ComponentProps<Settings = StorefrontResolvedSettings, Props = Record<string, unknown>> = {
+    target: StorefrontProductSlot;
     settings: Settings;
     data: StorefrontProductPage;
-    target: StorefrontBlockTarget;
     instanceId: string;
     context: StorefrontRenderContext;
-}
+} | {
+    target: Exclude<StorefrontComponentSlot, StorefrontProductSlot>;
+    settings: Settings;
+    context: StorefrontRenderContext;
+} | {
+    target: "page";
+    settings: Settings;
+    props: Props;
+    context: StorefrontRenderContext;
+};
 export type SectionComponent = (props: SectionProps<any>) => Renderable;
 export type HeaderComponent = (props: HeaderProps<any>) => Renderable;
 export type FooterComponent = (props: FooterProps<any>) => Renderable;
@@ -673,11 +686,11 @@ export type ProductMainComponent = (props: ProductMainProps<any>) => Renderable;
 export type ListingMainComponent = (props: ListingMainProps<any>) => Renderable;
 export type SectionSkinComponent = (props: SectionSkinProps<any, any>) => Renderable;
 export type SkinComponent = (props: any) => Renderable;
-export type BlockComponent = (props: BlockProps<any>) => Renderable;
+export type AppComponent = (props: ComponentProps<any, any>) => Renderable;
 export interface StorefrontDefinition {
     sections?: Record<string, SectionComponent>;
     skins?: Record<string, SkinComponent>;
-    blocks?: Record<string, BlockComponent>;
+    components?: Record<string, AppComponent>;
 }
 export interface StorefrontModuleDefinition extends StorefrontModule {
     definition: StorefrontDefinition;
@@ -704,13 +717,13 @@ export {};
 
 // packages/plugin-sdk/src/storefront/index.d.ts
 export { defineStorefront, storefrontDefinitionOf } from "./define";
-export type { BlockComponent, BlockProps, FooterComponent, FooterProps, HeaderComponent, HeaderProps, ListingMainComponent, ListingMainProps, ProductCardComponent, ProductCardProps, ProductMainComponent, ProductMainProps, SectionComponent, SectionProps, SectionSkinComponent, SectionSkinProps, SkinComponent, SkinProps, StorefrontDefinition, StorefrontModuleDefinition, } from "./define";
+export type { AppComponent, ComponentProps, FooterComponent, FooterProps, HeaderComponent, HeaderProps, ListingMainComponent, ListingMainProps, ProductCardComponent, ProductCardProps, ProductMainComponent, ProductMainProps, SectionComponent, SectionProps, SectionSkinComponent, SectionSkinProps, SkinComponent, SkinProps, StorefrontDefinition, StorefrontModuleDefinition, } from "./define";
 export { EMPTY_HTML, escapeHtml, html, isHtml, raw, toHtml, type Html, type Renderable } from "./html";
 export { Fragment, jsx, jsxs, type Component, type JSX } from "./jsx-runtime";
-export { BuyForm, CartCount, Filters, Gallery, Image, Island, OrderForm, Pagination, Price, Recommendations, Reviews, Toolbar, accountLink, asset, editable, menuDrawer, openCart, quickAdd, searchOpener, stickyHeader, } from "./components";
+export { BuyForm, CartCount, Filters, Gallery, Image, Island, OrderForm, Pagination, Price, Recommendations, Reviews, Slot, Toolbar, accountLink, asset, editable, menuDrawer, openCart, quickAdd, searchOpener, stickyHeader, } from "./components";
 export { formatDate, formatMoney, formatNumber, plural, storeTime, t, type Words } from "./locale";
-export type { BuyFormProps, ImageProps, IslandProps, OrderFormProps, PriceProps } from "./components";
-export type { StorefrontBannerMosaicSkinSettings, StorefrontBannerSkinSettings, StorefrontBlockTarget, StorefrontBrandWallSkinSettings, StorefrontCategoryTilesSkinSettings, StorefrontCollectionsSkinSettings, StorefrontDealBlockSkinSettings, StorefrontDeliveryFacts, StorefrontEditorialSkinSettings, StorefrontFaqSkinSettings, StorefrontFocalPoint, StorefrontFooterData, StorefrontHeaderData, StorefrontHeroSkinSettings, StorefrontImage, StorefrontLink, StorefrontListingPage, StorefrontLookbookSkinSettings, StorefrontMenuItem, StorefrontMoney, StorefrontNewsletterSkinSettings, StorefrontObjectFieldView, StorefrontProductCard, StorefrontProductCardData, StorefrontProductGridSkinSettings, StorefrontProductList, StorefrontProductPage, StorefrontProductRailSkinSettings, StorefrontProductTabsSkinSettings, StorefrontPromotionEnd, StorefrontRenderContext, StorefrontResolvedSettings, StorefrontSectionSkinData, StorefrontSectionSkinSettings, StorefrontSeoTextSkinSettings, StorefrontShopBySkinSettings, StorefrontSkinnableSection, StorefrontSkinTarget, StorefrontSpecificationsSkinSettings, StorefrontStoreInfo, StorefrontTile, StorefrontUspStripSkinSettings, StorefrontUtilityCardsSkinSettings, } from "@scalius/shared/plugins/storefront-protocol";
+export type { BuyFormProps, ImageProps, IslandProps, OrderFormProps, PriceProps, SlotProps } from "./components";
+export type { StorefrontBannerMosaicSkinSettings, StorefrontBannerSkinSettings, StorefrontComponentSlot, StorefrontComponentTarget, StorefrontBrandWallSkinSettings, StorefrontCategoryTilesSkinSettings, StorefrontCollectionsSkinSettings, StorefrontDealBlockSkinSettings, StorefrontDeliveryFacts, StorefrontEditorialSkinSettings, StorefrontFaqSkinSettings, StorefrontFocalPoint, StorefrontFooterData, StorefrontHeaderData, StorefrontHeroSkinSettings, StorefrontImage, StorefrontLink, StorefrontListingPage, StorefrontLookbookSkinSettings, StorefrontMenuItem, StorefrontMoney, StorefrontNewsletterSkinSettings, StorefrontObjectFieldView, StorefrontProductCard, StorefrontProductCardData, StorefrontProductGridSkinSettings, StorefrontProductList, StorefrontProductPage, StorefrontProductSlot, StorefrontProductRailSkinSettings, StorefrontProductTabsSkinSettings, StorefrontPromotionEnd, StorefrontRenderContext, StorefrontResolvedSettings, StorefrontSectionSkinData, StorefrontSectionSkinSettings, StorefrontSeoTextSkinSettings, StorefrontShopBySkinSettings, StorefrontSkinnableSection, StorefrontSkinTarget, StorefrontSpecificationsSkinSettings, StorefrontStoreInfo, StorefrontTile, StorefrontUspStripSkinSettings, StorefrontUtilityCardsSkinSettings, } from "@scalius/shared/plugins/storefront-protocol";
 
 // packages/plugin-sdk/src/storefront/island.d.ts
 import { type StorefrontIslandContext, type StorefrontIslandModule } from "@scalius/shared/plugins/storefront-protocol";
@@ -778,7 +791,7 @@ export declare function storeTime(context: {
 export {};
 
 // packages/plugin-sdk/src/storefront/testing.d.ts
-import { type StorefrontBlockTarget, type StorefrontFooterData, type StorefrontHeaderData, type StorefrontListingPage, type StorefrontModule, type StorefrontProductCard, type StorefrontProductPage, type StorefrontRenderContext, type StorefrontResolvedSettings, type StorefrontSectionSkinData, type StorefrontSkinJob, type StorefrontSkinTarget, type StorefrontSkinUnit } from "@scalius/shared/plugins/storefront-protocol";
+import { type StorefrontComponentTarget, type StorefrontFooterData, type StorefrontHeaderData, type StorefrontListingPage, type StorefrontModule, type StorefrontProductCard, type StorefrontProductPage, type StorefrontRenderContext, type StorefrontResolvedSettings, type StorefrontSectionSkinData, type StorefrontSkinJob, type StorefrontSkinTarget, type StorefrontSkinUnit } from "@scalius/shared/plugins/storefront-protocol";
 import { type StorefrontHeaderCheckOptions } from "@scalius/shared/plugins/storefront-html-check";
 export { checkStorefrontHeaderHtml } from "@scalius/shared/plugins/storefront-html-check";
 export declare function storefrontShown(html: string, pluginId: string): {
@@ -802,8 +815,9 @@ export interface RenderOptions extends StorefrontHeaderCheckOptions {
     context?: Partial<StorefrontRenderContext>;
 }
 export declare function renderSection(module: StorefrontModule, type: string, settings?: StorefrontResolvedSettings, options?: RenderOptions): string;
-export declare function renderBlock(module: StorefrontModule, type: string, settings?: StorefrontResolvedSettings, data?: StorefrontProductPage, options?: RenderOptions & {
-    target?: StorefrontBlockTarget;
+export declare function renderComponent(module: StorefrontModule, type: string, target: StorefrontComponentTarget, settings?: StorefrontResolvedSettings, options?: RenderOptions & {
+    data?: StorefrontProductPage;
+    props?: Record<string, unknown>;
 }): string;
 export declare function renderSkin<Target extends StorefrontSkinTarget>(module: StorefrontModule, component: string, target: Target, settings?: StorefrontResolvedSettings, data?: SkinData<Target>, options?: RenderOptions): string;
 export declare function renderHeader(module: StorefrontModule, component: string, settings?: StorefrontResolvedSettings, data?: Partial<StorefrontHeaderData>, options?: RenderOptions): string;
@@ -1186,7 +1200,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
             admin: string[];
             storefront: {
                 sections: string[];
-                productBlocks: string[];
+                components: string[];
                 skins: string[];
             };
         }[];
@@ -1248,6 +1262,227 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
             title: string;
         }[];
         storefront: {
+            components: {
+                type: string;
+                name: string;
+                targets: ("header.actions" | "product.buy_box.before" | "product.buy_box.after" | "product.below" | "footer.columns" | "page")[];
+                settings: ({
+                    type: "text";
+                    maxLength: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "textarea";
+                    maxLength: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "number";
+                    integer: boolean;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: number | undefined;
+                    min?: number | undefined;
+                    max?: number | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "boolean";
+                    default: boolean;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "select";
+                    options: {
+                        value: string;
+                        label: string;
+                    }[];
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "multiselect";
+                    options: {
+                        value: string;
+                        label: string;
+                    }[];
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string[] | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "secret";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "url";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "email";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "color";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "image";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "products";
+                    limit: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "product";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "link";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "list";
+                    fields: ({
+                        type: "text";
+                        maxLength: number;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "textarea";
+                        maxLength: number;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "number";
+                        integer: boolean;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: number | undefined;
+                        min?: number | undefined;
+                        max?: number | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "boolean";
+                        default: boolean;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "select";
+                        options: {
+                            value: string;
+                            label: string;
+                        }[];
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "url";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "color";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "image";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "link";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    })[];
+                    min: number;
+                    max: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    itemLabel?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                })[];
+                description?: string | undefined;
+            }[];
             skins: {
                 id: string;
                 target: "header" | "footer" | "product-card" | "product-main" | "listing-main" | `section:${string}`;
@@ -1716,226 +1951,6 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
                 }[];
                 description?: string | undefined;
             }[];
-            productBlocks: {
-                type: string;
-                name: string;
-                placement: "product.buy-box" | "product.below";
-                settings: ({
-                    type: "text";
-                    maxLength: number;
-                    key: string;
-                    label: string;
-                    required: boolean;
-                    default?: string | undefined;
-                    help?: string | undefined;
-                    group?: string | undefined;
-                } | {
-                    type: "textarea";
-                    maxLength: number;
-                    key: string;
-                    label: string;
-                    required: boolean;
-                    default?: string | undefined;
-                    help?: string | undefined;
-                    group?: string | undefined;
-                } | {
-                    type: "number";
-                    integer: boolean;
-                    key: string;
-                    label: string;
-                    required: boolean;
-                    default?: number | undefined;
-                    min?: number | undefined;
-                    max?: number | undefined;
-                    help?: string | undefined;
-                    group?: string | undefined;
-                } | {
-                    type: "boolean";
-                    default: boolean;
-                    key: string;
-                    label: string;
-                    required: boolean;
-                    help?: string | undefined;
-                    group?: string | undefined;
-                } | {
-                    type: "select";
-                    options: {
-                        value: string;
-                        label: string;
-                    }[];
-                    key: string;
-                    label: string;
-                    required: boolean;
-                    default?: string | undefined;
-                    help?: string | undefined;
-                    group?: string | undefined;
-                } | {
-                    type: "multiselect";
-                    options: {
-                        value: string;
-                        label: string;
-                    }[];
-                    key: string;
-                    label: string;
-                    required: boolean;
-                    default?: string[] | undefined;
-                    help?: string | undefined;
-                    group?: string | undefined;
-                } | {
-                    type: "secret";
-                    key: string;
-                    label: string;
-                    required: boolean;
-                    help?: string | undefined;
-                    group?: string | undefined;
-                } | {
-                    type: "url";
-                    key: string;
-                    label: string;
-                    required: boolean;
-                    default?: string | undefined;
-                    help?: string | undefined;
-                    group?: string | undefined;
-                } | {
-                    type: "email";
-                    key: string;
-                    label: string;
-                    required: boolean;
-                    default?: string | undefined;
-                    help?: string | undefined;
-                    group?: string | undefined;
-                } | {
-                    type: "color";
-                    key: string;
-                    label: string;
-                    required: boolean;
-                    default?: string | undefined;
-                    help?: string | undefined;
-                    group?: string | undefined;
-                } | {
-                    type: "image";
-                    key: string;
-                    label: string;
-                    required: boolean;
-                    help?: string | undefined;
-                    group?: string | undefined;
-                } | {
-                    type: "products";
-                    limit: number;
-                    key: string;
-                    label: string;
-                    required: boolean;
-                    default?: string | undefined;
-                    help?: string | undefined;
-                    group?: string | undefined;
-                } | {
-                    type: "product";
-                    key: string;
-                    label: string;
-                    required: boolean;
-                    help?: string | undefined;
-                    group?: string | undefined;
-                } | {
-                    type: "link";
-                    key: string;
-                    label: string;
-                    required: boolean;
-                    default?: string | undefined;
-                    help?: string | undefined;
-                    group?: string | undefined;
-                } | {
-                    type: "list";
-                    fields: ({
-                        type: "text";
-                        maxLength: number;
-                        key: string;
-                        label: string;
-                        required: boolean;
-                        default?: string | undefined;
-                        help?: string | undefined;
-                        group?: string | undefined;
-                    } | {
-                        type: "textarea";
-                        maxLength: number;
-                        key: string;
-                        label: string;
-                        required: boolean;
-                        default?: string | undefined;
-                        help?: string | undefined;
-                        group?: string | undefined;
-                    } | {
-                        type: "number";
-                        integer: boolean;
-                        key: string;
-                        label: string;
-                        required: boolean;
-                        default?: number | undefined;
-                        min?: number | undefined;
-                        max?: number | undefined;
-                        help?: string | undefined;
-                        group?: string | undefined;
-                    } | {
-                        type: "boolean";
-                        default: boolean;
-                        key: string;
-                        label: string;
-                        required: boolean;
-                        help?: string | undefined;
-                        group?: string | undefined;
-                    } | {
-                        type: "select";
-                        options: {
-                            value: string;
-                            label: string;
-                        }[];
-                        key: string;
-                        label: string;
-                        required: boolean;
-                        default?: string | undefined;
-                        help?: string | undefined;
-                        group?: string | undefined;
-                    } | {
-                        type: "url";
-                        key: string;
-                        label: string;
-                        required: boolean;
-                        default?: string | undefined;
-                        help?: string | undefined;
-                        group?: string | undefined;
-                    } | {
-                        type: "color";
-                        key: string;
-                        label: string;
-                        required: boolean;
-                        default?: string | undefined;
-                        help?: string | undefined;
-                        group?: string | undefined;
-                    } | {
-                        type: "image";
-                        key: string;
-                        label: string;
-                        required: boolean;
-                        help?: string | undefined;
-                        group?: string | undefined;
-                    } | {
-                        type: "link";
-                        key: string;
-                        label: string;
-                        required: boolean;
-                        default?: string | undefined;
-                        help?: string | undefined;
-                        group?: string | undefined;
-                    })[];
-                    min: number;
-                    max: number;
-                    key: string;
-                    label: string;
-                    required: boolean;
-                    itemLabel?: string | undefined;
-                    help?: string | undefined;
-                    group?: string | undefined;
-                })[];
-            }[];
             head: boolean;
             scripts: {
                 src: string;
@@ -2118,13 +2133,12 @@ export declare const STOREFRONT_SKIN_UNITS: readonly ["header", "footer", "produ
 export type StorefrontSkinUnit = (typeof STOREFRONT_SKIN_UNITS)[number];
 export declare const STOREFRONT_SECTION_SKIN_PREFIX = "section:";
 export type StorefrontSkinTarget = StorefrontSkinUnit | `section:${string}`;
-export declare const STOREFRONT_BLOCK_TARGETS: readonly ["product.buy-box", "product.below"];
-export type StorefrontBlockTarget = (typeof STOREFRONT_BLOCK_TARGETS)[number];
-export declare const STOREFRONT_COMPONENT_SLOTS: readonly ["header.actions", "product.buy-box.before", "product.buy-box.after", "product.below", "footer.columns"];
+export declare const STOREFRONT_COMPONENT_SLOTS: readonly ["header.actions", "product.buy_box.before", "product.buy_box.after", "product.below", "footer.columns"];
 export type StorefrontComponentSlot = (typeof STOREFRONT_COMPONENT_SLOTS)[number];
-export declare const STOREFRONT_PRODUCT_SLOTS: readonly ["product.buy-box.before", "product.buy-box.after", "product.below"];
+export declare const STOREFRONT_PRODUCT_SLOTS: readonly ["product.buy_box.before", "product.buy_box.after", "product.below"];
 export type StorefrontProductSlot = (typeof STOREFRONT_PRODUCT_SLOTS)[number];
-export declare const STOREFRONT_COMPONENT_TARGETS: readonly ["header.actions", "product.buy-box.before", "product.buy-box.after", "product.below", "footer.columns", "page"];
+export declare function storefrontComponentProductSlot(targets: readonly string[]): StorefrontProductSlot | null;
+export declare const STOREFRONT_COMPONENT_TARGETS: readonly ["header.actions", "product.buy_box.before", "product.buy_box.after", "product.below", "footer.columns", "page"];
 export type StorefrontComponentTarget = (typeof STOREFRONT_COMPONENT_TARGETS)[number];
 export declare const STOREFRONT_UI_SLOT_PAGES: {
     readonly "checkout.contact.after": "checkout";
@@ -2141,15 +2155,16 @@ export type StorefrontUiSlot = keyof typeof STOREFRONT_UI_SLOT_PAGES;
 export type StorefrontUiSlotPage = (typeof STOREFRONT_UI_SLOT_PAGES)[StorefrontUiSlot];
 export declare const STOREFRONT_UI_SLOTS: [StorefrontUiSlot, ...StorefrontUiSlot[]];
 export declare function storefrontUiSlotsOn(page: StorefrontUiSlotPage): StorefrontUiSlot[];
-export declare const STOREFRONT_EMBED_KINDS: readonly ["buy-form", "reviews", "recommendations", "filters", "toolbar", "pagination", "order-form", "gallery"];
+export declare const STOREFRONT_EMBED_KINDS: readonly ["buy-form", "reviews", "recommendations", "filters", "toolbar", "pagination", "order-form", "gallery", "slot"];
 export type StorefrontEmbedKind = (typeof STOREFRONT_EMBED_KINDS)[number];
 export declare const STOREFRONT_EMBED_TAG = "scalius-embed";
 export interface StorefrontEmbedRule {
     allowed: Partial<Record<StorefrontEmbedKind, number>>;
     required: readonly StorefrontEmbedKind[];
     appended: readonly StorefrontEmbedKind[];
+    slots?: readonly StorefrontComponentSlot[];
 }
-export declare function storefrontEmbedRule(unit: "section" | "block" | StorefrontSkinTarget): StorefrontEmbedRule;
+export declare function storefrontEmbedRule(unit: "section" | "component" | StorefrontSkinTarget): StorefrontEmbedRule;
 export declare const STOREFRONT_ISLAND_HYDRATION: readonly ["load", "idle", "visible", "interaction"];
 export type StorefrontIslandHydration = (typeof STOREFRONT_ISLAND_HYDRATION)[number];
 export declare const STOREFRONT_COMPONENT_LIMITS: {
@@ -2660,15 +2675,23 @@ export type StorefrontRenderJob = {
     type: string;
     instanceId: string;
     settings: StorefrontResolvedSettings;
-} | StorefrontSkinJob | {
+} | StorefrontSkinJob | StorefrontComponentJob;
+interface ComponentJobBase {
     id: string;
-    kind: "block";
-    target: StorefrontBlockTarget;
+    kind: "component";
     type: string;
-    instanceId: string;
     settings: StorefrontResolvedSettings;
+}
+export type StorefrontComponentJob = (ComponentJobBase & {
+    target: StorefrontProductSlot;
+    instanceId: string;
     data: StorefrontProductPage;
-};
+}) | (ComponentJobBase & {
+    target: Exclude<StorefrontComponentSlot, StorefrontProductSlot>;
+}) | (ComponentJobBase & {
+    target: "page";
+    props: Record<string, unknown>;
+});
 export interface StorefrontRenderBatch {
     abi: typeof STOREFRONT_COMPONENT_ABI;
     context: StorefrontRenderContext;

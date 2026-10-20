@@ -21,7 +21,7 @@ type BindingSite = {
   values: unknown;
   bindings: SettingBindings;
   owners: string[];
-  app?: { id: string; surface: string; kind: "sections" | "productBlocks" | "skins"; target?: string };
+  app?: { id: string; surface: string; kind: "sections" | "components" | "skins"; target?: string };
 };
 
 const record = (value: unknown): value is RecordValue => Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -58,7 +58,7 @@ function bindingSites(theme: StorefrontThemeDocument): BindingSite[] {
         : path[0] === "apps" && path[1] === "skins" ? path[2] : undefined;
       sites.push({
         path, settingsPath, values, bindings: value.bindings as SettingBindings, owners: resourceOwners(path),
-        ...(id && surface ? { app: { id, surface, kind: appSection ? "sections" : target ? "skins" : "productBlocks", target } } : {}),
+        ...(id && surface ? { app: { id, surface, kind: appSection ? "sections" : target ? "skins" : "components", target } } : {}),
       });
     }
     for (const [key, item] of Object.entries(value)) if (key !== "bindings") visit(item, [...path, key], value);

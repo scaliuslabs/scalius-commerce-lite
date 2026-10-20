@@ -314,11 +314,11 @@ describe("storefront surfaces in the manifest", () => {
     return parsed.ok ? [] : parsed.issues.map((issue) => `${issue.path} ${issue.message}`);
   };
 
-  it("declares sections and product blocks as components: no route, no storage reads", () => {
+  it("declares sections and components: no route, no storage reads", () => {
     expect(parsePluginManifest({ ...base, storefront: { sections: [section()] } }).ok).toBe(true);
     expect(issues({ ...base, storefront: { sections: [section({ route: "draw" })] } })).toHaveLength(1);
     expect(issues({ ...base, storefront: { sections: [section({ reads: ["reviews"] })] } })).toHaveLength(1);
-    expect(issues({ ...base, storefront: { productBlocks: [{ type: "stars", name: "Stars", placement: "product.buy-box", route: "draw" }] } })).toHaveLength(1);
+    expect(issues({ ...base, storefront: { components: [{ type: "stars", name: "Stars", targets: ["product.buy_box.after"], route: "draw" } as never] } })).toHaveLength(1);
   });
 
   it("keeps storefront settings public: no secrets", () => {
@@ -326,9 +326,9 @@ describe("storefront surfaces in the manifest", () => {
       .toEqual(["storefront.sections.0.settings.0.type Storefront settings are public: keep secrets in the app's settings."]);
   });
 
-  it("needs unique product block types", () => {
-    const block = { type: "stars", name: "Stars", placement: "product.below" } as const;
-    expect(issues({ ...base, storefront: { productBlocks: [block, block] } })).toEqual(["storefront.productBlocks Product block types must be unique."]);
+  it("needs unique component types", () => {
+    const component = { type: "stars", name: "Stars", targets: ["product.below"] as const };
+    expect(issues({ ...base, storefront: { components: [{ ...component, targets: [...component.targets] }, { ...component, targets: [...component.targets] }] } })).toEqual(["storefront.components Component types must be unique."]);
   });
 
   it("rejects retired route-rendered buyer blocks", () => {
@@ -539,10 +539,10 @@ describe("the manifest vocabulary", () => {
     expect(issues({ ...FULL, routes: { ...FULL.routes, webhooks: [{ name: "a" }, { name: "a" }] } })).toEqual(["routes.webhooks Webhook route names must be unique."]);
   });
 
-  it("names a product block's placement by its render target", () => {
-    const block = { type: "stars", name: "Stars" };
-    expect(issues({ ...FULL, storefront: { productBlocks: [{ ...block, placement: "product.buy-box" }] } })).toEqual([]);
-    expect(issues({ ...FULL, storefront: { productBlocks: [{ ...block, placement: "buy-box" }] } })).toHaveLength(1);
+  it("names a component's targets by slot", () => {
+    const component = { type: "stars", name: "Stars" };
+    expect(issues({ ...FULL, storefront: { components: [{ ...component, targets: ["product.buy_box.after"] }] } })).toEqual([]);
+    expect(issues({ ...FULL, storefront: { components: [{ ...component, targets: ["buy-box" as never] }] } })).toHaveLength(1);
   });
 
   it("takes an index as one field or a list of one to four, and reads a one-field list as the field", () => {

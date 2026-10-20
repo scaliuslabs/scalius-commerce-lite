@@ -442,7 +442,7 @@ describe("admin app routes", () => {
       proxy: true,
       head: true,
       sections: [],
-      productBlocks: [],
+      components: [],
     });
   });
 });

@@ -151,10 +151,10 @@ const {
 } = await resolveRequestTheme(Astro, layoutData);
 const chromeCopy = storefrontCopy(themeLanguage).chrome;
 const isThemePreview = themePreview !== null;
-// The stylesheets of the apps the theme names (their slots and sections): immutable, cached files.
+// The stylesheets of the apps the page may show (theme-named, page-wide slots, its proxy page): immutable, cached files.
 // None on a buyer's page, where app components never render.
 const appStylesheets = appComponentsRenderOn(storefrontAppPage(Astro.url.pathname))
-  ? themeAppStylesheets(storefrontTheme, readStorefrontExtensions(layoutData?.appExtensions))
+  ? themeAppStylesheets(storefrontTheme, readStorefrontExtensions(layoutData?.appExtensions), Astro.url.pathname)
   : [];
 // The theme editor's bridge, only under a valid preview: buyers never get it.
 const themeEditorBridge = isThemePreview && !libraryPreview

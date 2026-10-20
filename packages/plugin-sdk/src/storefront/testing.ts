@@ -1,4 +1,4 @@
-// Tests for storefront modules: render a section, block or skin through the
+// Tests for storefront modules: render a section, component or skin through the
 // same batch protocol the storefront uses, with realistic fixture data. A
 // skin's markup is held to its target's embed rule (a product-main skin must
 // place exactly one buy form), as the storefront holds it.
@@ -11,7 +11,8 @@
 import {
   STOREFRONT_COMPONENT_ABI,
   storefrontEmbedRule,
-  type StorefrontBlockTarget,
+  type StorefrontComponentJob,
+  type StorefrontComponentTarget,
   type StorefrontFooterData,
   type StorefrontHeaderData,
   type StorefrontListingPage,
@@ -200,15 +201,28 @@ export function renderSection(module: StorefrontModule, type: string, settings: 
   return renderOne(module, { id: "job_1", kind: "section", type, instanceId: `app-${type}`, settings }, options);
 }
 
-/** A component product block's HTML over the fixture product page (or yours). */
-export function renderBlock(
+/**
+ * A component's HTML at one of its targets: in a product slot over the
+ * fixture product page (or `data`), on `page` with `props` (what the proxy
+ * route answers). Throws when the storefront would drop it: a component
+ * places no embed (not even a slot).
+ */
+export function renderComponent(
   module: StorefrontModule,
   type: string,
+  target: StorefrontComponentTarget,
   settings: StorefrontResolvedSettings = {},
-  data: StorefrontProductPage = fixtureProductPage(),
-  options: RenderOptions & { target?: StorefrontBlockTarget } = {},
+  options: RenderOptions & { data?: StorefrontProductPage; props?: Record<string, unknown> } = {},
 ): string {
-  return renderOne(module, { id: "job_1", kind: "block", target: options.target ?? "product.below", type, instanceId: `app-${type}`, settings, data }, options);
+  const job = (target === "page"
+    ? { target, props: options.props ?? {} }
+    : target.startsWith("product.")
+      ? { target, instanceId: `app-${type}`, data: options.data ?? fixtureProductPage() }
+      : { target }) as Omit<StorefrontComponentJob, "id" | "kind" | "type" | "settings">;
+  const html = renderOne(module, { id: "job_1", kind: "component", type, settings, ...job } as StorefrontComponentJob, options);
+  const split = splitStorefrontEmbeds(html, storefrontEmbedRule("component"));
+  if (split.dropped > 0) throw new Error(`Component ${JSON.stringify(type)} (${target}): ${split.dropped} embed(s) render nothing in a component.`);
+  return html;
 }
 
 /**

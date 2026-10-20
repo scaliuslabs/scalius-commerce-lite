@@ -7,13 +7,14 @@
 //
 //   export default defineStorefront({
 //     sections: { hero: Hero },
+//     components: { points: Points },
 //     skins: { "clean-card": Card, "editorial-pdp": ProductMain },
 //   });
 
 export { defineStorefront, storefrontDefinitionOf } from "./define";
 export type {
-  BlockComponent,
-  BlockProps,
+  AppComponent,
+  ComponentProps,
   FooterComponent,
   FooterProps,
   HeaderComponent,
@@ -36,15 +37,16 @@ export type {
 export { EMPTY_HTML, escapeHtml, html, isHtml, raw, toHtml, type Html, type Renderable } from "./html";
 export { Fragment, jsx, jsxs, type Component, type JSX } from "./jsx-runtime";
 export {
-  BuyForm, CartCount, Filters, Gallery, Image, Island, OrderForm, Pagination, Price, Recommendations, Reviews, Toolbar,
+  BuyForm, CartCount, Filters, Gallery, Image, Island, OrderForm, Pagination, Price, Recommendations, Reviews, Slot, Toolbar,
   accountLink, asset, editable, menuDrawer, openCart, quickAdd, searchOpener, stickyHeader,
 } from "./components";
 export { formatDate, formatMoney, formatNumber, plural, storeTime, t, type Words } from "./locale";
-export type { BuyFormProps, ImageProps, IslandProps, OrderFormProps, PriceProps } from "./components";
+export type { BuyFormProps, ImageProps, IslandProps, OrderFormProps, PriceProps, SlotProps } from "./components";
 export type {
   StorefrontBannerMosaicSkinSettings,
   StorefrontBannerSkinSettings,
-  StorefrontBlockTarget,
+  StorefrontComponentSlot,
+  StorefrontComponentTarget,
   StorefrontBrandWallSkinSettings,
   StorefrontCategoryTilesSkinSettings,
   StorefrontCollectionsSkinSettings,
@@ -69,6 +71,7 @@ export type {
   StorefrontProductGridSkinSettings,
   StorefrontProductList,
   StorefrontProductPage,
+  StorefrontProductSlot,
   StorefrontProductRailSkinSettings,
   StorefrontProductTabsSkinSettings,
   StorefrontPromotionEnd,

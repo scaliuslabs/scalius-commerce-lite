@@ -3,7 +3,7 @@
 import { mkdirSync, watch, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
-import { bundlePlugin, loadPluginContract, packPlugin, root, smokeSettings } from "./plugin-build.mjs";
+import { bundlePlugin, componentJobs, loadPluginContract, packPlugin, root, smokeSettings } from "./plugin-build.mjs";
 
 const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => `&#${character.charCodeAt(0)};`);
 const load = (code) => import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
@@ -15,7 +15,7 @@ export async function previewPlugin(directory, output = join(directory, "dist/pr
   const storefront = packed.manifest.storefront;
   const jobs = [
     ...storefront.sections.map((section) => ({ id: `section:${section.type}`, kind: "section", type: section.type, instanceId: `preview-${section.type}`, settings: smokeSettings(contract, section.settings) })),
-    ...storefront.productBlocks.map((block) => ({ id: `block:${block.type}`, kind: "block", target: block.placement, type: block.type, instanceId: `preview-${block.type}`, settings: smokeSettings(contract, block.settings), data: contract.fixtureProductPage() })),
+    ...componentJobs(contract, storefront.components, "preview"),
     ...storefront.skins.map((skin) => ({ id: `skin:${skin.id}`, kind: "skin", target: skin.target, component: skin.id, settings: smokeSettings(contract, skin.settings), data: contract.fixtureSkinData(skin.target), ...(skin.target.startsWith("section:") ? { instanceId: "preview" } : {}) })),
   ];
   const module = packed.storefront.find((file) => file.path === contract.STOREFRONT_MODULE_FILE);

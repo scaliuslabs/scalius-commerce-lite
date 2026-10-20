@@ -76,7 +76,7 @@ const projection = productPageData({
 const buyBox = {
   summary: { product, category: null, variants, options, details: false, currencyCode: "USD", currencySymbol: "$" },
   reviewCopy: ENGLISH_CHECKOUT_LANGUAGE_DATA,
-  features: { shown: false, title: "Features" }, emi: false, contactLinks: [], componentBlocks: [],
+  features: { shown: false, title: "Features" }, emi: false, contactLinks: [],
   blockData: () => projection, fulfilment: "physical", deliveryFacts: [], canPurchaseAny: true,
 };
 const documentOf = (markup: string) => {

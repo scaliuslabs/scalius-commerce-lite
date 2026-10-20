@@ -3246,7 +3246,7 @@
       "storefront": {
        "default": {
         "sections": [],
-        "productBlocks": [],
+        "components": [],
         "skins": []
        },
        "type": "object",
@@ -3260,9 +3260,9 @@
           "pattern": "^[a-z][a-z0-9_]{0,47}$"
          }
         },
-        "productBlocks": {
+        "components": {
          "default": [],
-         "maxItems": 10,
+         "maxItems": 16,
          "type": "array",
          "items": {
           "type": "string",
@@ -3656,7 +3656,7 @@
    "storefront": {
     "default": {
      "sections": [],
-     "productBlocks": [],
+     "components": [],
      "head": false,
      "scripts": [],
      "proxy": false,
@@ -4890,9 +4890,60 @@
        "additionalProperties": false
       }
      },
-     "productBlocks": {
+     "head": {
+      "default": false,
+      "type": "boolean"
+     },
+     "scripts": {
       "default": [],
-      "maxItems": 10,
+      "maxItems": 5,
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "src": {
+         "type": "string",
+         "maxLength": 2048,
+         "format": "uri"
+        },
+        "placement": {
+         "default": "body-end",
+         "type": "string",
+         "enum": [
+          "head",
+          "body-end"
+         ]
+        },
+        "pages": {
+         "default": [
+          "all"
+         ],
+         "minItems": 1,
+         "type": "array",
+         "items": {
+          "type": "string",
+          "enum": [
+           "all",
+           "home",
+           "product",
+           "listing"
+          ]
+         }
+        }
+       },
+       "required": [
+        "src"
+       ],
+       "additionalProperties": false
+      }
+     },
+     "proxy": {
+      "default": false,
+      "type": "boolean"
+     },
+     "components": {
+      "default": [],
+      "maxItems": 16,
       "type": "array",
       "items": {
        "type": "object",
@@ -4906,12 +4957,26 @@
          "minLength": 1,
          "maxLength": 80
         },
-        "placement": {
+        "description": {
          "type": "string",
-         "enum": [
-          "product.buy-box",
-          "product.below"
-         ]
+         "minLength": 1,
+         "maxLength": 500
+        },
+        "targets": {
+         "minItems": 1,
+         "maxItems": 6,
+         "type": "array",
+         "items": {
+          "type": "string",
+          "enum": [
+           "header.actions",
+           "product.buy_box.before",
+           "product.buy_box.after",
+           "product.below",
+           "footer.columns",
+           "page"
+          ]
+         }
         },
         "settings": {
          "default": [],
@@ -6046,61 +6111,10 @@
        "required": [
         "type",
         "name",
-        "placement"
+        "targets"
        ],
        "additionalProperties": false
       }
-     },
-     "head": {
-      "default": false,
-      "type": "boolean"
-     },
-     "scripts": {
-      "default": [],
-      "maxItems": 5,
-      "type": "array",
-      "items": {
-       "type": "object",
-       "properties": {
-        "src": {
-         "type": "string",
-         "maxLength": 2048,
-         "format": "uri"
-        },
-        "placement": {
-         "default": "body-end",
-         "type": "string",
-         "enum": [
-          "head",
-          "body-end"
-         ]
-        },
-        "pages": {
-         "default": [
-          "all"
-         ],
-         "minItems": 1,
-         "type": "array",
-         "items": {
-          "type": "string",
-          "enum": [
-           "all",
-           "home",
-           "product",
-           "listing"
-          ]
-         }
-        }
-       },
-       "required": [
-        "src"
-       ],
-       "additionalProperties": false
-      }
-     },
-     "proxy": {
-      "default": false,
-      "type": "boolean"
      },
      "skins": {
       "default": [],

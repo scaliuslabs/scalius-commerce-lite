@@ -6,7 +6,7 @@ import { headerPageData } from "./data";
 
 const extension: StorefrontExtension = {
   pluginId: "acme.theme", version: "1.0.0", source: "bundled", release: "a".repeat(64),
-  sections: ["hero"], skins: [], blocks: [], islands: [], stylesheet: false, connect: [],
+  sections: ["hero"], skins: [], components: [], islands: [], stylesheet: false, connect: [],
   sectionSettings: { hero: pluginSettingsSchemaSchema.parse([
     { key: "heading", label: "Heading", type: "text", default: "Hello" },
     { key: "image", label: "Image", type: "image" },

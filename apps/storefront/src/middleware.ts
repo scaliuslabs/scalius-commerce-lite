@@ -166,6 +166,7 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
   const themeConnectHosts = themeAppConnectHosts(
     (await currentRequestTheme(locals)).theme,
     appComponentsRenderOn(storefrontAppPage(url.pathname)) ? readStorefrontExtensions(layout?.appExtensions) : [],
+    url.pathname,
   );
   // A purchased file streams as a sandboxed attachment: it keeps its own policy.
   return withPageCsp(url.pathname, response, {

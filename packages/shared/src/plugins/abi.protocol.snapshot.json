@@ -14362,26 +14362,22 @@
    "listing-main"
   ],
   "STOREFRONT_SECTION_SKIN_PREFIX": "section:",
-  "STOREFRONT_BLOCK_TARGETS": [
-   "product.buy-box",
-   "product.below"
-  ],
   "STOREFRONT_COMPONENT_SLOTS": [
    "header.actions",
-   "product.buy-box.before",
-   "product.buy-box.after",
+   "product.buy_box.before",
+   "product.buy_box.after",
    "product.below",
    "footer.columns"
   ],
   "STOREFRONT_PRODUCT_SLOTS": [
-   "product.buy-box.before",
-   "product.buy-box.after",
+   "product.buy_box.before",
+   "product.buy_box.after",
    "product.below"
   ],
   "STOREFRONT_COMPONENT_TARGETS": [
    "header.actions",
-   "product.buy-box.before",
-   "product.buy-box.after",
+   "product.buy_box.before",
+   "product.buy_box.after",
    "product.below",
    "footer.columns",
    "page"
@@ -14416,7 +14412,8 @@
    "toolbar",
    "pagination",
    "order-form",
-   "gallery"
+   "gallery",
+   "slot"
   ],
   "STOREFRONT_EMBED_TAG": "scalius-embed",
   "STOREFRONT_ISLAND_HYDRATION": [

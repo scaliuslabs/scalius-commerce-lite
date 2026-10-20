@@ -6,7 +6,7 @@ import type { StorefrontHeaderData } from "@scalius/shared/plugins/storefront-pr
 
 const extension: StorefrontExtension = {
   pluginId: "acme.theme", version: "1.0.0", source: "bundled", release: "e".repeat(64),
-  sections: ["hero"], sectionSettings: {}, skins: [], blocks: [], islands: [], stylesheet: false, connect: [],
+  sections: ["hero"], sectionSettings: {}, skins: [], components: [], islands: [], stylesheet: false, connect: [],
 };
 
 function host(run: (batch: StorefrontRenderBatch) => Promise<StorefrontRenderReply> | StorefrontRenderReply, wallMs?: number, extra: Partial<ExtensionHostOptions> = {}) {

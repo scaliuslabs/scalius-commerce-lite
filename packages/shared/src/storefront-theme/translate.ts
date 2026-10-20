@@ -15,7 +15,7 @@ import { STOREFRONT_BLOCK_TEXT, STOREFRONT_LANDING_TEXT, STOREFRONT_SECTION_TEXT
 export type StorefrontThemeText = (source: string) => string;
 
 /** The settings schema of an active app surface by its `<plugin id>/<id>` key; null when there is none. */
-export type StorefrontThemeAppSchemas = (kind: "section" | "skin" | "block", key: string) => PluginSettingsSchema | null;
+export type StorefrontThemeAppSchemas = (kind: "section" | "skin" | "component", key: string) => PluginSettingsSchema | null;
 
 function textOf(chain: readonly StorefrontThemeTranslation[]): StorefrontThemeText | null {
   if (chain.length === 0) return null;
@@ -58,7 +58,7 @@ function translatePaths(value: unknown, paths: readonly string[], text: Storefro
   return paths.reduce((current, path) => translateAt(current, path.split("."), text), value);
 }
 
-function translateValues(kind: "section" | "skin" | "block", key: string, values: unknown, text: StorefrontThemeText, apps: StorefrontThemeAppSchemas | null): unknown {
+function translateValues(kind: "section" | "skin" | "component", key: string, values: unknown, text: StorefrontThemeText, apps: StorefrontThemeAppSchemas | null): unknown {
   const schema = apps?.(kind, key) ?? null;
   return schema ? translatePluginSettingValues(schema, values, text) : values;
 }
@@ -110,7 +110,7 @@ function translatedDocument(document: StorefrontThemeDocument, text: StorefrontT
   const footer = translatePaths(blocks.footer, STOREFRONT_BLOCK_TEXT.footer.map((key) => `settings.${key}`), text) as typeof blocks.footer;
   const productApps = blocks.product.apps;
   const appBlocks = productApps?.map((block) => {
-    const values = translateValues("block", block.app, block.values, text, apps);
+    const values = translateValues("component", block.app, block.values, text, apps);
     return values === block.values ? block : { ...block, values: values as typeof block.values };
   });
   const product = appBlocks && appBlocks.some((block, index) => block !== productApps![index]) ? { ...blocks.product, apps: appBlocks } : blocks.product;

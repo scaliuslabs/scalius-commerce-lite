@@ -682,7 +682,7 @@ describe("one private library document", () => {
   it("links the selected active app's immutable stylesheet even when the saved theme never uses it", async () => {
     const release = "e".repeat(64);
     const app = { pluginId: "acme.theme", version: "1.0.0", source: "bundled", release,
-      sections: ["hero"], sectionSettings: { hero: [] }, skins: [], blocks: [], islands: ["motion"], stylesheet: true, connect: [] };
+      sections: ["hero"], sectionSettings: { hero: [] }, skins: [], components: [], islands: ["motion"], stylesheet: true, connect: [] };
     const render = vi.spyOn(extensionHost.prototype, "render").mockResolvedValue("<h2>App default</h2>");
     const result = await renderPage(LibraryPage, { document: fixedTheme(), preview: fixedTheme(), appExtensions: [app],
       previewData: { ...sectionData(), apps: [{ sectionId: "library-section", component: { pluginId: "acme.theme", type: "hero", values: {}, media: [], lists: [] } }] },
@@ -695,7 +695,7 @@ describe("one private library document", () => {
   });
   it("distinguishes a failed component renderer from a valid empty result only in the library", async () => {
     const app = { pluginId: "acme.theme", version: "1.0.0", source: "bundled", release: "e".repeat(64),
-      sections: ["hero"], sectionSettings: { hero: [] }, skins: [], blocks: [], islands: [], stylesheet: false, connect: [] };
+      sections: ["hero"], sectionSettings: { hero: [] }, skins: [], components: [], islands: [], stylesheet: false, connect: [] };
     const api = { document: fixedTheme(), preview: fixedTheme(), appExtensions: [app], previewData: { ...sectionData(), apps: [{
       sectionId: "library-section",
       component: { pluginId: "acme.theme", type: "hero", values: {}, media: [], lists: [] },
@@ -738,7 +738,7 @@ describe("one private library document", () => {
         section("editorial", "existing-after", { heading: "Do not draw after" }),
       ] };
       const app = { pluginId, version: "1.0.0", source: "bundled", release,
-        sections: ["hero"], sectionSettings: { hero: [] }, skins: [], blocks: [], islands: [], stylesheet: false, connect: [] };
+        sections: ["hero"], sectionSettings: { hero: [] }, skins: [], components: [], islands: [], stylesheet: false, connect: [] };
       const requested: string[][] = [];
       const result = await renderPage(LibraryPage, { document, preview: document, appExtensions: [app],
         onPreviewSections: (ids) => requested.push(ids), previewData: { ...sectionData(), apps: [{

@@ -268,7 +268,7 @@ describe("app sections", () => {
     }],
     skins: [],
     templates: [], pagePresets: [],
-    productBlocks: [],
+    components: [],
   }];
   const byKey = appSectionsByKey(APPS);
 

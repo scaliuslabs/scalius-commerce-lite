@@ -10,8 +10,8 @@ import {
   getShippingMethods,
 } from "@/lib/api";
 import AppComponent from "@/components/apps/AppComponent.astro";
-import ComponentProductBlocks from "@/components/apps/ComponentProductBlocks.astro";
-import { appProductBlocks, appSkin, renderAppSkin } from "@/lib/extensions";
+import AppSlot from "@/components/apps/AppSlot.astro";
+import { appSkin, appSlotComponents, renderAppSkin } from "@/lib/extensions";
 import { productPageData } from "@/lib/extensions/data";
 import type { EmbedRender, EmbedRenderers } from "@/lib/extensions/embeds";
 import type { StorefrontProductPage } from "@scalius/shared/plugins/storefront-protocol";
@@ -574,7 +574,7 @@ const productMainMarkup = productMainSkin
 const skinEmbeds = productMainMarkup?.embeds ?? new Set<string>();
 const shownModules = pageModules.filter((module) =>
   !(module === "reviews" && skinEmbeds.has("reviews")) && !(module === "related" && skinEmbeds.has("recommendations")));
-const componentBlocks = await appProductBlocks(Astro.locals, Astro.url);
+const appsBelow = (await appSlotComponents(Astro.locals, Astro.url, "product.below")).length > 0;
 const buyBox = {
   summary: {
     product,
@@ -601,7 +601,6 @@ const buyBox = {
   features: { shown: featuresAt === "buy-box", title: productPageCopy.productKeyFeaturesText },
   emi: buyBoxShowsEmi,
   contactLinks,
-  componentBlocks,
   blockData: productPageProjection,
   fulfilment: pageFulfilment,
   deliveryFacts,
@@ -947,8 +946,8 @@ const productCategoryAnalytics = productCategory
     })()}</ThemeEditorMark>)}
 
     {/* Installed apps' blocks after the template's modules. */}
-    <ThemeEditorMark id={editorMarks && componentBlocks.some((block) => block.target === "product.below") ? THEME_EDITOR_MARKS.productApps : null}>
-      <ComponentProductBlocks blocks={componentBlocks} target="product.below" data={productPageProjection} />
+    <ThemeEditorMark id={editorMarks && appsBelow ? THEME_EDITOR_MARKS.productApps : null}>
+      <AppSlot name="product.below" data={productPageProjection} />
     </ThemeEditorMark>
   </div>
 

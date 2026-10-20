@@ -1,6 +1,6 @@
 // App surfaces in the theme document: homepage sections and product-page
 // blocks that installed apps draw (`storefront.sections` and
-// `storefront.productBlocks` of their manifests), named `<plugin id>/<type>`.
+// `storefront.components` with a product slot), named `<plugin id>/<type>`.
 // The document holds where they go and the merchant's values; the app's own
 // manifest owns the settings schema, so the document only bounds the values
 // and the API resolves them against the active app when it renders. An app

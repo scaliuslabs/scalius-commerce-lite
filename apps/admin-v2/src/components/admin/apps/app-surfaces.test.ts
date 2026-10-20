@@ -91,7 +91,7 @@ function detailOf(manifest: PluginManifest, status: AppDetail["status"] = "activ
       proxy: manifest.storefront.proxy,
       head: manifest.storefront.head,
       sections: manifest.storefront.sections.map(({ type, name }) => ({ type, name })),
-      productBlocks: manifest.storefront.productBlocks.map(({ type, name, placement }) => ({ type, name, placement })),
+      components: manifest.storefront.components.map(({ type, name, targets }) => ({ type, name, targets: [...targets] })),
       scripts: [],
       themeProblems: [],
     },
@@ -148,7 +148,7 @@ describe("where an app appears", () => {
       ...manifest.admin.actions.map((action) => `action:${action.id}`),
       ...manifest.admin.widgets.map((widget) => `widget:${widget.id}`),
       ...manifest.storefront.sections.map((section) => `section:${section.type}`),
-      ...manifest.storefront.productBlocks.map((block) => `block:${block.type}`),
+      ...manifest.storefront.components.flatMap((component) => component.targets.map((target) => `component:${component.type}:${target}`)),
     ]);
     expect(entries.find((entry) => entry.key === "card:greeting")).toMatchObject({ group: "resources", to: "/admin/orders", detail: { message: "card", target: "order" } });
     expect(entries.find((entry) => entry.key === "action:wave")).toMatchObject({ to: "/admin/products", detail: { message: "bulkAction", target: "product" } });

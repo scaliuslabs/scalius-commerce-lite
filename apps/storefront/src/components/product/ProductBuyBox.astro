@@ -1,18 +1,17 @@
 ---
 // The product page's buy box: the summary (title, price, options, buyer
 // inputs, quantity, buttons) with what sits in it (rating, key features,
-// EMI, contact links, app blocks, digital promise, delivery facts,
+// EMI, contact links, the buy box's app slots, digital promise, delivery facts,
 // warranty). One component for both places it draws: the core product page,
 // and a product-main skin's buy form embed (`<scalius-embed kind="buy-form">`),
 // so a skin always gets the store's own form, rules, scripts and words.
 import type { ComponentProps } from "astro/types";
-import type { AppProductBlock } from "@/lib/extensions";
 import type { StorefrontProductPage } from "@scalius/shared/plugins/storefront-protocol";
 import type { DeliveryFact } from "@/lib/delivery-facts";
 import type { ProductFulfilment } from "@/lib/delivery-facts";
 import type { StoreContactLink } from "@/lib/store-contact";
 import DeliveryFacts from "@/components/DeliveryFacts.astro";
-import ComponentProductBlocks from "@/components/apps/ComponentProductBlocks.astro";
+import AppSlot from "@/components/apps/AppSlot.astro";
 import DigitalPromise from "./DigitalPromise.astro";
 import ProductEmiLine from "./ProductEmiLine.astro";
 import ProductSummary from "./ProductSummary.astro";
@@ -31,20 +30,20 @@ interface Props {
   /** The EMI line (the buy box's setting and the product's EMI plan). */
   emi: boolean;
   contactLinks: readonly StoreContactLink[];
-  /** App blocks of the buy box, and the page projection they draw from. */
-  componentBlocks: readonly AppProductBlock[];
+  /** The page projection the buy box's app slots draw from. */
   blockData: () => StorefrontProductPage;
   fulfilment: ProductFulfilment;
   deliveryFacts: DeliveryFact[];
   canPurchaseAny: boolean;
 }
 
-const { summary, reviewCopy, features, emi, contactLinks, componentBlocks, blockData, fulfilment, deliveryFacts, canPurchaseAny } = Astro.props;
+const { summary, reviewCopy, features, emi, contactLinks, blockData, fulfilment, deliveryFacts, canPurchaseAny } = Astro.props;
 const { product } = summary;
 ---
 
 <ProductSummary {...summary} projection={blockData()}>
   <ReviewsSummary slot="after-title" product={product} copy={reviewCopy} />
+  <AppSlot slot="after-title" name="product.buy_box.before" data={blockData} />
   {features.shown && (
     <ProductFeatureList slot="after-actions" features={buyBoxFeatures(product)} variant="list" title={features.title} />
   )}
@@ -64,7 +63,7 @@ const { product } = summary;
       ))}
     </nav>
   )}
-  <ComponentProductBlocks slot="after-actions" blocks={componentBlocks} target="product.buy-box" data={blockData} />
+  <AppSlot slot="after-actions" name="product.buy_box.after" data={blockData} />
   <DigitalPromise slot="after-actions" product={product} fulfilment={fulfilment} />
   {canPurchaseAny && <DeliveryFacts slot="after-actions" facts={deliveryFacts} variant="list" />}
   <WarrantyRow slot="after-actions" product={product} copy={summary.actionCopy} />

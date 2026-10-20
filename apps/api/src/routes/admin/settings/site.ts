@@ -84,7 +84,7 @@ import {
 } from "./theme-contract";
 import { readStoreShape, readThemeMedia } from "@scalius/core/modules/storefront";
 import { listPluginInstallations } from "@scalius/core/modules/plugins";
-import { STOREFRONT_BLOCK_TARGETS, pluginSurfaceKey, storefrontSettingNeeds, type PluginSettingsSchema } from "@scalius/shared/plugins";
+import { STOREFRONT_COMPONENT_TARGETS, pluginSurfaceKey, storefrontSettingNeeds, type PluginSettingsSchema } from "@scalius/shared/plugins";
 import { isPublicMediaUrl } from "@scalius/shared/platform-config";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const revisionSchema = z.number().int().nonnegative();
@@ -257,11 +257,12 @@ const themeAppSurfacesSchema = z.object({
     description: z.string().nullable(),
     sections: z.array(z.record(z.string(), z.unknown())),
   })),
-  productBlocks: z.array(z.object({
+  /** Components (`storefront.components`): one with a product slot is a product page app block the merchant places. */
+  components: z.array(z.object({
     key: z.string(),
     type: z.string(),
     name: z.string(),
-    placement: z.enum(STOREFRONT_BLOCK_TARGETS),
+    targets: z.array(z.enum(STOREFRONT_COMPONENT_TARGETS)),
     settings: z.array(appSettingFieldSchema),
   })),
 }).openapi("ThemeAppSurfaces");
@@ -314,17 +315,17 @@ function themeAppSurfaces(installations: PluginInstallations) {
             sections: sections as unknown as Array<Record<string, unknown>>,
           }] : [];
         }) : [],
-        // A component block needs the approved grant to cover storefront code.
-        productBlocks: code ? storefront.productBlocks.map((block) => ({
-          key: pluginSurfaceKey(installation.pluginId, block.type),
-          type: block.type,
-          name: block.name,
-          placement: block.placement,
-          settings: block.settings.map(appSettingField),
+        // A component needs the approved grant to cover storefront code.
+        components: code ? storefront.components.map((component) => ({
+          key: pluginSurfaceKey(installation.pluginId, component.type),
+          type: component.type,
+          name: component.name,
+          targets: [...component.targets],
+          settings: component.settings.map(appSettingField),
         })) : [],
       };
     })
-    .filter((surfaces) => surfaces.sections.length + surfaces.productBlocks.length + surfaces.skins.length + surfaces.templates.length + surfaces.pagePresets.length > 0)
+    .filter((surfaces) => surfaces.sections.length + surfaces.components.length + surfaces.skins.length + surfaces.templates.length + surfaces.pagePresets.length > 0)
     .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
 }
 

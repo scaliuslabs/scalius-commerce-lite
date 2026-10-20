@@ -73,9 +73,9 @@ export const pluginFeatureSchema = z.object({
   /** Storefront surfaces by their declared names. */
   storefront: z.object({
     sections: keys(32),
-    productBlocks: keys(10),
+    components: keys(16),
     skins: keys(30),
-  }).strict().default({ sections: [], productBlocks: [], skins: [] }),
+  }).strict().default({ sections: [], components: [], skins: [] }),
 }).strict();
 
 export type PluginFeature = z.output<typeof pluginFeatureSchema>;
@@ -105,7 +105,7 @@ export interface PluginFeatureOwners {
   functions: Map<string, string>;
   admin: Map<string, string>;
   sections: Map<string, string>;
-  productBlocks: Map<string, string>;
+  components: Map<string, string>;
   skins: Map<string, string>;
 }
 
@@ -114,7 +114,7 @@ export function pluginFeatureOwners(manifest: FeatureManifest): PluginFeatureOwn
   const owners: PluginFeatureOwners = {
     providers: new Map(), settingsGroups: new Map(), settings: new Map(), adminRoutes: new Map(), publicRoutes: new Map(),
     webhooks: new Map(), cron: new Map(), events: new Map(), functions: new Map(), admin: new Map(),
-    sections: new Map(), productBlocks: new Map(), skins: new Map(),
+    sections: new Map(), components: new Map(), skins: new Map(),
   };
   const claim = (map: Map<string, string>, values: readonly string[], feature: string) => {
     for (const value of values) if (!map.has(value)) map.set(value, feature);
@@ -130,7 +130,7 @@ export function pluginFeatureOwners(manifest: FeatureManifest): PluginFeatureOwn
     claim(owners.functions, feature.functions, feature.id);
     claim(owners.admin, feature.admin, feature.id);
     claim(owners.sections, feature.storefront.sections, feature.id);
-    claim(owners.productBlocks, feature.storefront.productBlocks, feature.id);
+    claim(owners.components, feature.storefront.components, feature.id);
     claim(owners.skins, feature.storefront.skins, feature.id);
   }
   // A field belongs to the feature of its group: a provider's or a settings group's.
@@ -189,7 +189,7 @@ export function pluginManifestWithFeatures(manifest: PluginManifest, enabled: It
     storefront: {
       ...manifest.storefront,
       sections: manifest.storefront.sections.filter((section) => keep(owners.sections, section.type)),
-      productBlocks: manifest.storefront.productBlocks.filter((block) => keep(owners.productBlocks, block.type)),
+      components: manifest.storefront.components.filter((component) => keep(owners.components, component.type)),
       skins: manifest.storefront.skins.filter((skin) => keep(owners.skins, skin.id)),
     },
   };
@@ -264,7 +264,7 @@ export function pluginFeatureIssues(manifest: PluginManifest): Issue[] {
     functions: new Set<string>(manifest.functions.map((fn) => fn.point)),
     admin: new Set([...manifest.admin.pages, ...manifest.admin.cards, ...manifest.admin.actions, ...manifest.admin.widgets].map((item) => item.id)),
     sections: new Set(manifest.storefront.sections.map((section) => section.type)),
-    productBlocks: new Set(manifest.storefront.productBlocks.map((block) => block.type)),
+    components: new Set(manifest.storefront.components.map((component) => component.type)),
     skins: new Set(manifest.storefront.skins.map((skin) => skin.id)),
   };
   const claimed = new Map<string, string>();
@@ -290,7 +290,7 @@ export function pluginFeatureIssues(manifest: PluginManifest): Issue[] {
     check("functions", feature.functions, at("functions"), "Function point");
     check("admin", feature.admin, at("admin"), "Admin surface");
     check("sections", feature.storefront.sections, at("storefront", "sections"), "Section");
-    check("productBlocks", feature.storefront.productBlocks, at("storefront", "productBlocks"), "Product block");
+    check("components", feature.storefront.components, at("storefront", "components"), "Component");
     check("skins", feature.storefront.skins, at("storefront", "skins"), "Skin");
     feature.scopes.forEach((scope, scopeIndex) => {
       if (manifest.scopes.includes(scope)) issues.push({ path: at("scopes", scopeIndex), message: `${scope} is already a base scope of the app.` });

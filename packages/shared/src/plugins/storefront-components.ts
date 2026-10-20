@@ -1,6 +1,6 @@
 // Storefront components (docs/STOREFRONT-COMPONENTS.md): the presentation an
 // app compiles once and the storefront runs at the edge. An app's storefront
-// module draws its sections and product blocks, and skins of core-owned units
+// module draws its sections, its components (in slots and app pages), and skins of core-owned units
 // (the header, the footer, the product card, the product page's main part,
 // the listing, core sections), from the merchant's settings and the data the
 // page already read. It is a pure function of its input: no network, no storage,
@@ -15,8 +15,9 @@
 
 import { z } from "zod";
 import {
-  STOREFRONT_BLOCK_TARGETS,
-  type StorefrontBlockTarget,
+  STOREFRONT_COMPONENT_TARGETS,
+  STOREFRONT_PRODUCT_SLOTS,
+  type StorefrontComponentTarget,
   type StorefrontImage,
   type StorefrontSkinTarget,
   type StorefrontProductCard,
@@ -111,7 +112,35 @@ export const storefrontIslandDeclarationSchema = z.object({
   description: description.optional(),
 }).strict();
 
+/** The most components one app declares. */
+export const STOREFRONT_COMPONENTS_MAX = 16;
+
+const PRODUCT_SLOTS = new Set<string>(STOREFRONT_PRODUCT_SLOTS);
+
+/**
+ * A component the app's storefront module draws (`storefront.components`):
+ * app markup at each of its `targets`, a component slot (storefront-protocol.ts)
+ * or `page` (an app page its proxy route answers with `{ page: { component } }`).
+ * In a product slot it renders where the merchant places it (the product
+ * page's app blocks, with their values) and gets the product page; in the
+ * other slots it renders for every page with its default values. At most one
+ * product slot. Like a skin, it reads nothing: its settings name no images
+ * or products.
+ */
+export const storefrontComponentDeclarationSchema = z.object({
+  /** Unique per app: the theme names it `<plugin id>/<type>`. */
+  type: key,
+  name: title,
+  description: description.optional(),
+  targets: z.array(z.enum(STOREFRONT_COMPONENT_TARGETS)).min(1).max(STOREFRONT_COMPONENT_TARGETS.length)
+    .refine((targets) => new Set(targets).size === targets.length, "Each target appears once.")
+    .refine((targets) => targets.filter((target) => PRODUCT_SLOTS.has(target)).length <= 1, "A component has at most one product slot."),
+  settings: pluginSettingsSchemaSchema.default([]),
+}).strict();
+export type StorefrontComponentDeclaration = z.infer<typeof storefrontComponentDeclarationSchema>;
+
 export const storefrontComponentsManifestSchema = {
+  components: z.array(storefrontComponentDeclarationSchema).max(STOREFRONT_COMPONENTS_MAX).default([]),
   skins: z.array(storefrontSkinDeclarationSchema).max(STOREFRONT_SKINS_MAX).default([]),
   templates: z.array(storefrontTemplateDeclarationSchema).max(5).default([]),
   pagePresets: z.array(storefrontPagePresetDeclarationSchema).max(8).default([]),
@@ -239,8 +268,8 @@ export interface StorefrontExtension {
   /** Each component section's settings schema, by type (the storefront resolves the values). */
   sectionSettings: Record<string, PluginSettingsSchema>;
   skins: Array<{ id: string; target: StorefrontSkinTarget; settings: PluginSettingsSchema }>;
-  /** Product blocks (`productBlocks`), drawn at the edge. */
-  blocks: Array<{ type: string; target: StorefrontBlockTarget; settings: PluginSettingsSchema }>;
+  /** Components (`storefront.components`), drawn at the edge at their targets. */
+  components: Array<{ type: string; targets: StorefrontComponentTarget[]; settings: PluginSettingsSchema }>;
   islands: string[];
   stylesheet: boolean;
   connect: string[];
@@ -248,15 +277,15 @@ export interface StorefrontExtension {
 
 /**
  * The settings schema of each active app surface (a component section, a
- * skin, a product block) by its `<plugin id>/<id>` theme key: what the theme's
+ * skin, a component) by its `<plugin id>/<id>` theme key: what the theme's
  * translated text reads to know which values are words (`text`, `textarea`).
  */
-export function storefrontExtensionSettingSchemas(extensions: readonly StorefrontExtension[]): (kind: "section" | "skin" | "block", key: string) => PluginSettingsSchema | null {
+export function storefrontExtensionSettingSchemas(extensions: readonly StorefrontExtension[]): (kind: "section" | "skin" | "component", key: string) => PluginSettingsSchema | null {
   const schemas = new Map<string, PluginSettingsSchema>();
   for (const extension of extensions) {
     for (const [type, schema] of Object.entries(extension.sectionSettings)) schemas.set(`section:${extension.pluginId}/${type}`, schema);
     for (const skin of extension.skins) schemas.set(`skin:${extension.pluginId}/${skin.id}`, skin.settings);
-    for (const block of extension.blocks) schemas.set(`block:${extension.pluginId}/${block.type}`, block.settings);
+    for (const component of extension.components) schemas.set(`component:${extension.pluginId}/${component.type}`, component.settings);
   }
   return (kind, key) => schemas.get(`${kind}:${key}`) ?? null;
 }
@@ -281,13 +310,13 @@ export function readStorefrontExtensions(value: unknown): StorefrontExtension[] 
       const settings = pluginSettingsSchemaSchema.safeParse(record.settings ?? []);
       return settings.success ? [{ id: record.id, target: record.target, settings: settings.data }] : [];
     }) : [];
-    const blocks = Array.isArray(item.blocks) ? item.blocks.flatMap((block) => {
-      if (typeof block !== "object" || block === null) return [];
-      const record = block as Record<string, unknown>;
-      if (typeof record.type !== "string" || !PLUGIN_KEY_PATTERN.test(record.type)) return [];
-      if (!(STOREFRONT_BLOCK_TARGETS as readonly unknown[]).includes(record.target)) return [];
+    const components = Array.isArray(item.components) ? item.components.flatMap((component) => {
+      if (typeof component !== "object" || component === null) return [];
+      const record = component as Record<string, unknown>;
+      if (typeof record.type !== "string" || !PLUGIN_KEY_PATTERN.test(record.type) || !Array.isArray(record.targets)) return [];
+      const targets = record.targets.filter((target): target is StorefrontComponentTarget => (STOREFRONT_COMPONENT_TARGETS as readonly unknown[]).includes(target));
       const settings = pluginSettingsSchemaSchema.safeParse(record.settings ?? []);
-      return settings.success ? [{ type: record.type, target: record.target as StorefrontBlockTarget, settings: settings.data }] : [];
+      return settings.success && targets.length > 0 ? [{ type: record.type, targets, settings: settings.data }] : [];
     }) : [];
     const sectionSettings: Record<string, PluginSettingsSchema> = {};
     if (typeof item.sectionSettings === "object" && item.sectionSettings !== null) {
@@ -305,7 +334,7 @@ export function readStorefrontExtensions(value: unknown): StorefrontExtension[] 
       sections: names(item.sections, PLUGIN_KEY_PATTERN),
       sectionSettings,
       skins,
-      blocks,
+      components,
       islands: names(item.islands, PLUGIN_URL_NAME_PATTERN),
       stylesheet: item.stylesheet === true,
       connect: Array.isArray(item.connect) ? item.connect.filter((host): host is string => typeof host === "string" && HOST.test(host)) : [],

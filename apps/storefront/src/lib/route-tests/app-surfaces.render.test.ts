@@ -241,7 +241,7 @@ describe("app scripts on public pages", () => {
     const page = parse(await response.text());
     expect(appScriptSources(page)).toEqual(["https://chat.example/all.js"]);
     expect(page.head.querySelector('script[data-app-script="acme.chat"]')?.hasAttribute("async")).toBe(true);
-    expect(page.querySelector("[data-app-blocks]")).toBeNull();
+    expect(page.querySelector("[data-app-slot]")).toBeNull();
     // One API call: the page's batch.
     expect(calls).toHaveLength(1);
   });
@@ -256,7 +256,7 @@ describe("app scripts on public pages", () => {
     expect(calls).toHaveLength(1);
     expect(new URL(calls[0]!, "https://api.shop.test").searchParams.getAll("r").join(" ")).not.toContain("product-apps");
     expect(appScriptSources(page)).toEqual(["https://chat.example/all.js", "https://cdn.acme.example/product.js"]);
-    expect(html).not.toContain("data-app-blocks");
+    expect(html).not.toContain("data-app-slot");
     expect(html).not.toContain("AppSurface.astro?astro&type=script");
   });
 });
