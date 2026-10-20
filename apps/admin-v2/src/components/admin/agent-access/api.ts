@@ -4,6 +4,7 @@ import {
   getApiV1AdminAgentAccessAuthorizationRequestsByRequestId,
   getApiV1AdminAgentAccessConnections,
   getApiV1AdminAgentAccessConnectionsByGrantIdEvents,
+  getApiV1Platform,
   postApiV1AdminAgentAccessAuthorizationRequestsByRequestIdApprove,
   postApiV1AdminAgentAccessAuthorizationRequestsByRequestIdDeny,
   postApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdApprove,
@@ -167,4 +168,20 @@ export function denyAgentDeviceAuthorization(
     path: { deviceId },
     body: reason ? { reason } : {},
   })));
+}
+
+/**
+ * The public API origin from Platform settings (Settings → Store details → Web
+ * addresses), as the API Worker resolves it; `null` while the merchant has not
+ * set it or it is not a usable address (HTTPS, or localhost for local work).
+ */
+export async function getAgentSetupOrigin(): Promise<string | null> {
+  const { apiUrl } = await apiData(getApiV1Platform());
+  if (!apiUrl) return null;
+  try {
+    const url = new URL(apiUrl);
+    return url.protocol === "https:" || url.hostname === "localhost" ? url.origin : null;
+  } catch {
+    return null;
+  }
 }

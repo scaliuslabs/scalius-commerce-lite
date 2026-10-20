@@ -38,6 +38,7 @@ import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { aiAccessQuery } from "~/lib/api-query-options/settings-screens";
 
 import { AccessFields, defaultSelection } from "./AccessFields";
+import { AgentSetup } from "./AgentSetup";
 import {
   createAgentToken,
   listAgentConnectionEvents,
@@ -454,6 +455,7 @@ export function AiAccessCard() {
           ) : null
         }
       >
+        <AgentSetup />
         {needsTwoStep ? (
           <Alert variant="warning" role="status">
             <ShieldAlert aria-hidden="true" />
