@@ -239,6 +239,7 @@ export const DASHBOARD_WHEN_A: Readonly<Record<string, string>> = {
   "dashboard.fraud_providers.update": "Use when changing a fraud-check provider's credentials or options.",
   "dashboard.gift_cards.get": "Use when reading one gift card's balance, status and transactions.",
   "dashboard.gift_cards.list": "Use when listing or searching gift cards by code ending or customer.",
+  "dashboard.gift_cards.settings_get": "Use when asked how much value an app may add to gift cards per UTC date.",
   "dashboard.gift_cards.summary": "Use when asked how much gift card balance is outstanding (the store's liability).",
   "dashboard.home.activity": "Use when asked about today's or recent daily sales, revenue, order count or new customers.",
   "dashboard.home.summary": "Use when asked for this month's order and customer counts and the most recent orders.",

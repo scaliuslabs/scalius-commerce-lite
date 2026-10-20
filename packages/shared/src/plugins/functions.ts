@@ -158,8 +158,9 @@ export const checkoutPaymentMethodsOutputSchema = z.object({
     z.object({ op: z.literal("hide"), methodId: id }).strict(),
     /**
      * Offer a `gated` method to this buyer: the built-in invoice (net terms)
-     * when the merchant lets apps decide who pays later. Any other method is
-     * skipped; a hide wins over an allow.
+     * when the merchant lets apps decide who pays later, or the app's own
+     * deferred (pay later) method, which is never offered without its app's
+     * allow. Any other method is skipped; a hide wins over an allow.
      */
     z.object({ op: z.literal("allow"), methodId: id }).strict(),
     z.object({ op: z.literal("rename"), methodId: id, name: label }).strict(),

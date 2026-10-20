@@ -608,6 +608,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     sourceSha256: "edb157b0afaef9bf112a064ee0cad556e4c6207149fa2f98a0bc25d9bacbc15c",
   },
   {
+    version: 166,
+    name: "0166_record_payment_permission",
+    sourceSha256: "c6fd2017f48946b361b564269611359aa5f1b15d152bedf45d78350ed7e26ddd",
+  },
+  {
     version: 168,
     name: "0168_tax_document_commands",
     sourceSha256: "4be963196e5a3977f80b9594e3414313266336a813691c57797c73df8e68a3ed",

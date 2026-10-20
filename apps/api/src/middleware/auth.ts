@@ -25,8 +25,8 @@ export const authMiddleware: MiddlewareHandler = async (c, next) => {
     return next();
   }
 
-  // Skip auth for Swagger UI and OpenAPI JSON
-  if (c.req.path === "/docs" || c.req.path === "/openapi.json") {
+  // Skip auth for the OpenAPI JSON
+  if (c.req.path === "/openapi.json") {
     return next();
   }
 

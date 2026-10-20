@@ -8,6 +8,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { paymentMethodsDocument } from "@scalius/core/modules/settings";
+import { autoFulfilOrder, FULFILLER_REGISTRY, type FulfillerRegistry } from "@scalius/core/modules/fulfilment";
+import { APP_PAYMENT_REVIEW_REASON } from "@scalius/core/modules/orders";
 import { EVENT_REPRESENTATION_SCHEMAS } from "@scalius/shared/events";
 import type { ProtectedCustomerData } from "@scalius/shared/plugins/protected-data";
 import { errorResponseFromError } from "../../utils/api-response";
@@ -179,6 +181,55 @@ describe("the stable app API's resources", () => {
     expect(paid.body.data).toMatchObject({ paymentStatus: "paid", paidMinor: 100_000, balanceDueMinor: 0 });
     expect(await overdue()).toEqual([]);
     expect(sqlite.prepare("SELECT kind FROM order_events WHERE order_id = ? AND kind = 'payment_recorded'").all(order.id)).toHaveLength(2);
+    // Tea ships: nothing automatic is owed, so the app's payment holds nothing.
+    expect(sqlite.prepare("SELECT count(*) AS n FROM order_holds WHERE order_id = ?").get(order.id)).toEqual({ n: 0 });
+  });
+
+  // Security audit S3: an app's recorded payment moves no money, so the gift
+  // cards and downloads it would settle wait for staff to confirm it.
+  it("holds the downloads of an order an app marked paid until staff release the review", async () => {
+    const invoice = (id: string) => sqlite.exec(`
+      INSERT OR IGNORE INTO products (id, name, slug, price_minor, is_active) VALUES ('p_dig', 'E-book', 'ebook', 50000, 1);
+      INSERT OR IGNORE INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory, fulfillment_kind)
+      VALUES ('v_dig', 'p_dig', 'EBOOK', 50000, 0, 1, 0, 'digital');
+      INSERT INTO orders (id, customer_name, customer_phone, requires_shipping, currency_code, currency_decimal_places,
+        subtotal_amount_minor, total_amount_minor, status, payment_method, payment_status, paid_amount_minor, balance_due_minor,
+        payment_terms_days, fulfillment_status, inventory_pool, inventory_action, version)
+      VALUES ('${id}', 'Buyer', '+8801700000000', 0, 'BDT', 2, 50000, 50000, 'pending', 'net_terms', 'unpaid', 0, 50000,
+        30, 'pending', 'regular', 'none', 1);
+      INSERT INTO order_items (id, order_id, product_id, variant_id, quantity, product_name, inventory_tracked,
+        unit_price_minor, line_subtotal_minor, discount_amount_minor, taxable_amount_minor, tax_amount_minor, fulfillment_type)
+      VALUES ('i_${id}', '${id}', 'p_dig', 'v_dig', 1, 'E-book', 0, 50000, 50000, 0, 0, 0, 'digital');
+    `);
+    const registry: FulfillerRegistry = { ...FULFILLER_REGISTRY, digital: { mode: "auto", fulfiller: { prepare: async () => [] } } };
+    const payInFull = (id: string, key: string) => call("POST", `/resources/orders/${id}/payments`, {
+      body: { amountMinor: 50_000, via: "bank_transfer" },
+      headers: { "Idempotency-Key": key },
+    });
+    const openHolds = (id: string) => sqlite.prepare("SELECT id, plugin_id, app_name, reason FROM order_holds WHERE order_id = ? AND released_at IS NULL").all(id) as Array<{ id: string; plugin_id: string; app_name: string; reason: string }>;
+
+    invoice("o_app");
+    principal = { pluginId: "acme.erp", pluginName: "Acme ERP", protectedData: new Set() } as never;
+    expect((await payInFull("o_app", "erp sync payment 0001")).status).toBe(201);
+    expect(sqlite.prepare("SELECT payment_status FROM orders WHERE id = 'o_app'").get()).toEqual({ payment_status: "paid" });
+    const [hold] = openHolds("o_app");
+    expect(hold).toMatchObject({ plugin_id: "acme.erp", app_name: "Acme ERP", reason: APP_PAYMENT_REVIEW_REASON });
+    // Nothing is handed over, by the route's own run or any later one.
+    expect(sqlite.prepare("SELECT fulfilled_quantity FROM order_items WHERE id = 'i_o_app'").get()).toEqual({ fulfilled_quantity: 0 });
+    expect(await autoFulfilOrder(db, "o_app", registry)).toMatchObject({ skipped: "on_hold", fulfilledTypes: [] });
+    // The app cannot clear the review it triggered.
+    expect((await call("POST", `/orders/o_app/holds/${hold!.id}/release`)).status).toBe(403);
+    expect(openHolds("o_app")).toHaveLength(1);
+    // Staff check the bank and release it: the download goes out.
+    principal = null;
+    expect((await call("POST", `/orders/o_app/holds/${hold!.id}/release`)).status).toBe(200);
+    expect(openHolds("o_app")).toEqual([]);
+    expect(await autoFulfilOrder(db, "o_app", registry)).not.toMatchObject({ skipped: "on_hold" });
+
+    // Staff recording the same payment need no second look.
+    invoice("o_staff");
+    expect((await payInFull("o_staff", "staff payment 0001")).status).toBe(201);
+    expect(openHolds("o_staff")).toEqual([]);
   });
 
   it("refuses a status change made on a stale order version, changing nothing", async () => {

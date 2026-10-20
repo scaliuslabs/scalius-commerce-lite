@@ -2,10 +2,13 @@
 // "Storefront proxy"): what makes a signed-in buyer's form post to an app's
 // proxy (`/apps/<plugin id>/...`) provably come from this store's own page.
 //
-// - Issued by the storefront gateway into every `<form method="post">` whose
-//   action is an app proxy path, on pages rendered for a signed-in buyer
-//   (only those carry a session, and they are never served from the shared
-//   page cache). It is a hidden field, so plain HTML forms work without
+// - Issued by the storefront gateway into a `<form method="post">` whose
+//   action is an app proxy path and which that same app drew, on pages
+//   rendered for a signed-in buyer (only those carry a session, and they are
+//   never served from the shared page cache). The app sanitizer stamps every
+//   form an app draws with its owner (`APP_FORM_OWNER_ATTRIBUTE`, a host-owned
+//   `data-sx-*` attribute no app can write), so app A's block posting to
+//   `/apps/<B>/...` never carries B's token. It is a hidden field, so plain HTML forms work without
 //   JavaScript, and the forms enhancer sends it with the other fields.
 // - Verified by the API before the app's handler runs: an unsafe proxied
 //   request that carries the store's session in a form encoding a cross-site
@@ -24,6 +27,8 @@ import { hmacSha256Hex } from "../hash";
 
 /** The hidden field the platform adds to an app's POST forms. */
 export const APP_FORM_TOKEN_FIELD = "_scalius_form";
+/** The attribute the app sanitizer sets on every form an app draws: the drawing app's id. */
+export const APP_FORM_OWNER_ATTRIBUTE = "data-sx-form-app";
 /** HKDF purpose of the key both Workers derive from SCALIUS_SECRET. */
 export const APP_FORM_TOKEN_PURPOSE = "app-form-token";
 const TOKEN_PATTERN = /^[0-9a-f]{64}$/;

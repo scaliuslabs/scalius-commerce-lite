@@ -1,0 +1,8 @@
+[
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "2127040f8b7ff645",
+  "change": "dashboard.resources.payments.create: the write_orders scope no longer covers it.",
+  "reason": "Pre-lock security fix (audit S3): a recorded payment settles an invoice with no money moving and hands over its gift cards and downloads, so it needs the Sensitive write_payments scope (orders.record_payment, migration 0166), not write_orders."
+ }
+]

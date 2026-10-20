@@ -355,9 +355,6 @@ importers:
       '@cloudflare/workers-oauth-provider':
         specifier: 1.2.3
         version: 1.2.3(patch_hash=29a68c317d5b08351f0fbb4d1fb466c460590e91f86dfc81212048dd2f6b06d8)
-      '@hono/swagger-ui':
-        specifier: ^0.6.1
-        version: 0.6.1(hono@4.13.13)
       '@hono/zod-openapi':
         specifier: ^1.6.3
         version: 1.6.3(hono@4.13.13)(zod@4.6.7)
@@ -1780,11 +1777,6 @@ packages:
   '@hono/node-server@2.1.4':
     resolution: {integrity: sha512-2g1qeHl4BduwDn6L8nkAvDrPUWPMlkQ//a5NhP/zIyaXKMjZNRV+cG9Csu+BiJFf6+68pqzjf4Hi5sJGKHuS1g==}
     engines: {node: '>=20'}
-    peerDependencies:
-      hono: 4.13.13
-
-  '@hono/swagger-ui@0.6.1':
-    resolution: {integrity: sha512-sJTvldu1GPeEPfyeLG7gRj+W4vEuD+JDi+JjJ3TJs/DvMUtBLs0KJO5yokGegWWdy5qrbdnQGekbhgNRmPmYKQ==}
     peerDependencies:
       hono: 4.13.13
 
@@ -8584,10 +8576,6 @@ snapshots:
   '@hey-api/types@0.1.4': {}
 
   '@hono/node-server@2.1.4(hono@4.13.13)':
-    dependencies:
-      hono: 4.13.13
-
-  '@hono/swagger-ui@0.6.1(hono@4.13.13)':
     dependencies:
       hono: 4.13.13
 
