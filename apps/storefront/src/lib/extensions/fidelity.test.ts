@@ -87,19 +87,19 @@ const documentOf = (markup: string) => {
 
 // A skin owns its heading and description, and hands the purchase form to core.
 const referenceSkin = ({ product }: StorefrontProductPage) =>
-  `<h1>${product.title}</h1><p data-skin-price>${product.price.formatted}</p><s data-skin-regular>${product.compareAt?.formatted ?? ""}</s>${product.descriptionHtml}<scalius-embed kind="buy-form" data-title="false"></scalius-embed>`;
+  `<h1>${product.title}</h1><p data-skin-price>${product.price.formatted}</p><s data-skin-regular>${product.compareAt?.formatted ?? ""}</s>${product.descriptionHtml}<scalius-embed kind="buy_form" data-title="false"></scalius-embed>`;
 
 describe("core and skin projection fidelity", () => {
   it("renders the same title, prices, SKU choices and purchase form through the real embed renderer", async () => {
     const request = new Request("https://shop.test/products/linen-shirt");
     const core = documentOf(await container.renderToString(ProductBuyBox, { props: buyBox, request }));
-    const split = splitStorefrontEmbeds(referenceSkin(projection), storefrontEmbedRule("product-main"));
+    const split = splitStorefrontEmbeds(referenceSkin(projection), storefrontEmbedRule("product_main"));
     expect(split.missing).toEqual([]);
     const skin = documentOf(await container.renderToString(AppComponent, {
       request,
       props: {
-        markup: { pluginId: "test.reference", base: "/_x/test.reference/release/", parts: split.parts, embeds: new Set(["buy-form"]) },
-        embeds: { "buy-form": ({ data }: { data: Record<string, string> }) => ({
+        markup: { pluginId: "test.reference", base: "/_x/test.reference/release/", parts: split.parts, embeds: new Set(["buy_form"]) },
+        embeds: { "buy_form": ({ data }: { data: Record<string, string> }) => ({
           component: ProductBuyBox, props: { ...buyBox, summary: { ...buyBox.summary, title: data.title !== "false" } },
         }) },
       },
@@ -108,7 +108,7 @@ describe("core and skin projection fidelity", () => {
     expect(core.querySelector(".product-price")?.textContent?.trim()).toBe(skin.querySelector("[data-skin-price]")?.textContent);
     expect(core.querySelector(".product-original-price")?.textContent?.trim()).toBe(skin.querySelector("[data-skin-regular]")?.textContent);
     expect(skin.querySelectorAll("h1")).toHaveLength(1);
-    expect(skin.querySelectorAll('[data-sx-embed="buy-form"]')).toHaveLength(1);
+    expect(skin.querySelectorAll('[data-sx-embed="buy_form"]')).toHaveLength(1);
     expect(skin.querySelector("#product-buy-form")?.outerHTML).toBe(core.querySelector("#product-buy-form")?.outerHTML);
     expect(skin.querySelector("#product-buy-form")?.getAttribute("method")).toBe("post");
     expect(skin.querySelector("#product-buy-form")?.getAttribute("action")).toBe("/buy/linen-shirt");
@@ -140,7 +140,7 @@ describe("core and skin projection fidelity", () => {
       pagination: listing.pagination, breadcrumbs: [{ label: "Home", href: "/" }, ...hero.breadcrumb], fields: {},
     });
     const referenceListing = (page: StorefrontListingPage) => `<h1>${page.title}</h1><nav aria-label="Breadcrumb">${page.breadcrumbs.map((crumb) => `<a href="${crumb.url}">${crumb.title}</a>`).join("")}</nav><scalius-embed kind="pagination"></scalius-embed>`;
-    const split = splitStorefrontEmbeds(referenceListing(data), storefrontEmbedRule("listing-main"));
+    const split = splitStorefrontEmbeds(referenceListing(data), storefrontEmbedRule("listing_main"));
     const core = documentOf(await container.renderToString(CatalogListingPage, { request, locals, props: { kind: "category", listing, hero } }));
     const skin = documentOf(await container.renderToString(AppComponent, {
       request, locals, props: {

@@ -75,8 +75,8 @@ it("keeps the marketplace preset while saving a lighter-header marketplace combi
   light.blocks.topBar = { variant: "utility", settings: { text: "Free delivery over ৳2,000", link: "/delivery" } };
   light.blocks.header = { variant: "search-first", settings: { search: "scoped", rowTone: "page", cartTotal: false } };
   const hero = light.pages.home.find((section) => section.type === "hero");
-  const categories = light.pages.home.find((section) => section.type === "category-tiles");
-  if (hero?.type !== "hero" || categories?.type !== "category-tiles") throw new Error("Marketplace sections missing");
+  const categories = light.pages.home.find((section) => section.type === "category_tiles");
+  if (hero?.type !== "hero" || categories?.type !== "category_tiles") throw new Error("Marketplace sections missing");
   hero.settings.layout = "wide-editorial";
   categories.settings.style = "square";
 
@@ -85,7 +85,7 @@ it("keeps the marketplace preset while saving a lighter-header marketplace combi
   expect(resolved.blocks.topBar.variant).toBe("utility");
   expect(resolved.blocks.header).toMatchObject({ variant: "search-first", settings: { rowTone: "page" } });
   expect(resolved.pages.home.find((section) => section.type === "hero")?.settings.layout).toBe("wide-editorial");
-  expect(resolved.pages.home.find((section) => section.type === "category-tiles")?.settings.style).toBe("square");
+  expect(resolved.pages.home.find((section) => section.type === "category_tiles")?.settings.style).toBe("square");
   expect(storefrontTemplateTheme("marketplace").blocks.header.settings).toMatchObject({ rowTone: "header" });
 });
 
@@ -388,8 +388,8 @@ describe("resolver on true store shapes", () => {
     expect(resolveStorefrontTheme(storefrontTemplateTheme("department-mall"), LIVE_SMALL).blocks.listing.filters.shown).toBe(true);
   });
 
-  it("is version 11 and reads or writes no older document", () => {
-    expect(STOREFRONT_THEME_DOCUMENT_VERSION).toBe(11);
+  it("is version 12 and reads or writes no older document", () => {
+    expect(STOREFRONT_THEME_DOCUMENT_VERSION).toBe(12);
     const theme = storefrontTemplateTheme("department-mall");
     expect(storefrontThemeDocumentSchema.safeParse({ ...theme, version: 9 }).success).toBe(false);
     expect(parseStoredStorefrontThemeDocument(JSON.stringify({ ...theme, version: 9 }))).toBeNull();

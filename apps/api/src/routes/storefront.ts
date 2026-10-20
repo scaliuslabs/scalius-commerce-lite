@@ -417,7 +417,7 @@ const layoutDataSchema = z.object({
     sectionSettings: z.record(z.string(), z.array(z.record(z.string(), z.unknown()))),
     skins: z.array(z.object({
       id: z.string(),
-      target: z.string().openapi({ description: "The unit the skin draws: header, footer, product-card, product-main, listing-main or section:<core section type>." }),
+      target: z.string().openapi({ description: "The unit the skin draws: header, footer, product_card, product_main, listing_main or section:<core section type>." }),
       settings: z.array(z.record(z.string(), z.unknown())),
     })),
     components: z.array(z.object({

@@ -83,7 +83,7 @@ describe("app component HTML", () => {
       + '<button type="button" popovertarget="theme-menu" aria-label="Menu">=</button><div id="theme-menu" popover="auto" tabindex="-1">m</div>'
       + '<form action="/search" method="get" role="search"><input type="search" name="q" autofocus></form>'
       + '<scalius-island data-island="rail" data-hydrate="visible" data-props="{&quot;a&quot;:1}"><ul data-track></ul></scalius-island>'
-      + '<scalius-embed kind="order-form" data-product="prod_1" data-max-quantity="5"></scalius-embed><scalius-embed kind="buy-form" data-title="false"></scalius-embed>'
+      + '<scalius-embed kind="order_form" data-product="prod_1" data-max-quantity="5"></scalius-embed><scalius-embed kind="buy_form" data-title="false"></scalius-embed>'
       + '<video class="cover" src="https://media.example.com/film.mp4" poster="/media/poster.webp" preload="none" muted loop playsinline></video>'
       + '<img src="https://media.example.com/a.webp" srcset="https://media.example.com/a-600.webp 600w" sizes="100vw" alt="A" width="1200" height="800" loading="eager" fetchpriority="high" decoding="sync">'
       + '</section>';

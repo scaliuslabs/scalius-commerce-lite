@@ -50,20 +50,20 @@ function content(overrides: Partial<HomepageContent> = {}): HomepageContent {
 
 describe("homepage section products", () => {
   it("titles lists by what they are unless the merchant named them, and links the whole list", () => {
-    expect(homepageSectionProducts(section("product-rail", "a", { title: "", source: { kind: "newest" }, limit: 4 }), content()))
+    expect(homepageSectionProducts(section("product_rail", "a", { title: "", source: { kind: "newest" }, limit: 4 }), content()))
       .toMatchObject({ title: "New arrivals", href: "/search", products: { length: 4 } });
-    expect(homepageSectionProducts(section("product-rail", "a", { title: "  Fresh  ", source: { kind: "newest" }, limit: 4 }), content())?.title)
+    expect(homepageSectionProducts(section("product_rail", "a", { title: "  Fresh  ", source: { kind: "newest" }, limit: 4 }), content())?.title)
       .toBe("Fresh");
-    expect(homepageSectionProducts(section("product-grid", "b", { title: "", source: { kind: "category", categoryId: "cat" }, columns: 2, rows: 1 }), content()))
+    expect(homepageSectionProducts(section("product_grid", "b", { title: "", source: { kind: "category", categoryId: "cat" }, columns: 2, rows: 1 }), content()))
       .toMatchObject({ title: "Tea", href: "/categories/green-tea" });
-    expect(homepageSectionProducts(section("product-rail", "c", { title: "", source: { kind: "collection", collectionId: "col" }, limit: 4 }), content()))
+    expect(homepageSectionProducts(section("product_rail", "c", { title: "", source: { kind: "collection", collectionId: "col" }, limit: 4 }), content()))
       .toMatchObject({ title: "Eid edit", href: "/collections/col" });
     // Popular has no listing to link to.
-    expect(homepageSectionProducts(section("product-rail", "d", { title: "", source: { kind: "popular" }, limit: 4 }), content())?.href).toBeNull();
+    expect(homepageSectionProducts(section("product_rail", "d", { title: "", source: { kind: "popular" }, limit: 4 }), content())?.href).toBeNull();
     // Products of a category that is no longer public never show under a made-up title.
-    expect(homepageSectionProducts(section("product-rail", "e", { title: "Tea", source: { kind: "category", categoryId: "gone" }, limit: 4 }), content())).toBeNull();
+    expect(homepageSectionProducts(section("product_rail", "e", { title: "Tea", source: { kind: "category", categoryId: "gone" }, limit: 4 }), content())).toBeNull();
     // A source the read did not return renders nothing.
-    expect(homepageSectionProducts(section("deal-block", "f", { title: "", source: { kind: "on-sale" } }), content())).toBeNull();
+    expect(homepageSectionProducts(section("deal_block", "f", { title: "", source: { kind: "on-sale" } }), content())).toBeNull();
   });
 
   it("shows a collections section's own collections in its order, and the newest products without one that shows products", () => {
@@ -78,24 +78,24 @@ describe("homepage section products", () => {
   });
 
   it("shows a category-tiles section's own categories in its order under its title", () => {
-    const tiles = section("category-tiles", "t", { style: "round", title: "  ", categoryIds: ["c3", "gone", "c1"] }) as never;
+    const tiles = section("category_tiles", "t", { style: "round", title: "  ", categoryIds: ["c3", "gone", "c1"] }) as never;
     expect(homepageCategoryTiles(tiles, content()).map((each) => each.id)).toEqual(["c3", "c1"]);
     expect(homepageCategoryTilesTitle(tiles)).toBe("Shop by category");
-    expect(homepageCategoryTilesTitle(section("category-tiles", "t", { title: " Departments " }) as never)).toBe("Departments");
+    expect(homepageCategoryTilesTitle(section("category_tiles", "t", { title: " Departments " }) as never)).toBe("Departments");
     expect(homepageSectionRenders(tiles, content())).toBe(true);
     // The denser styles need two public categories; the photo rail needs one.
-    expect(homepageSectionRenders(section("category-tiles", "t", { style: "round", categoryIds: ["c1", "gone"] }), content())).toBe(false);
-    expect(homepageSectionRenders(section("category-tiles", "t", { style: "photo", categoryIds: ["c1", "gone"] }), content())).toBe(true);
+    expect(homepageSectionRenders(section("category_tiles", "t", { style: "round", categoryIds: ["c1", "gone"] }), content())).toBe(false);
+    expect(homepageSectionRenders(section("category_tiles", "t", { style: "photo", categoryIds: ["c1", "gone"] }), content())).toBe(true);
   });
 });
 
 describe("homepage section rules", () => {
   it("reports the actual lead including text and banner rows, skipping hidden or empty sections", () => {
-    const text = section("seo-text", "intro", { heading: "Welcome", body: "Shop here" });
+    const text = section("seo_text", "intro", { heading: "Welcome", body: "Shop here" });
     const hidden = { ...section("banner", "hidden", { heading: "Hidden" }), hidden: true };
     const missing = section("hero", "empty");
     const sections = [hidden, missing, text, section("banner", "photo", { mediaId: "m1" })];
-    expect(homepageLead(sections, sections, content())).toEqual({ kind: "core", type: "seo-text" });
+    expect(homepageLead(sections, sections, content())).toEqual({ kind: "core", type: "seo_text" });
     const banners = [section("banner", "a", { layout: "two-up", heading: "A" }), section("banner", "b", { layout: "two-up", heading: "B" })];
     expect(homepageLead(banners, banners, content())).toEqual({ kind: "core", type: "banner" });
     expect(homepageLead([], [], content())).toBeNull();
@@ -111,8 +111,8 @@ describe("homepage section rules", () => {
   it("moves a visible banner after category tiles only for phones when the merchant chooses it", () => {
     const slides = [{ image: "m1", focalPoint: { x: 50, y: 50 }, alt: "Eid", link: null }];
     const hero = section("hero", "hero", { phonePlacement: "after-categories", slides });
-    const categories = section("category-tiles", "tiles", { style: "photo", categoryIds: ["c1"] });
-    const sections = [hero, section("usp-strip", "notice"), categories];
+    const categories = section("category_tiles", "tiles", { style: "photo", categoryIds: ["c1"] });
+    const sections = [hero, section("usp_strip", "notice"), categories];
     const shown = content();
     expect(homepagePhoneSections(sections, shown).map((each) => each.id)).toEqual(["notice", "tiles", "hero"]);
     expect(homepageLead(sections, homepagePhoneSections(sections, shown), shown)).toBeNull();
@@ -129,22 +129,22 @@ describe("homepage section rules", () => {
     const slides = [{ image: "gone", focalPoint: { x: 50, y: 50 }, alt: "Gone", link: null }, { image: "m1", focalPoint: { x: 50, y: 50 }, alt: "Eid", link: null }];
     expect(homepageSectionRenders(section("hero", "h", { slides }), content())).toBe(true);
     expect(homepageSectionRenders(section("hero", "h", { slides }), empty)).toBe(false);
-    expect(homepageSectionRenders(section("usp-strip", "u"), empty)).toBe(false);
-    expect(homepageSectionRenders(section("usp-strip", "u", { style: "ticker", source: { kind: "custom", items: [{ title: "Open on Friday", detail: "" }] } }), empty)).toBe(true);
+    expect(homepageSectionRenders(section("usp_strip", "u"), empty)).toBe(false);
+    expect(homepageSectionRenders(section("usp_strip", "u", { style: "ticker", source: { kind: "custom", items: [{ title: "Open on Friday", detail: "" }] } }), empty)).toBe(true);
     expect(homepageSectionRenders(section("banner", "b", { mediaId: "missing" }), empty)).toBe(false);
     expect(homepageSectionRenders(section("banner", "b", { mediaId: "m1" }), content())).toBe(true);
     expect(homepageSectionRenders(section("banner", "b", { heading: "Sale" }), empty)).toBe(true);
     expect(homepageSectionRenders(section("faq", "f"), empty)).toBe(false);
     // The signup reads no store data: it always has its form.
     expect(homepageSectionRenders(section("newsletter", "n", { heading: "Join" }), empty)).toBe(true);
-    expect(homepageSectionRenders(section("seo-text", "s", { heading: "", body: "\n\n" }), empty)).toBe(false);
+    expect(homepageSectionRenders(section("seo_text", "s", { heading: "", body: "\n\n" }), empty)).toBe(false);
   });
 
   it("leads with the first section that shows a photo", () => {
     const sections = [
-      section("usp-strip", "u", { style: "icons", source: { kind: "custom", items: [{ title: "COD", detail: "" }] } }),
+      section("usp_strip", "u", { style: "icons", source: { kind: "custom", items: [{ title: "COD", detail: "" }] } }),
       section("banner", "text", { heading: "Words only" }),
-      section("product-grid", "grid", { title: "", source: { kind: "newest" }, columns: 4, rows: 1 }),
+      section("product_grid", "grid", { title: "", source: { kind: "newest" }, columns: 4, rows: 1 }),
       section("banner", "photo", { mediaId: "m1" }),
     ];
     expect(homepageLeadSection(sections, content())?.id).toBe("grid");
@@ -164,7 +164,7 @@ describe("homepage section rules", () => {
   });
 
   it("counts a deal down only to its running promotion's end still ahead", () => {
-    const deal = (promotionId: string | null) => section("deal-block", "d", { promotionId }) as never;
+    const deal = (promotionId: string | null) => section("deal_block", "d", { promotionId }) as never;
     const ends = { promotionEnds: new Map([["promo-1", "2030-01-01T00:00:00Z"]]) };
     expect(dealEndsAt(deal("promo-1"), ends, Date.parse("2029-12-31T00:00:00Z"))).toBe("2030-01-01T00:00:00Z");
     expect(dealEndsAt(deal("promo-1"), ends, Date.parse("2030-01-02T00:00:00Z"))).toBeNull();

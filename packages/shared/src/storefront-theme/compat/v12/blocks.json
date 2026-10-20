@@ -1,0 +1,1050 @@
+[
+ {
+  "version": 12,
+  "template": "department-mall",
+  "tokens": {
+   "colors": {
+    "background": "#ffffff",
+    "foreground": "#1d1c1a",
+    "card": "#ffffff",
+    "card-foreground": "#1d1c1a",
+    "popover": "#ffffff",
+    "popover-foreground": "#1d1c1a",
+    "primary": "#1d1c1a",
+    "primary-foreground": "#fbfaf7",
+    "secondary": "#f1eee8",
+    "secondary-foreground": "#1d1c1a",
+    "muted": "#f1eee8",
+    "muted-foreground": "#5d5850",
+    "accent": "#e9e3d8",
+    "accent-foreground": "#1d1c1a",
+    "destructive": "#b42318",
+    "destructive-foreground": "#ffffff",
+    "border": "#e5e0d6",
+    "input": "#d3ccbf",
+    "ring": "#1d1c1a"
+   },
+   "typography": "retail",
+   "typeScale": "retail",
+   "headingCase": "sentence",
+   "density": "compact",
+   "radius": "subtle",
+   "buttonShape": "radius",
+   "surface": "hairline",
+   "imageRatio": "square",
+   "imageFit": "cover",
+   "headerTone": "light",
+   "container": "1200"
+  },
+  "brand": {
+   "logo": null,
+   "logoWidth": 180,
+   "footerLogo": null,
+   "favicon": null
+  },
+  "blocks": {
+   "topBar": {
+    "variant": "none",
+    "settings": {}
+   },
+   "header": {
+    "variant": "inline-nav",
+    "settings": {
+     "search": "icon",
+     "rowTone": "page",
+     "cartTotal": false
+    }
+   },
+   "navigation": {
+    "source": "tree+menu",
+    "maxTopItems": 8,
+    "linkBudget": 150
+   },
+   "desktopNav": {
+    "variant": "dropdown",
+    "settings": {}
+   },
+   "mobileNav": {
+    "variant": "accordion-drawer",
+    "settings": {}
+   },
+   "card": {
+    "variant": "standard",
+    "settings": {
+     "facts": "none",
+     "action": "none",
+     "hoverImage": false
+    }
+   },
+   "listing": {
+    "layout": {
+     "variant": "grid",
+     "settings": {}
+    },
+    "searchLayout": "same",
+    "descriptionPlacement": "below",
+    "filters": {
+     "style": "sidebar-dense",
+     "openByDefault": true,
+     "column": 262,
+     "rowPitch": 24,
+     "label": 14,
+     "searchPlacement": "same",
+     "ruled": false
+    },
+    "toolbar": [
+     "breadcrumb",
+     "result-count",
+     "sort",
+     "applied-chips"
+    ],
+    "phoneLayout": "grid",
+    "paging": "numbered",
+    "surface": "muted",
+    "band": "standard",
+    "phoneBar": "standard",
+    "links": "chips",
+    "phoneBanner": true,
+    "maxColumns": null
+   },
+   "product": {
+    "gallery": {
+     "variant": "classic",
+     "settings": {}
+    },
+    "buyBox": {
+     "variant": "classic",
+     "settings": {
+      "cta": "row",
+      "features": false,
+      "details": "buy-box",
+      "emi": false,
+      "whatsapp": false
+     }
+    },
+    "below": [
+     "description",
+     "reviews",
+     "related"
+    ],
+    "sticky": {
+     "phoneTop": "none",
+     "phoneBottom": "buy-bar",
+     "desktop": "none"
+    }
+   },
+   "footer": {
+    "variant": "columns",
+    "settings": {
+     "tone": "page",
+     "tagline": "",
+     "about": "",
+     "copyright": ""
+    }
+   }
+  },
+  "pages": {
+   "home": [],
+   "homeMode": {
+    "kind": "sections"
+   },
+   "landing": {},
+   "templates": {
+    "product": {
+     "sections": [],
+     "main": 0
+    },
+    "collection": {
+     "sections": [],
+     "main": 0
+    },
+    "cart": {
+     "sections": [],
+     "main": 0
+    },
+    "page": {
+     "sections": [],
+     "main": 0
+    }
+   }
+  }
+ },
+ {
+  "version": 12,
+  "template": "department-mall",
+  "tokens": {
+   "colors": {
+    "background": "#ffffff",
+    "foreground": "#1d1c1a",
+    "card": "#ffffff",
+    "card-foreground": "#1d1c1a",
+    "popover": "#ffffff",
+    "popover-foreground": "#1d1c1a",
+    "primary": "#1d1c1a",
+    "primary-foreground": "#fbfaf7",
+    "secondary": "#f1eee8",
+    "secondary-foreground": "#1d1c1a",
+    "muted": "#f1eee8",
+    "muted-foreground": "#5d5850",
+    "accent": "#e9e3d8",
+    "accent-foreground": "#1d1c1a",
+    "destructive": "#b42318",
+    "destructive-foreground": "#ffffff",
+    "border": "#e5e0d6",
+    "input": "#d3ccbf",
+    "ring": "#1d1c1a"
+   },
+   "typography": "retail",
+   "typeScale": "retail",
+   "headingCase": "sentence",
+   "density": "compact",
+   "radius": "subtle",
+   "buttonShape": "radius",
+   "surface": "hairline",
+   "imageRatio": "square",
+   "imageFit": "cover",
+   "headerTone": "light",
+   "container": "1200"
+  },
+  "brand": {
+   "logo": null,
+   "logoWidth": 180,
+   "footerLogo": null,
+   "favicon": null
+  },
+  "blocks": {
+   "topBar": {
+    "variant": "announcement",
+    "settings": {
+     "text": "",
+     "link": null
+    }
+   },
+   "header": {
+    "variant": "search-first",
+    "settings": {
+     "search": "field",
+     "rowTone": "page",
+     "cartTotal": false
+    }
+   },
+   "navigation": {
+    "source": "tree+menu",
+    "maxTopItems": 8,
+    "linkBudget": 150
+   },
+   "desktopNav": {
+    "variant": "cascading",
+    "settings": {}
+   },
+   "mobileNav": {
+    "variant": "drill-in-drawer",
+    "settings": {}
+   },
+   "card": {
+    "variant": "standard",
+    "settings": {
+     "facts": "none",
+     "action": "full",
+     "hoverImage": false
+    }
+   },
+   "listing": {
+    "layout": {
+     "variant": "list",
+     "settings": {}
+    },
+    "searchLayout": "same",
+    "descriptionPlacement": "below",
+    "filters": {
+     "style": "sidebar-dense",
+     "openByDefault": true,
+     "column": 262,
+     "rowPitch": 24,
+     "label": 14,
+     "searchPlacement": "same",
+     "ruled": false
+    },
+    "toolbar": [
+     "breadcrumb",
+     "result-count",
+     "sort",
+     "applied-chips"
+    ],
+    "phoneLayout": "grid",
+    "paging": "numbered",
+    "surface": "muted",
+    "band": "standard",
+    "phoneBar": "standard",
+    "links": "chips",
+    "phoneBanner": true,
+    "maxColumns": null
+   },
+   "product": {
+    "gallery": {
+     "variant": "thumbs-below",
+     "settings": {}
+    },
+    "buyBox": {
+     "variant": "marketplace-3col",
+     "settings": {}
+    },
+    "below": [
+     "description",
+     "reviews",
+     "related"
+    ],
+    "sticky": {
+     "phoneTop": "none",
+     "phoneBottom": "buy-bar",
+     "desktop": "none"
+    }
+   },
+   "footer": {
+    "variant": "centered-compact",
+    "settings": {
+     "tone": "muted",
+     "tagline": "",
+     "about": "",
+     "copyright": ""
+    }
+   }
+  },
+  "pages": {
+   "home": [],
+   "homeMode": {
+    "kind": "sections"
+   },
+   "landing": {},
+   "templates": {
+    "product": {
+     "sections": [],
+     "main": 0
+    },
+    "collection": {
+     "sections": [],
+     "main": 0
+    },
+    "cart": {
+     "sections": [],
+     "main": 0
+    },
+    "page": {
+     "sections": [],
+     "main": 0
+    }
+   }
+  }
+ },
+ {
+  "version": 12,
+  "template": "department-mall",
+  "tokens": {
+   "colors": {
+    "background": "#ffffff",
+    "foreground": "#1d1c1a",
+    "card": "#ffffff",
+    "card-foreground": "#1d1c1a",
+    "popover": "#ffffff",
+    "popover-foreground": "#1d1c1a",
+    "primary": "#1d1c1a",
+    "primary-foreground": "#fbfaf7",
+    "secondary": "#f1eee8",
+    "secondary-foreground": "#1d1c1a",
+    "muted": "#f1eee8",
+    "muted-foreground": "#5d5850",
+    "accent": "#e9e3d8",
+    "accent-foreground": "#1d1c1a",
+    "destructive": "#b42318",
+    "destructive-foreground": "#ffffff",
+    "border": "#e5e0d6",
+    "input": "#d3ccbf",
+    "ring": "#1d1c1a"
+   },
+   "typography": "retail",
+   "typeScale": "retail",
+   "headingCase": "sentence",
+   "density": "compact",
+   "radius": "subtle",
+   "buttonShape": "radius",
+   "surface": "hairline",
+   "imageRatio": "square",
+   "imageFit": "cover",
+   "headerTone": "light",
+   "container": "1200"
+  },
+  "brand": {
+   "logo": null,
+   "logoWidth": 180,
+   "footerLogo": null,
+   "favicon": null
+  },
+  "blocks": {
+   "topBar": {
+    "variant": "utility",
+    "settings": {
+     "text": "",
+     "link": null
+    }
+   },
+   "header": {
+    "variant": "centered-logo",
+    "settings": {
+     "search": "icon",
+     "rowTone": "page",
+     "cartTotal": false
+    }
+   },
+   "navigation": {
+    "source": "tree+menu",
+    "maxTopItems": 8,
+    "linkBudget": 150
+   },
+   "desktopNav": {
+    "variant": "mega-panel",
+    "settings": {
+     "promoImages": false
+    }
+   },
+   "mobileNav": {
+    "variant": "bottom-tabs",
+    "settings": {
+     "tabs": [
+      "home",
+      "categories",
+      "offers",
+      "account"
+     ],
+     "drawer": "accordion"
+    }
+   },
+   "card": {
+    "variant": "standard",
+    "settings": {
+     "facts": "none",
+     "action": "full",
+     "hoverImage": false
+    }
+   },
+   "listing": {
+    "layout": {
+     "variant": "shelves",
+     "settings": {
+      "maxShelves": 8,
+      "spacing": "standard"
+     }
+    },
+    "searchLayout": "same",
+    "descriptionPlacement": "below",
+    "filters": {
+     "style": "sidebar-dense",
+     "openByDefault": true,
+     "column": 262,
+     "rowPitch": 24,
+     "label": 14,
+     "searchPlacement": "same",
+     "ruled": false
+    },
+    "toolbar": [
+     "breadcrumb",
+     "result-count",
+     "sort",
+     "applied-chips"
+    ],
+    "phoneLayout": "grid",
+    "paging": "numbered",
+    "surface": "muted",
+    "band": "standard",
+    "phoneBar": "standard",
+    "links": "chips",
+    "phoneBanner": true,
+    "maxColumns": null
+   },
+   "product": {
+    "gallery": {
+     "variant": "thumbs-left",
+     "settings": {
+      "phoneSideThumbnails": false
+     }
+    },
+    "buyBox": {
+     "variant": "classic",
+     "settings": {
+      "cta": "row",
+      "features": true,
+      "details": "below",
+      "emi": false,
+      "whatsapp": false
+     }
+    },
+    "below": [
+     "description",
+     "reviews",
+     "related"
+    ],
+    "sticky": {
+     "phoneTop": "none",
+     "phoneBottom": "buy-bar",
+     "desktop": "none"
+    }
+   },
+   "footer": {
+    "variant": "directory",
+    "settings": {
+     "style": "columns",
+     "tagline": "",
+     "about": "",
+     "copyright": ""
+    }
+   }
+  },
+  "pages": {
+   "home": [],
+   "homeMode": {
+    "kind": "sections"
+   },
+   "landing": {},
+   "templates": {
+    "product": {
+     "sections": [],
+     "main": 0
+    },
+    "collection": {
+     "sections": [],
+     "main": 0
+    },
+    "cart": {
+     "sections": [],
+     "main": 0
+    },
+    "page": {
+     "sections": [],
+     "main": 0
+    }
+   }
+  }
+ },
+ {
+  "version": 12,
+  "template": "department-mall",
+  "tokens": {
+   "colors": {
+    "background": "#ffffff",
+    "foreground": "#1d1c1a",
+    "card": "#ffffff",
+    "card-foreground": "#1d1c1a",
+    "popover": "#ffffff",
+    "popover-foreground": "#1d1c1a",
+    "primary": "#1d1c1a",
+    "primary-foreground": "#fbfaf7",
+    "secondary": "#f1eee8",
+    "secondary-foreground": "#1d1c1a",
+    "muted": "#f1eee8",
+    "muted-foreground": "#5d5850",
+    "accent": "#e9e3d8",
+    "accent-foreground": "#1d1c1a",
+    "destructive": "#b42318",
+    "destructive-foreground": "#ffffff",
+    "border": "#e5e0d6",
+    "input": "#d3ccbf",
+    "ring": "#1d1c1a"
+   },
+   "typography": "retail",
+   "typeScale": "retail",
+   "headingCase": "sentence",
+   "density": "compact",
+   "radius": "subtle",
+   "buttonShape": "radius",
+   "surface": "hairline",
+   "imageRatio": "square",
+   "imageFit": "cover",
+   "headerTone": "light",
+   "container": "1200"
+  },
+  "brand": {
+   "logo": null,
+   "logoWidth": 180,
+   "footerLogo": null,
+   "favicon": null
+  },
+  "blocks": {
+   "topBar": {
+    "variant": "utility",
+    "settings": {
+     "text": "Free delivery inside Dhaka on orders over ৳3,000",
+     "link": "/delivery"
+    }
+   },
+   "header": {
+    "variant": "search-first",
+    "settings": {
+     "search": "scoped",
+     "rowTone": "page",
+     "cartTotal": true
+    }
+   },
+   "navigation": {
+    "source": "tree+menu",
+    "maxTopItems": 8,
+    "linkBudget": 150
+   },
+   "desktopNav": {
+    "variant": "drill-in-drawer",
+    "settings": {}
+   },
+   "mobileNav": {
+    "variant": "accordion-drawer",
+    "settings": {}
+   },
+   "card": {
+    "variant": "standard",
+    "settings": {
+     "facts": "none",
+     "action": "full",
+     "hoverImage": false
+    }
+   },
+   "listing": {
+    "layout": {
+     "variant": "quick-grid",
+     "settings": {}
+    },
+    "searchLayout": "same",
+    "descriptionPlacement": "below",
+    "filters": {
+     "style": "sidebar-dense",
+     "openByDefault": true,
+     "column": 262,
+     "rowPitch": 24,
+     "label": 14,
+     "searchPlacement": "same",
+     "ruled": false
+    },
+    "toolbar": [
+     "breadcrumb",
+     "result-count",
+     "sort",
+     "applied-chips"
+    ],
+    "phoneLayout": "grid",
+    "paging": "numbered",
+    "surface": "muted",
+    "band": "standard",
+    "phoneBar": "standard",
+    "links": "chips",
+    "phoneBanner": true,
+    "maxColumns": null
+   },
+   "product": {
+    "gallery": {
+     "variant": "stacked",
+     "settings": {}
+    },
+    "buyBox": {
+     "variant": "classic",
+     "settings": {
+      "cta": "row",
+      "features": true,
+      "details": "below",
+      "emi": false,
+      "whatsapp": false
+     }
+    },
+    "below": [
+     "description",
+     "reviews",
+     "related"
+    ],
+    "sticky": {
+     "phoneTop": "none",
+     "phoneBottom": "buy-bar",
+     "desktop": "none"
+    }
+   },
+   "footer": {
+    "variant": "columns",
+    "settings": {
+     "tone": "page",
+     "tagline": "Handwoven sarees and genuine electronics, delivered across Bangladesh.",
+     "about": "Nakshi Bazar started as one stall in New Market in 2009.\n\nToday we ship to all 64 districts from our warehouse in Tejgaon, with cash on delivery and official warranty.",
+     "copyright": "Nakshi Bazar Limited"
+    }
+   }
+  },
+  "pages": {
+   "home": [],
+   "homeMode": {
+    "kind": "sections"
+   },
+   "landing": {},
+   "templates": {
+    "product": {
+     "sections": [],
+     "main": 0
+    },
+    "collection": {
+     "sections": [],
+     "main": 0
+    },
+    "cart": {
+     "sections": [],
+     "main": 0
+    },
+    "page": {
+     "sections": [],
+     "main": 0
+    }
+   }
+  }
+ },
+ {
+  "version": 12,
+  "template": "department-mall",
+  "tokens": {
+   "colors": {
+    "background": "#ffffff",
+    "foreground": "#1d1c1a",
+    "card": "#ffffff",
+    "card-foreground": "#1d1c1a",
+    "popover": "#ffffff",
+    "popover-foreground": "#1d1c1a",
+    "primary": "#1d1c1a",
+    "primary-foreground": "#fbfaf7",
+    "secondary": "#f1eee8",
+    "secondary-foreground": "#1d1c1a",
+    "muted": "#f1eee8",
+    "muted-foreground": "#5d5850",
+    "accent": "#e9e3d8",
+    "accent-foreground": "#1d1c1a",
+    "destructive": "#b42318",
+    "destructive-foreground": "#ffffff",
+    "border": "#e5e0d6",
+    "input": "#d3ccbf",
+    "ring": "#1d1c1a"
+   },
+   "typography": "retail",
+   "typeScale": "retail",
+   "headingCase": "sentence",
+   "density": "compact",
+   "radius": "subtle",
+   "buttonShape": "radius",
+   "surface": "hairline",
+   "imageRatio": "square",
+   "imageFit": "cover",
+   "headerTone": "light",
+   "container": "1200"
+  },
+  "brand": {
+   "logo": null,
+   "logoWidth": 180,
+   "footerLogo": null,
+   "favicon": null
+  },
+  "blocks": {
+   "topBar": {
+    "variant": "utility",
+    "settings": {
+     "text": "Free delivery inside Dhaka on orders over ৳3,000",
+     "link": "/delivery"
+    }
+   },
+   "header": {
+    "variant": "search-first",
+    "settings": {
+     "search": "scoped",
+     "rowTone": "page",
+     "cartTotal": true
+    }
+   },
+   "navigation": {
+    "source": "tree+menu",
+    "maxTopItems": 8,
+    "linkBudget": 150
+   },
+   "desktopNav": {
+    "variant": "departments-rail",
+    "settings": {
+     "open": "demand"
+    }
+   },
+   "mobileNav": {
+    "variant": "accordion-drawer",
+    "settings": {}
+   },
+   "card": {
+    "variant": "standard",
+    "settings": {
+     "facts": "none",
+     "action": "full",
+     "hoverImage": false
+    }
+   },
+   "listing": {
+    "layout": {
+     "variant": "grid",
+     "settings": {}
+    },
+    "searchLayout": "same",
+    "descriptionPlacement": "below",
+    "filters": {
+     "style": "sidebar-dense",
+     "openByDefault": true,
+     "column": 262,
+     "rowPitch": 24,
+     "label": 14,
+     "searchPlacement": "same",
+     "ruled": false
+    },
+    "toolbar": [
+     "breadcrumb",
+     "result-count",
+     "sort",
+     "applied-chips"
+    ],
+    "phoneLayout": "grid",
+    "paging": "numbered",
+    "surface": "muted",
+    "band": "standard",
+    "phoneBar": "standard",
+    "links": "chips",
+    "phoneBanner": true,
+    "maxColumns": null
+   },
+   "product": {
+    "gallery": {
+     "variant": "portrait",
+     "settings": {}
+    },
+    "buyBox": {
+     "variant": "classic",
+     "settings": {
+      "cta": "row",
+      "features": true,
+      "details": "below",
+      "emi": false,
+      "whatsapp": false
+     }
+    },
+    "below": [
+     "description",
+     "reviews",
+     "related"
+    ],
+    "sticky": {
+     "phoneTop": "none",
+     "phoneBottom": "buy-bar",
+     "desktop": "none"
+    }
+   },
+   "footer": {
+    "variant": "columns",
+    "settings": {
+     "tone": "page",
+     "tagline": "Handwoven sarees and genuine electronics, delivered across Bangladesh.",
+     "about": "Nakshi Bazar started as one stall in New Market in 2009.\n\nToday we ship to all 64 districts from our warehouse in Tejgaon, with cash on delivery and official warranty.",
+     "copyright": "Nakshi Bazar Limited"
+    }
+   }
+  },
+  "pages": {
+   "home": [],
+   "homeMode": {
+    "kind": "sections"
+   },
+   "landing": {},
+   "templates": {
+    "product": {
+     "sections": [],
+     "main": 0
+    },
+    "collection": {
+     "sections": [],
+     "main": 0
+    },
+    "cart": {
+     "sections": [],
+     "main": 0
+    },
+    "page": {
+     "sections": [],
+     "main": 0
+    }
+   }
+  }
+ },
+ {
+  "version": 12,
+  "template": "department-mall",
+  "tokens": {
+   "colors": {
+    "background": "#ffffff",
+    "foreground": "#1d1c1a",
+    "card": "#ffffff",
+    "card-foreground": "#1d1c1a",
+    "popover": "#ffffff",
+    "popover-foreground": "#1d1c1a",
+    "primary": "#1d1c1a",
+    "primary-foreground": "#fbfaf7",
+    "secondary": "#f1eee8",
+    "secondary-foreground": "#1d1c1a",
+    "muted": "#f1eee8",
+    "muted-foreground": "#5d5850",
+    "accent": "#e9e3d8",
+    "accent-foreground": "#1d1c1a",
+    "destructive": "#b42318",
+    "destructive-foreground": "#ffffff",
+    "border": "#e5e0d6",
+    "input": "#d3ccbf",
+    "ring": "#1d1c1a"
+   },
+   "typography": "retail",
+   "typeScale": "retail",
+   "headingCase": "sentence",
+   "density": "compact",
+   "radius": "subtle",
+   "buttonShape": "radius",
+   "surface": "hairline",
+   "imageRatio": "square",
+   "imageFit": "cover",
+   "headerTone": "light",
+   "container": "1200"
+  },
+  "brand": {
+   "logo": null,
+   "logoWidth": 180,
+   "footerLogo": null,
+   "favicon": null
+  },
+  "blocks": {
+   "topBar": {
+    "variant": "utility",
+    "settings": {
+     "text": "Free delivery inside Dhaka on orders over ৳3,000",
+     "link": "/delivery"
+    }
+   },
+   "header": {
+    "variant": "search-first",
+    "settings": {
+     "search": "scoped",
+     "rowTone": "page",
+     "cartTotal": true
+    }
+   },
+   "navigation": {
+    "source": "tree+menu",
+    "maxTopItems": 8,
+    "linkBudget": 150
+   },
+   "desktopNav": {
+    "variant": "sticky-category-bar",
+    "settings": {
+     "flyouts": "dropdown"
+    }
+   },
+   "mobileNav": {
+    "variant": "accordion-drawer",
+    "settings": {}
+   },
+   "card": {
+    "variant": "standard",
+    "settings": {
+     "facts": "none",
+     "action": "full",
+     "hoverImage": false
+    }
+   },
+   "listing": {
+    "layout": {
+     "variant": "grid",
+     "settings": {}
+    },
+    "searchLayout": "same",
+    "descriptionPlacement": "below",
+    "filters": {
+     "style": "sidebar-dense",
+     "openByDefault": true,
+     "column": 262,
+     "rowPitch": 24,
+     "label": 14,
+     "searchPlacement": "same",
+     "ruled": false
+    },
+    "toolbar": [
+     "breadcrumb",
+     "result-count",
+     "sort",
+     "applied-chips"
+    ],
+    "phoneLayout": "grid",
+    "paging": "numbered",
+    "surface": "muted",
+    "band": "standard",
+    "phoneBar": "standard",
+    "links": "chips",
+    "phoneBanner": true,
+    "maxColumns": null
+   },
+   "product": {
+    "gallery": {
+     "variant": "image-grid",
+     "settings": {}
+    },
+    "buyBox": {
+     "variant": "classic",
+     "settings": {
+      "cta": "row",
+      "features": true,
+      "details": "below",
+      "emi": false,
+      "whatsapp": false
+     }
+    },
+    "below": [
+     "description",
+     "reviews",
+     "related"
+    ],
+    "sticky": {
+     "phoneTop": "none",
+     "phoneBottom": "buy-bar",
+     "desktop": "none"
+    }
+   },
+   "footer": {
+    "variant": "columns",
+    "settings": {
+     "tone": "page",
+     "tagline": "Handwoven sarees and genuine electronics, delivered across Bangladesh.",
+     "about": "Nakshi Bazar started as one stall in New Market in 2009.\n\nToday we ship to all 64 districts from our warehouse in Tejgaon, with cash on delivery and official warranty.",
+     "copyright": "Nakshi Bazar Limited"
+    }
+   }
+  },
+  "pages": {
+   "home": [],
+   "homeMode": {
+    "kind": "sections"
+   },
+   "landing": {},
+   "templates": {
+    "product": {
+     "sections": [],
+     "main": 0
+    },
+    "collection": {
+     "sections": [],
+     "main": 0
+    },
+    "cart": {
+     "sections": [],
+     "main": 0
+    },
+    "page": {
+     "sections": [],
+     "main": 0
+    }
+   }
+  }
+ }
+]

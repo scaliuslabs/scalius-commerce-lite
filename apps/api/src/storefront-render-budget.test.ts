@@ -137,18 +137,18 @@ function everySectionTheme() {
     ],
     sideBanners: [{ mediaId: "media_side", alt: "Side", href: "/sale" }],
   });
-  set("category-tiles", { style: "photo", title: "", categoryIds: ["cat_panjabi"] });
+  set("category_tiles", { style: "photo", title: "", categoryIds: ["cat_panjabi"] });
   set("collections", { carousel: "large", collectionIds: ["col_grid", "col_rail"] });
-  set("product-rail", { title: "", source: { kind: "popular" }, limit: 12 });
-  set("product-grid", { title: "", source: { kind: "category", categoryId: "cat_panjabi" }, columns: 4, rows: 2 });
-  set("deal-block", { title: "", source: { kind: "on-sale" }, promotionId: "promo_deal" });
-  set("product-tabs", { title: "", limit: 8, tabs: [{ label: "", source: { kind: "newest" } }, { label: "", source: { kind: "popular" } }] });
-  set("shop-by", { title: "", cards: [{ mediaId: "media_banner", title: "Eid", href: "/eid" }] });
-  set("banner-mosaic", { tiles: [{ mediaId: "media_story", alt: "", href: null }, { mediaId: "media_look", alt: "", href: null }] });
+  set("product_rail", { title: "", source: { kind: "popular" }, limit: 12 });
+  set("product_grid", { title: "", source: { kind: "category", categoryId: "cat_panjabi" }, columns: 4, rows: 2 });
+  set("deal_block", { title: "", source: { kind: "on-sale" }, promotionId: "promo_deal" });
+  set("product_tabs", { title: "", limit: 8, tabs: [{ label: "", source: { kind: "newest" } }, { label: "", source: { kind: "popular" } }] });
+  set("shop_by", { title: "", cards: [{ mediaId: "media_banner", title: "Eid", href: "/eid" }] });
+  set("banner_mosaic", { tiles: [{ mediaId: "media_story", alt: "", href: null }, { mediaId: "media_look", alt: "", href: null }] });
   set("lookbook", { title: "", mediaId: "media_look", source: { kind: "collection", collectionId: "col_grid" }, photo: "tall" });
   set("banner", { layout: "two-up", heading: "Eid", text: "", mediaId: "media_banner", cta: null });
   set("editorial", { layout: "image-with-text", heading: "Story", body: "Woven by hand.", mediaId: "media_story", imageSide: "end" });
-  set("product-rail", { title: "", source: { kind: "newest" }, limit: 8 }, "rail-newest");
+  set("product_rail", { title: "", source: { kind: "newest" }, limit: 8 }, "rail-newest");
   theme.pages.home = sections;
   // The product homepage's product rides in the second batch too.
   theme.pages.homeMode = { kind: "product", productId: "p_linen" };
@@ -470,7 +470,7 @@ describe("storefront page render D1 budget", () => {
       editTheme: (theme) => {
         theme.pages.templates[kind] = {
           sections: [
-            { ...storefrontSectionDefault("product-rail", "rail"), settings: { ...storefrontSectionDefault("product-rail", "rail").settings, source: { kind: "newest" } } } as StorefrontSection,
+            { ...storefrontSectionDefault("product_rail", "rail"), settings: { ...storefrontSectionDefault("product_rail", "rail").settings, source: { kind: "newest" } } } as StorefrontSection,
             { ...storefrontSectionDefault("faq", "faq"), settings: { heading: "Questions", items: [{ question: "Delivery?", answer: "Two days." }] } } as StorefrontSection,
           ],
           main: 1,

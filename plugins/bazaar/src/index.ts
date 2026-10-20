@@ -123,7 +123,7 @@ const skins = [
   },
   {
     id: "bazaar_card",
-    target: "product-card",
+    target: "product_card",
     name: "Bazaar card",
     description: "Photo on a light panel, title, stars and count, the big price with the list price, a fast-delivery badge and Add to cart.",
     settings: [
@@ -135,7 +135,7 @@ const skins = [
   },
   {
     id: "bazaar_product",
-    target: "product-main",
+    target: "product_main",
     name: "Bazaar product page",
     description: "Gallery, the centre column with title, store link, stars, price and About this item, and the buy box with Ships from and Sold by.",
     settings: [
@@ -150,7 +150,7 @@ const skins = [
   },
   {
     id: "bazaar_listing",
-    target: "listing-main",
+    target: "listing_main",
     name: "Bazaar results",
     description: "The results bar with the count and sort, the filter rail on the left and the card grid.",
     settings: [],
@@ -167,21 +167,21 @@ const skins = [
   },
   {
     id: "bazaar_product_row",
-    target: "section:product-rail",
+    target: "section:product_rail",
     name: "Bazaar product row",
     description: "Products as a carousel of marketplace cards.",
     settings: [{ key: "link_label", label: "Link text", type: "text", default: "See more", maxLength: 30 }],
   },
   {
     id: "bazaar_deals",
-    target: "section:deal-block",
+    target: "section:deal_block",
     name: "Bazaar deals",
     description: "The deal block's products as the deal row.",
     settings: [],
   },
   {
     id: "bazaar_quad_tiles",
-    target: "section:category-tiles",
+    target: "section:category_tiles",
     name: "Bazaar category cards",
     description: "Categories four to a card, as the marketplace's shop-by-category cards.",
     settings: [{ key: "link_label", label: "Link text", type: "text", default: "Shop now", maxLength: 30 }],
@@ -233,7 +233,7 @@ const templates = [
     id: "bazaar",
     name: "Bazaar",
     description: "A marketplace home: the hero carousel, a row of four cards over it, deal and best-seller rows, category cards and product rows.",
-    themeVersion: 11,
+    themeVersion: 12,
     theme: {
       tokens,
       blocks: { navigation: { source: "menu", maxTopItems: 18, linkBudget: 150 } },
@@ -241,18 +241,18 @@ const templates = [
         skins: {
           header: { app: "scalius.bazaar/bazaar_header", values: {} },
           footer: { app: "scalius.bazaar/bazaar_footer", values: { services: [] } },
-          "product-card": { app: "scalius.bazaar/bazaar_card", values: {} },
-          "product-main": { app: "scalius.bazaar/bazaar_product", values: {} },
-          "listing-main": { app: "scalius.bazaar/bazaar_listing", values: {} },
+          "product_card": { app: "scalius.bazaar/bazaar_card", values: {} },
+          "product_main": { app: "scalius.bazaar/bazaar_product", values: {} },
+          "listing_main": { app: "scalius.bazaar/bazaar_listing", values: {} },
         },
       },
       sections: [
         skinned("bazaar-hero", "hero", { layout: "full-bleed", slides: [] }, "bazaar_hero"),
         appSection("bazaar-cards-1", "card_row", { cards: [], overlap: true }),
         appSection("bazaar-deals", "deal_row", { heading: "Today's Deals", products: "on-sale" }),
-        skinned("bazaar-categories", "category-tiles", { style: "photo", title: "Shop by category", categoryIds: [] }, "bazaar_quad_tiles"),
+        skinned("bazaar-categories", "category_tiles", { style: "photo", title: "Shop by category", categoryIds: [] }, "bazaar_quad_tiles"),
         appSection("bazaar-best", "image_row", { heading: "Best Sellers", products: "popular" }),
-        skinned("bazaar-new", "product-rail", { title: "New arrivals", source: { kind: "newest" }, limit: 12 }, "bazaar_product_row"),
+        skinned("bazaar-new", "product_rail", { title: "New arrivals", source: { kind: "newest" }, limit: 12 }, "bazaar_product_row"),
         appSection("bazaar-cards-2", "card_row", { cards: [] }),
       ],
     },

@@ -1505,7 +1505,7 @@
           "version": {
             "type": "number",
             "enum": [
-              11
+              12
             ]
           },
           "template": {
@@ -3252,13 +3252,13 @@
                   "footer": {
                     "$ref": "#/components/schemas/StorefrontSkinRef"
                   },
-                  "product-card": {
+                  "product_card": {
                     "$ref": "#/components/schemas/StorefrontSkinRef"
                   },
-                  "product-main": {
+                  "product_main": {
                     "$ref": "#/components/schemas/StorefrontSkinRef"
                   },
-                  "listing-main": {
+                  "listing_main": {
                     "$ref": "#/components/schemas/StorefrontSkinRef"
                   }
                 },
@@ -3722,7 +3722,7 @@
                 "type": {
                   "type": "string",
                   "enum": [
-                    "usp-strip"
+                    "usp_strip"
                   ]
                 },
                 "version": {
@@ -3847,7 +3847,7 @@
                 "type": {
                   "type": "string",
                   "enum": [
-                    "category-tiles"
+                    "category_tiles"
                   ]
                 },
                 "version": {
@@ -4000,7 +4000,7 @@
                 "type": {
                   "type": "string",
                   "enum": [
-                    "product-rail"
+                    "product_rail"
                   ]
                 },
                 "version": {
@@ -4066,7 +4066,7 @@
                 "type": {
                   "type": "string",
                   "enum": [
-                    "product-grid"
+                    "product_grid"
                   ]
                 },
                 "version": {
@@ -4138,7 +4138,7 @@
                 "type": {
                   "type": "string",
                   "enum": [
-                    "deal-block"
+                    "deal_block"
                   ]
                 },
                 "version": {
@@ -4210,7 +4210,7 @@
                 "type": {
                   "type": "string",
                   "enum": [
-                    "product-tabs"
+                    "product_tabs"
                   ]
                 },
                 "version": {
@@ -4301,7 +4301,7 @@
                 "type": {
                   "type": "string",
                   "enum": [
-                    "shop-by"
+                    "shop_by"
                   ]
                 },
                 "version": {
@@ -4398,7 +4398,7 @@
                 "type": {
                   "type": "string",
                   "enum": [
-                    "banner-mosaic"
+                    "banner_mosaic"
                   ]
                 },
                 "version": {
@@ -4660,7 +4660,7 @@
                 "type": {
                   "type": "string",
                   "enum": [
-                    "brand-wall"
+                    "brand_wall"
                   ]
                 },
                 "version": {
@@ -5106,7 +5106,7 @@
                 "type": {
                   "type": "string",
                   "enum": [
-                    "utility-cards"
+                    "utility_cards"
                   ]
                 },
                 "version": {
@@ -5193,7 +5193,7 @@
                 "type": {
                   "type": "string",
                   "enum": [
-                    "endless-grid"
+                    "endless_grid"
                   ]
                 },
                 "version": {
@@ -5272,7 +5272,7 @@
                 "type": {
                   "type": "string",
                   "enum": [
-                    "seo-text"
+                    "seo_text"
                   ]
                 },
                 "version": {
@@ -5333,7 +5333,7 @@
                 "type": {
                   "type": "string",
                   "enum": [
-                    "recently-viewed"
+                    "recently_viewed"
                   ]
                 },
                 "version": {
@@ -33582,7 +33582,7 @@
                                     },
                                     "target": {
                                       "type": "string",
-                                      "description": "The unit the skin draws: header, footer, product-card, product-main, listing-main or section:<core section type>."
+                                      "description": "The unit the skin draws: header, footer, product_card, product_main, listing_main or section:<core section type>."
                                     },
                                     "settings": {
                                       "type": "array",

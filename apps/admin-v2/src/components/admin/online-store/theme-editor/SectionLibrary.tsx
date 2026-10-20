@@ -29,24 +29,24 @@ type Category = "all" | "banners" | "products" | "text" | "apps";
 const CATEGORY_OF: Record<(typeof STOREFRONT_SECTION_RENDERERS)[number], Exclude<Category, "all" | "apps">> = {
   hero: "banners",
   banner: "banners",
-  "banner-mosaic": "banners",
-  "shop-by": "banners",
+  "banner_mosaic": "banners",
+  "shop_by": "banners",
   lookbook: "banners",
-  "product-rail": "products",
-  "product-grid": "products",
-  "deal-block": "products",
-  "product-tabs": "products",
+  "product_rail": "products",
+  "product_grid": "products",
+  "deal_block": "products",
+  "product_tabs": "products",
   collections: "products",
-  "endless-grid": "products",
-  "recently-viewed": "products",
-  "category-tiles": "products",
-  "brand-wall": "products",
+  "endless_grid": "products",
+  "recently_viewed": "products",
+  "category_tiles": "products",
+  "brand_wall": "products",
   editorial: "text",
   faq: "text",
     specifications: "text",
-  "seo-text": "text",
-  "usp-strip": "text",
-  "utility-cards": "text",
+  "seo_text": "text",
+  "usp_strip": "text",
+  "utility_cards": "text",
   newsletter: "text",
   objects: "text",
 };
@@ -83,36 +83,36 @@ function SectionSketch({ type }: { type: StorefrontSectionType | "app" }): React
       return <span className="flex min-h-0 flex-1 flex-col justify-end gap-1 rounded-xs bg-(--sk-soft) p-1.5"><Bar className="w-1/2" /><Line className="w-1/3" /><Accent /></span>;
     case "banner":
       return <span className="flex min-h-0 flex-1 gap-1.5"><Soft className="flex-1" /><span className="flex flex-1 flex-col justify-center gap-1"><Bar className="w-3/4" /><Line className="w-full" /><Accent /></span></span>;
-    case "banner-mosaic":
+    case "banner_mosaic":
       return <span className="grid min-h-0 flex-1 grid-cols-3 grid-rows-2 gap-1"><Soft className="col-span-2 row-span-2" /><Soft /><Soft /></span>;
-    case "shop-by":
-    case "category-tiles":
+    case "shop_by":
+    case "category_tiles":
       return <span className="flex min-h-0 flex-1 flex-col gap-1"><Bar className="w-1/3" /><Cards count={4} className="grid-cols-4" /></span>;
     case "lookbook":
       return <span className="flex min-h-0 flex-1 gap-1"><Soft className="w-2/5" /><Cards count={4} className="grid-cols-2" /></span>;
-    case "product-rail":
+    case "product_rail":
     case "collections":
-    case "recently-viewed":
+    case "recently_viewed":
       return <span className="flex min-h-0 flex-1 flex-col gap-1"><Bar className="w-1/3" /><Cards count={5} className="grid-cols-5" /></span>;
-    case "product-grid":
-    case "endless-grid":
+    case "product_grid":
+    case "endless_grid":
       return <span className="flex min-h-0 flex-1 flex-col gap-1"><Bar className="w-1/3" /><Cards count={8} className="grid-cols-4" /></span>;
-    case "deal-block":
+    case "deal_block":
       return <span className="flex min-h-0 flex-1 flex-col gap-1"><span className="flex items-center gap-1"><Bar className="w-1/4" /><Accent className="w-8" /></span><Cards count={4} className="grid-cols-4" /></span>;
-    case "product-tabs":
+    case "product_tabs":
       return <span className="flex min-h-0 flex-1 flex-col gap-1"><span className="flex gap-1"><Accent className="w-5" /><Line className="mt-0.5 w-5" /><Line className="mt-0.5 w-5" /></span><Cards count={4} className="grid-cols-4" /></span>;
-    case "brand-wall":
+    case "brand_wall":
       return <span className="grid min-h-0 flex-1 grid-cols-4 items-center gap-1.5">{[0, 1, 2, 3].map((index) => <Line key={index} className="h-1.5" />)}</span>;
     case "editorial":
-    case "seo-text":
+    case "seo_text":
       return <span className="flex min-h-0 flex-1 flex-col justify-center gap-1 px-2"><Bar className="w-1/2" /><Line /><Line /><Line className="w-2/3" /></span>;
     case "faq":
     case "specifications":
     case "objects":
       return <span className="flex min-h-0 flex-1 flex-col justify-center gap-1.5 px-1">{[0, 1, 2].map((index) => <span key={index} className="flex items-center justify-between border-b border-(--sk-edge) pb-1"><Line className="w-2/3" /><Line className="w-1.5" /></span>)}</span>;
-    case "usp-strip":
+    case "usp_strip":
       return <span className="grid min-h-0 flex-1 grid-cols-4 items-center gap-1">{[0, 1, 2, 3].map((index) => <span key={index} className="flex items-center gap-0.5"><span className="size-1.5 rounded-full bg-(--sk-accent)" /><Line className="flex-1" /></span>)}</span>;
-    case "utility-cards":
+    case "utility_cards":
       return <Cards count={4} className="grid-cols-4" />;
     case "newsletter":
       return <span className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1"><Bar className="w-1/3" /><span className="flex w-2/3 gap-1"><span className="h-2 flex-1 rounded-xs border border-(--sk-edge)" /><Accent className="h-2" /></span></span>;

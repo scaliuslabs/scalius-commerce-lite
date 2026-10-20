@@ -266,14 +266,14 @@ describe("pnpm plugin validate", () => {
   it("compiles and smoke-renders the storefront module, so a broken skin fails validate, not pack (DX-4)", async () => {
     const plugin = makeTempPlugin({ id: "acme.skin" });
     try {
-      editSource(plugin.dir, (source) => source.replace("  storefront: {", '  storefront: {\n    skins: [{ id: "page", target: "product-main", name: "Page", settings: [] }],'));
+      editSource(plugin.dir, (source) => source.replace("  storefront: {", '  storefront: {\n    skins: [{ id: "page", target: "product_main", name: "Page", settings: [] }],'));
       writeFileSync(join(plugin.dir, "src/storefront.tsx"), `
         import { defineStorefront, raw } from "@scalius/plugin-sdk/storefront";
         export default defineStorefront({ sections: { banner: () => null }, skins: { page: () => raw("<main><h1>No buy form</h1></main>") } });
       `);
       const outcome = await validatePlugin(plugin.dir);
       expect(outcome.ok).toBe(false);
-      expect(formatChecks(outcome.checks)).toMatch(/✗ Storefront: skin:page \(product-main\): /);
+      expect(formatChecks(outcome.checks)).toMatch(/✗ Storefront: skin:page \(product_main\): /);
 
       writeFileSync(join(plugin.dir, "src/storefront.tsx"), `
         import { defineStorefront } from "@scalius/plugin-sdk/storefront";

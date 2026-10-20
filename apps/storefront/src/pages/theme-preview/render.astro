@@ -35,7 +35,7 @@ const section = target?.sections.find((section) => section.id === only);
 const regionSections = only ? target?.sections ?? [] : regions.flatMap((region) => region.sections);
 const emptyContent = homepageContent(EMPTY_HOMEPAGE_SECTION_DATA, []);
 const standalone = section && !(section.type === "banner" && section.settings.layout !== "full")
-  && !((section.type === "hero" || section.type === "category-tiles")
+  && !((section.type === "hero" || section.type === "category_tiles")
     && regionSections.some((each) => !each.hidden && each.type === "hero" && each.settings.phonePlacement === "after-categories"))
   && homeSectionRequestsEmpty(homeSectionRequests([section]))
   && homepageLeadSection([section], emptyContent) === null;

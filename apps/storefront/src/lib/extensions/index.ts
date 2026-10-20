@@ -208,7 +208,7 @@ export async function renderAppSkin<Target extends StorefrontSkinTarget>(
   ask: SkinAsk<Target>,
 ): Promise<AppMarkup | null> {
   const { host } = await requestExtensions(locals, url);
-  const jsonLd = skin.target !== "product-main" && skin.target !== "listing-main";
+  const jsonLd = skin.target !== "product_main" && skin.target !== "listing_main";
   const html = await host.render(skin.extension, {
     kind: "skin", target: skin.target, component: skin.component, settings: skin.settings, ...ask,
   } as never, { jsonLd });

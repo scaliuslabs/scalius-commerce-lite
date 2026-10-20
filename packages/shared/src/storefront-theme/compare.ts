@@ -38,7 +38,7 @@ const BLOCK_AREA: Record<string, ThemeChangeArea> = {
   card: "productCard", listing: "listing", product: "productPage", footer: "footer",
 };
 
-const SKIN_AREA: Record<string, ThemeChangeArea> = { header: "header", footer: "footer", "product-card": "productCard", "product-main": "productPage", "listing-main": "listing" };
+const SKIN_AREA: Record<string, ThemeChangeArea> = { header: "header", footer: "footer", "product_card": "productCard", "product_main": "productPage", "listing_main": "listing" };
 
 /**
  * Equal as stored JSON: a key whose value is undefined is the same as no key

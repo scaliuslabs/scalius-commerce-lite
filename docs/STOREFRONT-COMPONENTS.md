@@ -69,16 +69,16 @@ A **skin** is app markup for a core-owned unit. It gets the unit's public projec
 | Target | `data` (protocol type) | Core embeds it may place | Fallback |
 | --- | --- | --- | --- |
 | `header`, `footer` | `StorefrontHeaderData`, `StorefrontFooterData` | none (search, cart and account are attributes) | empty → core |
-| `product-card` | `StorefrontProductCardData` (`{ product, position, aboveFold }`) | none (`quickAdd`) | empty → core |
-| `product-main` | `StorefrontProductPage` | **`buy-form` (required, one)**, `gallery`, `reviews`, `recommendations` | no buy form → core |
-| `listing-main` | `StorefrontListingPage` | `filters`, `toolbar`, `pagination` (appended when left out) | empty → core |
+| `product_card` | `StorefrontProductCardData` (`{ product, position, aboveFold }`) | none (`quickAdd`) | empty → core |
+| `product_main` | `StorefrontProductPage` | **`buy_form` (required, one)**, `gallery`, `reviews`, `recommendations` | no buy form → core |
+| `listing_main` | `StorefrontListingPage` | `filters`, `toolbar`, `pagination` (appended when left out) | empty → core |
 | `section:<type>` | `StorefrontSectionSkinData<StorefrontSectionSkinSettings[type]>` | none (`quickAdd`) | empty → the core section |
 
-- `product-main` draws the product page's breadcrumbs, gallery and buy box. The buy form is `ProductBuyBox.astro`, the same component the core page draws: price, options, buyer inputs, quantity, buttons, delivery facts and the buy-box app blocks, kept current as the buyer chooses. The gallery (`<Gallery />`) is `ProductGallery.astro` with the theme's gallery setting: one main photo with thumbnails, previous/next and zoom on computers, a swipeable photo with its position on phones, and the chosen SKU's own photo when a variant is picked (exact SKU image, else the product photo); its first photo is preloaded as the LCP image. Prefer it to drawing `product.media` yourself, which stacks every photo above the buy form on phones. The skin owns the description (`descriptionHtml`). Reviews and related products a skin places replace the template's modules of the same.
+- `product_main` draws the product page's breadcrumbs, gallery and buy box. The buy form is `ProductBuyBox.astro`, the same component the core page draws: price, options, buyer inputs, quantity, buttons, delivery facts and the buy-box app blocks, kept current as the buyer chooses. The gallery (`<Gallery />`) is `ProductGallery.astro` with the theme's gallery setting: one main photo with thumbnails, previous/next and zoom on computers, a swipeable photo with its position on phones, and the chosen SKU's own photo when a variant is picked (exact SKU image, else the product photo); its first photo is preloaded as the LCP image. Prefer it to drawing `product.media` yourself, which stacks every photo above the buy form on phones. The skin owns the description (`descriptionHtml`). Reviews and related products a skin places replace the template's modules of the same.
 - A buy column that should stay in view beside the gallery marks itself `data-sticky-column` and writes its top as `calc(<offset> + var(--sticky-column-shift, 0px))`; the store's product script shifts a column taller than the window so it scrolls until its end is in view and back (`sticky-column.ts`). Core's stacked and grid galleries use the same.
-- `listing-main` draws the listing between the collection template's sections. The page links are numbered links on every listing, so crawlers reach every product.
-- A core section's projection is declared in the protocol, one interface per type (`StorefrontSectionSkinSettings`, `StorefrontHeroSkinSettings`, ...), each with its own version (`STOREFRONT_SECTION_SKIN_PROJECTIONS`, the `version` in `data`); core's stored settings never reach a skin directly. The host maps a section to it in one place (`coreSectionSkinSettings`): `image`, `phoneImage` and `mediaId` → `image`/`phoneImage` as `StorefrontImage | null`; a product `source` → `products` (`StorefrontProductList`: `{ title, url, cards }`, as many cards as the core section shows); `categoryIds`/`collectionIds` → `categories`/`collections` (`StorefrontTile[]`); `promotionId` → `promotion` (`{ endsAt } | null`); a Specifications custom field → `objectFields`; a delivery-facts source → the store's facts; hidden blocks and the editor's `hidden`/`bindings` keys left out. A projection only gains optional fields; when core changes a section, the host adapts it so a skin's input stays the same. A brand wall's brands arrive in `tiles`, a collections section's fallback products in `cards`. `aboveFold` is true for the homepage's lead section (the first section with photos): load its first row of photos eagerly, the likely largest at high priority, as the core section does. `recently-viewed`, `endless-grid` and `objects` have no skin.
-- JSON-LD stays core's on product and listing pages: the host strips app JSON-LD from `product-main`, `listing-main` and product blocks.
+- `listing_main` draws the listing between the collection template's sections. The page links are numbered links on every listing, so crawlers reach every product.
+- A core section's projection is declared in the protocol, one interface per type (`StorefrontSectionSkinSettings`, `StorefrontHeroSkinSettings`, ...), each with its own version (`STOREFRONT_SECTION_SKIN_PROJECTIONS`, the `version` in `data`); core's stored settings never reach a skin directly. The host maps a section to it in one place (`coreSectionSkinSettings`): `image`, `phoneImage` and `mediaId` → `image`/`phoneImage` as `StorefrontImage | null`; a product `source` → `products` (`StorefrontProductList`: `{ title, url, cards }`, as many cards as the core section shows); `categoryIds`/`collectionIds` → `categories`/`collections` (`StorefrontTile[]`); `promotionId` → `promotion` (`{ endsAt } | null`); a Specifications custom field → `objectFields`; a delivery-facts source → the store's facts; hidden blocks and the editor's `hidden`/`bindings` keys left out. A projection only gains optional fields; when core changes a section, the host adapts it so a skin's input stays the same. A brand wall's brands arrive in `tiles`, a collections section's fallback products in `cards`. `aboveFold` is true for the homepage's lead section (the first section with photos): load its first row of photos eagerly, the likely largest at high priority, as the core section does. `recently_viewed`, `endless_grid` and `objects` have no skin.
+- JSON-LD stays core's on product and listing pages: the host strips app JSON-LD from `product_main`, `listing_main` and product blocks.
 - **Product slots**: a component targeting `product.buy_box.before`, `product.buy_box.after` or `product.below` draws as a `component` job there, from the same `StorefrontProductPage`.
 
 ## Settings
@@ -252,11 +252,11 @@ on removal or mount failure; your other resources still need that cleanup.
 
 | Kind (SDK) | Where | Renders |
 | --- | --- | --- |
-| `buy-form` (`<BuyForm title={false} />`) | `product-main` (required, one) | `ProductBuyBox.astro`: the real buy form posting to `/buy/<slug>` |
-| `gallery` (`<Gallery />`) | `product-main` (one) | `ProductGallery.astro`: the theme's gallery, kept in step with the buy form's variant |
-| `reviews` (`<Reviews />`), `recommendations` (`<Recommendations />`) | `product-main` | the product's reviews and related products |
-| `filters`, `toolbar`, `pagination` | `listing-main` | `CatalogEmbed.astro`: the GET filter form, sort and page size, page links |
-| `order-form` (`<OrderForm product={…} />`) | component sections (two) | `OrderForm.astro`: the single-page order (below) |
+| `buy_form` (`<BuyForm title={false} />`) | `product_main` (required, one) | `ProductBuyBox.astro`: the real buy form posting to `/buy/<slug>` |
+| `gallery` (`<Gallery />`) | `product_main` (one) | `ProductGallery.astro`: the theme's gallery, kept in step with the buy form's variant |
+| `reviews` (`<Reviews />`), `recommendations` (`<Recommendations />`) | `product_main` | the product's reviews and related products |
+| `filters`, `toolbar`, `pagination` | `listing_main` | `CatalogEmbed.astro`: the GET filter form, sort and page size, page links |
+| `order_form` (`<OrderForm product={…} />`) | component sections (two) | `OrderForm.astro`: the single-page order (below) |
 
 ### The single-page order
 
@@ -315,7 +315,7 @@ Noor, a full theme, packs to a 40 KB module, 3.8 KB of islands and a 44 KB style
 
 ## Performance
 
-- **One call per app per page.** Every component an app draws on a page (header, footer, every card in a listing, every section) joins one batch, sent once (`ExtensionHost`). A product-main or listing-main skin is drawn first (the page needs to know whether core draws), so those pages make one more batch to the app.
+- **One call per app per page.** Every component an app draws on a page (header, footer, every card in a listing, every section) joins one batch, sent once (`ExtensionHost`). A product-main or listing_main skin is drawn first (the page needs to know whether core draws), so those pages make one more batch to the app.
 - **Memo.** Each isolate keeps an LRU of rendered output (2,000 entries, 8 MiB) keyed by the app's release, the job and its context. A popular page's cards and chrome render once per isolate, not per request.
 - **Bounded reads.** Skins and product blocks draw from data the page already has (the layout's menus and store info, the product part, the listing part, the homepage section data); their projections are built only when a skin draws. Component section data joins the page's existing batch. `apps/storefront/src/lib/route-tests/skins.render.test.ts` holds a skinned product page to one batch call.
 - **Existing page cache.** Rendered pages use the storefront's dependency-validated
@@ -352,7 +352,7 @@ The merchant owns their apps (private or uploaded). The platform makes what an a
 
 ## Stored themes
 
-The document keeps skins under `apps.skins` (`header`, `footer`, `product-card`, `product-main`, `listing-main`) and a core section's own `skin`. Stored themes are never reset: a shape change ships an upgrade step (`packages/shared/src/storefront-theme.md`, Compatibility).
+The document keeps skins under `apps.skins` (`header`, `footer`, `product_card`, `product_main`, `listing_main`) and a core section's own `skin`. Stored themes are never reset: a shape change ships an upgrade step (`packages/shared/src/storefront-theme.md`, Compatibility).
 
 ## Versioning
 

@@ -88,9 +88,9 @@ describe("packed Noor gallery integration", () => {
     expect(readStorefrontExtensions(layout.appExtensions)).toEqual([NOOR_EXTENSION]);
     expect(NOOR_EXTENSION.release).toBe(BUNDLED_STOREFRONT_EXTENSIONS[NOOR_EXTENSION.pluginId]!.release);
     expect(NOOR_EXTENSION.skins.map((skin) => skin.target)).toEqual([
-      "header", "footer", "product-card", "product-main", "section:hero", "section:product-tabs", "section:product-grid", "section:product-rail",
-      "section:category-tiles", "section:shop-by", "section:banner-mosaic", "section:lookbook", "section:deal-block", "section:usp-strip",
-      "section:editorial", "section:seo-text", "section:specifications", "section:faq", "section:newsletter",
+      "header", "footer", "product_card", "product_main", "section:hero", "section:product_tabs", "section:product_grid", "section:product_rail",
+      "section:category_tiles", "section:shop_by", "section:banner_mosaic", "section:lookbook", "section:deal_block", "section:usp_strip",
+      "section:editorial", "section:seo_text", "section:specifications", "section:faq", "section:newsletter",
     ]);
     expect((await read("noor-product-missing", "storefront/layout")).appExtensions).toEqual([]);
     expect(galleryEntry("noor-product-missing")!.theme.apps!.skins!.header).toEqual(galleryEntry("noor-product")!.theme.apps!.skins!.header);

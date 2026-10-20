@@ -302,7 +302,7 @@ const BAND_ORDER: readonly BuyerAvailabilityBand[] = ["in_stock", "untracked", "
 const PRODUCT_PAGE_MEDIA_MAX = 20;
 const PRODUCT_PAGE_VARIANTS_MAX = 100;
 
-/** The product page's projection (`StorefrontProductPage`): what a product-main skin and product blocks get. */
+/** The product page's projection (`StorefrontProductPage`): what a product_main skin and product blocks get. */
 export function productPageData(input: {
   product: Product;
   media: readonly ProductMedia[];
@@ -374,7 +374,7 @@ export function productPageData(input: {
   };
 }
 
-/** A listing page's projection (`StorefrontListingPage`): what a listing-main skin gets. */
+/** A listing page's projection (`StorefrontListingPage`): what a listing_main skin gets. */
 export function listingPageData(input: {
   kind: StorefrontListingPage["kind"];
   title: string;
@@ -460,7 +460,7 @@ export function coreSectionSkinData<Type extends StorefrontSkinnableSection>(
     // The projection's own version: core may change its section's version without changing what skins get.
     version: STOREFRONT_SECTION_SKIN_PROJECTIONS[visible.type as StorefrontSkinnableSection],
     settings,
-    tiles: visible.type === "brand-wall"
+    tiles: visible.type === "brand_wall"
       ? content.brands.map((brand) => ({
         id: brand.id,
         title: brand.name,

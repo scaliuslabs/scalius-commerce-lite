@@ -1,6 +1,6 @@
 ---
 // The product card every listing, rail and search draws: the app card skin
-// the theme names (`apps.skins["product-card"]`), else the theme's own card
+// the theme names (`apps.skins["product_card"]`), else the theme's own card
 // (CoreProductCard.astro). The skin gets the same card model (prices in the
 // page's market, photo renditions, the quick-add rules); one that draws
 // nothing, fails or is late gives way to the core card. A grid of app cards
@@ -32,6 +32,6 @@ const data = async () => {
 };
 ---
 
-<Skin target="product-card" data={data}>
+<Skin target="product_card" data={data}>
   <CoreProductCard {...props} />
 </Skin>

@@ -17,25 +17,25 @@ import type { StorefrontSectionType } from "./sections";
  */
 export const STOREFRONT_SECTION_TEXT = {
   hero: ["slides.*.alt", "slides.*.heading", "slides.*.text", "slides.*.buttonLabel", "sideBanners.*.alt"],
-  "usp-strip": ["source.items.*.title", "source.items.*.detail"],
-  "category-tiles": ["title"],
+  "usp_strip": ["source.items.*.title", "source.items.*.detail"],
+  "category_tiles": ["title"],
   collections: ["title"],
-  "product-rail": ["title"],
-  "product-grid": ["title"],
-  "deal-block": ["title"],
-  "product-tabs": ["title", "tabs.*.label"],
-  "shop-by": ["title", "cards.*.title", "cards.*.subtitle"],
-  "banner-mosaic": ["tiles.*.alt"],
+  "product_rail": ["title"],
+  "product_grid": ["title"],
+  "deal_block": ["title"],
+  "product_tabs": ["title", "tabs.*.label"],
+  "shop_by": ["title", "cards.*.title", "cards.*.subtitle"],
+  "banner_mosaic": ["tiles.*.alt"],
   lookbook: ["title"],
   banner: ["heading", "text", "cta.label"],
-  "brand-wall": ["title"],
+  "brand_wall": ["title"],
   editorial: ["heading", "body", "columns.*.title", "columns.*.text", "quotes.*.quote", "quotes.*.author"],
   specifications: ["heading", "rows.*.label", "rows.*.value"],
   faq: ["heading", "items.*.question", "items.*.answer"],
-  "utility-cards": ["cards.*.title", "cards.*.text"],
-  "endless-grid": ["title"],
-  "seo-text": ["heading", "body"],
-  "recently-viewed": ["title"],
+  "utility_cards": ["cards.*.title", "cards.*.text"],
+  "endless_grid": ["title"],
+  "seo_text": ["heading", "body"],
+  "recently_viewed": ["title"],
   objects: ["heading"],
   newsletter: ["heading", "text", "buttonLabel"],
 } as const satisfies Record<StorefrontSectionType, readonly string[]>;
@@ -54,7 +54,7 @@ export const STOREFRONT_THEME_TRANSLATION_LIMITS = {
   rows: 40,
   /** Translated words per row. */
   fields: 2_000,
-  /** One source text or translation (the longest setting, `seo-text` body, is 8,000). */
+  /** One source text or translation (the longest setting, `seo_text` body, is 8,000). */
   text: 8_000,
 } as const;
 

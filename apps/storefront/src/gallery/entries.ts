@@ -144,8 +144,8 @@ export function contentSection(type: StorefrontSectionType, id: string, settings
 /** The sections a block entry shows on the home page under the header. */
 const HOME_SHOWCASE = (): StorefrontSection[] => [
   contentSection("hero", "hero"),
-  contentSection("category-tiles", "tiles"),
-  contentSection("product-rail", "rail"),
+  contentSection("category_tiles", "tiles"),
+  contentSection("product_rail", "rail"),
 ];
 
 const isEmpty = (value: unknown) =>
@@ -241,8 +241,8 @@ function sectionEntries(): GalleryEntry[] {
         title: `${type}, ${variant.label}`,
         page: "home",
         theme: withHome(baseTheme(), home),
-        focus: type === "recently-viewed" ? { include: ['[data-recently-viewed]:not([hidden]) [data-recently-viewed-id="prod_1"]'] } : sectionFocus("gallery"),
-        scenario: type === "recently-viewed" ? { storage: recentStorage() } : {},
+        focus: type === "recently_viewed" ? { include: ['[data-recently-viewed]:not([hidden]) [data-recently-viewed-id="prod_1"]'] } : sectionFocus("gallery"),
+        scenario: type === "recently_viewed" ? { storage: recentStorage() } : {},
       });
     }
   }
@@ -395,11 +395,11 @@ function navigationEntries(): GalleryEntry[] {
 /** Cardinality is data, not a bigger section limit or a separate renderer. */
 function catalogEntries(): GalleryEntry[] {
   const theme = withHome(baseTheme(), [
-    contentSection("product-rail", "catalog-rail", { limit: 24 }),
-    contentSection("product-grid", "catalog-grid", { columns: 6, rows: 6 }),
-    contentSection("product-tabs", "catalog-tabs", { limit: 12 }),
+    contentSection("product_rail", "catalog-rail", { limit: 24 }),
+    contentSection("product_grid", "catalog-grid", { columns: 6, rows: 6 }),
+    contentSection("product_tabs", "catalog-tabs", { limit: 12 }),
     contentSection("collections", "catalog-collections"),
-    contentSection("endless-grid", "catalog-endless", { pageSize: 24 }),
+    contentSection("endless_grid", "catalog-endless", { pageSize: 24 }),
   ]);
   const banglaLoadMore = clone(theme);
   banglaLoadMore.blocks.listing.paging = "load-more";
@@ -430,7 +430,7 @@ function catalogEntries(): GalleryEntry[] {
       theme: withHome(baseTheme(), [
         contentSection("hero", "missing-hero"),
         contentSection("banner", "missing-banner"),
-        contentSection("banner-mosaic", "missing-mosaic"),
+        contentSection("banner_mosaic", "missing-mosaic"),
         contentSection("lookbook", "missing-lookbook"),
       ]),
       focus: MAIN,
@@ -470,7 +470,7 @@ function productEntries(): GalleryEntry[] {
     entries.push({ id: locale ? "product-tabs-dense-rtl" : "product-tabs-dense", family: "product:state", title: `Dense detail tabs, ${locale ? "RTL" : "LTR"}`, page: "product", theme, focus: { include: ["[data-product-details-tabs] #tab-nav"] }, scenario: { product: "fashion", productInfo: "dense-tabs", ...(locale ? { locale } : {}) } });
   }
   const recent = clone(base);
-  recent.pages.home = [contentSection("recently-viewed", "recent")];
+  recent.pages.home = [contentSection("recently_viewed", "recent")];
   entries.push({ id: "home-recently-viewed", family: "product:state", title: "Remembered public products", page: "home", theme: recent, focus: { include: ['[data-recently-viewed]:not([hidden]) [data-recently-viewed-id="prod_1"]'] }, scenario: { storage: recentStorage() } });
   return entries;
 }
@@ -479,8 +479,8 @@ function tokenEntries(): GalleryEntry[] {
   const base = baseTheme();
   base.pages.home = [
     contentSection("hero", "hero"),
-    contentSection("category-tiles", "tiles"),
-    contentSection("product-rail", "rail"),
+    contentSection("category_tiles", "tiles"),
+    contentSection("product_rail", "rail"),
     contentSection("banner", "banner"),
     contentSection("newsletter", "newsletter"),
   ];
@@ -536,14 +536,14 @@ function pageEntries(): GalleryEntry[] {
   const templated = clone(base);
   const around = (id: string, heading: string): StorefrontSection => contentSection("editorial", id, { layout: "rich-text", heading, body: "Free delivery inside Dhaka on orders over ৳3,000. Cash on delivery everywhere." });
   for (const kind of ["product", "collection", "cart", "page"] as const) {
-    templated.pages.templates[kind] = { sections: [around(`${kind}-above`, "Before the page"), contentSection("product-rail", `${kind}-rail`, { title: "You may also like" })], main: 1 };
+    templated.pages.templates[kind] = { sections: [around(`${kind}-above`, "Before the page"), contentSection("product_rail", `${kind}-rail`, { title: "You may also like" })], main: 1 };
   }
   const landing = clone(base);
   landing.pages.landing = {
     "eid-sale": {
       title: "Eid sale 2026",
       description: "Up to 40% off sarees, panjabi and phones until Chand Raat.",
-      sections: [contentSection("hero", "landing-hero"), contentSection("deal-block", "landing-deal"), contentSection("faq", "landing-faq")],
+      sections: [contentSection("hero", "landing-hero"), contentSection("deal_block", "landing-deal"), contentSection("faq", "landing-faq")],
     },
   };
   const productHome = clone(base);
@@ -578,9 +578,9 @@ function pageEntries(): GalleryEntry[] {
 function localeEntries(): GalleryEntry[] {
   const base = baseTheme();
   const rtl = clone(base);
-  rtl.pages.home = [contentSection("hero", "hero", { slides: [{ image: "banner-eid", focalPoint: { x: 50, y: 50 }, alt: ARABIC_TEXT, heading: ARABIC_TEXT, buttonLabel: "تسوق الآن", link: "/collections/col-eid" }] }), contentSection("category-tiles", "tiles"), contentSection("product-rail", "rail"), contentSection("faq", "faq")];
+  rtl.pages.home = [contentSection("hero", "hero", { slides: [{ image: "banner-eid", focalPoint: { x: 50, y: 50 }, alt: ARABIC_TEXT, heading: ARABIC_TEXT, buttonLabel: "تسوق الآن", link: "/collections/col-eid" }] }), contentSection("category_tiles", "tiles"), contentSection("product_rail", "rail"), contentSection("faq", "faq")];
   const bangla = clone(base);
-  bangla.pages.home = [contentSection("hero", "hero", { slides: [{ image: "banner-boishakh", focalPoint: { x: 50, y: 50 }, alt: BANGLA_LONG, heading: BANGLA_LONG, buttonLabel: "এখনই কিনুন", link: "/collections/col-bangla" }] }), contentSection("category-tiles", "tiles"), contentSection("product-rail", "rail"), contentSection("newsletter", "newsletter")];
+  bangla.pages.home = [contentSection("hero", "hero", { slides: [{ image: "banner-boishakh", focalPoint: { x: 50, y: 50 }, alt: BANGLA_LONG, heading: BANGLA_LONG, buttonLabel: "এখনই কিনুন", link: "/collections/col-bangla" }] }), contentSection("category_tiles", "tiles"), contentSection("product_rail", "rail"), contentSection("newsletter", "newsletter")];
   const pages: GalleryPage[] = ["home", "product", "category", "cart"];
   return pages.flatMap((page) => [
     { id: entryId("locale", "bn", page), family: "locale:bn", title: `Bangla store, ${page}`, page, theme: bangla, focus: WHOLE_PAGE, scenario: { locale: "bn" as const, product: "bangla" as const } },
@@ -675,9 +675,9 @@ function noorEntries(): GalleryEntry[] {
   // Noor's skins of the store's own sections, over the fixture content of each.
   const skinned = clone(base);
   skinned.pages.home = ([
-    ["hero", "noor_hero"], ["product-tabs", "noor_products_tabs"], ["product-grid", "noor_products_grid"], ["product-rail", "noor_products_rail"],
-    ["category-tiles", "noor_tiles_categories"], ["shop-by", "noor_tiles_cards"], ["banner-mosaic", "noor_promo_tiles"], ["lookbook", "noor_look"],
-    ["deal-block", "noor_sale"], ["usp-strip", "noor_promises"], ["editorial", "noor_story"], ["seo-text", "noor_text"], ["faq", "noor_faq"], ["newsletter", "noor_signup"], ["specifications", "noor_specifications"],
+    ["hero", "noor_hero"], ["product_tabs", "noor_products_tabs"], ["product_grid", "noor_products_grid"], ["product_rail", "noor_products_rail"],
+    ["category_tiles", "noor_tiles_categories"], ["shop_by", "noor_tiles_cards"], ["banner_mosaic", "noor_promo_tiles"], ["lookbook", "noor_look"],
+    ["deal_block", "noor_sale"], ["usp_strip", "noor_promises"], ["editorial", "noor_story"], ["seo_text", "noor_text"], ["faq", "noor_faq"], ["newsletter", "noor_signup"], ["specifications", "noor_specifications"],
   ] as const).map(([type, skin]) => ({ ...contentSection(type, `skin-${type}`), skin: { app: `scalius.noor/${skin}`, values: {} } }) as StorefrontSection);
   entries.push({ id: "noor-section-skins", family: "integration:noor", title: "Noor skins of the store's own sections", page: "home", theme: skinned, focus: WHOLE_PAGE, scenario: { noor: "active", menu: "compact" } });
   const slideshow = { ...homeEntry, id: "noor-home-slideshow", title: "Noor transparent header over the first slideshow", theme: clone(home) };

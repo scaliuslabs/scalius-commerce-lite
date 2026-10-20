@@ -42,7 +42,7 @@ describe("plugin ABI breaking changes", () => {
       providerTiers: { fraud: "stable" },
       scopes: { read_orders: {} },
       events: { resources: { "gift_card.transaction": "transaction" }, facts: { "gift_card.transaction": schema(z.object({ id: z.string() }), "output") } },
-      storefront: { KINDS: ["buy-form", "reviews"], TAG: "x" },
+      storefront: { KINDS: ["buy_form", "reviews"], TAG: "x" },
     };
     expect(protocolBreakingChanges(before, {
       providerTiers: { fraud: "beta" },
@@ -53,7 +53,7 @@ describe("plugin ABI breaking changes", () => {
       "providerTiers.fraud: a stable port went back to beta.",
       "scopes.read_orders: the scope was removed.",
       "events.gift_card.transaction: the topic was removed.",
-      "storefront.KINDS: \"buy-form\" was removed.",
+      "storefront.KINDS: \"buy_form\" was removed.",
       "storefront.TAG: the constant was removed.",
     ]);
   });

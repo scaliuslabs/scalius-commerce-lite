@@ -220,15 +220,15 @@ describe("Noor skins of the store's sections", () => {
   });
 
   it("draws the product page around the store's buy form, with the store's reviews and related products", () => {
-    const html = renderSkin(storefront, "noor_product", "product-main", skinSettings("noor_product", {}));
-    expect(html).toContain('<scalius-embed kind="buy-form" data-title="false"></scalius-embed>');
+    const html = renderSkin(storefront, "noor_product", "product_main", skinSettings("noor_product", {}));
+    expect(html).toContain('<scalius-embed kind="buy_form" data-title="false"></scalius-embed>');
     // The store's gallery, buy form, reviews and related products.
     expect(html).toContain('<div class="noor-pdp-media"><scalius-embed kind="gallery"></scalius-embed></div>');
     expect(html.match(/<scalius-embed/g)).toHaveLength(4);
     expect(html).toContain('<h1 class="noor-h1">Linen shirt</h1>');
     expect(html).toContain("Breathable linen, cut for the heat.");
     expect(storefrontShown(html, "scalius.noor").dropped).toBe(0);
-    const bare = renderSkin(storefront, "noor_product", "product-main", skinSettings("noor_product", { show_reviews: false, show_related: false, show_breadcrumbs: false, show_description: false }));
+    const bare = renderSkin(storefront, "noor_product", "product_main", skinSettings("noor_product", { show_reviews: false, show_related: false, show_breadcrumbs: false, show_description: false }));
     expect(bare.match(/<scalius-embed/g)).toHaveLength(2);
     expect(bare).not.toContain("noor-crumbs");
   });

@@ -1,6 +1,6 @@
 // Tests for storefront modules: render a section, component or skin through the
 // same batch protocol the storefront uses, with realistic fixture data. A
-// skin's markup is held to its target's embed rule (a product-main skin must
+// skin's markup is held to its target's embed rule (a product_main skin must
 // place exactly one buy form), as the storefront holds it.
 //
 //   import storefront from "./storefront";
@@ -169,9 +169,9 @@ export function fixtureSkinData(target: StorefrontSkinTarget): StorefrontSkinJob
   switch (target) {
     case "header": return fixtureHeaderData();
     case "footer": return fixtureFooterData();
-    case "product-card": return { product: fixtureProductCard(), position: 0, aboveFold: true };
-    case "product-main": return fixtureProductPage();
-    case "listing-main": return fixtureListingPage();
+    case "product_card": return { product: fixtureProductCard(), position: 0, aboveFold: true };
+    case "product_main": return fixtureProductPage();
+    case "listing_main": return fixtureListingPage();
     default: return fixtureSectionSkinData(target.slice("section:".length));
   }
 }
@@ -179,7 +179,7 @@ export function fixtureSkinData(target: StorefrontSkinTarget): StorefrontSkinJob
 /** What the storefront would do with a skin's markup: the problems that make it draw the core unit instead. */
 export function checkSkinHtml(target: StorefrontSkinTarget, html: string): string[] {
   const split = splitStorefrontEmbeds(html, storefrontEmbedRule(target));
-  const issues = split.missing.map((kind) => `A ${target} skin must place <scalius-embed kind="${kind}"> (the SDK's ${kind === "buy-form" ? "<BuyForm />" : kind}); without it the store draws its own.`);
+  const issues = split.missing.map((kind) => `A ${target} skin must place <scalius-embed kind="${kind}"> (the SDK's ${kind === "buy_form" ? "<BuyForm />" : kind}); without it the store draws its own.`);
   if (split.dropped > 0) issues.push(`${split.dropped} embed(s) render nothing here: ${target} allows ${Object.keys(storefrontEmbedRule(target).allowed).join(", ") || "none"}.`);
   return issues;
 }
@@ -265,5 +265,5 @@ export function renderFooter(module: StorefrontModule, component: string, settin
 }
 
 export function renderProductCard(module: StorefrontModule, component: string, settings: StorefrontResolvedSettings = {}, product: Partial<StorefrontProductCard> = {}, options: RenderOptions = {}): string {
-  return renderSkin(module, component, "product-card", settings, { product: fixtureProductCard(product), position: 0, aboveFold: false }, options);
+  return renderSkin(module, component, "product_card", settings, { product: fixtureProductCard(product), position: 0, aboveFold: false }, options);
 }

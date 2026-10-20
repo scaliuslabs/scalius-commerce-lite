@@ -39,6 +39,46 @@ function snakeAppKeys(value: unknown): unknown {
   }));
 }
 
+/** The core section types version 11 wrote kebab-case. */
+const V11_KEBAB_SECTION_TYPES: ReadonlySet<string> = new Set([
+  "usp-strip", "category-tiles", "product-rail", "product-grid", "deal-block", "product-tabs", "shop-by",
+  "banner-mosaic", "brand-wall", "utility-cards", "endless-grid", "seo-text", "recently-viewed",
+]);
+/** The skin units version 11 wrote kebab-case (`apps.skins` keys). */
+const V11_KEBAB_SKIN_UNITS: ReadonlySet<string> = new Set(["product-card", "product-main", "listing-main"]);
+
+/** Each section list of a (partial) document through `map`: the homepage, each landing page, each page template. */
+function mapSectionLists(document: Json, map: (list: unknown) => unknown): Json {
+  const pages = document.pages;
+  if (!isRecord(pages)) return document;
+  const each = (record: unknown) => isRecord(record)
+    ? Object.fromEntries(Object.entries(record).map(([key, page]) => [key, isRecord(page) && "sections" in page
+      ? { ...page, sections: map(page.sections) }
+      : page]))
+    : record;
+  const next: Json = { ...pages };
+  if ("home" in pages) next.home = map(pages.home);
+  if ("landing" in pages) next.landing = each(pages.landing);
+  if ("templates" in pages) next.templates = each(pages.templates);
+  return { ...document, pages: next };
+}
+
+/** Version 11 → 12: core section types and skin units in snake_case. */
+function snakeCoreNames(document: Json): Json {
+  const snake = (name: string) => name.replaceAll("-", "_");
+  const sections = (list: unknown) => Array.isArray(list)
+    ? list.map((section) => isRecord(section) && typeof section.type === "string" && V11_KEBAB_SECTION_TYPES.has(section.type)
+      ? { ...section, type: snake(section.type) }
+      : section)
+    : list;
+  const next = mapSectionLists(document, sections);
+  const apps = next.apps;
+  if (isRecord(apps) && isRecord(apps.skins)) {
+    next.apps = { ...apps, skins: Object.fromEntries(Object.entries(apps.skins).map(([unit, skin]) => [V11_KEBAB_SKIN_UNITS.has(unit) ? snake(unit) : unit, skin])) };
+  }
+  return next;
+}
+
 /**
  * The document steps by the version they upgrade from: entry `n` turns a
  * version `n` document into version `n + 1`. compat.test.ts requires one for
@@ -49,9 +89,14 @@ function snakeAppKeys(value: unknown): unknown {
  *   `<plugin id>/<name>` the document names (an app section's `app`, a skin's
  *   or product block's `app`, `apps.template`) reads with the name's hyphens
  *   as underscores: the name its app now declares.
+ * - 11 → 12: core names follow the same rule: every core section type
+ *   (`usp-strip` → `usp_strip`) and every `apps.skins` unit
+ *   (`product-card` → `product_card`) reads with its hyphens as underscores,
+ *   as the storefront protocol names them (skin targets, `section:<type>`).
  */
 export const STOREFRONT_THEME_DOCUMENT_UPGRADES: Readonly<Record<number, StorefrontThemeDocumentUpgrade>> = {
   10: (document) => snakeAppKeys(document) as Json,
+  11: snakeCoreNames,
 };
 
 /** A chain: the versions it reads, its document steps and each section type's own. */
@@ -121,18 +166,7 @@ export function upgradeStorefrontSectionList(list: unknown, chain: StorefrontThe
 
 /** The section lists of a (partial) current document upgraded: the homepage, each landing page, each page template. */
 function upgradeSectionLists(document: Json, chain: StorefrontThemeUpgradeChain): Json {
-  const pages = document.pages;
-  if (!isRecord(pages)) return document;
-  const each = (record: unknown) => isRecord(record)
-    ? Object.fromEntries(Object.entries(record).map(([key, page]) => [key, isRecord(page) && "sections" in page
-      ? { ...page, sections: upgradeStorefrontSectionList(page.sections, chain) }
-      : page]))
-    : record;
-  const next: Json = { ...pages };
-  if ("home" in pages) next.home = upgradeStorefrontSectionList(pages.home, chain);
-  if ("landing" in pages) next.landing = each(pages.landing);
-  if ("templates" in pages) next.templates = each(pages.templates);
-  return { ...document, pages: next };
+  return mapSectionLists(document, (list) => upgradeStorefrontSectionList(list, chain));
 }
 
 /**

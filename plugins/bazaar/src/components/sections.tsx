@@ -181,7 +181,7 @@ export function HeroSkin({ data, context, settings }: SectionSkinProps<"hero", {
 }
 
 /** A product row of the store's as a card carousel. */
-export function ProductRowSkin({ data, context, settings }: SectionSkinProps<"product-rail", { link_label: string | null }>) {
+export function ProductRowSkin({ data, context, settings }: SectionSkinProps<"product_rail", { link_label: string | null }>) {
   const list = data.settings.products;
   if (!list || (list.cards ?? []).length === 0) return null;
   const heading = data.settings.title || list.title;
@@ -195,7 +195,7 @@ export function ProductRowSkin({ data, context, settings }: SectionSkinProps<"pr
 }
 
 /** The store's deal block as the deal row, with the promotion's end when it has one. */
-export function DealsSkin({ data, context }: SectionSkinProps<"deal-block">) {
+export function DealsSkin({ data, context }: SectionSkinProps<"deal_block">) {
   const list = data.settings.products;
   if (!list || (list.cards ?? []).length === 0) return null;
   const heading = data.settings.title || list.title || t(context, { en: "Today's Deals", bn: "আজকের অফার" });
@@ -209,7 +209,7 @@ export function DealsSkin({ data, context }: SectionSkinProps<"deal-block">) {
 }
 
 /** The store's category tiles as quad cards: four categories to a card, a title per card. */
-export function QuadTilesSkin({ data, context, settings }: SectionSkinProps<"category-tiles", { link_label: string | null }>) {
+export function QuadTilesSkin({ data, context, settings }: SectionSkinProps<"category_tiles", { link_label: string | null }>) {
   const tiles = (data.settings.categories ?? []).filter((tile) => tile.image);
   if (tiles.length === 0) return null;
   const groups: StorefrontTile[][] = [];

@@ -434,7 +434,7 @@ export type MarketPresence = {
 };
 
 export type StorefrontThemeDocument = {
-    version: 11;
+    version: 12;
     template: 'department-mall' | 'boutique' | 'marketplace' | 'daily-essentials' | 'showcase-landing';
     tokens: {
         colors: {
@@ -753,9 +753,9 @@ export type StorefrontThemeDocument = {
         skins?: {
             header?: StorefrontSkinRef;
             footer?: StorefrontSkinRef;
-            'product-card'?: StorefrontSkinRef;
-            'product-main'?: StorefrontSkinRef;
-            'listing-main'?: StorefrontSkinRef;
+            product_card?: StorefrontSkinRef;
+            product_main?: StorefrontSkinRef;
+            listing_main?: StorefrontSkinRef;
         };
         template?: string;
     };
@@ -851,7 +851,7 @@ export type StorefrontSectionList = Array<{
     skin?: StorefrontSkinRef;
 } | {
     id: string;
-    type: 'usp-strip';
+    type: 'usp_strip';
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
@@ -873,7 +873,7 @@ export type StorefrontSectionList = Array<{
     skin?: StorefrontSkinRef;
 } | {
     id: string;
-    type: 'category-tiles';
+    type: 'category_tiles';
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
@@ -899,7 +899,7 @@ export type StorefrontSectionList = Array<{
     skin?: StorefrontSkinRef;
 } | {
     id: string;
-    type: 'product-rail';
+    type: 'product_rail';
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
@@ -912,7 +912,7 @@ export type StorefrontSectionList = Array<{
     skin?: StorefrontSkinRef;
 } | {
     id: string;
-    type: 'product-grid';
+    type: 'product_grid';
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
@@ -926,7 +926,7 @@ export type StorefrontSectionList = Array<{
     skin?: StorefrontSkinRef;
 } | {
     id: string;
-    type: 'deal-block';
+    type: 'deal_block';
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
@@ -940,7 +940,7 @@ export type StorefrontSectionList = Array<{
     skin?: StorefrontSkinRef;
 } | {
     id: string;
-    type: 'product-tabs';
+    type: 'product_tabs';
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
@@ -958,7 +958,7 @@ export type StorefrontSectionList = Array<{
     skin?: StorefrontSkinRef;
 } | {
     id: string;
-    type: 'shop-by';
+    type: 'shop_by';
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
@@ -977,7 +977,7 @@ export type StorefrontSectionList = Array<{
     skin?: StorefrontSkinRef;
 } | {
     id: string;
-    type: 'banner-mosaic';
+    type: 'banner_mosaic';
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
@@ -1026,7 +1026,7 @@ export type StorefrontSectionList = Array<{
     skin?: StorefrontSkinRef;
 } | {
     id: string;
-    type: 'brand-wall';
+    type: 'brand_wall';
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
@@ -1109,7 +1109,7 @@ export type StorefrontSectionList = Array<{
     skin?: StorefrontSkinRef;
 } | {
     id: string;
-    type: 'utility-cards';
+    type: 'utility_cards';
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
@@ -1126,7 +1126,7 @@ export type StorefrontSectionList = Array<{
     skin?: StorefrontSkinRef;
 } | {
     id: string;
-    type: 'endless-grid';
+    type: 'endless_grid';
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
@@ -1138,7 +1138,7 @@ export type StorefrontSectionList = Array<{
     skin?: StorefrontSkinRef;
 } | {
     id: string;
-    type: 'seo-text';
+    type: 'seo_text';
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
@@ -1150,7 +1150,7 @@ export type StorefrontSectionList = Array<{
     skin?: StorefrontSkinRef;
 } | {
     id: string;
-    type: 'recently-viewed';
+    type: 'recently_viewed';
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
@@ -8126,7 +8126,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 skins: Array<{
                     id: string;
                     /**
-                     * The unit the skin draws: header, footer, product-card, product-main, listing-main or section:<core section type>.
+                     * The unit the skin draws: header, footer, product_card, product_main, listing_main or section:<core section type>.
                      */
                     target: string;
                     settings: Array<{

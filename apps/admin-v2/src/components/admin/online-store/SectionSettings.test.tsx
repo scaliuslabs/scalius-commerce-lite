@@ -140,7 +140,7 @@ describe("section settings (generated from the registry)", () => {
   });
 
   it("sets the category tiles' style, title and published categories in order", async () => {
-    render(section("category-tiles", "tiles", { categoryIds: ["cat_gone"] }));
+    render(section("category_tiles", "tiles", { categoryIds: ["cat_gone"] }));
     choose(field<HTMLButtonElement>("theme-section-tiles-style"), "Square photo grid");
     expect(container.textContent).toContain("This style needs at least 2.");
     type(field("theme-section-tiles-title"), "Shop the pantry");
@@ -284,7 +284,7 @@ describe("section settings (generated from the registry)", () => {
   });
 
   it("says why a card without a name or with a bad link cannot be saved", () => {
-    render(addBlock(section("shop-by", "cards"), "cards") as StorefrontPlatformSection, { path: "cards", index: 0 });
+    render(addBlock(section("shop_by", "cards"), "cards") as StorefrontPlatformSection, { path: "cards", index: 0 });
     typeAndLeave(field("theme-section-cards-cards-0-href"), "sale page");
     expect(note("theme-section-cards-cards-0-href")).toBe("Use a store path like /sale or a full https:// link.");
     expect(note("theme-section-cards-cards-0-title")).toBe("Fill this in.");

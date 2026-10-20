@@ -51,14 +51,14 @@ beforeAll(async () => {
   const { orderFormEmbed } = await server.ssrLoadModule("/src/lib/extensions/embeds.ts");
   const { splitStorefrontEmbeds } = await server.ssrLoadModule("@scalius/shared/plugins/storefront-embeds");
   const { storefrontEmbedRule } = await server.ssrLoadModule("@scalius/shared/plugins/storefront-protocol");
-  orderForm = (products, instanceId) => ({ "order-form": orderFormEmbed(OrderForm, products, { instanceId, preview: false }) });
+  orderForm = (products, instanceId) => ({ "order_form": orderFormEmbed(OrderForm, products, { instanceId, preview: false }) });
   markup = (html) => ({ pluginId: "scalius.noor", base: "/_x/noor/release/", parts: splitStorefrontEmbeds(html, storefrontEmbedRule("section")).parts, embeds: new Set() });
 }, 120_000);
 afterAll(async () => { await server?.close(); });
 
 it("gives repeated same-product embeds distinct titles and location labels across placements", async () => {
   const products = new Map([["prod_shirt", "shirt"]]);
-  const two = markup('<scalius-embed kind="order-form" data-product="prod_shirt"></scalius-embed>'.repeat(2));
+  const two = markup('<scalius-embed kind="order_form" data-product="prod_shirt"></scalius-embed>'.repeat(2));
   const html = (await container.renderToString(AppComponent, { props: { markup: two, embeds: orderForm(products, "first") } }))
     + (await container.renderToString(AppComponent, { props: { markup: two, embeds: orderForm(products, "second") } }));
   const document = new Window().document;
@@ -79,7 +79,7 @@ it("gives repeated same-product embeds distinct titles and location labels acros
 
 it("orders only a product the component was given: an embed naming any other renders nothing", async () => {
   const html = await container.renderToString(AppComponent, { props: {
-    markup: markup('<p>a</p><scalius-embed kind="order-form" data-product="prod_other"></scalius-embed>'),
+    markup: markup('<p>a</p><scalius-embed kind="order_form" data-product="prod_other"></scalius-embed>'),
     embeds: orderForm(new Map([["prod_shirt", "shirt"]]), "only"),
   } });
   expect(html).toContain("<p>a</p>");

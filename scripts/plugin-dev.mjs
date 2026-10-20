@@ -68,7 +68,7 @@ export async function previewPlugin(directory, output = join(directory, "dist/pr
     })),
     ...storefront.skins.map((skin) => ({
       id: `skin:${skin.id}`, kind: "skin", target: skin.target, component: skin.id, settings: settingsFor(`skin:${skin.id}`, skin.settings),
-      data: skin.target === "product-main" ? product : contract.fixtureSkinData(skin.target), ...(skin.target.startsWith("section:") ? { instanceId: "preview" } : {}),
+      data: skin.target === "product_main" ? product : contract.fixtureSkinData(skin.target), ...(skin.target.startsWith("section:") ? { instanceId: "preview" } : {}),
     })),
   ];
   const module = packed.storefront.find((file) => file.path === contract.STOREFRONT_MODULE_FILE);

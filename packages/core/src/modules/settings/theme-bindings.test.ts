@@ -15,7 +15,7 @@ describe("theme dynamic source writes", () => {
   function themeWith(source: string, path = "heading"): StorefrontThemeDocument {
     const theme = structuredClone(DEFAULT_STOREFRONT_THEME);
     theme.pages.home = [];
-    theme.pages.templates.product.sections = [{ ...storefrontSectionDefault("seo-text", "details"), bindings: { [path]: { source } } }];
+    theme.pages.templates.product.sections = [{ ...storefrontSectionDefault("seo_text", "details"), bindings: { [path]: { source } } }];
     return theme;
   }
 
@@ -92,14 +92,14 @@ describe("theme dynamic source writes", () => {
 
   it("only maps object lists to compatible item fields", async () => {
     const theme = structuredClone(DEFAULT_STOREFRONT_THEME);
-    theme.pages.home = [{ ...storefrontSectionDefault("utility-cards", "cards"), bindings: { cards: { source: "object.custom.cards" } } }];
+    theme.pages.home = [{ ...storefrontSectionDefault("utility_cards", "cards"), bindings: { cards: { source: "object.custom.cards" } } }];
     sqlite.prepare(`INSERT INTO object_types (id, namespace, type, name, fields_json, storefront)
       VALUES ('oty_custom.cards', 'custom', 'cards', 'Cards', ?, 1)`)
       .run(JSON.stringify([{ key: "title", type: "single_line_text" }, { key: "text", type: "multi_line_text" }, { key: "href", type: "url" }, { key: "extra", type: "boolean" }]));
     await expect(assertThemeBindings(db, theme)).resolves.toBeUndefined();
     sqlite.prepare("UPDATE object_types SET fields_json = ?").run(JSON.stringify([{ key: "title", type: "boolean" }]));
     await expect(assertThemeBindings(db, theme)).rejects.toMatchObject({ status: 400 });
-    theme.pages.home = [{ ...storefrontSectionDefault("category-tiles", "categories"), bindings: { categoryIds: { source: "object.custom.cards" } } }];
+    theme.pages.home = [{ ...storefrontSectionDefault("category_tiles", "categories"), bindings: { categoryIds: { source: "object.custom.cards" } } }];
     await expect(assertThemeBindings(db, theme)).rejects.toMatchObject({ status: 400 });
   });
 
@@ -107,7 +107,7 @@ describe("theme dynamic source writes", () => {
     const theme = themeWith("object.custom.first.record.title");
     theme.blocks.footer.bindings = { tagline: { source: "object.custom.global.record.title" } };
     theme.pages.templates.product.sections = ["first", "second", "third", "fourth"].map((type) => ({
-      ...storefrontSectionDefault("seo-text", type), bindings: { heading: { source: `object.custom.${type}.record.title` } },
+      ...storefrontSectionDefault("seo_text", type), bindings: { heading: { source: `object.custom.${type}.record.title` } },
     }));
     const select = vi.fn(() => { throw new Error("Unexpected read"); });
     await expect(assertThemeBindings({ select } as unknown as Database, theme)).rejects.toMatchObject({ status: 400, message: "Connect at most four object types on one page." });
@@ -130,8 +130,8 @@ describe("theme dynamic source writes", () => {
 
   it("checks skin targets and their live setting schemas", async () => {
     const theme = structuredClone(DEFAULT_STOREFRONT_THEME);
-    theme.apps = { skins: { "product-main": { app: "demo.theme/main", values: { title: "Fallback" }, bindings: { title: { source: "resource.title" } } } } };
-    const manifest = { storefront: { skins: [{ id: "main", target: "product-main", settings: [{ key: "title", label: "Title", type: "text" }] }] } };
+    theme.apps = { skins: { "product_main": { app: "demo.theme/main", values: { title: "Fallback" }, bindings: { title: { source: "resource.title" } } } } };
+    const manifest = { storefront: { skins: [{ id: "main", target: "product_main", settings: [{ key: "title", label: "Title", type: "text" }] }] } };
     sqlite.prepare(`INSERT INTO plugin_installations (plugin_id, version, source, bundle_sha256, manifest_json, grant_json, grant_key, status)
       VALUES ('demo.theme', '1.0.0', 'bundled', ?, ?, '{}', 'grant', 'active')`).run("a".repeat(64), JSON.stringify(manifest));
     await expect(assertThemeBindings(db, theme)).resolves.toBeUndefined();

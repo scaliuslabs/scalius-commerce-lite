@@ -47,7 +47,7 @@ describe("scalius.bazaar manifest", () => {
   it("parses, and its module exports exactly the declared handlers", () => {
     expect(checkPluginHandlers(pluginHandlerInventory(declared), plugin)).toEqual([]);
     expect(declared.storefront.skins.map((skin) => skin.target)).toEqual([
-      "header", "footer", "product-card", "product-main", "listing-main", "section:hero", "section:product-rail", "section:deal-block", "section:category-tiles",
+      "header", "footer", "product_card", "product_main", "listing_main", "section:hero", "section:product_rail", "section:deal_block", "section:category_tiles",
     ]);
   });
 
@@ -60,7 +60,7 @@ describe("scalius.bazaar manifest", () => {
     const result = storefrontThemeDocumentSchema.safeParse(document);
     expect(result.success ? [] : result.error.issues).toEqual([]);
     expect(document.apps?.skins?.header?.app).toBe("scalius.bazaar/bazaar_header");
-    expect(document.apps?.skins?.["listing-main"]?.app).toBe("scalius.bazaar/bazaar_listing");
+    expect(document.apps?.skins?.["listing_main"]?.app).toBe("scalius.bazaar/bazaar_listing");
   });
 });
 
@@ -111,8 +111,8 @@ describe("scalius.bazaar storefront", () => {
 
   it("draws the product page around the store's buy form, with Sold by from the seller field", () => {
     const page = fixtureProductPage({ fields: { "scalius.sellers.seller_name": "Acme Audio", "scalius.sellers.seller_handle": "acme-audio", "custom.material": "Aluminium" }, brand: { title: "Acme", url: "/brands/acme" } });
-    const html = shown(renderSkin(storefront, "bazaar_product", "product-main", skinSettings("bazaar_product", { returns_text: "30-day returns", other_sellers_link: "/apps/scalius.sellers/store/acme-audio" }), page));
-    expect(html).toContain('kind="buy-form"');
+    const html = shown(renderSkin(storefront, "bazaar_product", "product_main", skinSettings("bazaar_product", { returns_text: "30-day returns", other_sellers_link: "/apps/scalius.sellers/store/acme-audio" }), page));
+    expect(html).toContain('kind="buy_form"');
     expect(html).toContain('kind="gallery"');
     expect(html).toContain("Visit the Acme Store");
     expect(html).toContain("Sold by");
@@ -124,7 +124,7 @@ describe("scalius.bazaar storefront", () => {
   });
 
   it("draws the results page with the filter rail, sort, cards and page links", () => {
-    const html = shown(renderSkin(storefront, "bazaar_listing", "listing-main", {}, fixtureListingPage({ kind: "search", title: "earbuds", total: 1200, totalIsCapped: true })));
+    const html = shown(renderSkin(storefront, "bazaar_listing", "listing_main", {}, fixtureListingPage({ kind: "search", title: "earbuds", total: 1200, totalIsCapped: true })));
     expect(html).toContain('kind="filters"');
     expect(html).toContain('kind="toolbar"');
     expect(html).toContain('kind="pagination"');
@@ -161,10 +161,10 @@ describe("scalius.bazaar storefront", () => {
     expect(shown(hero)).toContain("bz-hero-slide");
     expect(hero).toContain('loading="eager"');
     const list = { title: "New", url: "/collections/new", cards: [fixtureProductCard()] };
-    expect(shown(renderSkin(storefront, "bazaar_product_row", "section:product-rail", skinSettings("bazaar_product_row"), { ...fixtureSectionSkinData("product-rail"), settings: { title: "New arrivals", products: list, limit: 12 } }))).toContain("New arrivals");
-    expect(shown(renderSkin(storefront, "bazaar_deals", "section:deal-block", {}, { ...fixtureSectionSkinData("deal-block"), settings: { title: "Deals", products: list } }))).toContain("bz-deal-item");
+    expect(shown(renderSkin(storefront, "bazaar_product_row", "section:product_rail", skinSettings("bazaar_product_row"), { ...fixtureSectionSkinData("product_rail"), settings: { title: "New arrivals", products: list, limit: 12 } }))).toContain("New arrivals");
+    expect(shown(renderSkin(storefront, "bazaar_deals", "section:deal_block", {}, { ...fixtureSectionSkinData("deal_block"), settings: { title: "Deals", products: list } }))).toContain("bz-deal-item");
     const tiles = Array.from({ length: 5 }, (_, index) => ({ id: `c${index}`, title: `Cat ${index}`, url: `/categories/c${index}`, image: image(`c${index}`), cards: [] }));
-    const quad = shown(renderSkin(storefront, "bazaar_quad_tiles", "section:category-tiles", skinSettings("bazaar_quad_tiles"), { ...fixtureSectionSkinData("category-tiles"), settings: { style: "photo", title: "Shop by category", categories: tiles } }));
+    const quad = shown(renderSkin(storefront, "bazaar_quad_tiles", "section:category_tiles", skinSettings("bazaar_quad_tiles"), { ...fixtureSectionSkinData("category_tiles"), settings: { style: "photo", title: "Shop by category", categories: tiles } }));
     expect(quad.match(/bz-merch"/g)?.length).toBe(2);
   });
 });

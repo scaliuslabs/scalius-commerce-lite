@@ -7,22 +7,22 @@ import type { BundledStorefrontExtension } from "../lib/extensions/loaders";
 
 export const BUNDLED_STOREFRONT_EXTENSIONS: Readonly<Record<string, BundledStorefrontExtension>> = {
   "scalius.bazaar": {
-    release: "f75ab90e3d72d03e6c8c198ebc9931406eacbbfa7aac3d25a5fb118af7a9b753",
+    release: "eb6c651f4129947df57cb59ebbb554c030d570ab3d0f9d3e948d04c42863a6aa",
     module: () => import("./bundled/scalius-bazaar/storefront.gen.js"),
     files: () => import("./bundled/scalius-bazaar/files.gen"),
   },
   "scalius.noor": {
-    release: "bc397476736796195ff51551dcddcbbb127f206adab1ee165b643ff369ab4de2",
+    release: "51893d40cd006fc95ecaecf3eca8b52bca9640bdf13b00bdc252eb577f76ac4d",
     module: () => import("./bundled/scalius-noor/storefront.gen.js"),
     files: () => import("./bundled/scalius-noor/files.gen"),
   },
   "scalius.sellers": {
-    release: "d44e7dff0c0f4bc92781f6f00ed93d56a7ddd7d6b0f0a94ebc63015ed5289d36",
+    release: "77606ce74fe0b8d81f3af4ed91c86bf51019d449b7f0ef351d8cb8b3c6a71e1d",
     module: () => import("./bundled/scalius-sellers/storefront.gen.js"),
     files: () => import("./bundled/scalius-sellers/files.gen"),
   },
   "scalius.volt": {
-    release: "98581ea41c72ef45a9efa818d3f77d2dc1ff03013a43ef49a872947bbf523e9a",
+    release: "5719bbb200dce3783e29ab5c8d9e9436de6e049eb41eb33f866ae94edbd2143b",
     module: () => import("./bundled/scalius-volt/storefront.gen.js"),
     files: () => import("./bundled/scalius-volt/files.gen"),
   },

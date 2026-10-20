@@ -196,5 +196,35 @@
   "from": "cd5c76334ba0d78e",
   "change": "functions.buyer.ui output ui.root[variant 11].rows[].cells{*}[variant 5].currency: a new required field.",
   "reason": "Contract seal (beta criterion 1.9): a UI table money cell is PluginMoney, { amountMinor, currency }, the one money shape of every app boundary; the currency is always named."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "0c9f010f9d2e46fa",
+  "change": "storefront.STOREFRONT_SKIN_UNITS: \"product-card\" was removed.",
+  "reason": "Contract seal (beta criterion 1.8, audit R2 item 12): core storefront names follow the manifest identifier rule, snake_case: skin units product_card, product_main, listing_main; embed kinds buy_form, order_form; core section types and section:<type> targets. Theme document v12 (step 11 -> 12) renames stored section types and apps.skins units."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "0c9f010f9d2e46fa",
+  "change": "storefront.STOREFRONT_SKIN_UNITS: \"product-main\" was removed.",
+  "reason": "Contract seal (beta criterion 1.8, audit R2 item 12): core storefront names follow the manifest identifier rule, snake_case: skin units product_card, product_main, listing_main; embed kinds buy_form, order_form; core section types and section:<type> targets. Theme document v12 (step 11 -> 12) renames stored section types and apps.skins units."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "0c9f010f9d2e46fa",
+  "change": "storefront.STOREFRONT_SKIN_UNITS: \"listing-main\" was removed.",
+  "reason": "Contract seal (beta criterion 1.8, audit R2 item 12): core storefront names follow the manifest identifier rule, snake_case: skin units product_card, product_main, listing_main; embed kinds buy_form, order_form; core section types and section:<type> targets. Theme document v12 (step 11 -> 12) renames stored section types and apps.skins units."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "0c9f010f9d2e46fa",
+  "change": "storefront.STOREFRONT_EMBED_KINDS: \"buy-form\" was removed.",
+  "reason": "Contract seal (beta criterion 1.8, audit R2 item 12): core storefront names follow the manifest identifier rule, snake_case: skin units product_card, product_main, listing_main; embed kinds buy_form, order_form; core section types and section:<type> targets. Theme document v12 (step 11 -> 12) renames stored section types and apps.skins units."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "0c9f010f9d2e46fa",
+  "change": "storefront.STOREFRONT_EMBED_KINDS: \"order-form\" was removed.",
+  "reason": "Contract seal (beta criterion 1.8, audit R2 item 12): core storefront names follow the manifest identifier rule, snake_case: skin units product_card, product_main, listing_main; embed kinds buy_form, order_form; core section types and section:<type> targets. Theme document v12 (step 11 -> 12) renames stored section types and apps.skins units."
  }
 ]

@@ -45,7 +45,7 @@ describe("header page data", () => {
 
   it("preserves core and absent leads without inventing settings", () => {
     expect(headerPageData(null, extension)).toEqual({ lead: null });
-    expect(headerPageData({ kind: "core", type: "seo-text" }, extension)).toEqual({ lead: { kind: "core", type: "seo-text" } });
+    expect(headerPageData({ kind: "core", type: "seo_text" }, extension)).toEqual({ lead: { kind: "core", type: "seo_text" } });
   });
 
   it("shows a core lead's skin only to the app that owns it, with its values resolved", () => {

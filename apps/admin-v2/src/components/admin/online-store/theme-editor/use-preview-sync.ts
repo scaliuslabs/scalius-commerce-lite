@@ -168,7 +168,7 @@ export function usePreviewSync({ send, reload, connectedAt, working, sendable, s
     // Hero placement follows category tiles. Other units keep their phone slot
     // through replacements without rereading unrelated sibling dependencies.
     const phoneOrdered = [...was, ...now].some((section) => !section.hidden && section.type === "hero" && section.settings.phonePlacement === "after-categories");
-    const phonePlacementChanged = settingsChanged.some((section) => section.type === "hero" || section.type === "category-tiles");
+    const phonePlacementChanged = settingsChanged.some((section) => section.type === "hero" || section.type === "category_tiles");
     let regionsNeeded = groupChanged || mainMoved || (phoneOrdered && (shapeChanged || phonePlacementChanged));
     if (shapeChanged && scope && !groupChanged) {
       for (const region of storefrontScopeRegions({ ...working.pages }, scope)) {

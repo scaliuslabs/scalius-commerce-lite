@@ -1710,7 +1710,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
             }[];
             skins: {
                 id: string;
-                target: "header" | "footer" | "product-card" | "product-main" | "listing-main" | `section:${string}`;
+                target: "header" | "footer" | "product_card" | "product_main" | "listing_main" | `section:${string}`;
                 name: string;
                 settings: ({
                     type: "text";
@@ -2354,7 +2354,7 @@ export {};
 // packages/shared/src/plugins/storefront-protocol.d.ts
 import type { CustomFieldWireValue } from "../custom-fields";
 export declare const STOREFRONT_COMPONENT_ABI: 1;
-export declare const STOREFRONT_SKIN_UNITS: readonly ["header", "footer", "product-card", "product-main", "listing-main"];
+export declare const STOREFRONT_SKIN_UNITS: readonly ["header", "footer", "product_card", "product_main", "listing_main"];
 export type StorefrontSkinUnit = (typeof STOREFRONT_SKIN_UNITS)[number];
 export declare const STOREFRONT_SECTION_SKIN_PREFIX = "section:";
 export type StorefrontSkinTarget = StorefrontSkinUnit | `section:${string}`;
@@ -2380,7 +2380,7 @@ export type StorefrontUiSlot = keyof typeof STOREFRONT_UI_SLOT_PAGES;
 export type StorefrontUiSlotPage = (typeof STOREFRONT_UI_SLOT_PAGES)[StorefrontUiSlot];
 export declare const STOREFRONT_UI_SLOTS: [StorefrontUiSlot, ...StorefrontUiSlot[]];
 export declare function storefrontUiSlotsOn(page: StorefrontUiSlotPage): StorefrontUiSlot[];
-export declare const STOREFRONT_EMBED_KINDS: readonly ["buy-form", "reviews", "recommendations", "filters", "toolbar", "pagination", "order-form", "gallery", "slot"];
+export declare const STOREFRONT_EMBED_KINDS: readonly ["buy_form", "reviews", "recommendations", "filters", "toolbar", "pagination", "order_form", "gallery", "slot"];
 export type StorefrontEmbedKind = (typeof STOREFRONT_EMBED_KINDS)[number];
 export declare const STOREFRONT_EMBED_TAG = "scalius-embed";
 export interface StorefrontEmbedRule {
@@ -2812,45 +2812,45 @@ export interface StorefrontNewsletterSkinSettings {
 }
 export interface StorefrontSectionSkinSettings {
     hero: StorefrontHeroSkinSettings;
-    "usp-strip": StorefrontUspStripSkinSettings;
-    "category-tiles": StorefrontCategoryTilesSkinSettings;
+    "usp_strip": StorefrontUspStripSkinSettings;
+    "category_tiles": StorefrontCategoryTilesSkinSettings;
     collections: StorefrontCollectionsSkinSettings;
-    "product-rail": StorefrontProductRailSkinSettings;
-    "product-grid": StorefrontProductGridSkinSettings;
-    "deal-block": StorefrontDealBlockSkinSettings;
-    "product-tabs": StorefrontProductTabsSkinSettings;
+    "product_rail": StorefrontProductRailSkinSettings;
+    "product_grid": StorefrontProductGridSkinSettings;
+    "deal_block": StorefrontDealBlockSkinSettings;
+    "product_tabs": StorefrontProductTabsSkinSettings;
     lookbook: StorefrontLookbookSkinSettings;
     banner: StorefrontBannerSkinSettings;
-    "shop-by": StorefrontShopBySkinSettings;
-    "banner-mosaic": StorefrontBannerMosaicSkinSettings;
-    "brand-wall": StorefrontBrandWallSkinSettings;
+    "shop_by": StorefrontShopBySkinSettings;
+    "banner_mosaic": StorefrontBannerMosaicSkinSettings;
+    "brand_wall": StorefrontBrandWallSkinSettings;
     editorial: StorefrontEditorialSkinSettings;
     faq: StorefrontFaqSkinSettings;
     specifications: StorefrontSpecificationsSkinSettings;
-    "utility-cards": StorefrontUtilityCardsSkinSettings;
-    "seo-text": StorefrontSeoTextSkinSettings;
+    "utility_cards": StorefrontUtilityCardsSkinSettings;
+    "seo_text": StorefrontSeoTextSkinSettings;
     newsletter: StorefrontNewsletterSkinSettings;
 }
 export type StorefrontSkinnableSection = keyof StorefrontSectionSkinSettings;
 export declare const STOREFRONT_SECTION_SKIN_PROJECTIONS: {
     readonly hero: 1;
-    readonly "usp-strip": 1;
-    readonly "category-tiles": 1;
+    readonly usp_strip: 1;
+    readonly category_tiles: 1;
     readonly collections: 1;
-    readonly "product-rail": 1;
-    readonly "product-grid": 1;
-    readonly "deal-block": 1;
-    readonly "product-tabs": 1;
+    readonly product_rail: 1;
+    readonly product_grid: 1;
+    readonly deal_block: 1;
+    readonly product_tabs: 1;
     readonly lookbook: 1;
     readonly banner: 1;
-    readonly "shop-by": 1;
-    readonly "banner-mosaic": 1;
-    readonly "brand-wall": 1;
+    readonly shop_by: 1;
+    readonly banner_mosaic: 1;
+    readonly brand_wall: 1;
     readonly editorial: 1;
     readonly faq: 1;
     readonly specifications: 1;
-    readonly "utility-cards": 1;
-    readonly "seo-text": 1;
+    readonly utility_cards: 1;
+    readonly seo_text: 1;
     readonly newsletter: 1;
 };
 export interface StorefrontSectionSkinData<Settings = Record<string, unknown>> {
@@ -2891,13 +2891,13 @@ export type StorefrontSkinJob = (SkinJobBase & {
     target: "footer";
     data: StorefrontFooterData;
 }) | (SkinJobBase & {
-    target: "product-card";
+    target: "product_card";
     data: StorefrontProductCardData;
 }) | (SkinJobBase & {
-    target: "product-main";
+    target: "product_main";
     data: StorefrontProductPage;
 }) | (SkinJobBase & {
-    target: "listing-main";
+    target: "listing_main";
     data: StorefrontListingPage;
 }) | (SkinJobBase & {
     target: `section:${string}`;

@@ -30,7 +30,7 @@ function themeDocument(changes = {}) {
       home: [
         { id: "hero", type: "hero", version: 1, settings: { layout: "contained-banners", slides: [] } },
         { id: "collections", type: "collections", version: 1, settings: { carousel: "large", collectionIds: [] } },
-        { id: "categories", type: "category-tiles", version: 1, settings: { style: "photo", title: "", categoryIds: ["cat_merchant"] } },
+        { id: "categories", type: "category_tiles", version: 1, settings: { style: "photo", title: "", categoryIds: ["cat_merchant"] } },
       ],
       homeMode: { kind: "sections" },
     },

@@ -70,9 +70,9 @@ export function storefrontThemeAppsSchemaOf(skin: typeof storefrontSkinRefSchema
     skins: z.object({
       header: skin.optional(),
       footer: skin.optional(),
-      "product-card": skin.optional(),
-      "product-main": skin.optional(),
-      "listing-main": skin.optional(),
+      "product_card": skin.optional(),
+      "product_main": skin.optional(),
+      "listing_main": skin.optional(),
     }).strict().optional(),
     template: storefrontAppKeySchema.optional(),
   }).strict();

@@ -57,7 +57,7 @@ describe("Volt's manifest and template", () => {
     const result = storefrontThemeDocumentSchema.safeParse(document);
     expect(result.success ? [] : result.error.issues).toEqual([]);
     expect(document.apps?.skins?.header?.app).toBe("scalius.volt/volt_header");
-    expect(document.apps?.skins?.["listing-main"]?.app).toBe("scalius.volt/volt_listing");
+    expect(document.apps?.skins?.["listing_main"]?.app).toBe("scalius.volt/volt_listing");
   });
 });
 
@@ -107,8 +107,8 @@ describe("the product page", () => {
         "scalius.volt.product_code": "VGL31896",
       },
     });
-    const html = shown(renderSkin(storefront, "volt_product", "product-main", skinSettings("volt_product"), data));
-    expect(html).toContain('kind="buy-form"');
+    const html = shown(renderSkin(storefront, "volt_product", "product_main", skinSettings("volt_product"), data));
+    expect(html).toContain('kind="buy_form"');
     expect(html).toContain('kind="gallery"');
     expect(html).toContain('id="volt-spec"');
     expect(html).toContain("6.9 inches");
@@ -125,7 +125,7 @@ describe("the product page", () => {
 
 describe("the listing", () => {
   it("draws the count, the store's filters and toolbar, and Shop Now cards", () => {
-    const html = shown(renderSkin(storefront, "volt_listing", "listing-main", skinSettings("volt_listing", { title_suffix: "Price in Bangladesh" }),
+    const html = shown(renderSkin(storefront, "volt_listing", "listing_main", skinSettings("volt_listing", { title_suffix: "Price in Bangladesh" }),
       fixtureListingPage({ title: "Laptop", total: 167, cards: [fixtureProductCard({ id: "a" }), fixtureProductCard({ id: "b" })] })));
     expect(html).toContain("Laptop Price in Bangladesh");
     expect(html).toContain("Showing: (167 Items)");
@@ -149,8 +149,8 @@ describe("section skins and sections", () => {
 
   it("draws product tabs that work without the island", () => {
     const list = (title: string) => ({ title, url: `/c/${title}`, cards: [fixtureProductCard({ id: `${title}-1` })] });
-    const data = fixtureSectionSkinData("product-tabs", { title: "Volt Computers", tabs: [{ label: "Special PC", products: list("pc") }, { label: "CPU", products: list("cpu") }], limit: 8 });
-    const html = shown(renderSkin(storefront, "volt_tabs", "section:product-tabs", skinSettings("volt_tabs"), data));
+    const data = fixtureSectionSkinData("product_tabs", { title: "Volt Computers", tabs: [{ label: "Special PC", products: list("pc") }, { label: "CPU", products: list("cpu") }], limit: 8 });
+    const html = shown(renderSkin(storefront, "volt_tabs", "section:product_tabs", skinSettings("volt_tabs"), data));
     expect(html).toContain('role="tablist"');
     expect(html.match(/role="tabpanel"/g)).toHaveLength(2);
     expect(html).toContain("Volt Computers");

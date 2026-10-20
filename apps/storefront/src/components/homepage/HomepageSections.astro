@@ -187,9 +187,9 @@ const root = only
           </section>
         )}
 
-        {section.type === "usp-strip" && <UspStrip section={section} deliveryFacts={content.deliveryFacts} />}
+        {section.type === "usp_strip" && <UspStrip section={section} deliveryFacts={content.deliveryFacts} />}
 
-        {section.type === "category-tiles" && (
+        {section.type === "category_tiles" && (
           <CategoryTiles
             section={section}
             title={homepageCategoryTilesTitle(section, storeLanguage)}
@@ -207,11 +207,11 @@ const root = only
           />
         )}
 
-        {section.type === "product-rail" && list && (
+        {section.type === "product_rail" && list && (
           <ProductRail title={list.title} href={list.href} products={list.products} aboveFold={lead} headingId={headingId} {...money} />
         )}
 
-        {section.type === "product-grid" && list && (
+        {section.type === "product_grid" && list && (
           <ProductGridSection
             title={list.title}
             href={list.href}
@@ -223,7 +223,7 @@ const root = only
           />
         )}
 
-        {section.type === "deal-block" && list && (
+        {section.type === "deal_block" && list && (
           <DealBlock
             section={section}
             title={list.title}
@@ -236,7 +236,7 @@ const root = only
           />
         )}
 
-        {section.type === "product-tabs" && (
+        {section.type === "product_tabs" && (
           <ProductTabs
             sectionId={section.id}
             title={section.settings.title}
@@ -246,15 +246,15 @@ const root = only
           />
         )}
 
-        {section.type === "shop-by" && (
+        {section.type === "shop_by" && (
           <ShopByCards sectionId={section.id} title={section.settings.title} cards={homepageShopByCards(section, content)} aboveFold={lead} />
         )}
 
-        {section.type === "banner-mosaic" && <BannerMosaic tiles={homepageMosaicTiles(section, content)} aboveFold={lead} />}
+        {section.type === "banner_mosaic" && <BannerMosaic tiles={homepageMosaicTiles(section, content)} aboveFold={lead} />}
 
-        {section.type === "brand-wall" && <BrandWall section={section} brands={content.brands} />}
+        {section.type === "brand_wall" && <BrandWall section={section} brands={content.brands} />}
 
-        {section.type === "recently-viewed" && <RecentlyViewed section={section} />}
+        {section.type === "recently_viewed" && <RecentlyViewed section={section} />}
 
         {section.type === "lookbook" && list && (
           <Lookbook
@@ -289,13 +289,13 @@ const root = only
           <ObjectsSection section={section} object={object} media={content.media} {...money} {language} />
         )}
 
-        {section.type === "utility-cards" && <UtilityCards section={section} />}
+        {section.type === "utility_cards" && <UtilityCards section={section} />}
 
-        {section.type === "endless-grid" && list && (
+        {section.type === "endless_grid" && list && (
           <EndlessGrid section={section} title={section.settings.title.trim() || copy.moreToExplore} products={list.products} aboveFold={lead} {...money} />
         )}
 
-        {section.type === "seo-text" && <SeoText section={section} />}
+        {section.type === "seo_text" && <SeoText section={section} />}
 
         {section.type === "newsletter" && <NewsletterSection section={section} language={language} photo={homepageMedia(content, section.settings.mediaId)} aboveFold={lead} />}
 
@@ -312,7 +312,7 @@ const root = only
       const root = document.querySelector("[data-home-phone-reorder]");
       if (!root) return;
       const hero = root.querySelector(':scope > [data-home-section="hero"]');
-      const categories = root.querySelector(':scope > [data-home-section="category-tiles"]');
+      const categories = root.querySelector(':scope > [data-home-section="category_tiles"]');
       if (!hero || !categories) return;
       const desktopNext = hero.nextElementSibling;
       const phone = matchMedia("(max-width: 767px)");

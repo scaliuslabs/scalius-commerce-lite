@@ -2,7 +2,7 @@
 // where a component's checked markup hands a spot back to the store. The
 // storefront cuts the markup at its embeds and renders each one; the SDK's
 // test helpers and the packer read the same cut to hold a skin to its
-// target's rule (a product-main skin places exactly one buy form). Zod-free
+// target's rule (a product_main skin places exactly one buy form). Zod-free
 // and dependency-free: it runs in the storefront and in app tests.
 
 import {

@@ -5,7 +5,7 @@
  * the app's storefront module stubbed at the render host): a product-main
  * skin draws the main part around the store's own buy form, a skin without
  * one leaves the page to core, product-slot components draw from the page's
- * projection, and a listing-main skin composes the store's filters, sort
+ * projection, and a listing_main skin composes the store's filters, sort
  * and (always) page links. No skin adds an API read: the page is still one
  * batch.
  */
@@ -92,8 +92,8 @@ const EXTENSION = {
   pluginId: "acme.theme", version: "1.0.0", source: "bundled", release: "c".repeat(64),
   sections: [], sectionSettings: {}, islands: [], stylesheet: false, connect: [],
   skins: [
-    { id: "pdp", target: "product-main", settings: [] },
-    { id: "grid", target: "listing-main", settings: [] },
+    { id: "pdp", target: "product_main", settings: [] },
+    { id: "grid", target: "listing_main", settings: [] },
     { id: "bar", target: "header", settings: [] },
   ],
   components: [
@@ -108,8 +108,8 @@ function theme(skin: "pdp" | null = "pdp"): StorefrontThemeDocument {
     ...document,
     blocks: { ...document.blocks, product: { ...document.blocks.product, apps: [{ id: "guide", app: "acme.theme/size_guide", values: {} }] } },
     apps: { skins: {
-      ...(skin ? { "product-main": { app: `acme.theme/${skin}`, values: {} } } : {}),
-      "listing-main": { app: "acme.theme/grid", values: {} },
+      ...(skin ? { "product_main": { app: `acme.theme/${skin}`, values: {} } } : {}),
+      "listing_main": { app: "acme.theme/grid", values: {} },
     } },
   } as StorefrontThemeDocument;
 }
@@ -203,10 +203,10 @@ async function renderProduct(document: StorefrontThemeDocument) {
   return { calls, response, page: parse(await response.text()) };
 }
 
-describe("a product-main skin", () => {
+describe("a product_main skin", () => {
   it("draws the main part from the page's projection around the store's own buy form, in the page's one batch", async () => {
     const jobs = app({
-      "product-main": () => '<article class="acme-pdp"><h1>Linen, by Acme</h1><scalius-embed kind="buy-form" data-title="false"></scalius-embed><scalius-embed kind="reviews"></scalius-embed></article>',
+      "product_main": () => '<article class="acme-pdp"><h1>Linen, by Acme</h1><scalius-embed kind="buy_form" data-title="false"></scalius-embed><scalius-embed kind="reviews"></scalius-embed></article>',
       "component:size_guide": (job) => `<p class="acme-guide">Sizes for ${(job.data as { product: { title: string } }).product.title}</p>`,
     });
     const { calls, response, page } = await renderProduct(theme());
@@ -217,16 +217,16 @@ describe("a product-main skin", () => {
     const main = page.querySelector('[data-product-main="skin"] [data-sx-app="acme.theme"]')!;
     expect(main.querySelector(".acme-pdp h1")?.textContent).toBe("Linen, by Acme");
     // The store's own buy form, in the skin, with its title left out: one h1 on the page.
-    const form = main.querySelector('[data-sx-embed="buy-form"] form#product-buy-form[action="/buy/linen"]');
+    const form = main.querySelector('[data-sx-embed="buy_form"] form#product-buy-form[action="/buy/linen"]');
     expect(form).not.toBeNull();
-    expect(main.querySelector('[data-sx-embed="buy-form"] [data-action="add-to-cart"]')).not.toBeNull();
+    expect(main.querySelector('[data-sx-embed="buy_form"] [data-action="add-to-cart"]')).not.toBeNull();
     expect(page.querySelectorAll("h1")).toHaveLength(1);
     // Core's gallery and buy box do not draw beside it; the reviews it placed replace the module.
     expect(page.querySelectorAll("#product-buy-form")).toHaveLength(1);
     expect(page.querySelector('[data-sx-embed="reviews"]')).not.toBeNull();
 
     // The projection: band availability, market prices, sanitized description, fields, no quantity.
-    const skinJob = jobs.find(({ job }) => job.target === "product-main")!;
+    const skinJob = jobs.find(({ job }) => job.target === "product_main")!;
     expect(skinJob.options?.jsonLd).toBe(false);
     // Drawn before the page's Layout, it still gets the page's store and language by Layout's rules.
     expect(skinJob.context.store).toMatchObject({ name: "Nakshi Ghor", language: "en" });
@@ -249,7 +249,7 @@ describe("a product-main skin", () => {
 
   it("places the store's gallery where the skin asks for it, with its LCP preload, still in one batch", async () => {
     app({
-      "product-main": () => '<article class="acme-pdp"><div class="acme-media"><scalius-embed kind="gallery"></scalius-embed></div><h1>Linen</h1><scalius-embed kind="buy-form" data-title="false"></scalius-embed></article>',
+      "product_main": () => '<article class="acme-pdp"><div class="acme-media"><scalius-embed kind="gallery"></scalius-embed></div><h1>Linen</h1><scalius-embed kind="buy_form" data-title="false"></scalius-embed></article>',
     });
     productPhotos = true;
     const { calls, page } = await renderProduct(theme());
@@ -263,7 +263,7 @@ describe("a product-main skin", () => {
 
     // A skin without one draws its own photos: no core gallery, no preload for it.
     vi.restoreAllMocks();
-    app({ "product-main": () => '<article class="acme-pdp"><h1>Linen</h1><scalius-embed kind="buy-form" data-title="false"></scalius-embed></article>' });
+    app({ "product_main": () => '<article class="acme-pdp"><h1>Linen</h1><scalius-embed kind="buy_form" data-title="false"></scalius-embed></article>' });
     const own = await renderProduct(theme());
     productPhotos = false;
     expect(own.page.querySelector("[data-product-gallery]")).toBeNull();
@@ -272,7 +272,7 @@ describe("a product-main skin", () => {
 
   it("fits the gallery stage to the first photo's stored size, not the theme's card ratio: no bands", async () => {
     app({
-      "product-main": () => '<article class="acme-pdp"><scalius-embed kind="gallery"></scalius-embed><h1>Linen</h1><scalius-embed kind="buy-form" data-title="false"></scalius-embed></article>',
+      "product_main": () => '<article class="acme-pdp"><scalius-embed kind="gallery"></scalius-embed><h1>Linen</h1><scalius-embed kind="buy_form" data-title="false"></scalius-embed></article>',
     });
     // A portrait card ratio (Noor's) with square photos: a square stage.
     const portraitCards = theme();
@@ -297,7 +297,7 @@ describe("a product-main skin", () => {
   });
 
   it("leaves the product page to core when the skin places no buy form, draws nothing, or is not chosen", async () => {
-    app({ "product-main": () => '<article class="acme-pdp"><h1>No way to buy</h1></article>' });
+    app({ "product_main": () => '<article class="acme-pdp"><h1>No way to buy</h1></article>' });
     const missing = await renderProduct(theme());
     expect(missing.page.querySelector(".acme-pdp")).toBeNull();
     expect(missing.page.querySelector("#product-buy-form")).not.toBeNull();
@@ -308,7 +308,7 @@ describe("a product-main skin", () => {
     const none = await renderProduct(theme(null));
     expect(none.page.querySelector("[data-product-main]")).toBeNull();
     expect(none.page.querySelector("#product-buy-form")).not.toBeNull();
-    expect(jobs.some(({ job }) => job.target === "product-main")).toBe(false);
+    expect(jobs.some(({ job }) => job.target === "product_main")).toBe(false);
   });
 });
 
@@ -324,7 +324,7 @@ describe("an app header skin", () => {
   const header = '<header class="acme-header"><button type="button" popovertarget="acme-drawer">Menu</button><div id="acme-drawer" popover="auto" data-menu-drawer>Menu</div></header>';
 
   it("keeps the theme's bottom tabs, whose menu tab opens the header's own drawer", async () => {
-    const jobs = app({ header: () => header, "product-main": () => null });
+    const jobs = app({ header: () => header, "product_main": () => null });
     const { page } = await renderProduct(withHeader({ variant: "bottom-tabs", settings: { tabs: ["home", "categories", "offers", "account"], drawer: "drill-in" } }));
     expect(page.querySelector(".acme-header")).not.toBeNull();
     expect(page.querySelector("#site-header")).toBeNull();
@@ -337,7 +337,7 @@ describe("an app header skin", () => {
   });
 
   it("draws no tab bar for a drawer phone navigation", async () => {
-    const jobs = app({ header: () => header, "product-main": () => null });
+    const jobs = app({ header: () => header, "product_main": () => null });
     const { page } = await renderProduct(withHeader({ variant: "accordion-drawer", settings: {} }));
     expect(page.querySelector(".acme-header")).not.toBeNull();
     expect(page.querySelector("#mobile-tab-bar")).toBeNull();
@@ -434,10 +434,10 @@ async function renderListing(draw: Partial<Record<string, (job: Record<string, u
   return { jobs, page: parse(html) };
 }
 
-describe("a listing-main skin", () => {
+describe("a listing_main skin", () => {
   it("draws the listing from its projection with the store's sort, and appends the page links it left out", async () => {
     const { jobs, page } = await renderListing({
-      "listing-main": (job) => {
+      "listing_main": (job) => {
         const data = job.data as { title: string; cards: Array<{ title: string }> };
         return `<section class="acme-grid"><h1>${data.title}</h1><scalius-embed kind="toolbar"></scalius-embed><ul>${data.cards.map((card) => `<li>${card.title}</li>`).join("")}</ul></section>`;
       },
@@ -450,7 +450,7 @@ describe("a listing-main skin", () => {
     const paging = listing.querySelector('[data-sx-embed="pagination"]')!;
     expect(paging.querySelector('a[href*="page=3"]')).not.toBeNull();
     expect(page.querySelector("[data-catalog-band]")).toBeNull();
-    const data = jobs.find(({ job }) => job.target === "listing-main")!.job.data as Record<string, unknown>;
+    const data = jobs.find(({ job }) => job.target === "listing_main")!.job.data as Record<string, unknown>;
     expect(data).toMatchObject({
       kind: "category", title: "Sarees", total: 50, page: 2, pageCount: 3, descriptionHtml: "<p>Handwoven.</p>",
       fields: { "custom.season": "Eid" }, breadcrumbs: [{ title: "Home", url: "/" }, { title: "Sarees", url: "/categories/sarees" }],
@@ -458,7 +458,7 @@ describe("a listing-main skin", () => {
   });
 
   it("leaves the listing to core when the skin draws nothing", async () => {
-    const { page } = await renderListing({ "listing-main": () => "" });
+    const { page } = await renderListing({ "listing_main": () => "" });
     expect(page.querySelector("[data-listing-main]")).toBeNull();
     expect(page.querySelector("[data-catalog-band]")).not.toBeNull();
   });

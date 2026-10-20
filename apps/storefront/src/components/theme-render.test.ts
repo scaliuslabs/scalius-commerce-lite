@@ -296,7 +296,7 @@ function withStoreContent(base: StorefrontThemeDocument): StorefrontThemeDocumen
   theme.blocks.footer = { ...theme.blocks.footer, settings: { ...theme.blocks.footer.settings, ...FOOTER_WORDS } } as never;
   theme.pages.home = theme.pages.home.map((section) => {
     if (section.type === "hero") return { ...section, settings: { ...section.settings, slides: HERO_SLIDES } };
-    if (section.type === "category-tiles") return { ...section, settings: { ...section.settings, categoryIds: CATEGORY_IDS } };
+    if (section.type === "category_tiles") return { ...section, settings: { ...section.settings, categoryIds: CATEGORY_IDS } };
     if (section.type === "collections") return { ...section, settings: { ...section.settings, collectionIds: COLLECTION_IDS } };
     return section;
   }) as never;
@@ -663,7 +663,7 @@ describe("storefront theme render matrix", () => {
       productCard: { facts: "none", action: "full", hoverImage: false, imageRatio: "square", imageFit: "cover", surface: "hairline" },
       topBar: true,
     });
-    expect(resolved.pages.home.map(storefrontSectionRenderer)).toEqual(["hero", "collections", "category-tiles", "usp-strip"]);
+    expect(resolved.pages.home.map(storefrontSectionRenderer)).toEqual(["hero", "collections", "category_tiles", "usp_strip"]);
     expect(resolved.blocks.topBar.variant).toBe("utility");
     expect(resolved.blocks.header).toMatchObject({ variant: "search-first", settings: { search: "scoped", cartTotal: true } });
     expect(resolved.blocks.desktopNav).toMatchObject({ variant: "mega-panel" });
@@ -1709,7 +1709,7 @@ describe("theme sections", () => {
         { id: "care", type: "editorial", version: 1, settings: { layout: "rich-text", heading: "", body: "Dry clean only." } },
         // A version 1 newsletter (heading and text only): the signup form with its defaults.
         { id: "brands", type: "newsletter", version: 1, settings: { heading: "Join", text: "" } },
-        { id: "delivery", type: "usp-strip", version: 1, settings: { style: "icons", source: { kind: "delivery-facts" } } },
+        { id: "delivery", type: "usp_strip", version: 1, settings: { style: "icons", source: { kind: "delivery-facts" } } },
       ],
       homeMode: { kind: "sections" },
     },
@@ -1752,7 +1752,7 @@ describe("theme sections", () => {
     // The hero holds the first large photo, so it gets high priority.
     expect(page.querySelector(".desktop-carousel img")!.getAttribute("fetchpriority")).toBe("high");
     // The categories section is absent in this custom document.
-    expect(page.querySelector('[data-home-section="category-tiles"]')).toBeNull();
+    expect(page.querySelector('[data-home-section="category_tiles"]')).toBeNull();
   });
 
   it("skips empty sections and text strips when choosing what leads", () => {

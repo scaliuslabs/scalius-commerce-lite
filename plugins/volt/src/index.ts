@@ -140,7 +140,7 @@ const skins = [
   },
   {
     id: "volt_card",
-    target: "product-card",
+    target: "product_card",
     name: "Volt card",
     description: "A square photo with the amount saved, two lines of name and the price beside the regular price.",
     settings: [
@@ -152,7 +152,7 @@ const skins = [
   },
   {
     id: "volt_product",
-    target: "product-main",
+    target: "product_main",
     name: "Volt product page",
     description: "Gallery beside price chips, key features and the store's buy form; a tab bar over the specification table, description, warranty and reviews.",
     settings: [
@@ -167,7 +167,7 @@ const skins = [
   },
   {
     id: "volt_listing",
-    target: "listing-main",
+    target: "listing_main",
     name: "Volt listing",
     description: "Filters in a sidebar, the title with its item count, sort above a grid of cards, numbered pages.",
     settings: [
@@ -189,10 +189,10 @@ const skins = [
       { key: "interval", label: "Seconds per slide", type: "number", default: 5, min: 3, max: 12, integer: true },
     ],
   },
-  { id: "volt_usp", target: "section:usp-strip", name: "Volt trust strip", description: "The store's facts or your points as icon cards in a row.", settings: [] },
+  { id: "volt_usp", target: "section:usp_strip", name: "Volt trust strip", description: "The store's facts or your points as icon cards in a row.", settings: [] },
   {
     id: "volt_categories",
-    target: "section:category-tiles",
+    target: "section:category_tiles",
     name: "Volt featured categories",
     description: "Small category tiles in a dense grid under a centred title, with a See All button.",
     settings: [
@@ -201,13 +201,13 @@ const skins = [
       { key: "all_link", label: "Button link", type: "link", default: "/categories" },
     ],
   },
-  { id: "volt_tabs", target: "section:product-tabs", name: "Volt product tabs", description: "The title with pill tabs beside it over a grid of cards.", settings: productsSkin(5) },
-  { id: "volt_grid", target: "section:product-grid", name: "Volt product grid", description: "A titled grid of cards.", settings: productsSkin(5).slice(0, 2) },
-  { id: "volt_rail", target: "section:product-rail", name: "Volt product row", description: "A titled scrolling row of cards.", settings: productsSkin(5) },
-  { id: "volt_deals", target: "section:deal-block", name: "Volt deals", description: "A titled row of deals with the section's banner beside it.", settings: productsSkin(4) },
-  { id: "volt_brands", target: "section:brand-wall", name: "Volt brands", description: "Brand logos on white tiles.", settings: [] },
-  { id: "volt_banners", target: "section:banner-mosaic", name: "Volt banner row", description: "Up to three banners side by side.", settings: [] },
-  { id: "volt_about", target: "section:seo-text", name: "Volt store text", description: "The long store text on a white panel; lines starting with # are headings.", settings: [] },
+  { id: "volt_tabs", target: "section:product_tabs", name: "Volt product tabs", description: "The title with pill tabs beside it over a grid of cards.", settings: productsSkin(5) },
+  { id: "volt_grid", target: "section:product_grid", name: "Volt product grid", description: "A titled grid of cards.", settings: productsSkin(5).slice(0, 2) },
+  { id: "volt_rail", target: "section:product_rail", name: "Volt product row", description: "A titled scrolling row of cards.", settings: productsSkin(5) },
+  { id: "volt_deals", target: "section:deal_block", name: "Volt deals", description: "A titled row of deals with the section's banner beside it.", settings: productsSkin(4) },
+  { id: "volt_brands", target: "section:brand_wall", name: "Volt brands", description: "Brand logos on white tiles.", settings: [] },
+  { id: "volt_banners", target: "section:banner_mosaic", name: "Volt banner row", description: "Up to three banners side by side.", settings: [] },
+  { id: "volt_about", target: "section:seo_text", name: "Volt store text", description: "The long store text on a white panel; lines starting with # are headings.", settings: [] },
 ] satisfies Skin[];
 
 /** The source store's look: a light grey page, white panels, an orange accent, system sans type, 8px corners. */
@@ -251,7 +251,7 @@ const templates = [
     id: "volt",
     name: "Volt Gadgets",
     description: "A gadget and electronics store: a slider with side banners, a trust strip, featured categories, product tabs, deals, brands and the store text.",
-    themeVersion: 11,
+    themeVersion: 12,
     theme: {
       tokens,
       blocks: { navigation: { source: "tree+menu", maxTopItems: 12, linkBudget: 150 } },
@@ -259,9 +259,9 @@ const templates = [
         skins: {
           header: { app: "scalius.volt/volt_header", values: {} },
           footer: { app: "scalius.volt/volt_footer", values: {} },
-          "product-card": { app: "scalius.volt/volt_card", values: {} },
-          "product-main": { app: "scalius.volt/volt_product", values: {} },
-          "listing-main": { app: "scalius.volt/volt_listing", values: {} },
+          "product_card": { app: "scalius.volt/volt_card", values: {} },
+          "product_main": { app: "scalius.volt/volt_product", values: {} },
+          "listing_main": { app: "scalius.volt/volt_listing", values: {} },
         },
       },
       sections: [
@@ -275,26 +275,26 @@ const templates = [
             { icon: "headset", title: "After-Sales Service", detail: "We are here to help" },
           ],
         }),
-        skinned("volt-categories", "category-tiles", { style: "round-small", title: "Featured Category", categoryIds: [] }, "volt_categories"),
-        skinned("volt-computers", "product-tabs", {
+        skinned("volt-categories", "category_tiles", { style: "round-small", title: "Featured Category", categoryIds: [] }, "volt_categories"),
+        skinned("volt-computers", "product_tabs", {
           title: "Volt Computers",
           tabs: [{ label: "Special PC", source: { kind: "newest" } }, { label: "On sale", source: { kind: "on-sale" } }],
           limit: 10,
         }, "volt_tabs", { columns: 5 }),
-        skinned("volt-apple", "product-rail", { title: "Apple Exclusive 2026", source: { kind: "popular" }, limit: 12 }, "volt_rail", { link_label: "View all" }),
-        skinned("volt-appliances", "product-tabs", {
+        skinned("volt-apple", "product_rail", { title: "Apple Exclusive 2026", source: { kind: "popular" }, limit: 12 }, "volt_rail", { link_label: "View all" }),
+        skinned("volt-appliances", "product_tabs", {
           title: "Home Appliances",
           tabs: [{ label: "Hot Deals", source: { kind: "on-sale" } }, { label: "New", source: { kind: "newest" } }],
           limit: 10,
         }, "volt_tabs", { columns: 5 }),
-        skinned("volt-deals", "product-grid", { title: "Exclusive Deals", source: { kind: "on-sale" }, columns: 5, rows: 3 }, "volt_grid"),
-        skinned("volt-featured", "product-tabs", {
+        skinned("volt-deals", "product_grid", { title: "Exclusive Deals", source: { kind: "on-sale" }, columns: 5, rows: 3 }, "volt_grid"),
+        skinned("volt-featured", "product_tabs", {
           title: "Featured Products",
           tabs: [{ label: "Earbuds", source: { kind: "popular" } }, { label: "New", source: { kind: "newest" } }],
           limit: 10,
         }, "volt_tabs", { columns: 5 }),
-        skinned("volt-brands", "brand-wall", { title: "Top Brands", style: "grid" }, "volt_brands"),
-        skinned("volt-about", "seo-text", { heading: "", body: "" }, "volt_about"),
+        skinned("volt-brands", "brand_wall", { title: "Top Brands", style: "grid" }, "volt_brands"),
+        skinned("volt-about", "seo_text", { heading: "", body: "" }, "volt_about"),
       ],
     },
   },

@@ -14,7 +14,7 @@ describe("canvas scalar field edits", () => {
   });
   it("refuses list indices, unsupported sections and absent nullable CTA data", () => {
     expect(canvasTextField(storefrontSectionDefault("faq", "faq"), "items.0.question")).toBeNull();
-    expect(canvasTextField(storefrontSectionDefault("product-rail", "rail"), "title")).toBeNull();
+    expect(canvasTextField(storefrontSectionDefault("product_rail", "rail"), "title")).toBeNull();
     expect(canvasTextField({ ...banner, settings: { ...banner.settings, cta: null } }, "cta.label")).toBeNull();
   });
   it("uses schema-derived bounds and preserves plain paragraph text", () => {

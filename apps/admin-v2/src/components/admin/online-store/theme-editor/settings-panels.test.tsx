@@ -545,11 +545,11 @@ describe("app skins of the theme's units", () => {
         setting("sticky", "Stay on top", { type: "boolean", default: true }),
       ] },
       { key: "acme.studio/footer", id: "footer", target: "footer", name: "Studio footer", description: null, settings: [] },
-      { key: "acme.studio/card", id: "card", target: "product-card", name: "Studio card", description: null, settings: [
+      { key: "acme.studio/card", id: "card", target: "product_card", name: "Studio card", description: null, settings: [
         setting("badge", "Badge text", { required: true, maxLength: 20 }),
       ] },
-      { key: "acme.studio/pdp", id: "pdp", target: "product-main", name: "Studio product page", description: "An editorial gallery around the store's buy form.", settings: [] },
-      { key: "acme.studio/grid", id: "grid", target: "listing-main", name: "Studio listing", description: null, settings: [] },
+      { key: "acme.studio/pdp", id: "pdp", target: "product_main", name: "Studio product page", description: "An editorial gallery around the store's buy form.", settings: [] },
+      { key: "acme.studio/grid", id: "grid", target: "listing_main", name: "Studio listing", description: null, settings: [] },
     ],
   };
   const skinChoice = () => container.querySelector<HTMLElement>("[data-app-skin]")!;
@@ -600,10 +600,10 @@ describe("app skins of the theme's units", () => {
   it("skins the product card from Theme settings, holding an invalid value back", () => {
     renderThemeSettings(DEFAULT_STOREFRONT_THEME, "Product cards", [STUDIO]);
     click(radioIn(skinChoice(), "acme.studio/card"));
-    expect(latest.apps).toEqual({ skins: { "product-card": { app: "acme.studio/card", values: {} } } });
-    expect(container.querySelector("#theme-app-skin-product-card-badge-note")?.textContent).toBe("Fill this in.");
-    expect(invalidAppSkins(latest, appSkinsByKey([STUDIO]))).toEqual(["product-card"]);
-    type(field("theme-app-skin-product-card-badge"), "New");
+    expect(latest.apps).toEqual({ skins: { "product_card": { app: "acme.studio/card", values: {} } } });
+    expect(container.querySelector("#theme-app-skin-product_card-badge-note")?.textContent).toBe("Fill this in.");
+    expect(invalidAppSkins(latest, appSkinsByKey([STUDIO]))).toEqual(["product_card"]);
+    type(field("theme-app-skin-product_card-badge"), "New");
     expect(invalidAppSkins(latest, appSkinsByKey([STUDIO]))).toEqual([]);
     // The built-in card's settings are the fallback.
     click(fallback()!.querySelector<HTMLButtonElement>("button[aria-expanded]")!);
@@ -612,17 +612,17 @@ describe("app skins of the theme's units", () => {
 
   it("offers product page skins on the product part, keeping the built-in settings as the fallback", () => {
     renderPart(DEFAULT_STOREFRONT_THEME, EDITOR_PARTS.productMain, { kind: "product" }, [STUDIO]);
-    expect(skinChoice().getAttribute("data-app-skin")).toBe("product-main");
+    expect(skinChoice().getAttribute("data-app-skin")).toBe("product_main");
     expect(skinChoice().textContent).toContain("Built-in product page");
     click(radioIn(skinChoice(), "acme.studio/pdp"));
-    expect(latest.apps).toEqual({ skins: { "product-main": { app: "acme.studio/pdp", values: {} } } });
+    expect(latest.apps).toEqual({ skins: { "product_main": { app: "acme.studio/pdp", values: {} } } });
     expect(fallback()).not.toBeNull();
   });
 
   it("offers listing skins on the listing part", () => {
     renderPart(DEFAULT_STOREFRONT_THEME, EDITOR_PARTS.listing, { kind: "collection" }, [STUDIO]);
-    expect(skinChoice().getAttribute("data-app-skin")).toBe("listing-main");
+    expect(skinChoice().getAttribute("data-app-skin")).toBe("listing_main");
     click(radioIn(skinChoice(), "acme.studio/grid"));
-    expect(latest.apps).toEqual({ skins: { "listing-main": { app: "acme.studio/grid", values: {} } } });
+    expect(latest.apps).toEqual({ skins: { "listing_main": { app: "acme.studio/grid", values: {} } } });
   });
 });

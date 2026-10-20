@@ -81,4 +81,4 @@ if (extension && schema && extension.sections.includes(component.type)) {
 {/* Only the isolated library reports a failed module; a valid empty string
     still means the app intentionally has nothing to display. */}
 {libraryPreview && html === null && <template data-library-render-failed></template>}
-{markup && <AppComponent markup={markup} embeds={{ "order-form": orderFormEmbed(OrderForm as EmbedRender["component"], embedProducts, { instanceId: section.id, preview }) }} />}
+{markup && <AppComponent markup={markup} embeds={{ "order_form": orderFormEmbed(OrderForm as EmbedRender["component"], embedProducts, { instanceId: section.id, preview }) }} />}

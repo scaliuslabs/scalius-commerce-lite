@@ -55,7 +55,7 @@ export const SECTION_CONTENT: Record<StorefrontSectionType, SectionContent> = {
       "one-slide": { slides: [slide("eid", { heading: "Eid collection 2026", button: "Shop now" })] },
     },
   },
-  "usp-strip": {
+  "usp_strip": {
     settings: {
       style: "icons",
       source: { kind: "custom", items: [
@@ -67,23 +67,23 @@ export const SECTION_CONTENT: Record<StorefrontSectionType, SectionContent> = {
     },
     alternatives: { "source=delivery-facts": { source: { kind: "delivery-facts" } } },
   },
-  "category-tiles": { settings: { style: "photo", title: "Shop by category", categoryIds: FIXTURE_CATEGORY_IDS } },
+  "category_tiles": { settings: { style: "photo", title: "Shop by category", categoryIds: FIXTURE_CATEGORY_IDS } },
   collections: { settings: { carousel: "large", collectionIds: FIXTURE_COLLECTION_IDS } },
-  "product-rail": {
+  "product_rail": {
     settings: { title: "New arrivals", source: SOURCES.newest, limit: 12 },
     // A data state: five cards fit one row from 1280px, so the arrows show only below it.
     alternatives: { ...sourceAlternatives, "five-products": { limit: 5 } },
   },
-  "product-grid": {
+  "product_grid": {
     settings: { title: "Best sellers this week", source: SOURCES.popular, columns: 4, rows: 2 },
     // Two products are a data state shorter than one row: a capped two-column grid.
     alternatives: { ...sourceAlternatives, "two-products": { columns: 2, rows: 1 } },
   },
-  "deal-block": {
+  "deal_block": {
     settings: { title: "Flash sale", source: SOURCES["on-sale"], promotionId: "promo-flash", mediaId: "banner-eid" },
     alternatives: { "no-countdown": { promotionId: null } },
   },
-  "product-tabs": {
+  "product_tabs": {
     settings: {
       title: "Trending now",
       limit: 8,
@@ -95,7 +95,7 @@ export const SECTION_CONTENT: Record<StorefrontSectionType, SectionContent> = {
       ],
     },
   },
-  "shop-by": {
+  "shop_by": {
     settings: {
       title: "Shop by occasion",
       cards: [
@@ -107,7 +107,7 @@ export const SECTION_CONTENT: Record<StorefrontSectionType, SectionContent> = {
       ],
     },
   },
-  "banner-mosaic": {
+  "banner_mosaic": {
     settings: {
       tiles: [
         { mediaId: "wide-mosaic-1", alt: "Eid sale: up to 40% off sarees", href: "/collections/col-eid" },
@@ -126,7 +126,7 @@ export const SECTION_CONTENT: Record<StorefrontSectionType, SectionContent> = {
       "words-only": { mediaId: null },
     },
   },
-  "brand-wall": { settings: { title: "Official brand partners", style: "rail" } },
+  "brand_wall": { settings: { title: "Official brand partners", style: "rail" } },
   editorial: {
     settings: { layout: "rich-text", heading: "Made by hand in Bangladesh", body: "Every saree is woven by a master weaver in Narayanganj.\n\nWe pay fair wages and ship from our own warehouse in Dhaka." },
     alternatives: {
@@ -156,7 +156,7 @@ export const SECTION_CONTENT: Record<StorefrontSectionType, SectionContent> = {
       ],
     },
   },
-  "utility-cards": {
+  "utility_cards": {
     settings: {
       cards: [
         { title: "Track your order", text: "Enter your phone number and order number", href: "/track-order" },
@@ -166,14 +166,14 @@ export const SECTION_CONTENT: Record<StorefrontSectionType, SectionContent> = {
       ],
     },
   },
-  "endless-grid": { settings: { title: "Just for you", pageSize: 24 } },
-  "seo-text": {
+  "endless_grid": { settings: { title: "Just for you", pageSize: 24 } },
+  "seo_text": {
     settings: {
       heading: "Online shopping in Bangladesh",
       body: "## Sarees, panjabi and electronics\nNakshi Bazar sells handwoven sarees and genuine electronics with cash on delivery across Bangladesh.\n\n### Why buy online\nYou get official warranty, easy returns and delivery in 2 days.\n\n" + "More about our weavers and partners. ".repeat(12),
     },
   },
-  "recently-viewed": { settings: { title: "Recently viewed" } },
+  "recently_viewed": { settings: { title: "Recently viewed" } },
   objects: {
     settings: { heading: "Visit our stores", typeId: "oty_custom.locations", layout: "grid", limit: 12 },
     alternatives: {

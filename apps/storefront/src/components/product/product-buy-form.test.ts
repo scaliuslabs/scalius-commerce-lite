@@ -74,7 +74,7 @@ describe("product page purchase aids", () => {
   it("shows the contact actions after purchase when the buy box asks for them, only from valid merchant phone links", () => {
     expect(page).toContain("const contactLinks = themeLayout.buyBox.whatsapp");
     expect(page).toContain('storeContactLinks(layoutData.business).filter((link) => link.kind !== "email")');
-    // The buy box draws them (the core page and a product-main skin's buy form alike).
+    // The buy box draws them (the core page and a product_main skin's buy form alike).
     expect(page).toContain("contactLinks,");
     const buyBox = read("./ProductBuyBox.astro");
     expect(buyBox).toMatch(/contactLinks\.length > 0 && \(\s*<nav slot="after-actions" data-product-contact/);

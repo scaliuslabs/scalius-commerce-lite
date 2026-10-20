@@ -50,8 +50,8 @@ export const STOREFRONT_SKINS_MAX = 30;
 
 /**
  * A skin the app's storefront module draws (`storefront.skins`): app markup
- * for one core-owned unit (`header`, `footer`, `product-card`,
- * `product-main`, `listing-main`, or a core section `section:<type>`). It
+ * for one core-owned unit (`header`, `footer`, `product_card`,
+ * `product_main`, `listing_main`, or a core section `section:<type>`). It
  * gets the unit's public projection and the merchant's values for its
  * settings; core draws the unit whenever it is missing, fails or draws
  * nothing. A skin reads nothing, so its settings name no images or products
@@ -60,7 +60,7 @@ export const STOREFRONT_SKINS_MAX = 30;
 export const storefrontSkinDeclarationSchema = z.object({
   /** Unique per app: the theme names it `<plugin id>/<id>`. */
   id: key,
-  target: z.string().max(64).refine(isStorefrontSkinTarget, "Use header, footer, product-card, product-main, listing-main or section:<core section type>."),
+  target: z.string().max(64).refine(isStorefrontSkinTarget, "Use header, footer, product_card, product_main, listing_main or section:<core section type>."),
   name: title,
   description: description.optional(),
   settings: pluginSettingsSchemaSchema.default([]),

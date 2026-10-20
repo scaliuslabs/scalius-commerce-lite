@@ -219,7 +219,7 @@ describe("words, numbers and dates in the page's locale", () => {
   });
 
   it("embeds the order form by product id, never by a URL a canonical path can change", () => {
-    expect(OrderForm({ product: fixtureProductCard({ id: "prod_9", url: "/products/another" }) }).value).toBe('<scalius-embed kind="order-form" data-product="prod_9"></scalius-embed>');
+    expect(OrderForm({ product: fixtureProductCard({ id: "prod_9", url: "/products/another" }) }).value).toBe('<scalius-embed kind="order_form" data-product="prod_9"></scalius-embed>');
     expect(OrderForm({ product: null }).value).toBe("");
   });
 });

@@ -18,7 +18,7 @@ function withContent(): StorefrontThemeDocument {
   theme.pages.homeMode = { kind: "product", productId: "prod_1" };
   theme.pages.home = theme.pages.home.map((section) => {
     if (section.type === "hero") return { ...section, settings: { ...section.settings, slides: [slide] } };
-    if (section.type === "category-tiles") return { ...section, settings: { ...section.settings, title: "Departments", categoryIds: ["cat_a", "cat_b"] } };
+    if (section.type === "category_tiles") return { ...section, settings: { ...section.settings, title: "Departments", categoryIds: ["cat_a", "cat_b"] } };
     if (section.type === "collections") return { ...section, settings: { ...section.settings, collectionIds: ["col_a"] } };
     return section;
   });
@@ -76,8 +76,8 @@ describe("theme content", () => {
     const hero = next.pages.home.find((section) => section.type === "hero");
     expect(hero?.type === "hero" && hero.settings.slides).toEqual([slide]);
     expect(hero?.type === "hero" && hero.settings.layout).toBe("full-bleed");
-    const tiles = next.pages.home.find((section) => section.type === "category-tiles");
-    expect(tiles?.type === "category-tiles" && tiles.settings).toEqual({ style: "photo", title: "Departments", categoryIds: ["cat_a", "cat_b"] });
+    const tiles = next.pages.home.find((section) => section.type === "category_tiles");
+    expect(tiles?.type === "category_tiles" && tiles.settings).toEqual({ style: "photo", title: "Departments", categoryIds: ["cat_a", "cat_b"] });
     // Translations are content too: keyed by their words, they follow them into the new look.
     const translated = { ...source, translations: [{ locale: "bn", marketId: null, fields: { "Since 1998": "১৯৯৮ থেকে" } }] };
     expect(storefrontThemeWithContent(storefrontTemplateTheme("daily-essentials"), translated).translations).toEqual(translated.translations);
@@ -114,8 +114,8 @@ describe("theme media references", () => {
     const { storefrontThemeMediaReferences, storefrontThemeWithoutMedia } = await import("./content");
     const { storefrontSectionDefault } = await import("./sections");
     const theme = withContent();
-    theme.pages.home = ["deal-block", "newsletter"].map((type) => {
-      const section = storefrontSectionDefault(type as "deal-block" | "newsletter", type);
+    theme.pages.home = ["deal_block", "newsletter"].map((type) => {
+      const section = storefrontSectionDefault(type as "deal_block" | "newsletter", type);
       return { ...section, settings: { ...section.settings, mediaId: "campaign-photo" } } as typeof section;
     });
     expect(storefrontThemeMediaReferences(theme).filter((ref) => ref.mediaId === "campaign-photo")).toEqual([
@@ -147,7 +147,7 @@ describe("theme media references", () => {
       { mediaId: "media_side", alt: "", href: null },
     ];
     const banner = { ...storefrontSectionDefault("banner", "banner"), settings: { ...storefrontSectionDefault("banner", "banner").settings, mediaId: "media_gone_banner" } };
-    const mosaic = { ...storefrontSectionDefault("banner-mosaic", "mosaic"), settings: { tiles: [
+    const mosaic = { ...storefrontSectionDefault("banner_mosaic", "mosaic"), settings: { tiles: [
       { mediaId: "media_gone_tile", alt: "", href: null },
       { mediaId: "media_tile", alt: "", href: null },
     ] } };

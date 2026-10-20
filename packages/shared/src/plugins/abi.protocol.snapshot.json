@@ -14634,9 +14634,9 @@
   "STOREFRONT_SKIN_UNITS": [
    "header",
    "footer",
-   "product-card",
-   "product-main",
-   "listing-main"
+   "product_card",
+   "product_main",
+   "listing_main"
   ],
   "STOREFRONT_SECTION_SKIN_PREFIX": "section:",
   "STOREFRONT_COMPONENT_SLOTS": [
@@ -14682,13 +14682,13 @@
    "account.profile"
   ],
   "STOREFRONT_EMBED_KINDS": [
-   "buy-form",
+   "buy_form",
    "reviews",
    "recommendations",
    "filters",
    "toolbar",
    "pagination",
-   "order-form",
+   "order_form",
    "gallery",
    "slot"
   ],
@@ -14731,23 +14731,23 @@
   "STOREFRONT_SEAL_PREFIX": "//# scalius-storefront ",
   "STOREFRONT_SECTION_SKIN_PROJECTIONS": {
    "hero": 1,
-   "usp-strip": 1,
-   "category-tiles": 1,
+   "usp_strip": 1,
+   "category_tiles": 1,
    "collections": 1,
-   "product-rail": 1,
-   "product-grid": 1,
-   "deal-block": 1,
-   "product-tabs": 1,
+   "product_rail": 1,
+   "product_grid": 1,
+   "deal_block": 1,
+   "product_tabs": 1,
    "lookbook": 1,
    "banner": 1,
-   "shop-by": 1,
-   "banner-mosaic": 1,
-   "brand-wall": 1,
+   "shop_by": 1,
+   "banner_mosaic": 1,
+   "brand_wall": 1,
    "editorial": 1,
    "faq": 1,
    "specifications": 1,
-   "utility-cards": 1,
-   "seo-text": 1,
+   "utility_cards": 1,
+   "seo_text": 1,
    "newsletter": 1
   },
   "STOREFRONT_EXTENSION_PREFIX": "/_x/"

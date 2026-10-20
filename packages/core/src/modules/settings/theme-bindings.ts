@@ -36,8 +36,8 @@ function resourceOwners(path: string[]): string[] {
     if (path[1] === "listing") return ["category", "collection", "brand"];
   }
   if (path[0] === "apps" && path[1] === "skins") {
-    if (path[2] === "product-main" || path[2] === "product-card") return ["product"];
-    if (path[2] === "listing-main") return ["category", "collection", "brand"];
+    if (path[2] === "product_main" || path[2] === "product_card") return ["product"];
+    if (path[2] === "listing_main") return ["category", "collection", "brand"];
   }
   return [];
 }

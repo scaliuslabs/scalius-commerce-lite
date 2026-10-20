@@ -79,7 +79,7 @@ export function TrustStrip({ items, context }: { items: Array<{ title: string; d
   );
 }
 
-export function UspSkin({ data, context }: SectionSkinProps<"usp-strip">) {
+export function UspSkin({ data, context }: SectionSkinProps<"usp_strip">) {
   return <TrustStrip items={list(data.settings?.source?.items)} context={context} />;
 }
 
@@ -91,7 +91,7 @@ interface TilesSettings {
   all_link: string | null;
 }
 
-export function CategoryTilesSkin({ settings, data, context }: SectionSkinProps<"category-tiles", TilesSettings>) {
+export function CategoryTilesSkin({ settings, data, context }: SectionSkinProps<"category_tiles", TilesSettings>) {
   const tiles = list(data.settings.categories);
   if (tiles.length === 0) return null;
   const all = text(settings.all_link);
@@ -120,7 +120,7 @@ interface ProductsSettings {
   columns: number;
 }
 
-export function ProductTabsSkin({ settings, data, context, instanceId }: SectionSkinProps<"product-tabs", ProductsSettings>) {
+export function ProductTabsSkin({ settings, data, context, instanceId }: SectionSkinProps<"product_tabs", ProductsSettings>) {
   const limit = whole(data.settings.limit, 4, 12, 8);
   const tabs = list(data.settings.tabs).filter((tab) => list(tab.products?.cards).length > 0);
   if (tabs.length === 0) return null;
@@ -151,7 +151,7 @@ export function ProductTabsSkin({ settings, data, context, instanceId }: Section
   );
 }
 
-export function ProductGridSkin({ settings, data, context }: SectionSkinProps<"product-grid", ProductsSettings>) {
+export function ProductGridSkin({ settings, data, context }: SectionSkinProps<"product_grid", ProductsSettings>) {
   const columns = whole(data.settings.columns, 2, 6, 5);
   const cards = list(data.settings.products?.cards).slice(0, columns * whole(data.settings.rows, 1, 6, 2));
   if (cards.length === 0) return null;
@@ -164,7 +164,7 @@ export function ProductGridSkin({ settings, data, context }: SectionSkinProps<"p
   );
 }
 
-export function ProductRailSkin({ settings, data, context }: SectionSkinProps<"product-rail", ProductsSettings>) {
+export function ProductRailSkin({ settings, data, context }: SectionSkinProps<"product_rail", ProductsSettings>) {
   const cards = list(data.settings.products?.cards).slice(0, whole(data.settings.limit, 4, 24, 12));
   if (cards.length === 0) return null;
   return (
@@ -176,7 +176,7 @@ export function ProductRailSkin({ settings, data, context }: SectionSkinProps<"p
   );
 }
 
-export function DealSkin({ settings, data, context }: SectionSkinProps<"deal-block", ProductsSettings>) {
+export function DealSkin({ settings, data, context }: SectionSkinProps<"deal_block", ProductsSettings>) {
   const cards = list(data.settings.products?.cards);
   if (cards.length === 0) return null;
   const image = data.settings.image ?? null;
@@ -194,7 +194,7 @@ export function DealSkin({ settings, data, context }: SectionSkinProps<"deal-blo
 
 // ── Brands, banners, long text ────────────────────────────────────────────
 
-export function BrandWallSkin({ data, context }: SectionSkinProps<"brand-wall">) {
+export function BrandWallSkin({ data, context }: SectionSkinProps<"brand_wall">) {
   const tiles = list(data.tiles);
   if (tiles.length === 0) return null;
   return (
@@ -211,7 +211,7 @@ export function BrandWallSkin({ data, context }: SectionSkinProps<"brand-wall">)
   );
 }
 
-export function BannerMosaicSkin({ data }: SectionSkinProps<"banner-mosaic">) {
+export function BannerMosaicSkin({ data }: SectionSkinProps<"banner_mosaic">) {
   const tiles = list(data.settings.tiles).filter((tile) => tile.image);
   if (tiles.length === 0) return null;
   return (
@@ -226,7 +226,7 @@ export function BannerMosaicSkin({ data }: SectionSkinProps<"banner-mosaic">) {
   );
 }
 
-export function SeoTextSkin({ data }: SectionSkinProps<"seo-text">) {
+export function SeoTextSkin({ data }: SectionSkinProps<"seo_text">) {
   const body = text(data.settings.body);
   if (!body) return null;
   return (

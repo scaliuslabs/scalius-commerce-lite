@@ -11,7 +11,7 @@
 // The collection template's own sections (`pages.templates.collection`) sit
 // above and below the whole listing on category, collection and brand pages.
 //
-// An app skin of the listing (`apps.skins["listing-main"]`) draws this body
+// An app skin of the listing (`apps.skins["listing_main"]`) draws this body
 // instead, from the listing's projection, placing the store's own filters,
 // sort and page links (CatalogEmbed.astro); its page links are appended
 // when it leaves them out.
@@ -98,7 +98,7 @@ const projection: StorefrontListingPage = listingPageData({
   breadcrumbs: breadcrumb ?? [],
   fields,
 });
-const listingSkin = await appSkin(Astro.locals, Astro.url, "listing-main");
+const listingSkin = await appSkin(Astro.locals, Astro.url, "listing_main");
 const listingMarkup = listingSkin
   ? await renderAppSkin(Astro.locals, Astro.url, listingSkin, { data: projection })
   : null;

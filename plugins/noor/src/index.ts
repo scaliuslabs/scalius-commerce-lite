@@ -324,7 +324,7 @@ const skins = [
   },
   {
     id: "noor_card",
-    target: "product-card",
+    target: "product_card",
     name: "Noor card",
     description: "A quiet photo with a second photo on hover, small badges, and add to cart on the photo.",
     settings: [
@@ -348,7 +348,7 @@ const skins = [
   },
   {
     id: "noor_product",
-    target: "product-main",
+    target: "product_main",
     name: "Noor product page",
     description: "The store's gallery beside the title and the store's own buy form, which stays in view while the page scrolls, then the description, reviews and related products.",
     settings: [
@@ -386,42 +386,42 @@ const skins = [
   },
   {
     id: "noor_products_tabs",
-    target: "section:product-tabs",
+    target: "section:product_tabs",
     name: "Noor product tabs",
     description: "Products in tabs, as a grid or a scrolling row.",
     settings: productsSkinSettings("tabs"),
   },
   {
     id: "noor_products_grid",
-    target: "section:product-grid",
+    target: "section:product_grid",
     name: "Noor product grid",
     description: "Products in a grid of the section's columns and rows.",
     settings: productsSkinSettings("grid"),
   },
   {
     id: "noor_products_rail",
-    target: "section:product-rail",
+    target: "section:product_rail",
     name: "Noor product row",
     description: "Products in a scrolling row.",
     settings: productsSkinSettings("rail"),
   },
   {
     id: "noor_tiles_categories",
-    target: "section:category-tiles",
+    target: "section:category_tiles",
     name: "Noor category tiles",
     description: "The chosen categories as photo tiles: a mosaic, a row or circles.",
     settings: tilesSkinSettings(),
   },
   {
     id: "noor_tiles_cards",
-    target: "section:shop-by",
+    target: "section:shop_by",
     name: "Noor photo tiles",
     description: "Photo cards with a label and a link as tiles: a mosaic, a row or circles.",
     settings: tilesSkinSettings(),
   },
   {
     id: "noor_promo_tiles",
-    target: "section:banner-mosaic",
+    target: "section:banner_mosaic",
     name: "Noor promo tiles",
     description: "Up to three large photo links side by side; each photo's description is its heading.",
     settings: [{ key: "height", label: "Height", type: "select", default: "m", options: HEIGHTS.slice(0, 3) }, tone(), spacing()],
@@ -450,7 +450,7 @@ const skins = [
   },
   {
     id: "noor_sale",
-    target: "section:deal-block",
+    target: "section:deal_block",
     name: "Noor sale banner",
     description: "A banner counting down to the promotion's end, then its products in a row.",
     settings: [
@@ -467,7 +467,7 @@ const skins = [
   },
   {
     id: "noor_promises",
-    target: "section:usp-strip",
+    target: "section:usp_strip",
     name: "Noor promises",
     description: "The store's delivery facts or your own points with icons.",
     settings: [
@@ -486,7 +486,7 @@ const skins = [
   },
   {
     id: "noor_text",
-    target: "section:seo-text",
+    target: "section:seo_text",
     name: "Noor text",
     description: "Long text as a heading and paragraphs, with an optional button.",
     settings: storySkinSettings(false),
@@ -573,7 +573,7 @@ const templates = [
     name: "Noor",
     description: "An editorial store with a hero, product rows, collection tiles and a featured product. Add your own story, reviews and policies from the section library.",
     // The theme document version these values are written for; the store upgrades them from here.
-    themeVersion: 11,
+    themeVersion: 12,
     theme: {
       tokens,
       blocks: { navigation: { source: "menu", maxTopItems: 7, linkBudget: 150 } },
@@ -581,21 +581,21 @@ const templates = [
         skins: {
           header: { app: "scalius.noor/noor_header", values: { announcements: [] } },
           footer: { app: "scalius.noor/noor_footer", values: { payments: [], tagline: "", newsletter_heading: "Stay in touch", newsletter_text: "" } },
-          "product-card": { app: "scalius.noor/noor_card", values: {} },
-          "product-main": { app: "scalius.noor/noor_product", values: {} },
+          "product_card": { app: "scalius.noor/noor_card", values: {} },
+          "product_main": { app: "scalius.noor/noor_product", values: {} },
         },
       },
       sections: [
         // The hero shows once the merchant adds a slide with a photo.
         skinned("noor-hero", "hero", { layout: "full-bleed", slides: [] }, "noor_hero", { height: "l", scrim: "soft" }),
-        skinned("noor-new", "product-tabs", {
+        skinned("noor-new", "product_tabs", {
           title: "New arrivals",
           tabs: [{ label: "New in", source: { kind: "newest" } }, { label: "On sale", source: { kind: "on-sale" } }],
           limit: 8,
         }, "noor_products_tabs"),
-        skinned("noor-tiles", "category-tiles", { style: "photo", title: "Shop by category", categoryIds: [] }, "noor_tiles_categories"),
+        skinned("noor-tiles", "category_tiles", { style: "photo", title: "Shop by category", categoryIds: [] }, "noor_tiles_categories"),
         section("noor-feature", "featured_product", { eyebrow: "Featured product", points: [] }),
-        skinned("noor-best", "product-rail", { title: "Popular products", source: { kind: "popular" }, limit: 12 }, "noor_products_rail", { link_label: "Shop all" }),
+        skinned("noor-best", "product_rail", { title: "Popular products", source: { kind: "popular" }, limit: 12 }, "noor_products_rail", { link_label: "Shop all" }),
         skinned("noor-signup", "newsletter", { heading: "Stay in touch", text: "", email: "optional", whatsapp: false }, "noor_signup"),
       ],
     },
@@ -608,7 +608,7 @@ const pagePresets = [
     id: "product_campaign",
     name: "Product campaign",
     description: "A single-product page with its price, space for your selling points, checkout guidance and the store's order form when available.",
-    themeVersion: 11,
+    themeVersion: 12,
     sections: [
       section("lp-hero", "landing_hero", { badge: "" }),
       // The existing renderer leaves this section out until the merchant adds items.

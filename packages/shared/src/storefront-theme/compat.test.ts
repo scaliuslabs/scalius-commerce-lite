@@ -208,7 +208,7 @@ describe("app templates and page presets", () => {
         { id: "ok", name: "Ok", sections: [hero] },
       ],
     })).toEqual([
-      { kind: "template", id: "future", name: "Future", problem: "Version 99 is newer than this store reads (11)." },
+      { kind: "template", id: "future", name: "Future", problem: "Version 99 is newer than this store reads (12)." },
       { kind: "template", id: "broken", name: "Broken", problem: expect.stringMatching(/^sections\.0\.settings\.layout: /) },
       { kind: "page-preset", id: "old", name: "Old", problem: "Version 9 is older than the oldest readable version (10)." },
       { kind: "page-preset", id: "empty", name: "Empty", problem: "The preset has no sections." },
@@ -245,6 +245,38 @@ describe("the 10 → 11 step", () => {
     expect(upgraded.pages.home[1]!.settings).toEqual({ app: "scalius.noor/featured_product", values: { link: "/collections/new-in" } });
     expect(upgraded.pages.landing.eid.sections[0]!.settings.app).toBe("scalius.noor/landing_order");
     expect(upgraded.template).toBe("department-mall");
+  });
+});
+
+describe("the 11 → 12 step", () => {
+  it("names core section types and skin units in snake_case, and nothing else", () => {
+    const section = (id: string, type: string) => ({ id, type, version: 1, settings: { source: { kind: "on-sale" }, style: "round-small" } });
+    const stored = {
+      version: 11,
+      template: "department-mall",
+      apps: {
+        skins: { header: { app: "scalius.noor/noor_header", values: {} }, "product-card": { app: "scalius.noor/noor_card", values: {} }, "product-main": { app: "a.b/pdp", values: {} }, "listing-main": { app: "a.b/grid", values: {} } },
+        template: "scalius.noor/noor",
+      },
+      pages: {
+        home: [section("usp-strip", "usp-strip"), section("hero", "hero"), section("app", "app"), section("x", "made-up-type")],
+        landing: { eid: { title: "Eid", sections: [section("deal", "deal-block")] } },
+        templates: { product: { sections: [section("recent", "recently-viewed")], main: 0 } },
+      },
+    };
+    const upgraded = STOREFRONT_THEME_DOCUMENT_UPGRADES[11]!(structuredClone(stored)) as typeof stored;
+    expect(Object.keys(upgraded.apps.skins)).toEqual(["header", "product_card", "product_main", "listing_main"]);
+    expect(upgraded.apps.skins).toMatchObject({ product_card: stored.apps.skins["product-card"] });
+    expect(upgraded.pages.home.map((each) => each.type)).toEqual(["usp_strip", "hero", "app", "made-up-type"]);
+    // Ids, values and enum values keep their spelling.
+    expect(upgraded.pages.home[0]).toEqual({ ...section("usp-strip", "usp_strip") });
+    expect(upgraded.pages.landing.eid.sections[0]!.type).toBe("deal_block");
+    expect(upgraded.pages.templates.product.sections[0]!.type).toBe("recently_viewed");
+    expect(upgraded.template).toBe("department-mall");
+    // A stored version-11 theme reads at the current version.
+    const read = readStoredStorefrontThemeDocument(JSON.stringify({ ...DEFAULT_STOREFRONT_THEME, version: 11,
+      pages: { ...DEFAULT_STOREFRONT_THEME.pages, home: DEFAULT_STOREFRONT_THEME.pages.home.map((each) => ({ ...each, type: each.type.replaceAll("_", "-") })) } }));
+    expect(read.ok ? read.document.pages.home.map((each) => each.type) : read.reason).toEqual(DEFAULT_STOREFRONT_THEME.pages.home.map((each) => each.type));
   });
 });
 
@@ -299,8 +331,8 @@ describe("the upgrade chain", () => {
   });
 
   it("reads a stored document of this build strictly, and refuses other versions", () => {
-    expect(readStoredStorefrontThemeDocument(JSON.stringify(DEFAULT_STOREFRONT_THEME))).toEqual({ ok: true, document: DEFAULT_STOREFRONT_THEME, storedVersion: 11 });
-    expect(readStoredStorefrontThemeDocument(JSON.stringify({ version: 11 })).ok).toBe(false);
+    expect(readStoredStorefrontThemeDocument(JSON.stringify(DEFAULT_STOREFRONT_THEME))).toEqual({ ok: true, document: DEFAULT_STOREFRONT_THEME, storedVersion: 12 });
+    expect(readStoredStorefrontThemeDocument(JSON.stringify({ version: 12 })).ok).toBe(false);
     expect(readStoredStorefrontThemeDocument("{").ok).toBe(false);
     expect(readStoredStorefrontThemeDocument(JSON.stringify({ version: 9 }))).toEqual({ ok: false, reason: "Version 9 is older than the oldest readable version (10)." });
   });

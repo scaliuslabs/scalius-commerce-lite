@@ -134,8 +134,8 @@ describe("fallback resolution", () => {
     expect(resolve(storefrontTemplateTheme("marketplace")).blocks.listing.toolbar).toContain("aspect-chips");
     expect(resolve(base).blocks.listing.toolbar).toEqual(["breadcrumb", "result-count", "sort", "applied-chips"]);
     // Sections whose data is missing are dropped (category tiles need two categories).
-    expect(resolvedMarket.pages.home.map((section) => section.type)).not.toContain("category-tiles");
-    expect(resolvedMarket.pages.home.map((section) => section.type)).toEqual(["hero", "deal-block"]);
+    expect(resolvedMarket.pages.home.map((section) => section.type)).not.toContain("category_tiles");
+    expect(resolvedMarket.pages.home.map((section) => section.type)).toEqual(["hero", "deal_block"]);
   });
 
   it("keeps small-catalogue choices on a tiny store", () => {
@@ -146,7 +146,7 @@ describe("fallback resolution", () => {
     expect(boutique.fallbacks).toEqual([expect.objectContaining({ kind: "module", key: "content-blocks" })]);
     const essentials = resolveStorefrontTheme(storefrontTemplateTheme("daily-essentials"), TINY);
     expect(essentials.blocks.listing.layout.variant).toBe("grid");
-    expect(essentials.pages.home.map((section) => section.type)).toContain("category-tiles");
+    expect(essentials.pages.home.map((section) => section.type)).toContain("category_tiles");
     expect(resolveStorefrontTheme(DEFAULT_STOREFRONT_THEME, TINY).blocks.footer.variant).toBe("columns");
   });
 
