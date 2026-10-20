@@ -413,7 +413,34 @@ export interface StorefrontProductPage {
     fields: StorefrontFieldValues;
     /** Home first, the product last. */
     breadcrumbs: StorefrontLink[];
+    /**
+     * What the buyer types or picks before buying (engraving, gift wrap), in
+     * the buy form's order: an island reads the answers with
+     * `context.product.state().inputs[key]`. Absent from older stores.
+     */
+    buyerInputs?: StorefrontBuyerInput[];
   };
+}
+
+/** One buyer input of the buy form. */
+export interface StorefrontBuyerInput {
+  key: string;
+  type: "text" | "textarea" | "select" | "checkbox";
+  label: string;
+  required: boolean;
+  /** text and textarea; null without a limit. */
+  maxLength: number | null;
+  /** select choices; empty otherwise. */
+  options: Array<{ value: string; label: string }>;
+}
+
+/** The buy form as the buyer has it now (`context.product`). */
+export interface StorefrontProductState {
+  /** The chosen SKU; null until the buyer has chosen every option. */
+  variantId: string | null;
+  quantity: number;
+  /** Buyer input answers by key (`buyerInputs`); a checkbox is "true" when ticked. */
+  inputs: Record<string, string>;
 }
 
 /** What a listing-main skin gets: the listing as the core listing page shows it (this page of it). */
@@ -828,6 +855,15 @@ export interface StorefrontIslandContext {
   onCart(listener: (cart: { count: number; total: number }) => void): () => void;
   /** Calls the app's public routes through the storefront proxy (`/apps/<plugin id>/<path>`). */
   fetchApp(path: string, init?: RequestInit): Promise<Response>;
+  /**
+   * On a product page: the store's buy form, read through the store (never
+   * its markup). `onChange` calls the listener when the variant, quantity or
+   * an answer changes; it returns the unsubscribe. Absent on other pages.
+   */
+  product?: {
+    state(): StorefrontProductState;
+    onChange(listener: (state: StorefrontProductState) => void): () => void;
+  };
 }
 
 /** An island's client module (`defineIsland`): mounts on its element, may return a cleanup. */

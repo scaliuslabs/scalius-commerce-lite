@@ -2339,7 +2339,24 @@ export interface StorefrontProductPage {
         }>;
         fields: StorefrontFieldValues;
         breadcrumbs: StorefrontLink[];
+        buyerInputs?: StorefrontBuyerInput[];
     };
+}
+export interface StorefrontBuyerInput {
+    key: string;
+    type: "text" | "textarea" | "select" | "checkbox";
+    label: string;
+    required: boolean;
+    maxLength: number | null;
+    options: Array<{
+        value: string;
+        label: string;
+    }>;
+}
+export interface StorefrontProductState {
+    variantId: string | null;
+    quantity: number;
+    inputs: Record<string, string>;
 }
 export interface StorefrontListingPage {
     kind: "category" | "collection" | "brand" | "search";
@@ -2724,6 +2741,10 @@ export interface StorefrontIslandContext {
         total: number;
     }) => void): () => void;
     fetchApp(path: string, init?: RequestInit): Promise<Response>;
+    product?: {
+        state(): StorefrontProductState;
+        onChange(listener: (state: StorefrontProductState) => void): () => void;
+    };
 }
 export interface StorefrontIslandModule<Props = unknown> {
     abi: typeof STOREFRONT_COMPONENT_ABI;

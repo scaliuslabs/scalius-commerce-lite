@@ -12,6 +12,7 @@
 
 import type { StorefrontIslandContext, StorefrontIslandModule } from "@scalius/shared/plugins/storefront-protocol";
 import { formatMoney, getCurrencyCode } from "@/lib/currency";
+import { productContext } from "./product-context";
 import { initQuickAddCards } from "@/components/cards/scripts/quick-add-card";
 
 type CartSummary = { count: number; total: number };
@@ -77,6 +78,7 @@ function contextFor(element: Element): StorefrontIslandContext | null {
   const pluginId = host?.dataset.sxApp;
   const assets = host?.dataset.sxBase;
   if (!pluginId || !assets || !/^\/_x\//.test(assets)) return null;
+  const product = productContext();
   return {
     pluginId,
     assets,
@@ -88,6 +90,7 @@ function contextFor(element: Element): StorefrontIslandContext | null {
     quickAdd,
     onCart,
     fetchApp: (path, init) => fetch(`/apps/${pluginId}/${path.replace(/^\/+/, "")}`, { credentials: "same-origin", ...init }),
+    ...(product ? { product } : {}),
   };
 }
 
@@ -176,6 +179,18 @@ export function createIslandElement(
         connection.cleanups.add(stop);
         return () => { if (connection.cleanups.delete(stop)) stop(); };
       };
+      const product = context.product;
+      if (product) {
+        context.product = {
+          state: product.state,
+          onChange: (listener) => {
+            if (!this.#current(connection)) return () => {};
+            const stop = product.onChange((state) => { if (this.#current(connection)) listener(state); });
+            connection.cleanups.add(stop);
+            return () => { if (connection.cleanups.delete(stop)) stop(); };
+          },
+        };
+      }
       let props: unknown;
       try { props = this.dataset.props ? JSON.parse(this.dataset.props) : undefined; }
       catch { props = undefined; }

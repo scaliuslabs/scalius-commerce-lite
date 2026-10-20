@@ -317,6 +317,14 @@ export function productPageData(input: {
       }),
       fields: storefrontFieldValues(product.customFields),
       breadcrumbs: input.breadcrumbs,
+      buyerInputs: (product.customization?.fields ?? []).map((field) => ({
+        key: field.key,
+        type: field.type,
+        label: field.label,
+        required: field.required,
+        maxLength: field.maxLength,
+        options: field.options.map((option) => ({ value: option.value, label: option.label })),
+      })),
     },
   };
 }
