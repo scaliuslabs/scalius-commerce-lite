@@ -21,7 +21,8 @@ import { getCurrencySettings, paymentMethodsDocument, smsDocument } from "@scali
 import { SettingsRevisionConflictError } from "@scalius/core/settings-store";
 import { pluginFeatureRequest } from "@scalius/shared/plugins";
 import { qualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
-import { readAppProviderSettings, type AppProviderRuntime } from "./providers/runtime";
+import { getCredentialEncryptionKey } from "../utils/encryption-key";
+import { createAppProviderRuntime, readAppProviderSettings, type AppProviderRuntime } from "./providers/runtime";
 
 const ATTEMPTS = 3;
 
@@ -103,6 +104,32 @@ export async function chooseReadySmsProvider(
       if (!(error instanceof SettingsRevisionConflictError)) throw error;
     }
     return;
+  }
+}
+
+/**
+ * After features turn on or an app's keys are saved: its payment providers
+ * join checkout and a ready SMS provider becomes the SMS service when none is
+ * chosen. This is the one entry both lanes use: the lifecycle (`lifecycle.ts`:
+ * activating an app and turning a feature on, whoever asks, the dashboard or an
+ * agent operation) and the settings save. The change is already saved, so a
+ * failure here only leaves the service unused, which its status then says.
+ */
+export async function putServicesToUse(
+  context: { db: Database; env: Env; ctx?: ExecutionContext },
+  installation: PluginInstallation,
+  turnedOn: readonly string[],
+): Promise<void> {
+  try {
+    if (turnedOn.length > 0) await offerTurnedOnPaymentProviders(context.db, installation, turnedOn);
+    await chooseReadySmsProvider(
+      context.db,
+      createAppProviderRuntime({ env: context.env, db: context.db, ctx: context.ctx }),
+      installation,
+      getCredentialEncryptionKey(context.env as unknown as Record<string, unknown>),
+    );
+  } catch (error) {
+    console.warn(`[Apps] ${installation.pluginId}: its services could not be put to use (${error instanceof Error ? error.name : "error"}).`);
   }
 }
 

@@ -81,9 +81,8 @@ import {
   providerIconUrl,
 } from "../../plugins/listing";
 import { syncBundledPlugin, syncBundledPlugins } from "../../plugins/bundled-sync";
-import { chooseReadySmsProvider, offerTurnedOnPaymentProviders, providerUse } from "../../plugins/provider-adoption";
+import { providerUse, putServicesToUse } from "../../plugins/provider-adoption";
 import { providerConnections } from "../../plugins/provider-connection";
-import { requestProviderRuntime } from "../../plugins/providers/runtime";
 
 import { isPluginSandboxAvailable } from "../../plugins/loaders/sandbox-availability";
 import { planLimits } from "@scalius/shared/plan-limits";
@@ -635,22 +634,6 @@ function deliveryResponse(view: PluginEventDeliveryView) {
   };
 }
 
-/**
- * After features turn on or an app's keys are saved: its payment providers
- * join checkout and a ready SMS provider becomes the SMS service when none is
- * chosen (`provider-adoption.ts`). The merchant's change is already saved, so
- * a failure here only leaves the service unused, which its status then says.
- */
-async function putServicesToUse(c: Context<{ Bindings: Env }>, installation: PluginInstallation, turnedOn: readonly string[]) {
-  const db = c.get("db");
-  try {
-    if (turnedOn.length > 0) await offerTurnedOnPaymentProviders(db, installation, turnedOn);
-    await chooseReadySmsProvider(db, requestProviderRuntime(c), installation, getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>));
-  } catch (error) {
-    console.warn(`[Apps] ${installation.pluginId}: its services could not be put to use (${error instanceof Error ? error.name : "error"}).`);
-  }
-}
-
 function lifecycleContext(c: Context<{ Bindings: Env }>) {
   let ctx: ExecutionContext;
   try {
@@ -1003,7 +986,6 @@ app.openapi(activateRoute, async (c) => {
     expectedRevision: body.expectedRevision,
     expectedGrantKey: body.grantKey,
   });
-  await putServicesToUse(c, result.installation, result.installation.features.filter((feature) => !current.features.includes(feature)));
   return ok(c, { app: await detail(c, result.installation), hookError: result.hookError });
 });
 
@@ -1112,7 +1094,6 @@ app.openapi(featureEnableRoute, async (c) => {
     expectedGrantKey: body.grantKey,
     actorUserId: actor.id,
   });
-  if (result.changed) await putServicesToUse(c, result.installation, [featureId]);
   return ok(c, { app: await detail(c, result.installation), changed: result.changed, hookError: result.hookError });
 });
 
@@ -1180,7 +1161,8 @@ app.openapi(settingsRoute, async (c) => {
     expectedRevision: body.expectedRevision,
     credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
   });
-  await putServicesToUse(c, installation, []);
+  // Saving keys can make a waiting SMS provider ready; features adopt in the lifecycle.
+  await putServicesToUse(lifecycleContext(c), installation, []);
   return ok(c, { app: await detail(c, installation) });
 });
 
