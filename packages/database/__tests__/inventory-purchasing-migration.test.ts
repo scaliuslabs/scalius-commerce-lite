@@ -10,6 +10,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { parseEventFacts, type EventTopic } from "../../shared/src/events";
+import { EVENT_TOPICS_BEFORE_0164 } from "../scripts/event-outbox-triggers";
 import { compiledMigrationSql, createMigratedSqlite } from "../src/testing/sqlite-d1";
 import { freshTursoEngineStore } from "./turso-engine";
 
@@ -205,7 +206,10 @@ describe(`${NAME} over a populated 0108 store`, () => {
       INSERT INTO inventory_transfers (id, number, origin_location_id, destination_location_id) VALUES ('trf_e', 1002, 'loc_default', 'loc_b');
       UPDATE inventory_transfers SET status = 'in_transit', revision = 2 WHERE id = 'trf_e';
     `);
-    const rows = db.prepare("SELECT topic, resource_type, resource_id, data FROM event_outbox ORDER BY rowid").all() as Array<{ topic: EventTopic; resource_type: string; resource_id: string; data: string }>;
+    const rows = db.prepare("SELECT topic, resource_type, resource_id, data FROM event_outbox ORDER BY rowid").all() as Array<{ topic: string; resource_type: string; resource_id: string; data: string }>;
+    // 0109 installs the names before 0164's renames; its facts are the renamed topics' facts.
+    const renamed = new Map(Object.entries(EVENT_TOPICS_BEFORE_0164).map(([topic, before]) => [before.topic, topic as EventTopic]));
+    const currentTopic = (topic: string) => renamed.get(topic) ?? topic as EventTopic;
     expect(rows.map((row) => [row.topic, row.resource_type, row.resource_id])).toEqual([
       ["inventory.purchase_order_updated", "purchase_order", "po_e"],
       ["inventory.purchase_order_updated", "purchase_order", "po_e"],
@@ -214,7 +218,7 @@ describe(`${NAME} over a populated 0108 store`, () => {
       ["inventory.transfer_updated", "inventory_transfer", "trf_e"],
       ["inventory.transfer_updated", "inventory_transfer", "trf_e"],
     ]);
-    expect(rows.map((row) => parseEventFacts(row.topic, row.data))).toEqual([
+    expect(rows.map((row) => parseEventFacts(currentTopic(row.topic), row.data))).toEqual([
       { purchaseOrderId: "po_e", previousStatus: null, status: "draft", revision: 1 },
       { purchaseOrderId: "po_e", previousStatus: "draft", status: "ordered", revision: 2 },
       { purchaseOrderId: "po_d", previousStatus: null, status: "draft", revision: 1 },
