@@ -167,7 +167,7 @@ describe("reserveStockBatch strict movement claims", () => {
       db as never,
       [{ variantId: "var_a", quantity: 2, orderId: "order_1" }],
       "regular",
-      { reservationKey: "checkout-ingest:v1" },
+      { reservationKey: "checkout-ingest:v1", salesChannelId: "sc_online_store" },
     );
 
     expect(result.success).toBe(true);
@@ -198,6 +198,7 @@ describe("reserveStockBatch strict movement claims", () => {
       db as never,
       [{ variantId: "var_a", quantity: 2, orderId: "order_1", movementId: "reservation:claim_1" }],
       "regular",
+      { salesChannelId: "sc_online_store" },
     );
 
     expect(result.success).toBe(true);
@@ -222,6 +223,7 @@ describe("reserveStockBatch strict movement claims", () => {
       db as never,
       [{ variantId: "var_a", quantity: 2, orderId: "order_1", movementId: "reservation:claim_1" }],
       "regular",
+      { salesChannelId: "sc_online_store" },
     );
 
     expect(result).toMatchObject({

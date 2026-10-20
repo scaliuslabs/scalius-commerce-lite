@@ -71,6 +71,7 @@
     "lint:eslint": "node scripts/turbo-run.mjs lint --filter=@scalius/admin-v2 --filter=@scalius/storefront",
     "test": "node scripts/test-runner.mjs",
     "test:ci": "node scripts/test-runner.mjs",
+    "test:affected": "node scripts/test-affected.mjs",
     "test:watch": "vitest"
   },
   "devDependencies": {

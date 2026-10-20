@@ -200,7 +200,6 @@ describe("API Worker startup boundaries", () => {
     ["system", "/api/v1/payment/stripe/session"],
     ["system", "/api/v1/webhooks/stripe"],
     ["docs", "/api/v1/openapi.json"],
-    ["docs", "/api/v1/docs"],
     ["public", "/api/v1/seo"],
     ["public", "/api/v1/products"],
   ] satisfies ReadonlyArray<readonly [ExpectedRuntime, string]>)(

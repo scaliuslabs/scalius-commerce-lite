@@ -64,6 +64,14 @@ describe("PLUGIN_SCOPES", () => {
     expect([...effectivePluginPermissions({ scopes: ["write_marketing"] })]).toEqual(["marketing.send"]);
   });
 
+  // Security audit S3: marking an invoice paid needs its own Sensitive scope.
+  it("keeps recording invoice payments out of write_orders, under the Sensitive write_payments", () => {
+    expect(effectivePluginPermissions({ scopes: ["write_orders"] }).has("orders.record_payment")).toBe(false);
+    expect([...effectivePluginPermissions({ scopes: ["write_payments"] })].sort()).toEqual(["orders.record_payment", "orders.view"]);
+    expect(isSensitivePluginScope("write_payments")).toBe(true);
+    expect(PERMISSION_METADATA["orders.record_payment"].isSensitive).toBe(true);
+  });
+
   it("makes every write scope include its read scope", () => {
     for (const scope of PLUGIN_SCOPE_NAMES.filter((name) => name.startsWith("write_"))) {
       const read = `read_${scope.slice("write_".length)}` as keyof typeof PLUGIN_SCOPES;

@@ -124,5 +124,5 @@ describe("the versioned plugin ABI", () => {
 
   it("seals the SDK export map and emitted public declarations", async () => {
     await expect(await sdkDeclarations()).toMatchFileSnapshot("./abi.sdk.snapshot.txt");
-  }, 30_000);
+  });
 });

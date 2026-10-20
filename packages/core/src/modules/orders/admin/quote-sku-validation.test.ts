@@ -39,6 +39,7 @@ vi.mock("../../inventory", () => ({
     reserveStockBatch: inventoryMocks.reserveStockBatch,
     releaseReservedStockBatch: inventoryMocks.releaseReservedStockBatch,
     validateStockBatchAvailability: inventoryMocks.validateStockBatchAvailability,
+    isInventoryReservationConflictError: () => false,
 }));
 
 vi.mock("../../inventory/inventory-transitions", () => ({
@@ -111,6 +112,7 @@ beforeEach(() => {
         results: [],
         statements: [{ kind: "inventory-guard" }, { kind: "inventory-movement" }, { kind: "inventory-update" }],
         resolveIdempotentReplay: vi.fn(async () => null),
+        availabilityTransitions: () => [],
     });
     inventoryMocks.reserveStockBatch.mockResolvedValue({ success: true, results: [] });
     inventoryMocks.releaseReservedStockBatch.mockResolvedValue({ success: true, results: [] });
@@ -941,7 +943,12 @@ describe("resolveAdminOrderItemInventory", () => {
             db,
             [{ variantId: "var_tracked", quantity: 2, orderId: expect.any(String) }],
             "regular",
-            { reservationKey: expect.stringMatching(/^admin-order-create:v2:/) },
+            expect.objectContaining({
+                reservationKey: expect.stringMatching(/^admin-order-create:v2:/),
+                salesChannelId: "sc_online_store",
+                // A new order id holds no reservation: no generation read.
+                freshOrderIds: expect.any(Set),
+            }),
         );
         expect(batch).toHaveBeenCalledWith(expect.arrayContaining([
             { kind: "inventory-guard" },

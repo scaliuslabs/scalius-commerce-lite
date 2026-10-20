@@ -16,7 +16,7 @@ describe("pnpm plugin pack: storefront components", () => {
     expect(module.bytes.byteLength).toBeLessThan(32 * 1024);
     expect(packed.storefront.find((file) => file.path === "islands/carousel.js").bytes.byteLength).toBeLessThan(4 * 1024);
     for (const file of packed.storefront) expect(packed.code).toContain(`"${file.path}":"${file.sha256}"`);
-  }, 60_000);
+  });
 
   it("seals nothing for an app without storefront files", () => {
     expect(sealStorefront("code\n", [])).toBe("code\n");
@@ -39,5 +39,5 @@ describe("pnpm plugin pack: storefront components", () => {
     } finally {
       plugin.cleanup();
     }
-  }, 60_000);
+  });
 });

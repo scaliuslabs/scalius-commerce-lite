@@ -91,10 +91,7 @@ import {
   getBuyerVariantPricePresentation,
   getVariantDiscountedPrice,
 } from "@/components/product/lib/pricing-engine";
-import {
-  initialVariantPresentation,
-  resolveExactVariantSelection,
-} from "@/components/product/lib/variant-state-machine";
+import { initialVariantPresentation } from "@/components/product/lib/variant-state-machine";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 import {
   normalizeSavedProductCondition,
@@ -211,29 +208,12 @@ const formatMetadataPrice = (price: number) =>
 const buyerVariantResolution = resolveBuyerVariants(variants);
 const buyerVariants = buyerVariantResolution.variants;
 const buyerStockSummary = getBuyerStockSummary(buyerVariants);
-const requestedQueryVariantSelection = resolveExactVariantSelection(
-  buyerVariants,
-  {
-    variantId: Astro.url.searchParams.get("variant"),
-  },
-);
-const queryVariantSelection =
-  requestedQueryVariantSelection &&
-  isVariantAvailable(requestedQueryVariantSelection.variant)
-    ? requestedQueryVariantSelection
-    : null;
-const unavailableQueryVariantSelection =
-  requestedQueryVariantSelection &&
-  !isVariantAvailable(requestedQueryVariantSelection.variant)
-    ? requestedQueryVariantSelection
-    : null;
-const selectedBuyerVariant = requestedQueryVariantSelection?.variant ?? null;
-// The buy box's own opening choice: metadata states the price the buyer sees.
+// One page per product: a `?variant=` link is this page from the edge cache
+// (the query never reaches the render), and the buy box's pre-paint script
+// picks that SKU in the browser. The server states the opening choice.
 const buyerPricingVariants = initialVariantPresentation(
   product.options ?? [],
   buyerVariants,
-  queryVariantSelection?.variant ?? null,
-  unavailableQueryVariantSelection?.variant ?? null,
 ).pricingVariants;
 const buyerPricePresentation = getBuyerVariantPricePresentation(
   {
@@ -248,17 +228,12 @@ const buyerPricePresentation = getBuyerVariantPricePresentation(
   buyerPricingVariants,
 );
 const buyerDisplayedPrice = buyerPricePresentation.pricing.finalPrice;
-const fbViewVariants = selectedBuyerVariant
-  ? [selectedBuyerVariant].map((variant) => ({
+const fbViewVariants = buyerPricePresentation.isStartingAt
+  ? []
+  : buyerVariants.slice(0, 1).map((variant) => ({
       ...variant,
       price: buyerDisplayedPrice,
-    }))
-  : buyerPricePresentation.isStartingAt
-    ? []
-    : buyerVariants.slice(0, 1).map((variant) => ({
-        ...variant,
-        price: buyerDisplayedPrice,
-      }));
+    }));
 
 const pageMetaDescription = product.metaDescription?.trim() || "";
 
@@ -320,11 +295,10 @@ const productImageCandidates = [
 const primaryImageUrl = productImageCandidates[0] ?? null;
 // The gallery's own order and featured item (lib/gallery-media): the LCP
 // preload names exactly the file the first paint shows, with the srcset and
-// sizes of its slot. A `?variant=` link features that SKU's photo; a video
-// first paints its poster (in the photo's slot), never the video.
+// sizes of its slot. A video first paints its poster (in the photo's slot),
+// never the video.
 const galleryItems = productGalleryItems(product, media);
-const initialGalleryProductMediaId = queryVariantSelection?.variant.imageId ?? null;
-const initialGalleryMedia = featuredGalleryItem(galleryItems, initialGalleryProductMediaId);
+const initialGalleryMedia = featuredGalleryItem(galleryItems, null);
 // The photo box adapts to the photo the page paints first (its stored size,
 // within bounds), so a square photo never sits in a tall box with bands.
 const galleryLayout = {
@@ -380,8 +354,7 @@ const productConditionSchemaUrl = productCondition
   : null;
 
 // Primary SKU
-const primarySku =
-  selectedBuyerVariant?.sku || buyerVariants[0]?.sku || product.id;
+const primarySku = buyerVariants[0]?.sku || product.id;
 
 function normalizedVariantOption(
   value: string | null | undefined,
@@ -469,7 +442,6 @@ const productGroupVariesBy = productOptions
   )
   .filter((value, index, values) => values.indexOf(value) === index);
 const shouldEmitProductGroupJsonLd =
-  !selectedBuyerVariant &&
   buyerVariantResolution.mode === "optioned" &&
   buyerVariants.length > 0;
 
@@ -484,10 +456,7 @@ const offerShippingDetails = buildOfferShippingDetails({
 });
 // What the page sells decides what it may say about delivery: services and
 // digital items claim no delivery rates and no Offer shippingDetails.
-const pageFulfilment = productFulfilment(
-  product,
-  selectedBuyerVariant ? [selectedBuyerVariant] : buyerVariants,
-);
+const pageFulfilment = productFulfilment(product, buyerVariants);
 // Delivery fees, cash on delivery and returns, stated under the buy buttons.
 const deliveryFacts = buildDeliveryFacts({
   shippingMethods,
@@ -534,16 +503,7 @@ function withOfferCommerceDetails<T extends Record<string, unknown>>(
   } as T;
 }
 
-const primarySchemaVariant = selectedBuyerVariant ?? buyerVariants[0] ?? null;
-const primarySchemaUrl = selectedBuyerVariant
-  ? (buildVariantProductUrl(selectedBuyerVariant) ?? canonicalUrl)
-  : canonicalUrl;
-const primarySchemaName = selectedBuyerVariant
-  ? getVariantSchemaName(selectedBuyerVariant)
-  : product.name;
-const primarySchemaAvailability = selectedBuyerVariant
-  ? isVariantAvailable(selectedBuyerVariant)
-  : buyerStockSummary.canPurchaseAny;
+const primarySchemaVariant = buyerVariants[0] ?? null;
 
 // An app skin of the product page's main part (`apps.skins["product_main"]`):
 // drawn from the page's projection around the store's own buy form, else
@@ -585,8 +545,6 @@ const buyBox = {
     currencyCode,
     currencyDecimalPlaces,
     priceIncrementMinor: currencyPriceIncrement,
-    initialVariant: queryVariantSelection?.variant,
-    initialUnavailableVariant: unavailableQueryVariantSelection?.variant,
     quickBuyNotice,
     onlinePaymentUnavailable,
     actionCopy: productPageCopy,
@@ -613,7 +571,6 @@ const productGalleryProps = {
   product,
   media,
   layout: galleryLayout,
-  initialProductMediaId: initialGalleryProductMediaId,
   playVideoLabel: productPageCopy.productPlayVideoText,
   zoomLabel: shop.product.zoomPhoto,
   zoomOfLabel: shop.product.zoomPhotoOf,
@@ -689,43 +646,31 @@ const productJsonLd =
           : {
               "@context": "https://schema.org",
               "@type": "Product",
-              name: primarySchemaName,
-              url: primarySchemaUrl,
+              name: product.name,
+              url: canonicalUrl,
               description: schemaDescription,
-              ...((selectedBuyerVariant
-                ? getVariantSchemaImages(selectedBuyerVariant)
-                : schemaImageUrls
-              ).length > 0
-                ? {
-                    image: selectedBuyerVariant
-                      ? getVariantSchemaImages(selectedBuyerVariant)
-                      : schemaImageUrls,
-                  }
-                : {}),
+              ...(schemaImageUrls.length > 0 ? { image: schemaImageUrls } : {}),
               sku: primarySku,
               ...gtinJsonLdForVariant(
                 primarySchemaVariant?.barcode,
                 primarySchemaVariant?.barcodeType,
               ),
-              ...(selectedBuyerVariant
-                ? mappedVariantSchemaProps(selectedBuyerVariant)
-                : {}),
               ...(brandName
                 ? { brand: { "@type": "Brand", name: brandName } }
                 : {}),
               ...reviewSchema,
               offers: withOfferCommerceDetails({
                 "@type": "Offer",
-                url: primarySchemaUrl,
+                url: canonicalUrl,
                 priceCurrency: currencyCode,
                 price: formatMetadataPrice(buyerDisplayedPrice),
                 ...(productConditionSchemaUrl
                   ? { itemCondition: productConditionSchemaUrl }
                   : {}),
-                availability: primarySchemaAvailability
+                availability: buyerStockSummary.canPurchaseAny
                   ? "https://schema.org/InStock"
                   : "https://schema.org/OutOfStock",
-              }, selectedBuyerVariant ? [selectedBuyerVariant] : buyerVariants),
+              }, buyerVariants),
             },
       )
     : null;

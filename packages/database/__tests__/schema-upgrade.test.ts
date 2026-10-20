@@ -96,7 +96,7 @@ function quoteSqliteIdentifier(identifier: string): string {
   return `"${identifier.replaceAll('"', '""')}"`;
 }
 
-describe("provider-neutral schema upgrades", { timeout: 30_000 }, () => {
+describe("provider-neutral schema upgrades", () => {
   it("loads a contiguous migration chain with exact Turso and PostgreSQL sidecars", async () => {
     const artifacts = await loadSchemaUpgradeArtifacts();
     expect(artifacts.map((artifact) => ({
@@ -867,6 +867,24 @@ describe("provider-neutral schema upgrades", { timeout: 30_000 }, () => {
         sqliteStatements: 3,
         postgresStatements: 3,
       },
+      {
+        version: 166,
+        name: "0166_record_payment_permission",
+        sqliteStatements: 6,
+        postgresStatements: 6,
+      },
+      {
+        version: 167,
+        name: "0167_promotion_exhaustion_dependency",
+        sqliteStatements: 5,
+        postgresStatements: 5,
+      },
+      {
+        version: 168,
+        name: "0168_tax_document_commands",
+        sqliteStatements: 9,
+        postgresStatements: 9,
+      },
     ]);
   });
 
@@ -1123,6 +1141,9 @@ describe("provider-neutral schema upgrades", { timeout: 30_000 }, () => {
           { version: 163, name: "0163_payment_due_live_index" },
           { version: 164, name: "0164_event_topic_names" },
           { version: 165, name: "0165_app_resource_owners" },
+          { version: 166, name: "0166_record_payment_permission" },
+          { version: 167, name: "0167_promotion_exhaustion_dependency" },
+          { version: 168, name: "0168_tax_document_commands" },
         ],
       });
     } finally {

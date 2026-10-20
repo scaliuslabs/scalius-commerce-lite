@@ -45,7 +45,7 @@ describe("product page metadata price", () => {
   it("reads the buy box's own opening choice", () => {
     const page = read("../../pages/products/[slug].astro");
     expect(page).toMatch(/const buyerPricingVariants = initialVariantPresentation\(/);
-    expect(summary).toMatch(/\} = initialVariantPresentation\(options, variants, initialVariant, initialUnavailableVariant\);/);
+    expect(summary).toMatch(/\} = initialVariantPresentation\(options, variants\);/);
   });
 });
 

@@ -29,6 +29,7 @@ import {
     type PromotionEvaluationResult,
     type PromotionRejectionReason,
     type PromotionScope,
+    MAX_ACTIVE_AUTOMATIC_PROMOTIONS,
 } from "./promotions.evaluator";
 import { matchCustomerSegments, promotionCandidateRecord } from "./promotions.service";
 import type { AppliedPromotion, PromotionCheckoutSnapshot, StorefrontDiscountCart } from "./checkout-snapshot";
@@ -172,7 +173,6 @@ export interface StorefrontDiscountInput {
 
 /** Codes a buyer may submit together (at most one applies per discount class). */
 export const MAX_SUBMITTED_DISCOUNT_CODES = 5;
-const MAX_AUTOMATIC_CANDIDATES = 20;
 const MAX_OFFER_PRODUCTS = 3;
 
 const SEGMENT_SIGN_IN_MESSAGE = "This code is for selected customers. Sign in with an eligible account.";
@@ -224,6 +224,71 @@ function idList(column: AnyColumn, ids: readonly string[]): SQL {
  */
 const untargetedPromotionSql = sql`NOT EXISTS (SELECT 1 FROM promotion_customer_segments AS segment_limit WHERE segment_limit.promotion_id = "promotions"."id")`;
 
+/** A stored rule's id array at `path`, or no rows: json_each fails closed on Postgres. */
+function storedIdRows(config: string, path: `$.${string}`): SQL {
+    const empty = path.slice(2).split(".").reduceRight((inner, key) => `{"${key}":${inner}}`, "[]");
+    return sql.raw(`json_each(CASE WHEN json_valid(${config}) THEN CASE WHEN json_type(${config}, '${path}') = 'array' THEN ${config} ELSE '${empty}' END ELSE '${empty}' END, '${path}')`);
+}
+
+/** The rule scope at `base` names products or collections (empty means every line). */
+function scopedSql(config: string, base: "$" | "$.buy"): SQL {
+    return sql`(EXISTS (SELECT 1 FROM ${storedIdRows(config, `${base}.productIds`)})
+        OR EXISTS (SELECT 1 FROM ${storedIdRows(config, `${base}.collectionIds`)}))`;
+}
+
+/**
+ * Some cart product is in the rule scope at `base`: named directly, or in an
+ * active collection that lists it (manual) or its category (dynamic), the
+ * same membership `resolveLineCollections` resolves for the evaluator.
+ */
+function scopeTouchesCartSql(config: string, base: "$" | "$.buy", productIdsJson: string): SQL {
+    const cartProducts = sql`SELECT CAST(value AS TEXT) FROM json_each(${productIdsJson})`;
+    const source = sql.raw("COALESCE(CASE WHEN json_valid(target_collection.config) THEN json_extract(target_collection.config, '$.source') END, 'manual')");
+    return sql`(EXISTS (SELECT 1 FROM ${storedIdRows(config, `${base}.productIds`)} AS scope_product
+            WHERE CAST(scope_product.value AS TEXT) IN (${cartProducts}))
+        OR EXISTS (SELECT 1 FROM ${storedIdRows(config, `${base}.collectionIds`)} AS scope_collection
+            INNER JOIN collections AS target_collection ON target_collection.id = CAST(scope_collection.value AS TEXT)
+            WHERE target_collection.is_active = 1 AND target_collection.deleted_at IS NULL
+              AND ((${source} = 'dynamic'
+                    AND EXISTS (SELECT 1 FROM ${storedIdRows("target_collection.config", "$.categoryIds")} AS rule_category
+                        WHERE CAST(rule_category.value AS TEXT) IN (
+                            SELECT cart_product.category_id FROM products AS cart_product
+                            WHERE cart_product.id IN (${cartProducts}) AND cart_product.category_id IS NOT NULL)))
+                OR (${source} <> 'dynamic'
+                    AND EXISTS (SELECT 1 FROM ${storedIdRows("target_collection.config", "$.productIds")} AS member_product
+                        WHERE CAST(member_product.value AS TEXT) IN (${cartProducts}))))))`;
+}
+
+/**
+ * An automatic promotion can do something for this cart: its product
+ * discount's scope (or, for Buy X get Y, the scope to buy) reaches a cart
+ * product, and every scoped minimum (other than one that gates only bundled
+ * free shipping) counts a cart product. A promotion failing this can neither
+ * save nor nudge (offers come from a Buy X get Y whose buy side is met), so
+ * the read leaves it out before its bound.
+ */
+function automaticReachesCartSql(productIds: readonly string[]): SQL {
+    const productIdsJson = JSON.stringify([...new Set(productIds)]);
+    return sql`NOT EXISTS (SELECT 1 FROM promotion_effects AS line_effect
+            WHERE line_effect.promotion_id = "promotions"."id" AND line_effect.deleted_at IS NULL
+              AND line_effect.target = 'line'
+              AND ${scopedSql("line_effect.config", "$")}
+              AND NOT ${scopeTouchesCartSql("line_effect.config", "$", productIdsJson)}
+              AND NOT (COALESCE(json_type(line_effect.config, '$.buy'), '') = 'object'
+                  AND (NOT ${scopedSql("line_effect.config", "$.buy")}
+                      OR ${scopeTouchesCartSql("line_effect.config", "$.buy", productIdsJson)})))
+        AND NOT EXISTS (SELECT 1 FROM promotion_conditions AS scoped_minimum
+            WHERE scoped_minimum.promotion_id = "promotions"."id"
+              AND COALESCE(json_type(scoped_minimum.config, '$.shippingOnly'), '') <> 'true'
+              AND ${scopedSql("scoped_minimum.config", "$")}
+              AND NOT ${scopeTouchesCartSql("scoped_minimum.config", "$", productIdsJson)})`;
+}
+
+/** Product pages list automatic Buy X get Y offers only. */
+const buyGetPromotionSql = sql`EXISTS (SELECT 1 FROM promotion_effects AS buy_get_effect
+    WHERE buy_get_effect.promotion_id = "promotions"."id" AND buy_get_effect.deleted_at IS NULL
+      AND COALESCE(json_type(buy_get_effect.config, '$.buy'), '') = 'object')`;
+
 /**
  * Loads the codes' promotions (any status, so the buyer hears why they fail)
  * plus the currently scheduled active automatic promotions, with code usage
@@ -231,23 +296,31 @@ const untargetedPromotionSql = sql`NOT EXISTS (SELECT 1 FROM promotion_customer_
  * limited to segments compete only for a signed-in customer; then, when a
  * loaded active promotion is limited, the customer's membership of those
  * segments is read once per distinct segment (`matchCustomerSegments`).
+ *
+ * Automatic promotions are filtered in SQL first (those that reach the cart,
+ * or the Buy X get Y ones for a product page) and bounded after. The bound is
+ * the cap on automatic promotions that may be on at once, so it never cuts one.
  */
 async function loadCandidates(
     db: Database,
     codes: readonly string[],
     input: StorefrontDiscountInput,
     now: number,
-    options: { declareTransition?: boolean } = {},
+    options: { declareTransition?: boolean; automatic?: "cart" | "buy_get" } = {},
 ) {
     const declareTransition = Boolean(options.declareTransition) && deps.active();
     const codeIds = sql`SELECT ${promotionCodes.promotionId} FROM ${promotionCodes} WHERE ${idList(promotionCodes.normalizedCode, codes)}`;
+    const reaches = options.automatic === "buy_get"
+        ? buyGetPromotionSql
+        : automaticReachesCartSql(input.cart.lines.map((line) => line.productId));
     const automaticIds = sql`SELECT automatic.id FROM (SELECT ${promotions.id} AS id FROM ${promotions}
         WHERE ${promotions.method} = 'automatic' AND ${promotions.status} = 'active'
           AND ${promotions.deletedAt} IS NULL
           AND (${promotions.startsAt} IS NULL OR ${promotions.startsAt} <= ${now})
           AND (${promotions.endsAt} IS NULL OR ${promotions.endsAt} > ${now})
           ${input.segmentCustomerId ? sql`` : sql`AND ${untargetedPromotionSql}`}
-        ORDER BY ${promotions.priority}, ${promotions.id} LIMIT ${MAX_AUTOMATIC_CANDIDATES}) AS automatic`;
+          AND ${reaches}
+        ORDER BY ${promotions.priority}, ${promotions.id} LIMIT ${MAX_ACTIVE_AUTOMATIC_PROMOTIONS}) AS automatic`;
     const candidateIds = sql`(${codeIds} UNION ${automaticIds})`;
     const customerMatch = input.customerId
         ? sql`${promotionRedemptions.customerId} = ${input.customerId}`
@@ -836,7 +909,7 @@ export async function listProductBuyGetOffers(
         [],
         { cart: { currencyCode: currency.code, priceIncrementMinor: currency.priceIncrementMinor, lines: [], shippingAmountMinor: 0 } },
         evaluatedAtEpochSeconds,
-        { declareTransition: true },
+        { declareTransition: true, automatic: "buy_get" },
     );
     const candidates = typedCandidates(loaded)
         .filter((candidate) => candidate.method === "automatic" && buyGetEffect(candidate));

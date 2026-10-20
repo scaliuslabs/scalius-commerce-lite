@@ -143,7 +143,7 @@ describe("a standalone app (outside this repository)", () => {
     } finally {
       rmSync(parent, { recursive: true, force: true });
     }
-  }, 120_000);
+  });
 
   it("prints the steps the SDK README shows", () => {
     const readme = readFileSync(join(root, "packages/plugin-sdk/README.md"), "utf8");
@@ -183,7 +183,7 @@ describe("a standalone app (outside this repository)", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  }, 60_000);
+  });
 });
 
 describe("scaffolded plugin", () => {
@@ -283,7 +283,7 @@ describe("pnpm plugin validate", () => {
     } finally {
       plugin.cleanup();
     }
-  }, 60_000);
+  });
 
   it("warns above 1 MiB and fails above the registry's 16 MiB, and says when the source does not compile", async () => {
     const big = makeTempPlugin({ id: "acme.big" });
@@ -307,7 +307,7 @@ describe("pnpm plugin validate", () => {
       big.cleanup();
       broken.cleanup();
     }
-  }, 30_000);
+  });
 });
 
 describe("API bundle size gate", () => {

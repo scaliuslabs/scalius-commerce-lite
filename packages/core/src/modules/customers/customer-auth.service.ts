@@ -1075,6 +1075,29 @@ async function createSessionForCustomer(
     };
 }
 
+/** A session that signs its customer in: not revoked, not expired, its customer not deleted. */
+function liveCustomerSession(tokenHash: string) {
+    return and(
+        eq(customerSessions.tokenHash, tokenHash),
+        isNull(customerSessions.revokedAt),
+        gt(customerSessions.expiresAt, Math.floor(Date.now() / 1000)),
+        isNull(customers.deletedAt),
+    );
+}
+
+/**
+ * The customer a live session signs in (`getCustomerBySession`'s rule) by
+ * its token hash; composable into a read batch, so a checkout reads the
+ * session with its other rows instead of in a round trip of its own.
+ */
+export function selectSessionCustomer(db: Database, tokenHash: string) {
+    return db
+        .select({ customerId: customers.id })
+        .from(customerSessions)
+        .innerJoin(customers, eq(customerSessions.customerId, customers.id))
+        .where(liveCustomerSession(tokenHash));
+}
+
 /**
  * Retrieves a D1-backed customer session from a raw cookie token.
  * Returns null if the session is expired, revoked, missing, or points at a
@@ -1087,7 +1110,6 @@ export async function getCustomerBySession(
 ): Promise<CustomerSession | null> {
     if (!sessionToken.trim()) return null;
 
-    const nowSeconds = Math.floor(Date.now() / 1000);
     const tokenHash = await hashCustomerSessionToken(sessionToken, sessionHashKey);
     const row = await db
         .select({ session: customerSessions, customer: customers, address: customerAddresses })
@@ -1095,12 +1117,7 @@ export async function getCustomerBySession(
         .innerJoin(customers, eq(customerSessions.customerId, customers.id))
         // The default address rides the session read (no extra statement).
         .leftJoin(customerAddresses, joinDefaultAddress)
-        .where(and(
-            eq(customerSessions.tokenHash, tokenHash),
-            isNull(customerSessions.revokedAt),
-            gt(customerSessions.expiresAt, nowSeconds),
-            isNull(customers.deletedAt),
-        ))
+        .where(liveCustomerSession(tokenHash))
         .get();
 
     if (!row) return null;

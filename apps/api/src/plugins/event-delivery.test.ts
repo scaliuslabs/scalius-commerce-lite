@@ -51,7 +51,7 @@ const flakyModule = {
 };
 
 // The first delivery loads the admin app for ctx.api; give cold starts room on a busy machine.
-describe("plugin event delivery", { timeout: 30_000 }, () => {
+describe("plugin event delivery", () => {
   let sqlite: DatabaseSync;
   let db: Database;
   let env: Env;

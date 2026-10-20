@@ -32,7 +32,7 @@ export const SKIPPED_ROUTES = [
   { match: "/auth/two-factor", reason: "needs a half-signed-in session" },
   { match: "/auth/setup-2fa", reason: "needs a half-signed-in session" },
   { match: "/auth/setup", reason: "first-run setup answers only before an admin exists" },
-  { match: "/admin/settings/agent-access/*", reason: "needs a live agent-access request or handoff id" },
+  { match: "/admin/settings/agent-access/*", reason: "needs a live agent-access request, handoff or approval id" },
   { match: "/admin/apps/$pluginId/pages/$pageId", reason: "needs an app that declares a page" },
   { match: "/scanner", reason: "standalone phone scanner app with its own QR sign-in" },
   { match: "/connect", reason: "needs an OAuth consent request" },

@@ -406,7 +406,7 @@ function summary(installation: PluginInstallation) {
     source: installation.source,
     status: installation.status,
     needsApproval: pluginNeedsApproval(installation),
-    thirdParty: isThirdPartyPlugin(installation.pluginId),
+    thirdParty: isThirdPartyPlugin(installation),
     signed: installation.signerKeyId !== null,
     failureReason: installation.failureReason,
     revision: installation.revision,
@@ -744,7 +744,7 @@ function unreadableSummary(installation: UnreadablePluginInstallation): ReturnTy
     source: installation.source,
     status: "failed",
     needsApproval: false,
-    thirdParty: isThirdPartyPlugin(installation.pluginId),
+    thirdParty: isThirdPartyPlugin(installation),
     signed: false,
     failureReason: installation.failureReason
       ?? `Reinstall needed: this release cannot read the saved version ${installation.version} of this app, so it is not running.`,

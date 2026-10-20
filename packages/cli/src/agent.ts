@@ -12,9 +12,11 @@ import type { IndexedOperation, OutputMode, ResolvedProfile, Runtime, Structured
 // The agent-first commands: ask, search, describe, read, write and batch.
 // Each prints one envelope `{ok, data, meta}` (JSON when piped, text on a
 // terminal), and every change follows search -> describe -> dry run ->
-// confirm -> write -> verify. A gated change answers 428 with the server's
-// summary and a one-use token; --yes (or the merchant's yes) repeats the
-// identical request with that token, and nothing more is sent without it.
+// approve -> write -> verify. A gated change runs only after a person
+// approves it: on a terminal the CLI offers the server's dialog and asks
+// there; otherwise (a pipe, an agent) the server answers 428 with an approval
+// link for the merchant's dashboard, and the command ends with exit 10 until
+// it is run again with --approval <id>. --yes never approves a gated change.
 
 export interface OutputOptions {
   mode: OutputMode;
@@ -294,7 +296,8 @@ export interface WriteOptions {
   input: StructuredInput;
   dryRun: boolean;
   yes: boolean;
-  confirmToken?: string;
+  /** The approval the merchant gave in the dashboard for exactly this change. */
+  approval?: string;
   idempotencyKey?: string;
   /** false: return the envelope without printing it (bulk --wait prints the run instead). */
   print?: boolean;
@@ -361,39 +364,65 @@ async function approve(runtime: Runtime, summary: string): Promise<boolean> {
   return /^y(es)?$/i.test(answer);
 }
 
-function confirmationRequired(summary: string, label: string, details?: unknown): CliError {
-  return new CliError(10, "confirmation_required", `This change needs the merchant's approval: ${summary}`, details, {
-    status: 428,
-    retryable: false,
-    hint: "Show the summary to the merchant. Once they approve, run the same command again with --yes. Nothing was changed.",
-  });
+/** The server dialog's answer comes from the person at the terminal, never from --yes. */
+function dialogFor(runtime: Runtime): ((message: string) => Promise<boolean>) | undefined {
+  if (!interactive(runtime)) return undefined;
+  return (message) => approve(runtime, message.replace(/^Approve: /, ""));
 }
 
-/** The server's 428: its summary and one-use token (the fallback summary when it sent none). */
-function confirmationOf(value: Record<string, unknown>, fallbackSummary: string): { summary: string; token?: string; confirmation?: unknown } {
+interface ApprovalLink {
+  summary: string;
+  approvalId?: string;
+  approvalUrl?: string;
+  confirmation?: unknown;
+}
+
+/** The server's 428: its summary and the dashboard approval link (the fallback summary when it sent none). */
+function approvalLinkOf(value: Record<string, unknown>, fallbackSummary: string): ApprovalLink {
   const confirmation = isRecord(value.confirmation) ? value.confirmation : undefined;
   return {
     summary: typeof confirmation?.summary === "string" ? confirmation.summary : fallbackSummary,
-    ...(typeof confirmation?.confirmToken === "string" ? { token: confirmation.confirmToken } : {}),
+    ...(typeof confirmation?.approvalId === "string" ? { approvalId: confirmation.approvalId } : {}),
+    ...(typeof confirmation?.approvalUrl === "string" ? { approvalUrl: confirmation.approvalUrl } : {}),
     ...(confirmation ? { confirmation } : {}),
   };
 }
 
+function approvalNeeded(link: ApprovalLink, yes: boolean): CliError {
+  const where = link.approvalUrl && link.approvalId
+    ? ` Approve it at ${link.approvalUrl}, then run the same command again with --approval ${link.approvalId}.`
+    : "";
+  const message = yes
+    ? `--yes cannot approve this change: the store asks a person to approve it (${link.summary}).${where}`
+    : `This change needs the merchant's approval: ${link.summary}.${where}`;
+  return new CliError(10, "confirmation_required", message, link.confirmation ? { confirmation: link.confirmation } : undefined, {
+    status: 428,
+    retryable: false,
+    hint: link.approvalUrl
+      ? `Send the merchant ${link.approvalUrl}. Once they approve it, run the same command again with --approval ${link.approvalId}. Nothing was changed.`
+      : "Ask the merchant to approve the change, then run it again. Nothing was changed.",
+  });
+}
+
 /**
- * The merchant's answer to a 428: `--yes`, or an interactive yes. Without
- * either (a pipe, an agent) the command ends with exit 10 and sends nothing
- * more; the token is never spent unapproved.
+ * A gated change's dashboard approval. On a terminal the person opens the link
+ * and presses Enter once approved (the request is then repeated with the
+ * approval id); elsewhere the command ends with exit 10 and sends nothing
+ * more. --yes changes neither.
  */
-async function settleApproval(runtime: Runtime, yes: boolean, summary: string, label: string, details: unknown): Promise<void> {
-  if (yes) {
-    writeDiagnostic(runtime, `Approved with --yes: ${summary}`);
-    return;
-  }
-  if (!interactive(runtime)) throw confirmationRequired(summary, label, details);
-  if (!(await approve(runtime, summary))) {
+async function settleApprovalLink(runtime: Runtime, yes: boolean, link: ApprovalLink): Promise<string> {
+  if (!link.approvalId || !link.approvalUrl || !interactive(runtime)) throw approvalNeeded(link, yes);
+  const answer = await promptLine(
+    runtime,
+    `Approve in the dashboard: ${link.summary}\n${link.approvalUrl}\nPress Enter once approved (n to cancel) `,
+  );
+  if (/^n(o)?$/i.test(answer)) {
     throw new CliError(10, "confirmation_declined", "The change was not approved; nothing was written.");
   }
+  return link.approvalId;
 }
+
+const MAX_APPROVAL_PROMPTS = 3;
 
 /** The idempotency key this invocation uses for every attempt of one write. */
 export function idempotencyKeyFor(operation: IndexedOperation, requested: string | undefined): string | undefined {
@@ -428,7 +457,7 @@ function previewText(envelope: Record<string, unknown>, note?: string): string {
     JSON.stringify(envelope.data, null, 2),
     ...(confirmation ? [
       `Needs approval: ${String(confirmation.summary)}`,
-      `Apply with --yes, or --confirm-token ${String(confirmation.confirmToken)} (expires ${String(confirmation.expiresAt)}).`,
+      "Run it without --dry-run: a terminal asks you; otherwise the merchant approves it from a dashboard link.",
     ] : []),
   ].join("\n");
 }
@@ -440,33 +469,25 @@ async function sendWrite(
   args: Record<string, unknown>,
   yes: boolean,
   idempotent: boolean,
-  operationId: string,
   fallbackSummary: string,
-  dryRun: () => Promise<string | undefined>,
 ): Promise<ToolResult> {
   let current = { ...args };
+  let prompts = 0;
   for (let attempt = 1; ; attempt += 1) {
-    const result = await callTool(runtime, profile, audience, "scalius_write", current, { retry: idempotent });
+    const result = await callTool(runtime, profile, audience, "scalius_write", current, { retry: idempotent, confirm: dialogFor(runtime) });
     if (!result.isError) return result;
     const error = toolError(result.value);
     if (error.errorCode === "confirmation_required") {
-      // The server's 428: show its summary, then repeat the identical request
-      // (same input, same idempotency key) with the one-use token.
-      const { summary, token, confirmation } = confirmationOf(result.value, fallbackSummary);
-      if (current.confirmToken || token === undefined) throw confirmationRequired(summary, operationId, { confirmation });
-      await settleApproval(runtime, yes, summary, operationId, { confirmation });
-      current = { ...current, confirmToken: token };
+      // The server's 428 with a dashboard approval link (or the same link
+      // again: not approved yet). Repeat the identical request (same input,
+      // same idempotency key) with the approval id once a person approved.
+      const link = approvalLinkOf(result.value, fallbackSummary);
+      if (prompts >= MAX_APPROVAL_PROMPTS) throw approvalNeeded(link, yes);
+      prompts += 1;
+      current = { ...current, approvalId: await settleApprovalLink(runtime, yes, link) };
       continue;
     }
     if (!idempotent || attempt >= MAX_WRITE_ATTEMPTS) throw error;
-    if (error.errorCode === "confirm_token_used") {
-      // The token was spent by an attempt whose answer was lost: a fresh token
-      // with the same idempotency key replays the first result, never a second write.
-      const token = await dryRun();
-      if (!token) throw error;
-      current = { ...current, confirmToken: token };
-      continue;
-    }
     if (error.envelope.retryable !== true) throw error;
     await runtime.sleep(error.envelope.retryAfterMs ?? 1_000 * attempt);
   }
@@ -493,23 +514,16 @@ export async function write(runtime: Runtime, output: OutputOptions, operationId
     return { code: 11, envelope };
   }
 
-  const freshToken = async () => {
-    const preview = await tool(runtime, profile, audience, "scalius_write", dryRunArgs, true);
-    const confirmation = isRecord(preview.value.confirmation) ? preview.value.confirmation : undefined;
-    return typeof confirmation?.confirmToken === "string" ? confirmation.confirmToken : undefined;
-  };
-  // Send the change itself: a gated one answers 428 with the server's summary
-  // and token, which sendWrite settles with the merchant (nothing is written before).
+  // Send the change itself: a gated one asks the person (a terminal dialog,
+  // or a dashboard link) before anything is written.
   const result = await sendWrite(
     runtime,
     profile,
     audience,
-    { ...base, ...(options.confirmToken ? { confirmToken: options.confirmToken } : {}) },
+    { ...base, ...(options.approval ? { approvalId: options.approval } : {}) },
     options.yes,
     idempotencyKey !== undefined,
-    operationId,
     localSummary(operation, options.input),
-    freshToken,
   );
   const envelope = okEnvelope(result);
   if (options.print === false) return { code: 0, envelope };
@@ -548,7 +562,7 @@ export async function batch(
   runtime: Runtime,
   output: OutputOptions,
   value: unknown,
-  options: { dryRun: boolean; yes: boolean; confirmToken?: string },
+  options: { dryRun: boolean; yes: boolean; approval?: string },
 ): Promise<number> {
   const steps = parseSteps(value);
   const audiences = new Set(steps.map((step) => audienceForOperation(step.operationId)));
@@ -584,19 +598,20 @@ export async function batch(
     emit(runtime, output, envelope, () => previewText(envelope));
     return 11;
   }
-  let confirmToken = options.confirmToken;
+  let approvalId = options.approval;
+  let prompts = 0;
   let result: ToolResult;
   for (;;) {
-    result = await callTool(runtime, profile, audience, "scalius_write", { steps: keyed, ...(confirmToken ? { confirmToken } : {}) }, { retry: false });
+    result = await callTool(runtime, profile, audience, "scalius_write", { steps: keyed, ...(approvalId ? { approvalId } : {}) }, { retry: false, confirm: dialogFor(runtime) });
     if (!(result.isError && !Array.isArray(result.value.steps))) break;
     const error = toolError(result.value);
     if (error.errorCode !== "confirmation_required") throw error;
-    // The server's 428 for the whole batch: nothing ran. Repeat the identical steps with its token.
+    // The server's 428 for the whole batch: nothing ran. Repeat the identical steps once a person approved.
     const fallback = resolved.map(({ step, operation }) => localSummary(operation, step.input ?? {})).join("; ");
-    const { summary, token, confirmation } = confirmationOf(result.value, fallback);
-    if (confirmToken || token === undefined) throw confirmationRequired(summary, "<batch>", { confirmation });
-    await settleApproval(runtime, options.yes, summary, "<batch>", { confirmation });
-    confirmToken = token;
+    const link = approvalLinkOf(result.value, fallback);
+    if (prompts >= MAX_APPROVAL_PROMPTS) throw approvalNeeded(link, options.yes);
+    prompts += 1;
+    approvalId = await settleApprovalLink(runtime, options.yes, link);
   }
   return finish(result);
 }

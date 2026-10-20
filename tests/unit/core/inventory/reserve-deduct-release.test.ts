@@ -33,6 +33,7 @@ vi.mock("../../../../packages/core/src/modules/inventory/alerts", () => ({
 let applyInventoryForStatusChange: typeof import("../../../../packages/core/src/modules/inventory/inventory-transitions").applyInventoryForStatusChange;
 
 const TRANSITION_ORDER_ID = "ord_inventory_hardening";
+const TRANSITION_SALES_CHANNEL_ID = "sc_wholesale";
 const TRANSITION_ITEM = { variantId: "var_1", quantity: 2, inventoryTracked: true };
 const TRANSITION_VARIANT = {
   id: "var_1",
@@ -78,6 +79,9 @@ function orderWithInventoryAction(inventoryAction: string, overrides: Partial<{
     inventoryAction,
     inventoryPool: "regular",
     version: 7,
+    fulfillmentLocationId: null,
+    // Not the default channel, so a re-reservation provably forwards the order's own.
+    salesChannelId: TRANSITION_SALES_CHANNEL_ID,
     ...overrides,
   };
 }
@@ -377,6 +381,7 @@ describe("inventory status transition hardening", () => {
         movementId: expectedMovementId,
       }],
       "regular",
+      { salesChannelId: TRANSITION_SALES_CHANNEL_ID },
     );
     expect(batchCalls).toEqual([
       [expect.objectContaining({ kind: "updateOrder", table: orders })],

@@ -39,3 +39,17 @@ export const STALE_ASSET_RECOVERY_SCRIPT =
   'if(u.indexOf("/_astro/")>-1){console.warn("[StaleAsset] 404:",u);g()}},!0);' +
   'addEventListener("unhandledrejection",e=>{const m=e.reason&&e.reason.message;' +
   'if(m&&m.indexOf("dynamically imported")>-1&&m.indexOf("/_astro/")>-1){console.warn("[StaleAsset] Import failed");g()}})})();';
+
+/**
+ * VARIANT_PREPAINT_SCRIPT: a product page is one cached page whatever its
+ * `?variant=<sku id>` says (feed rows, shared links). Run by the buy box
+ * (ProductSummary.astro) before its first paint, it marks the document
+ * `data-variant-pending` when the URL names a SKU, so the opening choice's
+ * price, stock and option states never paint; product-controller.ts selects
+ * the named SKU and clears the mark. It clears itself after 3 s if the
+ * controller never runs.
+ */
+export const VARIANT_PREPAINT_SCRIPT =
+  '(()=>{try{if(!new URLSearchParams(location.search).get("variant"))return;' +
+  'const d=document.documentElement;d.dataset.variantPending="";' +
+  'setTimeout(()=>{delete d.dataset.variantPending},3e3)}catch{}})();';

@@ -330,24 +330,24 @@ describe("agent operation contract", () => {
   });
 
   it("exposes only the reviewed self-service connection and grant management subset", () => {
-    const browserHandoffOperations = manifest.filter((operation) =>
-      operation.pathTemplate.startsWith(
-        "/api/v1/admin/agent-access/browser-handoffs/",
-      ),
-    );
-    expect(browserHandoffOperations).toHaveLength(2);
-    expect(browserHandoffOperations.every((operation) =>
+    // Browser-only ceremonies for the grant's owner: a secure continuation and
+    // the approval of a gated agent change. Never an agent operation.
+    const browserOnly = (path: string) =>
+      path.startsWith("/api/v1/admin/agent-access/browser-handoffs/") ||
+      path.startsWith("/api/v1/admin/agent-access/approvals/");
+    const browserOnlyOperations = manifest.filter((operation) => browserOnly(operation.pathTemplate));
+    expect(browserOnlyOperations).toHaveLength(4);
+    expect(browserOnlyOperations.every((operation) =>
       operation.exposure === "excluded" &&
-      operation.rbac.type === "unmapped" &&
+      operation.rbac.type === "permission" &&
+      operation.rbac.permission === "agent_access.manage" &&
       operation.risk === "security" &&
       operation.batch === "forbidden"
     )).toBe(true);
 
     const managementOperations = manifest.filter((operation) =>
       operation.pathTemplate.startsWith("/api/v1/admin/agent-access/") &&
-      !operation.pathTemplate.startsWith(
-        "/api/v1/admin/agent-access/browser-handoffs/",
-      ),
+      !browserOnly(operation.pathTemplate),
     );
     expect(managementOperations).toHaveLength(15);
     expect(byId(manifest, "dashboard.agent_access.connections.purge_revoked")).toMatchObject({

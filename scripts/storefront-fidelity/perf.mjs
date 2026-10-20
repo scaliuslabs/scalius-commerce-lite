@@ -19,7 +19,8 @@ async function timeFetch(url) {
   const r = await fetch(url, { headers: { "User-Agent": "scalius-fidelity-perf" } });
   const ms = Math.round(performance.now() - t0);
   const body = await r.arrayBuffer();
-  return { ms, cache: r.headers.get("x-cache-status"), bytes: body.byteLength, status: r.status };
+  // The lane only: a hit that waited reads `HIT; frontier-wait=183ms`.
+  return { ms, cache: (r.headers.get("x-cache-status") ?? "").split(";", 1)[0].trim(), bytes: body.byteLength, status: r.status };
 }
 
 export async function ttfbRuns(ctx, path, runs = 3) {

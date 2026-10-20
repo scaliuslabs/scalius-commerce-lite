@@ -103,6 +103,20 @@ export const DASHBOARD_STAFF_OPERATIONS = {
     reason:
       "Emergency tenant-wide credential kill switch; only a live 2FA-verified Super Admin browser session may invoke it.",
   },
+  "dashboard.agent_access.approval.decide": {
+    exposure: "excluded",
+    risk: "security",
+    limits: { request: 4_096, response: 4_096 },
+    reason:
+      "The grant owner's approval of a gated agent change; only that owner's 2FA-verified browser session may answer it, never an agent.",
+  },
+  "dashboard.agent_access.approval.get": {
+    exposure: "excluded",
+    risk: "security",
+    limits: { request: 4_096, response: 8_192 },
+    reason:
+      "Browser-only view of a gated agent change waiting for its owner's approval; agents receive only the approval link.",
+  },
   "dashboard.agent_access.browser_handoff.claim": {
     exposure: "excluded",
     risk: "security",

@@ -546,6 +546,92 @@ export interface StorefrontOrderShippingMethodSnapshot {
     feeWaived: boolean;
 }
 
+/**
+ * A fully priced order's own facts (the `orders` row): the shipping-address
+ * snapshot (all null unless something ships), the billing-address snapshot
+ * and its money, payment and fulfilment state. Every channel commits this
+ * shape through `commitOrder()` (commit-order.ts).
+ */
+export type OrderFacts = OrderShippingAddressFields & Partial<OrderBillingAddressFields> & {
+    id: string;
+    customerName: string;
+    /** Null without a phone; stored as NO_PHONE (`storedPhone`). */
+    customerPhone: string | null;
+    customerEmail: string | null;
+    customerWhatsapp?: string | null;
+    notes: string | null;
+    attributes?: string;
+    /** Null when nothing physical was bought (no delivery method). */
+    shippingMethodId: string | null;
+    shippingMethodName: string | null;
+    shippingMethodDescription: string | null;
+    shippingMethodBaseAmountMinor: number | null;
+    shippingFeeWaived: boolean | null;
+    requiresShipping?: boolean;
+    shippingMethodKind?: DeliveryMethodKind | null;
+    pickupAddress?: string | null;
+    pickupHours?: string | null;
+    currencyCode: string;
+    currencyDecimalPlaces: number;
+    /**
+     * The order's money chain when it is not in the shop currency
+     * (MARKETS-DESIGN D3, step 6): the shop currency, the locked rate (shop
+     * units per presentment unit), its source, when it was set and until
+     * when the order keeps it (epoch seconds). Absent: same-currency.
+     */
+    fx?: {
+        shopCurrency: string;
+        fxRate: string;
+        fxSource: string;
+        fxAsOf: number | null;
+        fxLockedUntil: number | null;
+    };
+    subtotalAmountMinor: number;
+    shippingAmountMinor: number;
+    discountAmountMinor: number;
+    taxAmountMinor: number;
+    totalAmountMinor: number;
+    taxLabel: string;
+    pricesIncludeTax: boolean;
+    status: string;
+    paymentMethod: string;
+    paymentStatus: string;
+    paidAmountMinor: number;
+    balanceDueMinor: number;
+    /** A deferred order's terms (days): it commits unpaid, due that many days from now. */
+    paymentTermsDays?: number | null;
+    fulfillmentStatus: string;
+    inventoryPool: string;
+    /** "reserved": the commit holds the tracked lines' stock (ledger v2). */
+    inventoryAction: string;
+};
+
+/** One priced order line (`order_items`), its tax by `taxAllocationLineId`. */
+export interface OrderLine {
+    id: string;
+    taxAllocationLineId: string;
+    productId: string;
+    variantId: string;
+    quantity: number;
+    productName: string | null;
+    variantLabel: string | null;
+    inventoryTracked?: boolean;
+    /** Historical image/poster Media asset selected before the order batch. */
+    productImageMediaId: string | null;
+    /** How this line reaches the buyer; frozen by the commit. Defaults to `ship`. */
+    fulfillmentType?: FulfillmentType;
+    /** Serialized `order_items.properties` snapshot, or null without buyer inputs. */
+    properties?: string | null;
+    propertiesPriceMinor?: number;
+    /** Unit price before surcharges. */
+    baseUnitPriceMinor?: number;
+    unitPriceMinor: number;
+    lineSubtotalMinor: number;
+    discountAmountMinor: number;
+    taxableAmountMinor: number;
+    taxAmountMinor: number;
+}
+
 /** Prepared, server-authoritative storefront order data committed synchronously by checkout. */
 export interface StorefrontOrderCommitPayload {
     checkoutToken: string;
@@ -563,93 +649,17 @@ export interface StorefrontOrderCommitPayload {
     trackingSnapshot?: OrderTrackingSnapshot | null;
     /** Verified storefront account owner. Guest checkout deliberately keeps this null. */
     existingCustomer: { id: string } | null;
-    /**
-     * The shipping-address snapshot (all null unless something ships), the
-     * billing-address snapshot and the order's other facts.
-     */
-    orderData: OrderShippingAddressFields & Partial<OrderBillingAddressFields> & {
-        id: string;
-        customerName: string;
-        /** Null without a phone; stored as NO_PHONE (`storedPhone`). */
-        customerPhone: string | null;
-        customerEmail: string | null;
-        customerWhatsapp?: string | null;
-        notes: string | null;
-        attributes?: string;
-        /** Null when nothing physical was bought (no delivery method). */
-        shippingMethodId: string | null;
-        shippingMethodName: string | null;
-        shippingMethodDescription: string | null;
-        shippingMethodBaseAmountMinor: number | null;
-        shippingFeeWaived: boolean | null;
-        requiresShipping?: boolean;
-        shippingMethodKind?: DeliveryMethodKind | null;
-        pickupAddress?: string | null;
-        pickupHours?: string | null;
-        currencyCode: string;
-        currencyDecimalPlaces: number;
-        /**
-         * The order's money chain when it is not in the shop currency
-         * (MARKETS-DESIGN D3, step 6): the shop currency, the locked rate (shop
-         * units per presentment unit), its source, when it was set and until
-         * when the order keeps it (epoch seconds). Absent: same-currency.
-         */
-        fx?: {
-            shopCurrency: string;
-            fxRate: string;
-            fxSource: string;
-            fxAsOf: number | null;
-            fxLockedUntil: number | null;
-        };
-        subtotalAmountMinor: number;
-        shippingAmountMinor: number;
-        discountAmountMinor: number;
-        taxAmountMinor: number;
-        totalAmountMinor: number;
-        taxLabel: string;
-        pricesIncludeTax: boolean;
-        status: string;
-        paymentMethod: string;
-        paymentStatus: string;
-        paidAmountMinor: number;
-        balanceDueMinor: number;
-        /** A deferred order's terms (days): it commits unpaid, due that many days from now. */
-        paymentTermsDays?: number | null;
-        fulfillmentStatus: string;
-        inventoryPool: string;
-        inventoryAction: string;
-    };
-    items: {
-        id: string;
-        taxAllocationLineId: string;
+    /** The order's own facts. */
+    orderData: OrderFacts;
+    items: Array<OrderLine & {
         cartKey?: string | null;
-        productId: string;
-        variantId: string;
-        quantity: number;
-        productName: string | null;
-        variantLabel: string | null;
-        inventoryTracked?: boolean;
-        /** Historical image/poster Media asset selected before the order batch. */
-        productImageMediaId: string | null;
-        /** How this line reaches the buyer; frozen by the commit. Defaults to `ship`. */
-        fulfillmentType?: FulfillmentType;
-        /** Serialized `order_items.properties` snapshot, or null without buyer inputs. */
-        properties?: string | null;
-        propertiesPriceMinor?: number;
-        /** Unit price before surcharges. */
-        baseUnitPriceMinor?: number;
-        unitPriceMinor: number;
-        lineSubtotalMinor: number;
-        discountAmountMinor: number;
         /**
          * The quantity-bundle saving in `discountAmountMinor`. An order is
          * priced by its promotion or its bundles, never both
          * (checkout/bundle-discounts.ts). Absent means none.
          */
         bundleDiscountMinor?: number;
-        taxableAmountMinor: number;
-        taxAmountMinor: number;
-    }[];
+    }>;
     /** The applied discount (code or automatic); re-verified during the order commit. */
     promotion?: PromotionCheckoutSnapshot | null;
     /**

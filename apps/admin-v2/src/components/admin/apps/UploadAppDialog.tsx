@@ -25,6 +25,7 @@ type Step = { kind: "choose" } | { kind: "untrusted"; developer: string | null }
 const REFUSALS: Record<string, AppsLifecycleMessageKey> = {
   "package_invalid": "packageInvalid",
   "signature_invalid": "signatureInvalid",
+  "signature_signer_changed": "signerChanged",
   "installation_incompatible": "incompatible",
   "installation_source_conflict": "sourceConflict",
   "installation_sandbox_required": "sandboxRequired",

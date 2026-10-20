@@ -14,6 +14,9 @@ const HANDOFF_TTL_MS = 5 * 60 * 1000;
 const MAX_ACTION_BYTES = 4_096;
 const CLEANUP_PAGE_SIZE = 2_000;
 const DELETE_CHUNK_SIZE = 90;
+/** Rows whose operation id starts with this are dashboard approvals (`approvals.ts`), never continuations. */
+export const APPROVAL_OPERATION_PREFIX = "approval:";
+const notApproval = sql`substr(${agentBrowserHandoffs.operationId}, 1, ${APPROVAL_OPERATION_PREFIX.length}) <> ${APPROVAL_OPERATION_PREFIX}`;
 
 export interface AgentBrowserAction {
   url: string;
@@ -21,13 +24,13 @@ export interface AgentBrowserAction {
   fields: Record<string, string>;
 }
 
-function requireEncryptionKey(env: Env): string {
+export function requireEncryptionKey(env: Env): string {
   const key = env.CREDENTIAL_ENCRYPTION_KEY?.trim();
   if (!key) throw new Error("Agent browser handoff encryption is unavailable");
   return key;
 }
 
-function dashboardOrigin(env: Env): string {
+export function dashboardOrigin(env: Env): string {
   const value = env.BETTER_AUTH_URL?.trim();
   if (!value) throw new Error("BETTER_AUTH_URL is required for agent browser handoffs");
   const url = new URL(value);
@@ -86,22 +89,12 @@ function validateAction(action: AgentBrowserAction, env: Env): string {
   return serialized;
 }
 
-export async function createAgentBrowserHandoff(
-  db: Database,
-  principal: AgentPrincipal,
-  operationId: string,
-  action: AgentBrowserAction,
-  env: Env,
-): Promise<{ handoffId: string; url: string; expiresAt: string }> {
-  const now = new Date();
-  const expiresAt = new Date(now.getTime() + HANDOFF_TTL_MS);
-  const serialized = validateAction(action, env);
-  const encryptedAction = encodeEncryptedCredential(await encryptCredentials(
-    serialized,
-    requireEncryptionKey(env),
-  ));
-  const handoffId = `abh_${nanoid(20)}`;
-  const credentialGuard = principal.credentialId === null
+/**
+ * The grant (and, for a PAT or CLI key, the credential) is still the live,
+ * unrevoked authority this principal was resolved from.
+ */
+export function grantAuthorityGuard(principal: AgentPrincipal) {
+  return principal.credentialId === null
     ? sql`EXISTS (
         SELECT 1 FROM agent_grants
         WHERE id = ${principal.grantId}
@@ -127,8 +120,25 @@ export async function createAgentBrowserHandoff(
           AND agent_credentials.revoked_at IS NULL
           AND agent_credentials.expires_at > unixepoch()
       )`;
+}
+
+export async function createAgentBrowserHandoff(
+  db: Database,
+  principal: AgentPrincipal,
+  operationId: string,
+  action: AgentBrowserAction,
+  env: Env,
+): Promise<{ handoffId: string; url: string; expiresAt: string }> {
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + HANDOFF_TTL_MS);
+  const serialized = validateAction(action, env);
+  const encryptedAction = encodeEncryptedCredential(await encryptCredentials(
+    serialized,
+    requireEncryptionKey(env),
+  ));
+  const handoffId = `abh_${nanoid(20)}`;
   await safeBatch(db, [
-    buildBatchGuard(db, credentialGuard, "agent_browser_handoff_authority_inactive"),
+    buildBatchGuard(db, grantAuthorityGuard(principal), "AGENT_BROWSER_HANDOFF_AUTHORITY_INACTIVE"),
     db.insert(agentBrowserHandoffs).values({
       id: handoffId,
       grantId: principal.grantId,
@@ -177,6 +187,7 @@ export async function claimAgentBrowserHandoff(
     eq(agentBrowserHandoffs.ownerUserId, ownerUserId),
     eq(agentBrowserHandoffs.status, "active"),
     gt(agentBrowserHandoffs.expiresAt, now),
+    notApproval,
   )).get();
   if (!candidate) return null;
 
@@ -215,6 +226,7 @@ export async function claimAgentBrowserHandoff(
     eq(agentBrowserHandoffs.ownerUserId, ownerUserId),
     eq(agentBrowserHandoffs.status, "active"),
     gt(agentBrowserHandoffs.expiresAt, now),
+    notApproval,
     authorityGuard,
   )).returning({ id: agentBrowserHandoffs.id });
   if (claimed.length !== 1) return null;

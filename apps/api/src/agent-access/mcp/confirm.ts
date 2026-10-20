@@ -1,12 +1,14 @@
 // Confirmation for destructive and financial agent writes (decision D2).
 //
 // A grant's confirm policy defaults to `destructive_financial`: such a call
-// runs only with a one-time confirm token, which a dry run (or the refused
-// call itself) returns together with a human summary, or after a native
-// client dialog (MCP form elicitation on 2026-07-28 clients). The token is an
-// HMAC over the grant, the exact operations and inputs, and a 10-minute
-// expiry, so issuing one writes nothing; its single use is claimed in
-// `system_kv` immediately before the dispatch, so a replay is a 409.
+// runs only after a person approves it (audit R2 F3), either in the dashboard
+// (`../approvals.ts`: the refused call returns an approval link for the
+// grant's owner, never anything the agent could redeem itself) or, for an
+// OAuth app or the paired CLI, in a native client dialog (MCP form
+// elicitation on 2026-07-28 clients). The dialog's request state is a confirm
+// token: an HMAC over the grant, the exact operations and inputs, and a
+// 10-minute expiry, so issuing one writes nothing; its single use is claimed
+// in `system_kv` immediately before the dispatch, so a replay is a 409.
 
 import { and, eq, gt, isNull, lte, or, sql } from "drizzle-orm";
 import { systemKv } from "@scalius/database/schema";

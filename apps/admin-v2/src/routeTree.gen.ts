@@ -126,6 +126,7 @@ import { Route as AdminInventoryTransfersTransferIdReceiveRouteImport } from './
 import { Route as AdminObjectsTypeRecordsRecordIdRouteImport } from './routes/admin/objects/$type/records/$recordId'
 import { Route as AdminObjectsTypeRecordsNewRouteImport } from './routes/admin/objects/$type/records/new'
 import { Route as AdminOrdersListAbandonedCheckoutIdRouteImport } from './routes/admin/orders/_list/abandoned.$checkoutId'
+import { Route as AdminSettingsAgentAccessApproveApprovalIdRouteImport } from './routes/admin/settings/agent-access.approve.$approvalId'
 import { Route as AdminSettingsAgentAccessAuthorizeRequestIdRouteImport } from './routes/admin/settings/agent-access.authorize.$requestId'
 import { Route as AdminSettingsAgentAccessContinueHandoffIdRouteImport } from './routes/admin/settings/agent-access.continue.$handoffId'
 import { Route as AdminSettingsUsersRolesRoleIdRouteImport } from './routes/admin/settings/users_.roles.$roleId'
@@ -759,6 +760,12 @@ const AdminOrdersListAbandonedCheckoutIdRoute =
     path: '/$checkoutId',
     getParentRoute: () => AdminOrdersListAbandonedRoute,
   } as any)
+const AdminSettingsAgentAccessApproveApprovalIdRoute =
+  AdminSettingsAgentAccessApproveApprovalIdRouteImport.update({
+    id: '/agent-access/approve/$approvalId',
+    path: '/agent-access/approve/$approvalId',
+    getParentRoute: () => AdminSettingsRouteRoute,
+  } as any)
 const AdminSettingsAgentAccessAuthorizeRequestIdRoute =
   AdminSettingsAgentAccessAuthorizeRequestIdRouteImport.update({
     id: '/agent-access/authorize/$requestId',
@@ -894,6 +901,7 @@ export interface FileRoutesByFullPath {
   '/admin/objects/$type/records/$recordId': typeof AdminObjectsTypeRecordsRecordIdRoute
   '/admin/objects/$type/records/new': typeof AdminObjectsTypeRecordsNewRoute
   '/admin/orders/abandoned/$checkoutId': typeof AdminOrdersListAbandonedCheckoutIdRoute
+  '/admin/settings/agent-access/approve/$approvalId': typeof AdminSettingsAgentAccessApproveApprovalIdRoute
   '/admin/settings/agent-access/authorize/$requestId': typeof AdminSettingsAgentAccessAuthorizeRequestIdRoute
   '/admin/settings/agent-access/continue/$handoffId': typeof AdminSettingsAgentAccessContinueHandoffIdRoute
   '/admin/settings/users/roles/$roleId': typeof AdminSettingsUsersRolesRoleIdRoute
@@ -1013,6 +1021,7 @@ export interface FileRoutesByTo {
   '/admin/objects/$type/records/$recordId': typeof AdminObjectsTypeRecordsRecordIdRoute
   '/admin/objects/$type/records/new': typeof AdminObjectsTypeRecordsNewRoute
   '/admin/orders/abandoned/$checkoutId': typeof AdminOrdersListAbandonedCheckoutIdRoute
+  '/admin/settings/agent-access/approve/$approvalId': typeof AdminSettingsAgentAccessApproveApprovalIdRoute
   '/admin/settings/agent-access/authorize/$requestId': typeof AdminSettingsAgentAccessAuthorizeRequestIdRoute
   '/admin/settings/agent-access/continue/$handoffId': typeof AdminSettingsAgentAccessContinueHandoffIdRoute
   '/admin/settings/users/roles/$roleId': typeof AdminSettingsUsersRolesRoleIdRoute
@@ -1136,6 +1145,7 @@ export interface FileRoutesById {
   '/admin/objects/$type/records/$recordId': typeof AdminObjectsTypeRecordsRecordIdRoute
   '/admin/objects/$type/records/new': typeof AdminObjectsTypeRecordsNewRoute
   '/admin/orders/_list/abandoned/$checkoutId': typeof AdminOrdersListAbandonedCheckoutIdRoute
+  '/admin/settings/agent-access/approve/$approvalId': typeof AdminSettingsAgentAccessApproveApprovalIdRoute
   '/admin/settings/agent-access/authorize/$requestId': typeof AdminSettingsAgentAccessAuthorizeRequestIdRoute
   '/admin/settings/agent-access/continue/$handoffId': typeof AdminSettingsAgentAccessContinueHandoffIdRoute
   '/admin/settings/users_/roles/$roleId': typeof AdminSettingsUsersRolesRoleIdRoute
@@ -1260,6 +1270,7 @@ export interface FileRouteTypes {
     | '/admin/objects/$type/records/$recordId'
     | '/admin/objects/$type/records/new'
     | '/admin/orders/abandoned/$checkoutId'
+    | '/admin/settings/agent-access/approve/$approvalId'
     | '/admin/settings/agent-access/authorize/$requestId'
     | '/admin/settings/agent-access/continue/$handoffId'
     | '/admin/settings/users/roles/$roleId'
@@ -1379,6 +1390,7 @@ export interface FileRouteTypes {
     | '/admin/objects/$type/records/$recordId'
     | '/admin/objects/$type/records/new'
     | '/admin/orders/abandoned/$checkoutId'
+    | '/admin/settings/agent-access/approve/$approvalId'
     | '/admin/settings/agent-access/authorize/$requestId'
     | '/admin/settings/agent-access/continue/$handoffId'
     | '/admin/settings/users/roles/$roleId'
@@ -1501,6 +1513,7 @@ export interface FileRouteTypes {
     | '/admin/objects/$type/records/$recordId'
     | '/admin/objects/$type/records/new'
     | '/admin/orders/_list/abandoned/$checkoutId'
+    | '/admin/settings/agent-access/approve/$approvalId'
     | '/admin/settings/agent-access/authorize/$requestId'
     | '/admin/settings/agent-access/continue/$handoffId'
     | '/admin/settings/users_/roles/$roleId'
@@ -2339,6 +2352,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminOrdersListAbandonedCheckoutIdRouteImport
       parentRoute: typeof AdminOrdersListAbandonedRoute
     }
+    '/admin/settings/agent-access/approve/$approvalId': {
+      id: '/admin/settings/agent-access/approve/$approvalId'
+      path: '/agent-access/approve/$approvalId'
+      fullPath: '/admin/settings/agent-access/approve/$approvalId'
+      preLoaderRoute: typeof AdminSettingsAgentAccessApproveApprovalIdRouteImport
+      parentRoute: typeof AdminSettingsRouteRoute
+    }
     '/admin/settings/agent-access/authorize/$requestId': {
       id: '/admin/settings/agent-access/authorize/$requestId'
       path: '/agent-access/authorize/$requestId'
@@ -2389,6 +2409,7 @@ interface AdminSettingsRouteRouteChildren {
   AdminSettingsPoliciesWarrantyRoute: typeof AdminSettingsPoliciesWarrantyRoute
   AdminSettingsShippingAreasRoute: typeof AdminSettingsShippingAreasRoute
   AdminSettingsUsersUserIdRoute: typeof AdminSettingsUsersUserIdRoute
+  AdminSettingsAgentAccessApproveApprovalIdRoute: typeof AdminSettingsAgentAccessApproveApprovalIdRoute
   AdminSettingsAgentAccessAuthorizeRequestIdRoute: typeof AdminSettingsAgentAccessAuthorizeRequestIdRoute
   AdminSettingsAgentAccessContinueHandoffIdRoute: typeof AdminSettingsAgentAccessContinueHandoffIdRoute
   AdminSettingsUsersRolesRoleIdRoute: typeof AdminSettingsUsersRolesRoleIdRoute
@@ -2420,6 +2441,8 @@ const AdminSettingsRouteRouteChildren: AdminSettingsRouteRouteChildren = {
   AdminSettingsPoliciesWarrantyRoute: AdminSettingsPoliciesWarrantyRoute,
   AdminSettingsShippingAreasRoute: AdminSettingsShippingAreasRoute,
   AdminSettingsUsersUserIdRoute: AdminSettingsUsersUserIdRoute,
+  AdminSettingsAgentAccessApproveApprovalIdRoute:
+    AdminSettingsAgentAccessApproveApprovalIdRoute,
   AdminSettingsAgentAccessAuthorizeRequestIdRoute:
     AdminSettingsAgentAccessAuthorizeRequestIdRoute,
   AdminSettingsAgentAccessContinueHandoffIdRoute:

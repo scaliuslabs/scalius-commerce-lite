@@ -20,6 +20,7 @@ describe("order action permissions", () => {
       canResolveOrderSupportRequests: false,
       canUpdateOrderCod: false,
       canRefundOrders: false,
+      canRecordPayments: false,
       canPrintInvoices: false,
       canViewFraudCheck: false,
       canBulkDeleteOrders: false,
@@ -37,6 +38,7 @@ describe("order action permissions", () => {
       PERMISSIONS.ORDERS_CHANGE_STATUS,
       PERMISSIONS.ORDERS_MANAGE_SHIPMENTS,
       PERMISSIONS.ORDERS_REFUND,
+      PERMISSIONS.ORDERS_RECORD_PAYMENT,
       PERMISSIONS.ORDERS_ISSUE_INVOICE,
       PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW,
     ]);
@@ -52,6 +54,7 @@ describe("order action permissions", () => {
       canResolveOrderSupportRequests: true,
       canUpdateOrderCod: true,
       canRefundOrders: true,
+      canRecordPayments: true,
       canPrintInvoices: true,
       canViewFraudCheck: true,
       canBulkDeleteOrders: true,

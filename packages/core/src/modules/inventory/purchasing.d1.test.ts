@@ -309,7 +309,7 @@ describe("transfers", () => {
     expect((await getTransfer(db, short.id)).status).toBe("draft");
 
     // Units committed to an order stay put.
-    const reserved = await reserveStockBatch(db, [{ variantId: "var_a", quantity: 8, orderId: "ord_hold" }], "regular");
+    const reserved = await reserveStockBatch(db, [{ variantId: "var_a", quantity: 8, orderId: "ord_hold" }], "regular", { salesChannelId: "sc_online_store" });
     expect(reserved.success).toBe(true);
     const committed = await createTransfer(db, { originLocationId: "loc_default", destinationLocationId: "loc_shop", lines: [{ variantId: "var_a", quantity: 3 }] });
     await expect(shipTransfer(db, committed.id, { operationKey: key("committed"), expectedRevision: 1 })).rejects.toThrow(/committed to orders/);
@@ -458,7 +458,7 @@ describe("random command sequences", () => {
         }).then((result) => result.delta, () => 0);
         manualDelta += applied;
       } else if (action === 3) {
-        await reserveStockBatch(db, [{ variantId, quantity: 1, orderId: `ord_rand_${step}` }], "regular");
+        await reserveStockBatch(db, [{ variantId, quantity: 1, orderId: `ord_rand_${step}` }], "regular", { salesChannelId: "sc_online_store" });
       } else {
         const origin = locations[random(3)]!;
         const destination = locations.filter((location) => location !== origin)[random(2)]!;

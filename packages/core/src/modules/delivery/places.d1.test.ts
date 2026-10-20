@@ -34,7 +34,7 @@ describe("deleting places", () => {
         expect(counts.get("para")).toEqual({ "3": 2 });
         expect(counts.get("ctg")).toEqual({ "2": 1 });
         expect(counts.get("pallabi")).toBeUndefined();
-    }, 20_000); // The first test also builds the migrated SQLite database.
+    }); // The first test also builds the migrated SQLite database.
 
     it("deletes a city with its thanas and areas and takes them out of delivery zones", async () => {
         const harness = seed();

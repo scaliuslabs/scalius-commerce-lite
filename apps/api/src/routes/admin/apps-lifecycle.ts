@@ -16,6 +16,7 @@ import {
   listPluginInstallations,
   pluginRegistrySettingsDocument,
   pluginRegistrySources,
+  requirePinnedSigner,
   requirePluginInstallation,
   stopPlugin,
   stopThirdPartyPlugins,
@@ -371,6 +372,8 @@ export function registerAppLifecycleRoutes(app: OpenAPIHono<{ Bindings: Env }>, 
     if (release.sha256 === current.bundleSha256) {
       return ok(c, { app: await deps.detail(c, current), rolledBack: false, error: null });
     }
+    // Before anything is stored: an update keeps the developer the app was installed with.
+    requirePinnedSigner(current, { source: "registry", signerKeyId: release.signer?.id ?? null });
     await storeRelease(c.env, release);
     const { updatePluginToRelease } = await lifecycle();
     const result = await updatePluginToRelease(
@@ -432,6 +435,8 @@ export function registerAppLifecycleRoutes(app: OpenAPIHono<{ Bindings: Env }>, 
     if (current?.source === "bundled") {
       throw new PluginError("installation_source_conflict", `${current.manifest.name} is compiled into this deployment: update it with pnpm plugin add, then deploy.`);
     }
+    // Before anything is stored or trusted: an update keeps the developer the app was installed with.
+    if (current) requirePinnedSigner(current, { source: "upload", signerKeyId: release.signer?.id ?? null });
     await storeRelease(c.env, release);
     if (newKey) await trustDeveloperKey(db, newKey);
     if (!current) {

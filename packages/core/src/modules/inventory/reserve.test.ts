@@ -88,7 +88,7 @@ describe("reserveStockBatch sellability guard", () => {
         { variantId: "variant_a", quantity: 1, orderId: "order_2" },
       ],
       "regular",
-      { reservationKey: "checkout-test" },
+      { reservationKey: "checkout-test", salesChannelId: "sc_online_store" },
     );
 
     expect(result).toMatchObject({
@@ -106,7 +106,7 @@ describe("reserveStockBatch sellability guard", () => {
       db,
       [{ variantId: "variant_deleted", quantity: 1, orderId: "order_1" }],
       "regular",
-      { reservationKey: "checkout-test" },
+      { reservationKey: "checkout-test", salesChannelId: "sc_online_store" },
     );
 
     expect(result).toMatchObject({
@@ -156,7 +156,7 @@ describe("reserveStockBatch sellability guard", () => {
         { variantId: "variant_b", quantity: 2, orderId: "order_1" },
       ],
       "regular",
-      { reservationKey: "checkout-test" },
+      { reservationKey: "checkout-test", salesChannelId: "sc_online_store" },
     );
 
     expect(result.success).toBe(true);
@@ -186,7 +186,7 @@ describe("reserveStockBatch sellability guard", () => {
       db,
       [{ variantId: "variant_a", quantity: 2, orderId: "order_1" }],
       "regular",
-      { reservationKey: "checkout-test" },
+      { reservationKey: "checkout-test", salesChannelId: "sc_online_store" },
     );
 
     expect(plan.success).toBe(true);
@@ -225,6 +225,7 @@ describe("reserveStockBatch sellability guard", () => {
       "regular",
       {
         reservationKey: "checkout-test",
+        salesChannelId: "sc_online_store",
         freshOrderIds: new Set(["order_fresh"]),
       },
     );

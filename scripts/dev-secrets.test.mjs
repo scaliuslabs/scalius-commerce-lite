@@ -1,0 +1,34 @@
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+
+import { describe, expect, it } from "vitest";
+
+import { STOREFRONT_DEV_CONFIG, processEnvHasSecrets, writeDevWranglerConfig } from "./dev-secrets.mjs";
+
+describe("dev secrets", () => {
+  it("accepts process-env secrets only when every installed secret of the Worker is set", () => {
+    expect(processEnvHasSecrets("storefront", { SCALIUS_SECRET: "s" })).toBe(true);
+    expect(processEnvHasSecrets("api", { SCALIUS_SECRET: "s" })).toBe(false);
+    expect(processEnvHasSecrets("api", { SCALIUS_SECRET: "s", CREDENTIAL_ENCRYPTION_KEY: " " })).toBe(false);
+    expect(processEnvHasSecrets("api", { SCALIUS_SECRET: "s", CREDENTIAL_ENCRYPTION_KEY: "k" })).toBe(true);
+  });
+
+  it("writes a dev copy of a Wrangler config beside it that declares only the required secrets", () => {
+    const dir = mkdtempSync(join(tmpdir(), "scalius-dev-secrets-"));
+    try {
+      const source = join(dir, "wrangler.jsonc");
+      writeFileSync(source, '{\n  // comment\n  "name": "w", "main": "./src/worker.ts"\n}\n');
+      const out = writeDevWranglerConfig(pathToFileURL(source), ["SCALIUS_SECRET"]);
+      expect(out).toBe(join(dir, STOREFRONT_DEV_CONFIG));
+      expect(JSON.parse(readFileSync(out, "utf8"))).toEqual({
+        name: "w",
+        main: "./src/worker.ts",
+        secrets: { required: ["SCALIUS_SECRET"] },
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

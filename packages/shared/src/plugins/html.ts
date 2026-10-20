@@ -5,7 +5,8 @@
 // nothing (no `url()` or other loading function, no escapes, no comments),
 // `id`s under the app's own prefix (`<app name>-…`, so markup never
 // clobbers the page's ids), forms posting to a same-store path (on an app
-// page, only to the app's own routes: `formsTo`), islands, core embeds and
+// page, only to the app's own routes: `formsTo`; a POST form stamped with the
+// app's id, `APP_FORM_OWNER_ATTRIBUTE`), islands, core embeds and
 // schema.org JSON-LD (re-serialized; left out on a `noindex` page).
 //
 // Always: no event handlers, no script-capable URLs (links: same-store
@@ -31,6 +32,7 @@
 import { parseDocument } from "htmlparser2";
 import { isTag, isText, type ChildNode, type Element } from "domhandler";
 import { STOREFRONT_COMPONENT_LIMITS } from "./storefront-protocol";
+import { APP_FORM_OWNER_ATTRIBUTE } from "./app-form";
 
 export interface PluginHtmlOptions {
   /** The app the markup belongs to: its id prefix (`<app name>-`). */
@@ -363,6 +365,8 @@ function attributes(tag: string, input: Record<string, string>, svg: boolean, sc
   if (tag === "form") {
     if (!result.has("action")) return null;
     if (!result.has("method")) result.set("method", "get");
+    // Who drew a POST form: the gateway adds an app's form token only to that app's own forms.
+    if (result.get("method") === "post") result.set(APP_FORM_OWNER_ATTRIBUTE, scope.pluginId);
   }
   if (tag === "button" && !result.has("type")) result.set("type", "button");
   return result;

@@ -178,16 +178,6 @@ export type CartValidationOptions = {
   presence?: string | null;
 };
 
-type OrderStatusData = {
-  status?: string;
-  orderId?: string;
-  error?: string;
-};
-
-type OrderStatusPayload = OrderStatusData & {
-  data?: OrderStatusData;
-};
-
 type CreateOrderOptions = {
   customerSessionToken?: string | null;
 };
@@ -221,11 +211,9 @@ export async function createOrder(
 ): Promise<CreateOrderResult> {
   try {
     // Call apiFetch with retries: 0 because this mutation must not be retried
-    // automatically. The 202 branch below is legacy compatibility;
-    // the normal buyer path returns a committed order synchronously.
-    const path = "/orders";
+    // automatically; the order commits synchronously (a resubmit replays it).
     const response = await apiFetch(
-      path,
+      "/orders",
       {
         method: "POST",
         headers: {
@@ -266,102 +254,6 @@ export async function createOrder(
       return { success: false, error: errorMsg, errorCode, status: response.status, details };
     }
 
-    // Capture the 202 Async Accepted queue payload and poll for completion!
-    if (response.status === 202 && data.success && data.data?.statusToken) {
-      const statusToken = data.data.statusToken;
-      const initialOrderId = data.data.orderId;
-
-      // Adaptive polling: start fast (200ms), back off gradually.
-      // The queue typically completes in 2-3s. Fixed 1.5s intervals waste
-      // 15-20s; adaptive polling catches completion in 3-4s on average.
-      const pollIntervals = [
-        200, 200, 300, 300, 500, 500, 500,  // First 2.5s: aggressive
-        1000, 1000, 1000, 1000,             // Next 4s: moderate
-        2000, 2000, 2000, 2000, 2000,       // Next 10s: relaxed
-        3000, 3000, 3000, 3000,             // Final 12s: slow
-      ]; // Total: ~28.5s across 20 attempts
-
-      for (let i = 0; i < pollIntervals.length; i++) {
-        await new Promise(resolve => setTimeout(resolve, pollIntervals[i]));
-
-        const statusRes = await apiFetch(
-          `/orders/status/${encodeURIComponent(statusToken)}`,
-          {},
-          { retries: 2, timeout: 5000, auth: false },
-        );
-
-        if (statusRes.ok) {
-          const statusJson = (await statusRes.json()) as OrderStatusPayload;
-          // Status endpoint uses ok() wrapper: { success: true, data: { status, orderId } }
-          // But 202 responses use raw c.json(): { status: "processing" }
-          const statusData = statusJson.data ?? statusJson;
-          if (statusData.status === "completed") {
-            const replayResponse = await apiFetch(
-              path,
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  ...(options.customerSessionToken
-                    ? { "X-Customer-Session": options.customerSessionToken }
-                    : {}),
-                },
-                body: JSON.stringify(payload),
-                cache: "no-store",
-              },
-              { retries: 0, timeout: 15000, auth: false },
-            );
-            const replayData = await replayResponse.json() as {
-              success?: boolean;
-              data?: {
-                id?: string;
-                orderId?: string;
-                receiptToken?: string;
-                totalAmount?: number;
-                paymentMethod?: string;
-              };
-            };
-
-            if (replayResponse.ok && replayData.success && replayData.data?.receiptToken) {
-              return {
-                success: true,
-                orderId: replayData.data.orderId || replayData.data.id || statusData.orderId || initialOrderId,
-                receiptToken: replayData.data.receiptToken,
-                statusToken,
-                totalAmount: typeof replayData.data.totalAmount === "number" ? replayData.data.totalAmount : undefined,
-                paymentMethod: replayData.data.paymentMethod,
-                status: replayResponse.status,
-              };
-            }
-
-            if (!replayResponse.ok || !replayData.success) {
-              return {
-                success: false,
-                status: replayResponse.status,
-                error: getCheckoutErrorMessage(replayData),
-                errorCode: getApiErrorCode(replayData),
-                details: getApiErrorDetails(replayData),
-              };
-            }
-
-            return { success: false, error: "Order completed but receipt proof is unavailable. Please check your order history." };
-          } else if (statusData.status === "expired") {
-            return {
-              success: false,
-              status: 409,
-              errorCode: "checkout_attempt_expired",
-              error: "This checkout has ended. Please review your cart before placing a new order.",
-            };
-          } else if (statusData.status === "failed") {
-            return { success: false, error: statusData.error || "Order ingestion failed during high traffic. Please try again." };
-          }
-        }
-      }
-
-      return { success: false, error: "Order processing timed out. Please check your order history." };
-    }
-
-    // Normal synchronous return
     return {
       success: true,
       orderId: data.data?.id || data.data?.orderId,

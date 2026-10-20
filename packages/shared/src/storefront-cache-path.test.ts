@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   canonicalizeStorefrontHtmlCachePath,
-  hasStorefrontProductVariantSelectionParams,
   isStorefrontTrackingQueryParam,
   readStorefrontSeenSeq,
   withStorefrontSeenSeq,
@@ -19,27 +18,12 @@ describe("storefront HTML cache path canonicalization", () => {
     ).toBe("/products/fish");
   });
 
-  it("detects product variant selection params, including empty values", () => {
-    expect(
-      hasStorefrontProductVariantSelectionParams(
-        new URL("https://store.example/products/fish?size=m"),
-      ),
-    ).toBe(true);
-    expect(
-      hasStorefrontProductVariantSelectionParams(
-        new URL("https://store.example/products/fish?color="),
-      ),
-    ).toBe(true);
-    expect(
-      hasStorefrontProductVariantSelectionParams(
-        new URL("https://store.example/products/fish?utm_source=ad"),
-      ),
-    ).toBe(false);
-    expect(
-      hasStorefrontProductVariantSelectionParams(
-        new URL("https://store.example/categories/fish?size=m"),
-      ),
-    ).toBe(false);
+  it("serves every variant link of a product from its one page, and only on product pages", () => {
+    expect(canonicalizeStorefrontHtmlCachePath("/products/fish?variant=var_1")).toBe("/products/fish");
+    expect(canonicalizeStorefrontHtmlCachePath("/products/fish?variant=var_1&size=m&color=")).toBe("/products/fish");
+    expect(canonicalizeStorefrontHtmlCachePath("/products/fish?variant=var_1&error=out_of_stock")).toBe("/products/fish?error=out_of_stock");
+    // Elsewhere they are ordinary (functional) parameters.
+    expect(canonicalizeStorefrontHtmlCachePath("/categories/fish?size=m&variant=x")).toBe("/categories/fish?size=m&variant=x");
   });
 
   it("sorts surviving query params and elides listing defaults", () => {
@@ -78,9 +62,9 @@ describe("storefront HTML cache path canonicalization", () => {
   it("never strips functional or unknown parameters", () => {
     expect(
       canonicalizeStorefrontHtmlCachePath(
-        "/products/fish?variant=var_1&gclid=b&utm=keep&source=keep&ga=keep&campaign=keep&tracking=keep",
+        "/products/fish?gclid=b&utm=keep&source=keep&ga=keep&campaign=keep&tracking=keep",
       ),
-    ).toBe("/products/fish?campaign=keep&ga=keep&source=keep&tracking=keep&utm=keep&variant=var_1");
+    ).toBe("/products/fish?campaign=keep&ga=keep&source=keep&tracking=keep&utm=keep");
     for (const key of ["q", "page", "sortBy", "limit", "brand", "minPrice", "option.size", "display-size.min"]) {
       expect(isStorefrontTrackingQueryParam(key)).toBe(false);
     }

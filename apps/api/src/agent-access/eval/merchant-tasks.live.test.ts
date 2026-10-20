@@ -29,7 +29,7 @@ const skillsRoot = join(import.meta.dirname, "../../../../../packages/cli/skills
 
 const EVAL_POLICY = [
   "You are operating a Scalius store for its merchant through the scalius MCP tools only.",
-  "The merchant has already approved every change this task asks for: when a change returns a confirmation summary, state it once and continue with its confirmToken.",
+  "The merchant has already approved every change this task asks for: when a change returns a confirmation summary and approval link, state it once and repeat the same change with its approvalId.",
   "Do not invent ids; read them from the store. Finish with a one-paragraph answer for the merchant that states the facts you read.",
 ].join(" ");
 

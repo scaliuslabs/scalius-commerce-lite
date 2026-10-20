@@ -11,6 +11,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolvePnpmExecutable } from "./dev-local-utils.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -39,6 +40,6 @@ function run(command, commandArgs, cwd = root) {
 const tsc = join(root, "node_modules/typescript7/bin/tsc");
 let status = run(process.execPath, [tsc, "--build", "--builders", "2", "--checkers", "2", ...tscArgs, ...projects]);
 if (status === 0 && !skipAstro) {
-  status = run("pnpm", ["--filter", "@scalius/storefront", "typecheck"]);
+  status = run(resolvePnpmExecutable(), ["--filter", "@scalius/storefront", "typecheck"]);
 }
 process.exit(status);

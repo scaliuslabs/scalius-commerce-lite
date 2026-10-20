@@ -354,7 +354,10 @@ function createRefundDbWithLostStatusCas() {
     amountMinor: 10_000,
     currency: "BDT",
   };
-  const selectResults = [order, [], null, null, [payment], [refundAttempt], order, [payment, refundPayment]];
+  // The claim batch opens with a guard built from db.select(); the mocked batch
+  // commits, so its row is never read.
+  const claimBatchGuard = { batchGuard: 1 };
+  const selectResults = [order, [], null, null, [payment], claimBatchGuard, [refundAttempt], order, [payment, refundPayment]];
   let selectIndex = 0;
   let updateIndex = 0;
 

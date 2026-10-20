@@ -16,7 +16,7 @@ import { encodeListCursorOrNull, type ListCursorShape } from "@scalius/shared/pa
 import { fromMinor } from "@scalius/shared/money";
 import { keysetCondition, keysetOrderBy, readListCursor, type KeysetOrder } from "@scalius/core/utils/keyset";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
-import { buildOrderEventInsert, createOrderSchema, manualOrderPaymentMethodSchema, orderEventIdForRequest, overdueOrderCondition } from "@scalius/core/modules/orders";
+import { buildAppPaymentReviewHoldInsert, buildOrderEventInsert, createOrderSchema, manualOrderPaymentMethodSchema, orderEventIdForRequest, overdueOrderCondition } from "@scalius/core/modules/orders";
 import { recordOrderPayment } from "@scalius/core/modules/payments";
 import { paymentTermsSchema, RECORDED_PAYMENT_VIAS } from "@scalius/shared/payment-terms";
 import { placeManualOrder } from "./orders/create";
@@ -396,7 +396,7 @@ app.openapi(createRoute({
   path: "/orders/{id}/payments",
   tags: ["App API - Orders"],
   summary: "Record a payment against an invoice order",
-  description: "Records money received for a deferred (net terms) order: a bank transfer, cheque or cash against its invoice. No provider is called. The order's paid amount and payment status advance in the same write, `payment.updated` (and `order.paid` once nothing is due) follow, and a refund of it is a manual settlement. Send an Idempotency-Key: a repeat returns the first payment.",
+  description: "Records money received for a deferred (net terms) order: a bank transfer, cheque or cash against its invoice. No provider is called. The order's paid amount and payment status advance in the same write, `payment.updated` (and `order.paid` once nothing is due) follow, and a refund of it is a manual settlement. When an app records it on an order with gift cards or downloads still owed, the order is held for staff review in the same write: they are handed over once staff release the hold. Send an Idempotency-Key: a repeat returns the first payment.",
   request: {
     params: idParam,
     headers: recordPaymentHeaders,
@@ -437,6 +437,16 @@ app.openapi(createRoute({
         ...(appPrincipal ? { appId: appPrincipal.pluginId } : {}),
       },
     }, landed) }),
+    // An app's word moves no money: gift cards and downloads wait for staff.
+    ...(appPrincipal ? {
+      reviewHold: ({ paymentId, landed }) => buildAppPaymentReviewHoldInsert(db, {
+        orderId,
+        paymentId,
+        pluginId: appPrincipal.pluginId,
+        appName: appPrincipal.pluginName,
+        landed,
+      }),
+    } : {}),
   });
   const payment = await readPaymentRepresentation(db, result.paymentId);
   if (!payment) throw new NotFoundError("Payment not found");

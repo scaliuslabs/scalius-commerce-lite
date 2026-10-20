@@ -39,6 +39,7 @@ vi.mock("../agent-access/direct-operation", async (importOriginal) => {
   };
 });
 
+import { Hono } from "hono";
 import { adminAuthMiddleware } from "./admin-auth";
 import { withAgentDispatchPrincipal } from "../agent-access/dispatch-context";
 
@@ -128,7 +129,8 @@ function createContext(
     req: {
       raw: request,
       url: request.url,
-      path: pathname,
+      // Hono's routed path: no query, decoded once.
+      path: decodeURI(new URL(request.url).pathname),
       method,
       header: (name: string) => request.headers.get(name) ?? undefined,
     },
@@ -1208,6 +1210,34 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       message: "This admin endpoint is not configured for RBAC",
     });
     expect(next).not.toHaveBeenCalled();
+  });
+
+  it("checks the route that runs, not its percent-encoded spelling (audit R2 F7)", async () => {
+    // The router decodes `%61` to `a`, so this runs /conversations/assignees
+    // (conversations.reply); the encoded path must not pass as the
+    // /conversations/* read rule (conversations.view).
+    mocks.getUserPermissions.mockResolvedValue(new Set([PERMISSIONS.CONVERSATIONS_VIEW]));
+    const ran: string[] = [];
+    const app = new Hono<{ Bindings: Record<string, unknown> }>();
+    app.use("*", async (c, next) => {
+      (c as unknown as { set(key: string, value: unknown): void }).set("db", createDbMock());
+      await next();
+    });
+    app.use("/api/v1/admin/*", adminAuthMiddleware as never);
+    app.get("/api/v1/admin/conversations/assignees", (c) => { ran.push("assignees"); return c.json({ ok: true }); });
+    app.get("/api/v1/admin/conversations/:id", (c) => { ran.push(`get:${c.req.param("id")}`); return c.json({ ok: true }); });
+    app.onError((error, c) => c.json({ code: (error as { code?: string }).code }, ((error as { status?: number }).status ?? 500) as 403));
+    const cookie = `better-auth.session_token=${encodeURIComponent(signTestCookieValue("test_session"))}`;
+    const get = (path: string) => app.request(`https://api.scalius.test${path}`, { headers: { Cookie: cookie } }, { BETTER_AUTH_SECRET: TEST_SECRET });
+
+    for (const path of ["/api/v1/admin/conversations/%61ssignees", "/api/v1/admin/conversations/assignees", "/api/v1/admin/%63onversations/assignees"]) {
+      const response = await get(path);
+      expect(response.status, path).toBe(403);
+    }
+    expect(ran).toEqual([]);
+    // A conversation id still reads under the view permission.
+    expect((await get("/api/v1/admin/conversations/conv_1")).status).toBe(200);
+    expect(ran).toEqual(["get:conv_1"]);
   });
 
   it("still rejects mapped routes when the user lacks the required permission", async () => {

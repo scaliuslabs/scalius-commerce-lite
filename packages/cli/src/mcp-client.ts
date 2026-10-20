@@ -86,6 +86,18 @@ export interface McpRequestOptions {
   /** Retry temporary failures (429, 5xx, network) with backoff. Only for calls that are safe to repeat. */
   retry?: boolean;
   maxAttempts?: number;
+  /** The client capabilities this request declares (form elicitation only when a person can answer). */
+  capabilities?: Record<string, unknown>;
+}
+
+export interface ToolCallOptions extends McpRequestOptions {
+  /**
+   * Asks the person at the terminal to approve a server dialog (MCP form
+   * elicitation). Set only when stdin and stderr are a TTY: without it the CLI
+   * declares no dialog support, and a gated change answers with an approval
+   * link for the dashboard instead.
+   */
+  confirm?: (message: string) => Promise<boolean>;
 }
 
 let requestCounter = 0;
@@ -113,7 +125,7 @@ export async function mcpRequest(
       ...params,
       _meta: {
         "io.modelcontextprotocol/protocolVersion": MCP_PROTOCOL_VERSION,
-        "io.modelcontextprotocol/clientCapabilities": {},
+        "io.modelcontextprotocol/clientCapabilities": options.capabilities ?? {},
       },
     },
   });
@@ -185,15 +197,44 @@ export interface ToolResult {
   links: Array<{ uri: string; name?: string; mimeType?: string }>;
 }
 
+const MAX_DIALOG_ROUNDS = 3;
+
+/** The approval dialog a 2026-07-28 server asks for: `inputRequests.confirm`. */
+function confirmDialogOf(result: Record<string, unknown>): { message: string } | null {
+  if (result.resultType !== "input_required" || !isRecord(result.inputRequests)) return null;
+  const request = result.inputRequests.confirm;
+  if (!isRecord(request) || request.method !== "elicitation/create" || !isRecord(request.params)) return null;
+  return { message: typeof request.params.message === "string" ? request.params.message.slice(0, 600) : "Approve this change?" };
+}
+
 export async function callTool(
   runtime: Runtime,
   profile: ResolvedProfile,
   audience: Audience,
   name: string,
   args: Record<string, unknown>,
-  options: McpRequestOptions = {},
+  options: ToolCallOptions = {},
 ): Promise<ToolResult> {
-  const result = await mcpRequest(runtime, profile, audience, "tools/call", { name, arguments: args }, options);
+  const { confirm, ...requestOptions } = options;
+  const capabilities = confirm ? { elicitation: { form: {} } } : {};
+  let retryParams: Record<string, unknown> = {};
+  let result: Record<string, unknown> | undefined;
+  for (let round = 0; round <= MAX_DIALOG_ROUNDS; round += 1) {
+    result = await mcpRequest(runtime, profile, audience, "tools/call", { name, arguments: args, ...retryParams }, { ...requestOptions, capabilities });
+    const dialog = confirmDialogOf(result);
+    if (!dialog) break;
+    if (!confirm || typeof result.requestState !== "string" || round === MAX_DIALOG_ROUNDS) {
+      throw new CliError(8, "invalid_server_response", "The server asked for a dialog the CLI did not offer.");
+    }
+    // The person's answer, read from the terminal: the request is repeated
+    // with it and the server's request state, byte for byte.
+    const approved = await confirm(dialog.message);
+    retryParams = {
+      inputResponses: { confirm: approved ? { action: "accept", content: { confirm: true } } : { action: "decline" } },
+      requestState: result.requestState,
+    };
+  }
+  result = result!;
   const content = Array.isArray(result.content) ? result.content.filter(isRecord) : [];
   let value = isRecord(result.structuredContent) ? result.structuredContent : undefined;
   if (!value) {
@@ -239,6 +280,8 @@ export function toolError(value: Record<string, unknown>, fallbackCode = "operat
   if (code === "confirmation_required") {
     return new CliError(10, code, message, confirmation ? { confirmation } : undefined, envelope);
   }
+  // The person said no in the dialog: nothing was written, the same exit as an unapproved change.
+  if (code === "confirmation_declined") return new CliError(10, code, message, undefined, envelope);
   const exitCode = code === "operation_not_found" ? 5 : status === undefined ? 8 : exitCodeForHttpStatus(status);
   return new CliError(exitCode, code, message, undefined, envelope);
 }

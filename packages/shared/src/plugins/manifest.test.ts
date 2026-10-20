@@ -381,6 +381,16 @@ describe("settings groups and page tabs in the manifest", () => {
     expect(qualifiedSettingLabel(manifest, "region")).toBe("Region");
   });
 
+  // Security audit S4: a pay-later method is offered only when its app allows it.
+  it("refuses a deferred payment provider without a checkout.payment_methods function", () => {
+    const deferred = { payment: [{ id: "invoice", name: "Invoice", chargeCurrencies: ["BDT"], operations: [], flow: "deferred", dueInDays: 30 }] };
+    const missing = parsePluginManifest({ ...FULL, providers: deferred });
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) expect(JSON.stringify(missing.issues)).toContain("declare that function");
+    const declared = parsePluginManifest({ ...FULL, providers: deferred, functions: [{ point: "checkout.payment_methods" }] });
+    if (!declared.ok) throw new Error(JSON.stringify(declared.issues));
+  });
+
   it("gives a provider without fields of its own the app's general settings", () => {
     const single = parsePluginManifest({
       ...FULL,

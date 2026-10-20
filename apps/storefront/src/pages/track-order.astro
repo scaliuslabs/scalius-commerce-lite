@@ -1,12 +1,13 @@
 ---
-// Track your order. The order number alone opens a status-only view (no
+// Track your order. The order number alone shows nothing: with the last 4
+// digits of the order's phone, or its email, it opens a status view (no
 // address, phone, email or surname; the API limits lookups per buyer IP and
-// answers every miss the same way). Full details and every action need a
-// one-time code, sent through a channel the store chose in Customer accounts
-// to a contact saved on the order; a correct code stores the receipt proof as
-// an httpOnly cookie and opens the receipt. Plain form posts: it works the
-// same without JavaScript, and the order number, code and contacts only ever
-// travel in POST bodies.
+// per order and answers every miss the same way). Full details and every
+// action need a one-time code, sent through a channel the store chose in
+// Customer accounts to a contact saved on the order; a correct code stores
+// the receipt proof as an httpOnly cookie and opens the receipt. Plain form
+// posts: it works the same without JavaScript, and the order number, contact
+// and code only ever travel in POST bodies.
 import Layout from "@/layouts/Layout.astro";
 import StoreContact from "@/components/StoreContact.astro";
 import {
@@ -19,7 +20,9 @@ import {
   describeOrderCodeSendRefusal,
   failureNeedsStoreContact,
   getOrderCodeFailureText,
+  getOrderLookupContactError,
   getOrderLookupFieldErrors,
+  normalizeOrderLookupContact,
   normalizeOrderReference,
 } from "@/lib/order-lookup";
 import {
@@ -67,22 +70,26 @@ const isChannel = (value: unknown): value is OrderCodeChannel => CHANNELS.includ
 
 // Emails link /track-order?order=1001 to fill the field; nothing is looked up by URL.
 let reference = normalizeOrderReference(Astro.url.searchParams.get("order")) ?? "";
+let contact = "";
 let channel: OrderCodeChannel | undefined;
 let status: OrderLookupStatus | null = null;
 let codeStep = false;
 let message = "";
 let failed = false;
 let needsStoreContact = false;
-let fieldErrors: Partial<Record<"reference" | "code", string>> = {};
+let fieldErrors: Partial<Record<"reference" | "contact" | "code", string>> = {};
 
 if (isPost) {
   const fields = (await readOrderCodeFields(Astro.request)) ?? {};
   const intent = fields.intent ?? "find";
   reference = normalizeOrderReference(fields.reference) ?? fields.reference ?? "";
+  contact = fields.contact ?? "";
   channel = isChannel(fields.channel) ? fields.channel : undefined;
   fieldErrors = getOrderLookupFieldErrors(copy, reference);
-  if (!fieldErrors.reference && intent === "find") {
-    const result = await getOrderLookupStatus(Astro.request, reference);
+  if (intent !== "verify") fieldErrors = { ...fieldErrors, ...getOrderLookupContactError(copy, contact) };
+  const lookupContact = normalizeOrderLookupContact(contact) ?? "";
+  if (!fieldErrors.reference && !fieldErrors.contact && intent === "find") {
+    const result = await getOrderLookupStatus(Astro.request, reference, lookupContact);
     if (result.ok) status = result.data;
     else if (result.failure.status === 404) fieldErrors = { reference: copy.trackOrderNotFoundText };
     else {
@@ -102,8 +109,8 @@ if (isPost) {
       needsStoreContact = failureNeedsStoreContact(result.failure);
       message = getOrderCodeFailureText(copy, result.failure, "verify", copy.trackOrderUnavailableText);
     }
-  } else if (!fieldErrors.reference && intent === "send") {
-    const result = await sendOrderLookupCode({ reference, channel });
+  } else if (!fieldErrors.reference && !fieldErrors.contact && intent === "send") {
+    const result = await sendOrderLookupCode({ reference, contact: lookupContact, channel });
     if (result.ok) {
       codeStep = result.data.sent;
       message = result.data.message || copy.trackOrderCodeSentText;
@@ -152,7 +159,7 @@ const primaryButton =
   "inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90";
 const secondaryButton =
   "inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-border bg-background px-4 text-start text-sm font-medium text-foreground transition-colors hover:bg-muted";
-const invalid = (field: "reference" | "code", errorId: string) => fieldErrors[field]
+const invalid = (field: "reference" | "contact" | "code", errorId: string) => fieldErrors[field]
   ? { "aria-invalid": "true" as const, "aria-describedby": errorId }
   : {};
 ---
@@ -254,6 +261,7 @@ const invalid = (field: "reference" | "code", errorId: string) => fieldErrors[fi
                 <form method="post" action="/track-order" class="mt-4 space-y-2">
                   <input type="hidden" name="intent" value="send" />
                   <input type="hidden" name="reference" value={reference} />
+                  <input type="hidden" name="contact" value={contact} />
                   {status.codeOptions.map((option, index) => (
                     <button type="submit" name="channel" value={option.channel} class={index === 0 ? primaryButton : secondaryButton}>
                       {formatCheckoutLanguageText(copy.trackOrderSendCodeByText, { channel: channelName[option.channel], destination: option.destination })}
@@ -279,6 +287,7 @@ const invalid = (field: "reference" | "code", errorId: string) => fieldErrors[fi
           </h1>
           <form method="post" action="/track-order" class="mt-6 space-y-4" novalidate>
             <input type="hidden" name="reference" value={reference} />
+            <input type="hidden" name="contact" value={contact} />
             {channel && <input type="hidden" name="channel" value={channel} />}
             <p aria-live="polite" class={`text-sm ${failed ? "text-destructive" : "text-muted-foreground"}`}>{message}</p>
             <div class="grid gap-2">
@@ -303,6 +312,11 @@ const invalid = (field: "reference" | "code", errorId: string) => fieldErrors[fi
               <label for="trackOrderReference" class="text-sm font-medium text-foreground">{copy.orderReceiptOrderNumberText}</label>
               <input id="trackOrderReference" name="reference" value={reference} placeholder="#1001" autocomplete="off" required maxlength="40" autofocus class={fieldClass} {...invalid("reference", "trackOrderReferenceError")} />
               <p id="trackOrderReferenceError" class="text-sm text-destructive" hidden={!fieldErrors.reference}>{fieldErrors.reference}</p>
+            </div>
+            <div class="grid gap-2">
+              <label for="trackOrderContact" class="text-sm font-medium text-foreground">{copy.trackOrderContactLabelText}</label>
+              <input id="trackOrderContact" name="contact" value={contact} autocomplete="off" required maxlength="254" class={fieldClass} {...invalid("contact", "trackOrderContactError")} />
+              <p id="trackOrderContactError" class="text-sm text-destructive" hidden={!fieldErrors.contact}>{fieldErrors.contact}</p>
             </div>
             <p aria-live="polite" class={`min-h-5 text-sm ${failed ? "text-destructive" : "text-muted-foreground"}`}>{message}</p>
             <StoreContact layoutData={layoutData} hidden={!needsStoreContact} label={copy.storeContactLabelText} />

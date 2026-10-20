@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { APP_FORM_TOKEN_PURPOSE, appFormToken } from "@scalius/shared/plugins/app-form";
+import { sanitizePluginHtml } from "@scalius/shared/plugins/html";
 import { deriveRuntimeSecret } from "@scalius/shared/runtime-secrets";
 import { appOfFormAction, withAppFormTokens, type AppFormElement, type AppFormRewriter } from "./app-form-tokens";
 
@@ -38,9 +39,9 @@ describe("the app form token", () => {
 
   it("goes into a signed-in buyer's app POST forms only", async () => {
     const forms = [
-      { method: "post", action: "/apps/acme.wishlist/toggle" },
-      { method: "get", action: "/apps/acme.wishlist/search" },
-      { method: "POST", action: "/newsletter" },
+      { method: "post", action: "/apps/acme.wishlist/toggle", "data-sx-form-app": "acme.wishlist" },
+      { method: "get", action: "/apps/acme.wishlist/search", "data-sx-form-app": "acme.wishlist" },
+      { method: "POST", action: "/newsletter", "data-sx-form-app": "acme.wishlist" },
     ];
     const prepended: string[][] = [];
     const html = new Response("<form></form>", { headers: { "Content-Type": "text/html; charset=utf-8" } });
@@ -55,5 +56,34 @@ describe("the app form token", () => {
     expect(withAppFormTokens(guest, page, { SCALIUS_SECRET: MASTER }, () => { throw new Error("no rewrite"); })).toBe(page);
     const json = new Response("{}", { headers: { "Content-Type": "application/json" } });
     expect(withAppFormTokens(signedIn, json, { SCALIUS_SECRET: MASTER }, () => { throw new Error("no rewrite"); })).toBe(json);
+  });
+
+  it("goes only into forms the posting app drew itself, on every surface", async () => {
+    // What the sanitizer makes of app A's product block and app B's own section and page.
+    const blockOfA = sanitizePluginHtml(
+      '<form method="post" action="/apps/b.loyalty/redeem" data-sx-form-app="b.loyalty"><input type="hidden" name="points" value="9999"><button type="submit">See sizes</button></form>',
+      { pluginId: "a.sizes" },
+    );
+    const sectionOfB = sanitizePluginHtml('<form method="post" action="/apps/b.loyalty/redeem"><button type="submit">Redeem</button></form>', { pluginId: "b.loyalty" });
+    const pageOfB = sanitizePluginHtml('<form method="post" action="/apps/b.loyalty/redeem"><button type="submit">Redeem</button></form>', { pluginId: "b.loyalty", formsTo: "/apps/b.loyalty/" });
+    const ownersOf = (result: ReturnType<typeof sanitizePluginHtml>) => (result.ok ? [...result.html.matchAll(/data-sx-form-app="([^"]+)"/g)].map((match) => match[1]!) : []);
+    // App A cannot claim B's form: its own stamp replaces anything it wrote.
+    expect(ownersOf(blockOfA)).toEqual(["a.sizes"]);
+    expect(ownersOf(sectionOfB)).toEqual(["b.loyalty"]);
+    expect(ownersOf(pageOfB)).toEqual(["b.loyalty"]);
+    const forms: Array<Record<string, string>> = [
+      { method: "post", action: "/apps/b.loyalty/redeem", "data-sx-form-app": ownersOf(blockOfA)[0]! },
+      { method: "post", action: "/apps/b.loyalty/redeem", "data-sx-form-app": ownersOf(sectionOfB)[0]! },
+      { method: "post", action: "/apps/b.loyalty/redeem", "data-sx-form-app": ownersOf(pageOfB)[0]! },
+      // A form no app drew (core markup) never gets an app's token either.
+      { method: "post", action: "/apps/b.loyalty/redeem" },
+    ];
+    const prepended: string[][] = [];
+    const html = new Response("<form></form>", { headers: { "Content-Type": "text/html; charset=utf-8" } });
+    const signedIn = new Request("https://shop.test/products/x", { headers: { Cookie: "cs_tok=buyer-session" } });
+    await withAppFormTokens(signedIn, html, { SCALIUS_SECRET: MASTER }, fakeRewriter(forms, prepended)).text();
+    const token = await appFormToken(await deriveRuntimeSecret(MASTER, APP_FORM_TOKEN_PURPOSE), "b.loyalty", "buyer-session");
+    const field = `<input type="hidden" name="_scalius_form" value="${token}">`;
+    expect(prepended).toEqual([[], [field], [field], []]);
   });
 });

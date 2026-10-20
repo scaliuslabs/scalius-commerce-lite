@@ -8,6 +8,12 @@ import {
   createAgentBrowserHandoff,
   expireAgentBrowserHandoffs,
 } from "./browser-handoffs";
+import {
+  decideAgentApproval,
+  readAgentApproval,
+  redeemAgentApproval,
+  requestAgentApproval,
+} from "./approvals";
 
 const harness = () => createSqliteD1Database();
 
@@ -202,5 +208,55 @@ describe("agent browser handoff relational authority", () => {
     expect(sqlite.prepare("SELECT id FROM agent_browser_handoffs").all()).toEqual([
       { id: "abh_active00000000000000" },
     ]);
+  });
+
+  describe("approvals of gated agent changes (audit R2 F3)", () => {
+    const request = (db: Parameters<typeof requestAgentApproval>[0], who = principal()) =>
+      requestAgentApproval(db, env, who, { binding: "b".repeat(64), summary: "Process order refund: id=ord_1, amount=500", operationIds: ["dashboard.orders.refund"] });
+
+    it("is never claimable as a browser continuation", async () => {
+      const test = harness();
+      sqlite = test.sqlite;
+      seed(sqlite);
+      const link = await request(test.db);
+      expect(link.approvalUrl).toBe(`https://dashboard.example.test/admin/settings/agent-access/approve/${link.approvalId}`);
+      expect(await claimAgentBrowserHandoff(test.db, link.approvalId, ownerUserId, env)).toBeNull();
+      expect(await readAgentApproval(test.db, env, link.approvalId, ownerUserId)).toMatchObject({ status: "pending", summary: expect.stringContaining("amount=500") });
+      expect(await readAgentApproval(test.db, env, link.approvalId, "owner-2")).toBeNull();
+    });
+
+    it("cannot be approved once the grant is revoked or expired", async () => {
+      const test = harness();
+      sqlite = test.sqlite;
+      seed(sqlite);
+      const link = await request(test.db);
+      sqlite.prepare("UPDATE agent_grants SET expires_at = ? WHERE id = ?").run(Math.floor(Date.now() / 1000) - 1, grantId);
+      expect(await decideAgentApproval(test.db, link.approvalId, ownerUserId, "approve")).toBe(false);
+    });
+
+    it("is redeemed only by the same grant, credential and authority revision, once", async () => {
+      const test = harness();
+      sqlite = test.sqlite;
+      seed(sqlite);
+      const link = await request(test.db);
+      expect(await decideAgentApproval(test.db, link.approvalId, ownerUserId, "approve")).toBe(true);
+      await expect(redeemAgentApproval(test.db, env, { ...principal(), authorityRevision: 2 }, link.approvalId, "b".repeat(64)))
+        .rejects.toMatchObject({ code: "approval_invalid" });
+      await expect(redeemAgentApproval(test.db, env, { ...principal(), credentialId: "agc_otherotherotherother" }, link.approvalId, "b".repeat(64)))
+        .rejects.toMatchObject({ code: "approval_invalid" });
+      await expect(redeemAgentApproval(test.db, env, principal(), link.approvalId, "c".repeat(64)))
+        .rejects.toMatchObject({ code: "approval_invalid" });
+      await expect(redeemAgentApproval(test.db, env, principal(), link.approvalId, "b".repeat(64))).resolves.toBeUndefined();
+      await expect(redeemAgentApproval(test.db, env, principal(), link.approvalId, "b".repeat(64)))
+        .rejects.toMatchObject({ code: "approval_invalid" });
+    });
+
+    it("refuses to open a request for a revoked credential", async () => {
+      const test = harness();
+      sqlite = test.sqlite;
+      seed(sqlite);
+      sqlite.prepare("UPDATE agent_credentials SET revoked_at = ? WHERE id = ?").run(Math.floor(Date.now() / 1000), credentialId);
+      await expect(request(test.db)).rejects.toMatchObject({ code: "agent_grant_inactive" });
+    });
   });
 });

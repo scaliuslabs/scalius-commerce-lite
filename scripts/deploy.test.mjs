@@ -16,6 +16,7 @@ import {
   parseJsoncText,
   parseOnlyTarget,
   parseStorefrontBuildId,
+  reportFirstAdminSetupKey,
   resolveDeploymentUrls,
   resolveStorefrontVerificationUrl,
   sampleApiReadiness,
@@ -321,11 +322,10 @@ describe("deploy target wiring", () => {
   });
 
   it("keeps typechecking and deployment commands on supported workspaces", () => {
-    expect(getTypecheckCommandForTarget("api")).toContain(
-      "--workspace-concurrency=1 --filter @scalius/admin-v2 --filter @scalius/api typecheck",
-    );
-    expect(getTypecheckCommandForTarget("storefront")).toContain("--filter @scalius/storefront typecheck");
-    expect(getSequentialWorkspaceCommand("typecheck")).toContain("--concurrency=1");
+    // One TypeScript build for every workspace, never a per-workspace fan-out.
+    expect(getTypecheckCommandForTarget(undefined)).toBe("node scripts/typecheck.mjs");
+    expect(getTypecheckCommandForTarget("api")).toBe("node scripts/typecheck.mjs --no-astro");
+    expect(getTypecheckCommandForTarget("storefront")).toBe("node scripts/typecheck.mjs");
     expect(getSequentialWorkspaceCommand("build")).toContain("--concurrency=1");
     expect(getBuildCommandForTarget("api")).toContain("turbo run build --filter=@scalius/api --concurrency=1");
     expect(getBuildCommandForTarget("storefront")).toContain("--filter @scalius/storefront build");
@@ -679,5 +679,51 @@ describe("post-deploy verification URLs", () => {
 
     await verifyPostDeployTarget("storefront", { name: "scalius-api" }, null, options);
     expect(verifyStorefrontDeployImpl).toHaveBeenCalledWith(options);
+  });
+});
+
+describe("first-admin setup key after deploy (audit R2 F9)", () => {
+  const MASTER = "deploy-test-master-secret-0123456789abcdefghij";
+  const setupStatus = (data) => vi.fn(async () => new Response(JSON.stringify({ success: true, data }), { status: 200 }));
+  const quiet = () => ({ log: vi.fn(), warn: vi.fn() });
+
+  it("prints the derived key for a new store that requires it", async () => {
+    const { deriveRuntimeSecret } = await import("../packages/shared/src/runtime-secrets.ts");
+    const fetchImpl = setupStatus({ adminExists: false, setupTokenRequired: true });
+    const io = quiet();
+    const key = await reportFirstAdminSetupKey("https://api.example.com", {
+      fetchImpl, env: { SCALIUS_SECRET: MASTER }, interactive: false, ...io,
+    });
+    expect(fetchImpl).toHaveBeenCalledWith("https://api.example.com/api/v1/setup", expect.objectContaining({ method: "GET" }));
+    expect(key).toBe(await deriveRuntimeSecret(MASTER, "admin-setup"));
+    expect(io.log.mock.calls.flat().join("\n")).toContain(key);
+    expect(io.log.mock.calls.flat().join("\n")).not.toContain(MASTER);
+  });
+
+  it("prints nothing for a store that already has an admin or does not ask for a key", async () => {
+    for (const data of [{ adminExists: true, setupTokenRequired: true }, { adminExists: false, setupTokenRequired: false }]) {
+      const io = quiet();
+      const readSecret = vi.fn();
+      expect(await reportFirstAdminSetupKey("https://api.example.com", {
+        fetchImpl: setupStatus(data), env: { SCALIUS_SECRET: MASTER }, interactive: true, readSecret, ...io,
+      })).toBeNull();
+      expect(io.log).not.toHaveBeenCalled();
+      expect(readSecret).not.toHaveBeenCalled();
+    }
+  });
+
+  it("asks on a terminal, and only explains how to derive it otherwise", async () => {
+    const readSecret = vi.fn(async () => MASTER);
+    expect(await reportFirstAdminSetupKey("https://api.example.com", {
+      fetchImpl: setupStatus({ adminExists: false, setupTokenRequired: true }), env: {}, interactive: true, readSecret, ...quiet(),
+    })).toMatch(/\S{20,}/);
+    expect(readSecret).toHaveBeenCalledTimes(1);
+
+    const io = quiet();
+    expect(await reportFirstAdminSetupKey("https://api.example.com", {
+      fetchImpl: setupStatus({ adminExists: false, setupTokenRequired: true }), env: {}, interactive: false, ...io,
+    })).toBeNull();
+    expect(io.log.mock.calls.flat().join(" ")).toContain("pnpm secret:derive --purpose admin-setup");
+    expect(await reportFirstAdminSetupKey(null, { env: { SCALIUS_SECRET: MASTER }, ...quiet() })).toBeNull();
   });
 });

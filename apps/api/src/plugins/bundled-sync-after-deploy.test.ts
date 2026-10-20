@@ -21,8 +21,19 @@ describe("bundled apps after a deploy", () => {
       .run("ab".repeat(32), JSON.stringify(noorStored.manifest), JSON.stringify(noorStored.grant), JSON.stringify(noorStored.grant));
     expect((await readPluginInstallations(db)).unreadable.map((row) => row.pluginId)).toEqual(["scalius.noor"]);
 
-    const first = await syncBundledPluginsOncePerDeploy(db, deployment("v-new"));
-    expect(first?.updated).toContain("scalius.noor");
+    // Free syncs one bundled app per tick and keeps going on the next ticks
+    // until every app matches the deployed code.
+    const bundled = Object.keys(BUNDLED_PLUGINS).length;
+    const updated: string[] = [];
+    let ticks = 0;
+    for (let result = await syncBundledPluginsOncePerDeploy(db, deployment("v-new")); result; result = await syncBundledPluginsOncePerDeploy(db, deployment("v-new"))) {
+      ticks += 1;
+      expect(result.installed.length + result.updated.length).toBeLessThanOrEqual(1);
+      updated.push(...result.updated);
+      if (!result.pending) break;
+    }
+    expect(ticks).toBe(bundled);
+    expect(updated).toContain("scalius.noor");
     expect(await getPluginInstallation(db, "scalius.noor")).toMatchObject({ bundleSha256: BUNDLED_PLUGINS["scalius.noor"]!.sha256, status: "active" });
 
     // Later ticks of the same version do nothing; the next deployment syncs again.

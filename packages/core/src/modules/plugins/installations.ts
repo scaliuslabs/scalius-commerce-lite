@@ -355,6 +355,8 @@ interface InstallationBeforeUpdate {
   storedSettings: Record<string, unknown>;
   /** The stored manifest as it runs; null when it no longer reads. */
   manifest: PluginManifest | null;
+  /** The developer key the app was installed with (`requirePinnedSigner`). */
+  signerKeyId: string | null;
 }
 
 async function installationBeforeUpdate(db: Database, pluginId: string): Promise<InstallationBeforeUpdate> {
@@ -370,6 +372,7 @@ async function installationBeforeUpdate(db: Database, pluginId: string): Promise
     features: grant?.features ?? [],
     storedSettings: parseJsonObject(row.settingsJson) ?? {},
     manifest: null,
+    signerKeyId: row.signerKeyId ?? null,
   };
 }
 
@@ -388,8 +391,11 @@ export function requireInstallableManifest(value: unknown, source: PluginInstall
     });
   }
   const manifest = parsed.manifest;
-  if (source === "upload" && manifest.id.startsWith(`${FIRST_PARTY_PLUGIN_VENDOR}.`)) {
-    throw new PluginError("manifest_reserved_vendor", `Plugin ids under ${FIRST_PARTY_PLUGIN_VENDOR}.* are reserved for first-party plugins.`);
+  // Only code compiled into the deployment may use the first-party id space,
+  // whatever path it arrives by (audit R2 F6): first-party standing (beta
+  // operations, surviving the emergency stop) goes by this prefix.
+  if (source !== "bundled" && manifest.id.startsWith(`${FIRST_PARTY_PLUGIN_VENDOR}.`)) {
+    throw new PluginError("manifest_reserved_vendor", `Plugin ids under ${FIRST_PARTY_PLUGIN_VENDOR}.* are reserved for apps bundled with Scalius.`);
   }
   return manifest;
 }
@@ -800,6 +806,30 @@ export interface UpdatePluginInput {
 }
 
 /**
+ * The developer key an app was installed with stays its signer (audit R2
+ * F6): a registry or uploaded update must be signed by the same key, so a
+ * developer trusted for one app cannot ship code under another app's id and
+ * grant. An app installed unsigned takes the key of its first signed update.
+ * Moving an app to another developer is a reinstall (uninstall keeping its
+ * data, then install), which asks for approval again.
+ */
+export function requirePinnedSigner(
+  current: { signerKeyId: string | null; manifest: { name: string } | null; pluginId: string },
+  update: { source: PluginInstallationSource; signerKeyId: string | null },
+): void {
+  if (update.source === "bundled" || current.signerKeyId === null) return;
+  if (update.signerKeyId === current.signerKeyId) return;
+  const name = current.manifest?.name ?? current.pluginId;
+  throw new PluginError(
+    "signature.signer_changed",
+    update.signerKeyId === null
+      ? `${name} was installed from a signed release; an update must be signed by the same developer.`
+      : `${name} was installed from a release signed by another developer. To move it to this developer, uninstall it (keeping its data) and install this release.`,
+    { installedSigner: current.signerKeyId, releaseSigner: update.signerKeyId },
+  );
+}
+
+/**
  * Replaces the code and manifest. An active plugin whose new grant request
  * asks for anything not yet approved waits in `installed` for a Super Admin
  * (the old grant is kept on record, `pluginNeedsApproval` reports it); a
@@ -818,6 +848,7 @@ export async function updatePluginInstallation(
   const current = await installationBeforeUpdate(db, pluginId);
   const manifest = requireInstallableManifest(input.manifest, input.source);
   if (manifest.id !== pluginId) throw new PluginError("manifest_invalid", `The manifest is for ${manifest.id}, not ${pluginId}.`);
+  requirePinnedSigner({ ...current, pluginId }, { source: input.source, signerKeyId: input.signerKeyId ?? null });
   const sha256 = requireSha256(input.bundleSha256);
   // Features stay as they were (those the new manifest still declares); a new feature starts off.
   const features = knownPluginFeatures(manifest, current.features);

@@ -49,6 +49,7 @@ import { getArgValue, resolvePnpmExecutable, shellQuote } from "./dev-local-util
 import { readLockfile } from "./plugin-build.mjs";
 import { apiWranglerConfig, pluginSandboxEnabled, withPluginSandbox } from "./plugins.mjs";
 import { resolvePlan, withStorefrontPlanProfile } from "./plan.mjs";
+import { readHiddenLine } from "./demo-store/credentials.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
@@ -259,14 +260,18 @@ export function getBuildCommandForTarget(target) {
   }
 }
 
+/**
+ * The one workspace typecheck (scripts/typecheck.mjs): a single TypeScript 7
+ * project-reference build that checks every package once, then the
+ * storefront's `astro check`. An API deploy skips only the astro check; a
+ * storefront deploy needs both (the storefront reads the shared packages).
+ * No target is the full deploy.
+ */
 export function getTypecheckCommandForTarget(target) {
-  const workspaces = {
-    api: ["@scalius/admin-v2", "@scalius/api"],
-    storefront: ["@scalius/storefront"],
-  }[target];
-  if (!workspaces) throw new Error(`Unknown deploy target: ${target}`);
-  const filters = workspaces.map((workspace) => `--filter ${workspace}`).join(" ");
-  return `${pnpm} --workspace-concurrency=1 ${filters} typecheck`;
+  if (target === undefined) return "node scripts/typecheck.mjs";
+  const args = { api: " --no-astro", storefront: "" }[target];
+  if (args === undefined) throw new Error(`Unknown deploy target: ${target}`);
+  return `node scripts/typecheck.mjs${args}`;
 }
 
 export function getSequentialWorkspaceCommand(task) {
@@ -1078,6 +1083,74 @@ async function verifyApiDeploy(config, apiWranglerConfigPath = null, options = {
   await sampleApiReadiness(apiBaseUrl, { migrationsApplied: options.migrationsApplied === true });
 }
 
+const SETUP_KEY_HINT = "If this store has no admin yet, run `pnpm secret:derive --purpose admin-setup` "
+  + "and paste the key on the dashboard's /auth/setup page.";
+
+/**
+ * A new store asks for a setup key before anyone can claim its first admin
+ * (audit R2 F9). After the API deploy, when the live store has no admin yet
+ * and requires the key, print it: derived from SCALIUS_SECRET (from the
+ * environment, or a hidden prompt on a terminal), exactly as the Worker
+ * derives it. Nothing is printed for a store that already has an admin.
+ * Returns the printed key, or null.
+ */
+export async function reportFirstAdminSetupKey(apiBaseUrl, {
+  fetchImpl = fetch,
+  env = process.env,
+  log = console.log,
+  warn = console.warn,
+  interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY),
+  readSecret = (prompt) => readHiddenLine(prompt),
+  timeoutMs = PLATFORM_CONFIG_TIMEOUT_MS,
+} = {}) {
+  if (!apiBaseUrl) {
+    log(`\n${SETUP_KEY_HINT}`);
+    return null;
+  }
+  const url = buildApiV1Url(apiBaseUrl, "/setup");
+  let status;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetchImpl(url, {
+      method: "GET",
+      headers: { Accept: "application/json", "Cache-Control": "no-cache" },
+      signal: controller.signal,
+    });
+    const payload = response.ok ? await response.json() : null;
+    status = payload?.success === true ? payload.data : null;
+  } catch {
+    status = null;
+  } finally {
+    clearTimeout(timeout);
+  }
+  if (!status || typeof status.adminExists !== "boolean") {
+    warn(`⚠ Could not read first-admin setup status from ${url}. ${SETUP_KEY_HINT}`);
+    return null;
+  }
+  if (status.adminExists || status.setupTokenRequired !== true) return null;
+
+  let master = String(env.SCALIUS_SECRET ?? "").trim();
+  if (!master && interactive) {
+    try {
+      master = String(await readSecret("SCALIUS_SECRET, to print the first-admin setup key (Enter to skip): ")).trim();
+    } catch {
+      master = "";
+    }
+  }
+  if (!master) {
+    log(`\n▶ First-admin setup key\n  This store has no admin yet. ${SETUP_KEY_HINT}`);
+    return null;
+  }
+  const { deriveRuntimeSecret } = await import(new URL("../packages/shared/src/runtime-secrets.ts", import.meta.url).href);
+  const key = await deriveRuntimeSecret(master, "admin-setup");
+  log("\n▶ First-admin setup key");
+  log("  This store has no admin yet. Open the dashboard's /auth/setup page and paste this key:");
+  log(`  ${key}`);
+  log("  It stops mattering once the first admin exists. Clear the terminal scrollback when you are done.");
+  return key;
+}
+
 export async function verifyPostDeployTarget(
   target,
   apiConfig,
@@ -1304,10 +1377,8 @@ export async function main() {
   try {
     // 1. Typecheck first — catches type mismatches esbuild ignores
     run(
-      requestedTarget
-        ? getTypecheckCommandForTarget(requestedTarget)
-        : getSequentialWorkspaceCommand("typecheck"),
-      requestedTarget ? `Typecheck ${requestedTarget} workspace` : "Typecheck all workspaces sequentially",
+      getTypecheckCommandForTarget(requestedTarget ?? undefined),
+      requestedTarget ? `Typecheck for the ${requestedTarget} deploy` : "Typecheck every workspace",
     );
 
     if (!requestedTarget || requestedTarget === "api") {
@@ -1338,6 +1409,7 @@ export async function main() {
         deploymentUrls,
         migrationsApplied,
       });
+      if (requestedTarget === "api") await reportFirstAdminSetupKey(deploymentUrls?.apiUrl ?? null);
       console.log(`\n✓ Deploy complete (${requestedTarget}).`);
       return;
     }
@@ -1363,6 +1435,7 @@ export async function main() {
       deployTarget(targetName, targetConfigPath, plan, pluginSandbox);
       await verifyPostDeployTarget(targetName, config, targetConfigPath, { deploymentUrls, migrationsApplied });
     }
+    if (deployTargets.includes("api")) await reportFirstAdminSetupKey(deploymentUrls?.apiUrl ?? null);
 
     console.log(`\n✓ Deploy complete (${deployTargets.join(" + ")}).`);
   } catch {

@@ -49,7 +49,7 @@ describe(`${NAME} files`, () => {
   });
 });
 
-describe(`${NAME} over a populated 0120 database`, { timeout: 30_000 }, () => {
+describe(`${NAME} over a populated 0120 database`, () => {
   let db: DatabaseSync | null = null;
   afterEach(() => db?.close());
 

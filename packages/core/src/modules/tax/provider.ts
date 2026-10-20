@@ -96,27 +96,3 @@ export async function quoteTax(input: CalculateTaxQuoteInput, options: QuoteTaxO
     }
     return completeTaxQuote(prepared, calculation);
 }
-
-/**
- * After an order commits: an app provider's calculation becomes its
- * committed document (idempotent per order). The order never waits on it or
- * fails with it; the system provider keeps no document. Null: nothing to
- * commit, or the app could not (it keeps the calculation id on the order's
- * tax snapshot for a later reconciliation).
- */
-export async function commitTaxDocument(
-    quote: Pick<TaxQuote, "jurisdiction">,
-    orderId: string,
-    apps: AppProviders | undefined,
-): Promise<{ documentId: string } | null> {
-    const { providerId, calculationId } = quote.jurisdiction ?? {};
-    if (!providerId || providerId === SYSTEM_TAX_PROVIDER_ID || !calculationId) return null;
-    const choice = await resolveAppProvider(apps, "tax", providerId);
-    if (!choice.provider?.commit) return null;
-    try {
-        return await choice.provider.commit({ calculationId, orderId, idempotencyKey: `tax-commit:${orderId}` }, {});
-    } catch {
-        console.warn("[tax] provider commit failed", { provider: providerId, order: orderId.slice(0, 12) });
-        return null;
-    }
-}

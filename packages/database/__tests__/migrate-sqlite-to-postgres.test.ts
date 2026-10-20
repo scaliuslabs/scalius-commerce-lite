@@ -412,7 +412,7 @@ describe("SQLite-to-PostgreSQL initial target SQL", () => {
     expect(tableNames).toHaveLength(schema.applicationTables);
     expect(truncate.split(", ")).toHaveLength(schema.applicationTables);
     expect(sql.match(/\bTRUNCATE\s+TABLE\b/g)).toHaveLength(1);
-  }, 60_000);
+  });
 });
 
 describe("SQLite-to-PostgreSQL content fingerprints", () => {

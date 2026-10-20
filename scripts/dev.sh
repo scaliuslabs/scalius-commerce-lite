@@ -9,9 +9,14 @@
 # 3. Ports: --api-port, --storefront-port and --admin-port (default 8787,
 #    4322, 4323) export SCALIUS_DEV_API_PORT, SCALIUS_DEV_STOREFRONT_PORT and
 #    SCALIUS_DEV_ADMIN_PORT, the one dev-only port source every app reads
-#    (scripts/dev-ports.mjs). --state <dir> exports SCALIUS_WRANGLER_STATE.
-#    The local Platform settings document is pointed at the same origins
-#    before the API starts. None of this is a Worker var.
+#    (scripts/dev-ports.mjs). --state <dir> exports SCALIUS_WRANGLER_STATE as
+#    an absolute path (a relative one is resolved from the repo root once, so
+#    migrations, the API, the storefront and the seed scripts share one
+#    database). The local Platform settings document is pointed at the same
+#    origins before the API starts. None of this is a Worker var.
+# 4. Fail closed: a service that exits or does not answer before it is ready
+#    stops the whole stack with an error, and so does one that exits later,
+#    so a half-up stack never looks healthy.
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 DRY_RUN="${SCALIUS_DEV_DRY_RUN:-0}"
@@ -57,6 +62,14 @@ while [ "$#" -gt 0 ]; do
 done
 set -- ${PASSTHROUGH_ARGS[@]+"${PASSTHROUGH_ARGS[@]}"}
 
+if [ -n "${SCALIUS_WRANGLER_STATE:-}" ]; then
+  case "$SCALIUS_WRANGLER_STATE" in
+    /*) ;;
+    *) SCALIUS_WRANGLER_STATE="$ROOT_DIR/${SCALIUS_WRANGLER_STATE#./}" ;;
+  esac
+  export SCALIUS_WRANGLER_STATE
+fi
+
 API_PORT="${SCALIUS_DEV_API_PORT:-8787}"
 STOREFRONT_PORT="${SCALIUS_DEV_STOREFRONT_PORT:-4322}"
 ADMIN_PORT="${SCALIUS_DEV_ADMIN_PORT:-4323}"
@@ -74,6 +87,7 @@ export SCALIUS_DEV_ADMIN_PORT="$ADMIN_PORT"
 DEV_PORTS=("$API_PORT" "$STOREFRONT_PORT" "$ADMIN_PORT")
 API_READY_URL="${SCALIUS_DEV_API_READY_URL:-http://localhost:$API_PORT/api/v1/setup}"
 API_READY_TIMEOUT_SECONDS="${SCALIUS_DEV_API_READY_TIMEOUT_SECONDS:-60}"
+APP_READY_TIMEOUT_SECONDS="${SCALIUS_DEV_APP_READY_TIMEOUT_SECONDS:-180}"
 API_PID=""
 ADMIN_PID=""
 STOREFRONT_PID=""
@@ -426,6 +440,64 @@ wait_for_api_ready() {
   exit 1
 }
 
+# Waits until a started app answers HTTP at all (any status: a storefront
+# without a store still answers). If it exits first or never answers, the
+# EXIT trap stops everything this wrapper started.
+wait_for_app_ready() {
+  local label="$1"
+  local pid="$2"
+  local url="$3"
+  echo "Waiting for $label at $url..."
+  if [ "$DRY_RUN" = "1" ]; then
+    echo "[dry-run] $label readiness assumed."
+    return
+  fi
+  validate_numeric_setting "SCALIUS_DEV_APP_READY_TIMEOUT_SECONDS" "$APP_READY_TIMEOUT_SECONDS"
+
+  local waited=0 code status
+  while [ "$waited" -lt "$APP_READY_TIMEOUT_SECONDS" ]; do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      wait "$pid"
+      status=$?
+      [ "$status" = "0" ] && status=1
+      echo "$label exited before it was ready (status ${status}); stopping the stack. Its error is above." >&2
+      exit "$status"
+    fi
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$url" 2>/dev/null || true)"
+    if [ -n "$code" ] && [ "$code" != "000" ]; then
+      echo "$label is ready."
+      return
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  echo "$label did not answer within ${APP_READY_TIMEOUT_SECONDS}s; stopping the stack." >&2
+  exit 1
+}
+
+# Keeps the stack up while every started service runs; when one exits, the
+# EXIT trap stops the rest and the wrapper fails.
+supervise_services() {
+  if [ "$DRY_RUN" = "1" ]; then
+    return
+  fi
+  local entry label pid status
+  while :; do
+    for entry in "API worker:$API_PID" "Admin dashboard:$ADMIN_PID" "Storefront:$STOREFRONT_PID"; do
+      label="${entry%%:*}"
+      pid="${entry##*:}"
+      [ -z "$pid" ] && continue
+      if ! kill -0 "$pid" 2>/dev/null; then
+        wait "$pid"
+        status=$?
+        echo "$label stopped (status ${status}); stopping the stack." >&2
+        exit 1
+      fi
+    done
+    sleep 1
+  done
+}
+
 HAS_FILTERS=0
 HAS_API=0
 HAS_ADMIN=0
@@ -450,10 +522,10 @@ if [ "$HAS_FILTERS" = "1" ]; then
     echo ""
     echo "API dev server running. Ctrl+C to stop."
     echo "  API:     http://localhost:$API_PORT"
-    echo "  Swagger: http://localhost:$API_PORT/api/v1/docs"
+    echo "  OpenAPI: http://localhost:$API_PORT/api/v1/openapi.json"
     echo "  Mailbox: http://127.0.0.1:8025"
     echo ""
-    wait
+    supervise_services
     exit 0
   fi
 
@@ -463,7 +535,8 @@ if [ "$HAS_FILTERS" = "1" ]; then
     start_api
     wait_for_api_ready
     start_admin
-    wait
+    wait_for_app_ready "Admin dashboard" "$ADMIN_PID" "http://localhost:$ADMIN_PORT/"
+    supervise_services
     exit 0
   fi
 
@@ -473,7 +546,8 @@ if [ "$HAS_FILTERS" = "1" ]; then
     start_api
     wait_for_api_ready
     start_storefront
-    wait
+    wait_for_app_ready "Storefront" "$STOREFRONT_PID" "http://localhost:$STOREFRONT_PORT/health"
+    supervise_services
     exit 0
   fi
 
@@ -492,13 +566,15 @@ wait_for_api_ready
 
 start_admin
 start_storefront
+wait_for_app_ready "Admin dashboard" "$ADMIN_PID" "http://localhost:$ADMIN_PORT/"
+wait_for_app_ready "Storefront" "$STOREFRONT_PID" "http://localhost:$STOREFRONT_PORT/health"
 
 echo ""
-echo "All dev servers starting. Ctrl+C to stop all."
+echo "All dev servers ready. Ctrl+C to stop all."
 echo "  API:        http://localhost:$API_PORT"
 echo "  Admin:      http://localhost:$ADMIN_PORT"
 echo "  Storefront: http://localhost:$STOREFRONT_PORT"
-echo "  Swagger:    http://localhost:$API_PORT/api/v1/docs"
+echo "  OpenAPI:    http://localhost:$API_PORT/api/v1/openapi.json"
 echo "  Mailbox:    http://127.0.0.1:8025"
 echo ""
-wait
+supervise_services

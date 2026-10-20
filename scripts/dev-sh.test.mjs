@@ -120,6 +120,25 @@ describe("dev.sh startup planning", () => {
     );
   });
 
+  it("resolves a relative --state from the repo root once, so every consumer opens one database", () => {
+    const flag = runDevSh(["--filter=@scalius/api", "--state", "./.qa-state"]);
+    expect(flag.stdout).toContain(`--persist-to ${root}/.qa-state\n`);
+
+    const fromEnv = runDevSh(["--filter=@scalius/api"], { SCALIUS_WRANGLER_STATE: ".agent-state" });
+    expect(fromEnv.stdout).toContain(`--persist-to ${root}/.agent-state\n`);
+  });
+
+  it("waits for the dashboard and the storefront to answer before reporting the stack ready", () => {
+    const result = runDevSh();
+
+    expect(result.status).toBe(0);
+    const adminWait = result.stdout.indexOf("Waiting for Admin dashboard at http://localhost:4323/");
+    const storefrontWait = result.stdout.indexOf("Waiting for Storefront at http://localhost:4322/health");
+    expect(adminWait).toBeGreaterThan(result.stdout.indexOf("Starting storefront"));
+    expect(storefrontWait).toBeGreaterThan(adminWait);
+    expect(result.stdout.indexOf("All dev servers ready.")).toBeGreaterThan(storefrontWait);
+  });
+
   it.each([
     [["--api-port", "abc"], /API port .* must be a TCP port/],
     [["--admin-port", "70000"], /Admin port .* must be a TCP port/],
@@ -219,5 +238,5 @@ describe("dev.sh shutdown", () => {
       for (const pid of pids) if (alive(pid)) process.kill(pid, "SIGKILL");
       rmSync(dir, { recursive: true, force: true });
     }
-  }, 15_000);
+  });
 });

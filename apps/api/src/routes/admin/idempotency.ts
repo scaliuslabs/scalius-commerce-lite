@@ -22,6 +22,7 @@ import { systemKv } from "@scalius/database/schema";
 import { eq, lte, sql } from "drizzle-orm";
 import { sha256Hex } from "@scalius/shared/hash";
 import { AppError } from "@scalius/core/errors";
+import { routedApiPath } from "../../utils/routed-path";
 
 /** How long a key is remembered: a retry after this creates again. */
 export const IDEMPOTENCY_WINDOW_SECONDS = 24 * 60 * 60;
@@ -99,10 +100,9 @@ async function claim(c: Context, storeKey: string, request: string): Promise<Sto
 export const idempotentReplay: MiddlewareHandler<{ Bindings: Env }> = async (c, next) => {
   const key = c.req.header("Idempotency-Key");
   if (key === undefined || c.req.method === "GET" || c.req.method === "HEAD") return next();
-  const pathname = new URL(c.req.url).pathname;
   // The operation catalog loads only for a request that sent a key (route families never initialize it).
   const { resolveDirectAgentOperation } = await import("../../agent-access/direct-operation");
-  const operation = resolveDirectAgentOperation(c.req.method, pathname.startsWith("/api/v1") ? pathname : `/api/v1${pathname}`);
+  const operation = resolveDirectAgentOperation(c.req.method, routedApiPath(c));
   if (!operation || operation.stability !== "stable") return next();
   if (!IDEMPOTENCY_KEY_PATTERN.test(key)) {
     refuse(400, "idempotency_key_invalid", `Idempotency-Key is ${MIN_KEY} to ${MAX_KEY} printable characters.`);

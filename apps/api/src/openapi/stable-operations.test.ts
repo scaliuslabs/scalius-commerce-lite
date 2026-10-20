@@ -16,7 +16,9 @@
 // the one name an app passes to `ctx.api.call`, sealed with its contract.
 //
 // A breaking change needs a new operation (or a new plugin API version), not
-// an edited snapshot.
+// an edited snapshot. Before the v2 lock a deliberate break (a security fix)
+// is accepted only by an entry in `stable-operations.breaks.json` naming the
+// exact change and the committed snapshot's fingerprint.
 
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
@@ -30,8 +32,20 @@ import { appOperationName, resolveAppOperation } from "../plugins/app-operations
 import type { AgentOperationManifestEntry } from "./agent-operation-manifest";
 import { referencedComponentSchemas } from "@scalius/shared/openapi-schema-refs";
 import { inputBreakingChanges, schemaBreakingChanges } from "@scalius/shared/schema-compat";
+import { snapshotFingerprint, unacknowledgedBreaks, type AbiBreakAcknowledgement } from "@scalius/shared/plugins/abi-compat";
 
-const SNAPSHOT_FILE = new URL("./stable-operations.snapshot.json", import.meta.url);
+const SNAPSHOT_NAME = "stable-operations.snapshot.json";
+const SNAPSHOT_FILE = new URL(`./${SNAPSHOT_NAME}`, import.meta.url);
+const BREAKS_NAME = "stable-operations.breaks.json";
+
+/**
+ * Accepted breaks (`abi-compat.ts` rules): each names its exact change and the
+ * fingerprint of the snapshot it breaks from, so an entry never pre-accepts a
+ * later break and `vitest -u` alone accepts none.
+ */
+function acknowledgedBreaks(): AbiBreakAcknowledgement[] {
+  return JSON.parse(readFileSync(new URL(`./${BREAKS_NAME}`, import.meta.url), "utf8")) as AbiBreakAcknowledgement[];
+}
 
 /**
  * Scopes that reach no operation by themselves: bridge capabilities
@@ -285,7 +299,7 @@ describe("the stable app API", () => {
     expect(idle).toEqual([]);
   });
 
-  it("marks every buyer contact field it returns as protected customer data", () => {
+  it("marks every buyer contact field it returns as protected customer data, beta operations first-party apps call included", () => {
     // Field names that carry a buyer's contact details wherever they appear,
     // and `name` under a customer or address record.
     const CONTACT_KEYS = new Set([
@@ -298,6 +312,8 @@ describe("the stable app API", () => {
     const PERSON_CONTAINERS = new Set(["customers", "customer", "customerRecord", "addresses", "address", "defaultAddress", "mergedInto", "relatedCustomer"]);
     // The store's own contact details, not a buyer's.
     const STORE_OWNED = new Set(["dashboard.inventory_locations.list", "dashboard.settings.business_get"]);
+    // The store's own details inside a buyer document (an invoice's seller block).
+    const STORE_OWNED_PATHS = ["data.businessInfo"];
     const resolve = (node: unknown): Record<string, unknown> | null => {
       if (!node || typeof node !== "object") return null;
       const ref = (node as { $ref?: unknown }).$ref;
@@ -319,7 +335,8 @@ describe("the stable app API", () => {
       const contact = key !== undefined && (CONTACT_KEYS.has(key) || (key === "name" && parent !== undefined && PERSON_CONTAINERS.has(parent))
         || (key === "name" && path.join(".") === "data" + ".name" && operationId.startsWith("dashboard.customers.")));
       // An object (an address, a contact block) is checked through its fields.
-      if (contact && !protectedMarkerCategories(schema[PROTECTED_FIELD_KEYWORD]) && schema.type !== "boolean" && schema.type !== "object") {
+      const storeOwned = STORE_OWNED_PATHS.some((prefix) => path.join(".").startsWith(`${prefix}.`));
+      if (contact && !storeOwned && !protectedMarkerCategories(schema[PROTECTED_FIELD_KEYWORD]) && schema.type !== "boolean" && schema.type !== "object") {
         unmarked.push(`${operationId} ${path.join(".")}`);
       }
       for (const [child, value] of Object.entries((schema.properties ?? {}) as Record<string, unknown>)) walk(operationId, value, [...path, child], refs);
@@ -329,7 +346,25 @@ describe("the stable app API", () => {
         walk(operationId, variant, path, refs);
       }
     };
-    for (const operation of stable) {
+    // Beta operations only first-party apps may call, which return buyer
+    // contact details (audit R2 F10): marked before any is promoted to stable.
+    const FIRST_PARTY_CONTACT_OPERATIONS = [
+      "dashboard.orders.invoice_get",
+      "dashboard.orders.invoice_issue",
+      "dashboard.customers.history",
+      "dashboard.conversations.context",
+      "dashboard.conversations.list",
+      "dashboard.conversations.get",
+      "dashboard.gift_cards.get",
+      "dashboard.search.global",
+      "dashboard.home.summary",
+    ];
+    const beta = FIRST_PARTY_CONTACT_OPERATIONS.map((operationId) => {
+      const operation = AGENT_OPERATIONS.find((candidate) => candidate.operationId === operationId);
+      expect(operation, operationId).toBeDefined();
+      return operation!;
+    });
+    for (const operation of [...stable, ...beta]) {
       if (STORE_OWNED.has(operation.operationId)) continue;
       walk(operation.operationId, operation.outputSchema, [], new Set());
     }
@@ -436,14 +471,18 @@ describe("the stable app API", () => {
     }
   });
 
-  it("changes only additively against the committed snapshot", () => {
+  // One test, so `-u` cannot write the snapshot past a refused break.
+  it("changes only additively against the committed snapshot, then matches it (accept an additive change with -u)", async () => {
     const committed = committedSnapshot();
     expect(committed, "stable-operations.snapshot.json is missing: create it with vitest run -u").not.toBeNull();
-    expect(stableBreakingChanges(committed!, currentSnapshot())).toEqual([]);
-  });
-
-  it("matches the committed snapshot (accept an additive change with -u)", async () => {
-    await expect(`${JSON.stringify(currentSnapshot(), null, 1)}\n`).toMatchFileSnapshot("./stable-operations.snapshot.json");
+    const current = currentSnapshot();
+    const text = `${JSON.stringify(current, null, 1)}\n`;
+    const committedText = readFileSync(SNAPSHOT_FILE, "utf8");
+    if (committedText !== text) {
+      const open = unacknowledgedBreaks(SNAPSHOT_NAME, await snapshotFingerprint(committedText), stableBreakingChanges(committed!, current), acknowledgedBreaks());
+      expect(open, `Breaking changes to the stable app API. Add a new operation instead, or (before the lock) add these entries with a reason to ${BREAKS_NAME}.`).toEqual([]);
+    }
+    await expect(text).toMatchFileSnapshot("./stable-operations.snapshot.json");
   });
 });
 

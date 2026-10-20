@@ -14,7 +14,7 @@ Order numbers and names are not ids. Search (`dashboard.orders.list` `search`, `
 
 ## Money and approval
 
-- Refunds, cancellations, deletions and other destructive or financial steps need the merchant's approval: dry run, show `confirmation.summary`, then send the `confirmToken`. Never approve for them, and never refund more than `dashboard.orders.payments` says is refundable.
+- Refunds, cancellations, deletions and other destructive or financial steps need the merchant's approval: dry run, then the write gives `confirmation.approvalUrl` for the merchant; repeat it with `approvalId` only after they approve there. Never approve for them, and never refund more than `dashboard.orders.payments` says is refundable.
 - If a refund or capture answer is lost, read the payments again (or `dashboard.orders.refund_reconcile`) before anything else. Never send a second refund to be safe.
 - Amounts are major units (500 = 500 BDT) unless the field ends in `Minor` (`amountMinor`, `shippingMinor`), which is the smallest unit (500 BDT = 50000).
 - The tools add an idempotency key to every write that takes one; a retry with the same key cannot double-charge.

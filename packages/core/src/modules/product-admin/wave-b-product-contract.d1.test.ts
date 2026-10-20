@@ -66,7 +66,7 @@ function updateInput(id: string, expectedAggregateRevision: number, extra: Recor
 
 describe("Wave B product contract", () => {
     // Build the migrated schema once in a hook, not inside the first test's time budget.
-    beforeAll(() => createSqliteD1Database().sqlite.close(), 30_000);
+    beforeAll(() => createSqliteD1Database().sqlite.close());
 
     it("creates a gift card with a digital, untracked default SKU", async () => {
         const { db, product, skus } = setup();

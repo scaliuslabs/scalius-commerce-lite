@@ -4,6 +4,7 @@ import {
   postApiV1AdminGiftCards,
   postApiV1AdminGiftCardsByGiftCardIdAdjust,
   postApiV1AdminGiftCardsByGiftCardIdResend,
+  putApiV1AdminGiftCardsSettings,
 } from "@scalius/api-client/sdk";
 
 import { apiData, type ApiBody } from "~/lib/api";
@@ -13,6 +14,17 @@ import { announceSave, presenceKey } from "~/lib/realtime/store";
 export type IssueGiftCardInput = ApiBody<typeof postApiV1AdminGiftCards>;
 export type AdjustGiftCardInput = ApiBody<typeof postApiV1AdminGiftCardsByGiftCardIdAdjust>;
 export type UpdateGiftCardInput = ApiBody<typeof patchApiV1AdminGiftCardsByGiftCardId>;
+export type GiftCardSettingsInput = ApiBody<typeof putApiV1AdminGiftCardsSettings>;
+
+/** Saves what apps may add a day under the revision the dialog loaded (a 409 means someone changed it). */
+export function useSaveGiftCardSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: GiftCardSettingsInput) => apiData(putApiV1AdminGiftCardsSettings({ body: input })),
+    onSuccess: (saved) => queryClient.setQueryData(giftCardKeys.settings(), saved),
+    onError: () => void queryClient.invalidateQueries({ queryKey: giftCardKeys.settings() }),
+  });
+}
 
 function invalidate(queryClient: QueryClient, id?: string) {
   void queryClient.invalidateQueries({ queryKey: giftCardKeys.lists() });

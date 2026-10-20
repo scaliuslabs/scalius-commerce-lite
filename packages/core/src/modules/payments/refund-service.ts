@@ -1560,19 +1560,13 @@ export async function processRefund(
         noActiveRefundAttemptForOrderIdCondition(params.orderId),
         noActivePaymentSessionAttemptForOrderIdCondition(params.orderId),
     );
-    // Gift-card ledger rows are append-only, so a lost claim can't be cleaned
-    // up afterwards like the pending rows below. When the batch moves card
-    // money, a guard evaluates the claim predicate first and fails the whole
-    // batch, so nothing commits unless the claim does.
-    const movesGiftCardMoney = storeCredit !== null
-        || allocations.some((allocation) => allocationSettlementMode(allocation) === "gift_card");
+    // A guard evaluates the claim predicate first and fails the whole batch,
+    // so the refund rows, attempts and any card money commit only with the
+    // claim: a lost claim leaves nothing behind to clean up.
     const ledgerReason = refundLedgerReason(params.reason);
-    let claimResults: unknown[];
     try {
-        claimResults = await db.batch([
-            ...(movesGiftCardMoney
-                ? [buildBatchGuard(db, sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${claimCondition})`, REFUND_CLAIM_CONFLICT)]
-                : []),
+        await db.batch([
+            buildBatchGuard(db, sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${claimCondition})`, REFUND_CLAIM_CONFLICT),
             // The guarded order claim must execute before this transaction creates
             // its own active refund rows. D1 batches are sequential: placing this
             // statement after the inserts makes the no-active-refund predicate see
@@ -1580,7 +1574,7 @@ export async function processRefund(
             db.update(orders).set({
                 version: claimVersion,
                 updatedAt: sql`unixepoch()`,
-            }).where(claimCondition).returning({ id: orders.id, version: orders.version }),
+            }).where(claimCondition),
             ...allocations.flatMap((allocation) => {
                 const mode = allocationSettlementMode(allocation);
                 const internal = isInternalSettlement(mode);
@@ -1633,7 +1627,7 @@ export async function processRefund(
             // One new card for the whole refund, after the attempt it belongs to.
             ...(storeCredit?.statements ?? []),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
-        ] as any) as unknown[];
+        ] as any);
     } catch (error: unknown) {
         if (isBatchGuardError(error, REFUND_CLAIM_CONFLICT)) {
             // Lost the claim: another refund, payment or edit got there first.
@@ -1652,17 +1646,6 @@ export async function processRefund(
             throw new ConflictError(REFUND_IN_PROGRESS_MESSAGE);
         }
         throw error;
-    }
-
-    const claimedOrderResult = claimResults[movesGiftCardMoney ? 1 : 0] as Array<{ id: string; version: number }> | undefined;
-    const claimedOrder = claimedOrderResult?.[0];
-    if (!claimedOrder) {
-        // Unreachable when the batch moved card money: its guard failed the batch.
-        await db.delete(refundAttempts).where(inArray(refundAttempts.refundPaymentId, allocations.map((allocation) => allocation.id)));
-        await db.delete(orderPayments).where(inArray(orderPayments.id, allocations.map((allocation) => allocation.id)));
-        throw new ConflictError(
-            "Refund failed due to a concurrent modification. Please retry."
-        );
     }
 
     // 4. Dispatch to gateway via unified PaymentProvider interface after the

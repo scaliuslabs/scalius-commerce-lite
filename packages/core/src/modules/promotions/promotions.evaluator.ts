@@ -12,6 +12,12 @@ const MAX_MINOR_AMOUNT = Number.MAX_SAFE_INTEGER;
 const MAX_BUY_GET_APPLICATIONS = 10_000;
 /** Products + collections one rule may target (keeps config JSON small). */
 export const PROMOTION_SCOPE_LIMIT = 90;
+/**
+ * Automatic discounts that may be on (active and not ended) at once. Writes
+ * refuse the next one, so every checkout and product page reads all of them:
+ * the candidate read's bound is this cap, never a silent cut.
+ */
+export const MAX_ACTIVE_AUTOMATIC_PROMOTIONS = 50;
 /** Customer segments one rule may be limited to. */
 export const PROMOTION_CUSTOMER_SEGMENT_LIMIT = 5;
 

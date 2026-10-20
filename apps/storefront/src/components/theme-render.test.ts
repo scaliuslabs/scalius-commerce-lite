@@ -8,7 +8,7 @@
  * LCP timing need a browser; this catches wrong markup cheaply in CI.
  */
 import { fileURLToPath } from "node:url";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { Window } from "happy-dom";
 import type { ViteDevServer } from "vite";
 import {
@@ -69,6 +69,11 @@ let container: Container;
 const components = new Map<string, AstroComponent>();
 
 beforeAll(async () => {
+  // Render-only: there is no API. Without this, every header render reads the
+  // layout through the transport's local-dev fallback, localhost:8787: a
+  // refused connection retried with backoff (most of this file's time), or a
+  // developer's live stack answering.
+  vi.stubGlobal("fetch", async () => new Response(null, { status: 503 }));
   const { getViteConfig } = await import("astro/config");
   const { createServer } = await import("vite");
   const configure = getViteConfig(

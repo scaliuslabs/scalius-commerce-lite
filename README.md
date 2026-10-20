@@ -72,13 +72,13 @@ pnpm dev
 
 `pnpm dev:setup` writes the two secrets to `apps/api/.dev.vars` and `apps/storefront/.dev.vars` (git-ignored), applies local D1 migrations, and creates a local admin through `/api/v1/setup`. It writes no URLs. The default admin is `admin@local.scalius.test` with password `ScaliusLocal123!`. Override it with `--admin-email`, `--admin-password`, `--admin-name`, or `LOCAL_ADMIN_EMAIL`, `LOCAL_ADMIN_PASSWORD`, `LOCAL_ADMIN_NAME`.
 
-`pnpm dev` runs a doctor preflight, starts or reuses Mailpit, applies local D1 migrations (skip with `SCALIUS_SKIP_DEV_MIGRATIONS=1`), points the local Platform settings at the local ports, then starts the API, the dashboard and the storefront. It refuses to start when a port is in use.
+`pnpm dev` runs a doctor preflight, starts or reuses Mailpit, applies local D1 migrations (skip with `SCALIUS_SKIP_DEV_MIGRATIONS=1`), points the local Platform settings at the local ports, then starts the API, the dashboard and the storefront, and reports the stack ready only when all three answer. It refuses to start when a port is in use, and stops the whole stack with an error when any service exits. Without `.dev.vars` files, export `SCALIUS_SECRET` and `CREDENTIAL_ENCRYPTION_KEY` instead (agent and CI stacks): Wrangler binds only those two names from the environment.
 
 | URL | Service |
 |-----|---------|
 | `http://localhost:4323/admin` | Dashboard |
 | `http://localhost:4322` | Storefront |
-| `http://localhost:8787/api/v1/docs` | Swagger UI (spec at `/api/v1/openapi.json`, health at `/api/v1/health`) |
+| `http://localhost:8787/api/v1/openapi.json` | OpenAPI contract (open it in any OpenAPI viewer; health at `/api/v1/health`) |
 | `http://127.0.0.1:8025` | Mailpit inbox |
 
 `pnpm dev:doctor` reports on Node, secrets, database state, and ports without changing anything. Add a profile after you start servers: `dev:doctor:api`, `dev:doctor:admin`, `dev:doctor:storefront`, or `dev:doctor:all`.
@@ -93,7 +93,7 @@ pnpm dev --api-port 8931 --storefront-port 4531 --admin-port 4532 --state /tmp/s
 
 `scripts/dev.sh` runs `node scripts/dev-ports.mjs sync-platform` before the API starts. It replaces only unset or loopback Platform origins, so an origin you saved in the dashboard stays. Wrangler's dev registry is machine-wide, so an API on a non-default port runs as `scalius-api-local-<api port>`. The header of `scripts/dev-ports.mjs` lists the other subcommands (`api-worker-name`, `storefront-config`, `verify-binding`).
 
-To start one app alone, export the three port variables and `SCALIUS_WRANGLER_STATE`, run `sync-platform` while the API is stopped, then run `pnpm --dir <app> dev`.
+A relative `--state` is resolved from the repository root. To start one app alone, export the three port variables and an absolute `SCALIUS_WRANGLER_STATE`, run `sync-platform` while the API is stopped, then run `pnpm --dir <app> dev`.
 
 ## Commands
 
@@ -110,6 +110,8 @@ Run every command from the repository root.
 | `pnpm typecheck` | One TypeScript 7 `tsc --build` over every project (project references), then `astro check` for the storefront |
 | `pnpm lint` | Oxlint with type-aware rules over the repository (`.oxlintrc.json`), then ESLint for `.astro` files and the dashboard design rules |
 | `pnpm test` | Vitest for the whole repository ([tests/README.md](tests/README.md)) |
+| `pnpm test:affected [--base <ref>] [--list]` | Only the tests a change can break: Vitest's `--changed` selection plus path rules for migrations, the DVC registry and triggers, the plugin ABI and the generated contracts (`scripts/test-affected.mjs`) |
+| `node scripts/regen-after-merge.mjs [--check]` | Rebuild every generated file after a merge or rebase, then commit the result; run it once with `--install` to enable the keep-one-side merge driver for generated files (`.gitattributes`) |
 | `pnpm check:env` | Fail on Wrangler `vars`, bindings outside the allowed set, and a missing `CF_VERSION_METADATA` |
 | `pnpm generate:sdk` | Regenerate the agent operation manifest and `@scalius/api-client`; commit the output |
 | `pnpm build` | Build every workspace |
@@ -230,7 +232,7 @@ Without an API origin, the deploy succeeds but skips live `/health` and `/readyz
 
 ### 4. Complete Platform settings
 
-1. Open the dashboard and create the first admin at `/auth/setup`.
+1. Open the dashboard and create the first admin at `/auth/setup` with the setup key the deploy printed (or `pnpm secret:derive --purpose admin-setup`). A new store asks for it, so nobody else can claim the store first.
 2. Fill the four web addresses in Settings > Store details.
 
 Until you do, `/api/v1/readyz` reports a `platform_config` problem. The storefront's credentialed features (cart, customer sign-in) fail, because CORS and cookie settings derive from these origins.

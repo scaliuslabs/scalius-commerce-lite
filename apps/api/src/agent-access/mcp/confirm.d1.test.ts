@@ -1,5 +1,7 @@
 // Confirmation and dry run on a real refund: the MCP tool dispatches into the
 // real Hono app on D1, so "writes nothing" is checked against every table.
+// A gated change runs only after the grant's owner approves it in the
+// dashboard (audit R2 F3); a personal access key never gets a client dialog.
 import "@hono/zod-openapi";
 import { Buffer } from "node:buffer";
 import type { DatabaseSync } from "node:sqlite";
@@ -29,6 +31,7 @@ vi.mock("../backend", async () => {
 
 import { createOrder } from "@scalius/core/modules/orders";
 import { createAgentMcpServer } from "./server";
+import { decideAgentApproval } from "../approvals";
 
 const OWNER = "00000000-0000-4000-8000-000000000042";
 const GRANT = "agr_confirmrefund0000001";
@@ -37,19 +40,19 @@ type ToolOutput = {
   isError?: boolean;
   structuredContent: {
     error?: Record<string, unknown>;
-    confirmation?: { confirmToken: string; summary: string };
+    confirmation?: { approvalId: string; approvalUrl: string; summary: string };
     [key: string]: unknown;
   };
 };
 
-/** Every row of every table except the agent audit trail (and the grant's last-used stamp it moves). */
+/** Every row of every table except the agent audit trail, the grant's last-used stamp it moves, and approval requests. */
 function snapshot(sqlite: DatabaseSync): Record<string, unknown[]> {
   // Real tables only: virtual (search index) tables are maintained by triggers on these.
   const tables = sqlite.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
     AND sql NOT LIKE 'CREATE VIRTUAL%' ORDER BY name`).all() as Array<{ name: string }>;
   const rows: Record<string, unknown[]> = {};
   for (const { name } of tables) {
-    if (name === "agent_audit_events" || name === "agent_grants" || name === "agent_credentials") continue;
+    if (["agent_audit_events", "agent_grants", "agent_credentials", "agent_browser_handoffs"].includes(name)) continue;
     try {
       rows[name] = sqlite.prepare(`SELECT * FROM "${name}"`).all();
     } catch {
@@ -65,7 +68,7 @@ describe("confirmed refunds through MCP on D1", () => {
   let db: Database;
   let env: Env;
   let orderId: string;
-  let write: (args: Record<string, unknown>) => Promise<ToolOutput>;
+  let write: (args: Record<string, unknown>, ctx?: unknown) => Promise<ToolOutput>;
   /** Work the refund hands to waitUntil (notifications): settled before a snapshot. */
   let background: Promise<unknown>[];
   const settle = async () => {
@@ -136,7 +139,7 @@ describe("confirmed refunds through MCP on D1", () => {
       } as unknown as ExecutionContext,
     });
     const handler = Reflect.get(server, "_registeredTools").scalius_write.handler;
-    write = (args) => handler(args) as Promise<ToolOutput>;
+    write = (args, ctx) => handler(args, ctx) as Promise<ToolOutput>;
   }, 60_000);
 
   afterEach(async () => {
@@ -164,42 +167,74 @@ describe("confirmed refunds through MCP on D1", () => {
       written: false,
       operationId: "dashboard.orders.refund",
       validated: true,
-      confirmation: { summary: expect.stringContaining("amount=500"), confirmToken: expect.stringMatching(/^sct_/) },
+      confirmation: { summary: expect.stringContaining("amount=500"), approvalRequired: true },
     });
+    expect(JSON.stringify(output.structuredContent)).not.toMatch(/sct_|confirmToken|approvalId/);
     expect(snapshot(sqlite)).toEqual(before);
     expect(audits()).toEqual([]);
   });
 
-  it("writes nothing without a confirmation, runs exactly once with the token, and refuses a replay", async () => {
+  it("writes nothing without the owner's approval, runs exactly once after it, and refuses a replay", async () => {
     const before = snapshot(sqlite);
     const refused = await write(refund());
     expect(refused.isError).toBe(true);
     expect(refused.structuredContent.error).toMatchObject({ code: "confirmation_required", retryable: true });
+    expect(refused.structuredContent.confirmation).toMatchObject({
+      summary: expect.stringContaining("amount=500"),
+      approvalId: expect.stringMatching(/^abh_/),
+      approvalUrl: expect.stringMatching(/^https:\/\/dashboard\.example\.test\/admin\/settings\/agent-access\/approve\/abh_/),
+    });
     expect(snapshot(sqlite)).toEqual(before);
     expect(audits()).toEqual([expect.objectContaining({
       operation_id: "dashboard.orders.refund",
       outcome: "denied",
       error_class: "confirmation_required",
     })]);
+    const approvalId = refused.structuredContent.confirmation!.approvalId;
 
-    const token = refused.structuredContent.confirmation!.confirmToken;
-    const confirmed = await write({ ...refund(), confirmToken: token });
+    // The agent retrying before the owner answers gets the same link and runs nothing.
+    const early = await write({ ...refund(), approvalId });
+    expect(early.structuredContent.error).toMatchObject({ code: "confirmation_required" });
+    expect(early.structuredContent.confirmation).toMatchObject({ approvalId });
+    expect(attempts().count).toBe(0);
+
+    expect(await decideAgentApproval(db, approvalId, OWNER, "approve")).toBe(true);
+    const confirmed = await write({ ...refund(), approvalId });
     expect(confirmed.isError, JSON.stringify(confirmed)).toBeUndefined();
     expect(confirmed.structuredContent).toMatchObject({ ok: true, meta: { operationId: "dashboard.orders.refund", status: 200 } });
     expect(attempts().count).toBe(1);
     const refundRows = sqlite.prepare("SELECT COUNT(*) AS count FROM order_payments WHERE order_id = ?").get(orderId) as { count: number };
     expect(refundRows.count).toBeGreaterThan(1);
-    expect(audits().at(-1)).toMatchObject({ outcome: "success", http_status: 200, metadata_json: expect.stringContaining('"confirmedBy":"token"') });
+    expect(audits().at(-1)).toMatchObject({ outcome: "success", http_status: 200, metadata_json: expect.stringContaining('"confirmedBy":"approval"') });
 
     await settle();
     const afterConfirm = snapshot(sqlite);
-    const replay = await write({ ...refund(), confirmToken: token });
+    const replay = await write({ ...refund(), approvalId });
     expect(replay.isError).toBe(true);
-    expect(replay.structuredContent.error).toMatchObject({ code: "confirm_token_used", status: 409, current: null });
+    expect(replay.structuredContent.error).toMatchObject({ code: "approval_invalid", status: 400 });
     expect(attempts().count).toBe(1);
     await settle();
-    const { system_kv: _claims, ...unchanged } = snapshot(sqlite);
-    const { system_kv: _before, ...expected } = afterConfirm;
-    expect(unchanged).toEqual(expected);
-  });
+    expect(snapshot(sqlite)).toEqual(afterConfirm);
+  }, 60_000);
+
+  it("gives a personal access key the approval link even when its client offers a dialog", async () => {
+    const credentialId = "agc_confirmrefundpat0001";
+    const now = Math.floor(Date.now() / 1000);
+    sqlite.prepare("UPDATE agent_grants SET kind = 'pat', oauth_client_id = NULL, oauth_redirect_uris_json = NULL WHERE id = ?").run(GRANT);
+    sqlite.prepare(`INSERT INTO agent_credentials (id, grant_id, kind, token_hash, token_hint, expires_at, created_at, updated_at)
+      VALUES (?, ?, 'pat', ?, 'sc_pat_agc_confirm', ?, ?, ?)`).run(credentialId, GRANT, "p".repeat(64), now + 3_600, now - 60, now - 60);
+    state.principal = { ...state.principal!, grantKind: "pat", credentialId };
+    const dialogClient = {
+      mcpReq: {
+        envelope: { "io.modelcontextprotocol/clientCapabilities": { elicitation: { form: {} } } },
+        inputResponses: { confirm: { action: "accept", content: { confirm: true } } },
+        requestState: () => "sct_forged",
+      },
+    };
+    const refused = await write(refund(), dialogClient);
+    expect(refused.isError).toBe(true);
+    expect(refused.structuredContent.error).toMatchObject({ code: "confirmation_required" });
+    expect(refused.structuredContent.confirmation).toMatchObject({ approvalId: expect.stringMatching(/^abh_/) });
+    expect(attempts().count).toBe(0);
+  }, 60_000);
 });

@@ -10,24 +10,9 @@ export const BUNDLED_PLUGINS: Readonly<Record<string, BundledPluginEntry>> = {
     sha256: "364cfcafd93bf29c6052e6d541635f389bbd1737735a2a98afb84321d9858fd5",
     load: () => import("../../../../plugins/bangladesh/src/index"),
   },
-  "scalius.bazaar": {
-    version: "1.0.0",
-    sha256: "7c0657cdb42e993cfdaf857d60280841dc911f828dec6b0e06b44f95fc83768a",
-    load: () => import("../../../../plugins/bazaar/src/index"),
-  },
   "scalius.noor": {
     version: "2.0.0",
     sha256: "51893d40cd006fc95ecaecf3eca8b52bca9640bdf13b00bdc252eb577f76ac4d",
     load: () => import("../../../../plugins/noor/src/index"),
-  },
-  "scalius.sellers": {
-    version: "1.0.0",
-    sha256: "7a7da4027bd41a60a6079fb4540c6004cf04c3489f2b12ff91c85a16dbcc68ef",
-    load: () => import("../../../../plugins/sellers/src/index"),
-  },
-  "scalius.volt": {
-    version: "1.0.0",
-    sha256: "5719bbb200dce3783e29ab5c8d9e9436de6e049eb41eb33f866ae94edbd2143b",
-    load: () => import("../../../../plugins/volt/src/index"),
   },
 };

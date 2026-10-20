@@ -148,7 +148,7 @@ describe("the Bangladesh pack's SSLCommerz", () => {
     bank_tran_id: `bank_${valId}`, value_a: "full", value_b: orderId, card_type: "VISA-Dutch Bangla",
   });
 
-  it("fails closed until activation, then serves the IPN, cancel and refund URLs", { timeout: 60_000 }, async () => {
+  it("fails closed until activation, then serves the IPN, cancel and refund URLs", async () => {
     // Before activation: never offered, the IPN finds no gateway, a refund stops before any call.
     await expect(getActivePaymentMethods(db, KEY, providers())).resolves.toMatchObject({ enabledMethods: ["cod"], defaultMethod: "cod" });
     validated("ORDFLY", "val_fly");

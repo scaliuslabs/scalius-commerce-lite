@@ -88,8 +88,35 @@ describe("plugin installations", () => {
       await expect(installPlugin(db, { manifest: manifest({ id: "acme.raw", scopes: scopes as never }), source: "upload", bundleSha256: SHA }))
         .rejects.toMatchObject({ pluginCode: "manifest_invalid" });
     }
-    await expect(installPlugin(db, { manifest: manifest({ id: "scalius.fake" }), source: "upload", bundleSha256: SHA }))
-      .rejects.toMatchObject({ pluginCode: "manifest_reserved_vendor" });
+    // scalius.* belongs to apps bundled with Scalius, whatever path another arrives by (audit R2 F6).
+    for (const source of ["upload", "registry"] as const) {
+      await expect(installPlugin(db, { manifest: manifest({ id: "scalius.fake" }), source, bundleSha256: SHA }))
+        .rejects.toMatchObject({ pluginCode: "manifest_reserved_vendor" });
+    }
+    await expect(installPlugin(db, { manifest: manifest({ id: "scalius.fake" }), source: "bundled", bundleSha256: SHA }))
+      .resolves.toMatchObject({ pluginId: "scalius.fake" });
+  });
+
+  it("keeps the developer key an app was installed with: updates must be signed by it (audit R2 F6)", async () => {
+    const SIGNER = "key_acme_0001";
+    const installed = await installPlugin(db, { manifest: manifest(), source: "registry", bundleSha256: SHA, signerKeyId: SIGNER });
+    expect(installed.signerKeyId).toBe(SIGNER);
+    const update = (signerKeyId: string | null, source: "registry" | "upload" = "registry") => updatePluginInstallation(db, "acme.loyalty", {
+      manifest: manifest({ version: "1.1.0" }), source, bundleSha256: "b".repeat(64), expectedRevision: 1, signerKeyId,
+    });
+    // Another trusted developer cannot ship code under this app's id and grant, and neither can an unsigned upload.
+    await expect(update("key_other_0002")).rejects.toMatchObject({ pluginCode: "signature_signer_changed" });
+    await expect(update(null, "upload")).rejects.toMatchObject({ pluginCode: "signature_signer_changed" });
+    expect(await requirePluginInstallation(db, "acme.loyalty")).toMatchObject({ version: "1.0.0", revision: 1, signerKeyId: SIGNER });
+    await expect(update(SIGNER)).resolves.toMatchObject({ version: "1.1.0", signerKeyId: SIGNER });
+
+    // An app installed unsigned takes the key of its first signed update, then keeps it.
+    await installPlugin(db, { manifest: manifest({ id: "acme.unsigned" }), source: "upload", bundleSha256: SHA });
+    const signedUpdate = (signerKeyId: string, expectedRevision: number) => updatePluginInstallation(db, "acme.unsigned", {
+      manifest: manifest({ id: "acme.unsigned", version: `1.${expectedRevision}.0` }), source: "registry", bundleSha256: "c".repeat(64), expectedRevision, signerKeyId,
+    });
+    await expect(signedUpdate(SIGNER, 1)).resolves.toMatchObject({ signerKeyId: SIGNER });
+    await expect(signedUpdate("key_other_0002", 2)).rejects.toMatchObject({ pluginCode: "signature_signer_changed" });
   });
 
   it("seals secrets, never echoes them, opens them only with the right key, and keeps them when omitted", async () => {

@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
@@ -40,6 +41,8 @@ vi.mock("../dispatch", async (importOriginal) => {
 });
 
 import { writeAgentConfirmPolicy } from "./confirm";
+import { decideAgentApproval } from "../approvals";
+import { getDb } from "@scalius/database/client";
 import { AGENT_ERROR_MAX_BYTES } from "./errors";
 import { InMemoryTransport, type JSONRPCMessage } from "@modelcontextprotocol/server";
 import { createAgentMcpServer, createAgentMcpServerForRequest, peekMcpMethod } from "./server";
@@ -52,7 +55,7 @@ const principal: AgentPrincipal = {
   ownerUserId: "mcp-test-admin",
   isSuperAdmin: true,
   resource: "dashboard",
-  grantKind: "oauth",
+  grantKind: "cli",
   preset: "full",
   permissions: new Set(["*"]),
   riskCeiling: "security",
@@ -106,9 +109,21 @@ describe("MCP surface v2 execution", () => {
     env = {
       DB: harness.binding,
       PUBLIC_API_BASE_URL: "https://api.example.test",
+      BETTER_AUTH_URL: "https://dashboard.example.test",
+      CREDENTIAL_ENCRYPTION_KEY: Buffer.alloc(32, 5).toString("base64"),
       AGENT_TOKEN_PEPPER: "server-execution-test-pepper",
       RL_STANDARD: { limit: async () => ({ success: true }) },
     } as unknown as Env;
+    // The live grant and CLI credential an approval request is checked against.
+    const now = Math.floor(Date.now() / 1000);
+    sqlite.prepare("INSERT INTO user (id, name, email) VALUES (?, 'Owner', 'owner@example.test')").run(principal.ownerUserId);
+    sqlite.prepare(`INSERT INTO agent_grants (id, kind, owner_user_id, resource, label, preset, permissions_json, risk_ceiling,
+      authority_revision, status, expires_at, created_at, updated_at)
+      VALUES (?, 'cli', ?, 'dashboard', 'CLI', 'full', '["*"]', 'security', 1, 'active', ?, ?, ?)`)
+      .run(principal.grantId, principal.ownerUserId, now + 3_600, now - 60, now - 60);
+    sqlite.prepare(`INSERT INTO agent_credentials (id, grant_id, kind, token_hash, token_hint, expires_at, created_at, updated_at)
+      VALUES (?, ?, 'cli', ?, 'sc_cli_agc_bbbbbb', ?, ?, ?)`)
+      .run(principal.credentialId, principal.grantId, "c".repeat(64), now + 3_600, now - 60, now - 60);
     const server = createAgentMcpServer({ surface: "dashboard", env, ctx: {} as ExecutionContext });
     tool = (name) => Reflect.get(server, "_registeredTools")[name].handler as ToolHandler;
   });
@@ -148,7 +163,7 @@ describe("MCP surface v2 execution", () => {
       operationId: "dashboard.orders.refund",
       risk: "financial",
       dryRun: "none",
-      rules: expect.arrayContaining([expect.stringContaining("confirmToken")]),
+      rules: expect.arrayContaining([expect.stringContaining("approvalUrl")]),
       inputs: { path: ["id!:string"] },
     });
     expect(operations[2]).toMatchObject({ operationId: "dashboard.nope", error: { code: "operation_not_found" } });
@@ -350,14 +365,18 @@ describe("MCP surface v2 execution", () => {
   describe("confirmation of destructive and financial writes", () => {
     const refund = { operationId: "dashboard.orders.refund", input: { path: { id: "ord_1042" }, body: { amount: 500, reason: "damaged" } } };
 
-    it("refuses without a confirmation, audits it, then runs exactly once with the token", async () => {
+    const approve = (approvalId: string) => decideAgentApproval(getDb(env), approvalId, principal.ownerUserId, "approve");
+
+    it("refuses without approval, audits it, hands out a link, then runs exactly once after the owner approves", async () => {
       mocks.dispatchAgentOperation.mockImplementation(async ({ operation }) => result(operation.operationId, 200, { success: true, data: { amount: 500 } }));
       const refused = await tool("scalius_write")(refund);
       expect(refused.isError).toBe(true);
-      const value = refused.structuredContent as { error: Record<string, unknown>; confirmation: { summary: string; confirmToken: string; expiresAt: string } };
+      const value = refused.structuredContent as { error: Record<string, unknown>; confirmation: { summary: string; approvalId: string; approvalUrl: string; expiresAt: string } };
       expect(value.error).toMatchObject({ code: "confirmation_required", retryable: true });
+      expect(String(value.error.hint)).toContain("approvalUrl");
       expect(value.confirmation.summary).toBe("Process order refund: id=ord_1042, amount=500, reason=damaged");
-      expect(value.confirmation.confirmToken).toMatch(/^sct_/);
+      expect(value.confirmation.approvalUrl).toBe(`https://dashboard.example.test/admin/settings/agent-access/approve/${value.confirmation.approvalId}`);
+      expect(JSON.stringify(value)).not.toMatch(/sct_|confirmToken/);
       expect(mocks.dispatchAgentOperation).not.toHaveBeenCalled();
       expect(mocks.writeAudit).toHaveBeenCalledWith(expect.objectContaining({
         operationId: "dashboard.orders.refund",
@@ -365,23 +384,35 @@ describe("MCP surface v2 execution", () => {
         errorClass: "confirmation_required",
       }), env);
 
-      const confirmed = await tool("scalius_write")({ ...refund, confirmToken: value.confirmation.confirmToken });
+      // The agent cannot approve its own request: retrying first runs nothing.
+      const early = await tool("scalius_write")({ ...refund, approvalId: value.confirmation.approvalId });
+      expect(early.structuredContent).toMatchObject({ error: { code: "confirmation_required" }, confirmation: { approvalId: value.confirmation.approvalId } });
+      expect(mocks.dispatchAgentOperation).not.toHaveBeenCalled();
+
+      expect(await approve(value.confirmation.approvalId)).toBe(true);
+      const confirmed = await tool("scalius_write")({ ...refund, approvalId: value.confirmation.approvalId });
       expect(confirmed.isError).toBeUndefined();
       expect(confirmed.structuredContent).toMatchObject({ ok: true, data: { amount: 500 } });
       expect(mocks.dispatchAgentOperation).toHaveBeenCalledTimes(1);
-      expect(mocks.dispatchAgentOperation.mock.calls[0]![0]).toMatchObject({ confirmedBy: "token" });
+      expect(mocks.dispatchAgentOperation.mock.calls[0]![0]).toMatchObject({ confirmedBy: "approval" });
 
-      const replay = await tool("scalius_write")({ ...refund, confirmToken: value.confirmation.confirmToken });
-      expect(replay.structuredContent).toMatchObject({ error: { code: "confirm_token_used", status: 409, current: null } });
+      const replay = await tool("scalius_write")({ ...refund, approvalId: value.confirmation.approvalId });
+      expect(replay.structuredContent).toMatchObject({ error: { code: "approval_invalid", status: 400 } });
       expect(mocks.dispatchAgentOperation).toHaveBeenCalledTimes(1);
     });
 
-    it("binds the token to the exact input", async () => {
+    it("binds the approval to the exact input, and a dry run hands out nothing redeemable", async () => {
       const dryRun = await tool("scalius_write")({ ...refund, dryRun: true });
-      expect(dryRun.structuredContent).toMatchObject({ ok: true, dryRun: true, written: false, operationId: "dashboard.orders.refund", support: "none", validated: true, verifyWith: "dashboard.orders.get" });
-      const token = (dryRun.structuredContent as { confirmation: { confirmToken: string } }).confirmation.confirmToken;
-      const changed = await tool("scalius_write")({ ...refund, input: { ...refund.input, body: { amount: 5000, reason: "damaged" } }, confirmToken: token });
-      expect(changed.structuredContent).toMatchObject({ error: { code: "confirm_token_invalid" } });
+      expect(dryRun.structuredContent).toMatchObject({
+        ok: true, dryRun: true, written: false, operationId: "dashboard.orders.refund", support: "none", validated: true, verifyWith: "dashboard.orders.get",
+        confirmation: { summary: expect.any(String), approvalRequired: true },
+      });
+      expect(JSON.stringify(dryRun.structuredContent)).not.toMatch(/sct_|confirmToken|approvalId/);
+      const refused = await tool("scalius_write")(refund);
+      const { approvalId } = (refused.structuredContent as { confirmation: { approvalId: string } }).confirmation;
+      expect(await approve(approvalId)).toBe(true);
+      const changed = await tool("scalius_write")({ ...refund, input: { ...refund.input, body: { amount: 5000, reason: "damaged" } }, approvalId });
+      expect(changed.structuredContent).toMatchObject({ error: { code: "approval_invalid" } });
       expect(mocks.dispatchAgentOperation).not.toHaveBeenCalled();
     });
 
@@ -422,12 +453,13 @@ describe("MCP surface v2 execution", () => {
         { id: "trash", operationId: destructive.operationId, input: { path: { id: "ana_1" } } },
       ];
       const refused = await tool("scalius_write")({ steps });
-      const token = (refused.structuredContent as { confirmation: { confirmToken: string; summary: string } }).confirmation;
-      expect(token.summary).toContain("id=ana_1");
+      const confirmation = (refused.structuredContent as { confirmation: { approvalId: string; summary: string } }).confirmation;
+      expect(confirmation.summary).toContain("id=ana_1");
       expect(mocks.dispatchAgentOperation).not.toHaveBeenCalled();
-      const confirmed = await tool("scalius_write")({ steps, confirmToken: token.confirmToken });
+      expect(await approve(confirmation.approvalId)).toBe(true);
+      const confirmed = await tool("scalius_write")({ steps, approvalId: confirmation.approvalId });
       expect(confirmed.structuredContent).toMatchObject({ ok: true });
-      expect(mocks.dispatchAgentOperation.mock.calls.map(([options]) => options.confirmedBy)).toEqual([undefined, "token"]);
+      expect(mocks.dispatchAgentOperation.mock.calls.map(([options]) => options.confirmedBy)).toEqual([undefined, "approval"]);
     });
   });
 

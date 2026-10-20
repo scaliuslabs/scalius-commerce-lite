@@ -16,7 +16,9 @@ import {
   currentRequestTheme,
   readStoreShape,
   readStorefrontBrandAssets,
+  pageRendersDegradedTheme,
   readStorefrontTheme,
+  readStorefrontThemeDocument,
   requestThemeFor,
   resolveRequestTheme,
 } from "./storefront-theme-context";
@@ -200,6 +202,42 @@ describe("readStorefrontTheme", () => {
     for (const value of invalid) {
       expect(readStorefrontTheme(value)).toBe(DEFAULT_STOREFRONT_THEME);
     }
+  });
+
+  it("marks a newer or broken document degraded and logs it once, masked", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    warn.mockClear();
+    const template = storefrontTemplateTheme("marketplace");
+    // An API deployed first serves the next theme version to this storefront.
+    const newer = { ...template, version: DEFAULT_STOREFRONT_THEME.version + 1, secretNote: "merchant text" };
+    for (let attempt = 0; attempt < 3; attempt++) {
+      expect(readStorefrontThemeDocument(newer)).toEqual({ theme: DEFAULT_STOREFRONT_THEME, degraded: true });
+    }
+    expect(warn).toHaveBeenCalledTimes(1);
+    const logged = JSON.stringify(warn.mock.calls[0]);
+    expect(logged).toContain(`"version":${DEFAULT_STOREFRONT_THEME.version + 1}`);
+    expect(logged).not.toContain("merchant text");
+    // No document is not a failure: the default renders, cacheable.
+    expect(readStorefrontThemeDocument(undefined)).toEqual({ theme: DEFAULT_STOREFRONT_THEME, degraded: false });
+    expect(readStorefrontThemeDocument(null).degraded).toBe(false);
+    expect(readStorefrontThemeDocument(template)).toEqual({ theme: template, degraded: false });
+  });
+
+  it("keeps a page drawn with the default in place of an unreadable theme out of the shared cache", async () => {
+    const html = new Response("<html></html>", { headers: { "Content-Type": "text/html; charset=utf-8" } });
+    const unreadable = { theme: { ...storefrontTemplateTheme("boutique"), version: DEFAULT_STOREFRONT_THEME.version + 1 }, storeShape: SHAPE };
+    const brokenLocals = {};
+    expect(await pageRendersDegradedTheme({ request: request(), locals: brokenLocals }, html, unreadable)).toBe(true);
+    // The page and the policy share the request's one resolution.
+    expect((await currentRequestTheme(brokenLocals)).theme).toBe(DEFAULT_STOREFRONT_THEME);
+    expect((await currentRequestTheme(brokenLocals)).degraded).toBe(true);
+
+    const published = { theme: storefrontTemplateTheme("boutique"), storeShape: SHAPE };
+    expect(await pageRendersDegradedTheme({ request: request(), locals: {} }, html, published)).toBe(false);
+    expect(await pageRendersDegradedTheme({ request: request(), locals: {} }, html, null)).toBe(false);
+    // Feeds and sitemaps draw no theme.
+    const xml = new Response("<urlset/>", { headers: { "Content-Type": "application/xml" } });
+    expect(await pageRendersDegradedTheme({ request: request(), locals: {} }, xml, unreadable)).toBe(false);
   });
 
   it("reads the store shape strictly and resolves for an empty store otherwise", () => {

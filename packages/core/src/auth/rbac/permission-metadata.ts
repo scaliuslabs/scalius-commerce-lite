@@ -339,6 +339,15 @@ export const PERMISSION_METADATA: Record<
     category: "Orders",
     isSensitive: true,
   },
+  [PERMISSIONS.ORDERS_RECORD_PAYMENT]: {
+    name: PERMISSIONS.ORDERS_RECORD_PAYMENT,
+    displayName: "Record Payments",
+    description: "Record money received against an invoice (bank transfer, cheque, cash)",
+    resource: "orders",
+    action: "record_payment",
+    category: "Orders",
+    isSensitive: true,
+  },
   [PERMISSIONS.ORDERS_ISSUE_INVOICE]: {
     name: PERMISSIONS.ORDERS_ISSUE_INVOICE,
     displayName: "Issue Invoices",

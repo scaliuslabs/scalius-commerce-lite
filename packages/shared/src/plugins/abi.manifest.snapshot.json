@@ -153,7 +153,7 @@
    },
    "scopes": {
     "default": [],
-    "maxItems": 28,
+    "maxItems": 29,
     "type": "array",
     "items": {
      "type": "string",
@@ -164,6 +164,7 @@
       "write_inventory",
       "read_orders",
       "write_orders",
+      "write_payments",
       "write_fulfillments",
       "read_customers",
       "write_customers",
@@ -1550,6 +1551,7 @@
           "write_inventory",
           "read_orders",
           "write_orders",
+          "write_payments",
           "write_fulfillments",
           "read_customers",
           "write_customers",
@@ -3223,7 +3225,7 @@
       },
       "scopes": {
        "default": [],
-       "maxItems": 28,
+       "maxItems": 29,
        "type": "array",
        "items": {
         "type": "string",
@@ -3234,6 +3236,7 @@
          "write_inventory",
          "read_orders",
          "write_orders",
+         "write_payments",
          "write_fulfillments",
          "read_customers",
          "write_customers",

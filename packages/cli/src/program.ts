@@ -36,6 +36,7 @@ interface RunOptions {
   file: string[];
   idempotencyKey?: string;
   yes: boolean;
+  approval?: string;
   save?: string;
   overwrite: boolean;
 }
@@ -239,15 +240,15 @@ export function createProgram(runtime: Runtime): Command {
     .argument("<operationId>")
     .option("--input <json|@file|->", "{path, query, body} input")
     .option("--dry-run", "validate and preview; writes nothing (exit 11)", false)
-    .option("--yes", "the merchant approved this change", false)
-    .option("--confirm-token <token>", "approval token from a dry run of exactly this input")
+    .option("--yes", "you reviewed this change (a change the store gates still needs a person: a terminal prompt or the --approval link)", false)
+    .option("--approval <id>", "the approval id the merchant approved in the dashboard (from the 428 answer)")
     .option("--idempotency-key <key>", "auto (default) or a key to reuse when retrying", "auto")
-    .action(async (operationId: string, options: { input?: string; dryRun: boolean; yes: boolean; confirmToken?: string; idempotencyKey: string }, command) => {
+    .action(async (operationId: string, options: { input?: string; dryRun: boolean; yes: boolean; approval?: string; idempotencyKey: string }, command) => {
       const outcome = await write(runtime, output(command), operationId, {
         input: await readInput(runtime, options.input),
         dryRun: options.dryRun,
         yes: options.yes,
-        confirmToken: options.confirmToken,
+        approval: options.approval,
         idempotencyKey: options.idempotencyKey,
       });
       finish(outcome.code);
@@ -257,9 +258,9 @@ export function createProgram(runtime: Runtime): Command {
     .description("run up to 20 reads, or up to 20 changes in order, in one call")
     .requiredOption("--input <json|@file|->", "{\"steps\": [{\"id\", \"operationId\", \"input\"}]}")
     .option("--dry-run", "preview the changes; writes nothing (exit 11)", false)
-    .option("--yes", "the merchant approved these changes", false)
-    .option("--confirm-token <token>", "approval token from a dry run of exactly these steps")
-    .action(async (options: { input: string; dryRun: boolean; yes: boolean; confirmToken?: string }, command) => {
+    .option("--yes", "you reviewed this change (a change the store gates still needs a person: a terminal prompt or the --approval link)", false)
+    .option("--approval <id>", "the approval id the merchant approved in the dashboard (from the 428 answer)")
+    .action(async (options: { input: string; dryRun: boolean; yes: boolean; approval?: string }, command) => {
       const input = await readBatchInput(runtime, options.input);
       finish(await batch(runtime, output(command), input.body, options));
     });
@@ -284,8 +285,8 @@ export function createProgram(runtime: Runtime): Command {
     .option("--action <action>", "publish: publish or unpublish")
     .option("--input <json|@file|->", "the raw {\"body\": {...}} instead of the friendly flags")
     .option("--dry-run", "preview before and after; writes nothing (exit 11)", false)
-    .option("--yes", "the merchant approved this change", false)
-    .option("--confirm-token <token>", "approval token for exactly this request (from the 428 answer)")
+    .option("--yes", "you reviewed this change (a change the store gates still needs a person: a terminal prompt or the --approval link)", false)
+    .option("--approval <id>", "the approval id the merchant approved in the dashboard (from the 428 answer)")
     .option("--wait", "follow a large run until it is done", false)
     .action(async (kind: string, options: Omit<BulkOptions, "input"> & { input?: string }, command) => {
       if (!(kind in BULK_KINDS)) throw new CliError(2, "invalid_bulk_kind", `Bulk kind must be one of: ${Object.keys(BULK_KINDS).join(", ")}.`);
@@ -504,6 +505,7 @@ export function createProgram(runtime: Runtime): Command {
     .option("--file <path|field=@path>", "stream a reviewed raw file or attach a multipart field", collectFile, [])
     .option("--idempotency-key <key>", "idempotency key for a supporting operation")
     .option("--yes", "confirm local risk warning", false)
+    .option("--approval <id>", "the approval id the merchant approved in the dashboard (from the 428 answer)")
     .option("--save <path>", "save a contract-declared artifact response")
     .option("--overwrite", "replace an existing --save destination", false)
     .action(async (id: string, options: RunOptions, command) => {
@@ -513,6 +515,7 @@ export function createProgram(runtime: Runtime): Command {
         files: options.file,
         idempotencyKey: options.idempotencyKey,
         yes: options.yes,
+        approval: options.approval,
         save: options.save,
         overwrite: options.overwrite,
       });

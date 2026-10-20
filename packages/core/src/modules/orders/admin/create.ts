@@ -1,33 +1,25 @@
-// Staff-created (manual) orders: one guarded batch writes the order, its lines, stock reservations and receipt.
+// Staff-created (manual) orders: staff, app and agent policy (the actor's
+// idempotency claim, hand-set prices, the named customer) around the one
+// order commit (../commit-order.ts).
 import { resolveStaffOrderSalesChannel } from "../../sales-channels";
-import { nextOrderNumberSql } from "../number";
-import { chunkRowsForD1, safeBatch, type Database } from "@scalius/database/client";
+import type { Database } from "@scalius/database/client";
 import {
-    orders,
-    orderItems,
-    orderTaxSnapshots,
-    orderItemTaxSnapshots,
     customers,
-    customerHistory,
-    codTracking,
     OrderStatus,
     PaymentMethod,
     FulfillmentStatus,
+    InventoryPool,
 } from "@scalius/database/schema";
-import { prepareStockReservationBatch } from "../../inventory";
-import type { ReservationEntry } from "../../inventory";
-import { and, isNull, sql, eq } from "drizzle-orm";
+import { and, isNull, eq, sql } from "drizzle-orm";
 import { buildOrderEventInsert, orderEventIdForRequest } from "../timeline";
 import { guestRecordForContact } from "../../customers";
 import { generateOrderId } from "@scalius/shared/order-utils";
-import { orderMoneyChainColumns } from "@scalius/shared/money-chain";
 import { normalizeOrderChannelSource } from "@scalius/shared/order-channel-source";
 import { nanoid } from "nanoid";
 import type { CreateOrderInput } from "../validation";
 import { ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
-import { computeOrderPaymentState, createCODTrackingInsertValues } from "../../payments";
+import { computeOrderPaymentState } from "../../payments";
 import { paymentMethodsDocument, validateCustomerPhoneCountry } from "../../settings";
-import { deferredOrderColumns } from "../payment-terms-columns";
 import {
     buildAdminOrderCreateAttemptCommit,
     buildAdminOrderCreateAttemptGuard,
@@ -39,13 +31,12 @@ import {
 } from "./create-attempts";
 import { prepareManualOrderQuote } from "./quote";
 import type { AppProviders } from "../../../integrations/provider-port";
-import { ORDER_ITEM_TAX_SNAPSHOT_PARAMETERS_PER_ROW, orderItemTaxSnapshotColumns, orderTaxSnapshotColumns } from "../../tax";
-import { orderMarketIdSql } from "../../markets";
-import { orderShippingAddressColumns, orderShippingAddressInsertColumns, resolveOrderAddress } from "../shipping-address";
-import { orderBillingAddressColumns, orderBillingAddressInsertColumns, resolveStaffBillingAddress } from "../billing-address";
+import { orderShippingAddressColumns, resolveOrderAddress } from "../shipping-address";
+import { orderBillingAddressColumns, resolveStaffBillingAddress } from "../billing-address";
+import { commitOrder, type OrderCustomer } from "../commit-order";
+import type { OrderFacts, OrderLine } from "../types";
 import type { SQLiteBatchItem } from "./shared";
 import type { AppliedAppDiscount, ManualOrderAppFunctions } from "@scalius/shared/checkout-app-facts";
-import { buildAppDiscountFactInserts } from "../../order-kernel";
 
 /** What this request committed (absent on a replay). */
 export interface ManualOrderCommitted {
@@ -62,26 +53,11 @@ export interface CreateManualOrderResult {
     committed: ManualOrderCommitted | null;
 }
 
-// Bound values per multi-row insert row (drizzle binds every column,
-// defaults included); D1 allows 100 per statement.
-const ORDER_ITEM_INSERT_PARAMETERS_PER_ROW = 21;
-const ORDER_ITEM_TAX_INSERT_PARAMETERS_PER_ROW = ORDER_ITEM_TAX_SNAPSHOT_PARAMETERS_PER_ROW;
-
-// ─────────────────────────────────────────
-// Write operations
-// ─────────────────────────────────────────
-
 /**
- * Creates an order in the admin context (manual order entry).
- * Handles customer lookup/creation, location name resolution,
- * order row insertion, and order items insertion.
- *
- * Inventory flow:
- *   1. Reserve stock for all variant items (validates availability)
- *   2. Insert order + items atomically via db.batch()
- *   3. Commit one confirmed, unpaid COD order with immutable money/tax facts
- *   4. Keep tracked stock reserved until the fulfillment lifecycle deducts it
- *   5. If the batch fails, release all reservations (no orphaned holds)
+ * Creates an order in the admin context (manual order entry): one confirmed,
+ * unpaid cash-on-delivery or invoice order whose tracked stock stays reserved
+ * until the fulfilment lifecycle deducts it. The order, its customer, lines,
+ * tax facts, reservation and replay response commit in one batch.
  */
 export async function createOrder(
     db: Database,
@@ -89,6 +65,32 @@ export async function createOrder(
     actorId: string | null,
 ): Promise<{ id: string }> {
     return (await createManualOrder(db, data, actorId)).response;
+}
+
+/**
+ * The customer a staff order is filed under: a named customer (an app's
+ * renewal, a B2B buyer), else the guest record of its phone, else a new one.
+ * A named customer that owns a storefront account owns the order too, as a
+ * signed-in checkout does (customer-identity.ts: customer_id equals
+ * account_owner_customer_id), so the order shows in the buyer's account. The
+ * phone's guest record is never an account.
+ */
+async function resolveManualOrderCustomer(db: Database, data: CreateOrderInput): Promise<OrderCustomer> {
+    const existing = await db
+        .select({ id: customers.id, accountClaimedAt: customers.accountClaimedAt })
+        .from(customers)
+        .where(data.customerId
+            ? and(eq(customers.id, data.customerId), isNull(customers.deletedAt))
+            : guestRecordForContact({ phone: data.customerPhone }))
+        .get();
+    if (data.customerId && !existing) {
+        throw new ValidationError("That customer doesn't exist or is in the trash.");
+    }
+    if (!existing) return { id: "cust_" + nanoid(), accountOwnerCustomerId: null, createdBy: "staff" };
+    return {
+        id: existing.id,
+        accountOwnerCustomerId: data.customerId && existing.accountClaimedAt ? existing.id : null,
+    };
 }
 
 /**
@@ -129,6 +131,9 @@ export async function createManualOrder(
             { reason: "payment_method_unavailable" },
         );
     }
+    // A committed response is resolved before mutable policy checks so a lost
+    // response still replays. Fresh requests validate before claiming, which
+    // lets a merchant correct a rejected phone without burning the request key.
     const claim = await claimAdminOrderCreateAttempt<{ id: string }>(db, attemptIdentity);
     if (claim.status === "replay") return replayed(claim.response);
     if (claim.status === "processing") {
@@ -139,28 +144,24 @@ export async function createManualOrder(
     const attempt = claim.attempt;
     const orderId = attempt.orderId;
     const response = { id: orderId };
+    // A reclaimed request owns the same stable reservation identity: its
+    // attempt is not marked failed underneath the new owner.
+    let lostClaim = false;
 
-    // A committed response is resolved before mutable policy checks so a lost
-    // response still replays. Fresh requests validate before claiming, which
-    // lets a merchant correct a rejected phone without burning the request key.
-    const prepared = await (async () => {
+    try {
         // An active channel staff picked, else the online store (MARKETS-DESIGN D6).
         const salesChannelId = await resolveStaffOrderSalesChannel(db, data.salesChannelId);
-        const manualQuote = await prepareManualOrderQuote(db, data, undefined, undefined, { apps: options.apps, appProviders: options.appProviders });
         const {
             locationNames: { cityName, zoneName, areaName },
             trackedItems,
             allocationLineIds,
             taxQuote,
-            quote,
             address,
             requiresShipping,
             deliveryMethodKind,
             deliveryMethod: shippingMethod,
-            manualDiscountMinor,
             appDiscounts,
-            currency,
-        } = manualQuote;
+        } = await prepareManualOrderQuote(db, data, undefined, undefined, { apps: options.apps, appProviders: options.appProviders });
         if (requiresShipping && !data.shippingAddress?.trim()) {
             throw new ValidationError("Enter the delivery address, or choose a pickup method.");
         }
@@ -178,365 +179,140 @@ export async function createManualOrder(
             ships: requiresShipping,
             skipValidation: data.skipAddressValidation === true,
         });
-        const initialPaymentState = computeOrderPaymentState({
-            totalAmountMinor: taxQuote.totalMinor,
-            paidAmountMinor: 0,
-        });
-        // An invoice (net terms): unpaid now, due in the days staff or the
-        // app chose, else the store's net days (Settings → Payments).
-        const paymentTermsDays = data.paymentMethod === PaymentMethod.NET_TERMS
-            ? data.paymentTermsDays ?? paymentMethods!.netTerms.dueInDays
-            : null;
-        // A named customer files the order under that record (an app's
-        // renewal, a B2B buyer); otherwise the guest record of its phone.
-        const existingCustomer = data.customerId
-            ? await db.select().from(customers)
-                .where(and(eq(customers.id, data.customerId), isNull(customers.deletedAt)))
-                .get()
-            : await db
-                .select()
-                .from(customers)
-                .where(guestRecordForContact({ phone: data.customerPhone }))
-                .get();
-        if (data.customerId && !existingCustomer) {
-            throw new ValidationError("That customer doesn't exist or is in the trash.");
-        }
-        const reservationEntries: ReservationEntry[] = trackedItems
-            .filter((item) => item.inventoryTracked)
-            .map((item) => ({
-                variantId: item.variantId,
-                quantity: item.quantity,
-                pool: "regular" as const,
-            }));
-        const inventoryPlan = await prepareStockReservationBatch(
-            db,
-            reservationEntries.map((entry) => ({
-                variantId: entry.variantId,
-                quantity: entry.quantity,
-                orderId,
-            })),
-            "regular",
-            { reservationKey: `admin-order-create:v2:${orderId}` },
-        );
-        if (!inventoryPlan.success) {
-            throw new ValidationError(
-                inventoryPlan.error ?? "Insufficient stock for one or more items",
-            );
-        }
+        const paymentState = computeOrderPaymentState({ totalAmountMinor: taxQuote.totalMinor, paidAmountMinor: 0 });
+        const paymentMethod = data.paymentMethod === PaymentMethod.NET_TERMS ? PaymentMethod.NET_TERMS : PaymentMethod.COD;
+        // A method picked for an order with nothing physical is not used.
+        const method = shippingMethod && deliveryMethodKind ? shippingMethod : null;
+        const contact = { name: data.customerName, phone: data.customerPhone };
 
-        return {
-            initialPaymentState,
-            paymentTermsDays,
-            address,
-            shippingAddress,
-            billing,
-            requiresShipping,
-            deliveryMethodKind,
-            cityName,
-            zoneName,
-            areaName,
-            existingCustomer,
-            trackedItems,
-            allocationLineIds,
-            taxQuote,
-            quote,
-            reservationEntries,
-            inventoryPlan,
-            shippingMethod,
-            manualDiscountMinor,
-            appDiscounts,
-            currency,
-            salesChannelId,
-        };
-    })().catch(async (error) => {
-        await markAdminOrderCreateAttemptFailed(db, attempt, error).catch(() => undefined);
-        throw error;
-    });
-    const {
-        initialPaymentState,
-        paymentTermsDays,
-        address,
-        shippingAddress,
-        billing,
-        requiresShipping,
-        deliveryMethodKind,
-        cityName,
-        zoneName,
-        areaName,
-        existingCustomer,
-        trackedItems,
-        allocationLineIds,
-        taxQuote,
-        quote,
-        reservationEntries,
-        inventoryPlan,
-        shippingMethod,
-        manualDiscountMinor,
-        appDiscounts,
-        currency,
-        salesChannelId,
-    } = prepared;
-    let customerId = existingCustomer?.id;
-    const paymentMethod = data.paymentMethod === PaymentMethod.NET_TERMS ? PaymentMethod.NET_TERMS : PaymentMethod.COD;
-    // A named customer that owns a storefront account owns the order too, as
-    // a signed-in checkout does (customer-identity.ts: customer_id equals
-    // account_owner_customer_id), so an app's renewal or a staff order shows
-    // in the buyer's account. The phone's guest record is never an account.
-    const accountOwnerCustomerId = data.customerId && existingCustomer?.accountClaimedAt
-        ? existingCustomer.id
-        : null;
-
-    // ── Atomic batch: customer + order + items ──────────────────────────
-    // D1 batch() executes all statements in a single atomic operation.
-    // If any statement fails, none are committed.
-    const writeBatch: SQLiteBatchItem[] = [
-        buildAdminOrderCreateAttemptGuard(db, attempt),
-        ...inventoryPlan.statements,
-    ];
-
-    if (!existingCustomer) {
-        customerId = "cust_" + nanoid();
-        // Its address book gets the order's address from the order insert
-        // (trigger orders_seed_customer_address).
-        writeBatch.push(
-            db.insert(customers).values({
-                id: customerId,
-                name: data.customerName,
-                phone: data.customerPhone,
-                email: data.customerEmail,
-                totalOrders: 1,
-                lastOrderAt: sql`unixepoch()`,
-                createdAt: sql`unixepoch()`,
-                updatedAt: sql`unixepoch()`,
-            }),
-        );
-        writeBatch.push(
-            db.insert(customerHistory).values({
-                id: "hist_" + nanoid(),
-                customerId: customerId!,
-                name: data.customerName,
-                email: data.customerEmail,
-                phone: data.customerPhone,
-                changeType: "created",
-                actor: "staff",
-                createdAt: sql`unixepoch()`,
-            }),
-        );
-    } else {
-        writeBatch.push(
-            db.update(customers).set({
-                totalOrders: sql`${customers.totalOrders} + 1`,
-                lastOrderAt: sql`unixepoch()`,
-                updatedAt: sql`unixepoch()`,
-            }).where(eq(customers.id, existingCustomer.id)),
-        );
-    }
-
-    const preparedOrderItems = trackedItems.map((item, index) => {
-        const allocationLineId = allocationLineIds[index]!;
-        const lineTax = taxQuote.lines.find((line) => line.lineId === allocationLineId);
-        if (!lineTax) {
-            throw new ValidationError("Authoritative tax quote is missing a manual-order line. Please retry.");
-        }
-        return {
-            id: generateOrderId(),
-            item,
-            lineTax,
-        };
-    });
-
-    // Order row
-    writeBatch.push(
-        db.insert(orders).values({
-            orderNumber: nextOrderNumberSql(db),
+        const order: OrderFacts = {
             id: orderId,
             customerName: data.customerName,
             customerPhone: data.customerPhone,
             customerEmail: data.customerEmail,
-            ...orderShippingAddressInsertColumns(orderShippingAddressColumns(shippingAddress, {
-                name: data.customerName,
-                phone: data.customerPhone,
-            })),
-            ...orderBillingAddressInsertColumns(orderBillingAddressColumns(billing, {
-                name: data.customerName,
-                phone: data.customerPhone,
-            })),
+            ...orderShippingAddressColumns(shippingAddress, contact),
+            ...orderBillingAddressColumns(billing, contact),
+            notes: data.notes,
+            attributes: JSON.stringify(data.attributes ?? {}),
+            shippingMethodId: method?.id ?? null,
+            shippingMethodName: method?.name ?? null,
+            shippingMethodDescription: method?.description ?? null,
+            shippingMethodBaseAmountMinor: method?.feeMinor ?? null,
+            shippingFeeWaived: null,
             requiresShipping,
             shippingMethodKind: deliveryMethodKind,
             pickupAddress: deliveryMethodKind === "pickup" ? shippingMethod?.pickupAddress ?? null : null,
             pickupHours: deliveryMethodKind === "pickup" ? shippingMethod?.pickupHours ?? null : null,
-            notes: data.notes,
+            // A staff order is priced in the shop currency: same-currency.
             currencyCode: taxQuote.currencyCode,
             currencyDecimalPlaces: taxQuote.decimalPlaces,
             subtotalAmountMinor: taxQuote.subtotalMinor,
             shippingAmountMinor: taxQuote.shippingMinor,
-            // A method picked for an order with nothing physical is not used.
-            ...(shippingMethod && deliveryMethodKind ? {
-                shippingMethodId: shippingMethod.id,
-                shippingMethodName: shippingMethod.name,
-                shippingMethodDescription: shippingMethod.description,
-                shippingMethodBaseAmountMinor: shippingMethod.feeMinor,
-            } : {}),
             discountAmountMinor: taxQuote.discountMinor,
             taxAmountMinor: taxQuote.taxMinor,
             totalAmountMinor: taxQuote.totalMinor,
-            // The money chain in the same insert: a staff order is priced in the
-            // shop currency, so it is same-currency (rate 1, shop = presentment).
-            ...orderMoneyChainColumns({
-                currencyCode: taxQuote.currencyCode,
-                subtotalAmountMinor: taxQuote.subtotalMinor,
-                shippingAmountMinor: taxQuote.shippingMinor,
-                discountAmountMinor: taxQuote.discountMinor,
-                taxAmountMinor: taxQuote.taxMinor,
-                totalAmountMinor: taxQuote.totalMinor,
-            }),
             taxLabel: taxQuote.displayLabel,
             pricesIncludeTax: taxQuote.pricesIncludeTax,
-            paidAmountMinor: initialPaymentState.paidAmountMinor,
-            balanceDueMinor: initialPaymentState.balanceDueMinor,
-            paymentStatus: initialPaymentState.paymentStatus,
-            paymentMethod,
-            // An invoice's terms and due date (SQL literals; nothing for cash on delivery).
-            ...deferredOrderColumns(paymentTermsDays),
-            fulfillmentStatus: FulfillmentStatus.PENDING,
             status: OrderStatus.CONFIRMED,
-            // The shipping country's market, else (an order taxed at its billing
-            // address) the billing country's, else the backup market (MARKETS-DESIGN D4).
-            marketId: orderMarketIdSql(shippingAddress?.countryCode
-                ?? (taxQuote.jurisdiction?.addressSource === "billing" ? billing?.address?.countryCode ?? null : null)),
-            customerId,
-            accountOwnerCustomerId,
-            inventoryAction: reservationEntries.length > 0 ? "reserved" : "none",
+            paymentMethod,
+            paymentStatus: paymentState.paymentStatus,
+            paidAmountMinor: paymentState.paidAmountMinor,
+            balanceDueMinor: paymentState.balanceDueMinor,
+            // An invoice (net terms): unpaid now, due in the days staff or
+            // the app chose, else the store's net days (Settings → Payments).
+            paymentTermsDays: paymentMethod === PaymentMethod.NET_TERMS
+                ? data.paymentTermsDays ?? paymentMethods!.netTerms.dueInDays
+                : null,
+            fulfillmentStatus: FulfillmentStatus.PENDING,
+            inventoryPool: InventoryPool.REGULAR,
+            inventoryAction: trackedItems.some((item) => item.inventoryTracked) ? "reserved" : "none",
+        };
+        const lines: OrderLine[] = trackedItems.map((item, index) => {
+            const taxAllocationLineId = allocationLineIds[index]!;
+            const lineTax = taxQuote.lines.find((line) => line.lineId === taxAllocationLineId);
+            if (!lineTax) {
+                throw new ValidationError("Authoritative tax quote is missing a manual-order line. Please retry.");
+            }
+            return {
+                id: generateOrderId(),
+                taxAllocationLineId,
+                productId: item.productId,
+                variantId: item.variantId,
+                productImageMediaId: item.productImageMediaId,
+                quantity: item.quantity,
+                productName: item.productName,
+                variantLabel: item.variantLabel,
+                inventoryTracked: item.inventoryTracked,
+                fulfillmentType: item.fulfillmentType,
+                properties: item.properties,
+                propertiesPriceMinor: item.propertiesPriceMinor,
+                baseUnitPriceMinor: item.baseUnitPriceMinor,
+                unitPriceMinor: lineTax.unitPriceMinor,
+                lineSubtotalMinor: lineTax.grossAmountMinor,
+                discountAmountMinor: lineTax.discountMinor,
+                taxableAmountMinor: lineTax.taxableAmountMinor,
+                taxAmountMinor: lineTax.taxMinor,
+            };
+        });
+
+        // Prices set by hand are part of the order's record, in the same batch.
+        const pricedByHand = data.items.filter((item) => item.unitPriceMinor !== undefined).length;
+        const pricesSetEventId = pricedByHand > 0 ? await orderEventIdForRequest(orderId, "prices_set", data.requestKey) : null;
+
+        const committed = await commitOrder(db, {
             // Staff-created; the source says where it came in (facebook, walk_in, …).
             channel: data.channel ?? "admin",
             channelSource: normalizeOrderChannelSource(data.channelSource),
-            attributes: JSON.stringify(data.attributes ?? {}),
             salesChannelId,
-            version: 1,
-            createdAt: sql`unixepoch()`,
-            updatedAt: sql`unixepoch()`,
-        }),
-    );
-
-    // A COD order and its collection lifecycle are one durable fact. Keeping
-    // this inside the create batch prevents a shippable order whose cash can
-    // never be recorded because a later initialization call failed.
-    if (paymentMethod === PaymentMethod.COD) {
-        writeBatch.push(
-            db.insert(codTracking).values(createCODTrackingInsertValues(orderId)),
-        );
-    }
-
-    // Order items
-    if (preparedOrderItems.length > 0) {
-        const itemRows = preparedOrderItems.map(({ id, item, lineTax }) => ({
-            id,
-            orderId,
-            productId: item.productId,
-            variantId: item.variantId,
-            productImageMediaId: item.productImageMediaId,
-            quantity: item.quantity,
-            productName: item.productName,
-            variantLabel: item.variantLabel,
-            inventoryTracked: item.inventoryTracked,
-            unitPriceMinor: lineTax.unitPriceMinor,
-            lineSubtotalMinor: lineTax.grossAmountMinor,
-            discountAmountMinor: lineTax.discountMinor,
-            taxableAmountMinor: lineTax.taxableAmountMinor,
-            taxAmountMinor: lineTax.taxMinor,
-            fulfillmentType: item.fulfillmentType,
-            properties: item.properties,
-            propertiesPriceMinor: item.propertiesPriceMinor,
-            baseUnitPriceMinor: item.baseUnitPriceMinor,
-            createdAt: sql`unixepoch()`,
-        }));
-        for (const chunk of chunkRowsForD1(
-            itemRows,
-            ORDER_ITEM_INSERT_PARAMETERS_PER_ROW,
-        )) {
-            writeBatch.push(db.insert(orderItems).values(chunk));
-        }
-
-        const itemTaxRows = preparedOrderItems.map(({ id, lineTax }) => ({
-            orderItemId: id,
-            orderId,
-            ...orderItemTaxSnapshotColumns(taxQuote, lineTax),
-            createdAt: sql`unixepoch()`,
-        }));
-        for (const chunk of chunkRowsForD1(
-            itemTaxRows,
-            ORDER_ITEM_TAX_INSERT_PARAMETERS_PER_ROW,
-        )) {
-            writeBatch.push(db.insert(orderItemTaxSnapshots).values(chunk));
-        }
-    }
-
-    writeBatch.push(
-        db.insert(orderTaxSnapshots).values({
-            orderId,
-            ...orderTaxSnapshotColumns(taxQuote),
-            createdAt: sql`unixepoch()`,
-        }),
-    );
-
-    // App discounts (checkout functions) sit on top of the staff discount:
-    // line discount = staff part + app part, recorded as `app_discount` facts
-    // exactly as a storefront order records them (order-kernel/app-facts.ts).
-    if (appDiscounts.length > 0) {
-        const orderItemIdByLineId = new Map(preparedOrderItems.map(({ id }, index) => [allocationLineIds[index]!, id]));
-        writeBatch.push(...buildAppDiscountFactInserts(db, {
-            orderId,
-            currencyCode: taxQuote.currencyCode,
-            discounts: appDiscounts,
-            orderItemIdByLineId,
-        }) as SQLiteBatchItem[]);
-    }
-
-    // Prices set by hand are part of the order's record, in the same batch.
-    const pricedByHand = data.items.filter((item) => item.unitPriceMinor !== undefined).length;
-    if (pricedByHand > 0) {
-        writeBatch.push(buildOrderEventInsert(db, {
-            id: await orderEventIdForRequest(orderId, "prices_set", data.requestKey),
-            orderId,
-            kind: "prices_set",
-            actorId,
-            data: { lines: pricedByHand },
-        }, sql`1`) as unknown as SQLiteBatchItem);
-    }
-
-    writeBatch.push(buildAdminOrderCreateAttemptCommit(db, attempt, response));
-
-    try {
-        await safeBatch(db, writeBatch);
-    } catch (batchError) {
-        const replay = await resolveAdminOrderCreateAttempt<{ id: string }>(
-            db,
-            attemptIdentity,
-        ).catch(() => null);
-        if (replay) return replayed(replay.response);
-        if (isAdminOrderCreateAttemptGuardError(batchError)) {
-            // A reclaimed request owns the same stable reservation identity.
-            // Do not release stock underneath the new owner.
-            throw new ConflictError(
-                "Another request owns this manual-order creation. Retry the same form to recover its result.",
-            );
-        }
-
-        // Inventory guards, ledger edges, counters, customer/order facts, COD,
-        // tax snapshots, and idempotency evidence share this one transaction.
-        // A failed batch has no reservation to compensate.
-        await markAdminOrderCreateAttemptFailed(db, attempt, batchError).catch(() => undefined);
-        throw batchError;
-    }
-
-    return {
-        response,
-        committed: {
-            orderId,
-            customerId: customerId!,
-            paymentMethod,
-            totalAmountMinor: taxQuote.totalMinor,
+            order,
+            lines,
+            taxQuote,
             appDiscounts,
-        },
-    };
+            reservationKey: `admin-order-create:v2:${orderId}`,
+        }, {
+            async prepare() {
+                const customer = await resolveManualOrderCustomer(db, data);
+                return {
+                    customer,
+                    before: [buildAdminOrderCreateAttemptGuard(db, attempt)],
+                    after: [
+                        ...(pricesSetEventId ? [buildOrderEventInsert(db, {
+                            id: pricesSetEventId,
+                            orderId,
+                            kind: "prices_set",
+                            actorId,
+                            data: { lines: pricedByHand },
+                        }, sql`1`) as unknown as SQLiteBatchItem] : []),
+                        buildAdminOrderCreateAttemptCommit(db, attempt, response),
+                    ],
+                };
+            },
+            stockUnavailable: (reservation) => new ValidationError(
+                reservation.error ?? "Insufficient stock for one or more items",
+            ),
+            mapError(error) {
+                if (!isAdminOrderCreateAttemptGuardError(error)) return null;
+                lostClaim = true;
+                return new ConflictError(
+                    "Another request owns this manual-order creation. Retry the same form to recover its result.",
+                );
+            },
+        });
+        // The batch failed after committing (a lost response): the order is this request's.
+        if (committed.alreadyCommitted) return replayed(response);
+
+        return {
+            response,
+            committed: {
+                orderId,
+                customerId: committed.customerId!,
+                paymentMethod,
+                totalAmountMinor: taxQuote.totalMinor,
+                appDiscounts,
+            },
+        };
+    } catch (error) {
+        if (!lostClaim) await markAdminOrderCreateAttemptFailed(db, attempt, error).catch(() => undefined);
+        throw error;
+    }
 }

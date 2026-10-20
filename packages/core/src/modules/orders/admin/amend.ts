@@ -429,7 +429,7 @@ export async function confirmManualOrderAmendment(
         db,
         toReservationBatchItems(positiveEntries, orderId),
         pool,
-        { reservationKey: inventoryKey },
+        { reservationKey: inventoryKey, salesChannelId: order.salesChannelId },
     );
     if (!reservePlan.success) {
         throw new ValidationError(reservePlan.error ?? "Insufficient stock for this amendment.");

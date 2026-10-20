@@ -15,7 +15,7 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { activatePlugin, deactivatePlugin, getPluginInstallation, installPlugin, writePluginSettings } from "@scalius/core/modules/plugins";
 import {
   calculateStorefrontTaxQuote,
-  commitTaxDocument,
+  processTaxDocumentCommandsForOrder,
   createTaxRate,
   createTaxRegion,
   TAX_UNAVAILABLE_REASON,
@@ -137,6 +137,15 @@ describe("an app tax provider through the bundled loader", () => {
   });
 
   const apps = () => createAppProviders(createAppProviderRuntime({ env, db, ctx: pluginTestCtx() }), KEY);
+  /** An order and its tax snapshot, as the checkout commit writes them. */
+  const commitOrder = (orderId: string, providerId: string, calculationId: string | null) => {
+    sqlite.prepare(`INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, currency_code,
+      currency_decimal_places, subtotal_amount_minor, tax_amount_minor, total_amount_minor, status, payment_method, payment_status)
+      VALUES (?, 'Buyer', '+447700900123', 'London', 'city_1', 'zone_1', 'USD', 2, 11000, 2200, 13200, 'pending', 'stripe', 'paid')`).run(orderId);
+    sqlite.prepare(`INSERT INTO order_tax_snapshots (order_id, currency_code, decimal_places, display_label, prices_include_tax,
+      shipping_taxed, settings_version, calculation_version, destination_snapshot, rate_snapshot, provider_id, provider_calculation_id)
+      VALUES (?, 'USD', 2, 'Tax', 0, 1, 1, 'tax-v1', '{}', '[]', ?, ?)`).run(orderId, providerId, calculationId);
+  };
   const quote = (countryCode: string | null) => calculateStorefrontTaxQuote(db, {
     destination: countryCode ? { city: null, zone: null, area: null, countryCode } : { city: "city_1", zone: "zone_1", area: null },
     lines: [{ lineId: "l1", productId: "p1", variantId: "v1", unitPriceMinor: 10_000, quantity: 1, taxClassId: null }],
@@ -156,11 +165,20 @@ describe("an app tax provider through the bundled loader", () => {
       rateId: `${LEVY}:GB`, name: "GB VAT", rateBps: 2_000, priority: 0, compound: false,
       jurisdictionType: "provider", jurisdictionId: "GB", amountMinor: 2_000,
     }]);
-    // After the order commits, the app's calculation becomes its document (the system keeps none).
-    await expect(commitTaxDocument(gb, "ord_1", apps())).resolves.toEqual({ documentId: "doc-ord_1" });
+    // After the order commits, the app's calculation becomes its document (the system keeps none):
+    // the snapshot's insert writes the command, the drain sends it, cancelling voids it.
+    commitOrder("ord_1", LEVY, gb.jurisdiction!.calculationId!);
+    await expect(processTaxDocumentCommandsForOrder(db, "ord_1", apps())).resolves.toEqual(["done"]);
+    sqlite.exec("UPDATE orders SET status = 'cancelled' WHERE id = 'ord_1'");
+    await expect(processTaxDocumentCommandsForOrder(db, "ord_1", apps())).resolves.toEqual(["done"]);
+    expect(sqlite.prepare("SELECT id, status, document_id FROM tax_document_commands ORDER BY created_at, id").all()).toEqual([
+      { id: "tax-commit:ord_1", status: "done", document_id: "doc-ord_1" },
+      { id: "tax-void:ord_1", status: "done", document_id: "doc-ord_1" },
+    ]);
     // Bangladesh: the merchant's rates through the system provider.
     const bd = await quote(null);
-    await expect(commitTaxDocument(bd, "ord_2", apps())).resolves.toBeNull();
+    commitOrder("ord_2", "system", null);
+    await expect(processTaxDocumentCommandsForOrder(db, "ord_2", apps())).resolves.toEqual([]);
     expect(bd).toMatchObject({ taxMinor: 1_650, jurisdiction: { countryCode: "BD", providerId: "system", calculationId: null } });
     // The US region has no rate and no provider of its own: the system provider, no tax.
     expect(await quote("US")).toMatchObject({ taxMinor: 0, jurisdiction: { providerId: "system" } });

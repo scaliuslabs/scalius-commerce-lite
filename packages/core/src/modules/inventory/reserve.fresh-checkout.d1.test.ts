@@ -40,6 +40,7 @@ describe("fresh checkout inventory transaction", () => {
         "regular",
         {
           reservationKey: "checkout-test",
+          salesChannelId: "sc_online_store",
           freshOrderIds: new Set([orderId]),
         },
       );
@@ -88,6 +89,7 @@ describe("fresh checkout inventory transaction", () => {
         "regular",
         {
           reservationKey: "checkout-test",
+          salesChannelId: "sc_online_store",
           freshOrderIds: new Set([firstOrderId]),
         },
       ),
@@ -97,6 +99,7 @@ describe("fresh checkout inventory transaction", () => {
         "regular",
         {
           reservationKey: "checkout-test",
+          salesChannelId: "sc_online_store",
           freshOrderIds: new Set([exhaustedOrderId]),
         },
       ),
@@ -125,6 +128,7 @@ describe("fresh checkout inventory transaction", () => {
       "regular",
       {
         reservationKey: "checkout-test",
+        salesChannelId: "sc_online_store",
         freshOrderIds: new Set([orderId]),
       },
     );
@@ -164,6 +168,7 @@ describe("fresh checkout inventory transaction", () => {
         "preorder",
         {
           reservationKey: "checkout-test",
+          salesChannelId: "sc_online_store",
           freshOrderIds: new Set([orderId]),
         },
       )
@@ -225,6 +230,7 @@ describe("fresh checkout inventory transaction", () => {
         "backorder",
         {
           reservationKey: "checkout-test",
+          salesChannelId: "sc_online_store",
           freshOrderIds: new Set([orderId]),
         },
       )

@@ -1163,6 +1163,27 @@
       "when": 1792509491778,
       "tag": "0165_app_resource_owners",
       "breakpoints": true
+    },
+    {
+      "idx": 166,
+      "version": "6",
+      "when": 1792598400000,
+      "tag": "0166_record_payment_permission",
+      "breakpoints": true
+    },
+    {
+      "idx": 167,
+      "version": "6",
+      "when": 1792540800000,
+      "tag": "0167_promotion_exhaustion_dependency",
+      "breakpoints": true
+    },
+    {
+      "idx": 168,
+      "version": "6",
+      "when": 1792684800000,
+      "tag": "0168_tax_document_commands",
+      "breakpoints": true
     }
   ]
 }

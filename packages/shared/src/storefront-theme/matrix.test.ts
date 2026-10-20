@@ -193,5 +193,5 @@ describe("block variant matrix", () => {
       }
     }
     expect(documents).toBe(rows.length * STOREFRONT_THEME_PALETTE_KEYS.length * STOREFRONT_DENSITIES.length);
-  }, 30_000);
+  });
 });

@@ -186,7 +186,8 @@ describe.each(PLANS)("Workers %s plan budget", (plan) => {
     // A deployed store: its bundled apps already match this version (the
     // first tick after a deploy does this once, plugins/scheduled.ts), so the
     // idle hour measures steady state, not the one-time catch-up.
-    await syncBundledPluginsOncePerDeploy(store.db, store.env);
+    // The first ticks after a deploy sync the bundled apps (one per tick on Free).
+    while ((await syncBundledPluginsOncePerDeploy(store.db, store.env))?.pending);
     await store.ownerCookie();
   }, 120_000);
 

@@ -28,7 +28,7 @@ import { manifest as wishlistManifest } from "./testing/apps/wishlist/src/index"
 const SESSION_KEY = "wishlist-e2e-session-hash-key-0123456789";
 const MASTER = "wishlist-e2e-master-secret-0123456789abcdef0123456789";
 
-describe("acme.wishlist end to end", { timeout: 30_000 }, () => {
+describe("acme.wishlist end to end", () => {
   let sqlite: DatabaseSync;
   let db: Database;
   let env: Env;

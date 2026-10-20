@@ -418,9 +418,20 @@ export function reviewsEnabledSql(): SQL<number> {
 
 export const GIFT_CARD_DEFAULT_EXPIRY_MONTHS = { min: 1, max: 120 } as const;
 
+/**
+ * The most value one app may add to gift cards in a UTC day (cards it issues
+ * plus top-ups), in minor units of the store currency: 1,000.00 in a
+ * two-decimal currency. 0 stops apps adding value at all.
+ */
+export const GIFT_CARD_APP_DAILY_LIMIT_DEFAULT_MINOR = 100_000;
+/** The highest daily app limit a merchant may set (one card's maximum value). */
+export const GIFT_CARD_APP_DAILY_LIMIT_MAX_MINOR = 10_000_000_000;
+
 export interface GiftCardSettings {
   /** Months until a newly issued card expires; null = never (the default). */
   defaultExpiryMonths: number | null;
+  /** Security audit S2: what one app may add to gift cards a day, in store-currency minor units. */
+  appDailyLimitMinor: number;
 }
 
 export const giftCardsDocument = defineSettingsDocument<GiftCardSettings>({
@@ -430,8 +441,9 @@ export const giftCardsDocument = defineSettingsDocument<GiftCardSettings>({
       .min(GIFT_CARD_DEFAULT_EXPIRY_MONTHS.min)
       .max(GIFT_CARD_DEFAULT_EXPIRY_MONTHS.max)
       .nullable(),
+    appDailyLimitMinor: z.number().int().min(0).max(GIFT_CARD_APP_DAILY_LIMIT_MAX_MINOR),
   }),
-  defaults: { defaultExpiryMonths: null },
+  defaults: { defaultExpiryMonths: null, appDailyLimitMinor: GIFT_CARD_APP_DAILY_LIMIT_DEFAULT_MINOR },
 });
 
 /** Gift-card settings, or a failure the caller must treat as "gift cards unavailable". */

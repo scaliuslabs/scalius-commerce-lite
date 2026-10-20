@@ -835,6 +835,14 @@ export const pluginManifestSchema = z.object({
         context.addIssue({ code: "custom", path: ["providers", index, "settings"], message: `Setting ${key} is not declared in settings.` });
       }
     }
+    // A pay-later method is offered only when its app allows it for the buyer.
+    if (provider.kind === "payment" && provider.flow === "deferred" && !manifest.functions.some((fn) => fn.point === "checkout.payment_methods")) {
+      context.addIssue({
+        code: "custom",
+        path: ["providers", index, "flow"],
+        message: "A deferred payment provider is offered only when the app's checkout.payment_methods function allows it: declare that function.",
+      });
+    }
     if (provider.environmentSetting !== undefined) {
       const field = manifest.settings.find((candidate) => candidate.key === provider.environmentSetting);
       const values = field?.type === "select" ? field.options.map((option) => option.value).sort().join(",") : "";

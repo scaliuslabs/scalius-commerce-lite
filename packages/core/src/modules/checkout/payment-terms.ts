@@ -7,8 +7,11 @@
 //   decide", an app's `checkout.payment_methods` answer may also allow it
 //   (`{ op: "allow" }`): the method is then `gated` until one does, so an app
 //   that fails or does not answer leaves it hidden (fail closed).
-// - An app's deferred method (`flow: "deferred"`) reaches signed-in buyers;
-//   its app hides it from anyone else with its own `checkout.payment_methods`.
+// - An app's deferred method (`flow: "deferred"`) is `gated` for every
+//   signed-in buyer: it is offered only when its own app's
+//   `checkout.payment_methods` allows it for this buyer. An app that fails,
+//   times out or does not answer leaves it hidden (fail closed), so nobody
+//   buys on credit because an app was slow.
 //
 // Reads happen only when a deferred method is enabled and the buyer is
 // signed in: one statement for the tags, one for the segment definitions
@@ -89,7 +92,7 @@ export async function resolveDeferredPaymentEligibility(
   const gated = new Set<string>();
   for (const method of deferred) {
     if (method !== NET_TERMS_PAYMENT_METHOD) {
-      eligible.add(method);
+      gated.add(method);
       continue;
     }
     if (await customerHasNetTerms(db, input.customerId, input.netTerms)) eligible.add(method);

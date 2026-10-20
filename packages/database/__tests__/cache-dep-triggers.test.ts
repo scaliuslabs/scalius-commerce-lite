@@ -184,21 +184,38 @@ describe("0100_cache_dependencies", () => {
     expect(await driver.rows("SELECT seq FROM cache_clock")).toEqual(before);
   });
 
-  it("advances a promotion only when redemptions can exhaust it", async () => {
+  it("advances a limited promotion only when a redemption exhausts it or a removed one un-exhausts it", async () => {
     const driver = nodeDriver("d1", false);
-    // The checkout guards on redemptions (allocations, order shape) are not under test here.
+    // The checkout guards on redemptions (allocations, order shape, immutability) are not under test here.
     for (const { name } of driver.sqlite.prepare(
       "SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'promotion_redemptions' AND name NOT LIKE 'cdep\\_%' ESCAPE '\\'",
     ).all() as Array<{ name: string }>) driver.sqlite.exec(`DROP TRIGGER "${name}"`);
     await driver.exec(`
       INSERT INTO promotions (id, name, method, status) VALUES ('promo_open', 'Open', 'automatic', 'active');
-      INSERT INTO promotions (id, name, method, status, max_redemptions) VALUES ('promo_cap', 'Capped', 'automatic', 'active', 100);
+      INSERT INTO promotions (id, name, method, status, max_redemptions) VALUES ('promo_cap', 'Capped', 'automatic', 'active', 3);
+      INSERT INTO promotions (id, name, method, status, max_discount_spend_minor, budget_currency_code) VALUES ('promo_budget', 'Budget', 'automatic', 'active', 1200, 'BDT');
     `);
-    const redemption = (id: string, promotion: string) => `INSERT INTO promotion_redemptions
+    const redemption = (id: string, promotion: string, amount = 500) => `INSERT INTO promotion_redemptions
       (id, promotion_id, order_id, customer_id, promotion_revision, promotion_code, currency_code, discount_amount_minor)
-      VALUES ('${id}', '${promotion}', 'order_${id}', 'cust_1', 1, 'SAVE10', 'BDT', 500)`;
+      VALUES ('${id}', '${promotion}', 'order_${id}', 'cust_1', 1, 'SAVE10', 'BDT', ${amount})`;
+    const removal = (id: string) => `DELETE FROM promotion_redemptions WHERE id = '${id}'`;
+    const advanced = (promotion: string) => [`promo:${promotion}`, "t:promotion_redemptions"];
     expect(await bumped(driver, redemption("r1", "promo_open"))).toEqual([]);
-    expect(await bumped(driver, redemption("r2", "promo_cap"))).toEqual(["promo:promo_cap", "t:promotion_redemptions"]);
+    // Redemptions below the limit leave every page that shows the promotion valid.
+    expect(await bumped(driver, redemption("c1", "promo_cap"))).toEqual([]);
+    expect(await bumped(driver, redemption("c2", "promo_cap"))).toEqual([]);
+    // The one that reaches it exhausts the promotion.
+    expect(await bumped(driver, redemption("c3", "promo_cap"))).toEqual(advanced("promo_cap"));
+    // Removing one brings it back; removing another changes nothing a buyer sees.
+    expect(await bumped(driver, removal("c3"))).toEqual(advanced("promo_cap"));
+    expect(await bumped(driver, removal("c2"))).toEqual([]);
+    // A spend budget: exhausted when the spend reaches it.
+    expect(await bumped(driver, redemption("b1", "promo_budget", 500))).toEqual([]);
+    expect(await bumped(driver, redemption("b2", "promo_budget", 500))).toEqual([]);
+    expect(await bumped(driver, redemption("b3", "promo_budget", 200))).toEqual(advanced("promo_budget"));
+    expect(await bumped(driver, removal("b1"))).toEqual(advanced("promo_budget"));
+    expect(await bumped(driver, removal("b2"))).toEqual([]);
+    expect(await bumped(driver, removal("r1"))).toEqual([]);
   });
 
   it.each(["d1", "turso"] as const)("invalidates only the changed ordering projection on %s", async (provider) => {

@@ -548,7 +548,8 @@ function evaluatePublicStorefrontCacheHeaders(headers, { label }) {
   const cacheStatus = normalizeHeaderValue(headers, "x-cache-status");
   const errors = [];
 
-  if (!/^(?:HIT|MISS)$/i.test(cacheStatus)) {
+  // The lane is the first token; a hit that waited adds `; frontier-wait=<ms>ms`.
+  if (!/^(?:HIT|MISS)(?:;|$)/i.test(cacheStatus)) {
     errors.push(`${label} X-Cache-Status must report the public cache lane (HIT or MISS).`);
   }
   if (/\bs-maxage=|\bpublic\b[^,]*max-age=[1-9]/i.test(cacheControl)) {

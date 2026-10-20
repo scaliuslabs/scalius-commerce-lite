@@ -137,7 +137,7 @@ export function buyerIpHeaders(request: Request): Record<string, string> {
 
 export type OrderCodeChannel = "email" | "sms" | "whatsapp";
 
-/** Track your order, status only: no address, phone, email or surname. */
+/** Track your order with the number and a contact: no address, phone, email or surname. */
 export interface OrderLookupStatus {
   orderNumber: number | null;
   firstName: string | null;
@@ -168,6 +168,7 @@ export interface OrderLookupStatus {
 export async function getOrderLookupStatus(
   request: Request,
   reference: string,
+  contact: string,
 ): Promise<OrderCodeResult<OrderLookupStatus>> {
   try {
     const response = await apiFetch(
@@ -175,7 +176,7 @@ export async function getOrderLookupStatus(
       {
         method: "POST",
         headers: { "Content-Type": "application/json", ...buyerIpHeaders(request) },
-        body: JSON.stringify({ reference }),
+        body: JSON.stringify({ reference, contact }),
         cache: "no-store",
       },
       { retries: 0, timeout: ORDER_CODE_TIMEOUT_MS, auth: true },
@@ -203,10 +204,10 @@ export async function getOrderLookupStatus(
 }
 
 /** Track your order: a code to the contact saved on the order, through a channel the store chose. */
-export async function sendOrderLookupCode(input: { reference: string; channel?: OrderCodeChannel }) {
+export async function sendOrderLookupCode(input: { reference: string; contact: string; channel?: OrderCodeChannel }) {
   return sentResult(await postOrderCodeApi(
     "/orders/lookup/send-otp",
-    { reference: input.reference, ...(input.channel ? { channel: input.channel } : {}) },
+    { reference: input.reference, contact: input.contact, ...(input.channel ? { channel: input.channel } : {}) },
     { auth: false, fallbackCode: "order_lookup_send_failed" },
   ));
 }

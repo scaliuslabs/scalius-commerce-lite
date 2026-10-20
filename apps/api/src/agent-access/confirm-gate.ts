@@ -6,21 +6,22 @@
 // A destructive, financial or security operation (or one the registry marks
 // `confirmation: "required"`), under a grant whose confirm policy is on,
 // runs only when:
-//   - the dispatcher already settled it (MCP consumed the merchant's confirm
-//     token or a client dialog approved it), or
+//   - the dispatcher already settled it (MCP redeemed the owner's dashboard
+//     approval, or a client dialog approved it), or
 //   - it is a native dry run (`dryRun: true`, which writes nothing), or
-//   - on the REST lane, the request carries a `Scalius-Confirm-Token` header
-//     minted for exactly this grant, operation and input (one use, 10 minutes).
+//   - on the REST lane, the request carries a `Scalius-Approval` header naming
+//     an approval the grant's owner gave in the dashboard for exactly this
+//     grant, operation and input (one use; audit R2 F3).
 // Otherwise nothing runs: the answer is 428 `confirmation_required` with the
-// summary the merchant approves and a fresh token for the retry.
+// summary and an approval link for the owner. The agent never receives
+// anything it could redeem by itself.
 import type { Context } from "hono";
 import { AppError } from "@scalius/core/errors";
+import { getDb } from "@scalius/database/client";
 import type { AgentOperationManifestEntry } from "../openapi/agent-operation-manifest";
 import type { OperationDispatchClearance } from "./dispatch-context";
-import type { AgentOperationInput } from "./dispatch";
+import { AgentDispatchError, type AgentOperationInput } from "./dispatch";
 import type { AgentPrincipal } from "./types";
-
-export const CONFIRM_TOKEN_HEADER = "Scalius-Confirm-Token";
 
 function pathParams(template: string, pathname: string): Record<string, string> {
   const templateSegments = template.split("/").filter(Boolean);
@@ -33,7 +34,7 @@ function pathParams(template: string, pathname: string): Record<string, string> 
   return params;
 }
 
-/** The request as the operation input a confirm token binds (path, query, JSON body). */
+/** The request as the operation input an approval binds (path, query, JSON body). */
 async function requestInput(c: Context, operation: AgentOperationManifestEntry, pathname: string): Promise<AgentOperationInput> {
   const url = new URL(c.req.url);
   const query = Object.fromEntries(url.searchParams.entries());
@@ -78,28 +79,46 @@ export async function enforceAgentConfirmation(
   if (await confirm.readAgentConfirmPolicy(env, principal) === "none") return;
   if (clearance) {
     // The dispatcher sent a gated write it did not settle: refuse, never guess.
-    throw new AppError(428, "confirmation_required", "This change needs the merchant's approval: dry-run it, then send the confirmToken.");
+    throw new AppError(428, "confirmation_required", "This change needs the merchant's approval before it runs.");
   }
   const input = await requestInput(c, operation, pathname);
   if (isNativeDryRun(operation, input)) return;
+  const approvals = await import("./approvals");
   const steps = [{ operation, input }];
   const binding = await confirm.confirmBinding(steps);
-  const token = c.req.header(CONFIRM_TOKEN_HEADER)?.trim();
-  if (token) {
+  const db = getDb(env);
+  const approvalId = c.req.header(approvals.APPROVAL_HEADER)?.trim();
+  if (approvalId) {
     try {
-      await confirm.consumeConfirmToken(env, principal, binding, token);
+      await approvals.redeemAgentApproval(db, env, principal, approvalId, binding);
     } catch (error) {
+      if (error instanceof approvals.AgentApprovalPendingError) {
+        throw new AppError(428, "confirmation_required", error.message, {
+          confirmation: { ...error.confirmation, header: approvals.APPROVAL_HEADER },
+        });
+      }
       const status = (error as { status?: number }).status;
-      const code = (error as { code?: string }).code ?? "confirm_token_invalid";
-      throw new AppError(status === 409 ? 409 : 400, code, error instanceof Error ? error.message : "The confirm token is not valid");
+      const code = (error as { code?: string }).code ?? "approval_invalid";
+      throw new AppError(status === 409 ? 409 : 400, code, error instanceof Error ? error.message : "The approval is not valid");
     }
     return;
   }
-  const minted = await confirm.mintConfirmToken(env, principal, binding);
+  const summary = confirm.confirmSummary(steps);
+  let link: Awaited<ReturnType<typeof approvals.requestAgentApproval>>;
+  try {
+    link = await approvals.requestAgentApproval(db, env, principal, {
+      binding,
+      summary,
+      operationIds: [operation.operationId],
+    });
+  } catch (error) {
+    if (error instanceof AgentDispatchError) throw new AppError(error.status, error.code, error.message);
+    throw error;
+  }
   throw new AppError(
     428,
     "confirmation_required",
-    `This change needs the merchant's approval. Show them the summary, then repeat the same request with the ${CONFIRM_TOKEN_HEADER} header.`,
-    { confirmation: { summary: confirm.confirmSummary(steps), ...minted, header: CONFIRM_TOKEN_HEADER } },
+    `This change needs the merchant's approval. Ask them to open confirmation.approvalUrl and approve it, then repeat the same request with the ${approvals.APPROVAL_HEADER} header set to confirmation.approvalId.`,
+    { confirmation: { summary, ...link, header: approvals.APPROVAL_HEADER } },
   );
 }

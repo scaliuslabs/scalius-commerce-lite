@@ -21983,6 +21983,7 @@
                         "write_inventory",
                         "read_orders",
                         "write_orders",
+                        "write_payments",
                         "write_fulfillments",
                         "read_customers",
                         "write_customers",
@@ -22827,6 +22828,7 @@
                 "write_inventory",
                 "read_orders",
                 "write_orders",
+                "write_payments",
                 "write_fulfillments",
                 "read_customers",
                 "write_customers",
@@ -22990,6 +22992,7 @@
                         "write_inventory",
                         "read_orders",
                         "write_orders",
+                        "write_payments",
                         "write_fulfillments",
                         "read_customers",
                         "write_customers",
@@ -24051,7 +24054,8 @@
                 "type": "string"
               },
               "name": {
-                "type": "string"
+                "type": "string",
+                "x-scalius-protected": "name"
               }
             },
             "required": [
@@ -24061,7 +24065,8 @@
           },
           "recipientName": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "x-scalius-protected": "name"
           },
           "recipientContactMasked": {
             "type": "string",
@@ -24112,11 +24117,13 @@
               },
               "recipientEmail": {
                 "type": "string",
-                "nullable": true
+                "nullable": true,
+                "x-scalius-protected": "email"
               },
               "recipientPhone": {
                 "type": "string",
-                "nullable": true
+                "nullable": true,
+                "x-scalius-protected": "phone"
               },
               "sourceOrder": {
                 "type": "object",
@@ -72913,7 +72920,7 @@
         "tags": [
           "Orders"
         ],
-        "summary": "Status-only view of an order by its number (no personal data)",
+        "summary": "Status view of an order by its number and the last 4 phone digits or email",
         "requestBody": {
           "required": true,
           "content": {
@@ -72926,10 +72933,17 @@
                     "minLength": 1,
                     "maxLength": 64,
                     "description": "Order number (\"#1001\") or order id"
+                  },
+                  "contact": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 254,
+                    "description": "The last 4 digits of the phone number on the order, or its email"
                   }
                 },
                 "required": [
-                  "reference"
+                  "reference",
+                  "contact"
                 ],
                 "additionalProperties": false
               }
@@ -73325,7 +73339,7 @@
           "maxRequestBytes": 1048576,
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
-          "exclusionReason": "Service-authenticated storefront proxy for the Track-your-order status view; guessable order numbers stay behind the storefront's per-IP limit.",
+          "exclusionReason": "Service-authenticated storefront proxy for the Track-your-order status view; it needs the order number plus the last 4 phone digits or the email, behind per-IP and per-order limits.",
           "dryRun": "none",
           "confirmation": "none"
         },
@@ -73354,6 +73368,12 @@
                     "maxLength": 64,
                     "description": "Order number (\"#1001\") or order id"
                   },
+                  "contact": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 254,
+                    "description": "The last 4 digits of the phone number on the order, or its email"
+                  },
                   "channel": {
                     "type": "string",
                     "enum": [
@@ -73364,7 +73384,8 @@
                   }
                 },
                 "required": [
-                  "reference"
+                  "reference",
+                  "contact"
                 ],
                 "additionalProperties": false
               }
@@ -94143,7 +94164,7 @@
           "App API - Orders"
         ],
         "summary": "Record a payment against an invoice order",
-        "description": "Records money received for a deferred (net terms) order: a bank transfer, cheque or cash against its invoice. No provider is called. The order's paid amount and payment status advance in the same write, `payment.updated` (and `order.paid` once nothing is due) follow, and a refund of it is a manual settlement. Send an Idempotency-Key: a repeat returns the first payment.",
+        "description": "Records money received for a deferred (net terms) order: a bank transfer, cheque or cash against its invoice. No provider is called. The order's paid amount and payment status advance in the same write, `payment.updated` (and `order.paid` once nothing is due) follow, and a refund of it is a manual settlement. When an app records it on an order with gift cards or downloads still owed, the order is held for staff review in the same write: they are handed over once staff release the hold. Send an Idempotency-Key: a repeat returns the first payment.",
         "parameters": [
           {
             "schema": {
@@ -94355,7 +94376,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "orders.edit"
+          "permission": "orders.record_payment"
         }
       },
       "get": {
@@ -100463,7 +100484,7 @@
           "App API - Gift cards"
         ],
         "summary": "Issue a gift card",
-        "description": "Issues a gift card in the store currency, in minor units at its price increment. The code is never returned: with `notify` the store sends it to the recipient, else the owning customer. Send an Idempotency-Key: a repeat returns the first card.",
+        "description": "Issues a gift card in the store currency, in minor units at its price increment. The code is never returned: with `notify` the store sends it to the recipient, else the owning customer. An app's `notify` reaches only the owning customer's own contact (set `customerId`, no recipient email or phone), and what one app issues and tops up per UTC date stays within the store's limit (403 `app_gift_card_limit`, Gift cards > Settings). Send an Idempotency-Key: a repeat returns the first card.",
         "parameters": [
           {
             "schema": {
@@ -100539,7 +100560,7 @@
                   "notify": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Send the code to the recipient (else the owning customer) now."
+                    "description": "Send the code to the recipient (else the owning customer) now. From an app: to the owning customer's own contact only."
                   }
                 },
                 "required": [
@@ -100854,7 +100875,7 @@
           "App API - Gift cards"
         ],
         "summary": "Disable, enable or re-date a gift card",
-        "description": "`status: disabled` stops a card being spent (its balance stays); `active` turns it back on. Also changes the expiry, the owning customer or the store's note. Fields left out keep their value.",
+        "description": "`status: disabled` stops a card being spent (its balance stays); `active` turns it back on. Also changes the expiry, the owning customer or the store's note. An app cannot change the owner of a card with a balance (403). Fields left out keep their value.",
         "parameters": [
           {
             "schema": {
@@ -101072,7 +101093,7 @@
           "App API - Gift cards"
         ],
         "summary": "Add to or take from a gift card balance",
-        "description": "One ledger movement with a reason: a positive `amountMinor` adds value, a negative one removes it (never below zero), in minor units of the card's currency. Send an Idempotency-Key: a repeat moves the balance once.",
+        "description": "One ledger movement with a reason: a positive `amountMinor` adds value, a negative one removes it (never below zero), in minor units of the card's currency. An app adds value only to cards in the store currency, within its limit per UTC date (403 `app_gift_card_limit`). Send an Idempotency-Key: a repeat moves the balance once.",
         "parameters": [
           {
             "schema": {
@@ -122041,10 +122062,12 @@
                                     "type": "string"
                                   },
                                   "name": {
-                                    "type": "string"
+                                    "type": "string",
+                                    "x-scalius-protected": "name"
                                   },
                                   "phone": {
-                                    "type": "string"
+                                    "type": "string",
+                                    "x-scalius-protected": "phone"
                                   },
                                   "kind": {
                                     "type": "string",
@@ -122090,15 +122113,18 @@
                                 "type": "string"
                               },
                               "name": {
-                                "type": "string"
+                                "type": "string",
+                                "x-scalius-protected": "name"
                               },
                               "email": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "x-scalius-protected": "email"
                               },
                               "phone": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "x-scalius-protected": "phone"
                               },
                               "changeType": {
                                 "type": "string",
@@ -122160,11 +122186,13 @@
                                     "type": "string"
                                   },
                                   "name": {
-                                    "type": "string"
+                                    "type": "string",
+                                    "x-scalius-protected": "name"
                                   },
                                   "phone": {
                                     "type": "string",
-                                    "nullable": true
+                                    "nullable": true,
+                                    "x-scalius-protected": "phone"
                                   },
                                   "kind": {
                                     "type": "string",
@@ -122220,7 +122248,8 @@
                                 "nullable": true
                               },
                               "customerName": {
-                                "type": "string"
+                                "type": "string",
+                                "x-scalius-protected": "name"
                               },
                               "totalAmount": {
                                 "type": "number"
@@ -148581,7 +148610,8 @@
                                 "nullable": true
                               },
                               "customerName": {
-                                "type": "string"
+                                "type": "string",
+                                "x-scalius-protected": "name"
                               },
                               "status": {
                                 "type": "string"
@@ -148605,22 +148635,26 @@
                                 "type": "string"
                               },
                               "name": {
-                                "type": "string"
+                                "type": "string",
+                                "x-scalius-protected": "name"
                               },
                               "phone": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "x-scalius-protected": "phone"
                               },
                               "email": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "x-scalius-protected": "email"
                               },
                               "origin": {
                                 "type": "string"
                               },
                               "latestOrderName": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "x-scalius-protected": "name"
                               }
                             },
                             "required": [
@@ -152300,7 +152334,8 @@
                               },
                               "customerName": {
                                 "type": "string",
-                                "maxLength": 256
+                                "maxLength": 256,
+                                "x-scalius-protected": "name"
                               },
                               "totalAmount": {
                                 "type": "number"
@@ -158708,6 +158743,7 @@
             "orders.edit",
             "orders.issue_invoice",
             "orders.manage_shipments",
+            "orders.record_payment",
             "orders.refund",
             "orders.restore",
             "orders.view",
@@ -162022,6 +162058,7 @@
             "orders.edit",
             "orders.issue_invoice",
             "orders.manage_shipments",
+            "orders.record_payment",
             "orders.refund",
             "orders.restore",
             "orders.view",
@@ -163131,6 +163168,7 @@
             "orders.edit",
             "orders.issue_invoice",
             "orders.manage_shipments",
+            "orders.record_payment",
             "orders.refund",
             "orders.restore",
             "orders.view",
@@ -170569,6 +170607,7 @@
             "orders.edit",
             "orders.issue_invoice",
             "orders.manage_shipments",
+            "orders.record_payment",
             "orders.refund",
             "orders.restore",
             "orders.view",
@@ -189028,16 +189067,19 @@
                               "exclusiveMinimum": true
                             },
                             "customerName": {
-                              "type": "string"
+                              "type": "string",
+                              "x-scalius-protected": "name"
                             },
                             "customerPhone": {
                               "type": "string",
                               "nullable": true,
-                              "description": "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in)."
+                              "description": "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in).",
+                              "x-scalius-protected": "phone"
                             },
                             "customerEmail": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "email"
                             },
                             "customerId": {
                               "type": "string",
@@ -189045,11 +189087,13 @@
                             },
                             "shippingAddress": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "shippingAddressLine2": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "shippingCountryCode": {
                               "type": "string",
@@ -189057,7 +189101,8 @@
                             },
                             "shippingDependentLocality": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "shippingLocality": {
                               "type": "string",
@@ -189073,34 +189118,41 @@
                             },
                             "shippingCompany": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "shippingName": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "name"
                             },
                             "shippingPhone": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "phone"
                             },
                             "billingSameAsShipping": {
                               "type": "boolean"
                             },
                             "billingName": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "name"
                             },
                             "billingCompany": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "billingAddress": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "billingAddressLine2": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "billingCountryCode": {
                               "type": "string",
@@ -189108,7 +189160,8 @@
                             },
                             "billingDependentLocality": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "billingLocality": {
                               "type": "string",
@@ -189750,16 +189803,19 @@
                               "exclusiveMinimum": true
                             },
                             "customerName": {
-                              "type": "string"
+                              "type": "string",
+                              "x-scalius-protected": "name"
                             },
                             "customerPhone": {
                               "type": "string",
                               "nullable": true,
-                              "description": "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in)."
+                              "description": "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in).",
+                              "x-scalius-protected": "phone"
                             },
                             "customerEmail": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "email"
                             },
                             "customerId": {
                               "type": "string",
@@ -189767,11 +189823,13 @@
                             },
                             "shippingAddress": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "shippingAddressLine2": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "shippingCountryCode": {
                               "type": "string",
@@ -189779,7 +189837,8 @@
                             },
                             "shippingDependentLocality": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "shippingLocality": {
                               "type": "string",
@@ -189795,34 +189854,41 @@
                             },
                             "shippingCompany": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "shippingName": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "name"
                             },
                             "shippingPhone": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "phone"
                             },
                             "billingSameAsShipping": {
                               "type": "boolean"
                             },
                             "billingName": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "name"
                             },
                             "billingCompany": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "billingAddress": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "billingAddressLine2": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "billingCountryCode": {
                               "type": "string",
@@ -189830,7 +189896,8 @@
                             },
                             "billingDependentLocality": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "billingLocality": {
                               "type": "string",
@@ -205697,7 +205764,8 @@
                               },
                               "customerName": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "x-scalius-protected": "name"
                               },
                               "assigneeUserId": {
                                 "type": "string",
@@ -206908,7 +206976,8 @@
                               },
                               "customerName": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "x-scalius-protected": "name"
                               },
                               "assigneeUserId": {
                                 "type": "string",
@@ -207513,15 +207582,18 @@
                               "type": "string"
                             },
                             "name": {
-                              "type": "string"
+                              "type": "string",
+                              "x-scalius-protected": "name"
                             },
                             "email": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "email"
                             },
                             "phone": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "phone"
                             }
                           },
                           "required": [
@@ -208268,7 +208340,8 @@
                             },
                             "customerName": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "name"
                             },
                             "assigneeUserId": {
                               "type": "string",
@@ -208862,7 +208935,8 @@
                             },
                             "customerName": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "name"
                             },
                             "assigneeUserId": {
                               "type": "string",
@@ -209421,7 +209495,8 @@
                             },
                             "customerName": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "name"
                             },
                             "assigneeUserId": {
                               "type": "string",
@@ -209983,7 +210058,8 @@
                             },
                             "customerName": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "name"
                             },
                             "assigneeUserId": {
                               "type": "string",
@@ -210586,7 +210662,8 @@
                             },
                             "customerName": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "name"
                             },
                             "assigneeUserId": {
                               "type": "string",
@@ -238986,7 +239063,8 @@
           "confirmation": "none"
         },
         "x-scalius-rbac": {
-          "type": "unmapped"
+          "type": "permission",
+          "permission": "agent_access.manage"
         }
       },
       "post": {
@@ -239154,7 +239232,346 @@
           "confirmation": "none"
         },
         "x-scalius-rbac": {
-          "type": "unmapped"
+          "type": "permission",
+          "permission": "agent_access.manage"
+        }
+      }
+    },
+    "/api/v1/admin/agent-access/approvals/{approvalId}": {
+      "get": {
+        "operationId": "dashboard.agent_access.approval.get",
+        "tags": [
+          "Admin - Agent Access"
+        ],
+        "summary": "Read a change an agent asks to make",
+        "description": "Browser-only: the summary of one gated agent change waiting for (or given) its owner's approval.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^abh_[A-Za-z0-9_-]{20}$"
+            },
+            "required": true,
+            "name": "approvalId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The change to approve",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "approvalId": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "pending",
+                            "approved"
+                          ]
+                        },
+                        "summary": {
+                          "type": "string"
+                        },
+                        "operationIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "expiresAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "approvalId",
+                        "status",
+                        "summary",
+                        "operationIds",
+                        "expiresAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "excluded",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "security",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 8192,
+          "maxRequestBytes": 4096,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Browser-only view of a gated agent change waiting for its owner's approval; agents receive only the approval link.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "agent_access.manage"
+        }
+      },
+      "post": {
+        "operationId": "dashboard.agent_access.approval.decide",
+        "tags": [
+          "Admin - Agent Access"
+        ],
+        "summary": "Approve or decline a change an agent asks to make",
+        "description": "Browser-only: the grant's owner approves (the agent's retry then runs once) or declines one gated agent change.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^abh_[A-Za-z0-9_-]{20}$"
+            },
+            "required": true,
+            "name": "approvalId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "decision": {
+                    "type": "string",
+                    "enum": [
+                      "approve",
+                      "decline"
+                    ]
+                  }
+                },
+                "required": [
+                  "decision"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The answer was recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "decision": {
+                          "type": "string",
+                          "enum": [
+                            "approve",
+                            "decline"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "decision"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "excluded",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "security",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 4096,
+          "maxRequestBytes": 4096,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "The grant owner's approval of a gated agent change; only that owner's 2FA-verified browser session may answer it, never an agent.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "agent_access.manage"
         }
       }
     },
@@ -241232,6 +241649,7 @@
             "orders.edit",
             "orders.issue_invoice",
             "orders.manage_shipments",
+            "orders.record_payment",
             "orders.refund",
             "orders.restore",
             "orders.view",
@@ -254247,6 +254665,365 @@
         "x-scalius-rbac": {
           "type": "permission",
           "permission": "gift_cards.view"
+        }
+      }
+    },
+    "/api/v1/admin/gift-cards/settings": {
+      "get": {
+        "operationId": "dashboard.gift_cards.settings_get",
+        "tags": [
+          "Admin - Gift cards"
+        ],
+        "summary": "Gift card settings",
+        "description": "How much value one app may add to gift cards per UTC date, in the store currency.",
+        "responses": {
+          "200": {
+            "description": "The settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "appDailyLimit": {
+                          "type": "number",
+                          "description": "The most one app may add to gift cards per UTC date (cards it issues plus top-ups), in the store currency. 0: apps add no value."
+                        },
+                        "appDailyLimitMinor": {
+                          "type": "integer"
+                        },
+                        "currencyCode": {
+                          "type": "string"
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "appDailyLimit",
+                        "appDailyLimitMinor",
+                        "currencyCode",
+                        "revision"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when asked how much value an app may add to gift cards per UTC date.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "gift_cards.view"
+        }
+      },
+      "put": {
+        "operationId": "dashboard.gift_cards.settings_update",
+        "tags": [
+          "Admin - Gift cards"
+        ],
+        "summary": "Change gift card settings",
+        "description": "Sets the most one app may add to gift cards per UTC date (issued cards and top-ups together), in the store currency. Staff are never limited.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "appDailyLimit": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "In the store currency; 0 stops apps adding value."
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "The `revision` you read; a newer one is refused with 409."
+                  }
+                },
+                "required": [
+                  "appDailyLimit",
+                  "expectedRevision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The saved settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "appDailyLimit": {
+                          "type": "number",
+                          "description": "The most one app may add to gift cards per UTC date (cards it issues plus top-ups), in the store currency. 0: apps add no value."
+                        },
+                        "appDailyLimitMinor": {
+                          "type": "integer"
+                        },
+                        "currencyCode": {
+                          "type": "string"
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "appDailyLimit",
+                        "appDailyLimitMinor",
+                        "currencyCode",
+                        "revision"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "financial",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when changing how much value one app may add to gift cards per UTC date.",
+          "dryRun": "none",
+          "confirmation": "required"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "gift_cards.manage"
         }
       }
     },
@@ -273918,6 +274695,22 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.gift_cards.resend"
+          ]
+        },
+        {
+          "operationId": "dashboard.gift_cards.settings_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.gift_cards.settings_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.gift_cards.settings_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.gift_cards.settings_update"
           ]
         },
         {

@@ -4,7 +4,7 @@ import {
   type Database,
 } from "@scalius/database/client";
 import { checkoutAttempts, orderReceipts, orders } from "@scalius/database/schema";
-import { and, eq, getTableColumns, isNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, getTableColumns, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { ConflictError, ForbiddenError, ServiceUnavailableError } from "@scalius/core/errors";
@@ -26,13 +26,11 @@ export interface CheckoutAttemptIdentity {
 }
 
 /**
- * A checkout identity prepared in memory and committed with the order. New
- * storefront submits use this instead of creating a durable processing lease
- * before validation and order construction finish.
+ * A checkout identity prepared in memory and committed with the order: the
+ * attempt row exists only once its order does (no lease, no processing row),
+ * so a request key either replays its committed order or starts a new one.
  */
 export interface AtomicCheckoutAttempt {
-  commitMode: "atomic";
-  origin: "new" | "retry";
   id: string;
   requestKey: string;
   requestHash: string;
@@ -42,11 +40,6 @@ export interface AtomicCheckoutAttempt {
 }
 
 export type CheckoutAttemptReplayResult<TResponse> = { status: "replay"; response: TResponse };
-export type CheckoutAttemptProcessingResult = { status: "processing"; orderId: string; statusToken: string };
-export type ExistingCheckoutAttemptResult<TResponse> =
-  | CheckoutAttemptReplayResult<TResponse>
-  | CheckoutAttemptProcessingResult
-  | { status: "retry"; attempt: AtomicCheckoutAttempt };
 
 const CHECKOUT_ATTEMPT_REQUEST_KEY_PREFIX = "checkout_submit:v1:";
 const CHECKOUT_STATUS_TOKEN_PREFIX = "cst_";
@@ -134,8 +127,6 @@ export function createAtomicCheckoutAttempt(
   identity: CheckoutAttemptIdentity,
 ): AtomicCheckoutAttempt {
   return {
-    commitMode: "atomic",
-    origin: "new",
     id: createCheckoutAttemptId(),
     requestKey: identity.requestKey,
     requestHash: identity.requestHash,
@@ -148,25 +139,22 @@ export function createAtomicCheckoutAttempt(
 export async function resolveExistingCheckoutAttempt<TResponse>(
   db: Database,
   identity: CheckoutAttemptIdentity,
-  nowSeconds = Math.floor(Date.now() / 1000),
   customerId?: string | null | PromiseLike<string | null>,
-): Promise<ExistingCheckoutAttemptResult<TResponse> | null> {
+): Promise<CheckoutAttemptReplayResult<TResponse> | null> {
   const existing = await selectCheckoutAttemptByKey(db, identity.requestKey).get();
   return resolveCheckoutAttemptRow<TResponse>(
     existing,
     identity,
-    nowSeconds,
     existing?.linkedOrderAccountOwnerCustomerId ? await customerId : undefined,
   );
 }
 
-/** Replay / 409 / retry decision for a row read by `selectCheckoutAttemptByKey`. */
+/** Replay or 409 decision for a row read by `selectCheckoutAttemptByKey`; null starts a new attempt. */
 export function resolveCheckoutAttemptRow<TResponse>(
   existing: CheckoutAttemptRow | undefined,
   identity: CheckoutAttemptIdentity,
-  nowSeconds = Math.floor(Date.now() / 1000),
   customerId?: string | null,
-): ExistingCheckoutAttemptResult<TResponse> | null {
+): CheckoutAttemptReplayResult<TResponse> | null {
   if (existing?.linkedOrderAccountOwnerCustomerId && existing.linkedOrderAccountOwnerCustomerId !== customerId) {
     throw new ForbiddenError("Sign in to the account that started this checkout to continue.");
   }
@@ -183,27 +171,15 @@ export function resolveCheckoutAttemptRow<TResponse>(
     );
   }
   assertSameCheckoutRequest(existing, identity);
-
-  const replay = replayCheckoutAttempt<TResponse>(existing);
-  if (replay) return replay;
-
-  if (!existing) return null;
-  if (isRetryableCheckoutAttempt(existing, nowSeconds)) {
-    return {
-      status: "retry",
-      attempt: atomicCheckoutAttemptFromRow(existing),
-    };
-  }
-  if (existing.status !== "processing") return null;
-
-  return processingResultFromAttempt(existing);
+  return replayCheckoutAttempt<TResponse>(existing);
 }
 
 /**
  * Prepare a committed idempotency row and receipt around the authoritative
- * order transaction. The upsert is intentionally first: duplicate submissions
- * arbitrate before inventory and order writes. A named invalid JSON path keeps
- * this guard distinguishable from stock and promotion guards after rollback.
+ * order transaction. The insert is intentionally first: duplicate submissions
+ * arbitrate before inventory and order writes (the loser inserts nothing and
+ * its guard fails). A named marker keeps this guard distinguishable from
+ * stock and promotion guards after rollback.
  */
 export async function prepareAtomicCheckoutAttemptCommit<TResponse>(
   db: Database,
@@ -216,16 +192,6 @@ export async function prepareAtomicCheckoutAttemptCommit<TResponse>(
 ): Promise<PreparedAtomicCheckoutAttemptCommit> {
   const responsePayload = JSON.stringify(options.response);
   const tokenHash = await hashOrderReceiptToken(attempt.checkoutToken);
-  const retryableExistingAttempt = or(
-    eq(checkoutAttempts.status, "failed"),
-    and(
-      eq(checkoutAttempts.status, "processing"),
-      or(
-        isNull(checkoutAttempts.claimExpiresAt),
-        lte(checkoutAttempts.claimExpiresAt, sql`unixepoch()`),
-      ),
-    ),
-  );
 
   const attemptWrite = db
     .insert(checkoutAttempts)
@@ -240,30 +206,10 @@ export async function prepareAtomicCheckoutAttemptCommit<TResponse>(
       totalAmountMinor: options.totalAmountMinor,
       responsePayload,
       attempts: 1,
-      claimId: null,
-      claimExpiresAt: null,
-      lastError: null,
       createdAt: sql`unixepoch()`,
       updatedAt: sql`unixepoch()`,
     })
-    .onConflictDoUpdate({
-      target: checkoutAttempts.requestKey,
-      set: {
-        status: "committed",
-        paymentMethod: options.paymentMethod,
-        totalAmountMinor: options.totalAmountMinor,
-        responsePayload,
-        attempts: sql`${checkoutAttempts.attempts} + 1`,
-        claimId: null,
-        claimExpiresAt: null,
-        lastError: null,
-        updatedAt: sql`unixepoch()`,
-      },
-      setWhere: and(
-        eq(checkoutAttempts.requestHash, attempt.requestHash),
-        retryableExistingAttempt,
-      ),
-    });
+    .onConflictDoNothing({ target: checkoutAttempts.requestKey });
 
   const committedIdentityCondition = and(
     eq(checkoutAttempts.id, attempt.id),
@@ -349,37 +295,6 @@ function replayCheckoutAttempt<TResponse>(
   } catch {
     throw new ServiceUnavailableError("Checkout replay payload is unreadable. Please try again.");
   }
-}
-
-function isRetryableCheckoutAttempt(
-  row: CheckoutAttemptRow,
-  nowSeconds = Math.floor(Date.now() / 1000),
-): boolean {
-  return row.status === "failed" || (
-    row.status === "processing"
-    && (row.claimExpiresAt === null || row.claimExpiresAt <= nowSeconds)
-  );
-}
-
-function atomicCheckoutAttemptFromRow(row: CheckoutAttemptRow): AtomicCheckoutAttempt {
-  return {
-    commitMode: "atomic",
-    origin: "retry",
-    id: row.id,
-    requestKey: row.requestKey,
-    requestHash: row.requestHash,
-    orderId: row.orderId,
-    checkoutToken: row.checkoutToken,
-    statusToken: buildCheckoutStatusTokenFromRequestKey(row.requestKey),
-  };
-}
-
-function processingResultFromAttempt(row: Pick<CheckoutAttemptRow, "orderId" | "requestKey">): CheckoutAttemptProcessingResult {
-  return {
-    status: "processing",
-    orderId: row.orderId,
-    statusToken: buildCheckoutStatusTokenFromRequestKey(row.requestKey),
-  };
 }
 
 function assertSameCheckoutRequest(

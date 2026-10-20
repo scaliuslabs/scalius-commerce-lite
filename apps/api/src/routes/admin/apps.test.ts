@@ -119,9 +119,9 @@ describe("admin app routes", () => {
     expect(detail.granted).toBeNull();
     expect(detail.added).toEqual(detail.request);
     // The risk is what the scope lets this (third-party) app call: stable operations only,
-    // so the COD amount edit (beta, financial) does not count, but recording a payment
-    // against an invoice (stable, financial) does.
-    expect(detail.scopes).toEqual([{ name: "write_orders", risk: "financial", sensitive: false }]);
+    // so the COD amount edit (beta, financial) does not count, and recording a payment
+    // against an invoice needs write_payments (security audit S3).
+    expect(detail.scopes).toEqual([{ name: "write_orders", risk: "write", sensitive: false }]);
     expect(detail.settings.fields.map((field: Json) => [field.key, field.type, field.required])).toEqual([["tag", "text", true], ["note", "textarea", false], ["min_total", "number", false]]);
     expect(detail.settings.missing).toEqual([]);
     expect(detail).toMatchObject({ runtime: "bundled", runtimeAvailable: true, cron: [], admin: { pages: [{ id: "overview", route: "summary" }] } });

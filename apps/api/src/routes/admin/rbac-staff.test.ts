@@ -200,6 +200,37 @@ describe("staff always keep a role", () => {
     });
 });
 
+describe("removing a role takes the same authority as assigning it", () => {
+    it("lets a lower-privileged team lead remove only roles within their own permissions", async () => {
+        const owner = await asStaff("owner");
+        const lead = await owner("POST", "/rbac/roles", {
+            name: "team_lead", displayName: "Team lead", permissions: ["team.view", "team.manage_roles", "orders.view", "orders.edit"],
+        });
+        const orders = await owner("POST", "/rbac/roles", {
+            name: "order_desk", displayName: "Order desk", permissions: ["orders.view", "orders.edit"],
+        });
+        expect([lead.status, orders.status]).toEqual([201, 201]);
+        expect((await owner("POST", "/rbac/user-roles", { userId: "staff", roleId: lead.body.data.role.id })).status).toBe(201);
+        expect((await owner("POST", "/rbac/user-roles", { userId: "manager", roleId: orders.body.data.role.id })).status).toBe(201);
+
+        // The team lead cannot demote the manager: the Manager role holds permissions they lack.
+        const teamLead = await asStaff("staff");
+        const demote = await teamLead("DELETE", "/rbac/user-roles", { userId: "manager", roleId: roleId("manager") });
+        expect(demote.status).toBe(403);
+        expect(demote.body.error.message).toContain("cannot remove a role");
+        expect(database.sqlite.prepare("SELECT COUNT(*) AS n FROM user_roles WHERE user_id = 'manager'").get()).toEqual({ n: 2 });
+        // An agent acting for the owner is held to its grant the same way.
+        const agent = await asStaff("owner", { agentGrant: ["team.view", "team.manage_roles", "orders.view", "orders.edit"] });
+        expect((await agent("DELETE", "/rbac/user-roles", { userId: "manager", roleId: roleId("manager") })).status).toBe(403);
+
+        // A role within the lead's own permissions comes off, as it could have been given.
+        expect((await teamLead("DELETE", "/rbac/user-roles", { userId: "manager", roleId: orders.body.data.role.id })).status).toBe(200);
+        // The owner may remove any role.
+        expect((await owner("POST", "/rbac/user-roles", { userId: "manager", roleId: orders.body.data.role.id })).status).toBe(201);
+        expect((await owner("DELETE", "/rbac/user-roles", { userId: "manager", roleId: roleId("manager") })).status).toBe(200);
+    });
+});
+
 describe("remove staff", () => {
     it("removes a staff member's access and sign-in", async () => {
         const call = await asStaff("manager");

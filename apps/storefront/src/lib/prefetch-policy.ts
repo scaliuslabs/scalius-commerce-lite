@@ -1,13 +1,13 @@
-import { hasStorefrontProductVariantSelectionParams } from "@scalius/shared/storefront-cache-path";
 import { transformHtmlAnchorAttributes } from "@scalius/shared/html-anchor-transform";
 import { isPrivateStorefrontPathname } from "./cache-policy";
 
 const STOREFRONT_URL_BASE = "https://storefront-prefetch.invalid";
 
 /**
- * Astro prefetches every internal link by default. Private commerce routes and
- * product option URLs deliberately bypass the public HTML cache, so fetching
- * them before an intentional navigation only creates private SSR/API work.
+ * Astro prefetches every internal link by default. Private commerce routes
+ * deliberately bypass the public HTML cache, so fetching them before an
+ * intentional navigation only creates private SSR/API work. A product's
+ * variant links are its one cached page, so they prefetch like it.
  */
 export function getStorefrontPrefetchAttribute(
   href: string | URL | null | undefined,
@@ -32,10 +32,7 @@ export function getStorefrontPrefetchAttribute(
 
   if (pageBase && url.origin !== baseUrl.origin) return undefined;
 
-  return isPrivateStorefrontPathname(url.pathname) ||
-    hasStorefrontProductVariantSelectionParams(url)
-    ? "false"
-    : undefined;
+  return isPrivateStorefrontPathname(url.pathname) ? "false" : undefined;
 }
 
 /**

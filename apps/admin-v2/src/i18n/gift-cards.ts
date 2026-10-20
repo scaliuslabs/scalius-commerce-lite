@@ -7,6 +7,18 @@ export const giftCardsMessages = defineMessages({
     whatGiftCards: "gift cards",
     issueGiftCard: "Issue gift card",
 
+    // Settings: what apps may add
+    settingsButton: "Settings",
+    settingsTitle: "Gift card settings",
+    settingsDescription: "Apps you approve to issue gift cards add value your store owes. Limit how much each app can add.",
+    appDailyLimitLabel: "Most one app can add a day",
+    appDailyLimitHelp: "New cards and top-ups from one app together, each day. Set 0 to stop apps adding value. Your staff are never limited.",
+    appDailyLimitRequired: "Enter an amount, or 0.",
+    settingsLoadFailed: "Couldn't load the gift card settings.",
+    settingsSave: "Save",
+    settingsSaved: "Gift card settings saved",
+    settingsChanged: "Someone else changed these settings. They have been reloaded; try again.",
+
     // Outstanding balance
     outstandingTitle: "Outstanding balance",
     outstandingHelp: "What customers can still spend. Disabled and expired cards aren't counted.",
@@ -169,6 +181,17 @@ export const giftCardsMessages = defineMessages({
     pageTitle: "গিফট কার্ড",
     whatGiftCards: "গিফট কার্ড",
     issueGiftCard: "গিফট কার্ড ইস্যু করুন",
+
+    settingsButton: "সেটিংস",
+    settingsTitle: "গিফট কার্ড সেটিংস",
+    settingsDescription: "যে অ্যাপকে আপনি গিফট কার্ড দেওয়ার অনুমতি দেন, সে আপনার দোকানের দেনা বাড়ায়। প্রতিটি অ্যাপ কতটা যোগ করতে পারবে তার সীমা ঠিক করুন।",
+    appDailyLimitLabel: "একটি অ্যাপ দিনে সর্বোচ্চ যতটা যোগ করতে পারে",
+    appDailyLimitHelp: "একটি অ্যাপের নতুন কার্ড ও টপ-আপ মিলিয়ে, প্রতিদিন। অ্যাপকে মূল্য যোগ করতে না দিতে 0 দিন। আপনার স্টাফের কোনো সীমা নেই।",
+    appDailyLimitRequired: "একটি পরিমাণ লিখুন, অথবা 0।",
+    settingsLoadFailed: "গিফট কার্ড সেটিংস লোড করা যায়নি।",
+    settingsSave: "সেভ করুন",
+    settingsSaved: "গিফট কার্ড সেটিংস সেভ হয়েছে",
+    settingsChanged: "অন্য কেউ এই সেটিংস বদলেছেন। আবার লোড করা হয়েছে; আবার চেষ্টা করুন।",
 
     outstandingTitle: "বকেয়া ব্যালেন্স",
     outstandingHelp: "গ্রাহকেরা এখনও যতটা খরচ করতে পারেন। বন্ধ ও মেয়াদোত্তীর্ণ কার্ড ধরা হয়নি।",

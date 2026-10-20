@@ -1,9 +1,11 @@
 /**
  * The platform's form token in app forms (`@scalius/shared/plugins/app-form`).
- * On a page rendered for a signed-in buyer, every `<form method="post">`
- * whose action is an app proxy path (`/apps/<plugin id>/...`, under any
- * presence) gets a hidden `_scalius_form` field bound to that app and the
- * buyer's session. The API refuses a session-carrying form post to an app
+ * On a page rendered for a signed-in buyer, a `<form method="post">` whose
+ * action is an app proxy path (`/apps/<plugin id>/...`, under any presence)
+ * gets a hidden `_scalius_form` field bound to that app and the buyer's
+ * session, only when that same app drew it (the sanitizer's owner stamp,
+ * `APP_FORM_OWNER_ATTRIBUTE`): another app's form posting there, or a form
+ * no app drew, gets none. The API refuses a session-carrying form post to an app
  * without it, before the app's handler runs.
  *
  * Runs in the gateway after the page cache, on HTML only, and only when the
@@ -14,6 +16,7 @@
  */
 import { deriveRuntimeSecret, readMasterSecret, type MasterSecretEnvironment } from "@scalius/shared/runtime-secrets";
 import {
+  APP_FORM_OWNER_ATTRIBUTE,
   APP_FORM_TOKEN_FIELD,
   APP_FORM_TOKEN_PURPOSE,
   appFormSessionOfCookie,
@@ -50,7 +53,7 @@ export function appOfFormAction(action: string | null, pageUrl: string): string 
   return appProxyPluginOfPath(stripPresencePath(url.pathname, presenceOfPath(url.pathname)));
 }
 
-/** The response with the form token in every app POST form, when the buyer is signed in. */
+/** The response with the form token in each app's own POST forms, when the buyer is signed in. */
 export function withAppFormTokens(
   request: Request,
   response: Response,
@@ -77,7 +80,7 @@ export function withAppFormTokens(
     async element(form) {
       if ((form.getAttribute("method") ?? "get").trim().toLowerCase() !== "post") return;
       const pluginId = appOfFormAction(form.getAttribute("action"), request.url);
-      if (!pluginId) return;
+      if (!pluginId || form.getAttribute(APP_FORM_OWNER_ATTRIBUTE) !== pluginId) return;
       // A hex token: nothing in it needs escaping.
       form.prepend(`<input type="hidden" name="${APP_FORM_TOKEN_FIELD}" value="${await tokenFor(pluginId)}">`, { html: true });
     },

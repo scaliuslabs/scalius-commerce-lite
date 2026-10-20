@@ -131,7 +131,6 @@ describe("public storefront cache policy", () => {
     ["recovery", "/payment-recovery", {}],
     ["newsletter result", "/newsletter?status=subscribed", {}],
     ["newsletter link", "/newsletter/unsubscribe?token=u1.x", {}],
-    ["variant selection", "/products/fish?size=large", {}],
     ["signed-in buyer", "/products/fish", { Cookie: "_fbp=fb.1.1; cs_auth=1" }],
     ["session", "/about", { Cookie: "cs_tok=private" }],
     ["theme preview", "/", { Cookie: "stp_theme_preview=tpv" }],
@@ -147,6 +146,15 @@ describe("public storefront cache policy", () => {
     }
     expect(getPublicStorefrontCachePolicy(new Request(`https://shop.example/${shell}`, { method: "POST" }))).toBeNull();
     expect(getPublicStorefrontCachePolicy(workerRequest(`/${shell}/extra`))).toBeNull();
+  });
+
+  it("serves every variant link of a product, retired option links included, from its one page", () => {
+    for (const query of ["?variant=sku_2", "?variant=sku_2&gclid=x", "?size=large&color=red", "?variant="]) {
+      expect(getPublicStorefrontCachePolicy(workerRequest(`/products/fish${query}`)), query)
+        .toEqual({ canonicalUrl: "https://shop.example/products/fish" });
+    }
+    expect(getPublicStorefrontCachePolicy(workerRequest("/en-in/products/fish?variant=sku_2")))
+      .toEqual({ canonicalUrl: "https://shop.example/en-in/products/fish" });
   });
 
   it("keeps tracking-cookie visitors on the shared cache lane", () => {
