@@ -23,10 +23,12 @@ import { providerCountriesSchema, providerCurrencySchema } from "./common";
 import { PROVIDER_KINDS, PROVIDER_OPERATIONS, type ProviderKind } from "./kinds";
 import { paymentAmountLimitsSchema } from "./payment";
 import { MESSAGING_CHANNELS } from "./channels";
+import { pluginKeySchema, pluginUrlNameSchema } from "../manifest-patterns";
 
-const providerId = z.string().regex(/^[a-z][a-z0-9-]{0,47}$/);
+/** A URL path segment (`/webhooks/couriers/<plugin id>:<provider id>`): snake_case or kebab-case. */
+const providerId = pluginUrlNameSchema();
 const title = z.string().trim().min(1).max(80);
-const settingKey = z.string().regex(/^[a-z][a-z0-9_]{0,47}$/);
+const settingKey = pluginKeySchema();
 /**
  * The provider's own mark in the plugin package (`assets/pathao.svg`): an SVG
  * or PNG with the app icon's checks, shown beside the provider where the
@@ -126,7 +128,7 @@ export const courierProviderDescriptorSchema = z.object({
    * `recipient.locationIds`.
    */
   locations: z.object({
-    key: z.string().regex(/^[a-z][a-z0-9_-]{0,31}$/),
+    key: z.string().regex(/^[a-z][a-z0-9_]{0,31}$/, "Use snake_case: a lowercase letter, then at most 31 lowercase letters, digits or underscores."),
     required: z.array(z.enum(["city", "zone", "area"])).max(3)
       .refine((levels) => new Set(levels).size === levels.length, "List each level once.")
       .default([]),

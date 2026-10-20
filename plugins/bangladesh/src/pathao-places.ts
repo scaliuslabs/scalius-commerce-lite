@@ -7,7 +7,7 @@
 //   a courier API refresh becomes a reviewed diff of places.json
 //   (`pnpm places:pathao-dataset`).
 // - `refreshPathaoPlaces()` is the store's live refresh (the places page's
-//   "Refresh from Pathao", finished by the `pathao-places` job): bounded
+//   "Refresh from Pathao", finished by the `pathao_places` job): bounded
 //   steps, each applied through the place import port
 //   (`dashboard.delivery_locations.import`, source `bd`, never `finish`: a
 //   live refresh turns off only what Pathao marks unusable). Progress is in

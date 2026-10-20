@@ -23,7 +23,7 @@ import {
   type StorefrontResolvedSettings,
   type StorefrontResolvedValue,
 } from "./storefront-protocol";
-import { PLUGIN_HOST_PATTERN, PLUGIN_NAME_PATTERN } from "./manifest-patterns";
+import { PLUGIN_HOST_PATTERN, PLUGIN_KEY_PATTERN, PLUGIN_URL_NAME_PATTERN, pluginKeySchema, pluginUrlNameSchema } from "./manifest-patterns";
 import {
   PLUGIN_PRODUCT_ID,
   PLUGIN_PRODUCT_SOURCE,
@@ -39,7 +39,8 @@ export * from "./storefront-protocol";
 
 // ── Manifest ──────────────────────────────────────────────────────────────
 
-const name = z.string().regex(PLUGIN_NAME_PATTERN);
+/** Skin, template and page preset ids: snake_case (the theme stores them as `<plugin id>/<id>`). */
+const key = pluginKeySchema();
 const title = z.string().trim().min(1).max(80);
 const description = z.string().trim().min(1).max(500);
 
@@ -57,7 +58,7 @@ export const STOREFRONT_SKINS_MAX = 30;
  */
 export const storefrontSkinDeclarationSchema = z.object({
   /** Unique per app: the theme names it `<plugin id>/<id>`. */
-  id: name,
+  id: key,
   target: z.string().max(64).refine(isStorefrontSkinTarget, "Use header, footer, product-card, product-main, listing-main or section:<core section type>."),
   name: title,
   description: description.optional(),
@@ -75,7 +76,7 @@ export type StorefrontSkinDeclaration = z.infer<typeof storefrontSkinDeclaration
  * app's page.
  */
 export const storefrontTemplateDeclarationSchema = z.object({
-  id: name,
+  id: key,
   name: title,
   description: description.optional(),
   /** The theme document version `theme` was written for (absent: 10, `STOREFRONT_DECLARATION_THEME_VERSION`). */
@@ -93,7 +94,7 @@ export type StorefrontTemplateDeclaration = z.infer<typeof storefrontTemplateDec
  * still does not fit is left out and reported on the app's page.
  */
 export const storefrontPagePresetDeclarationSchema = z.object({
-  id: name,
+  id: key,
   name: title,
   description: description.optional(),
   /** The theme document version `sections` were written for (absent: 10, `STOREFRONT_DECLARATION_THEME_VERSION`). */
@@ -105,7 +106,8 @@ export type StorefrontPagePresetDeclaration = z.infer<typeof storefrontPagePrese
 
 /** A client module the app's markup mounts (`storefront.islands`, built from `src/islands/<name>.ts`). */
 export const storefrontIslandDeclarationSchema = z.object({
-  name,
+  /** Its file (`islands/<name>.js`, a URL path segment): snake_case or kebab-case. */
+  name: pluginUrlNameSchema(),
   description: description.optional(),
 }).strict();
 
@@ -271,18 +273,18 @@ export function readStorefrontExtensions(value: unknown): StorefrontExtension[] 
     const item = entry as Record<string, unknown>;
     if (typeof item.pluginId !== "string" || typeof item.version !== "string" || typeof item.release !== "string" || !RELEASE.test(item.release)) continue;
     if (item.source !== "bundled" && item.source !== "registry" && item.source !== "upload") continue;
-    const names = (list: unknown) => Array.isArray(list) ? list.filter((name): name is string => typeof name === "string" && PLUGIN_NAME_PATTERN.test(name)) : [];
+    const names = (list: unknown, pattern: RegExp) => Array.isArray(list) ? list.filter((name): name is string => typeof name === "string" && pattern.test(name)) : [];
     const skins = Array.isArray(item.skins) ? item.skins.flatMap((skin) => {
       if (typeof skin !== "object" || skin === null) return [];
       const record = skin as Record<string, unknown>;
-      if (typeof record.id !== "string" || !PLUGIN_NAME_PATTERN.test(record.id) || !isStorefrontSkinTarget(record.target)) return [];
+      if (typeof record.id !== "string" || !PLUGIN_KEY_PATTERN.test(record.id) || !isStorefrontSkinTarget(record.target)) return [];
       const settings = pluginSettingsSchemaSchema.safeParse(record.settings ?? []);
       return settings.success ? [{ id: record.id, target: record.target, settings: settings.data }] : [];
     }) : [];
     const blocks = Array.isArray(item.blocks) ? item.blocks.flatMap((block) => {
       if (typeof block !== "object" || block === null) return [];
       const record = block as Record<string, unknown>;
-      if (typeof record.type !== "string" || !PLUGIN_NAME_PATTERN.test(record.type)) return [];
+      if (typeof record.type !== "string" || !PLUGIN_KEY_PATTERN.test(record.type)) return [];
       if (!(STOREFRONT_BLOCK_TARGETS as readonly unknown[]).includes(record.target)) return [];
       const settings = pluginSettingsSchemaSchema.safeParse(record.settings ?? []);
       return settings.success ? [{ type: record.type, target: record.target as StorefrontBlockTarget, settings: settings.data }] : [];
@@ -290,7 +292,7 @@ export function readStorefrontExtensions(value: unknown): StorefrontExtension[] 
     const sectionSettings: Record<string, PluginSettingsSchema> = {};
     if (typeof item.sectionSettings === "object" && item.sectionSettings !== null) {
       for (const [type, schema] of Object.entries(item.sectionSettings as Record<string, unknown>)) {
-        if (!PLUGIN_NAME_PATTERN.test(type)) continue;
+        if (!PLUGIN_KEY_PATTERN.test(type)) continue;
         const parsed = pluginSettingsSchemaSchema.safeParse(schema);
         if (parsed.success) sectionSettings[type] = parsed.data;
       }
@@ -300,11 +302,11 @@ export function readStorefrontExtensions(value: unknown): StorefrontExtension[] 
       version: item.version,
       source: item.source,
       release: item.release,
-      sections: names(item.sections),
+      sections: names(item.sections, PLUGIN_KEY_PATTERN),
       sectionSettings,
       skins,
       blocks,
-      islands: names(item.islands),
+      islands: names(item.islands, PLUGIN_URL_NAME_PATTERN),
       stylesheet: item.stylesheet === true,
       connect: Array.isArray(item.connect) ? item.connect.filter((host): host is string => typeof host === "string" && HOST.test(host)) : [],
     });

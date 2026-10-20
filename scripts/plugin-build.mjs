@@ -339,7 +339,7 @@ export async function packStorefront(contract, manifest, source) {
     const jobs = [
       ...sections.map((section) => ({ id: `section:${section.type}`, kind: "section", type: section.type, instanceId: "smoke", settings: smokeSettings(contract, section.settings) })),
       ...blocks.map((block) => ({
-        id: `block:${block.type}`, kind: "block", target: `product.${block.placement}`, type: block.type, instanceId: "smoke",
+        id: `block:${block.type}`, kind: "block", target: block.placement, type: block.type, instanceId: "smoke",
         settings: smokeSettings(contract, block.settings), data: contract.fixtureProductPage(),
       })),
       ...storefront.skins.map((skin) => ({

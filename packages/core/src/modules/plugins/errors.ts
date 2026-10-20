@@ -6,7 +6,6 @@ import { AppError } from "../../errors";
  */
 export type PluginErrorCode =
   | "manifest.invalid"
-  | "manifest.custom_field_type"
   | "manifest.reserved_vendor"
   | "installation.exists"
   | "installation.not_found"
@@ -51,6 +50,8 @@ export type PluginErrorCode =
   | "custom_fields.undeclared"
   | "custom_fields.invalid"
   | "messaging.not_allowed"
+  /** `to` is not a customer, a staff member or a declared recipient (`messaging.recipients`), and the app lacks `send_messages_any`. */
+  | "messaging.recipient_not_allowed"
   | "messaging.invalid"
   | "messaging.unavailable"
   /** Order timeline entries (`ctx.timeline.add`). */

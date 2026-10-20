@@ -1,0 +1,834 @@
+[
+ {
+  "version": 11,
+  "template": "department-mall",
+  "tokens": {
+   "colors": {
+    "background": "#ffffff",
+    "foreground": "#1d1c1a",
+    "card": "#ffffff",
+    "card-foreground": "#1d1c1a",
+    "popover": "#ffffff",
+    "popover-foreground": "#1d1c1a",
+    "primary": "#1d1c1a",
+    "primary-foreground": "#fbfaf7",
+    "secondary": "#f1eee8",
+    "secondary-foreground": "#1d1c1a",
+    "muted": "#f1eee8",
+    "muted-foreground": "#5d5850",
+    "accent": "#e9e3d8",
+    "accent-foreground": "#1d1c1a",
+    "destructive": "#b42318",
+    "destructive-foreground": "#ffffff",
+    "border": "#e5e0d6",
+    "input": "#d3ccbf",
+    "ring": "#1d1c1a"
+   },
+   "typography": "retail",
+   "typeScale": "retail",
+   "headingCase": "sentence",
+   "density": "compact",
+   "radius": "subtle",
+   "buttonShape": "radius",
+   "surface": "hairline",
+   "imageRatio": "square",
+   "imageFit": "cover",
+   "headerTone": "light",
+   "container": "1200"
+  },
+  "brand": {
+   "logo": null,
+   "logoWidth": 180,
+   "footerLogo": null,
+   "favicon": null
+  },
+  "blocks": {
+   "topBar": {
+    "variant": "utility",
+    "settings": {
+     "text": "Free delivery inside Dhaka on orders over ৳3,000",
+     "link": "/delivery"
+    }
+   },
+   "header": {
+    "variant": "search-first",
+    "settings": {
+     "search": "scoped",
+     "rowTone": "page",
+     "cartTotal": true
+    }
+   },
+   "navigation": {
+    "source": "tree+menu",
+    "maxTopItems": 8,
+    "linkBudget": 150
+   },
+   "desktopNav": {
+    "variant": "mega-panel",
+    "settings": {
+     "promoImages": false
+    }
+   },
+   "mobileNav": {
+    "variant": "accordion-drawer",
+    "settings": {}
+   },
+   "card": {
+    "variant": "standard",
+    "settings": {
+     "facts": "none",
+     "action": "full",
+     "hoverImage": false
+    }
+   },
+   "listing": {
+    "layout": {
+     "variant": "grid",
+     "settings": {}
+    },
+    "searchLayout": "same",
+    "descriptionPlacement": "below",
+    "filters": {
+     "style": "sidebar-dense",
+     "openByDefault": true,
+     "column": 262,
+     "rowPitch": 24,
+     "label": 14,
+     "searchPlacement": "same",
+     "ruled": false
+    },
+    "toolbar": [
+     "breadcrumb",
+     "result-count",
+     "sort",
+     "applied-chips"
+    ],
+    "phoneLayout": "grid",
+    "paging": "numbered",
+    "surface": "muted",
+    "band": "standard",
+    "phoneBar": "standard",
+    "links": "chips",
+    "phoneBanner": true,
+    "maxColumns": null
+   },
+   "product": {
+    "gallery": {
+     "variant": "classic",
+     "settings": {}
+    },
+    "buyBox": {
+     "variant": "classic",
+     "settings": {
+      "cta": "row",
+      "features": true,
+      "details": "below",
+      "emi": false,
+      "whatsapp": false
+     }
+    },
+    "below": [
+     "description",
+     "reviews",
+     "related"
+    ],
+    "sticky": {
+     "phoneTop": "none",
+     "phoneBottom": "buy-bar",
+     "desktop": "none"
+    }
+   },
+   "footer": {
+    "variant": "columns",
+    "settings": {
+     "tone": "page",
+     "tagline": "Handwoven sarees and genuine electronics, delivered across Bangladesh.",
+     "about": "Nakshi Bazar started as one stall in New Market in 2009.\n\nToday we ship to all 64 districts from our warehouse in Tejgaon, with cash on delivery and official warranty.",
+     "copyright": "Nakshi Bazar Limited"
+    }
+   }
+  },
+  "pages": {
+   "home": [
+    {
+     "id": "s-hero",
+     "type": "hero",
+     "version": 1,
+     "settings": {
+      "layout": "full-bleed",
+      "slides": [
+       {
+        "image": "banner-eid",
+        "phoneImage": "phone-eid",
+        "focalPoint": {
+         "x": 50,
+         "y": 40
+        },
+        "alt": "Campaign photo: eid",
+        "heading": "Eid collection 2026",
+        "text": "Handwoven jamdani, delivered in 2 days across Dhaka",
+        "buttonLabel": "Shop the edit",
+        "link": "/collections/col-eid"
+       },
+       {
+        "image": "banner-tech",
+        "focalPoint": {
+         "x": 50,
+         "y": 40
+        },
+        "alt": "Campaign photo: tech",
+        "heading": "Galaxy A56 5G",
+        "text": "From ৳48,999 or ৳4,083/month EMI",
+        "buttonLabel": "Buy now",
+        "link": "/products/galaxy-a56",
+        "hidden": true
+       },
+       {
+        "image": "banner-boishakh",
+        "focalPoint": {
+         "x": 50,
+         "y": 40
+        },
+        "alt": "Campaign photo: boishakh",
+        "heading": "হাতে বোনা ঢাকাই জামদানি শাড়ি, সুতি ও রেশমের মিশ্রণে তৈরি, নকশিকাঁথা ফোঁড়ের পাড় সহ উৎসবের বিশেষ সংস্করণ",
+        "buttonLabel": "কিনুন",
+        "link": "/collections/col-eid"
+       }
+      ],
+      "sideBanners": [
+       {
+        "mediaId": "banner-side-1",
+        "alt": "Free delivery over ৳3,000",
+        "href": "/pages/delivery"
+       },
+       {
+        "mediaId": "banner-side-2",
+        "alt": "Laptops for students",
+        "href": "/categories/laptops"
+       }
+      ]
+     }
+    },
+    {
+     "id": "s-usp-strip",
+     "type": "usp-strip",
+     "version": 1,
+     "settings": {
+      "style": "icons",
+      "source": {
+       "kind": "custom",
+       "items": [
+        {
+         "title": "Cash on delivery",
+         "detail": "All 64 districts"
+        },
+        {
+         "title": "7-day returns",
+         "detail": "Free pickup in Dhaka"
+        },
+        {
+         "title": "Official warranty",
+         "detail": "On every phone and laptop"
+        },
+        {
+         "title": "বিকাশে পেমেন্ট",
+         "detail": "নিরাপদ ও দ্রুত"
+        }
+       ]
+      }
+     }
+    },
+    {
+     "id": "s-category-tiles",
+     "type": "category-tiles",
+     "version": 1,
+     "settings": {
+      "style": "photo",
+      "title": "Shop by category",
+      "categoryIds": [
+       "cat-0",
+       "cat-1",
+       "cat-2",
+       "cat-3",
+       "cat-4",
+       "cat-5",
+       "cat-6",
+       "cat-7",
+       "cat-8",
+       "cat-9",
+       "cat-10",
+       "cat-11"
+      ]
+     }
+    },
+    {
+     "id": "s-collections",
+     "type": "collections",
+     "version": 1,
+     "settings": {
+      "carousel": "large",
+      "collectionIds": [
+       "col-eid",
+       "col-new",
+       "col-tech",
+       "col-bangla"
+      ]
+     }
+    },
+    {
+     "id": "s-product-rail",
+     "type": "product-rail",
+     "version": 1,
+     "settings": {
+      "title": "New arrivals",
+      "source": {
+       "kind": "newest"
+      },
+      "limit": 12
+     }
+    },
+    {
+     "id": "s-product-grid",
+     "type": "product-grid",
+     "version": 1,
+     "settings": {
+      "title": "Best sellers this week",
+      "source": {
+       "kind": "popular"
+      },
+      "columns": 4,
+      "rows": 2
+     }
+    },
+    {
+     "id": "s-deal-block",
+     "type": "deal-block",
+     "version": 1,
+     "settings": {
+      "title": "Flash sale",
+      "source": {
+       "kind": "on-sale"
+      },
+      "promotionId": "promo-flash",
+      "mediaId": "banner-eid"
+     }
+    },
+    {
+     "id": "s-product-tabs",
+     "type": "product-tabs",
+     "version": 1,
+     "settings": {
+      "title": "Trending now",
+      "tabs": [
+       {
+        "label": "New in",
+        "source": {
+         "kind": "newest"
+        }
+       },
+       {
+        "label": "On sale",
+        "source": {
+         "kind": "on-sale"
+        }
+       },
+       {
+        "label": "জামদানি শাড়ি",
+        "source": {
+         "kind": "category",
+         "categoryId": "cat-1"
+        }
+       },
+       {
+        "label": "Eid edit",
+        "source": {
+         "kind": "collection",
+         "collectionId": "col-eid"
+        }
+       }
+      ],
+      "limit": 8
+     }
+    },
+    {
+     "id": "s-shop-by",
+     "type": "shop-by",
+     "version": 1,
+     "settings": {
+      "title": "Shop by occasion",
+      "cards": [
+       {
+        "mediaId": "square-occasion-eid",
+        "title": "Eid",
+        "subtitle": "Made for the celebration",
+        "href": "/collections/col-eid"
+       },
+       {
+        "mediaId": "square-occasion-wedding",
+        "title": "Wedding season",
+        "href": "/categories/sarees"
+       },
+       {
+        "mediaId": "square-occasion-office",
+        "title": "Office wear",
+        "href": "/categories/panjabi"
+       },
+       {
+        "mediaId": "square-occasion-boishakh",
+        "title": "পহেলা বৈশাখ",
+        "href": "/collections/col-bangla"
+       },
+       {
+        "mediaId": "square-occasion-campus",
+        "title": "Back to campus",
+        "href": "/categories/laptops"
+       }
+      ]
+     }
+    },
+    {
+     "id": "s-banner-mosaic",
+     "type": "banner-mosaic",
+     "version": 1,
+     "settings": {
+      "tiles": [
+       {
+        "mediaId": "wide-mosaic-1",
+        "alt": "Eid sale: up to 40% off sarees",
+        "href": "/collections/col-eid"
+       },
+       {
+        "mediaId": "square-mosaic-2",
+        "alt": "New phones",
+        "href": "/categories/smartphones"
+       },
+       {
+        "mediaId": "square-mosaic-3",
+        "alt": "Panjabi from ৳1,490",
+        "href": "/categories/panjabi"
+       },
+       {
+        "mediaId": "square-mosaic-4",
+        "alt": "Audio deals",
+        "href": "/categories/audio"
+       },
+       {
+        "mediaId": "square-mosaic-5",
+        "alt": "",
+        "href": null
+       }
+      ]
+     }
+    },
+    {
+     "id": "s-lookbook",
+     "type": "lookbook",
+     "version": 1,
+     "settings": {
+      "title": "Eid looks",
+      "mediaId": "phone-lookbook",
+      "source": {
+       "kind": "collection",
+       "collectionId": "col-eid"
+      },
+      "photo": "tall"
+     }
+    },
+    {
+     "id": "s-banner",
+     "type": "banner",
+     "version": 1,
+     "aiDraft": true,
+     "settings": {
+      "layout": "full",
+      "heading": "Winter shawls are here",
+      "text": "Pashmina and cotton shawls woven in Rajshahi, from ৳1,250.",
+      "mediaId": "banner-shawl",
+      "cta": {
+       "label": "Shop shawls",
+       "href": "/categories/women"
+      }
+     }
+    },
+    {
+     "id": "s-brand-wall",
+     "type": "brand-wall",
+     "version": 1,
+     "settings": {
+      "title": "Official brand partners",
+      "style": "rail"
+     }
+    },
+    {
+     "id": "s-editorial",
+     "type": "editorial",
+     "version": 1,
+     "settings": {
+      "layout": "rich-text",
+      "heading": "Made by hand in Bangladesh",
+      "body": "Every saree is woven by a master weaver in Narayanganj.\n\nWe pay fair wages and ship from our own warehouse in Dhaka."
+     }
+    },
+    {
+     "id": "s-specifications",
+     "type": "specifications",
+     "version": 1,
+     "settings": {
+      "heading": "Specifications",
+      "rows": [
+       {
+        "label": "Fabric",
+        "value": "Cotton"
+       },
+       {
+        "label": "Care",
+        "value": "Hand wash"
+       }
+      ]
+     }
+    },
+    {
+     "id": "s-faq",
+     "type": "faq",
+     "version": 1,
+     "settings": {
+      "heading": "Frequently asked questions",
+      "items": [
+       {
+        "question": "Do you deliver outside Dhaka?",
+        "answer": "Yes, to all 64 districts in 2-4 days. Delivery is ৳120 outside Dhaka.",
+        "bindings": {
+         "answer": {
+          "source": "resource.description"
+         }
+        }
+       },
+       {
+        "question": "Can I pay cash on delivery?",
+        "answer": "Yes. You can also pay with bKash, Nagad or a card."
+       },
+       {
+        "question": "ফেরত দেওয়ার নিয়ম কী?",
+        "answer": "হাতে বোনা ঢাকাই জামদানি শাড়ি, সুতি ও রেশমের মিশ্রণে তৈরি, নকশিকাঁথা ফোঁড়ের পাড় সহ উৎসবের বিশেষ সংস্করণ"
+       },
+       {
+        "question": "Do phones come with an official warranty?",
+        "answer": "Every phone and laptop has the brand's official warranty. Keep the box and the invoice."
+       }
+      ]
+     },
+     "bindings": {
+      "heading": {
+       "source": "resource.title"
+      }
+     }
+    },
+    {
+     "id": "s-utility-cards",
+     "type": "utility-cards",
+     "version": 1,
+     "settings": {
+      "cards": [
+       {
+        "title": "Track your order",
+        "text": "Enter your phone number and order number",
+        "href": "/track-order"
+       },
+       {
+        "title": "Find a store",
+        "text": "Dhanmondi, Uttara, Chattogram",
+        "href": "/pages/stores"
+       },
+       {
+        "title": "Warranty claims",
+        "text": "Start a claim online",
+        "href": "/warranty-claims"
+       },
+       {
+        "title": "Gift cards",
+        "text": "Check your balance",
+        "href": "/gift-card-balance"
+       }
+      ]
+     }
+    },
+    {
+     "id": "s-endless-grid",
+     "type": "endless-grid",
+     "version": 1,
+     "settings": {
+      "title": "Just for you",
+      "pageSize": 24
+     }
+    },
+    {
+     "id": "s-seo-text",
+     "type": "seo-text",
+     "version": 1,
+     "hidden": true,
+     "settings": {
+      "heading": "Online shopping in Bangladesh",
+      "body": "## Sarees, panjabi and electronics\nNakshi Bazar sells handwoven sarees and genuine electronics with cash on delivery across Bangladesh.\n\n### Why buy online\nYou get official warranty, easy returns and delivery in 2 days.\n\nMore about our weavers and partners. More about our weavers and partners. More about our weavers and partners. More about our weavers and partners. More about our weavers and partners. More about our weavers and partners. More about our weavers and partners. More about our weavers and partners. More about our weavers and partners. More about our weavers and partners. More about our weavers and partners. More about our weavers and partners."
+     }
+    },
+    {
+     "id": "s-recently-viewed",
+     "type": "recently-viewed",
+     "version": 1,
+     "settings": {
+      "title": "Recently viewed"
+     }
+    },
+    {
+     "id": "s-objects",
+     "type": "objects",
+     "version": 1,
+     "settings": {
+      "heading": "Visit our stores",
+      "typeId": "oty_custom.locations",
+      "layout": "grid",
+      "limit": 12
+     }
+    },
+    {
+     "id": "s-newsletter",
+     "type": "newsletter",
+     "version": 1,
+     "settings": {
+      "heading": "Get Eid offers first",
+      "text": "SMS and email, twice a month. Unsubscribe any time.",
+      "mediaId": "banner-eid",
+      "email": "optional",
+      "whatsapp": false,
+      "buttonLabel": "Subscribe"
+     }
+    }
+   ],
+   "homeMode": {
+    "kind": "product",
+    "productId": "prod_0"
+   },
+   "landing": {
+    "eid-sale": {
+     "title": "Eid sale",
+     "description": "Every Eid offer in one place.",
+     "sections": [
+      {
+       "id": "hero",
+       "type": "hero",
+       "version": 1,
+       "settings": {
+        "layout": "full-bleed",
+        "slides": [
+         {
+          "image": "banner-eid",
+          "phoneImage": "phone-eid",
+          "focalPoint": {
+           "x": 50,
+           "y": 40
+          },
+          "alt": "Campaign photo: eid",
+          "heading": "Eid collection 2026",
+          "text": "Handwoven jamdani, delivered in 2 days across Dhaka",
+          "buttonLabel": "Shop the edit",
+          "link": "/collections/col-eid"
+         },
+         {
+          "image": "banner-tech",
+          "focalPoint": {
+           "x": 50,
+           "y": 40
+          },
+          "alt": "Campaign photo: tech",
+          "heading": "Galaxy A56 5G",
+          "text": "From ৳48,999 or ৳4,083/month EMI",
+          "buttonLabel": "Buy now",
+          "link": "/products/galaxy-a56",
+          "hidden": true
+         },
+         {
+          "image": "banner-boishakh",
+          "focalPoint": {
+           "x": 50,
+           "y": 40
+          },
+          "alt": "Campaign photo: boishakh",
+          "heading": "হাতে বোনা ঢাকাই জামদানি শাড়ি, সুতি ও রেশমের মিশ্রণে তৈরি, নকশিকাঁথা ফোঁড়ের পাড় সহ উৎসবের বিশেষ সংস্করণ",
+          "buttonLabel": "কিনুন",
+          "link": "/collections/col-eid"
+         }
+        ],
+        "sideBanners": [
+         {
+          "mediaId": "banner-side-1",
+          "alt": "Free delivery over ৳3,000",
+          "href": "/pages/delivery"
+         },
+         {
+          "mediaId": "banner-side-2",
+          "alt": "Laptops for students",
+          "href": "/categories/laptops"
+         }
+        ]
+       }
+      },
+      {
+       "id": "grid",
+       "type": "product-grid",
+       "version": 1,
+       "settings": {
+        "title": "Best sellers this week",
+        "source": {
+         "kind": "popular"
+        },
+        "columns": 4,
+        "rows": 2
+       }
+      },
+      {
+       "id": "faq",
+       "type": "faq",
+       "version": 1,
+       "settings": {
+        "heading": "Frequently asked questions",
+        "items": [
+         {
+          "question": "Do you deliver outside Dhaka?",
+          "answer": "Yes, to all 64 districts in 2-4 days. Delivery is ৳120 outside Dhaka.",
+          "bindings": {
+           "answer": {
+            "source": "resource.description"
+           }
+          }
+         },
+         {
+          "question": "Can I pay cash on delivery?",
+          "answer": "Yes. You can also pay with bKash, Nagad or a card."
+         },
+         {
+          "question": "ফেরত দেওয়ার নিয়ম কী?",
+          "answer": "হাতে বোনা ঢাকাই জামদানি শাড়ি, সুতি ও রেশমের মিশ্রণে তৈরি, নকশিকাঁথা ফোঁড়ের পাড় সহ উৎসবের বিশেষ সংস্করণ"
+         },
+         {
+          "question": "Do phones come with an official warranty?",
+          "answer": "Every phone and laptop has the brand's official warranty. Keep the box and the invoice."
+         }
+        ]
+       }
+      }
+     ],
+     "noIndex": true
+    }
+   },
+   "templates": {
+    "product": {
+     "sections": [
+      {
+       "id": "specs",
+       "type": "specifications",
+       "version": 1,
+       "settings": {
+        "heading": "Specifications",
+        "rows": [
+         {
+          "label": "Fabric",
+          "value": "Cotton"
+         },
+         {
+          "label": "Care",
+          "value": "Hand wash"
+         }
+        ]
+       }
+      },
+      {
+       "id": "related",
+       "type": "product-rail",
+       "version": 1,
+       "settings": {
+        "title": "New arrivals",
+        "source": {
+         "kind": "newest"
+        },
+        "limit": 12
+       }
+      }
+     ],
+     "main": 0
+    },
+    "collection": {
+     "sections": [
+      {
+       "id": "banner",
+       "type": "banner",
+       "version": 1,
+       "settings": {
+        "layout": "full",
+        "heading": "Winter shawls are here",
+        "text": "Pashmina and cotton shawls woven in Rajshahi, from ৳1,250.",
+        "mediaId": "banner-shawl",
+        "cta": {
+         "label": "Shop shawls",
+         "href": "/categories/women"
+        }
+       }
+      }
+     ],
+     "main": 1
+    },
+    "cart": {
+     "sections": [
+      {
+       "id": "promises",
+       "type": "usp-strip",
+       "version": 1,
+       "settings": {
+        "style": "icons",
+        "source": {
+         "kind": "custom",
+         "items": [
+          {
+           "title": "Cash on delivery",
+           "detail": "All 64 districts"
+          },
+          {
+           "title": "7-day returns",
+           "detail": "Free pickup in Dhaka"
+          },
+          {
+           "title": "Official warranty",
+           "detail": "On every phone and laptop"
+          },
+          {
+           "title": "বিকাশে পেমেন্ট",
+           "detail": "নিরাপদ ও দ্রুত"
+          }
+         ]
+        }
+       }
+      }
+     ],
+     "main": 0
+    },
+    "page": {
+     "sections": [
+      {
+       "id": "signup",
+       "type": "newsletter",
+       "version": 1,
+       "settings": {
+        "heading": "Get Eid offers first",
+        "text": "SMS and email, twice a month. Unsubscribe any time.",
+        "mediaId": "banner-eid",
+        "email": "optional",
+        "whatsapp": false,
+        "buttonLabel": "Subscribe"
+       }
+      }
+     ],
+     "main": 0
+    }
+   }
+  }
+ }
+]

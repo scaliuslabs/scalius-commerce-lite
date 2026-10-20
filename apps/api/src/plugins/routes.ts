@@ -22,7 +22,7 @@
 import { Hono, type Context } from "hono";
 import type { Database } from "@scalius/database/client";
 import { getActivePluginInstallation, maskPluginLogText, type PluginInstallation } from "@scalius/core/modules/plugins";
-import { PLUGIN_ID_PATTERN, PLUGIN_NAME_PATTERN, PLUGIN_SCOPES } from "@scalius/shared/plugins";
+import { PLUGIN_ID_PATTERN, PLUGIN_SCOPES, PLUGIN_URL_NAME_PATTERN } from "@scalius/shared/plugins";
 import type { PluginRouteRequest } from "@scalius/plugin-sdk";
 import { adminAuthMiddleware } from "../middleware/admin-auth";
 import { dashboardOriginGuardMiddleware } from "../middleware/cookie-origin-guard";
@@ -40,8 +40,6 @@ export const PLUGIN_ROUTE_BODY_LIMITS: Readonly<Record<PluginRouteSurface, numbe
   public: 256 * 1024,
   webhooks: 1024 * 1024,
 };
-/** Methods a webhook route answers (providers POST; some verify with a GET challenge). */
-export const PLUGIN_WEBHOOK_METHODS = ["GET", "POST"] as const;
 export const PLUGIN_PUBLIC_CACHE_MAX_AGE = 300;
 const MAX_SUBPATH_LENGTH = 512;
 const MAX_QUERY_ENTRIES = 50;
@@ -73,7 +71,7 @@ export function parsePluginRoutePath(pathname: string): ParsedTarget | null {
   const match = /^\/api\/v1\/plugins\/([^/]+)\/(admin|public|webhooks)\/([^/]+)(\/.*)?$/.exec(pathname);
   if (!match) return null;
   const [, pluginId, surface, name, rest] = match;
-  if (!PLUGIN_ID_PATTERN.test(pluginId!) || !PLUGIN_NAME_PATTERN.test(name!)) return null;
+  if (!PLUGIN_ID_PATTERN.test(pluginId!) || !PLUGIN_URL_NAME_PATTERN.test(name!)) return null;
   const subpath = (rest ?? "").replace(/^\/+/, "");
   if (subpath.length > MAX_SUBPATH_LENGTH) return null;
   // Decoded segments must stay segments: no dot segments or encoded separators.
@@ -92,7 +90,6 @@ export function parsePluginRoutePath(pathname: string): ParsedTarget | null {
 
 /** The methods a declared route answers, or null when the plugin does not declare it. */
 export function declaredPluginRouteMethods(installation: PluginInstallation, surface: PluginRouteSurface, name: string): readonly string[] | null {
-  if (surface === "webhooks") return installation.manifest.routes.webhooks.includes(name) ? PLUGIN_WEBHOOK_METHODS : null;
   const route = installation.manifest.routes[surface].find((entry) => entry.name === name);
   return route ? route.methods : null;
 }

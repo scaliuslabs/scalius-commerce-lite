@@ -9,7 +9,7 @@ import storefront from "../storefront";
 
 const parsed = parsePluginManifest(manifest);
 if (!parsed.ok) throw new Error("Invalid Noor manifest");
-const schema = parsed.manifest.storefront.skins.find((skin) => skin.id === "noor-header")!.settings;
+const schema = parsed.manifest.storefront.skins.find((skin) => skin.id === "noor_header")!.settings;
 const menu = (count: number): StorefrontMenuItem[] => Array.from({ length: count }, (_, index) => ({
   title: `Category ${index}`, url: `/categories/root-${index}`,
   children: [{ title: `Group ${index}`, url: `/categories/group-${index}`, children: [{ title: `Leaf ${index}`, url: `/categories/leaf-${index}`, children: [] }] }],
@@ -20,7 +20,7 @@ function render(items: StorefrontMenuItem[], layout: "center" | "start", languag
   const settings = resolveStorefrontSettings(schema, { layout, menu_style: style }, { image: () => null, products: () => [] });
   const context = fixtureContext({ page: { kind: "listing", path } });
   context.store.language = language;
-  const html = storefrontShown(renderHeader(storefront, "noor-header", settings, { menu: items }, { context }), "scalius.noor");
+  const html = storefrontShown(renderHeader(storefront, "noor_header", settings, { menu: items }, { context }), "scalius.noor");
   expect(html.dropped).toBe(0);
   const template = document.createElement("template");
   template.innerHTML = html.html;
@@ -116,7 +116,7 @@ describe("Noor bounded desktop navigation", () => {
     const settings = resolveStorefrontSettings(schema, { layout: "center" }, { image: () => null, products: () => [] });
     const draw = (phoneNavigation?: { menu: "accordion" | "drill"; tabBar: boolean }) => {
       const template = document.createElement("template");
-      template.innerHTML = renderHeader(storefront, "noor-header", settings, { menu: menu(2), ...(phoneNavigation ? { phoneNavigation } : {}) }, { context: fixtureContext() });
+      template.innerHTML = renderHeader(storefront, "noor_header", settings, { menu: menu(2), ...(phoneNavigation ? { phoneNavigation } : {}) }, { context: fixtureContext() });
       return template.content.querySelector<HTMLElement>("#noor-drawer")!;
     };
     expect(draw().hasAttribute("data-menu-drawer")).toBe(true);
@@ -131,7 +131,7 @@ describe("Noor bounded desktop navigation", () => {
   ] as const)("gives phones one search (header search %s, phone navigation %j)", (showSearch, phoneNavigation) => {
     const settings = resolveStorefrontSettings(schema, { layout: "center", show_search: showSearch }, { image: () => null, products: () => [] });
     const template = document.createElement("template");
-    template.innerHTML = renderHeader(storefront, "noor-header", settings, { menu: menu(2), ...(phoneNavigation ? { phoneNavigation } : {}) }, { context: fixtureContext() });
+    template.innerHTML = renderHeader(storefront, "noor_header", settings, { menu: menu(2), ...(phoneNavigation ? { phoneNavigation } : {}) }, { context: fixtureContext() });
     const header = template.content;
     // The header's own search button (with or without the store's tab bar, which has no Search tab), else the drawer's field.
     expect(header.querySelectorAll('.noor-header-end [popovertarget="noor-search"]')).toHaveLength(showSearch ? 1 : 0);

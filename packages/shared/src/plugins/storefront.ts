@@ -16,8 +16,8 @@ export const PLUGIN_PRODUCT_BLOCKS_MAX = 10;
 /** A failed render is retried after this long (the page stays cacheable meanwhile). */
 export const PLUGIN_RENDER_RETRY_SECONDS = 60;
 
-/** `<plugin id>/<section or block type>`: how a theme names an app's section or block. */
-export const PLUGIN_SURFACE_KEY_PATTERN = /^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\/([a-z][a-z0-9-]{0,47})$/;
+/** `<plugin id>/<type or id>`: how a theme names an app's section, block, skin or template (a snake_case key). */
+export const PLUGIN_SURFACE_KEY_PATTERN = /^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\/([a-z][a-z0-9_]{0,47})$/;
 
 export function pluginSurfaceKey(pluginId: string, type: string): string {
   return `${pluginId}/${type}`;

@@ -27,7 +27,6 @@ import {
   type PluginInstallationSource,
   type PluginInstallationStatus,
 } from "@scalius/database/schema";
-import { isCustomFieldType } from "@scalius/shared/custom-fields";
 import { looksLikePlaceholderCredential } from "@scalius/shared/plugins/placeholder-credentials";
 import {
   FIRST_PARTY_PLUGIN_VENDOR,
@@ -142,6 +141,8 @@ export function parseStoredPluginGrant(value: string | null): PluginGrantRequest
   if (connect === null) return null;
   const features = raw.features === undefined ? [] : stringList(raw.features);
   if (features === null) return null;
+  const messageRecipients = raw.messageRecipients === undefined ? [] : stringList(raw.messageRecipients);
+  if (messageRecipients === null) return null;
   return {
     ...(parsed as Record<(typeof lists)[number], string[]>),
     publicRoutes: raw.publicRoutes,
@@ -149,6 +150,7 @@ export function parseStoredPluginGrant(value: string | null): PluginGrantRequest
     storefrontCode: raw.storefrontCode === true,
     storefrontConnect: connect,
     features,
+    messageRecipients,
   } as PluginGrantRequest;
 }
 
@@ -336,10 +338,6 @@ export function requireInstallableManifest(value: unknown, source: PluginInstall
     });
   }
   const manifest = parsed.manifest;
-  const badType = manifest.customFields.find((field) => !isCustomFieldType(field.type));
-  if (badType) {
-    throw new PluginError("manifest.custom_field_type", `Unknown custom field type ${badType.type}.`);
-  }
   if (source === "upload" && manifest.id.startsWith(`${FIRST_PARTY_PLUGIN_VENDOR}.`)) {
     throw new PluginError("manifest.reserved_vendor", `Plugin ids under ${FIRST_PARTY_PLUGIN_VENDOR}.* are reserved for first-party plugins.`);
   }

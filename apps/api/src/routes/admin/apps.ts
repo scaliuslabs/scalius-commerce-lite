@@ -46,7 +46,8 @@ import {
   PLUGIN_FUNCTION_POINTS,
   PLUGIN_NAV_PLACEMENTS,
   PLUGIN_SCOPE_NAMES,
-  isProtectedDataScope,
+  STOREFRONT_BLOCK_TARGETS,
+  isSensitivePluginScope,
   knownPluginFeatures,
   pluginFeatureOwners,
   pluginFeatureRequest,
@@ -130,6 +131,7 @@ const grantSchema = z.object({
   storefrontCode: z.boolean().openapi({ description: "Draws on the storefront with its own code: components, client islands or a stylesheet." }),
   storefrontConnect: z.array(z.string()).openapi({ description: "Hosts the app's storefront islands reach from the buyer's browser." }),
   features: z.array(z.string()).openapi({ description: "The app's features that are on (empty for apps that declare none)." }),
+  messageRecipients: z.array(z.string()).openapi({ description: "Fields of the app's own records (<object>.<field>) whose email addresses or phone numbers it may message." }),
 }).openapi("AppGrant", { description: "What an app may do; the consent screen lists it in plain words." });
 
 /** The manifest's text in other languages (BCP 47 tag → text); the dashboard picks its own. */
@@ -300,7 +302,7 @@ const appDetailSchema = appSummarySchema.extend({
       description: "Whether the store uses it: a payment method checkout lists (offered), one hidden in Settings, Payments (hidden) or one that cannot charge the store currency (currency); the notification SMS service (chosen) or another one (not_chosen). Null for other kinds.",
     }),
   })).openapi({ description: "The providers the app offers, each set up on its capability's settings page." }),
-  routes: z.object({ admin: z.array(routeSchema), public: z.array(routeSchema), webhooks: z.array(z.string()) }),
+  routes: z.object({ admin: z.array(routeSchema), public: z.array(routeSchema), webhooks: z.array(routeSchema) }),
   cron: z.array(z.object({
     name: z.string(),
     schedule: z.string(),
@@ -318,7 +320,7 @@ const appDetailSchema = appSummarySchema.extend({
     proxy: z.boolean(),
     head: z.boolean(),
     sections: z.array(z.object({ type: z.string(), name: z.string() })),
-    productBlocks: z.array(z.object({ type: z.string(), name: z.string(), placement: z.enum(["buy-box", "below"]) })),
+    productBlocks: z.array(z.object({ type: z.string(), name: z.string(), placement: z.enum(STOREFRONT_BLOCK_TARGETS) })),
     scripts: z.array(z.object({ src: z.string(), placement: z.string(), pages: z.array(z.string()) })),
     themeProblems: z.array(z.object({
       kind: z.enum(["template", "page-preset"]),
@@ -467,8 +469,8 @@ async function scopeRows(installation: PluginInstallation, request: Pick<PluginG
     return {
       name,
       risk: (risk === "security" ? "financial" : risk) as "read" | "write" | "destructive" | "financial",
-      // Buyer contact data (a protected customer data scope) is always sensitive.
-      sensitive: isProtectedDataScope(name)
+      // Buyer contact data (a protected customer data scope) and mail to any address are always sensitive.
+      sensitive: isSensitivePluginScope(name)
         || [...permissions].some((permission) => (PERMISSION_METADATA as Record<string, { isSensitive?: boolean }>)[permission]?.isSensitive === true),
     };
   });
@@ -559,7 +561,7 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
     routes: {
       admin: manifest.routes.admin.map((route) => ({ name: route.name, methods: [...route.methods] })),
       public: manifest.routes.public.map((route) => ({ name: route.name, methods: [...route.methods] })),
-      webhooks: [...manifest.routes.webhooks],
+      webhooks: manifest.routes.webhooks.map((route) => ({ name: route.name, methods: [...route.methods] })),
     },
     cron: manifest.cron.map((job) => {
       const run = lastRuns[job.name] ?? null;
@@ -1021,7 +1023,7 @@ app.openapi(deactivateRoute, async (c) => {
 // ── Features ──
 
 const featureParams = idParams.extend({
-  featureId: z.string().regex(/^[a-z][a-z0-9-]{0,47}$/).openapi({ description: "The feature's id (manifest.features[].id)." }),
+  featureId: z.string().regex(/^[a-z][a-z0-9_-]{0,47}$/).openapi({ description: "The feature's id (manifest.features[].id)." }),
 });
 const featureResultSchema = successEnvelope(z.object({
   app: appDetailSchema,

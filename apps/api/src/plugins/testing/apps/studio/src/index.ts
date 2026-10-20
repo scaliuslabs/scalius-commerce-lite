@@ -66,18 +66,18 @@ export const manifest = {
     ],
     skins: [
       {
-        id: "studio-header", target: "header", name: "Studio header",
+        id: "studio_header", target: "header", name: "Studio header",
         settings: [
           { key: "sticky", label: "Stay on screen while scrolling", type: "boolean", default: true },
           { key: "show_search", label: "Show search", type: "boolean", default: true },
         ],
       },
       {
-        id: "studio-footer", target: "footer", name: "Studio footer",
+        id: "studio_footer", target: "footer", name: "Studio footer",
         settings: [{ key: "tagline", label: "Tagline", type: "text", default: "Made with care.", maxLength: 120 }],
       },
       {
-        id: "studio-card", target: "product-card", name: "Studio card",
+        id: "studio_card", target: "product-card", name: "Studio card",
         settings: [
           {
             key: "ratio", label: "Photo shape", type: "select", default: "portrait",
@@ -94,9 +94,9 @@ export const manifest = {
       theme: {
         apps: {
           skins: {
-            header: { app: "acme.studio/studio-header", values: {} },
-            footer: { app: "acme.studio/studio-footer", values: {} },
-            "product-card": { app: "acme.studio/studio-card", values: {} },
+            header: { app: "acme.studio/studio_header", values: {} },
+            footer: { app: "acme.studio/studio_footer", values: {} },
+            "product-card": { app: "acme.studio/studio_card", values: {} },
           },
         },
         sections: [

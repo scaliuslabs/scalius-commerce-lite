@@ -84,7 +84,7 @@ import {
 } from "./theme-contract";
 import { readStoreShape, readThemeMedia } from "@scalius/core/modules/storefront";
 import { listPluginInstallations } from "@scalius/core/modules/plugins";
-import { pluginSurfaceKey, storefrontSettingNeeds, type PluginSettingsSchema } from "@scalius/shared/plugins";
+import { STOREFRONT_BLOCK_TARGETS, pluginSurfaceKey, storefrontSettingNeeds, type PluginSettingsSchema } from "@scalius/shared/plugins";
 import { isPublicMediaUrl } from "@scalius/shared/platform-config";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const revisionSchema = z.number().int().nonnegative();
@@ -261,7 +261,7 @@ const themeAppSurfacesSchema = z.object({
     key: z.string(),
     type: z.string(),
     name: z.string(),
-    placement: z.enum(["buy-box", "below"]),
+    placement: z.enum(STOREFRONT_BLOCK_TARGETS),
     settings: z.array(appSettingFieldSchema),
   })),
 }).openapi("ThemeAppSurfaces");

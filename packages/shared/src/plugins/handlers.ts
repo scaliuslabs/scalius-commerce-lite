@@ -58,7 +58,7 @@ export interface PluginHandlerManifest {
   routes: {
     admin: ReadonlyArray<{ name: string }>;
     public: ReadonlyArray<{ name: string }>;
-    webhooks: readonly string[];
+    webhooks: ReadonlyArray<{ name: string }>;
   };
   cron: ReadonlyArray<{ name: string }>;
   providers: ReadonlyArray<{ id: string; kind: ProviderKind; operations: readonly string[] }>;
@@ -98,7 +98,7 @@ function liveInventory(manifest: PluginHandlerManifest): PluginHandlerInventory 
     routes: {
       admin: manifest.routes.admin.map((route) => route.name),
       public: manifest.routes.public.map((route) => route.name),
-      webhooks: [...manifest.routes.webhooks],
+      webhooks: manifest.routes.webhooks.map((route) => route.name),
     },
     cron: manifest.cron.map((job) => job.name),
     providers: manifest.providers.map((provider) => ({

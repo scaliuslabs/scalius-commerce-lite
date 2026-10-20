@@ -31,7 +31,7 @@ import { storefrontLandingPageSchemaOf, storefrontLandingPagesSchemaOf, storefro
 import { buildStorefrontTokenCss, storefrontThemeTokensSchema, type StorefrontThemeTokens } from "./tokens";
 import { storefrontThemeTranslationsSchema } from "./text";
 
-export const STOREFRONT_THEME_DOCUMENT_VERSION = 10 as const;
+export const STOREFRONT_THEME_DOCUMENT_VERSION = 11 as const;
 
 /**
  * The five presets of one design system ("Scalius Base"), named by

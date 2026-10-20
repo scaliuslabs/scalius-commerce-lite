@@ -263,7 +263,7 @@ on removal or mount failure; your other resources still need that cleanup.
 - It renders only for products that can be ordered from a form (active, in stock, no customization, not a gift card); otherwise it links to the product page.
 - The core styles it on the store's tokens (zero-specificity rules; `--of-radius`, `--of-line`, `--of-focus` change the basics), with sizes as compact chips and a price per option only when prices differ. Restyle it through `.scalius-order-form` and its parts.
 - When the store cannot take the order there (cash on delivery off, checkout not ready, a product that needs input), buyers get a link to the product's page and the editor's preview says why.
-- Noor's landing kit shows the pattern: `landing-hero` (photos, offer price, countdown, "Order now", call and WhatsApp), `landing-features` (cards, photo rows or numbered steps) and `landing-order` (the summary, assurances and the form at `#order`, with a sticky order bar on phones), arranged with any other section on a landing page. On landing pages Noor's header and footer switch to a campaign mode (logo and "Order now"; the legal line) unless the merchant keeps the full ones.
+- Noor's landing kit shows the pattern: `landing_hero` (photos, offer price, countdown, "Order now", call and WhatsApp), `landing_features` (cards, photo rows or numbered steps) and `landing_order` (the summary, assurances and the form at `#order`, with a sticky order bar on phones), arranged with any other section on a landing page. On landing pages Noor's header and footer switch to a campaign mode (logo and "Order now"; the legal line) unless the merchant keeps the full ones.
 
 ## Build, test, install
 

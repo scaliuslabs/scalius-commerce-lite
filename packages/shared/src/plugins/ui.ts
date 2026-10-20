@@ -12,7 +12,7 @@
 // guessing. Part of the versioned plugin API.
 
 import { z } from "zod";
-import { PLUGIN_NAME_PATTERN } from "./manifest";
+import { PLUGIN_URL_NAME_PATTERN, PLUGIN_URL_NAME_RULE } from "./manifest-patterns";
 
 export const PLUGIN_UI_VERSION = 1 as const;
 
@@ -52,7 +52,7 @@ const label = z.string().trim().min(1).max(PLUGIN_UI_LIMITS.label);
 const optionalLabel = z.string().trim().max(PLUGIN_UI_LIMITS.label);
 const tone = z.enum(PLUGIN_UI_TONES);
 const recordId = z.string().trim().min(1).max(128);
-const routeName = z.string().regex(PLUGIN_NAME_PATTERN);
+const routeName = z.string().regex(PLUGIN_URL_NAME_PATTERN, PLUGIN_URL_NAME_RULE);
 /** Path segments after a route name: letters, digits and `-_.~`, never dot segments. */
 const subpath = z.string().max(256).regex(/^(?:[A-Za-z0-9_~-][A-Za-z0-9._~-]*)(?:\/[A-Za-z0-9_~-][A-Za-z0-9._~-]*)*$/, "Use plain path segments.");
 const queryValue = z.string().max(512);
@@ -78,7 +78,7 @@ const json: z.ZodType<PluginUiJson> = z.lazy(() =>
  * Scalius resource's detail page, or an https site (a new tab).
  */
 export const pluginUiTargetSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("app-page"), page: z.string().regex(PLUGIN_NAME_PATTERN), query: query.optional() }).strict(),
+  z.object({ kind: z.literal("app-page"), page: z.string().regex(PLUGIN_URL_NAME_PATTERN, PLUGIN_URL_NAME_RULE), query: query.optional() }).strict(),
   z.object({ kind: z.literal("resource"), resource: z.enum(PLUGIN_UI_RESOURCES), id: recordId }).strict(),
   z.object({ kind: z.literal("external"), href: httpsUrl }).strict(),
 ]);

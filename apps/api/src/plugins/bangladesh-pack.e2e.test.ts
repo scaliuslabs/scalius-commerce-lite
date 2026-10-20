@@ -110,7 +110,7 @@ describe("the Bangladesh pack's providers", () => {
 
     // Only the features turned on run: their ports and jobs are registered, nothing else is.
     expect(sqlite.prepare("SELECT kind, name FROM plugin_registrations WHERE plugin_id = ? ORDER BY kind, name").all(PACK)).toEqual([
-      { kind: "cron", name: "places-sync" },
+      { kind: "cron", name: "places_sync" },
       { kind: "provider", name: "fraud" },
       { kind: "provider", name: "sms" },
     ]);

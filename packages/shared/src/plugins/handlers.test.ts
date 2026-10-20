@@ -12,7 +12,7 @@ const parsed = parsePluginManifest({
   author: { name: "Acme" },
   events: ["order.*", "customer.created"],
   functions: [{ point: "checkout.discounts" }],
-  routes: { admin: [{ name: "dashboard", methods: ["GET"] }], public: [], webhooks: ["acme-callback"] },
+  routes: { admin: [{ name: "dashboard", methods: ["GET"] }], public: [], webhooks: [{ name: "acme-callback" }] },
   cron: [{ name: "expire", schedule: "0 3 * * *" }],
 });
 if (!parsed.ok) throw new Error("fixture");

@@ -45,7 +45,7 @@ export interface HeaderSettings {
 function supportsOverlay(data: HeaderProps<HeaderSettings>["data"]): boolean {
   const lead = data.page?.lead;
   // The store's hero drawn by Noor's hero skin: it renders only with a photo, and overlays unless split.
-  if (lead?.kind === "core") return lead.type === "hero" && lead.skin?.id === "noor-hero" && lead.skin.settings.layout !== "split";
+  if (lead?.kind === "core") return lead.type === "hero" && lead.skin?.id === "noor_hero" && lead.skin.settings.layout !== "split";
   if (lead?.kind !== "app" || lead.pluginId !== "scalius.noor" || !lead.settings) return false;
   const hasImage = (value: unknown): boolean => typeof value === "object" && value !== null
     && "url" in value && typeof value.url === "string" && value.url.length > 0;

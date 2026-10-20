@@ -69,7 +69,7 @@ export async function runBuyerUiAction(action: BuyerUiAction, block: BuyerUiBloc
     if (!addDiscountCode(action.code)) throw new Error("This code could not be added, or is already in your cart.");
     return { message: "Code added. Your cart will check whether it applies." };
   }
-  if (action.kind !== "app_route" || !PLUGIN_ID_PATTERN.test(block.appId) || !/^[a-z][a-z0-9-]{0,47}$/.test(action.route)) {
+  if (action.kind !== "app_route" || !PLUGIN_ID_PATTERN.test(block.appId) || !/^[a-z][a-z0-9_-]{0,47}$/.test(action.route)) {
     throw new Error(FAILED);
   }
   const response = await fetch(`/apps/${block.appId}/${action.route}`, {

@@ -154,10 +154,15 @@ export interface PluginCustomFields {
 
 export interface PluginMessaging {
   /**
-   * Sends through the store's configured providers; recipients are resolved by the platform.
+   * Sends through the store's configured providers, from the store's sender. Pass one of:
+   * - `customerId` (needs `read_customers`): the platform resolves the address and never returns it;
+   * - `to`: a staff member's email, or an address held in a `messaging.recipients` field of
+   *   your own records, exactly as the record holds it; any other address needs the sensitive
+   *   `send_messages_any` scope (`messaging.recipient_not_allowed` otherwise).
    * `marketing: true` (with `customerId`) sends only when the customer is subscribed on that
    * channel now (`queued: false` otherwise); e-mail then carries the store's unsubscribe
    * footer and RFC 8058 List-Unsubscribe headers. Transactional mail leaves it unset.
+   * Limits: `PLUGIN_MESSAGE_LIMITS` per message, `messagesPerMinute` of the store's plan.
    */
   email(input: { customerId?: string; to?: string; subject: string; html: string; text?: string; marketing?: boolean }): Promise<{ queued: boolean }>;
   sms(input: { customerId?: string; to?: string; text: string; marketing?: boolean }): Promise<{ queued: boolean }>;

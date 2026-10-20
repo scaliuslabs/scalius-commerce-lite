@@ -190,7 +190,7 @@ const placesFeature = () => feature({
   recommended: true,
   request: {
     scopes: [{ name: "write_places", risk: "write", sensitive: false }],
-    allowedHosts: [], providers: [], events: [], functions: [], publicRoutes: false, storefront: false, admin: true, cron: ["places-sync"],
+    allowedHosts: [], providers: [], events: [], functions: [], publicRoutes: false, storefront: false, admin: true, cron: ["places_sync"],
   },
   grantKey: "feature-key-places",
   pages: ["places"],
@@ -1109,7 +1109,7 @@ describe("App page: sections", () => {
       status: "active",
       features: [placesFeature(), feature()].map((entry, index) => (index === 0 ? { ...entry, enabled: true, grantKey: null } : entry)),
       admin: { pages: [{ id: "places", title: "Bangladesh places", placement: "settings", route: "places", tabs: null }], cards: [], actions: [], widgets: [] },
-      cron: [{ name: "places-sync", schedule: "17 * * * *", lastRun: { scheduledFor: "2026-10-01T08:00:00.000Z", status: "failed", finishedAt: "2026-10-01T08:00:05.000Z", durationMs: 5000, error: "Pathao answered 503." } }],
+      cron: [{ name: "places_sync", schedule: "17 * * * *", lastRun: { scheduledFor: "2026-10-01T08:00:00.000Z", status: "failed", finishedAt: "2026-10-01T08:00:05.000Z", durationMs: 5000, error: "Pathao answered 503." } }],
     }), MANAGER, true, "places");
     expect(text()).toContain("Not working");
     expect(text()).toContain("Pathao answered 503.");

@@ -31,11 +31,13 @@ const SNAPSHOT_FILE = new URL("./stable-operations.snapshot.json", import.meta.u
 
 /**
  * Scopes that reach no operation by themselves: bridge capabilities
- * (`ctx.messaging` marketing sends) and the protected customer data scopes,
- * which reveal marked response fields of operations other scopes reach.
+ * (`ctx.messaging` marketing sends, messages to any address) and the
+ * protected customer data scopes, which reveal marked response fields of
+ * operations other scopes reach.
  */
 const BRIDGE_ONLY_SCOPES: ReadonlySet<PluginScope> = new Set([
   "write_marketing",
+  "send_messages_any",
   ...PLUGIN_SCOPE_NAMES.filter((scope) => isProtectedDataScope(scope)),
 ]);
 

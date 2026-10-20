@@ -6,19 +6,23 @@
 // changes only additively.
 
 import { z } from "zod";
-import { isCustomFieldObjectTarget } from "../custom-fields";
+import { CUSTOM_FIELD_TYPES, isCustomFieldKey, isCustomFieldObjectTarget } from "../custom-fields";
 import { isEventTopicFilter, topicMatchesAnyFilter, type EventTopic, type EventTopicFilter } from "../events";
 import { SCALIUS_PLATFORM_VERSION, SUPPORTED_PLUGIN_API_VERSIONS } from "./api-version";
 import { parsePluginCronSchedule } from "./cron";
 import { FIRST_PARTY_PLUGIN_VENDOR, PLUGIN_ID_PATTERN } from "./ids";
-import { PLUGIN_HOST_PATTERN, PLUGIN_NAME_PATTERN } from "./manifest-patterns";
+import {
+  PLUGIN_FIELD_KEY_PATTERN, PLUGIN_FIELD_KEY_RULE, PLUGIN_HOST_PATTERN, PLUGIN_KEY_PATTERN, PLUGIN_KEY_RULE, PLUGIN_OBJECT_TYPE_RULE,
+  pluginFieldKeySchema, pluginKeySchema, pluginUrlNameSchema,
+} from "./manifest-patterns";
 import { PLUGIN_SCOPE_NAMES, type PluginScope } from "./scopes";
 import { storefrontComponentsManifestSchema } from "./storefront-components";
 import { PLUGIN_SETTING_KEY, PLUGIN_STOREFRONT_SETTING_TYPES, pluginAppSettingsSchemaSchema, pluginSettingsSchemaSchema, type PluginSettingsSchema } from "./settings-schema";
 import { pluginProvidersSchema } from "./providers/descriptors";
 import { checkoutAttributeSchema } from "./buyer-ui";
 import { PLUGIN_BLOCK_TARGETS } from "./storefront";
-import { objectTypeDeclarationSchema, OBJECT_TYPE_PATTERN } from "./objects";
+import { STOREFRONT_BLOCK_TARGETS } from "./storefront-protocol";
+import { objectTypeDeclarationSchema, OBJECT_TYPE_PATTERN, type ObjectTypeDeclaration } from "./objects";
 import { FUNCTION_READS_MAX, functionReadDeclarationSchema, functionReadIssues } from "./function-reads";
 import { PROVIDER_KINDS } from "./providers/kinds";
 import { providerRequiredScopes } from "./protected-data";
@@ -36,14 +40,27 @@ export { PLUGIN_API_VERSION, SCALIUS_PLATFORM_VERSION, SUPPORTED_PLUGIN_API_VERS
 
 /** `vendor.name` (in ./ids.ts, so id checks don't need this schema module). */
 export { FIRST_PARTY_PLUGIN_VENDOR, PLUGIN_ID_PATTERN };
-/** Name and host patterns (in ./manifest-patterns.ts, shared with the storefront components contract). */
-export { PLUGIN_HOST_PATTERN, PLUGIN_NAME_PATTERN, isPluginHostAllowed } from "./manifest-patterns";
+/** The identifier rule and host patterns (in ./manifest-patterns.ts, shared with the storefront components contract). */
+export {
+  PLUGIN_FIELD_KEY_PATTERN,
+  PLUGIN_FIELD_KEY_RULE,
+  PLUGIN_HOST_PATTERN,
+  PLUGIN_KEY_PATTERN,
+  PLUGIN_KEY_RULE,
+  PLUGIN_OBJECT_TYPE_PATTERN,
+  PLUGIN_OBJECT_TYPE_RULE,
+  PLUGIN_URL_NAME_PATTERN,
+  PLUGIN_URL_NAME_RULE,
+  isPluginHostAllowed,
+} from "./manifest-patterns";
 /** Access scopes (in ./scopes.ts: the one scope → RBAC table). */
 export {
   PLUGIN_SCOPES,
   PLUGIN_SCOPE_NAMES,
+  isCapabilityScope,
   isPluginScope,
   isProtectedDataScope,
+  isSensitivePluginScope,
   legacyPermissionScope,
   pluginScopePermissions,
   type PluginScope,
@@ -74,7 +91,10 @@ export {
   type PluginFeatureRequest,
 } from "./features";
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]{1,40})?$/;
-const name = z.string().regex(PLUGIN_NAME_PATTERN);
+/** A manifest name or data key: snake_case (manifest-patterns.ts). */
+const key = pluginKeySchema();
+/** A name that is also a URL path segment: snake_case or kebab-case. */
+const urlName = pluginUrlNameSchema();
 const title = z.string().trim().min(1).max(80);
 const description = z.string().trim().min(1).max(500);
 
@@ -118,11 +138,20 @@ export const PLUGIN_NAV_PLACEMENTS = ["apps", "orders", "products", "customers",
 
 export const PLUGIN_HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
 
-const routeSchema = z.object({
-  name,
-  methods: z.array(z.enum(PLUGIN_HTTP_METHODS)).min(1).max(5),
+/**
+ * One route, on every surface: `{ name, methods?, description? }`. The name
+ * is its URL path segment; `methods` defaults to `["GET"]` for admin and
+ * public routes and to `["POST"]` for webhooks.
+ */
+const routeSchemaOf = (defaultMethods: (typeof PLUGIN_HTTP_METHODS)[number][]) => z.object({
+  name: urlName,
+  methods: z.array(z.enum(PLUGIN_HTTP_METHODS)).min(1).max(5)
+    .refine((methods) => new Set(methods).size === methods.length, "List each method once.")
+    .default(defaultMethods),
   description: description.optional(),
 }).strict();
+const routeSchema = routeSchemaOf(["GET"]);
+const webhookRouteSchema = routeSchemaOf(["POST"]);
 
 const scopeName = z.enum(PLUGIN_SCOPE_NAMES);
 
@@ -147,10 +176,10 @@ const cronSchedule = z.string().trim().regex(/^(\S+\s+){4}\S+$/, "Use a five-fie
 
 const customFieldSchema = z.object({
   ownerType: z.enum(["product", "variant", "customer", "order", "category", "collection", "brand", "page"]),
-  key: z.string().regex(/^[a-z][a-z0-9_]{0,63}$/),
+  key: z.string().max(64).refine(isCustomFieldKey, "Use snake_case: 2 to 64 lowercase letters and digits, words joined by single underscores."),
   name: title,
-  /** A custom-field type id from `@scalius/shared/custom-fields`; checked at install. */
-  type: z.string().min(1).max(48),
+  /** A custom-field type (`CUSTOM_FIELD_TYPES` in `@scalius/shared/custom-fields`). */
+  type: z.enum(CUSTOM_FIELD_TYPES),
   description: description.optional(),
   storefrontVisible: z.boolean().default(false),
   to: z.string().max(150).optional(),
@@ -182,13 +211,13 @@ export const PLUGIN_LIST_COLUMNS_PER_REQUEST = 5;
  * app's value.
  */
 const listColumnSchema = z.object({
-  id: name,
+  id: key,
   resource: z.enum(PLUGIN_LIST_RESOURCES),
   title,
   type: z.enum(PLUGIN_LIST_COLUMN_TYPES),
   source: z.discriminatedUnion("kind", [
-    z.object({ kind: z.literal("object"), object: z.string().regex(OBJECT_TYPE_PATTERN), field: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,47}$/) }).strict(),
-    z.object({ kind: z.literal("customField"), key: z.string().regex(/^[a-z][a-z0-9_]{0,63}$/) }).strict(),
+    z.object({ kind: z.literal("object"), object: z.string().regex(OBJECT_TYPE_PATTERN, PLUGIN_OBJECT_TYPE_RULE), field: pluginFieldKeySchema() }).strict(),
+    z.object({ kind: z.literal("customField"), key: pluginFieldKeySchema() }).strict(),
   ]),
   filterable: z.boolean().default(false),
 }).strict();
@@ -196,32 +225,33 @@ const listColumnSchema = z.object({
 const adminSchema = z.object({
   /** Full pages; their content is the declarative UI tree the plugin's admin route returns. */
   pages: z.array(z.object({
-    id: name,
+    /** Its dashboard address: `/admin/apps/<plugin id>/pages/<id>`. */
+    id: urlName,
     title,
     placement: z.enum(PLUGIN_NAV_PLACEMENTS).default("apps"),
     /** The admin route that returns the page's UI tree (with tabs: the first tab's). */
-    route: name,
+    route: urlName,
     /**
      * Sub-pages drawn as tabs under the page title (Polaris Tabs), each one
      * its own admin route; the first one opens by default. The page's
      * `route` must be one of them, so a dashboard without tabs still draws
      * the page.
      */
-    tabs: z.array(z.object({ id: name, title, route: name }).strict()).min(2).max(PLUGIN_PAGE_TABS_MAX).optional(),
+    tabs: z.array(z.object({ id: key, title, route: urlName }).strict()).min(2).max(PLUGIN_PAGE_TABS_MAX).optional(),
   }).strict()).max(10).default([]),
   /** Cards on a resource's detail page. */
-  cards: z.array(z.object({ id: name, target: z.enum(PLUGIN_ADMIN_TARGETS), title, route: name }).strict()).max(20).default([]),
+  cards: z.array(z.object({ id: key, target: z.enum(PLUGIN_ADMIN_TARGETS), title, route: urlName }).strict()).max(20).default([]),
   /** Buttons on a resource's detail page or bulk bar; they POST to an admin route. */
   actions: z.array(z.object({
-    id: name,
+    id: key,
     target: z.enum(PLUGIN_ADMIN_TARGETS),
     label: title,
-    route: name,
+    route: urlName,
     bulk: z.boolean().default(false),
     destructive: z.boolean().default(false),
   }).strict()).max(20).default([]),
   /** Dashboard home widgets. */
-  widgets: z.array(z.object({ id: name, title, route: name }).strict()).max(5).default([]),
+  widgets: z.array(z.object({ id: key, title, route: urlName }).strict()).max(5).default([]),
   /** Columns (and filters) on the products, orders and customers lists. */
   listColumns: z.array(listColumnSchema).max(10).default([]),
 }).strict();
@@ -230,7 +260,7 @@ const adminSchema = z.object({
  * Entry kinds the app writes on order timelines (`ctx.timeline.add`), each
  * with the title staff see. Writing needs the `write_orders` scope.
  */
-const timelineSchema = z.array(z.object({ kind: name, title }).strict()).max(20).default([])
+const timelineSchema = z.array(z.object({ kind: key, title }).strict()).max(20).default([])
   .refine((kinds) => new Set(kinds.map((entry) => entry.kind)).size === kinds.length, "Timeline kinds must be unique.");
 
 /** The pages an app script can name. Buyer pages (cart, checkout, the receipt, account) are not among them. */
@@ -243,15 +273,15 @@ const storefrontSchema = z.object({
    * (storefront-components.ts).
    */
   sections: z.array(z.object({
-    type: name,
+    type: key,
     name: title,
     description: description.optional(),
     settings: pluginSettingsSchemaSchema.default([]),
     reads: z.array(z.object({
       object: z.string().min(2).max(150).regex(/^[a-z][a-z0-9_.-]*$/),
-      where: z.record(z.string().regex(/^[a-z][a-z0-9_]{0,63}$/), z.union([
+      where: z.record(z.string().regex(PLUGIN_FIELD_KEY_PATTERN, PLUGIN_FIELD_KEY_RULE), z.union([
         z.string().max(128), z.number().finite(), z.boolean(), z.null(),
-        z.object({ setting: z.string().regex(/^[a-z][a-z0-9_]{0,63}$/) }).strict(),
+        z.object({ setting: z.string().regex(PLUGIN_KEY_PATTERN, PLUGIN_KEY_RULE) }).strict(),
       ])).refine((value) => Object.keys(value).length <= 4, "At most four indexed filters.").optional(),
       limit: z.number().int().min(1).max(24).default(24),
     }).strict()).max(2).default([]),
@@ -262,9 +292,10 @@ const storefrontSchema = z.object({
    * projection (`block` jobs, storefront-components.ts).
    */
   productBlocks: z.array(z.object({
-    type: name,
+    type: key,
     name: title,
-    placement: z.enum(["buy-box", "below"]),
+    /** Its render target: `product.buy-box` (in the buy box, after the buttons) or `product.below` (after the page's modules). */
+    placement: z.enum(STOREFRONT_BLOCK_TARGETS),
     settings: pluginSettingsSchemaSchema.default([]),
   }).strict()).max(10).default([]),
   /** Meta tags and JSON-LD (sanitized) for the page head. */
@@ -306,6 +337,39 @@ function settingNeedsRead(field: PluginSettingsSchema[number]): boolean {
     || (field.type === "list" && field.fields.some((item) => item.type === "image"));
 }
 
+// ── Messaging ─────────────────────────────────────────────────────────────
+
+/** The most Object fields one app declares as message recipients. */
+export const PLUGIN_MESSAGE_RECIPIENTS_MAX = 4;
+
+/**
+ * Who `ctx.messaging.email` and `sms` may reach by `to` (COMMERCE-HOOKS H5,
+ * "Messaging"): besides a customer by `customerId` (`read_customers`) and the
+ * store's own staff, only an address held in one of these fields of the app's
+ * own Objects. The consent screen lists them. Any other address needs the
+ * sensitive `send_messages_any` scope.
+ */
+const messagingSchema = z.object({
+  recipients: z.array(z.object({
+    /** One of the app's object types (`objects`). */
+    object: z.string().regex(OBJECT_TYPE_PATTERN, PLUGIN_OBJECT_TYPE_RULE),
+    /** A `single_line_text` field holding an email address or phone number, first in an index or alone in a unique set. */
+    field: pluginFieldKeySchema(),
+  }).strict()).max(PLUGIN_MESSAGE_RECIPIENTS_MAX).default([]),
+}).strict();
+
+/** A declared recipient field as the grant names it: `<object>.<field>`. */
+export function pluginMessageRecipientKey(recipient: { object: string; field: string }): string {
+  return `${recipient.object}.${recipient.field}`;
+}
+
+/** Whether an object's declared index (leading field) or unique set (alone) finds a record by `field`. */
+export function objectFieldLookupIndexed(declaration: Pick<ObjectTypeDeclaration, "indexes" | "unique">, field: string): boolean {
+  const lead = (entry: string | readonly string[]) => (typeof entry === "string" ? entry : entry[0]);
+  const alone = (entry: string | readonly string[]) => (typeof entry === "string" ? entry === field : entry.length === 1 && entry[0] === field);
+  return declaration.indexes.some((entry) => lead(entry) === field) || declaration.unique.some(alone);
+}
+
 // ── Settings groups ───────────────────────────────────────────────────────
 
 /** The most app-wide settings sections one app declares. */
@@ -317,7 +381,7 @@ export const PLUGIN_SETTINGS_GROUPS_MAX = 20;
  * fields are shown with their provider instead.
  */
 const settingsGroupSchema = z.object({
-  id: name,
+  id: key,
   title,
   description: description.optional(),
   /** Lower comes first; groups with the same order keep the manifest's order. */
@@ -409,27 +473,27 @@ const pluginTranslationSchema = z.object({
   name: title.optional(),
   tagline: tagline.optional(),
   description: description.optional(),
-  pages: z.record(name, title).optional(),
-  cards: z.record(name, title).optional(),
-  salesChannels: z.record(name, title).optional(),
-  actions: z.record(name, title).optional(),
-  widgets: z.record(name, title).optional(),
+  pages: z.record(urlName, title).optional(),
+  cards: z.record(key, title).optional(),
+  salesChannels: z.record(urlName, title).optional(),
+  actions: z.record(key, title).optional(),
+  widgets: z.record(key, title).optional(),
   /** List column titles by id. */
-  listColumns: z.record(name, title).optional(),
+  listColumns: z.record(key, title).optional(),
   /** Order timeline entry titles by kind. */
-  timeline: z.record(name, title).optional(),
+  timeline: z.record(key, title).optional(),
   /** Page tab titles: page id → tab id → title. */
-  tabs: z.record(name, z.record(name, title)).optional(),
+  tabs: z.record(urlName, z.record(key, title)).optional(),
   /** Settings section titles and descriptions by group id. */
-  settingsGroups: z.record(name, z.object({ title: title.optional(), description: description.optional() }).strict()).optional(),
+  settingsGroups: z.record(key, z.object({ title: title.optional(), description: description.optional() }).strict()).optional(),
   /** Setting labels, help and option labels by stored value (app settings only). */
-  settings: z.record(z.string().regex(PLUGIN_SETTING_KEY), z.object({
+  settings: z.record(z.string().regex(PLUGIN_SETTING_KEY, PLUGIN_KEY_RULE), z.object({
     label: z.string().trim().min(1).max(80).optional(),
     help: z.string().trim().min(1).max(280).optional(),
     options: z.record(z.string().min(1).max(64), z.string().trim().min(1).max(80)).optional(),
   }).strict()).optional(),
   /** Feature names and descriptions by feature id. */
-  features: z.record(name, pluginFeatureTranslationSchema).optional(),
+  features: z.record(urlName, pluginFeatureTranslationSchema).optional(),
 }).strict();
 export type PluginTranslation = z.infer<typeof pluginTranslationSchema>;
 
@@ -514,12 +578,12 @@ export const pluginManifestSchema = z.object({
     admin: z.array(adminRouteSchema).max(40).default([]),
     /** Unauthenticated, rate-limited (`/api/v1/plugins/<id>/public/<name>`). */
     public: z.array(routeSchema).max(20).default([]),
-    /** Inbound provider webhooks (`/api/v1/plugins/<id>/webhooks/<name>`), raw body preserved. */
-    webhooks: z.array(name).max(10).default([]),
+    /** Inbound provider webhooks (`/api/v1/plugins/<id>/webhooks/<name>`), raw body preserved; `methods` defaults to `["POST"]`. */
+    webhooks: z.array(webhookRouteSchema).max(10).default([]),
   }).strict().default({ admin: [], public: [], webhooks: [] }),
-  cron: z.array(z.object({ name, schedule: cronSchedule }).strict()).max(10).default([]),
+  cron: z.array(z.object({ name: key, schedule: cronSchedule }).strict()).max(10).default([]),
 
-  objects: z.record(z.string().regex(OBJECT_TYPE_PATTERN), objectTypeDeclarationSchema).default({})
+  objects: z.record(z.string().regex(OBJECT_TYPE_PATTERN, PLUGIN_OBJECT_TYPE_RULE), objectTypeDeclarationSchema).default({})
     .refine((types) => Object.keys(types).length <= 20, "At most 20 object types."),
   customFields: z.array(customFieldSchema).max(50).default([]),
   /**
@@ -540,9 +604,11 @@ export const pluginManifestSchema = z.object({
    * `GET /api/v1/admin/settings/sales-channels/<channel id>/products` and
    * follows `product.publication_changed`. Its orders name it.
    */
-  salesChannels: z.array(z.object({ id: name, name: title }).strict()).max(3).default([])
+  salesChannels: z.array(z.object({ id: urlName, name: title }).strict()).max(3).default([])
     .refine((channels) => new Set(channels.map((channel) => channel.id)).size === channels.length, "Sales channel ids must be unique."),
   settings: pluginAppSettingsSchemaSchema.default([]),
+  /** Who the app's email and SMS may reach by address (`messaging.recipients`); shown on the consent screen. */
+  messaging: messagingSchema.default({ recipients: [] }),
   /**
    * Parts of the app a merchant turns on one at a time (features.ts). Each
    * starts off; turning one on asks consent for its own scopes and hosts, and
@@ -592,6 +658,26 @@ export const pluginManifestSchema = z.object({
   const publicRoutes = new Set(manifest.routes.public.map((route) => route.name));
   if (routes.size !== manifest.routes.admin.length + manifest.routes.public.length) {
     context.addIssue({ code: "custom", path: ["routes"], message: "Route names must be unique across admin and public routes." });
+  }
+  if (new Set(manifest.routes.webhooks.map((route) => route.name)).size !== manifest.routes.webhooks.length) {
+    context.addIssue({ code: "custom", path: ["routes", "webhooks"], message: "Webhook route names must be unique." });
+  }
+  manifest.messaging.recipients.forEach((recipient, index) => {
+    const path = ["messaging", "recipients", index];
+    const declaration = manifest.objects[recipient.object];
+    if (!declaration) {
+      context.addIssue({ code: "custom", path: [...path, "object"], message: `Object type ${recipient.object} is not declared.` });
+      return;
+    }
+    const field = declaration.fields.find((entry) => entry.key === recipient.field);
+    if (field?.type !== "single_line_text") {
+      context.addIssue({ code: "custom", path: [...path, "field"], message: `${recipient.object}.${recipient.field} must be a single_line_text field holding an email address or phone number.` });
+    } else if (!objectFieldLookupIndexed(declaration, recipient.field)) {
+      context.addIssue({ code: "custom", path: [...path, "field"], message: `Index ${recipient.field} first in ${recipient.object} (or declare it unique) so a message finds its record by index.` });
+    }
+  });
+  if (new Set(manifest.messaging.recipients.map(pluginMessageRecipientKey)).size !== manifest.messaging.recipients.length) {
+    context.addIssue({ code: "custom", path: ["messaging", "recipients"], message: "Message recipients must be unique." });
   }
   const needAdminRoute = (path: (string | number)[], route: string) => {
     if (!adminRoutes.has(route)) context.addIssue({ code: "custom", path, message: `Admin route ${route} is not declared.` });
@@ -867,12 +953,14 @@ export interface PluginGrantRequest {
   storefrontConnect: string[];
   /** The features turned on (`manifest.features`), sorted. Everything else already includes these features' parts. */
   features: string[];
+  /** Object fields whose addresses the app may email or text (`messaging.recipients`, `<object>.<field>`). */
+  messageRecipients: string[];
 }
 
 /** The list dimensions of a grant request, in key order. */
 export const PLUGIN_GRANT_LIST_DIMENSIONS = [
   "allowedHosts", "blockingFunctions", "customFieldOwners", "events", "features", "functions",
-  "providers", "scopes", "storefrontConnect", "storefrontScripts",
+  "messageRecipients", "providers", "scopes", "storefrontConnect", "storefrontScripts",
 ] as const satisfies ReadonlyArray<keyof PluginGrantRequest>;
 /** The flag dimensions of a grant request, in key order. */
 export const PLUGIN_GRANT_FLAG_DIMENSIONS = ["publicRoutes", "storefrontCode", "storefrontSurfaces"] as const satisfies ReadonlyArray<keyof PluginGrantRequest>;
@@ -882,7 +970,7 @@ export function emptyPluginGrantRequest(): PluginGrantRequest {
   return {
     scopes: [], allowedHosts: [], events: [], functions: [], blockingFunctions: [], providers: [],
     publicRoutes: false, storefrontScripts: [], storefrontSurfaces: false, customFieldOwners: [],
-    storefrontCode: false, storefrontConnect: [], features: [],
+    storefrontCode: false, storefrontConnect: [], features: [], messageRecipients: [],
   };
 }
 
@@ -912,6 +1000,7 @@ export function pluginGrantRequest(declared: PluginManifest, features: Iterable<
       || Boolean(manifest.storefront.stylesheet),
     storefrontConnect: sorted(manifest.storefront.connect),
     features: enabled,
+    messageRecipients: sorted(manifest.messaging.recipients.map(pluginMessageRecipientKey)),
   };
 }
 
@@ -968,6 +1057,7 @@ export function pluginGrantAdditions(granted: PluginGrantRequest | null, next: P
     storefrontCode: next.storefrontCode && !granted.storefrontCode,
     storefrontConnect: added(granted.storefrontConnect, next.storefrontConnect),
     features: added(granted.features, next.features),
+    messageRecipients: added(granted.messageRecipients, next.messageRecipients),
   };
 }
 

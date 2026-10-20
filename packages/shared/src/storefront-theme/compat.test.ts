@@ -208,7 +208,7 @@ describe("app templates and page presets", () => {
         { id: "ok", name: "Ok", sections: [hero] },
       ],
     })).toEqual([
-      { kind: "template", id: "future", name: "Future", problem: "Version 99 is newer than this store reads (10)." },
+      { kind: "template", id: "future", name: "Future", problem: "Version 99 is newer than this store reads (11)." },
       { kind: "template", id: "broken", name: "Broken", problem: expect.stringMatching(/^sections\.0\.settings\.layout: /) },
       { kind: "page-preset", id: "old", name: "Old", problem: "Version 9 is older than the oldest readable version (10)." },
       { kind: "page-preset", id: "empty", name: "Empty", problem: "The preset has no sections." },
@@ -218,6 +218,33 @@ describe("app templates and page presets", () => {
   it("returns a template's parts at the current version", () => {
     expect(checkStorefrontAppTemplateTheme({ sections: [hero], apps: { skins: {} } }, 10)).toEqual({ ok: true, value: { sections: [hero], apps: { skins: {} } } });
     expect(checkStorefrontPagePresetSections([hero], 10)).toEqual({ ok: true, value: [hero] });
+  });
+});
+
+describe("the 10 → 11 step", () => {
+  it("names every app surface by its snake_case name, and nothing else", () => {
+    const skin = (app: string) => ({ app, values: { label: "noor-header stays text" } });
+    const stored = {
+      version: 10,
+      template: "department-mall",
+      apps: { skins: { header: skin("scalius.noor/noor-header") }, template: "scalius.noor/noor" },
+      blocks: { product: { apps: [{ id: "size-guide", app: "acme.fit/size-guide", values: {} }] } },
+      pages: {
+        home: [
+          { id: "noor-hero", type: "hero", version: 1, settings: { layout: "split", slides: [] }, skin: skin("scalius.noor/noor-hero") },
+          { id: "app-feature", type: "app", version: 1, settings: { app: "scalius.noor/featured-product", values: { link: "/collections/new-in" } } },
+        ],
+        landing: { eid: { title: "Eid", sections: [{ id: "lp-order", type: "app", version: 1, settings: { app: "scalius.noor/landing-order", values: {} } }] } },
+      },
+    };
+    const upgraded = STOREFRONT_THEME_DOCUMENT_UPGRADES[10]!(structuredClone(stored)) as typeof stored;
+    expect(upgraded.apps).toEqual({ skins: { header: skin("scalius.noor/noor_header") }, template: "scalius.noor/noor" });
+    expect(upgraded.blocks.product.apps[0]).toEqual({ id: "size-guide", app: "acme.fit/size_guide", values: {} });
+    expect(upgraded.pages.home[0]!.skin).toEqual(skin("scalius.noor/noor_hero"));
+    expect(upgraded.pages.home[0]!.id).toBe("noor-hero");
+    expect(upgraded.pages.home[1]!.settings).toEqual({ app: "scalius.noor/featured_product", values: { link: "/collections/new-in" } });
+    expect(upgraded.pages.landing.eid.sections[0]!.settings.app).toBe("scalius.noor/landing_order");
+    expect(upgraded.template).toBe("department-mall");
   });
 });
 
@@ -272,8 +299,8 @@ describe("the upgrade chain", () => {
   });
 
   it("reads a stored document of this build strictly, and refuses other versions", () => {
-    expect(readStoredStorefrontThemeDocument(JSON.stringify(DEFAULT_STOREFRONT_THEME))).toEqual({ ok: true, document: DEFAULT_STOREFRONT_THEME, storedVersion: 10 });
-    expect(readStoredStorefrontThemeDocument(JSON.stringify({ version: 10 })).ok).toBe(false);
+    expect(readStoredStorefrontThemeDocument(JSON.stringify(DEFAULT_STOREFRONT_THEME))).toEqual({ ok: true, document: DEFAULT_STOREFRONT_THEME, storedVersion: 11 });
+    expect(readStoredStorefrontThemeDocument(JSON.stringify({ version: 11 })).ok).toBe(false);
     expect(readStoredStorefrontThemeDocument("{").ok).toBe(false);
     expect(readStoredStorefrontThemeDocument(JSON.stringify({ version: 9 }))).toEqual({ ok: false, reason: "Version 9 is older than the oldest readable version (10)." });
   });

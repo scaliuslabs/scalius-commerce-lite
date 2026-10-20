@@ -45,7 +45,7 @@ describe("the storefront gallery", () => {
 
   it("composes the Noor slideshow through the current hero skin", () => {
     const hero = entries.find((entry) => entry.id === "noor-home-skin-slideshow")!.theme.pages.home[0]!;
-    expect(hero).toMatchObject({ type: "hero", skin: { app: "scalius.noor/noor-hero" } });
+    expect(hero).toMatchObject({ type: "hero", skin: { app: "scalius.noor/noor_hero" } });
     if (hero.type !== "hero") throw new Error("Expected core hero");
     expect(hero.settings.slides).toHaveLength(2);
     expect(hero.settings.slides.every((slide) => slide.heading && slide.image)).toBe(true);

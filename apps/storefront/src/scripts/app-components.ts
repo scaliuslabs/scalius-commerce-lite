@@ -91,7 +91,7 @@ function contextFor(element: Element): StorefrontIslandContext | null {
   };
 }
 
-const ISLAND_NAME = /^[a-z][a-z0-9-]{0,47}$/;
+const ISLAND_NAME = /^[a-z][a-z0-9_-]{0,47}$/;
 
 type IslandModule = { default?: StorefrontIslandModule };
 type IslandConnection = {

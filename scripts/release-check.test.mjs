@@ -559,9 +559,9 @@ describe("public API reads", () => {
 describe("theme apps", () => {
   // The demo after a deploy: the theme still drew with Noor, but Noor had dropped off the layout.
   const theme = {
-    apps: { skins: { header: { app: "scalius.noor/noor-header", values: {} }, "product-card": { app: "scalius.noor/noor-card", values: {} } } },
+    apps: { skins: { header: { app: "scalius.noor/noor_header", values: {} }, "product-card": { app: "scalius.noor/noor_card", values: {} } } },
     pages: { home: { sections: [
-      { id: "hero", type: "hero", skin: { app: "scalius.noor/section-hero", values: {} } },
+      { id: "hero", type: "hero", skin: { app: "scalius.noor/section_hero", values: {} } },
       { id: "app", type: "app", app: "acme.reviews/reviews", values: {} },
     ] } },
   };

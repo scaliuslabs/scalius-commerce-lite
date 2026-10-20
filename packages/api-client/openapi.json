@@ -1505,7 +1505,7 @@
           "version": {
             "type": "number",
             "enum": [
-              10
+              11
             ]
           },
           "template": {
@@ -2951,7 +2951,7 @@
                         },
                         "app": {
                           "type": "string",
-                          "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
+                          "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
                         },
                         "values": {
                           "type": "object",
@@ -3266,7 +3266,7 @@
               },
               "template": {
                 "type": "string",
-                "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
+                "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
               }
             },
             "additionalProperties": false
@@ -3418,7 +3418,7 @@
         "properties": {
           "app": {
             "type": "string",
-            "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
+            "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
           },
           "values": {
             "type": "object",
@@ -5570,7 +5570,7 @@
                   "properties": {
                     "app": {
                       "type": "string",
-                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
+                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9_]{0,47})$"
                     },
                     "values": {
                       "type": "object",
@@ -6495,7 +6495,7 @@
               },
               "attribute": {
                 "type": "string",
-                "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+                "pattern": "^[a-z][a-z0-9_]{0,47}$"
               }
             },
             "required": [
@@ -6558,7 +6558,7 @@
                       },
                       "key": {
                         "type": "string",
-                        "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$"
                       },
                       "value": {
                         "type": "string",
@@ -6604,7 +6604,7 @@
                       },
                       "route": {
                         "type": "string",
-                        "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                        "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                       },
                       "body": {
                         "$ref": "#/components/schemas/BuyerUiJson"
@@ -7232,7 +7232,7 @@
                         },
                         "attribute": {
                           "type": "string",
-                          "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+                          "pattern": "^[a-z][a-z0-9_]{0,47}$"
                         }
                       },
                       "required": [
@@ -7295,7 +7295,7 @@
                                 },
                                 "key": {
                                   "type": "string",
-                                  "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+                                  "pattern": "^[a-z][a-z0-9_]{0,47}$"
                                 },
                                 "value": {
                                   "type": "string",
@@ -7341,7 +7341,7 @@
                                 },
                                 "route": {
                                   "type": "string",
-                                  "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                                  "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                                 },
                                 "body": {
                                   "$ref": "#/components/schemas/BuyerUiJson"
@@ -7372,7 +7372,7 @@
                     "properties": {
                       "key": {
                         "type": "string",
-                        "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$"
                       },
                       "label": {
                         "type": "string",
@@ -13110,8 +13110,8 @@
                 "placement": {
                   "type": "string",
                   "enum": [
-                    "buy-box",
-                    "below"
+                    "product.buy-box",
+                    "product.below"
                   ]
                 },
                 "settings": {
@@ -15931,6 +15931,7 @@
                         "read_customers",
                         "write_customers",
                         "write_marketing",
+                        "send_messages_any",
                         "read_customer_names",
                         "read_customer_emails",
                         "read_customer_phones",
@@ -16223,7 +16224,22 @@
                   "webhooks": {
                     "type": "array",
                     "items": {
-                      "type": "string"
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "methods": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "methods"
+                      ]
                     }
                   }
                 },
@@ -16361,8 +16377,8 @@
                         "placement": {
                           "type": "string",
                           "enum": [
-                            "buy-box",
-                            "below"
+                            "product.buy-box",
+                            "product.below"
                           ]
                         }
                       },
@@ -16749,6 +16765,7 @@
                 "read_customers",
                 "write_customers",
                 "write_marketing",
+                "send_messages_any",
                 "read_customer_names",
                 "read_customer_emails",
                 "read_customer_phones",
@@ -16833,6 +16850,13 @@
               "type": "string"
             },
             "description": "The app's features that are on (empty for apps that declare none)."
+          },
+          "messageRecipients": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Fields of the app's own records (<object>.<field>) whose email addresses or phone numbers it may message."
           }
         },
         "required": [
@@ -16848,7 +16872,8 @@
           "customFieldOwners",
           "storefrontCode",
           "storefrontConnect",
-          "features"
+          "features",
+          "messageRecipients"
         ],
         "description": "What an app may do; the consent screen lists it in plain words."
       },
@@ -16892,6 +16917,7 @@
                         "read_customers",
                         "write_customers",
                         "write_marketing",
+                        "send_messages_any",
                         "read_customer_names",
                         "read_customer_emails",
                         "read_customer_phones",
@@ -39713,7 +39739,7 @@
                                       },
                                       "attribute": {
                                         "type": "string",
-                                        "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+                                        "pattern": "^[a-z][a-z0-9_]{0,47}$"
                                       }
                                     },
                                     "required": [
@@ -39776,7 +39802,7 @@
                                               },
                                               "key": {
                                                 "type": "string",
-                                                "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+                                                "pattern": "^[a-z][a-z0-9_]{0,47}$"
                                               },
                                               "value": {
                                                 "type": "string",
@@ -39822,7 +39848,7 @@
                                               },
                                               "route": {
                                                 "type": "string",
-                                                "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                                                "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                                               },
                                               "body": {
                                                 "$ref": "#/components/schemas/BuyerUiJson"
@@ -39853,7 +39879,7 @@
                                   "properties": {
                                     "key": {
                                       "type": "string",
-                                      "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+                                      "pattern": "^[a-z][a-z0-9_]{0,47}$"
                                     },
                                     "label": {
                                       "type": "string",
@@ -65207,7 +65233,7 @@
                                           },
                                           "attribute": {
                                             "type": "string",
-                                            "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+                                            "pattern": "^[a-z][a-z0-9_]{0,47}$"
                                           }
                                         },
                                         "required": [
@@ -65270,7 +65296,7 @@
                                                   },
                                                   "key": {
                                                     "type": "string",
-                                                    "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+                                                    "pattern": "^[a-z][a-z0-9_]{0,47}$"
                                                   },
                                                   "value": {
                                                     "type": "string",
@@ -65316,7 +65342,7 @@
                                                   },
                                                   "route": {
                                                     "type": "string",
-                                                    "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                                                    "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                                                   },
                                                   "body": {
                                                     "$ref": "#/components/schemas/BuyerUiJson"
@@ -65347,7 +65373,7 @@
                                       "properties": {
                                         "key": {
                                           "type": "string",
-                                          "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+                                          "pattern": "^[a-z][a-z0-9_]{0,47}$"
                                         },
                                         "label": {
                                           "type": "string",
@@ -67362,7 +67388,7 @@
                                       },
                                       "attribute": {
                                         "type": "string",
-                                        "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+                                        "pattern": "^[a-z][a-z0-9_]{0,47}$"
                                       }
                                     },
                                     "required": [
@@ -67425,7 +67451,7 @@
                                               },
                                               "key": {
                                                 "type": "string",
-                                                "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+                                                "pattern": "^[a-z][a-z0-9_]{0,47}$"
                                               },
                                               "value": {
                                                 "type": "string",
@@ -67471,7 +67497,7 @@
                                               },
                                               "route": {
                                                 "type": "string",
-                                                "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                                                "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                                               },
                                               "body": {
                                                 "$ref": "#/components/schemas/BuyerUiJson"
@@ -67502,7 +67528,7 @@
                                   "properties": {
                                     "key": {
                                       "type": "string",
-                                      "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+                                      "pattern": "^[a-z][a-z0-9_]{0,47}$"
                                     },
                                     "label": {
                                       "type": "string",
@@ -68642,7 +68668,7 @@
                                       },
                                       "attribute": {
                                         "type": "string",
-                                        "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+                                        "pattern": "^[a-z][a-z0-9_]{0,47}$"
                                       }
                                     },
                                     "required": [
@@ -68705,7 +68731,7 @@
                                               },
                                               "key": {
                                                 "type": "string",
-                                                "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+                                                "pattern": "^[a-z][a-z0-9_]{0,47}$"
                                               },
                                               "value": {
                                                 "type": "string",
@@ -68751,7 +68777,7 @@
                                               },
                                               "route": {
                                                 "type": "string",
-                                                "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                                                "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                                               },
                                               "body": {
                                                 "$ref": "#/components/schemas/BuyerUiJson"
@@ -68782,7 +68808,7 @@
                                   "properties": {
                                     "key": {
                                       "type": "string",
-                                      "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+                                      "pattern": "^[a-z][a-z0-9_]{0,47}$"
                                     },
                                     "label": {
                                       "type": "string",
@@ -220427,7 +220453,7 @@
           {
             "schema": {
               "type": "string",
-              "pattern": "^(?:icon|screenshot-[1-6]|provider-[a-z][a-z0-9-]{0,47})$",
+              "pattern": "^(?:icon|screenshot-[1-6]|provider-[a-z][a-z0-9_-]{0,47})$",
               "description": "icon, screenshot-1 to screenshot-6, or provider-<provider id>."
             },
             "required": true,
@@ -222681,7 +222707,7 @@
           {
             "schema": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$",
               "description": "The feature's id (manifest.features[].id)."
             },
             "required": true,
@@ -222876,7 +222902,7 @@
           {
             "schema": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$",
               "description": "The feature's id (manifest.features[].id)."
             },
             "required": true,

@@ -447,14 +447,14 @@ describe("product page app blocks", () => {
     templates: [], pagePresets: [],
     productBlocks: [
       {
-        key: "acme.reviews/stars", type: "stars", name: "Star rating", placement: "buy-box",
+        key: "acme.reviews/stars", type: "stars", name: "Star rating", placement: "product.buy-box",
         settings: [
           setting("label", "Label", { maxLength: 40, default: "Rated by buyers" }),
           setting("size", "Size", { type: "select", options: [{ value: "small", label: "Small" }, { value: "large", label: "Large" }], default: "small" }),
         ],
       },
       {
-        key: "acme.reviews/list", type: "list", name: "Review list", placement: "below",
+        key: "acme.reviews/list", type: "list", name: "Review list", placement: "product.below",
         settings: [
           setting("count", "Reviews shown", { type: "number", min: 1, max: 20, integer: true, default: 5 }),
           setting("title", "Title", { required: true, maxLength: 60 }),

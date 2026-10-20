@@ -5,6 +5,7 @@
 // bridge. Part of the versioned plugin API.
 
 import { z } from "zod";
+import { PLUGIN_KEY_PATTERN, PLUGIN_KEY_RULE, PLUGIN_URL_NAME_PATTERN, PLUGIN_URL_NAME_RULE } from "./manifest-patterns";
 
 export const PLUGIN_SETTING_TYPES = [
   "text",
@@ -54,21 +55,22 @@ export const PLUGIN_PRODUCT_SOURCE = /^(?:newest|on-sale|popular|(?:collection|c
 /** A same-store path (`/collections/new`) or an https URL (a `link` setting's value). */
 export const PLUGIN_LINK = /^(?:\/(?!\/)[^\s]*|https:\/\/[^\s]+)$/;
 
-/** A setting key: lowercase words joined by underscores, unique per plugin. */
-export const PLUGIN_SETTING_KEY = /^[a-z][a-z0-9_]{0,47}$/;
+/** A setting key: snake_case (the manifest's key rule), unique per plugin. */
+export const PLUGIN_SETTING_KEY = PLUGIN_KEY_PATTERN;
 
 const label = z.string().trim().min(1).max(80);
 const help = z.string().trim().min(1).max(280).optional();
 const choice = z.object({ value: z.string().min(1).max(64), label }).strict();
 
 /**
- * A settings group or provider id (`manifest.settingsGroups[].id`,
- * `manifest.providers.*[].id`): the same lowercase name both use.
+ * A settings group (snake_case) or a provider id (snake_case or
+ * kebab-case: it is a URL path segment): `manifest.settingsGroups[].id`,
+ * `manifest.providers.*[].id`.
  */
-export const PLUGIN_SETTING_GROUP = /^[a-z][a-z0-9-]{0,47}$/;
+export const PLUGIN_SETTING_GROUP = PLUGIN_URL_NAME_PATTERN;
 
 const base = {
-  key: z.string().regex(PLUGIN_SETTING_KEY),
+  key: z.string().regex(PLUGIN_SETTING_KEY, PLUGIN_KEY_RULE),
   label,
   help,
   required: z.boolean().default(false),
@@ -79,7 +81,7 @@ const base = {
    * provider up). Left out: the app's general settings, or the provider whose
    * `settings` names it. Presentation only; storage and validation ignore it.
    */
-  group: z.string().regex(PLUGIN_SETTING_GROUP).optional(),
+  group: z.string().regex(PLUGIN_SETTING_GROUP, PLUGIN_URL_NAME_RULE).optional(),
 };
 
 const textField = z.object({ ...base, type: z.literal("text"), default: z.string().max(500).optional(), maxLength: z.number().int().min(1).max(500).default(200) }).strict();

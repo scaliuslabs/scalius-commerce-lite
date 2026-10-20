@@ -28,7 +28,7 @@ import { hasControlCharacter } from "@scalius/shared/plugins/html";
 
 /** `vendor.name` (the platform's plugin id pattern). */
 const PLUGIN_ID = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
-const ROUTE_NAME = /^[a-z][a-z0-9-]{0,47}$/;
+const ROUTE_NAME = /^[a-z][a-z0-9_-]{0,47}$/;
 const METHODS = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]);
 const FORWARDED_REQUEST_HEADERS = ["accept", "accept-language", "content-type", "if-none-match", "user-agent", "x-requested-with"];
 const FORWARDED_RESPONSE_HEADERS = ["content-type", "cache-control", "etag", "vary", "allow", "retry-after", "content-security-policy"];

@@ -16,7 +16,7 @@ export interface SignInApp {
 export type SignInLanguage = "en" | "bn";
 
 /** The id's characters are all valid in a URL path segment as they are. */
-const APP_PROVIDER_ID = /^[a-z0-9][a-z0-9.-]*:[a-z][a-z0-9-]*$/;
+const APP_PROVIDER_ID = /^[a-z0-9][a-z0-9.-]*:[a-z][a-z0-9_-]*$/;
 
 export function signInLanguage(code: unknown): SignInLanguage {
   return checkoutLanguageBaseCode(code) === "bn" ? "bn" : "en";

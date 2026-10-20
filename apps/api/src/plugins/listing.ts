@@ -42,7 +42,7 @@ export interface PluginCatalogEntry {
 }
 
 /** `icon`, `screenshot-1` to `screenshot-6`, or `provider-<provider id>` (a provider's own icon). */
-export const PLUGIN_ASSET_NAME = /^(?:icon|screenshot-[1-6]|provider-[a-z][a-z0-9-]{0,47})$/;
+export const PLUGIN_ASSET_NAME = /^(?:icon|screenshot-[1-6]|provider-[a-z][a-z0-9_-]{0,47})$/;
 
 export function pluginAssetUrl(pluginId: string, asset: string, fingerprint: string): string {
   return `/api/v1/admin/apps/${pluginId}/assets/${asset}?v=${fingerprint.slice(0, 16)}`;

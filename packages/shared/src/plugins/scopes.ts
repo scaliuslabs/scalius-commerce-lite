@@ -8,13 +8,16 @@
 // only added, never renamed or removed, and a scope never gains a capability
 // its description does not state.
 //
-// Two tiers:
-//   - access scopes confer RBAC permissions (`rbac`);
+// Three tiers:
+//   - access scopes (`read_*`, `write_*`) confer RBAC permissions (`rbac`);
 //   - protected customer data scopes (`protects`) confer none: each reveals
 //     one category of buyer contact data (names, emails, phones, street
 //     addresses) wherever the app's access scopes already reach. Without it,
 //     those fields read null in operation responses and provider inputs leave
-//     them out (./protected-data.ts).
+//     them out (./protected-data.ts);
+//   - capability scopes (`sensitive`, no `rbac`) confer none either: each
+//     widens one host capability the bridge checks by the scope's name
+//     (`send_messages_any`: `ctx.messaging` to any address).
 //
 // Rules of the table:
 //   - `write_*` includes its `read_*` (an app that edits can read what it edits);
@@ -37,6 +40,8 @@ export interface PluginScopeDefinition {
   readonly staff: string;
   /** A protected customer data scope: the category it reveals (it confers no RBAC). */
   readonly protects?: ProtectedCustomerData;
+  /** A capability scope: confers no RBAC, widens one host capability, and the consent screen marks it Sensitive. */
+  readonly sensitive?: true;
 }
 
 const PRODUCTS_READ = ["products.view", "categories.view", "collections.view", "attributes.view"] as const;
@@ -75,12 +80,19 @@ export const PLUGIN_SCOPES = {
   write_orders: { rbac: ["orders.view", "orders.create", "orders.edit", "orders.change_status"], staff: "orders.edit" },
   /** Hand over order lines, create and void fulfilments and courier shipments. */
   write_fulfillments: { rbac: ["orders.view", "orders.manage_shipments"], staff: "orders.manage_shipments" },
-  /** Customers, their tags and marketing consent; message a customer by id (`ctx.messaging`). Contact fields need the protected data scopes. */
+  /** Customers, their tags and marketing consent; email, text or push a customer by id (`ctx.messaging`). Contact fields need the protected data scopes. */
   read_customers: { rbac: ["customers.view"], staff: "customers.view" },
   /** Create and edit customers, their tags and custom fields. */
   write_customers: { rbac: ["customers.view", "customers.create", "customers.edit"], staff: "customers.edit" },
   /** Send marketing email and SMS to customers who agreed to receive it. The platform resolves the address; the app never sees it. */
   write_marketing: { rbac: ["marketing.send"], staff: "marketing.send" },
+  /**
+   * Email and text any address from the store's sender (`ctx.messaging` with
+   * any `to`). Without it an app reaches customers by id, the store's staff
+   * and the addresses in its declared `messaging.recipients` fields only.
+   * Sensitive: mail from the store's own domain to anyone. Confers no RBAC.
+   */
+  send_messages_any: { rbac: [], staff: "marketing.send", sensitive: true },
   /** Buyers' and recipients' names. */
   read_customer_names: { rbac: [], staff: "customers.view", protects: "name" },
   /** Buyers' email addresses. */
@@ -124,6 +136,17 @@ export const PLUGIN_SCOPE_NAMES = Object.keys(PLUGIN_SCOPES) as [PluginScope, ..
 
 export function isPluginScope(value: string): value is PluginScope {
   return Object.prototype.hasOwnProperty.call(PLUGIN_SCOPES, value);
+}
+
+/** Whether the consent screen marks a scope Sensitive by itself: protected customer data, or a sensitive capability. */
+export function isSensitivePluginScope(scope: PluginScope): boolean {
+  const definition = PLUGIN_SCOPES[scope] as PluginScopeDefinition;
+  return definition.protects !== undefined || definition.sensitive === true;
+}
+
+/** Whether a scope widens a host capability instead of conferring RBAC (`send_messages_any`). */
+export function isCapabilityScope(scope: PluginScope): boolean {
+  return (PLUGIN_SCOPES[scope] as PluginScopeDefinition).sensitive === true;
 }
 
 /** Whether a scope reveals protected customer data instead of conferring RBAC. */

@@ -388,8 +388,8 @@ describe("resolver on true store shapes", () => {
     expect(resolveStorefrontTheme(storefrontTemplateTheme("department-mall"), LIVE_SMALL).blocks.listing.filters.shown).toBe(true);
   });
 
-  it("is version 10 and reads or writes no older document", () => {
-    expect(STOREFRONT_THEME_DOCUMENT_VERSION).toBe(10);
+  it("is version 11 and reads or writes no older document", () => {
+    expect(STOREFRONT_THEME_DOCUMENT_VERSION).toBe(11);
     const theme = storefrontTemplateTheme("department-mall");
     expect(storefrontThemeDocumentSchema.safeParse({ ...theme, version: 9 }).success).toBe(false);
     expect(parseStoredStorefrontThemeDocument(JSON.stringify({ ...theme, version: 9 }))).toBeNull();

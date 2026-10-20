@@ -113,13 +113,50 @@ describe("the harness is as strict as the platform", () => {
     expect(await harness.fn("cart.line_prices", { cart: fixtures.cart(), lines: [] })).toMatchObject({ ok: true, value: { prices: [] } });
   });
 
-  it("refuses customer messages without read_customers, as the host does", async () => {
-    const refused = createPluginTestHarness({ default: strict({ prices: [] }) });
-    expect(await refused.deliver(fixtures.event("order.created"))).toMatchObject({ ok: false, error: { code: "messaging.not_allowed" } });
+  it("never lets read_customers relay mail to any address, as the host does", async () => {
+    const refused = createPluginTestHarness({ default: strict({ prices: [] }, ["read_customers"]) });
+    expect(await refused.deliver(fixtures.event("order.created"))).toMatchObject({ ok: false, error: { code: "messaging.recipient_not_allowed" } });
     expect(refused.sent.emails).toEqual([]);
-    const allowed = createPluginTestHarness({ default: strict({ prices: [] }, ["read_customers"]) });
-    expect(await allowed.deliver(fixtures.event("order.created"))).toMatchObject({ ok: true });
-    expect(allowed.sent.emails).toHaveLength(1);
+    const any = createPluginTestHarness({ default: strict({ prices: [] }, ["send_messages_any"]) });
+    expect(await any.deliver(fixtures.event("order.created"))).toMatchObject({ ok: true });
+    expect(any.sent.emails).toHaveLength(1);
+  });
+
+  it("messages a customer by id with read_customers, staff, and the addresses its declared recipient fields hold", async () => {
+    const app = (scopes: PluginManifestInput["scopes"] = []) => definePlugin({
+      manifest: {
+        ...manifest, id: "acme.newsletter", scopes, functions: [], events: [], migrations: [],
+        routes: { admin: [{ name: "send", methods: ["POST"] }], public: [], webhooks: [] },
+        objects: { subscribers: { name: "Subscribers", fields: [{ key: "email", name: "Email", type: "single_line_text" }], unique: ["email"] } },
+        messaging: { recipients: [{ object: "subscribers", field: "email" }] },
+      },
+      routes: {
+        admin: {
+          send: async (request, ctx) => {
+            const body = request.body as { customerId?: string; to?: string; subscribe?: string };
+            if (body.subscribe) await ctx.objects.subscribers!.put(body.subscribe, { email: body.subscribe });
+            await ctx.messaging.email({ ...(body.customerId ? { customerId: body.customerId } : { to: body.to }), subject: "News", html: "<p>News</p>" });
+            return { body: { sent: true } };
+          },
+        },
+      },
+    });
+    const harness = createPluginTestHarness({ default: app() }, { staff: ["Owner@Shop.test"] });
+    const send = (body: Record<string, unknown>) => harness.route("admin", "send", { method: "POST", body });
+    expect(await send({ to: "owner@shop.test" })).toMatchObject({ ok: true });
+    expect(await send({ to: "reader@example.test" })).toMatchObject({ ok: false, error: { code: "messaging.recipient_not_allowed" } });
+    expect(await send({ to: "reader@example.test", subscribe: "reader@example.test" })).toMatchObject({ ok: true });
+    expect(await send({ customerId: "cus_1" })).toMatchObject({ ok: false, error: { code: "messaging.not_allowed" } });
+    expect(harness.sent.emails).toHaveLength(2);
+    const customers = createPluginTestHarness({ default: app(["read_customers"]) });
+    expect(await customers.route("admin", "send", { method: "POST", body: { customerId: "cus_1" } })).toMatchObject({ ok: true });
+    // Size limits are the host's (PLUGIN_MESSAGE_LIMITS): HTML is measured in UTF-8 bytes.
+    const big = definePlugin({
+      manifest: { ...manifest, id: "acme.big", scopes: ["send_messages_any"], functions: [], events: ["order.created"], routes: { admin: [], public: [], webhooks: [] }, migrations: [] },
+      events: { "order.created": async (event, ctx) => void await ctx.messaging.email({ to: "a@example.test", subject: "Big", html: "অ".repeat(40_000) }) },
+    });
+    expect(await createPluginTestHarness({ default: big }).deliver(fixtures.event("order.created")))
+      .toMatchObject({ ok: false, error: { code: "messaging.invalid", message: expect.stringContaining("html is text of at most 102400 bytes.") } });
   });
 });
 

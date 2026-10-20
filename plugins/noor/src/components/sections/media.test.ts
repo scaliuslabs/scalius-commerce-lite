@@ -27,9 +27,9 @@ function renderHero(slide: { image?: string; phoneImage?: string }, next?: { ima
     : null);
   const skin = parsePluginManifest(manifest);
   if (!skin.ok) throw new Error("Invalid Noor manifest");
-  const settings = resolveStorefrontSettings(skin.manifest.storefront.skins.find((entry) => entry.id === "noor-hero")!.settings, {}, { image: () => null, products: () => [] });
+  const settings = resolveStorefrontSettings(skin.manifest.storefront.skins.find((entry) => entry.id === "noor_hero")!.settings, {}, { image: () => null, products: () => [] });
   const data = fixtureSectionSkinData("hero", { layout: "full-bleed", slides: [slide, ...(next ? [next] : [])].map((entry) => ({ image: photo(entry.image), phoneImage: photo("phoneImage" in entry ? entry.phoneImage : undefined), alt: "", focalPoint: { x: 50, y: 50 }, link: null })) });
-  const result = storefrontShown(renderSkin(storefront, "noor-hero", "section:hero", settings, data), "scalius.noor");
+  const result = storefrontShown(renderSkin(storefront, "noor_hero", "section:hero", settings, data), "scalius.noor");
   expect(result.dropped).toBe(0);
   document.body.innerHTML = result.html;
   return document.body;

@@ -141,6 +141,8 @@ export const installedAppsMessages = defineMessages({
     storefrontConnectTo: "Its storefront code connects to {host} from your buyers' browsers",
     access_hosts: "Websites it connects to",
     access_fields: "Adds its own fields to",
+    access_messages: "Email and text messages",
+    messageRecipientsIn: "Emails and texts the addresses in its {field} records",
 
     functionsTitle: "Checkout functions",
     functionsDescription: "Where this app takes part in checkout. At each step, the app with the lowest priority number runs first.",
@@ -413,6 +415,8 @@ export const installedAppsMessages = defineMessages({
     storefrontConnectTo: "এর স্টোরফ্রন্ট কোড ক্রেতার ব্রাউজার থেকে {host}-এ যোগাযোগ করে",
     access_hosts: "যে ওয়েবসাইটগুলোর সাথে যোগাযোগ করে",
     access_fields: "যেখানে নিজের ফিল্ড যোগ করে",
+    access_messages: "ইমেইল ও টেক্সট মেসেজ",
+    messageRecipientsIn: "এর {field} রেকর্ডের ঠিকানায় ইমেইল ও টেক্সট পাঠায়",
 
     functionsTitle: "চেকআউট ফাংশন",
     functionsDescription: "চেকআউটের যে ধাপগুলোতে এই অ্যাপ কাজ করে। প্রতিটি ধাপে যে অ্যাপের প্রায়োরিটি নম্বর সবচেয়ে কম, সেটি আগে চলে।",

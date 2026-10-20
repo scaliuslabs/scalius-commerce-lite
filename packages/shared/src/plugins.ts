@@ -18,3 +18,5 @@ export * from "./plugins/storefront-embeds";
 export * from "./plugins/buyer-ui";
 
 export * from "./plugins/objects";
+
+export * from "./plugins/messaging";

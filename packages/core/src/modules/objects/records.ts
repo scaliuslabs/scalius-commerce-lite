@@ -544,7 +544,9 @@ function scalarOf(where: ObjectWhere, field: string, declaration: ObjectTypeDecl
 /**
  * The declared index a query uses: the where fields must be exactly the
  * leading fields of one index (equality), and an orderBy field must be the
- * next field of that same index. Anything else is refused, never scanned.
+ * next field of that same index. A unique field set also answers an exact
+ * lookup on all of its fields with values (its `u` column, no index slot of
+ * its own). Anything else is refused, never scanned.
  */
 export function planObjectRecordQuery(
   declaration: ObjectTypeDeclaration,
@@ -578,7 +580,20 @@ export function planObjectRecordQuery(
       fingerprint,
     };
   }
-  const declared = declaration.indexes.map((entry) => fieldsOf(entry).join("+")).join(", ") || "none";
+  // A unique set leaves out records missing any of its fields, so it answers
+  // only an exact lookup with every value given.
+  for (const [slot, entry] of declaration.unique.entries()) {
+    const fields = fieldsOf(entry);
+    if (!sameFields(fields, whereFields) || fields.some((field) => where[field] === null || where[field] === undefined)) continue;
+    if (orderField !== undefined && orderField !== "id" && !fields.includes(orderField)) continue;
+    const column = UNIQUE_COLUMNS[slot]!;
+    const encoded = encodeIndexTuple(fields.map((field) => scalarOf(where, field, declaration)), fields);
+    return { column: null, condition: eq(objectRecords[column], encoded), orderByIndex: false, fingerprint: `${column}:${fnv1a(encoded)}:${orderField ?? ""}` };
+  }
+  const declared = [
+    ...declaration.indexes.map((entry) => fieldsOf(entry).join("+")),
+    ...declaration.unique.map((entry) => `unique ${fieldsOf(entry).join("+")}`),
+  ].join(", ") || "none";
   throw new ObjectError(
     "object.unindexed_query",
     `Query by the leading fields of a declared index and order by its next field (declared indexes: ${declared}).`,
@@ -670,6 +685,20 @@ export async function queryObjectRecords(
       ? encodeCursor({ f: fingerprint, s: sortColumn ? String(last.sort ?? "") : null, i: last.id })
       : null,
   };
+}
+
+/** Whether any record matches `where`, through a declared index or unique set (one indexed row read). */
+export async function objectRecordExists(
+  db: Database,
+  namespace: string,
+  object: string,
+  declaration: ObjectTypeDeclaration,
+  where: ObjectWhere,
+): Promise<boolean> {
+  const plan = planObjectRecordQuery(declaration, { where: await storedWhere(db, declaration, where) });
+  const row = await db.select({ id: objectRecords.id }).from(objectRecords)
+    .where(and(owned(namespace, object), plan.condition)).limit(1).get();
+  return row !== undefined;
 }
 
 export async function countObjectRecords(

@@ -49,12 +49,12 @@ describe("header page data", () => {
   });
 
   it("shows a core lead's skin only to the app that owns it, with its values resolved", () => {
-    const skinned: HomepageHeaderLead = { kind: "core", type: "hero", skin: { app: "acme.theme/big-hero", values: { layout: "split", ignored: 1 } } };
+    const skinned: HomepageHeaderLead = { kind: "core", type: "hero", skin: { app: "acme.theme/big_hero", values: { layout: "split", ignored: 1 } } };
     const owner = {
       ...extension,
-      skins: [{ id: "big-hero", target: "section:hero" as const, settings: pluginSettingsSchemaSchema.parse([{ key: "layout", label: "Layout", type: "text", default: "overlay" }]) }],
+      skins: [{ id: "big_hero", target: "section:hero" as const, settings: pluginSettingsSchemaSchema.parse([{ key: "layout", label: "Layout", type: "text", default: "overlay" }]) }],
     };
-    expect(headerPageData(skinned, owner)).toEqual({ lead: { kind: "core", type: "hero", skin: { id: "big-hero", settings: { layout: "split" } } } });
+    expect(headerPageData(skinned, owner)).toEqual({ lead: { kind: "core", type: "hero", skin: { id: "big_hero", settings: { layout: "split" } } } });
     expect(headerPageData(skinned, { ...owner, pluginId: "other.theme" })).toEqual({ lead: { kind: "core", type: "hero" } });
     expect(headerPageData(skinned, extension)).toEqual({ lead: { kind: "core", type: "hero" } });
   });

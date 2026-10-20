@@ -554,7 +554,9 @@ export class PluginBridgeHost implements PluginBridgeApi {
       fail("installation.inactive", "The plugin is not active.");
     }
     const permissions = this.props.authority.permissions.filter((permission) => principal.permissions.has(permission));
-    return { pluginId: this.pluginId, permissions, runtime: this.runtime };
+    // The live grant decides who `to` reaches (a revoked scope or field applies at once).
+    const recipients = { anyAddress: principal.messaging?.anyAddress === true, fields: principal.messaging?.recipients ?? [] };
+    return { pluginId: this.pluginId, permissions, recipients, objects: this.props.authority.objects, runtime: this.runtime };
   }
 }
 

@@ -1,5 +1,6 @@
 /** Theme component data drawn at the edge from the public page batch. */
 import type { StorefrontRenderJob } from "@scalius/shared/plugins/storefront-protocol";
+import { PLUGIN_KEY_PATTERN } from "@scalius/shared/plugins/manifest-patterns";
 import { OBJECT_FIELD_KEY_PATTERN, OBJECT_FIELD_TYPES, OBJECT_FIELDS_MAX, OBJECT_HANDLE_PATTERN, OBJECT_RECORD_MAX_BYTES, OBJECT_SECTION_RECORDS_MAX, parseObjectTypeHandle } from "@scalius/shared/plugins/objects";
 import { HOME_MAX_OBJECT_TYPES } from "@scalius/shared/storefront-theme/home-data";
 import type { PluginHead } from "@scalius/shared/plugins/storefront";
@@ -27,7 +28,8 @@ export interface HomepageAppSurface {
 }
 
 const PLUGIN_ID = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
-const TYPE = /^[a-z][a-z0-9-]{0,47}$/;
+/** A component section's type: a manifest key (snake_case). */
+const TYPE = PLUGIN_KEY_PATTERN;
 
 /** A component section's data, shape-checked; null when it is not one. */
 export function readAppComponent(value: unknown): HomepageAppComponent | null {

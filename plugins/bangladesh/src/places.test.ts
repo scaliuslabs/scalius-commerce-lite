@@ -70,7 +70,7 @@ describe("Bangladesh places", () => {
     await store.instance.feature("enable", "places");
     const sent = store.calls.length;
     await store.instance.feature("enable", "places");
-    await store.instance.cron("places-sync");
+    await store.instance.cron("places_sync");
     expect(store.calls).toHaveLength(sent);
   });
 
@@ -81,7 +81,7 @@ describe("Bangladesh places", () => {
     expect(store.instance.kv.get("places")).toMatchObject({ done: false, next: 2 * PLACES_CHUNK, error: expect.stringContaining("within the hour") });
     const page = await store.instance.route("admin", "places");
     expect(JSON.stringify(page.value)).toContain("within the hour");
-    await store.instance.cron("places-sync");
+    await store.instance.cron("places_sync");
     expect(store.calls[3]!.body.places[0]).toEqual(store.calls[2]!.body.places[0]);
     expect(store.instance.kv.get("places")).toMatchObject({ done: true, error: null });
   });
@@ -98,7 +98,7 @@ describe("Bangladesh places", () => {
     const run = async (ctx: Parameters<typeof seedPlaces>[0]) => {
       await seedPlaces(ctx, { budgetMs: options.budgetMs, places: async () => options.places ?? tiny, version: (await ctx.kv.get<string>("test-version")) ?? "v1", ...(options.now ? { now: options.now } : {}) });
     };
-    const instance = createPluginTestHarness({ default: { ...pack, lifecycle: { enable: run }, cron: { ...pack.cron, "places-sync": run } } }, {
+    const instance = createPluginTestHarness({ default: { ...pack, lifecycle: { enable: run }, cron: { ...pack.cron, places_sync: run } } }, {
       api: (_id, input) => {
         calls.push(input as ImportCall);
         return { ok: true, status: 200, data: { created: 1, updated: 0, unchanged: 0, skipped: 0, deactivated: 0, conflicts: [], conflictCount: 0 }, error: null };
@@ -114,16 +114,16 @@ describe("Bangladesh places", () => {
     await instance.feature("enable", "places");
     expect(calls).toHaveLength(1);
     expect(instance.kv.get("places")).toMatchObject({ version: "v1", next: PLACES_CHUNK, done: false });
-    await instance.cron("places-sync");
+    await instance.cron("places_sync");
     expect(calls.map((call) => [call.body.places.length, call.body.finish])).toEqual([[PLACES_CHUNK, false], [1, true]]);
   });
 
   it("loads a newer dataset version from the start, as after an app update", async () => {
     const { instance, calls } = tinyPack({ budgetMs: 60_000 });
-    await instance.cron("places-sync");
-    await instance.cron("places-sync");
+    await instance.cron("places_sync");
+    await instance.cron("places_sync");
     instance.kv.set("test-version", "v2");
-    await instance.cron("places-sync");
+    await instance.cron("places_sync");
     expect(calls.map((call) => [call.body.version, call.body.finish])).toEqual([["v1", true], ["v2", true]]);
   });
 
