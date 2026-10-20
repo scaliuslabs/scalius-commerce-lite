@@ -218,8 +218,10 @@ export interface PluginMessaging {
         html: string;
         text?: string;
         marketing?: boolean;
+        idempotencyKey?: string;
     }): Promise<{
         queued: boolean;
+        duplicate?: boolean;
     }>;
     sms(input: {
         customerId?: string;
@@ -317,6 +319,16 @@ export interface PluginRouteRequest {
     customer?: {
         id: string;
     } | null;
+    routes?: PluginStorefrontRoutes | null;
+}
+export interface PluginStorefrontRoutes {
+    readonly home: string;
+    readonly search: string;
+    readonly cart: string;
+    readonly account: string;
+    readonly signIn: string;
+    readonly orders: string;
+    readonly trackOrder: string;
 }
 export interface PluginRouteResponse {
     status?: number;
@@ -686,6 +698,7 @@ export interface PluginRuntimeBridge {
     customFieldsSet(ownerType: string, ownerId: string, values: Record<string, unknown>): Promise<void>;
     messagingEmail(input: unknown): Promise<{
         queued: boolean;
+        duplicate?: boolean;
     }>;
     messagingSms(input: unknown): Promise<{
         queued: boolean;

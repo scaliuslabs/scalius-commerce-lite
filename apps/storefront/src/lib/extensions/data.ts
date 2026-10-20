@@ -22,6 +22,7 @@ import type {
   StorefrontTile,
 } from "@scalius/shared/plugins/storefront-protocol";
 import { STOREFRONT_SECTION_SKIN_PROJECTIONS } from "@scalius/shared/plugins/storefront-protocol";
+import { STOREFRONT_CORE_ROUTES } from "@scalius/shared/storefront-routes";
 import {
   HOME_PRODUCT_LIST_LIMIT,
   coreSectionSkinSettings,
@@ -111,7 +112,7 @@ export function headerData(input: {
     menu: menuItems(sourceNavigation(resolved.blocks.navigation.source as NavigationSource, input.navigation, nodes)),
     categories: menuItems(navigationFromCategoryTree(nodes)),
     announcement: text ? { text, url: typeof settings.link === "string" && settings.link ? settings.link : null } : null,
-    routes: { home: "/", search: "/search", cart: "/cart", account: "/account" },
+    routes: { home: STOREFRONT_CORE_ROUTES.home, search: STOREFRONT_CORE_ROUTES.search, cart: STOREFRONT_CORE_ROUTES.cart, account: STOREFRONT_CORE_ROUTES.account },
     searchParam: "q",
     phoneNavigation: (({ menu, tabBar }) => ({ menu, tabBar }))(phoneNavigation(resolved.blocks)),
     ...(input.page !== undefined ? { page: input.page } : {}),

@@ -177,7 +177,21 @@ export interface PluginMessaging {
    * footer and RFC 8058 List-Unsubscribe headers. Transactional mail leaves it unset.
    * Limits: `PLUGIN_MESSAGE_LIMITS` per message, `messagesPerMinute` of the store's plan.
    */
-  email(input: { customerId?: string; to?: string; subject: string; html: string; text?: string; marketing?: boolean }): Promise<{ queued: boolean }>;
+  email(input: {
+    customerId?: string;
+    to?: string;
+    subject: string;
+    html: string;
+    text?: string;
+    marketing?: boolean;
+    /**
+     * Sends at most once per key (8 to 200 printable characters) within 24
+     * hours: a repeat, e.g. a redelivered event's handler, answers
+     * `duplicate: true` and sends nothing. A failed send releases the key.
+     * Derive it from what the message is about (`seller-notice-${splitId}`).
+     */
+    idempotencyKey?: string;
+  }): Promise<{ queued: boolean; duplicate?: boolean }>;
   sms(input: { customerId?: string; to?: string; text: string; marketing?: boolean }): Promise<{ queued: boolean }>;
   /** A dashboard notification for staff. */
   notifyStaff(input: { title: string; body?: string; url?: string }): Promise<void>;
@@ -323,8 +337,37 @@ export interface PluginRouteRequest {
    * direct API requests and on every other surface. Use it to key the
    * buyer's own records; read more with `ctx.api` if the app has
    * `customers.view`.
+   *
+   * Forms: a signed-in buyer's form post (`POST`, `PUT`, `PATCH`, `DELETE`
+   * as a form, multipart or text body) reaches the handler only with the
+   * platform's form token verified. The storefront adds the token to every
+   * `<form method="post">` on your proxy, so plain HTML forms work without
+   * JavaScript and need nothing from you; the field is removed from `body`.
+   * JSON requests need no token (a cross-site page cannot send them).
    */
   customer?: { id: string } | null;
+  /**
+   * Public routes: the store's own pages to link and redirect to (never
+   * hard-code `/account`). Root paths: on a market presence page the
+   * platform keeps every link, form action and redirect inside the presence.
+   * Null on admin and webhook routes.
+   */
+  routes?: PluginStorefrontRoutes | null;
+}
+
+/** The store's core pages (`request.routes`). */
+export interface PluginStorefrontRoutes {
+  readonly home: string;
+  readonly search: string;
+  readonly cart: string;
+  /** The buyer's account. */
+  readonly account: string;
+  /** Where a guest signs in. */
+  readonly signIn: string;
+  /** The buyer's order history. */
+  readonly orders: string;
+  /** Guest order lookup. */
+  readonly trackOrder: string;
 }
 
 /**

@@ -18,7 +18,7 @@
  * Nothing from an answer ever enters the DOM as HTML. Without JavaScript the
  * plain form posts, and the proxy answers the navigation with a redirect back.
  */
-import { logicalPathname } from "@/lib/presence-url";
+import { logicalPathname, pagePath } from "@/lib/presence-url";
 
 /** What an app answers a form or state read with (anything else is ignored). */
 export interface AppFormAnswer {
@@ -138,7 +138,8 @@ function formFields(form: HTMLFormElement, submitter: HTMLElement | null): URLSe
 function follow(answer: AppFormAnswer, origin: string): boolean {
   const path = sameOriginPath(answer.redirect, origin) ?? sameOriginPath(answer.navigate, origin);
   if (!path) return false;
-  window.location.assign(path);
+  // An app answers with root paths (`request.routes`); the buyer stays in their presence.
+  window.location.assign(pagePath(path));
   return true;
 }
 

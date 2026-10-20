@@ -122,7 +122,7 @@ export class PluginBridge extends WorkerEntrypoint<Env, PluginBridgeProps> imple
     return (await this.#host()).customFieldsSet(ownerType, ownerId, values);
   }
 
-  async messagingEmail(input: Parameters<PluginBridgeApi["messagingEmail"]>[0]): Promise<{ queued: boolean }> {
+  async messagingEmail(input: Parameters<PluginBridgeApi["messagingEmail"]>[0]): Promise<{ queued: boolean; duplicate?: boolean }> {
     return (await this.#host()).messagingEmail(input);
   }
 

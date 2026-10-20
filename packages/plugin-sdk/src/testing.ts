@@ -29,6 +29,7 @@ import {
   type PluginSettingValue,
 } from "@scalius/shared/plugins";
 import { providerOperationSchemas } from "@scalius/shared/plugins/providers";
+import { STOREFRONT_CORE_ROUTES } from "@scalius/shared/storefront-routes";
 import type { EventTopic } from "@scalius/shared/events";
 import type { PluginApiCallInput, PluginApiResult, PluginEvent, PluginRouteRequest, PluginStoreInfo } from "./context";
 import {
@@ -141,6 +142,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
   const revisionKey = (name: string, id: string) => `${name}\u0000${id}`;
   const customFields = new Map<string, Record<string, unknown>>();
   const logs: PluginLogRecord[] = [];
+  const emailKeys = new Set<string>();
   const sent = { emails: [] as unknown[], sms: [] as unknown[], notices: [] as unknown[], pushes: [] as unknown[], timeline: [] as unknown[], holds: [] as unknown[], risks: [] as unknown[] };
 
   const object = (name: string) => records.get(name) ?? refuse("object.undeclared_type", `Object type "${name}" is not declared in the manifest.`);
@@ -374,8 +376,15 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     // customer needs read_customers; `to` a staff email, a declared recipient
     // field's value or send_messages_any; a marketing one write_marketing and
     // a customerId (consent is per customer); otherwise exactly one recipient.
+    // An idempotency key sends once (the platform keeps it 24 hours).
     messagingEmail: async (input) => {
       checkMessage(input, "email");
+      const key = (input as { idempotencyKey?: unknown }).idempotencyKey;
+      if (key !== undefined) {
+        if (typeof key !== "string" || !/^[\x20-\x7E]{8,200}$/u.test(key)) refuse("messaging.invalid", "idempotencyKey is 8 to 200 printable characters.");
+        if (emailKeys.has(key)) return { queued: true, duplicate: true };
+        emailKeys.add(key);
+      }
       sent.emails.push(copy(input));
       return { queued: true };
     },
@@ -544,7 +553,12 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       kind: "route",
       surface,
       name,
-      request: { method: "GET", subpath: "", query: {}, headers: {}, body: null, rawBody: null, staffId: null, ...request },
+      request: {
+        method: "GET", subpath: "", query: {}, headers: {}, body: null, rawBody: null, staffId: null,
+        // The platform's core routes (`@scalius/shared/storefront-routes`), on public routes.
+        routes: surface === "public" ? STOREFRONT_CORE_ROUTES : null,
+        ...request,
+      },
     }),
     cron: (name: string, scheduledAt = new Date().toISOString()) => run({ kind: "cron", name, scheduledAt }),
     lifecycle: (hook: "install" | "activate" | "deactivate" | "uninstall", keepData = true) => run({ kind: "lifecycle", hook, keepData }),

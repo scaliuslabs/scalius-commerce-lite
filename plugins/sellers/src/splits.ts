@@ -101,8 +101,10 @@ export async function splitOrder(ctx: PluginContext, event: PluginEvent): Promis
       await splits(ctx).put(splitIdOf(order.id, sellerId), split, { expectedRevision: null });
       created.push(split);
     } catch (error) {
+      // Split on an earlier delivery: its notice is sent again below under the
+      // same key, so a run that died between the write and the send still
+      // notifies the seller, and one that sent it sends nothing.
       if (errorCode(error) !== "object.conflict") throw error;
-      continue; // Split on an earlier delivery.
     }
     if (seller?.email) {
       const number = order.orderNumber ?? order.id;
@@ -112,7 +114,14 @@ export async function splitOrder(ctx: PluginContext, event: PluginEvent): Promis
         subject: plain(`New order ${number} for ${seller.name}`, 200),
         text: `You have a new order (${number}) at ${ctx.store.name}.\n\n${items}\n\nSubtotal: ${minorToMajor(subtotal, ctx.store.decimalPlaces)} ${order.currency}\nCommission: ${minorToMajor(commission, ctx.store.decimalPlaces)} ${order.currency}\nYour net: ${minorToMajor(split.net_minor, ctx.store.decimalPlaces)} ${order.currency}\n\nOpen your seller dashboard to fulfil it.`,
         html: `<p>You have a new order (${escapeText(String(number))}) at ${escapeText(ctx.store.name)}.</p><ul>${split.lines.map((line) => `<li>${line.quantity} x ${escapeText(line.title)}</li>`).join("")}</ul><p>Your net: ${minorToMajor(split.net_minor, ctx.store.decimalPlaces)} ${escapeText(order.currency)}</p><p>Open your seller dashboard to fulfil it.</p>`,
-      }).catch((error: unknown) => ctx.log.warn("A seller notice was not sent", { sellerId, code: errorCode(error) }));
+        // Once per split, however often the event is delivered.
+        idempotencyKey: `sellers-split-notice-${splitIdOf(order.id, sellerId)}`.slice(0, 200),
+      }).catch((error: unknown) => {
+        // A busy or failing platform retries the event (the key keeps it to one email); a refusal will not change.
+        const code = errorCode(error);
+        if (code === "rate_limited" || code === "internal") throw error;
+        ctx.log.warn("A seller notice was not sent", { sellerId, code });
+      });
     }
   }
   if (created.length > 0) {

@@ -17,13 +17,14 @@
 // Every send counts against `planLimits().plugins.messagesPerMinute`, and a
 // message is at most `PLUGIN_MESSAGE_LIMITS`.
 
-import { customers, user } from "@scalius/database/schema";
+import { customers, systemKv, user } from "@scalius/database/schema";
+import { sha256Hex } from "@scalius/shared/hash";
 import { compactPhone, normalizeBdMobile } from "@scalius/shared/phone-input";
 import { planLimits } from "@scalius/shared/plan-limits";
 import { PLUGIN_MESSAGE_LIMITS, PLUGIN_MESSAGE_RECIPIENT_RULE, pluginMessageTextFits } from "@scalius/shared/plugins/messaging";
 import type { ObjectTypeDeclaration } from "@scalius/shared/plugins/objects";
 import { PluginError } from "@scalius/core/modules/plugins";
-import { and, eq } from "drizzle-orm";
+import { and, eq, lte, sql } from "drizzle-orm";
 import { pluginWithinMessageRate } from "./authority";
 import type { PluginBridgeEnvironment } from "./bridge";
 import { createAppProviders } from "./providers/app-providers";
@@ -147,10 +148,61 @@ function requireOneRecipient(input: { customerId?: unknown; to?: unknown }): voi
   }
 }
 
+/** How long a sent email's key is remembered: a repeat within it sends nothing. */
+export const PLUGIN_EMAIL_IDEMPOTENCY_SECONDS = 24 * 60 * 60;
+/** A send claim older than this (a run that died mid-send) may be taken again. */
+const PLUGIN_EMAIL_SEND_CLAIM_SECONDS = 120;
+const IDEMPOTENCY_KEY = /^[\x20-\x7E]{8,200}$/u;
+
+/**
+ * Sends at most once per app and `idempotencyKey` within 24 hours (a
+ * `system_kv` claim, the stable API's retry window): the first send claims
+ * the key, a success keeps it, a failure releases it so a retry sends. A
+ * repeat answers `{ queued, duplicate: true }` and sends nothing. A run that
+ * died between claiming and sending leaves a claim that expires after two
+ * minutes, so its retry sends then (at most one duplicate, never a loss).
+ */
+async function sendOnce(
+  context: PluginMessagingContext,
+  key: unknown,
+  send: () => Promise<{ queued: boolean }>,
+): Promise<{ queued: boolean; duplicate?: boolean }> {
+  if (key === undefined) return send();
+  if (typeof key !== "string" || !IDEMPOTENCY_KEY.test(key)) throw new PluginError("messaging.invalid", "idempotencyKey is 8 to 200 printable characters.");
+  const db = context.runtime.db();
+  const storeKey = `app-email:${context.pluginId}:${await sha256Hex(key)}`;
+  const now = Math.floor(Date.now() / 1000);
+  const won = await db.insert(systemKv)
+    .values({ key: storeKey, value: "sending", expiresAt: now + PLUGIN_EMAIL_SEND_CLAIM_SECONDS })
+    .onConflictDoUpdate({
+      target: systemKv.key,
+      set: { value: sql`excluded.value`, expiresAt: sql`excluded.expires_at` },
+      setWhere: lte(systemKv.expiresAt, now),
+    })
+    .returning({ key: systemKv.key });
+  if (won.length === 0) {
+    const row = await db.select({ value: systemKv.value }).from(systemKv).where(eq(systemKv.key, storeKey)).get();
+    return { queued: row?.value === "sent", duplicate: true };
+  }
+  let result: { queued: boolean };
+  try {
+    result = await send();
+  } catch (error) {
+    await db.delete(systemKv).where(eq(systemKv.key, storeKey)).run().catch(() => undefined);
+    throw error;
+  }
+  if (result.queued) {
+    await db.update(systemKv).set({ value: "sent", expiresAt: now + PLUGIN_EMAIL_IDEMPOTENCY_SECONDS }).where(eq(systemKv.key, storeKey)).run();
+  } else {
+    await db.delete(systemKv).where(eq(systemKv.key, storeKey)).run();
+  }
+  return result;
+}
+
 export async function sendPluginEmail(
   context: PluginMessagingContext,
-  input: { customerId?: string; to?: string; subject: string; html: string; text?: string; marketing?: boolean },
-): Promise<{ queued: boolean }> {
+  input: { customerId?: string; to?: string; subject: string; html: string; text?: string; marketing?: boolean; idempotencyKey?: string },
+): Promise<{ queued: boolean; duplicate?: boolean }> {
   const subject = text(input?.subject, "subject", { chars: PLUGIN_MESSAGE_LIMITS.subjectChars })!;
   let html = text(input?.html, "html", { bytes: PLUGIN_MESSAGE_LIMITS.htmlBytes })!;
   let plain = text(input?.text, "text", { bytes: PLUGIN_MESSAGE_LIMITS.textBytes }, false);
@@ -161,13 +213,15 @@ export async function sendPluginEmail(
     const unsubscribe = permission.unsubscribeUrl!;
     html = `${html}<p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:#5f6368;">${escapeHtml(permission.footer.text)} <a href="${escapeHtml(unsubscribe)}">${escapeHtml(permission.footer.unsubscribeLabel)}</a></p>`;
     plain = `${plain ?? ""}\n\n${permission.footer.text}\n${permission.footer.unsubscribeLabel}: ${unsubscribe}`.trim();
-    const { env, db, encryptionKey, appProviders } = await messagingRuntime(context);
-    const { sendEmail } = await import("@scalius/core/integrations/email");
-    const result = await sendEmail(
-      { to: permission.contact!, subject, html, text: plain, headers: permission.headers },
-      { env: env as never, db, encryptionKey, appProviders },
-    );
-    return { queued: result.success };
+    return sendOnce(context, input.idempotencyKey, async () => {
+      const { env, db, encryptionKey, appProviders } = await messagingRuntime(context);
+      const { sendEmail } = await import("@scalius/core/integrations/email");
+      const result = await sendEmail(
+        { to: permission.contact!, subject, html, text: plain, headers: permission.headers },
+        { env: env as never, db, encryptionKey, appProviders },
+      );
+      return { queued: result.success };
+    });
   }
   requireOneRecipient(input);
   let to: string;
@@ -182,13 +236,15 @@ export async function sendPluginEmail(
     await requireRecipient(context, "email", to);
   }
   await requireRate(context);
-  const { env, db, encryptionKey, appProviders } = await messagingRuntime(context);
-  const { sendEmail } = await import("@scalius/core/integrations/email");
-  const result = await sendEmail(
-    { to, subject, html, ...(plain ? { text: plain } : {}) },
-    { env: env as never, db, encryptionKey, appProviders },
-  );
-  return { queued: result.success };
+  return sendOnce(context, input.idempotencyKey, async () => {
+    const { env, db, encryptionKey, appProviders } = await messagingRuntime(context);
+    const { sendEmail } = await import("@scalius/core/integrations/email");
+    const result = await sendEmail(
+      { to, subject, html, ...(plain ? { text: plain } : {}) },
+      { env: env as never, db, encryptionKey, appProviders },
+    );
+    return { queued: result.success };
+  });
 }
 
 /** A phone number the SMS providers take (E.164, or a Bangladesh mobile), or null. */

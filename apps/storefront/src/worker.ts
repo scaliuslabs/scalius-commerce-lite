@@ -31,6 +31,7 @@ import {
   presenceRenderTarget,
   withoutInboundPresence,
 } from "./lib/market-presence";
+import { withAppFormTokens } from "./lib/app-form-tokens";
 
 /**
  * Honours a signed front proxy's forwarded host, proto, and client IP. The
@@ -111,7 +112,7 @@ export default class StorefrontGateway extends WorkerEntrypoint<Env> {
     // A mail client's RFC 8058 one-click unsubscribe (no Origin, a form
     // body) reaches the unsubscribe page as JSON; everything else as sent.
     const oneClick = await oneClickUnsubscribeRequest(request);
-    return servePublicStorefrontRequest(oneClick ?? request, {
+    const response = await servePublicStorefrontRequest(oneClick ?? request, {
       cache: caches.default,
       buildId: BUILD_ID,
       workerVersion: readWorkerVersion(this.env),
@@ -119,6 +120,9 @@ export default class StorefrontGateway extends WorkerEntrypoint<Env> {
       waitUntil: (promise) => this.ctx.waitUntil(promise),
       frontier: frontierClient(this.env),
     });
+    // A signed-in buyer's page: the platform's token in every app POST form
+    // (after the page cache, which never holds a signed-in page).
+    return withAppFormTokens(request, response, this.env);
   }
 
   /**
