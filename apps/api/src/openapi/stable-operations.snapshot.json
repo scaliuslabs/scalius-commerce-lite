@@ -1137,11 +1137,7 @@
          }
         },
         "required": [
-         "name",
-         "description",
-         "metaTitle",
-         "metaDescription",
-         "image"
+         "name"
         ]
        }
       }
