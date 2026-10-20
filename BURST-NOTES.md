@@ -61,7 +61,7 @@ To reproduce the harness locally, I copied `apps/api/src/agent-access/eval/` fro
 - `categories.create` is **stable**. `stable-operations.snapshot.json` was updated with `-u`: an additive loosening where only `name` stays required. This may conflict with the stable-API worker's snapshot edits; regenerate on merge.
 - **Test:** `categories.publish-d1.test.ts`, a new case creating from a name alone.
 
-### 6. COD countries and the discount describe (uncommitted at the time of writing; see the end of this file)
+### 6. COD countries and the discount describe (commit 520970e48)
 - `dashboard.payments.methods_get`: `gatewayStatus.cod.countries = ["BD"]`, from `COD_COUNTRIES`. The optional `countries` field was added to `gatewayStatusSchema`.
 - The `dashboard.discounts.create` `when` line, which compact describe shows, now carries the basic recipe:
   - `method code`, `codes [{code}]`;
@@ -75,9 +75,18 @@ To reproduce the harness locally, I copied `apps/api/src/agent-access/eval/` fro
   2. Move the markers to `system_kv` (key `notification-provider-health:<channel>:<provider>`). Update `getNotificationProviderBlock`, `markNotificationProviderBlocked` and `buildClearNotificationProviderBlocksStatement`; the last is batched with settings saves, so keep it a statement. Also update the README lines.
   3. Add a migration that moves existing rows. Then drop `settings` from task #16's `writes`.
 
-### 8. Search ranking for #5, #6 and #18: not done
-- #22 and #26 now rank their op first in the harness.
-- **Next step:** run the harness with `AGENT_EVAL_ONLY=5,6,18` and read `routing[].top`. Then add synonyms or examples to the product-create intent ("simple product", "t-shirt sizes colours variants") and the order-create intent ("COD order for customer") in `apps/api/src/agent-access/workflows/routes-dashboard.ts`, and to their `when` lines.
+### 8. Search ranking for #5, #6 and #18: partly done (commit 8cf94050a)
+- I rewrote the `when` lines of `dashboard.products.create` (units in stock, a t-shirt in sizes and colours) and `dashboard.resources.orders.create` (creating a COD order for a customer).
+- Harness ranks afterwards (0 = first):
+  - **#6: rank 0** (was 4).
+  - **#5: rank 1.** The `dashboard.inventory-transfer` intent still wins on "20 in stock".
+  - **#18: rank 1.** The `dashboard.sales-analytics` intent wins. `dashboard.order-for-customer`, which contains the operation, comes second.
+  - #22 and #26 rank 0.
+- **Next steps:**
+  1. Scope the inventory-transfer intent's tags and examples to moving stock between locations, not "in stock".
+  2. Find why sales-analytics matches "Create a COD order".
+  3. Change both in `apps/api/src/agent-access/workflows/routes-dashboard.ts`, then rerun `AGENT_EVAL_ONLY=5,6,18`.
+- **Test note:** the host load average was 64 to 90. Under it, `workflows/resolver.test.ts` had two 5 s timeouts, and its warm p95 under 50 ms check measured 53 to 60 ms. The same file passed earlier in this session at lower load. Rerun it on a quiet host.
 
 ### 9. Operator preset: not done
 - **Next step:** in the preset definition (`resolveGrantSelection` / Operator in `packages/core/src/modules/agent-access`):
