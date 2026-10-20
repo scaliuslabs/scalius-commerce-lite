@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 166,
-  name: "0166_record_payment_permission",
+  version: 167,
+  name: "0167_promotion_exhaustion_dependency",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -611,6 +611,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 166,
     name: "0166_record_payment_permission",
     sourceSha256: "c6fd2017f48946b361b564269611359aa5f1b15d152bedf45d78350ed7e26ddd",
+  },
+  {
+    version: 167,
+    name: "0167_promotion_exhaustion_dependency",
+    sourceSha256: "32cbe7582a9e1aa23dbf5e5dfba735ce9f4e7462d3f4e85ddd1ff9f10e6d8f3e",
   },
 ] as const;
 

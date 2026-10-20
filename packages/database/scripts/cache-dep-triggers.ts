@@ -32,6 +32,7 @@ import * as schema from "../src/schema";
 import { compileSqliteDdlForPostgres } from "./postgres-schema";
 import {
   CACHE_DEP_TABLES,
+  LIMITED_PROMOTION_OF_ROW,
   withOldImageCompanions,
   type CacheDepKeyTemplate,
   type CacheDepKind,
@@ -130,6 +131,9 @@ export const CACHE_DEP_LATER_TRIGGERS: Readonly<Record<string, string>> = {
   // A market's currency (0123) is a visible column of its row.
   cdep_markets_upd: "0123_market_currencies",
   cdep_shipping_methods_upd: "0155_v2_beta_contract",
+  // A redemption advances its promotion only when it exhausts it (or a removed one un-exhausts it).
+  cdep_promotion_redemptions_ins: "0167_promotion_exhaustion_dependency",
+  cdep_promotion_redemptions_del: "0167_promotion_exhaustion_dependency",
 };
 
 /**
@@ -157,6 +161,17 @@ export const CACHE_DEP_ADDED_BASELINE_TRIGGERS: ReadonlySet<string> = new Set([
  */
 export const CACHE_DEP_BASELINE_CHANGED: Readonly<Record<string, readonly string[]>> = {
   "products:seo": ["no_index", "exclude_from_sitemap", "exclude_from_product_feed"],
+};
+
+/**
+ * Rule guards (`<table>:<rule name>`) deployed 0100 rendered before a later
+ * migration narrowed them: 0100 renders this guard, every later render the
+ * registry's, and the migration named in `CACHE_DEP_LATER_TRIGGERS`
+ * reinstalls the trigger.
+ */
+export const CACHE_DEP_BASELINE_WHERE: Readonly<Record<string, NonNullable<CacheDepRule["where"]>>> = {
+  "promotion_redemptions:ins": { exists: LIMITED_PROMOTION_OF_ROW },
+  "promotion_redemptions:del": { exists: LIMITED_PROMOTION_OF_ROW },
 };
 
 export const CACHE_DEP_BASELINE_COLUMNS: Readonly<Record<string, readonly string[]>> = {
@@ -658,11 +673,12 @@ function guards(table: string, spec: CacheDepTableSpec, rule: CacheDepRule, dial
     simple.push(`(${BAND_INPUTS.map((column) => `OLD.${d.id(column)} ${d.distinct} NEW.${d.id(column)}`).join(" OR ")})`);
     subquery.push(`${bandSql(dialect, "OLD")} <> ${bandSql(dialect, "NEW")}`);
   }
-  for (const [column, value] of Object.entries(rule.where?.equals ?? {})) {
+  const where = (renderingBaseline ? CACHE_DEP_BASELINE_WHERE[`${table}:${rule.name}`] : undefined) ?? rule.where;
+  for (const [column, value] of Object.entries(where?.equals ?? {})) {
     assertColumn(table, column);
     simple.push(`${image}.${d.id(column)} = ${literal(value)}`);
   }
-  if (rule.where?.exists) subquery.push(`EXISTS (${rule.where.exists.replace(/\bR\./g, `${image}.`)})`);
+  if (where?.exists) subquery.push(`EXISTS (${where.exists.replace(/\bR\./g, `${image}.`)})`);
   if (rule.event === "update" && changed.length === 0 && !rule.bandChanged) {
     throw new Error(`${table}.${rule.name}: an update rule needs changed columns or a band test.`);
   }
@@ -788,8 +804,10 @@ const generatedBaseline = (() => {
   }
 })();
 const postgresByName = new Map(generatedWithRetired.map((trigger) => [trigger.name, trigger.postgres]));
+const baselineWhereTriggers = new Set(Object.keys(CACHE_DEP_BASELINE_WHERE)
+  .map((key) => `${CACHE_DEP_TRIGGER_PREFIX}${key.replace(":", "_")}`));
 const baselineByName = new Map([
-  ...generatedBaseline.filter((trigger) => trigger.table in CACHE_DEP_BASELINE_COLUMNS),
+  ...generatedBaseline.filter((trigger) => trigger.table in CACHE_DEP_BASELINE_COLUMNS || baselineWhereTriggers.has(trigger.name)),
   ...generatedProjectionBaseline.filter((trigger) => PROJECTION_TABLES.has(trigger.table)),
 ].map((trigger) => [trigger.name, trigger]));
 

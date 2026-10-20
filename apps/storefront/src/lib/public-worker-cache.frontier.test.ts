@@ -4,6 +4,8 @@ import { DEPENDENCY_CACHE_RETENTION_SECONDS, hashCacheDep, type CacheFrontierDel
 
 import {
   PAGE_DEPENDENCY_HEADERS,
+  cacheStatusLane,
+  pageEarlyHintLinks,
   publicStorefrontDvcCacheKey,
   servePublicStorefrontRequest,
   type PublicStorefrontCacheContext,
@@ -47,14 +49,14 @@ function part(s0: number, deps: string[], extra: Partial<StorefrontBatchPartCach
   return { apiVersion: "api-1", status: "miss", s0, deps, validUntil: null, softMaxAgeSeconds: null, renderedAt: 1_000, ...extra };
 }
 
-function setup(renderParts: () => Array<StorefrontBatchPartCache | null>) {
+function setup(renderParts: () => Array<StorefrontBatchPartCache | null>, html = (clock: number) => `<html>${clock}</html>`) {
   const store = new Map<string, Response>();
   const pending: Promise<unknown>[] = [];
   const api = fakeStore();
   let now = 1_000;
   const render = vi.fn(async (_request: Request) => {
     for (const cache of renderParts()) recordPagePart(currentPageDependencies(), cache);
-    return new Response(`<html>${api.clock}</html>`, {
+    return new Response(html(api.clock), {
       status: 200,
       headers: { "Content-Type": "text/html", "X-Cache-Status": "MISS", "Cache-Control": "no-cache" },
     });
@@ -234,7 +236,8 @@ describe("frontier-validated storefront pages", () => {
       t.tick(delay);
       return { apiVersion: "api-1", S: 60, floor: 0, changed: false };
     });
-    expect((await t.serve()).headers.get("X-Cache-Status")).toBe("MISS");
+    // The rejected entry's check still delayed the answer: the status says how long.
+    expect((await t.serve()).headers.get("X-Cache-Status")).toBe(`MISS; slow-check=${delay}ms`);
     expect(t.api.client.check).toHaveBeenCalledTimes(1);
   });
 
@@ -394,7 +397,7 @@ describe("one frontier refresh and one slow check per isolate", () => {
     });
     const responses = await Promise.all([t.serve(), t.serve(), t.serve()]);
     expect(t.api.client.check).toHaveBeenCalledTimes(1);
-    expect(responses.map((response) => response.headers.get("X-Cache-Status"))).toEqual(Array(3).fill("MISS"));
+    expect(responses.map((response) => cacheStatusLane(response.headers.get("X-Cache-Status")))).toEqual(Array(3).fill("MISS"));
   });
 });
 
@@ -426,5 +429,56 @@ describe("frontier wire validation", () => {
     await expect(client.check(10, Array.from({ length: 257 }, (_, index) => hashCacheDep(`p:${index}`))))
       .rejects.toThrow("crossed API versions");
     expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("the wait a hit pays, and what the browser fetches meanwhile", () => {
+  it("reports a blocking frontier refresh in X-Cache-Status, after the lane", async () => {
+    const t = setup(() => [part(10, [P1])]);
+    await t.serve();
+    expect((await t.serve()).headers.get("X-Cache-Status")).toBe("HIT");
+    t.tick(1_500); // A quiet store: the frontier is older than Δ.
+    const original = vi.mocked(t.api.client.delta).getMockImplementation()!;
+    vi.mocked(t.api.client.delta).mockImplementationOnce(async (...args) => {
+      t.tick(183); // The round trip to the API's region.
+      return original(...args);
+    });
+    const waited = await t.serve();
+    expect(waited.headers.get("X-Cache-Status")).toBe("HIT; frontier-wait=183ms");
+    expect(cacheStatusLane(waited.headers.get("X-Cache-Status"))).toBe("HIT");
+    // Within Δ again: no wait to report.
+    expect((await t.serve()).headers.get("X-Cache-Status")).toBe("HIT");
+  });
+
+  it("stores a page with Link preloads of its build stylesheets and fonts, so hits carry Early Hints", async () => {
+    const head = [
+      '<html><head><link rel="stylesheet" href="/_astro/build-a/global.Ab1.css">',
+      "<link rel=stylesheet href=/_astro/build-a/Layout.Cd2.css>",
+      '<link rel="preload" as="font" type="font/woff2" href="/_astro/build-a/inter-latin.Ef3.woff2" media="(min-width: 640px)" crossorigin="anonymous">',
+      // Not the build's own files, or not something to preload: never hinted.
+      '<link rel="stylesheet" href="https://fonts.example/app.css"><link rel="stylesheet" href="//cdn.example/x.css">',
+      '<link rel="icon" href="/_astro/build-a/favicon.Gh4.css"><link rel="preload" as="image" href="/_astro/build-a/hero.woff2">',
+      '<link rel="stylesheet" href="/_astro/build-a/a.css>; rel=preload, <https://evil.example/x.css">',
+      '</head><body><link rel="stylesheet" href="/_astro/build-a/late.css"></body></html>',
+    ].join("");
+    const t = setup(() => [part(10, [P1])], () => head);
+    const miss = await t.serve();
+    expect(miss.headers.get("Link")).toBeNull();
+    const expected = [
+      "</_astro/build-a/global.Ab1.css>; rel=preload; as=style",
+      "</_astro/build-a/Layout.Cd2.css>; rel=preload; as=style",
+      '</_astro/build-a/inter-latin.Ef3.woff2>; rel=preload; as=font; type="font/woff2"; crossorigin; media="(min-width: 640px)"',
+    ];
+    expect(t.store.get(KEY)!.headers.get("Link")).toBe(expected.join(", "));
+    const hit = await t.serve();
+    expect(hit.headers.get("X-Cache-Status")).toBe("HIT");
+    expect(hit.headers.get("Link")).toBe(expected.join(", "));
+  });
+
+  it("hints at most six files, once each, and none from a page without a head", () => {
+    const links = Array.from({ length: 9 }, (_, index) => `<link rel="stylesheet" href="/_astro/b/s${index % 8}.css">`).join("");
+    expect(pageEarlyHintLinks(`<head>${links}</head>`)).toHaveLength(6);
+    expect(pageEarlyHintLinks('<head><link rel="stylesheet" href="/_astro/b/s.css"><link rel="stylesheet" href="/_astro/b/s.css"></head>')).toHaveLength(1);
+    expect(pageEarlyHintLinks("<urlset></urlset>")).toEqual([]);
   });
 });

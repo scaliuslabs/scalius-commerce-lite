@@ -219,7 +219,10 @@ export async function timeFetch(url) {
   const response = await fetch(url, { redirect: "manual", headers: { "User-Agent": "scalius-storefront-perf" } });
   const ttfb = Math.round(performance.now() - started);
   await response.arrayBuffer();
-  return { ttfb, status: response.status, cache: response.headers.get("x-cache-status") ?? "" };
+  // X-Cache-Status is the lane, then any wait: `HIT; frontier-wait=183ms`.
+  const [lane = "", ...waits] = (response.headers.get("x-cache-status") ?? "").split(";").map((part) => part.trim());
+  const frontierWait = waits.map((part) => /^frontier-wait=(\d+)ms$/.exec(part)?.[1]).find(Boolean);
+  return { ttfb, status: response.status, cache: lane, frontierWaitMs: frontierWait ? Number(frontierWait) : null };
 }
 
 // ---------------------------------------------------------------------------

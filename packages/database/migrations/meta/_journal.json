@@ -1170,6 +1170,13 @@
       "when": 1792598400000,
       "tag": "0166_record_payment_permission",
       "breakpoints": true
+    },
+    {
+      "idx": 167,
+      "version": "6",
+      "when": 1792540800000,
+      "tag": "0167_promotion_exhaustion_dependency",
+      "breakpoints": true
     }
   ]
 }

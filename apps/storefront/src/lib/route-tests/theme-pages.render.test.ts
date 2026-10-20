@@ -211,14 +211,19 @@ describe("product page structure from the theme's product blocks", () => {
     expect(marks(second.document)).toEqual([]);
   });
 
-  it("keeps exact-SKU image precedence, the primary-image fallback, JSON-LD and noIndex", async () => {
+  it("renders one page whatever ?variant= names, with the primary image, every SKU in JSON-LD, and noIndex", async () => {
     const theme = productTheme(["reviews", "description"]);
-    const blue = (await render("product", theme, { variant: "sku_blue" })).document;
-    const red = (await render("product", theme, { variant: "sku_red" })).document;
-    expect(blue.querySelector('[data-product-gallery] img[fetchpriority="high"]')?.getAttribute("src")).toContain("blue.jpg");
-    expect(red.querySelector('[data-product-gallery] img[fetchpriority="high"]')?.getAttribute("src")).toContain("primary.jpg");
-    expect(resourceSchema(blue).find((schema) => schema["@type"] === "Product")?.sku).toBe("SHIRT-BLUE");
-    expect(resourceSchema((await render("product", theme)).document).some((schema) => schema["@type"] === "ProductGroup")).toBe(true);
+    // A variant link is the product's one cached page: the render never reads
+    // the query; the buy box selects the SKU (and its exact image) in the browser.
+    const blue = await render("product", theme, { variant: "sku_blue" });
+    const plain = await render("product", theme);
+    expect(blue.html).toBe(plain.html);
+    expect(plain.document.querySelector('[data-product-gallery] img[fetchpriority="high"]')?.getAttribute("src")).toContain("primary.jpg");
+    const group = resourceSchema(plain.document).find((schema) => schema["@type"] === "ProductGroup");
+    expect(group).toBeDefined();
+    // Each SKU keeps its exact image (else the primary) under its own `?variant=` URL.
+    const skus = (group!.hasVariant as Array<{ sku: string; image: string | null; url: string }>);
+    expect(skus.find((sku) => sku.sku === "SHIRT-BLUE")).toMatchObject({ image: expect.stringContaining("blue.jpg"), url: expect.stringContaining("variant=sku_blue") });
     const hidden = (await render("product", theme, { noIndex: true })).document;
     expect(hidden.querySelector('meta[name="robots"]')?.getAttribute("content")).toContain("noindex,follow");
     expect(resourceSchema(hidden).some((schema) => ["Product", "ProductGroup", "BreadcrumbList"].includes(schema["@type"]))).toBe(false);

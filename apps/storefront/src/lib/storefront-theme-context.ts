@@ -43,27 +43,58 @@ export interface RequestTheme {
   language: StorefrontLanguage;
   bindingContext: SettingBindingContext;
   shape: StoreShape;
+  /** The page renders the default in place of an unreadable document: never shared-cached. */
+  degraded: boolean;
 }
 
 interface ThemeLocals {
   storefrontTheme?: Promise<RequestTheme>;
 }
 
+export interface StorefrontThemeRead {
+  theme: StorefrontThemeDocument;
+  /**
+   * The API sent a document this storefront cannot read (a newer theme
+   * version during an API-first deploy, or a bad document): the page renders
+   * the default theme, so it must never enter the shared page cache.
+   */
+  degraded: boolean;
+}
+
+/** The one failure signature this isolate last reported (a log dedupe hint only). */
+let reportedThemeFailure: string | null = null;
+
 /**
  * The theme document the storefront renders for a value from the API.
  * Anything invalid renders `DEFAULT_STOREFRONT_THEME` whole (a fail-safe,
- * never a per-field repair).
+ * never a per-field repair) and reads as degraded. The failure is logged
+ * once per isolate and signature, masked: the document's declared version
+ * and the failing schema paths (indexes elided), never a value.
  */
-export function readStorefrontTheme(value: unknown): StorefrontThemeDocument {
+export function readStorefrontThemeDocument(value: unknown): StorefrontThemeRead {
   const result = storefrontThemeDocumentSchema.safeParse(value);
-  if (result.success) return result.data;
-  if (value !== undefined && value !== null) {
-    const paths = result.error.issues
-      .slice(0, 3)
-      .map((issue) => issue.path.join(".") || "(root)");
-    console.warn("[theme] Invalid theme document; rendering the default theme.", paths);
+  if (result.success) return { theme: result.data, degraded: false };
+  if (value === undefined || value === null) return { theme: DEFAULT_STOREFRONT_THEME, degraded: false };
+  const version = (value as { version?: unknown }).version;
+  const declared = typeof version === "number" && Number.isSafeInteger(version) ? version : null;
+  const paths = result.error.issues
+    .slice(0, 3)
+    .map((issue) => issue.path.map((part) => (typeof part === "number" ? "#" : String(part).slice(0, 40))).join(".") || "(root)");
+  const signature = `${declared}:${paths.join(",")}`;
+  if (signature !== reportedThemeFailure) {
+    reportedThemeFailure = signature;
+    console.warn("[theme] Unreadable theme document; rendering the default theme uncached.", {
+      version: declared,
+      expected: DEFAULT_STOREFRONT_THEME.version,
+      paths,
+    });
   }
-  return DEFAULT_STOREFRONT_THEME;
+  return { theme: DEFAULT_STOREFRONT_THEME, degraded: true };
+}
+
+/** The theme document a value renders (see `readStorefrontThemeDocument`). */
+export function readStorefrontTheme(value: unknown): StorefrontThemeDocument {
+  return readStorefrontThemeDocument(value).theme;
 }
 
 /**
@@ -113,7 +144,7 @@ export function readStorefrontBrandAssets(value: unknown, brand: StorefrontTheme
 export function requestThemeFor(
   theme: StorefrontThemeDocument,
   shape: StoreShape = EMPTY_STORE_SHAPE,
-  options: { previewToken?: string | null; preview?: ThemePreviewData | null; brand?: unknown; languageCode?: unknown; bindings?: SettingBindingContext } = {},
+  options: { previewToken?: string | null; preview?: ThemePreviewData | null; brand?: unknown; languageCode?: unknown; bindings?: SettingBindingContext; degraded?: boolean } = {},
 ): RequestTheme {
   const bindingContext = { language: storefrontLanguage(options.languageCode), ...options.bindings };
   theme = boundTheme(theme, bindingContext);
@@ -128,6 +159,7 @@ export function requestThemeFor(
     language: storefrontLanguage(options.languageCode),
     bindingContext,
     shape,
+    degraded: options.degraded ?? false,
   };
 }
 
@@ -143,10 +175,12 @@ export function resolveRequestTheme(
     // A live preview renders the draft and its brand images; its validation
     // failing renders the default (without images), never the published
     // theme under a preview banner.
+    const read = readStorefrontThemeDocument(preview ? preview.theme : layoutData?.theme);
     return requestThemeFor(
-      readStorefrontTheme(preview ? preview.theme : layoutData?.theme),
+      read.theme,
       readStoreShape(layoutData?.storeShape),
       {
+        degraded: read.degraded,
         previewToken,
         preview,
         brand: preview ? preview.brand : layoutData?.brand,
@@ -156,6 +190,26 @@ export function resolveRequestTheme(
     );
   })();
   return locals.storefrontTheme;
+}
+
+/**
+ * Whether an HTML response drew the default theme because the API sent a
+ * document this storefront cannot read. The request's one theme resolution
+ * is shared with the page (resolved here first when the Layout has not yet),
+ * so this reads the same document the HTML renders. A resolution that throws
+ * reads as degraded: the page is then never shared-cached.
+ */
+export async function pageRendersDegradedTheme(
+  astro: { request: Request; locals: object },
+  response: Response,
+  layoutData: Parameters<typeof resolveRequestTheme>[1],
+): Promise<boolean> {
+  if (!response.headers.get("Content-Type")?.toLowerCase().includes("text/html")) return false;
+  try {
+    return (await resolveRequestTheme(astro, layoutData)).degraded;
+  } catch {
+    return true;
+  }
 }
 
 /** Object data joins the existing page part after the layout resolves. */

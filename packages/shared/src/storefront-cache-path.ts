@@ -62,7 +62,15 @@ export function isStorefrontTrackingQueryParam(key: string): boolean {
   return TRACKING_QUERY_PARAM_SET.has(normalized) || normalized.startsWith("utm_");
 }
 
-const PRODUCT_HTML_IGNORED_QUERY_PARAMS = ["size", "color"] as const;
+/**
+ * Variant selection on a product page: `variant=<sku id>` (feed rows, shared
+ * links, the buy box's own URL) and the retired `size`/`color` links. The
+ * server renders one page per product whatever they say, and a pre-paint
+ * script in the buy box picks the SKU from the browser URL (ProductSummary),
+ * so they never split the page cache and never reach a render: every variant
+ * link is the product page's edge hit.
+ */
+const PRODUCT_HTML_IGNORED_QUERY_PARAMS = ["variant", "size", "color"] as const;
 
 export function normalizeStorefrontCacheQueryValue(
   key: string,
@@ -96,15 +104,6 @@ function getHtmlPathDefaults(
     return { page: 1, sortBy: "newest" };
   }
   return {};
-}
-
-export function hasStorefrontProductVariantSelectionParams(url: URL): boolean {
-  return (
-    /^\/products\/[^/]+$/.test(url.pathname) &&
-    PRODUCT_HTML_IGNORED_QUERY_PARAMS.some((param) =>
-      url.searchParams.has(param),
-    )
-  );
 }
 
 function getIgnoredParams(pathname: string): (key: string) => boolean {

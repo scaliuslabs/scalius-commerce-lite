@@ -395,6 +395,39 @@ describe("DVC directed scenarios", () => {
     expect(verdict.valid).toBe(false);
   }, 120_000);
 
+  it("limited promotion: redemptions below its limit leave the pages naming it valid; the exhausting one does not", async () => {
+    const harness = await DvcHarness.create({ ...harnessConfig("scenario-promo-exhaustion"), raceRate: 0, collect: false });
+    try {
+      const { sqlite } = harness;
+      // The checkout guards on redemptions (eligibility, allocations, limits) are not under test here.
+      for (const { name } of sqlite.prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'promotion_redemptions' AND name NOT LIKE 'cdep\\_%' ESCAPE '\\'",
+      ).all() as Array<{ name: string }>) sqlite.exec(`DROP TRIGGER "${name}"`);
+      // SAVE10 has one redemption; its limit becomes three, and the landing page's deal block names it.
+      sqlite.exec(`
+        UPDATE promotions SET max_redemptions = 3 WHERE id = 'promo_code';
+        UPDATE theme_settings SET colors = json_set(colors, '$.pages.landing.eid.sections[' || (
+          SELECT key FROM json_each(theme_settings.colors, '$.pages.landing.eid.sections') WHERE json_extract(value, '$.type') = 'deal-block'
+        ) || '].settings.promotionId', 'promo_code') WHERE id = 'default';
+        INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, status, created_at, updated_at, customer_id) VALUES
+          ('o_dvc_r2', 'A', '01700000001', 'Road', 'city', 'zone', 'pending', ${DVC_SEED_EPOCH}, ${DVC_SEED_EPOCH}, 'cus_1'),
+          ('o_dvc_r3', 'A', '01700000001', 'Road', 'city', 'zone', 'pending', ${DVC_SEED_EPOCH}, ${DVC_SEED_EPOCH}, 'cus_1');
+      `);
+      const redeem = (order: string) => sqlite.exec(`INSERT INTO promotion_redemptions
+        (id, promotion_id, order_id, customer_id, promotion_revision, promotion_code, currency_code, discount_amount_minor)
+        VALUES ('pred_${order}', 'promo_code', '${order}', 'cus_1', 1, 'SAVE10', 'BDT', 1000)`);
+      const path = "/api/v1/storefront/landing/eid";
+      const { meta } = await harness.readPart(path);
+      expect(meta.deps).toContain("promo:promo_code");
+      redeem("o_dvc_r2");
+      expect(await harness.checkPart(path), "a redemption below the limit").toEqual(VALID);
+      redeem("o_dvc_r3");
+      expect((await harness.checkPart(path)).valid, "the redemption that exhausts it").toBe(false);
+    } finally {
+      harness.close();
+    }
+  }, 120_000);
+
   it("landing page: a merchant's draft edit leaves the live cached page valid", async () => {
     const verdict = await staleAfter("scenario-landing-draft", "/api/v1/storefront/landing/eid", (sqlite) => {
       sqlite.exec(`INSERT INTO theme_settings_drafts (id, theme, revision, base_published_revision, created_at, updated_at)

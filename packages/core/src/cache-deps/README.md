@@ -31,6 +31,7 @@ The triggers keep these rules:
 
 - A buyer-visible change of a registered row advances every key its rule derives, from the old and the new row image. It does so in the same transaction, whatever code wrote the row. An update rule fires only when a visible column changed. A move out of a menu, category, brand, product or promotion advances the one it left. Every change also advances `t:<table>`.
 - A stock change inside the SKU availability band advances nothing. A band change advances the product keys.
+- A promotion redemption advances its promotion only when it exhausts it (the count reaches `max_redemptions`, or the spend reaches `max_discount_spend_minor`), and a removed one only when it un-exhausts it. The other redemptions of a flash sale leave its pages cached.
 - `rebuildCatalogProjections` sets `cache_clock.coarse = 1` for its batches. Every trigger then advances only `store`.
 - `POST /api/v1/cache/clear` (Settings, Advanced, "Refresh store"; permission `settings.cache.manage`) advances `store`. Every entry depends on `store`.
 - An entry with `s0` below `cache_clock.floor` is invalid. No code prunes `cache_dep`, so the floor stays 0.
@@ -66,7 +67,7 @@ t:<table>   store
 
 ### Migrations
 
-Migration 0100 holds the clock tables and the baseline triggers (deployed, immutable). Migration 0101 holds the triggers of the ordering projections (`product_recommendations`, `product_sales_stats`, `orders`, `order_items`). `pnpm --filter @scalius/database exec tsx scripts/cache-dep-triggers.ts --write` regenerates only 0101. A table registered after 0101 gets a hand-assembled migration that contains every generated statement verbatim, and `CACHE_DEP_LATER_TABLES` names that migration (0104 custom fields, 0108 promotion customer segments, 0110 the plugin tables, 0112 the market tables).
+Migration 0100 holds the clock tables and the baseline triggers (deployed, immutable). Migration 0101 holds the triggers of the ordering projections (`product_recommendations`, `product_sales_stats`, `orders`, `order_items`). `pnpm --filter @scalius/database exec tsx scripts/cache-dep-triggers.ts --write` regenerates only 0101. A table registered after 0101 gets a hand-assembled migration that contains every generated statement verbatim, and `CACHE_DEP_LATER_TABLES` names that migration (0104 custom fields, 0108 promotion customer segments, 0110 the plugin tables, 0112 the market tables). A rule changed after its trigger deployed is reinstalled by the migration `CACHE_DEP_LATER_TRIGGERS` names; when it narrows a deployed guard, `CACHE_DEP_BASELINE_WHERE` keeps the guard deployed 0100 rendered (0167 promotion exhaustion).
 
 ## Read side: recording
 
@@ -151,7 +152,7 @@ The reader gives the storefront a proof per part: the API version, `status` (`hi
    - A frontier call longer than 1.5 seconds renders the page live.
 4. The slow path (`POST /api/v1/storefront/frontier/check`) sends the key hashes. The API scans at most 4,000 changes after `s0` and answers "changed" beyond that. One check runs per entry and isolate; concurrent requests join it.
 5. `GET /api/v1/storefront/frontier` and the check route answer 404 without the `X-Scalius-Frontier-Key` header. Both Workers derive the key as an HKDF of `SCALIUS_SECRET` (purpose `cache-frontier`). A frontier answer holds at most 4,000 changes: the newest ones, with the horizon raised to the first change left out (an entry older than that takes the slow path). An answer always reaches the clock: a key row holds its latest change, so a cut below the clock could miss a key that changed again after it.
-6. Private requests (checkout, account, a session cookie, variant selections) always render.
+6. Private requests (checkout, account, a session cookie) always render. A product's variant links are its one cached page.
 
 ### Read your writes
 

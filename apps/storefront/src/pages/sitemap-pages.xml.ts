@@ -15,7 +15,7 @@ import {
 import type { SitemapUrl } from '@/lib/sitemap-utils';
 import { getAllPages } from '@/lib/api/pages';
 import { getLayoutData } from '@/lib/api/storefront';
-import { readStorefrontTheme } from '@/lib/storefront-theme-context';
+import { readStorefrontThemeDocument } from '@/lib/storefront-theme-context';
 import type { Page } from '@/lib/api/types';
 import type { APIContext, APIRoute } from 'astro';
 import { normalizeResourceCanonicalPath } from '@scalius/shared/seo-canonical';
@@ -62,7 +62,12 @@ export const GET: APIRoute = async (_context: APIContext) => {
     if (!layout) {
       return xmlDataUnavailableResponse('Pages sitemap is temporarily unavailable');
     }
-    const landingUrls: SitemapUrl[] = Object.entries(readStorefrontTheme(layout.theme).pages.landing)
+    // An unreadable theme would drop every landing page: fail closed, uncached.
+    const themeRead = readStorefrontThemeDocument(layout.theme);
+    if (themeRead.degraded) {
+      return xmlDataUnavailableResponse('Pages sitemap is temporarily unavailable');
+    }
+    const landingUrls: SitemapUrl[] = Object.entries(themeRead.theme.pages.landing)
       .filter(([, landing]) => !landing.noIndex && !landing.excludeFromSitemap)
       .map(([slug]) => ({ loc: sitemapPageUrl(baseUrl, `/pages/${slug}`) }));
 
