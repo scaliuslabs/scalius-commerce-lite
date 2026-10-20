@@ -4,14 +4,26 @@ import type { PluginApiCallInput } from "@scalius/plugin-sdk";
 import { parsePluginManifest } from "@scalius/plugin-sdk/manifest";
 import { checkPluginHandlers, pluginHandlerInventory } from "@scalius/shared/plugins";
 import { parsePluginPageOutput } from "@scalius/shared/plugins/storefront";
+import { renderComponent, storefrontShown } from "@scalius/plugin-sdk/storefront/testing";
 import plugin, { manifest } from "./index";
 import { commissionOf } from "./model";
 import { nextStatus } from "./splits";
+import storefront from "./storefront";
 
-/** The HTML of a proxied page answer ("" for a redirect or JSON). */
+/**
+ * A proxied page answer as the store draws it: the app's page component
+ * (a declared `page` target) from the answer's props, through the
+ * storefront's output check ("" for a redirect or JSON).
+ */
 function pageHtml(value: unknown): string {
   const output = parsePluginPageOutput((value as { body: unknown }).body);
-  return output && "page" in output ? output.page.html : "";
+  if (!output || !("page" in output)) return "";
+  const declared = manifest.storefront.components.find((component) => component.type === output.page.component);
+  expect(declared?.targets).toContain("page");
+  const html = renderComponent(storefront, output.page.component, "page", {}, { props: output.page.props });
+  const shown = storefrontShown(html, manifest.id);
+  expect(shown.dropped).toBe(0);
+  return shown.html;
 }
 
 const ORDER = {
@@ -142,11 +154,17 @@ describe("scalius.sellers portal", () => {
   it("takes an application from a signed-in customer and opens the portal", async () => {
     const harness = createPluginTestHarness(plugin, { api: store().api } as never);
     const guest = await harness.route("public", "apply", { headers: { accept: "text/html" } });
-    expect(parsePluginPageOutput((guest.value as { body: unknown }).body)).toMatchObject({ page: { title: "Seller dashboard" } });
+    expect(parsePluginPageOutput((guest.value as { body: unknown }).body)).toMatchObject({ page: { title: "Seller dashboard", component: "seller_portal" } });
+    expect(pageHtml(guest.value)).toContain('href="/account"');
     const form = await harness.route("public", "apply", { customer: { id: "cus_9" } });
     expect(pageHtml(form.value)).toContain('action="/apps/scalius.sellers/apply"');
-    const bad = await harness.route("public", "apply", { method: "POST", customer: { id: "cus_9" }, body: { name: "x", email: "nope" } });
+    // A refused application keeps what the buyer typed, as text.
+    const bad = await harness.route("public", "apply", { method: "POST", customer: { id: "cus_9" }, body: { name: "<b>x</b>", email: "nope" } });
     expect((bad.value as { status?: number }).status).toBe(422);
+    const refused = pageHtml(bad.value);
+    expect(refused).toContain('role="alert"');
+    expect(refused).toContain('value="&lt;b&gt;x&lt;/b&gt;"');
+    expect(refused).not.toContain("<b>");
     const applied = await harness.route("public", "apply", { method: "POST", customer: { id: "cus_9" }, body: { name: "Rina's Crafts", email: "rina@sellers.test" } });
     expect((applied.value as { body: unknown }).body).toEqual({ redirect: "/apps/scalius.sellers/portal" });
     expect(harness.records.get("sellers")?.get("sel_rina-s-crafts")).toMatchObject({ status: "pending", customer_id: "cus_9" });
@@ -167,6 +185,25 @@ describe("scalius.sellers portal", () => {
     const shipped = backend.calls.find((call) => call.op === "dashboard.resources.fulfillments.create")!;
     expect(shipped.input).toMatchObject({ path: { id: "ord_1" }, body: { kind: "ship", lines: [{ orderItemId: "li_1", quantity: 2 }], tracking: { courierName: "Pathao", trackingId: "TRK1" } } });
     expect(harness.records.get("order_splits")?.get("ord_1~sel_acme-audio")).toMatchObject({ status: "fulfilled" });
+    // The orders page says so after the plain form post's redirect.
+    const orders = pageHtml((await harness.route("public", "portal", { subpath: "/orders", query: { shipped: "1" }, customer: { id: "cus_acme" } })).value);
+    expect(orders).toContain("Marked as shipped.");
+    expect(orders).toContain("2 x Earbuds");
+  });
+
+  it("draws the portal from props: the split's net in the store's money, and a ship form posting to the app", async () => {
+    const { harness } = await marketplace();
+    const acme = harness.records.get("sellers")!.get("sel_acme-audio") as Record<string, unknown>;
+    harness.records.get("sellers")!.set("sel_acme-audio", { ...acme, customer_id: "cus_acme" });
+    await harness.event("order.created", { type: "order", id: "ord_1" }, {}, { id: "evt_1" });
+    const home = await harness.route("public", "portal", { customer: { id: "cus_acme" } });
+    expect((home.value as { headers?: Record<string, string> }).headers).toMatchObject({ "cache-control": "no-store" });
+    const html = pageHtml(home.value);
+    expect(html).toContain("Your shop is open.");
+    expect(html).toContain('action="/apps/scalius.sellers/portal/ship"');
+    expect(html).toContain('name="split" value="ord_1~sel_acme-audio"');
+    expect(html).toContain("4,250");
+    expect(html).toContain('href="/apps/scalius.sellers/store/acme-audio"');
   });
 
   it("shows a seller's public page only while approved", async () => {
@@ -176,6 +213,7 @@ describe("scalius.sellers portal", () => {
     await harness.route("admin", "seller-status", { method: "POST", body: { sellerId: "sel_acme-audio", status: "suspended" } });
     const closed = await harness.route("public", "store", { subpath: "/acme-audio" });
     expect((closed.value as { status?: number }).status).toBe(404);
+    expect(pageHtml(closed.value)).toContain("does not exist or is closed");
     expect(harness.records.get("product_sellers")?.get("p_earbuds")).toMatchObject({ seller_status: "suspended" });
   });
 });

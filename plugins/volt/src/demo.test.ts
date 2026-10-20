@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createPluginTestHarness } from "@scalius/plugin-sdk/testing";
+import { createPluginTestHarness, parsePluginUiDocument } from "@scalius/plugin-sdk/testing";
 import type { PluginApiCallInput, PluginApiResult } from "@scalius/plugin-sdk";
 import { VOLT_DEMO_PACK } from "../demo-pack";
 import plugin from "./index";
@@ -208,8 +208,15 @@ describe("import and removal", () => {
     const harness = createPluginTestHarness(plugin, { api: store.api });
     const empty = await harness.route("admin", "demo");
     expect(JSON.stringify(empty.value)).toContain("Import demo store");
+    const valid = (value: unknown) => {
+      const document = parsePluginUiDocument((value as { body: unknown }).body);
+      return document.ok ? null : document.issues;
+    };
+    expect(valid(empty.value)).toBeNull();
     await runUntilIdle(harness, "demo-import");
-    const page = JSON.stringify((await harness.route("admin", "demo")).value);
+    const imported = await harness.route("admin", "demo");
+    expect(valid(imported.value)).toBeNull();
+    const page = JSON.stringify(imported.value);
     expect(page).toContain("Remove demo content");
     expect(page).toContain("Finish the home page");
     expect(page).toContain("collection:volt-computers");

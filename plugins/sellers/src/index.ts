@@ -224,6 +224,9 @@ export const manifest = {
     components: [
       { type: "sold_by", name: "Sold by", targets: ["product.buy_box.before"], settings: [{ key: "label", label: "Label", type: "text", default: "Sold by", maxLength: 30 }] },
       { type: "about_seller", name: "About the seller", targets: ["product.below"], settings: [] },
+      // The proxy pages' bodies (src/pages.tsx), drawn from the routes' props.
+      { type: "seller_portal", name: "Seller portal", targets: ["page"] },
+      { type: "seller_shop", name: "Seller shop page", targets: ["page"] },
     ],
     stylesheet: true,
   },
@@ -266,7 +269,7 @@ const SELLER_COLUMNS = [
 /** Status buttons for one seller (tables carry no buttons: each row's actions are buttons under the table). */
 function sellerButtons(id: string, name: string, status: SellerStatus) {
   const button = (label: string, next: SellerStatus, tone?: "critical" | "primary") =>
-    ui.button(`${label}: ${name}`.slice(0, 80), { route: "seller-status", body: { sellerId: id, status: next } }, {
+    ui.button(`${label}: ${name}`.slice(0, 80), ui.route("seller-status", { body: { sellerId: id, status: next } }), {
       ...(tone ? { tone } : {}),
       ...(next === "suspended" || next === "rejected" ? { confirm: { title: `${label} ${name}?`.slice(0, 80), text: next === "suspended" ? "Buyers can no longer check out their products until you reinstate them." : "The application is closed.", confirmLabel: label, destructive: true } } : {}),
     });
@@ -311,7 +314,7 @@ async function sellersPage(request: PluginRouteRequest, ctx: PluginContext) {
         ...rows.slice(0, 8).flatMap((record) => sellerButtons(record.id, record.data.name, record.data.status)),
       ]),
       ui.card("Add a seller", [
-        ui.form({ route: "seller-add" }, "Add seller", [
+        ui.form(ui.route("seller-add"), "Add seller", [
           ui.textField("name", "Shop name", { required: true }),
           ui.textField("handle", "Shop address", { help: "Lower-case letters, digits and dashes. Empty: from the name." }),
           ui.textField("email", "Notice email"),
@@ -349,11 +352,11 @@ async function payoutsPage(request: PluginRouteRequest, ctx: PluginContext) {
     body: ui.page([
       ui.card("To approve", [
         table(drafts.records, "Draft payouts"),
-        ...drafts.records.slice(0, 8).map((record) => ui.button(`Approve ${record.data.seller_id}`.slice(0, 80), { route: "payout-status", body: { payoutId: record.id, status: "approved" } })),
+        ...drafts.records.slice(0, 8).map((record) => ui.button(`Approve ${record.data.seller_id}`.slice(0, 80), ui.route("payout-status", { body: { payoutId: record.id, status: "approved" } }))),
       ]),
       ui.card("To pay", [
         table(approved.records, "Approved payouts"),
-        ...approved.records.slice(0, 5).map((record) => ui.form({ route: "payout-status", body: { payoutId: record.id, status: "paid" } }, `Record paid: ${record.data.seller_id}`.slice(0, 80), [
+        ...approved.records.slice(0, 5).map((record) => ui.form(ui.route("payout-status", { body: { payoutId: record.id, status: "paid" } }), `Record paid: ${record.data.seller_id}`.slice(0, 80), [
           ui.textField("reference", "Transfer reference", { help: "Your bank or wallet transfer id." }),
         ])),
       ]),
@@ -361,7 +364,7 @@ async function payoutsPage(request: PluginRouteRequest, ctx: PluginContext) {
     ], {
       title: "Payouts",
       description: "Fulfilled orders are drafted into payouts every Monday (after the hold days in the settings). Approve them, transfer the net, then record the transfer.",
-      actions: [ui.button("Draft payouts now", { route: "payouts-draft" }, { tone: "primary" })],
+      actions: [ui.button("Draft payouts now", ui.route("payouts-draft"), { tone: "primary" })],
     }),
   };
 }
@@ -453,7 +456,7 @@ const routes = {
         current
           ? ui.keyValue([{ label: "Sold by", value: current.seller_name }, { label: "Seller status", value: current.seller_status }])
           : ui.text("The store sells this product itself.", { tone: "neutral", size: "sm" }),
-        approved.records.length > 0 ? ui.form({ route: "product-assign" }, "Save seller", [
+        approved.records.length > 0 ? ui.form(ui.route("product-assign"), "Save seller", [
           ui.select("seller", "Seller", [{ value: STORE_SELLS, label: "The store" }, ...approved.records.map((record) => ({ value: record.id, label: record.data.name.slice(0, 80) }))], { value: current?.seller_id ?? STORE_SELLS }),
         ]) : ui.text("Approve a seller to give them products.", { tone: "neutral", size: "sm" }),
       ]),

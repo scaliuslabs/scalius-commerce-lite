@@ -1,10 +1,12 @@
 // The Sellers app's storefront module: "Sold by <seller>" in the product
 // page's buy box and an "About the seller" block below it (both from the
-// product's public seller fields, drawn for any theme), and a seller
-// directory section from the published seller profiles. Themes that draw
-// their own seller line (Bazaar) read the same fields.
+// product's public seller fields, drawn for any theme), a seller directory
+// section from the published seller profiles, and the seller portal and shop
+// pages (src/pages.tsx). Themes that draw their own seller line (Bazaar)
+// read the same fields.
 
 import { defineStorefront, t, type ComponentProps, type SectionProps } from "@scalius/plugin-sdk/storefront";
+import { SellerPortal, SellerShop } from "./pages";
 
 const NAME = "scalius.sellers.seller_name";
 const HANDLE = "scalius.sellers.seller_handle";
@@ -69,5 +71,5 @@ function Directory({ objects, settings, context }: SectionProps<{ heading: strin
 
 export default defineStorefront({
   sections: { seller_directory: Directory },
-  components: { sold_by: SoldBy, about_seller: AboutSeller },
+  components: { sold_by: SoldBy, about_seller: AboutSeller, seller_portal: SellerPortal, seller_shop: SellerShop },
 });
