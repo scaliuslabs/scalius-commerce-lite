@@ -253,6 +253,13 @@ export async function createManualOrder(
         salesChannelId,
     } = prepared;
     let customerId = existingCustomer?.id;
+    // A named customer that owns a storefront account owns the order too, as
+    // a signed-in checkout does (customer-identity.ts: customer_id equals
+    // account_owner_customer_id), so an app's renewal or a staff order shows
+    // in the buyer's account. The phone's guest record is never an account.
+    const accountOwnerCustomerId = data.customerId && existingCustomer?.accountClaimedAt
+        ? existingCustomer.id
+        : null;
 
     // ── Atomic batch: customer + order + items ──────────────────────────
     // D1 batch() executes all statements in a single atomic operation.
@@ -371,6 +378,7 @@ export async function createManualOrder(
             marketId: orderMarketIdSql(shippingAddress?.countryCode
                 ?? (taxQuote.jurisdiction?.addressSource === "billing" ? billing?.address?.countryCode ?? null : null)),
             customerId,
+            accountOwnerCustomerId,
             inventoryAction: reservationEntries.length > 0 ? "reserved" : "none",
             // Staff-created; the source says where it came in (facebook, walk_in, …).
             channel: data.channel ?? "admin",
