@@ -1,0 +1,31 @@
+{
+  "extends": "@scalius/tsconfig/base.json",
+  "compilerOptions": {
+    "types": [],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "jsx": "react-jsx",
+    "jsxImportSource": "@scalius/plugin-sdk/storefront",
+    "paths": {
+      "@scalius/shared/*": [
+        "../../packages/shared/src/*"
+      ]
+    },
+    "noEmit": true,
+    "tsBuildInfoFile": "../../node_modules/.cache/tsbuild/plugin-sellers.tsbuildinfo"
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "references": [
+    {
+      "path": "../../packages/shared"
+    },
+    {
+      "path": "../../packages/plugin-sdk"
+    }
+  ]
+}
