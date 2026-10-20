@@ -5,10 +5,10 @@ import { ChevronRight, Plus, X } from "lucide-react";
 import { toast } from "~/lib/toast";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
+import { ChoiceField } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
-import { Switch } from "~/components/ui/switch";
 import { Textarea } from "~/components/ui/textarea";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useCurrency } from "~/hooks/use-currency";
@@ -320,10 +320,12 @@ function RatesEditor({
               <Input id={id("description")} maxLength={255} value={rate.description} placeholder={t("rateDescriptionPlaceholder")} onChange={(event) => update(index, { description: event.target.value })} />
             </SettingsField>
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <label className="flex min-h-11 items-center gap-3 text-body font-medium">
-                <Switch checked={rate.isActive} onCheckedChange={(isActive) => update(index, { isActive })} />
-                {t("showAtCheckout")}
-              </label>
+              {/* Saved with the zone's Save: a checkbox (DESIGN F9). */}
+              <ChoiceField
+                id={id("isActive")}
+                label={t("showAtCheckout")}
+                control={<Checkbox id={id("isActive")} checked={rate.isActive} onCheckedChange={(checked) => update(index, { isActive: checked === true })} />}
+              />
               <Button type="button" variant="ghost" onClick={() => onChange(rates.filter((_, i) => i !== index))}>
                 {t("removeCharge")}
               </Button>

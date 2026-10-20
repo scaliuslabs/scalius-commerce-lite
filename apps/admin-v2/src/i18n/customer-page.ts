@@ -9,6 +9,7 @@ export const customerPageMessages = defineMessages({
   en: {
     ...customersMessages.en,
     newCustomer: "New customer",
+    createOrder: "Create order",
     unsavedCustomer: "Unsaved customer",
     customerCreated: "Customer created",
     customerSaved: "Customer saved",
@@ -59,6 +60,7 @@ export const customerPageMessages = defineMessages({
   bn: {
     ...customersMessages.bn,
     newCustomer: "নতুন কাস্টমার",
+    createOrder: "অর্ডার তৈরি করুন",
     unsavedCustomer: "কাস্টমার সেভ হয়নি",
     customerCreated: "কাস্টমার তৈরি হয়েছে",
     customerSaved: "কাস্টমার সেভ হয়েছে",

@@ -9,6 +9,7 @@ import { postApiV1AdminCustomers, putApiV1AdminCustomersById } from "@scalius/ap
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { FormField } from "../ui/form";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { CustomerActivity } from "./CustomerActivity";
 import { AddressFields, SkipAddressValidation, useAddressErrors } from "./address/AddressFields";
@@ -267,7 +268,17 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
       heading={isEdit ? (record ? customerTitle(record, t).title : t("customer")) : t("newCustomer")}
       unsavedLabel={isEdit ? undefined : t("unsavedCustomer")}
       savedMessage={t(isEdit ? "customerSaved" : "customerCreated")}
-      actions={isEdit && defaultValues?.id && !trashed ? <AppActionsMenu target="customer" id={defaultValues.id} /> : undefined}
+      actions={isEdit && defaultValues?.id && !trashed ? (
+        <>
+          {/* Shopify's Create order: the order form starts with this customer's contact. */}
+          {hasPermission(PERMISSIONS.ORDERS_CREATE) ? (
+            <Button asChild variant="outline">
+              <Link to="/admin/orders/new" search={{ customerId: defaultValues.id }}>{t("createOrder")}</Link>
+            </Button>
+          ) : null}
+          <AppActionsMenu target="customer" id={defaultValues.id} />
+        </>
+      ) : undefined}
       isSubmitting={isSubmitting}
       backUrl="/admin/customers"
       presenceKey={defaultValues?.id ? presenceKey("customer", defaultValues.id) : null}
