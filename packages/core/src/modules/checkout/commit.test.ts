@@ -393,8 +393,9 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     expect(JSON.stringify(db.conflictIgnoredInserts)).not.toContain("+8801712345678");
   });
 
-  it("rejects an inactive authenticated customer without executing the prepared inventory writes", async () => {
-    const db = createDbMock({ activeCustomer: null });
+  it("fences an inactive authenticated customer in the order batch instead of a pre-read", async () => {
+    const db = createDbMock();
+    mocks.safeBatch.mockRejectedValue(new Error("D1_ERROR: bad JSON path: 'ORDER_CUSTOMER_ACCOUNT_INACTIVE'"));
 
     await expect(commitStorefrontOrderPayload(db, createPayload()))
       .rejects.toMatchObject({
@@ -402,8 +403,8 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
         message: "Customer account is no longer active. Please sign in again.",
       });
 
-    expect(mocks.prepareStockReservationBatch).toHaveBeenCalledOnce();
-    expect(mocks.safeBatch).not.toHaveBeenCalled();
+    expect(mocks.safeBatch).toHaveBeenCalledOnce();
+    expect(db.select).not.toHaveBeenCalledWith(expect.objectContaining({ accountClaimedAt: expect.anything() }));
   });
 
   it("maps one-per-customer trigger aborts even when D1 nests the cause", async () => {
