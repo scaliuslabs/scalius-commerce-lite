@@ -275,11 +275,7 @@ async function selectAuthOtpDeliveryReceiptByKey(
 }
 
 export async function hashOtpIdentifier(identifier: string): Promise<string> {
-    const normalized = identifier.trim().toLowerCase();
-    if (typeof crypto !== "undefined" && crypto.subtle) {
-        return sha256Hex(normalized);
-    }
-    return fallbackHash(normalized).padEnd(64, "0").slice(0, 64);
+    return sha256Hex(identifier.trim().toLowerCase());
 }
 
 export function maskOtpIdentifier(identifier: string): string {
@@ -301,18 +297,7 @@ function createAuthOtpReceiptClaimId(): string {
 }
 
 function createRandomId(): string {
-    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-        return crypto.randomUUID().replace(/-/g, "");
-    }
-    return `${Date.now().toString(36)}${fallbackHash(String(Date.now())).slice(0, 12)}`;
-}
-
-function fallbackHash(value: string): string {
-    let hash = 5381;
-    for (let index = 0; index < value.length; index += 1) {
-        hash = ((hash << 5) + hash) ^ value.charCodeAt(index);
-    }
-    return (hash >>> 0).toString(16).padStart(8, "0");
+    return crypto.randomUUID().replace(/-/g, "");
 }
 
 function normalizeError(error: unknown): string {

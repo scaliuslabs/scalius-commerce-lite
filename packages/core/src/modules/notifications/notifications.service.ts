@@ -143,14 +143,7 @@ const NON_RETRYABLE_DISPATCH_ERROR_PATTERNS = [
 
 /** The dashboard order page (BETTER_AUTH_URL is the dashboard origin from Platform settings). */
 export function resolveDashboardOrderLink(env: object | undefined, orderId: string): string | null {
-    const origin = (env as { BETTER_AUTH_URL?: unknown } | undefined)?.BETTER_AUTH_URL;
-    const dashboardUrl = typeof origin === "string" ? origin.trim() : "";
-    if (!dashboardUrl) return null;
-    try {
-        return new URL(`/admin/orders/${encodeURIComponent(orderId)}`, dashboardUrl).href;
-    } catch {
-        return null;
-    }
+    return resolveDashboardLink(env, `/admin/orders/${encodeURIComponent(orderId)}`);
 }
 
 function credentialEncryptionKeyFromEnv(env: Env): string | undefined {
