@@ -22,7 +22,7 @@ import {
 import { AppError, ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { z } from "zod";
 import { readIncomingStock, type IncomingStockRow } from "./inventory-insights";
-import { optionalTextSchema, parseInventoryInput } from "./validation";
+import { blankToNull, optionalTextSchema, parseInventoryInput } from "./validation";
 import { readStoreCountry } from "../../utils/store-country";
 
 /** RAISE message of the trigger that refuses a stock movement without an active location. */
@@ -244,7 +244,6 @@ export type UpdateInventoryLocationInput = z.input<typeof updateInventoryLocatio
 
 /** The stored shape of a location form: blank optional text is null. */
 function locationValues(input: z.output<typeof inventoryLocationInputSchema>) {
-    const blankToNull = (value: string | null | undefined) => (value ? value : null);
     return {
         name: input.name,
         code: input.code,

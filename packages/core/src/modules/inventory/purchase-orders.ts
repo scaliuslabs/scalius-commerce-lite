@@ -38,7 +38,7 @@ import { digitalStockError, isDigitalKind, variantOptionLabelSql } from "../prod
 import { type StoreCurrency } from "../settings";
 import { readStoreCurrency } from "../markets";
 import { inventoryOperationKeySchema } from "./inventory.validation";
-import { dateOnlySchema, optionalTextSchema, parseInventoryInput } from "./validation";
+import { blankToNull, dateOnlySchema, optionalTextSchema, parseInventoryInput } from "./validation";
 import { resolveActiveInventoryLocation } from "./locations";
 import { assertActiveSupplier } from "./suppliers";
 import { addedQuantitySql, commandActorUserIdSql, executeStockCommand, idsFromJsonSql, readStockCommandSkus, type StockCommandEdge } from "./stock-commands";
@@ -538,11 +538,6 @@ function assertRevision(header: { revision: number }, expected: number): void {
   if (header.revision !== expected) throw new ConflictError("This purchase order changed. Reload to see the latest.");
 }
 
-function textOrNull(value: string | null | undefined): string | null | undefined {
-  if (value === undefined) return undefined;
-  return value ? value : null;
-}
-
 async function runGuarded(db: Database, statements: BatchItem<"sqlite">[]): Promise<void> {
   try {
     await safeBatch(db, statements as never);
@@ -581,8 +576,8 @@ export async function createPurchaseOrder(
           destinationLocationId: destination.id,
           status: "draft",
           expectedOn: data.expectedOn ?? null,
-          reference: textOrNull(data.reference) ?? null,
-          notes: textOrNull(data.notes) ?? null,
+          reference: blankToNull(data.reference),
+          notes: blankToNull(data.notes),
           currencyCode: currency.code,
           shippingMinor: unitCostToMinor(data.shipping ?? 0, currency),
           otherCostsMinor: unitCostToMinor(data.otherCosts ?? 0, currency),
@@ -636,8 +631,8 @@ export async function updatePurchaseOrder(
       ...(data.supplierId !== undefined ? { supplierId: data.supplierId } : {}),
       ...(destination ? { destinationLocationId: destination.id } : {}),
       ...(data.expectedOn !== undefined ? { expectedOn: data.expectedOn } : {}),
-      ...(data.reference !== undefined ? { reference: textOrNull(data.reference) } : {}),
-      ...(data.notes !== undefined ? { notes: textOrNull(data.notes) } : {}),
+      ...(data.reference !== undefined ? { reference: blankToNull(data.reference) } : {}),
+      ...(data.notes !== undefined ? { notes: blankToNull(data.notes) } : {}),
       ...(data.shipping !== undefined ? { shippingMinor: unitCostToMinor(data.shipping, currency) } : {}),
       ...(data.otherCosts !== undefined ? { otherCostsMinor: unitCostToMinor(data.otherCosts, currency) } : {}),
       ...(data.tax !== undefined ? { taxMinor: unitCostToMinor(data.tax, currency) } : {}),

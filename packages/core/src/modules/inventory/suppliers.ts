@@ -9,7 +9,7 @@ import { z } from "zod";
 import type { Database } from "@scalius/database/client";
 import { purchaseOrders, suppliers, SUPPLIER_STATUSES, type SupplierStatus } from "@scalius/database/schema";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
-import { optionalTextSchema, parseInventoryInput } from "./validation";
+import { blankToNull, optionalTextSchema, parseInventoryInput } from "./validation";
 
 
 export const supplierInputSchema = z.object({
@@ -50,13 +50,12 @@ export interface SupplierRecord {
 }
 
 function values(input: z.output<typeof supplierInputSchema>) {
-  const blank = (value: string | null | undefined) => (value ? value : null);
   return {
     name: input.name,
-    contactName: blank(input.contactName),
-    phone: blank(input.phone),
-    email: blank(input.email),
-    notes: blank(input.notes),
+    contactName: blankToNull(input.contactName),
+    phone: blankToNull(input.phone),
+    email: blankToNull(input.email),
+    notes: blankToNull(input.notes),
   };
 }
 

@@ -34,7 +34,7 @@ import {
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { digitalStockError, isDigitalKind, variantOptionLabelSql } from "../products";
 import { inventoryOperationKeySchema } from "./inventory.validation";
-import { dateOnlySchema, optionalTextSchema, parseInventoryInput } from "./validation";
+import { blankToNull, dateOnlySchema, optionalTextSchema, parseInventoryInput } from "./validation";
 import { resolveActiveInventoryLocation, type InventoryLocationRef } from "./locations";
 import { addedQuantitySql, commandActorUserIdSql, executeStockCommand, idsFromJsonSql, readStockCommandSkus, type StockCommandEdge } from "./stock-commands";
 
@@ -492,11 +492,6 @@ async function runGuarded(db: Database, statements: BatchItem<"sqlite">[]): Prom
   }
 }
 
-function textOrNull(value: string | null | undefined): string | null | undefined {
-  if (value === undefined) return undefined;
-  return value ? value : null;
-}
-
 function isNumberConflict(error: unknown): boolean {
   const text = String((error as Error)?.message ?? "") + String((error as { cause?: Error })?.cause?.message ?? "");
   return /inventory_transfers_number_unique|inventory_transfers\.number/i.test(text);
@@ -517,8 +512,8 @@ export async function createTransfer(db: Database, input: CreateTransferInput, a
           destinationLocationId: destination.id,
           status: "draft",
           expectedOn: data.expectedOn ?? null,
-          reference: textOrNull(data.reference) ?? null,
-          notes: textOrNull(data.notes) ?? null,
+          reference: blankToNull(data.reference),
+          notes: blankToNull(data.notes),
           revision: 1,
           createdBy: actorId ?? null,
           createdAt: sql`unixepoch()`,
@@ -553,8 +548,8 @@ export async function updateTransfer(db: Database, id: string, input: UpdateTran
       originLocationId: originId,
       destinationLocationId: destinationId,
       ...(data.expectedOn !== undefined ? { expectedOn: data.expectedOn } : {}),
-      ...(data.reference !== undefined ? { reference: textOrNull(data.reference) } : {}),
-      ...(data.notes !== undefined ? { notes: textOrNull(data.notes) } : {}),
+      ...(data.reference !== undefined ? { reference: blankToNull(data.reference) } : {}),
+      ...(data.notes !== undefined ? { notes: blankToNull(data.notes) } : {}),
       revision: sql`${inventoryTransfers.revision} + 1`,
       updatedAt: sql`unixepoch()`,
     }).where(and(eq(inventoryTransfers.id, id), eq(inventoryTransfers.revision, data.expectedRevision))) as unknown as BatchItem<"sqlite">,

@@ -18,6 +18,9 @@ export function parseInventoryInput<T>(schema: z.ZodType<T>, input: unknown, fal
 
 export const optionalTextSchema = (max: number) => z.string().trim().max(max).nullable().optional();
 
+/** Blank optional text is stored as null. */
+export const blankToNull = (value: string | null | undefined): string | null => (value ? value : null);
+
 export const dateOnlySchema = z.string().trim()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date like 2026-10-31.")
   .refine((value) => !Number.isNaN(Date.parse(`${value}T00:00:00Z`)) && new Date(`${value}T00:00:00Z`).toISOString().startsWith(value), "Use a real calendar date.");
