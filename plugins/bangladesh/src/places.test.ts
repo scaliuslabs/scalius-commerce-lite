@@ -14,7 +14,7 @@ function fakeStore(options: { failAt?: number; status?: number } = {}) {
   const keys = new Set<string>();
   const instance = createPluginTestHarness(pack, {
     api: (operationId, input) => {
-      expect(operationId).toBe("dashboard.delivery_locations.import");
+      expect(operationId).toBe("delivery_locations.import");
       const call = input as ImportCall;
       calls.push(call);
       if (options.failAt === calls.length) {

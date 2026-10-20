@@ -1,6 +1,7 @@
 {
  "operations": {
-  "dashboard.brands.create": {
+  "brands.create": {
+   "operationId": "dashboard.brands.create",
    "method": "POST",
    "path": "/api/v1/admin/brands",
    "risk": "write",
@@ -151,7 +152,8 @@
     ]
    }
   },
-  "dashboard.brands.get": {
+  "brands.get": {
+   "operationId": "dashboard.brands.get",
    "method": "GET",
    "path": "/api/v1/admin/brands/{id}",
    "risk": "read",
@@ -319,7 +321,8 @@
     ]
    }
   },
-  "dashboard.brands.restore": {
+  "brands.restore": {
+   "operationId": "dashboard.brands.restore",
    "method": "POST",
    "path": "/api/v1/admin/brands/restore",
    "risk": "write",
@@ -410,7 +413,8 @@
     ]
    }
   },
-  "dashboard.brands.set_status": {
+  "brands.set_status": {
+   "operationId": "dashboard.brands.set_status",
    "method": "PATCH",
    "path": "/api/v1/admin/brands/{id}/status",
    "risk": "write",
@@ -508,7 +512,8 @@
     ]
    }
   },
-  "dashboard.brands.trash": {
+  "brands.trash": {
+   "operationId": "dashboard.brands.trash",
    "method": "POST",
    "path": "/api/v1/admin/brands/trash",
    "risk": "destructive",
@@ -599,7 +604,8 @@
     ]
    }
   },
-  "dashboard.brands.update": {
+  "brands.update": {
+   "operationId": "dashboard.brands.update",
    "method": "PUT",
    "path": "/api/v1/admin/brands/{id}",
    "risk": "write",
@@ -757,7 +763,8 @@
     ]
    }
   },
-  "dashboard.categories.create": {
+  "categories.create": {
+   "operationId": "dashboard.categories.create",
    "method": "POST",
    "path": "/api/v1/admin/categories",
    "risk": "write",
@@ -939,7 +946,8 @@
     ]
    }
   },
-  "dashboard.categories.list_children": {
+  "categories.list_children": {
+   "operationId": "dashboard.categories.list_children",
    "method": "GET",
    "path": "/api/v1/admin/categories/children",
    "risk": "read",
@@ -1051,7 +1059,8 @@
     ]
    }
   },
-  "dashboard.categories.restore": {
+  "categories.restore": {
+   "operationId": "dashboard.categories.restore",
    "method": "POST",
    "path": "/api/v1/admin/categories/{id}/restore",
    "risk": "write",
@@ -1125,7 +1134,8 @@
     ]
    }
   },
-  "dashboard.categories.set_status": {
+  "categories.set_status": {
+   "operationId": "dashboard.categories.set_status",
    "method": "PATCH",
    "path": "/api/v1/admin/categories/{id}/status",
    "risk": "write",
@@ -1225,7 +1235,8 @@
     ]
    }
   },
-  "dashboard.categories.trash": {
+  "categories.trash": {
+   "operationId": "dashboard.categories.trash",
    "method": "DELETE",
    "path": "/api/v1/admin/categories/{id}",
    "risk": "destructive",
@@ -1281,7 +1292,8 @@
    },
    "output": null
   },
-  "dashboard.categories.update": {
+  "categories.update": {
+   "operationId": "dashboard.categories.update",
    "method": "PUT",
    "path": "/api/v1/admin/categories/{id}",
    "risk": "write",
@@ -1478,7 +1490,8 @@
     ]
    }
   },
-  "dashboard.collections.create": {
+  "collections.create": {
+   "operationId": "dashboard.collections.create",
    "method": "POST",
    "path": "/api/v1/admin/collections",
    "risk": "write",
@@ -1659,7 +1672,8 @@
     ]
    }
   },
-  "dashboard.collections.get_by_ids": {
+  "collections.get_by_ids": {
+   "operationId": "dashboard.collections.get_by_ids",
    "method": "GET",
    "path": "/api/v1/admin/collections/by-ids",
    "risk": "read",
@@ -1734,7 +1748,8 @@
     ]
    }
   },
-  "dashboard.collections.restore": {
+  "collections.restore": {
+   "operationId": "dashboard.collections.restore",
    "method": "POST",
    "path": "/api/v1/admin/collections/{id}/restore",
    "risk": "write",
@@ -1805,7 +1820,8 @@
     ]
    }
   },
-  "dashboard.collections.trash": {
+  "collections.trash": {
+   "operationId": "dashboard.collections.trash",
    "method": "DELETE",
    "path": "/api/v1/admin/collections/{id}",
    "risk": "destructive",
@@ -1851,7 +1867,8 @@
    },
    "output": null
   },
-  "dashboard.collections.update": {
+  "collections.update": {
+   "operationId": "dashboard.collections.update",
    "method": "PUT",
    "path": "/api/v1/admin/collections/{id}",
    "risk": "write",
@@ -2033,7 +2050,8 @@
     ]
    }
   },
-  "dashboard.collections.update_products": {
+  "collections.update_products": {
+   "operationId": "dashboard.collections.update_products",
    "method": "POST",
    "path": "/api/v1/admin/collections/{id}/products",
    "risk": "write",
@@ -2137,7 +2155,8 @@
     ]
    }
   },
-  "dashboard.content.create": {
+  "content.create": {
+   "operationId": "dashboard.content.create",
    "method": "POST",
    "path": "/api/v1/admin/pages",
    "risk": "write",
@@ -2346,7 +2365,8 @@
     ]
    }
   },
-  "dashboard.content.get": {
+  "content.get": {
+   "operationId": "dashboard.content.get",
    "method": "GET",
    "path": "/api/v1/admin/pages/{id}",
    "risk": "read",
@@ -2547,7 +2567,8 @@
     ]
    }
   },
-  "dashboard.content.update": {
+  "content.update": {
+   "operationId": "dashboard.content.update",
    "method": "PUT",
    "path": "/api/v1/admin/pages/{id}",
    "risk": "write",
@@ -2743,7 +2764,8 @@
     ]
    }
   },
-  "dashboard.custom_field_definitions.get": {
+  "custom_field_definitions.get": {
+   "operationId": "dashboard.custom_field_definitions.get",
    "method": "GET",
    "path": "/api/v1/admin/custom-field-definitions/{id}",
    "risk": "read",
@@ -2793,7 +2815,8 @@
     ]
    }
   },
-  "dashboard.custom_field_definitions.list": {
+  "custom_field_definitions.list": {
+   "operationId": "dashboard.custom_field_definitions.list",
    "method": "GET",
    "path": "/api/v1/admin/custom-field-definitions",
    "risk": "read",
@@ -2871,7 +2894,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.get_brand_values": {
+  "custom_fields.get_brand_values": {
+   "operationId": "dashboard.custom_fields.get_brand_values",
    "method": "GET",
    "path": "/api/v1/admin/custom-fields/brand/{ownerId}",
    "risk": "read",
@@ -2961,7 +2985,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.get_category_values": {
+  "custom_fields.get_category_values": {
+   "operationId": "dashboard.custom_fields.get_category_values",
    "method": "GET",
    "path": "/api/v1/admin/custom-fields/category/{ownerId}",
    "risk": "read",
@@ -3051,7 +3076,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.get_collection_values": {
+  "custom_fields.get_collection_values": {
+   "operationId": "dashboard.custom_fields.get_collection_values",
    "method": "GET",
    "path": "/api/v1/admin/custom-fields/collection/{ownerId}",
    "risk": "read",
@@ -3141,7 +3167,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.get_customer_values": {
+  "custom_fields.get_customer_values": {
+   "operationId": "dashboard.custom_fields.get_customer_values",
    "method": "GET",
    "path": "/api/v1/admin/custom-fields/customer/{ownerId}",
    "risk": "read",
@@ -3231,7 +3258,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.get_order_values": {
+  "custom_fields.get_order_values": {
+   "operationId": "dashboard.custom_fields.get_order_values",
    "method": "GET",
    "path": "/api/v1/admin/custom-fields/order/{ownerId}",
    "risk": "read",
@@ -3322,7 +3350,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.get_page_values": {
+  "custom_fields.get_page_values": {
+   "operationId": "dashboard.custom_fields.get_page_values",
    "method": "GET",
    "path": "/api/v1/admin/custom-fields/page/{ownerId}",
    "risk": "read",
@@ -3412,7 +3441,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.get_product_values": {
+  "custom_fields.get_product_values": {
+   "operationId": "dashboard.custom_fields.get_product_values",
    "method": "GET",
    "path": "/api/v1/admin/custom-fields/product/{ownerId}",
    "risk": "read",
@@ -3502,7 +3532,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.get_variant_values": {
+  "custom_fields.get_variant_values": {
+   "operationId": "dashboard.custom_fields.get_variant_values",
    "method": "GET",
    "path": "/api/v1/admin/custom-fields/variant/{ownerId}",
    "risk": "read",
@@ -3592,7 +3623,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.set_brand_values": {
+  "custom_fields.set_brand_values": {
+   "operationId": "dashboard.custom_fields.set_brand_values",
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/brand/{ownerId}",
    "risk": "write",
@@ -3730,7 +3762,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.set_category_values": {
+  "custom_fields.set_category_values": {
+   "operationId": "dashboard.custom_fields.set_category_values",
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/category/{ownerId}",
    "risk": "write",
@@ -3868,7 +3901,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.set_collection_values": {
+  "custom_fields.set_collection_values": {
+   "operationId": "dashboard.custom_fields.set_collection_values",
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/collection/{ownerId}",
    "risk": "write",
@@ -4006,7 +4040,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.set_customer_values": {
+  "custom_fields.set_customer_values": {
+   "operationId": "dashboard.custom_fields.set_customer_values",
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/customer/{ownerId}",
    "risk": "write",
@@ -4144,7 +4179,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.set_order_values": {
+  "custom_fields.set_order_values": {
+   "operationId": "dashboard.custom_fields.set_order_values",
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/order/{ownerId}",
    "risk": "write",
@@ -4282,7 +4318,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.set_page_values": {
+  "custom_fields.set_page_values": {
+   "operationId": "dashboard.custom_fields.set_page_values",
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/page/{ownerId}",
    "risk": "write",
@@ -4420,7 +4457,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.set_product_values": {
+  "custom_fields.set_product_values": {
+   "operationId": "dashboard.custom_fields.set_product_values",
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/product/{ownerId}",
    "risk": "write",
@@ -4558,7 +4596,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.set_variant_values": {
+  "custom_fields.set_variant_values": {
+   "operationId": "dashboard.custom_fields.set_variant_values",
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/variant/{ownerId}",
    "risk": "write",
@@ -4696,7 +4735,8 @@
     ]
    }
   },
-  "dashboard.customers.addresses_list": {
+  "customers.addresses_list": {
+   "operationId": "dashboard.customers.addresses_list",
    "method": "GET",
    "path": "/api/v1/admin/customers/{id}/addresses",
    "risk": "read",
@@ -4873,7 +4913,8 @@
     ]
    }
   },
-  "dashboard.customers.create": {
+  "customers.create": {
+   "operationId": "dashboard.customers.create",
    "method": "POST",
    "path": "/api/v1/admin/customers",
    "risk": "write",
@@ -5034,7 +5075,8 @@
     ]
    }
   },
-  "dashboard.customers.marketing_get": {
+  "customers.marketing_get": {
+   "operationId": "dashboard.customers.marketing_get",
    "method": "GET",
    "path": "/api/v1/admin/customers/{id}/marketing",
    "risk": "read",
@@ -5294,7 +5336,8 @@
     ]
    }
   },
-  "dashboard.customers.tags_list": {
+  "customers.tags_list": {
+   "operationId": "dashboard.customers.tags_list",
    "method": "GET",
    "path": "/api/v1/admin/customers/tags",
    "risk": "read",
@@ -5372,7 +5415,8 @@
     ]
    }
   },
-  "dashboard.customers.tags_set": {
+  "customers.tags_set": {
+   "operationId": "dashboard.customers.tags_set",
    "method": "PUT",
    "path": "/api/v1/admin/customers/{id}/tags",
    "risk": "write",
@@ -5461,7 +5505,8 @@
     ]
    }
   },
-  "dashboard.customers.update": {
+  "customers.update": {
+   "operationId": "dashboard.customers.update",
    "method": "PUT",
    "path": "/api/v1/admin/customers/{id}",
    "risk": "write",
@@ -5541,7 +5586,8 @@
     ]
    }
   },
-  "dashboard.delivery_locations.import": {
+  "delivery_locations.import": {
+   "operationId": "dashboard.delivery_locations.import",
    "method": "POST",
    "path": "/api/v1/admin/settings/delivery-locations/import",
    "risk": "write",
@@ -5741,7 +5787,8 @@
     ]
    }
   },
-  "dashboard.discounts.activate": {
+  "discounts.activate": {
+   "operationId": "dashboard.discounts.activate",
    "method": "POST",
    "path": "/api/v1/admin/discounts/{id}/activate",
    "risk": "write",
@@ -5840,7 +5887,8 @@
     ]
    }
   },
-  "dashboard.discounts.archive": {
+  "discounts.archive": {
+   "operationId": "dashboard.discounts.archive",
    "method": "DELETE",
    "path": "/api/v1/admin/discounts/{id}",
    "risk": "destructive",
@@ -5898,7 +5946,8 @@
    },
    "output": null
   },
-  "dashboard.discounts.create": {
+  "discounts.create": {
+   "operationId": "dashboard.discounts.create",
    "method": "POST",
    "path": "/api/v1/admin/discounts",
    "risk": "write",
@@ -6470,7 +6519,8 @@
     ]
    }
   },
-  "dashboard.discounts.get": {
+  "discounts.get": {
+   "operationId": "dashboard.discounts.get",
    "method": "GET",
    "path": "/api/v1/admin/discounts/{id}",
    "risk": "read",
@@ -6768,7 +6818,8 @@
     ]
    }
   },
-  "dashboard.discounts.pause": {
+  "discounts.pause": {
+   "operationId": "dashboard.discounts.pause",
    "method": "POST",
    "path": "/api/v1/admin/discounts/{id}/pause",
    "risk": "write",
@@ -6867,7 +6918,8 @@
     ]
    }
   },
-  "dashboard.discounts.update": {
+  "discounts.update": {
+   "operationId": "dashboard.discounts.update",
    "method": "PUT",
    "path": "/api/v1/admin/discounts/{id}",
    "risk": "write",
@@ -7455,7 +7507,8 @@
     ]
    }
   },
-  "dashboard.inventory_locations.list": {
+  "inventory_locations.list": {
+   "operationId": "dashboard.inventory_locations.list",
    "method": "GET",
    "path": "/api/v1/admin/inventory/locations",
    "risk": "read",
@@ -7607,7 +7660,8 @@
     ]
    }
   },
-  "dashboard.inventory.adjust": {
+  "inventory.adjust": {
+   "operationId": "dashboard.inventory.adjust",
    "method": "POST",
    "path": "/api/v1/admin/inventory/{variantId}/adjust",
    "risk": "write",
@@ -7746,7 +7800,8 @@
     ]
    }
   },
-  "dashboard.inventory.levels": {
+  "inventory.levels": {
+   "operationId": "dashboard.inventory.levels",
    "method": "GET",
    "path": "/api/v1/admin/inventory/{variantId}/levels",
    "risk": "read",
@@ -7844,7 +7899,8 @@
     ]
    }
   },
-  "dashboard.inventory.product_levels": {
+  "inventory.product_levels": {
+   "operationId": "dashboard.inventory.product_levels",
    "method": "GET",
    "path": "/api/v1/admin/inventory/levels",
    "risk": "read",
@@ -7952,7 +8008,8 @@
     ]
    }
   },
-  "dashboard.inventory.set_stock": {
+  "inventory.set_stock": {
+   "operationId": "dashboard.inventory.set_stock",
    "method": "POST",
    "path": "/api/v1/admin/inventory/stock-set",
    "risk": "write",
@@ -8070,7 +8127,8 @@
     ]
    }
   },
-  "dashboard.languages.list": {
+  "languages.list": {
+   "operationId": "dashboard.languages.list",
    "method": "GET",
    "path": "/api/v1/admin/settings/languages",
    "risk": "read",
@@ -8110,7 +8168,8 @@
     ]
    }
   },
-  "dashboard.media.get": {
+  "media.get": {
+   "operationId": "dashboard.media.get",
    "method": "GET",
    "path": "/api/v1/admin/media/{id}",
    "risk": "read",
@@ -8272,7 +8331,8 @@
     ]
    }
   },
-  "dashboard.media.import_url": {
+  "media.import_url": {
+   "operationId": "dashboard.media.import_url",
    "method": "POST",
    "path": "/api/v1/admin/media/uploads/import-url",
    "risk": "write",
@@ -8466,7 +8526,8 @@
     ]
    }
   },
-  "dashboard.media.list": {
+  "media.list": {
+   "operationId": "dashboard.media.list",
    "method": "GET",
    "path": "/api/v1/admin/media",
    "risk": "read",
@@ -8750,7 +8811,8 @@
     ]
    }
   },
-  "dashboard.media.trash": {
+  "media.trash": {
+   "operationId": "dashboard.media.trash",
    "method": "POST",
    "path": "/api/v1/admin/media/{id}/trash",
    "risk": "destructive",
@@ -8942,7 +9004,8 @@
     ]
    }
   },
-  "dashboard.media.update": {
+  "media.update": {
+   "operationId": "dashboard.media.update",
    "method": "PATCH",
    "path": "/api/v1/admin/media/{id}",
    "risk": "write",
@@ -9181,7 +9244,8 @@
     ]
    }
   },
-  "dashboard.orders.comment_add": {
+  "orders.comment_add": {
+   "operationId": "dashboard.orders.comment_add",
    "method": "POST",
    "path": "/api/v1/admin/orders/{id}/timeline",
    "risk": "write",
@@ -9316,7 +9380,8 @@
     ]
    }
   },
-  "dashboard.orders.fulfillment_void": {
+  "orders.fulfillment_void": {
+   "operationId": "dashboard.orders.fulfillment_void",
    "method": "POST",
    "path": "/api/v1/admin/orders/{id}/fulfillments/{fulfillmentId}/void",
    "risk": "write",
@@ -9414,7 +9479,8 @@
     ]
    }
   },
-  "dashboard.orders.mark_delivered": {
+  "orders.mark_delivered": {
+   "operationId": "dashboard.orders.mark_delivered",
    "method": "POST",
    "path": "/api/v1/admin/orders/{id}/mark-delivered",
    "risk": "write",
@@ -9485,7 +9551,8 @@
     ]
    }
   },
-  "dashboard.orders.pickup_ready": {
+  "orders.pickup_ready": {
+   "operationId": "dashboard.orders.pickup_ready",
    "method": "POST",
    "path": "/api/v1/admin/orders/{id}/pickup-ready",
    "risk": "write",
@@ -9572,7 +9639,8 @@
     ]
    }
   },
-  "dashboard.orders.return_get": {
+  "orders.return_get": {
+   "operationId": "dashboard.orders.return_get",
    "method": "GET",
    "path": "/api/v1/admin/orders/{id}/returns/{returnId}",
    "risk": "read",
@@ -9889,7 +9957,8 @@
     ]
    }
   },
-  "dashboard.orders.returns": {
+  "orders.returns": {
+   "operationId": "dashboard.orders.returns",
    "method": "GET",
    "path": "/api/v1/admin/orders/{id}/returns",
    "risk": "read",
@@ -10201,7 +10270,8 @@
     ]
    }
   },
-  "dashboard.orders.timeline": {
+  "orders.timeline": {
+   "operationId": "dashboard.orders.timeline",
    "method": "GET",
    "path": "/api/v1/admin/orders/{id}/timeline",
    "risk": "read",
@@ -10344,7 +10414,8 @@
     ]
    }
   },
-  "dashboard.orders.update_details": {
+  "orders.update_details": {
+   "operationId": "dashboard.orders.update_details",
    "method": "PUT",
    "path": "/api/v1/admin/orders/{id}/details",
    "risk": "write",
@@ -10554,7 +10625,8 @@
     ]
    }
   },
-  "dashboard.orders.update_status": {
+  "orders.update_status": {
+   "operationId": "dashboard.orders.update_status",
    "method": "PUT",
    "path": "/api/v1/admin/orders/{id}/status",
    "risk": "write",
@@ -10659,7 +10731,8 @@
     ]
    }
   },
-  "dashboard.product_variants.retire": {
+  "product_variants.retire": {
+   "operationId": "dashboard.product_variants.retire",
    "method": "DELETE",
    "path": "/api/v1/admin/products/{id}/variants/{variantId}",
    "risk": "destructive",
@@ -10737,7 +10810,8 @@
     ]
    }
   },
-  "dashboard.products.publications_set": {
+  "products.publications_set": {
+   "operationId": "dashboard.products.publications_set",
    "method": "PUT",
    "path": "/api/v1/admin/products/{id}/publications",
    "risk": "write",
@@ -10828,7 +10902,8 @@
     ]
    }
   },
-  "dashboard.products.restore": {
+  "products.restore": {
+   "operationId": "dashboard.products.restore",
    "method": "POST",
    "path": "/api/v1/admin/products/{id}/restore",
    "risk": "write",
@@ -10898,7 +10973,8 @@
     ]
    }
   },
-  "dashboard.products.trash": {
+  "products.trash": {
+   "operationId": "dashboard.products.trash",
    "method": "DELETE",
    "path": "/api/v1/admin/products/{id}",
    "risk": "destructive",
@@ -10968,7 +11044,8 @@
     ]
    }
   },
-  "dashboard.resources.app_content.delete": {
+  "app_content.delete": {
+   "operationId": "dashboard.resources.app_content.delete",
    "method": "POST",
    "path": "/api/v1/admin/resources/app-content/delete",
    "risk": "destructive",
@@ -11115,7 +11192,8 @@
     ]
    }
   },
-  "dashboard.resources.bulk_runs.get": {
+  "bulk_runs.get": {
+   "operationId": "dashboard.resources.bulk_runs.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/bulk-runs/{id}",
    "risk": "read",
@@ -11162,7 +11240,8 @@
     ]
    }
   },
-  "dashboard.resources.bulk_runs.list": {
+  "bulk_runs.list": {
+   "operationId": "dashboard.resources.bulk_runs.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/bulk-runs",
    "risk": "read",
@@ -11251,7 +11330,8 @@
     ]
    }
   },
-  "dashboard.resources.customers.bulk_tag": {
+  "customers.bulk_tag": {
+   "operationId": "dashboard.resources.customers.bulk_tag",
    "method": "POST",
    "path": "/api/v1/admin/resources/customers/bulk-tag",
    "risk": "write",
@@ -11367,7 +11447,8 @@
     ]
    }
   },
-  "dashboard.resources.customers.get": {
+  "customers.get": {
+   "operationId": "dashboard.resources.customers.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/customers/{id}",
    "risk": "read",
@@ -11410,7 +11491,8 @@
     ]
    }
   },
-  "dashboard.resources.customers.list": {
+  "customers.list": {
+   "operationId": "dashboard.resources.customers.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/customers",
    "risk": "read",
@@ -11544,7 +11626,8 @@
     ]
    }
   },
-  "dashboard.resources.fulfillments.create": {
+  "fulfillments.create": {
+   "operationId": "dashboard.resources.fulfillments.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/orders/{id}/fulfillments",
    "risk": "write",
@@ -11695,7 +11778,8 @@
     ]
    }
   },
-  "dashboard.resources.fulfillments.list": {
+  "fulfillments.list": {
+   "operationId": "dashboard.resources.fulfillments.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/orders/{id}/fulfillments",
    "risk": "read",
@@ -11750,7 +11834,8 @@
     ]
    }
   },
-  "dashboard.resources.gift_cards.adjust": {
+  "gift_cards.adjust": {
+   "operationId": "dashboard.resources.gift_cards.adjust",
    "method": "POST",
    "path": "/api/v1/admin/resources/gift-cards/{id}/adjust",
    "risk": "financial",
@@ -11846,7 +11931,8 @@
     ]
    }
   },
-  "dashboard.resources.gift_cards.create": {
+  "gift_cards.create": {
+   "operationId": "dashboard.resources.gift_cards.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/gift-cards",
    "risk": "financial",
@@ -11970,7 +12056,8 @@
     ]
    }
   },
-  "dashboard.resources.gift_cards.get": {
+  "gift_cards.get": {
+   "operationId": "dashboard.resources.gift_cards.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/gift-cards/{id}",
    "risk": "read",
@@ -12021,7 +12108,8 @@
     ]
    }
   },
-  "dashboard.resources.gift_cards.list": {
+  "gift_cards.list": {
+   "operationId": "dashboard.resources.gift_cards.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/gift-cards",
    "risk": "read",
@@ -12107,7 +12195,8 @@
     ]
    }
   },
-  "dashboard.resources.gift_cards.update": {
+  "gift_cards.update": {
+   "operationId": "dashboard.resources.gift_cards.update",
    "method": "PATCH",
    "path": "/api/v1/admin/resources/gift-cards/{id}",
    "risk": "financial",
@@ -12215,7 +12304,8 @@
     ]
    }
   },
-  "dashboard.resources.orders.create": {
+  "orders.create": {
+   "operationId": "dashboard.resources.orders.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/orders",
    "risk": "write",
@@ -12611,7 +12701,8 @@
     ]
    }
   },
-  "dashboard.resources.orders.get": {
+  "orders.get": {
+   "operationId": "dashboard.resources.orders.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/orders/{id}",
    "risk": "read",
@@ -12655,7 +12746,8 @@
     ]
    }
   },
-  "dashboard.resources.orders.list": {
+  "orders.list": {
+   "operationId": "dashboard.resources.orders.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/orders",
    "risk": "read",
@@ -12841,7 +12933,8 @@
     ]
    }
   },
-  "dashboard.resources.payments.create": {
+  "payments.create": {
+   "operationId": "dashboard.resources.payments.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/orders/{id}/payments",
    "risk": "financial",
@@ -12954,7 +13047,8 @@
     ]
    }
   },
-  "dashboard.resources.payments.list": {
+  "payments.list": {
+   "operationId": "dashboard.resources.payments.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/orders/{id}/payments",
    "risk": "read",
@@ -13009,7 +13103,8 @@
     ]
    }
   },
-  "dashboard.resources.price_lists.create": {
+  "price_lists.create": {
+   "operationId": "dashboard.resources.price_lists.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/price-lists",
    "risk": "write",
@@ -13135,7 +13230,8 @@
     ]
    }
   },
-  "dashboard.resources.price_lists.delete": {
+  "price_lists.delete": {
+   "operationId": "dashboard.resources.price_lists.delete",
    "method": "DELETE",
    "path": "/api/v1/admin/resources/price-lists/{id}",
    "risk": "destructive",
@@ -13207,7 +13303,8 @@
     ]
    }
   },
-  "dashboard.resources.price_lists.get": {
+  "price_lists.get": {
+   "operationId": "dashboard.resources.price_lists.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/price-lists/{id}",
    "risk": "read",
@@ -13258,7 +13355,8 @@
     ]
    }
   },
-  "dashboard.resources.price_lists.list": {
+  "price_lists.list": {
+   "operationId": "dashboard.resources.price_lists.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/price-lists",
    "risk": "read",
@@ -13312,7 +13410,8 @@
     ]
    }
   },
-  "dashboard.resources.price_lists.prices_list": {
+  "price_lists.prices_list": {
+   "operationId": "dashboard.resources.price_lists.prices_list",
    "method": "GET",
    "path": "/api/v1/admin/resources/price-lists/{id}/prices",
    "risk": "read",
@@ -13403,7 +13502,8 @@
     ]
    }
   },
-  "dashboard.resources.price_lists.prices_set": {
+  "price_lists.prices_set": {
+   "operationId": "dashboard.resources.price_lists.prices_set",
    "method": "PUT",
    "path": "/api/v1/admin/resources/price-lists/{id}/prices",
    "risk": "write",
@@ -13552,7 +13652,8 @@
     ]
    }
   },
-  "dashboard.resources.price_lists.update": {
+  "price_lists.update": {
+   "operationId": "dashboard.resources.price_lists.update",
    "method": "PATCH",
    "path": "/api/v1/admin/resources/price-lists/{id}",
    "risk": "write",
@@ -13689,7 +13790,8 @@
     ]
    }
   },
-  "dashboard.resources.products.bulk_publish": {
+  "products.bulk_publish": {
+   "operationId": "dashboard.resources.products.bulk_publish",
    "method": "POST",
    "path": "/api/v1/admin/resources/products/bulk-publish",
    "risk": "write",
@@ -13813,7 +13915,8 @@
     ]
    }
   },
-  "dashboard.resources.products.bulk_set_status": {
+  "products.bulk_set_status": {
+   "operationId": "dashboard.resources.products.bulk_set_status",
    "method": "POST",
    "path": "/api/v1/admin/resources/products/bulk-set-status",
    "risk": "write",
@@ -13939,7 +14042,8 @@
     ]
    }
   },
-  "dashboard.resources.products.create": {
+  "products.create": {
+   "operationId": "dashboard.resources.products.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/products",
    "risk": "write",
@@ -14198,7 +14302,8 @@
     ]
    }
   },
-  "dashboard.resources.products.get": {
+  "products.get": {
+   "operationId": "dashboard.resources.products.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/products/{id}",
    "risk": "read",
@@ -14241,7 +14346,8 @@
     ]
    }
   },
-  "dashboard.resources.products.list": {
+  "products.list": {
+   "operationId": "dashboard.resources.products.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/products",
    "risk": "read",
@@ -14385,7 +14491,8 @@
     ]
    }
   },
-  "dashboard.resources.products.update": {
+  "products.update": {
+   "operationId": "dashboard.resources.products.update",
    "method": "PATCH",
    "path": "/api/v1/admin/resources/products/{id}",
    "risk": "write",
@@ -14531,7 +14638,8 @@
     ]
    }
   },
-  "dashboard.resources.shipments.create": {
+  "shipments.create": {
+   "operationId": "dashboard.resources.shipments.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/orders/{id}/shipments",
    "risk": "write",
@@ -14640,7 +14748,8 @@
     ]
    }
   },
-  "dashboard.resources.shipments.get": {
+  "shipments.get": {
+   "operationId": "dashboard.resources.shipments.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/shipments/{id}",
    "risk": "read",
@@ -14684,7 +14793,8 @@
     ]
    }
   },
-  "dashboard.resources.shipments.list": {
+  "shipments.list": {
+   "operationId": "dashboard.resources.shipments.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/orders/{id}/shipments",
    "risk": "read",
@@ -14739,7 +14849,8 @@
     ]
    }
   },
-  "dashboard.resources.variants.bulk_set_prices": {
+  "variants.bulk_set_prices": {
+   "operationId": "dashboard.resources.variants.bulk_set_prices",
    "method": "POST",
    "path": "/api/v1/admin/resources/variants/bulk-set-prices",
    "risk": "write",
@@ -14926,7 +15037,8 @@
     ]
    }
   },
-  "dashboard.resources.variants.bulk_set_stock": {
+  "variants.bulk_set_stock": {
+   "operationId": "dashboard.resources.variants.bulk_set_stock",
    "method": "POST",
    "path": "/api/v1/admin/resources/variants/bulk-set-stock",
    "risk": "write",
@@ -15031,7 +15143,8 @@
     ]
    }
   },
-  "dashboard.resources.variants.get": {
+  "variants.get": {
+   "operationId": "dashboard.resources.variants.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/variants/{id}",
    "risk": "read",
@@ -15076,7 +15189,8 @@
     ]
    }
   },
-  "dashboard.resources.variants.lookup": {
+  "variants.lookup": {
+   "operationId": "dashboard.resources.variants.lookup",
    "method": "POST",
    "path": "/api/v1/admin/resources/variants/lookup",
    "risk": "read",
@@ -15146,7 +15260,8 @@
     ]
    }
   },
-  "dashboard.resources.webhook_subscriptions.create": {
+  "webhook_subscriptions.create": {
+   "operationId": "dashboard.resources.webhook_subscriptions.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/webhook-subscriptions",
    "risk": "write",
@@ -15308,7 +15423,8 @@
     ]
    }
   },
-  "dashboard.resources.webhook_subscriptions.delete": {
+  "webhook_subscriptions.delete": {
+   "operationId": "dashboard.resources.webhook_subscriptions.delete",
    "method": "DELETE",
    "path": "/api/v1/admin/resources/webhook-subscriptions/{id}",
    "risk": "destructive",
@@ -15387,7 +15503,8 @@
     ]
    }
   },
-  "dashboard.resources.webhook_subscriptions.list": {
+  "webhook_subscriptions.list": {
+   "operationId": "dashboard.resources.webhook_subscriptions.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/webhook-subscriptions",
    "risk": "read",
@@ -15437,7 +15554,8 @@
     ]
    }
   },
-  "dashboard.resources.webhook_subscriptions.update": {
+  "webhook_subscriptions.update": {
+   "operationId": "dashboard.resources.webhook_subscriptions.update",
    "method": "PATCH",
    "path": "/api/v1/admin/resources/webhook-subscriptions/{id}",
    "risk": "write",
@@ -15617,7 +15735,8 @@
     ]
    }
   },
-  "dashboard.sales_channels.products": {
+  "sales_channels.products": {
+   "operationId": "dashboard.sales_channels.products",
    "method": "GET",
    "path": "/api/v1/admin/settings/sales-channels/{id}/products",
    "risk": "read",
@@ -15699,7 +15818,8 @@
     ]
    }
   },
-  "dashboard.settings.business_get": {
+  "settings.business_get": {
+   "operationId": "dashboard.settings.business_get",
    "method": "GET",
    "path": "/api/v1/admin/settings/business",
    "risk": "read",
@@ -15842,6 +15962,7 @@
    }
   },
   "objects.delete": {
+   "operationId": "objects.delete",
    "method": "DELETE",
    "path": "/api/v1/admin/objects/{type}/{id}",
    "risk": "destructive",
@@ -15898,6 +16019,7 @@
    "output": null
   },
   "objects.get": {
+   "operationId": "objects.get",
    "method": "GET",
    "path": "/api/v1/admin/objects/{type}/{id}",
    "risk": "read",
@@ -15959,6 +16081,7 @@
    }
   },
   "objects.list": {
+   "operationId": "objects.list",
    "method": "GET",
    "path": "/api/v1/admin/objects/{type}",
    "risk": "read",
@@ -16089,6 +16212,7 @@
    }
   },
   "objects.types.create": {
+   "operationId": "objects.types.create",
    "method": "POST",
    "path": "/api/v1/admin/objects/types",
    "risk": "write",
@@ -16238,6 +16362,7 @@
    }
   },
   "objects.types.delete": {
+   "operationId": "objects.types.delete",
    "method": "DELETE",
    "path": "/api/v1/admin/objects/types/{type}",
    "risk": "destructive",
@@ -16284,6 +16409,7 @@
    "output": null
   },
   "objects.types.get": {
+   "operationId": "objects.types.get",
    "method": "GET",
    "path": "/api/v1/admin/objects/types/{type}",
    "risk": "read",
@@ -16340,6 +16466,7 @@
    }
   },
   "objects.types.list": {
+   "operationId": "objects.types.list",
    "method": "GET",
    "path": "/api/v1/admin/objects/types",
    "risk": "read",
@@ -16381,6 +16508,7 @@
    }
   },
   "objects.types.update": {
+   "operationId": "objects.types.update",
    "method": "PATCH",
    "path": "/api/v1/admin/objects/types/{type}",
    "risk": "write",
@@ -16540,6 +16668,7 @@
    }
   },
   "objects.upsert": {
+   "operationId": "objects.upsert",
    "method": "PUT",
    "path": "/api/v1/admin/objects/{type}/{id}",
    "risk": "write",

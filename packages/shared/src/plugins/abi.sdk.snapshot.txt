@@ -93,7 +93,7 @@ export interface PluginApiResult<T = unknown> {
     } | null;
 }
 export interface PluginApi {
-    call<T = unknown>(operationId: string, input?: PluginApiCallInput): Promise<PluginApiResult<T>>;
+    call<T = unknown>(operation: string, input?: PluginApiCallInput): Promise<PluginApiResult<T>>;
 }
 export interface PluginMoney {
     amountMinor: number;
@@ -986,6 +986,7 @@ export interface StableContractParameter {
     description?: string;
 }
 export interface StableContractOperation {
+    operationId: string;
     method: string;
     path: string;
     risk: string;
@@ -1045,7 +1046,7 @@ export {};
 // packages/plugin-sdk/src/testing-contract.gen.d.ts
 import type { StableContract } from "./testing-contract";
 export declare const STABLE_CONTRACT: StableContract;
-export declare const NON_STABLE_OPERATION_IDS: readonly string[];
+export declare const NON_STABLE_OPERATION_NAMES: readonly string[];
 
 // packages/plugin-sdk/src/testing.d.ts
 import { type PluginFunctionInputDraft, type PluginFunctionOutput, type PluginFunctionPoint, type PluginSettingValue } from "@scalius/shared/plugins";

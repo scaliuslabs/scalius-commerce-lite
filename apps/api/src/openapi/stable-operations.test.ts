@@ -12,6 +12,9 @@
 //   3. the snapshot equals the current contract exactly, so an additive
 //      change is reviewed: accept it with `vitest run -u` on this file.
 //
+// The snapshot is keyed by app name (`orders.get`, plugins/app-operations.ts):
+// the one name an app passes to `ctx.api.call`, sealed with its contract.
+//
 // A breaking change needs a new operation (or a new plugin API version), not
 // an edited snapshot.
 
@@ -23,6 +26,7 @@ import { protectedMarkerCategories } from "@scalius/shared/plugins/protected-dat
 import { eventDataTruncation } from "@scalius/shared/events";
 import { AGENT_COMPONENT_SCHEMAS, AGENT_OPERATIONS } from "../generated/agent-operations.gen";
 import { isOperationAvailableToPlugin, pluginRbacSatisfied } from "../plugins/authority";
+import { appOperationName, resolveAppOperation } from "../plugins/app-operations";
 import type { AgentOperationManifestEntry } from "./agent-operation-manifest";
 import { referencedComponentSchemas } from "@scalius/shared/openapi-schema-refs";
 import { inputBreakingChanges, schemaBreakingChanges } from "@scalius/shared/schema-compat";
@@ -54,6 +58,8 @@ function appView<T>(schema: T): T {
 }
 
 interface StableOperationSnapshot {
+  /** The operation the app name resolves to (its OpenAPI operationId); not part of the app contract. */
+  operationId: string;
   method: string;
   path: string;
   risk: string;
@@ -77,7 +83,8 @@ function coveringScopes(operation: AgentOperationManifestEntry): PluginScope[] {
 const stable = AGENT_OPERATIONS.filter((operation) => operation.stability === "stable");
 
 function currentSnapshot(): StableSnapshot {
-  const operations = Object.fromEntries(stable.map((operation) => [operation.operationId, {
+  const operations = Object.fromEntries(stable.map((operation) => [appOperationName(operation.operationId) ?? operation.operationId, {
+    operationId: operation.operationId,
     method: operation.method,
     path: operation.pathTemplate,
     risk: operation.risk,
@@ -329,6 +336,20 @@ describe("the stable app API", () => {
     expect([...new Set(unmarked)]).toEqual([]);
   });
 
+  it("names every operation once, by resource and verb, never by the dashboard's route tree", () => {
+    for (const operation of stable) {
+      const name = appOperationName(operation.operationId);
+      expect(name, operation.operationId).toMatch(/^(?!dashboard\.|resources\.)[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/u);
+      expect(resolveAppOperation(name!)?.operationId).toBe(operation.operationId);
+    }
+    // Where the dashboard has its own operation beside the resource, the resource owns the name.
+    expect(resolveAppOperation("products.create")?.operationId).toBe("dashboard.resources.products.create");
+    expect(resolveAppOperation("orders.list")?.operationId).toBe("dashboard.resources.orders.list");
+    expect(appOperationName("dashboard.products.create")).toBeNull();
+    expect(resolveAppOperation("dashboard.resources.orders.get")).toBeNull();
+    expect(resolveAppOperation("storefront.products.list")).toBeNull();
+  });
+
   it("never reaches people, credentials, webhooks or apps", () => {
     for (const operation of stable) {
       expect(operation.operationId).not.toMatch(/^dashboard\.(account|team|agent_access|apps|webhooks|security)\./);
@@ -430,8 +451,8 @@ describe("the breaking-change check", () => {
   const object = (properties: Record<string, unknown>, required: string[] = []) => ({ type: "object", properties, required });
   const snapshot = (operation: Partial<StableOperationSnapshot>): StableSnapshot => ({
     operations: {
-      "dashboard.things.get": {
-        method: "GET", path: "/api/v1/admin/things/{id}", risk: "read", idempotency: "none", revision: "none", scopes: ["read_products"],
+      "things.get": {
+        operationId: "dashboard.things.get", method: "GET", path: "/api/v1/admin/things/{id}", risk: "read", idempotency: "none", revision: "none", scopes: ["read_products"],
         input: { parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }] },
         output: object({ id: { type: "string" }, status: { type: "string", enum: ["a", "b"] } }, ["id", "status"]),
         ...operation,
@@ -464,16 +485,16 @@ describe("the breaking-change check", () => {
     });
     const problems = stableBreakingChanges(before, after);
     expect(problems).toEqual(expect.arrayContaining([
-      "dashboard.things.get: the read_products scope no longer covers it.",
-      "dashboard.things.get: revision is now required.",
-      "dashboard.things.get input body.tags[]: maxLength tightened to 100.",
-      'dashboard.things.get input body.kind: no longer accepts "y".',
-      "dashboard.things.get input body.owner: a new required field.",
-      "dashboard.things.get output id: the field is no longer always present.",
-      "dashboard.things.get output status: the field was removed.",
+      "things.get: the read_products scope no longer covers it.",
+      "things.get: revision is now required.",
+      "things.get input body.tags[]: maxLength tightened to 100.",
+      'things.get input body.kind: no longer accepts "y".',
+      "things.get input body.owner: a new required field.",
+      "things.get output id: the field is no longer always present.",
+      "things.get output status: the field was removed.",
     ]));
     expect(stableBreakingChanges(before, { operations: {}, components: {} }))
-      .toEqual(["dashboard.things.get: removed from the stable app API."]);
+      .toEqual(["things.get: removed from the stable app API."]);
   });
 
   it("follows component references and matches union variants by their discriminator", () => {
@@ -489,7 +510,7 @@ describe("the breaking-change check", () => {
     expect(stableBreakingChanges(before, reordered)).toEqual([]);
     const retyped: StableSnapshot = { ...reordered, components: { Count: { type: "string" } } };
     expect(stableBreakingChanges(before, retyped)).toEqual([
-      "dashboard.things.get output [variant 1].count: type changed from integer to string.",
+      "things.get output [variant 1].count: type changed from integer to string.",
     ]);
   });
 });

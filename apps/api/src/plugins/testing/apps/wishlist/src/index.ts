@@ -173,10 +173,10 @@ function fieldOf(request: PluginRouteRequest, name: string): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-/** The product as the stable app API returns it (`dashboard.resources.products.get`), reduced to what the app shows. */
+/** The product as the stable app API returns it (`products.get`), reduced to what the app shows. */
 async function readProduct(ctx: PluginContext, productId: string): Promise<ProductFacts | null> {
   const result = await ctx.api.call<{ name?: string; slug?: string; status?: string; imageUrl?: string | null }>(
-    "dashboard.resources.products.get",
+    "products.get",
     { path: { id: productId } },
   );
   const product = result.ok ? result.data : null;

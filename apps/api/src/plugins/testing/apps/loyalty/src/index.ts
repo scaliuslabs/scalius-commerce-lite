@@ -105,7 +105,7 @@ export function pointsEarned(totalMinor: number, settings: Record<string, unknow
   return per100 > 0 && totalMinor > 0 ? Math.floor((totalMinor * per100) / hundred) : 0;
 }
 
-/** The fields loyalty reads of `dashboard.resources.orders.get` (the order as webhooks carry it). */
+/** The fields loyalty reads of `orders.get` (the order as webhooks carry it). */
 interface PaidOrder {
   id: string;
   totalMinor: number;
@@ -118,7 +118,7 @@ interface PaidOrder {
  * the entry; a concurrent credit or spend is re-read and retried.
  */
 async function earn(orderId: string, ctx: PluginContext): Promise<void> {
-  const result = await ctx.api.call<PaidOrder>("dashboard.resources.orders.get", { path: { id: orderId } });
+  const result = await ctx.api.call<PaidOrder>("orders.get", { path: { id: orderId } });
   if (!result.ok || !result.data) {
     ctx.log.warn("Could not read the paid order", { orderId, status: result.status });
     if (result.status >= 500) throw new Error("The order could not be read; the event will be retried.");

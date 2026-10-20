@@ -75,6 +75,14 @@ mirror a dashboard screen, an editor section or a summary card.
   milliseconds, no bare string, no union of forms. Discount schedules are
   `startsAt`/`endsAt`. The test fails on any `*At`/`*Since` field of another
   form (`isoTimestampSchema` in `schemas/timestamps.ts`).
+- **Apps name an operation by resource and verb.** `ctx.api.call` takes the
+  app name (`orders.get`, `products.create`, `objects.upsert`), never the
+  operation id: `dashboard.resources.` or `dashboard.` is dropped, and where
+  the dashboard has its own operation beside the resource one
+  (`dashboard.products.create`), the resource owns the name and the
+  dashboard's has none (`@scalius/shared/plugins/app-operations`).
+  `stable-operations.snapshot.json` is keyed by app name, so the alias table
+  is sealed with the contract. Agents, MCP and the CLI keep operation ids.
 - **Error codes are one lower_snake vocabulary** (`not_found`, `validation_error`,
   `price_changed`, `product_revision_conflict`, `api_operation_not_stable`); an
   area prefix is `<area>_<code>`, never dotted or upper-case.

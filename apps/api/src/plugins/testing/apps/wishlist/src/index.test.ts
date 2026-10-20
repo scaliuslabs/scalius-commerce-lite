@@ -8,7 +8,7 @@ import storefront from "./storefront";
 
 // The product as dashboard.resources.products.get returns it.
 const productApi = async (operationId: string, input: unknown) => {
-  if (operationId === "dashboard.resources.products.get") {
+  if (operationId === "products.get") {
     const id = (input as { path: { id: string } }).path.id;
     const product = {
       id,
@@ -85,7 +85,7 @@ describe("acme.wishlist", () => {
     const harness = createPluginTestHarness(wishlist, {
       api: async (operationId, input) => {
         const result = await productApi(operationId, input);
-        if (!result.ok || operationId !== "dashboard.resources.products.get") return result;
+        if (!result.ok || operationId !== "products.get") return result;
         return { ...result, data: { ...(result.data as Record<string, unknown>), name } };
       },
     });

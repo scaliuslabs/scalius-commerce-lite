@@ -118,7 +118,7 @@ export default definePlugin({
       const orderId = event.resource.id;
       if (await tagged(ctx).get(orderId)) return;
 
-      const order = await ctx.api.call<{ totalMinor?: number; orderNumber?: number | null }>("dashboard.resources.orders.get", { path: { id: orderId } });
+      const order = await ctx.api.call<{ totalMinor?: number; orderNumber?: number | null }>("orders.get", { path: { id: orderId } });
       if (!order.ok) throw new Error(`The order could not be read (${order.error?.code ?? order.status}).`);
       const taggedAt = Date.parse(event.occurredAt) || 0;
       const orderNumber = typeof order.data?.orderNumber === "number" ? order.data.orderNumber : null;

@@ -113,7 +113,7 @@ describe("acme.loyalty", () => {
     };
     const harness = createPluginTestHarness(loyalty, {
       api: async (operationId, input) => {
-        expect(operationId).toBe("dashboard.resources.orders.get");
+        expect(operationId).toBe("orders.get");
         const order = orders[String(input?.path?.id)];
         return order ? { ok: true, status: 200, data: order, error: null } : { ok: false, status: 404, data: null, error: { code: "not_found", message: "Not found" } };
       },

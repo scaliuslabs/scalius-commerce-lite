@@ -9,7 +9,7 @@
 // - `refreshPathaoPlaces()` is the store's live refresh (the places page's
 //   "Refresh from Pathao", finished by the `pathao_places` job): bounded
 //   steps, each applied through the place import port
-//   (`dashboard.delivery_locations.import`, source `bd`, never `finish`: a
+//   (`delivery_locations.import`, source `bd`, never `finish`: a
 //   live refresh turns off only what Pathao marks unusable). Progress is in
 //   the app's KV (`pathao-refresh`).
 //
@@ -287,7 +287,7 @@ async function importEntries(ctx: PluginContext, entries: PlaceEntry[], version:
   let created = 0;
   let updated = 0;
   for (let offset = 0; offset < entries.length; offset += PLACES_CHUNK) {
-    const result = await ctx.api.call<{ created: number; updated: number }>("dashboard.delivery_locations.import", {
+    const result = await ctx.api.call<{ created: number; updated: number }>("delivery_locations.import", {
       body: { country: PLACES_COUNTRY, source: PLACES_SOURCE, version, places: entries.slice(offset, offset + PLACES_CHUNK) },
     });
     if (!result.ok || !result.data) {

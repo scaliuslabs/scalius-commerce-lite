@@ -1,6 +1,6 @@
 // The Bangladesh place directory (66 cities, 1,258 thanas, 10,226 areas from
 // Pathao's delivery locations; ../places/README.md), loaded into the store
-// through the place import port: `ctx.api.call("dashboard.delivery_locations.import")`,
+// through the place import port: `ctx.api.call("delivery_locations.import")`,
 // the same operation the dashboard and agents use (permission
 // settings.delivery_locations.edit, which the merchant grants on activation).
 //
@@ -116,7 +116,7 @@ export async function seedPlaces(ctx: PluginContext, options: SeedOptions): Prom
     const chunk = places.slice(state.next, state.next + PLACES_CHUNK);
     const finish = state.next + chunk.length >= places.length;
     // The import is idempotent by itself (it takes no idempotency key): a resent chunk changes nothing.
-    const result = await ctx.api.call<ImportResult>("dashboard.delivery_locations.import", {
+    const result = await ctx.api.call<ImportResult>("delivery_locations.import", {
       body: { country: PLACES_COUNTRY, source: PLACES_SOURCE, version, places: chunk, finish },
     }).catch((error: unknown) => ({ ok: false as const, status: 0, data: null, error: { code: platformErrorCode(error) || "api.failed", message: "The place import could not run." } }));
     if (!result.ok || !result.data) {

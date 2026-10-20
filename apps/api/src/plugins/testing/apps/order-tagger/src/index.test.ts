@@ -5,14 +5,14 @@ import { createPluginTestHarness, parsePluginUiDocument } from "@scalius/plugin-
 import type { PluginApiCallInput } from "@scalius/plugin-sdk";
 import tagger from "./index";
 
-/** `dashboard.resources.orders.get` answers in minor units (BDT: 1,500 taka is 150,000 paisa). */
+/** `orders.get` answers in minor units (BDT: 1,500 taka is 150,000 paisa). */
 function api(totalMinor = 150_000) {
   const calls: Array<{ operationId: string; input: PluginApiCallInput | undefined }> = [];
   return {
     calls,
     answer: async (operationId: string, input: PluginApiCallInput | undefined) => {
       calls.push({ operationId, input });
-      if (operationId === "dashboard.resources.orders.get") return { ok: true, status: 200, data: { id: input?.path?.id, currency: "BDT", totalMinor }, error: null };
+      if (operationId === "orders.get") return { ok: true, status: 200, data: { id: input?.path?.id, currency: "BDT", totalMinor }, error: null };
       return { ok: false, status: 404, data: null, error: { code: "api_unknown_operation", message: operationId } };
     },
   };
@@ -43,7 +43,7 @@ describe("acme.order-tagger", () => {
     const small = api(10_000);
     const harness = createPluginTestHarness(tagger, { api: small.answer, settings: { min_total: 500 } });
     expect(await harness.event("order.paid", { type: "order", id: "ord_2" })).toMatchObject({ ok: true });
-    expect(small.calls.map((call) => call.operationId)).toEqual(["dashboard.resources.orders.get"]);
+    expect(small.calls.map((call) => call.operationId)).toEqual(["orders.get"]);
     expect(harness.records.get("tagged")?.get("ord_2")).toMatchObject({ order_id: "ord_2" });
     expect(harness.records.get("tagged")?.get("ord_2")?.tag).toBeUndefined();
     const summary = await harness.route("admin", "summary");

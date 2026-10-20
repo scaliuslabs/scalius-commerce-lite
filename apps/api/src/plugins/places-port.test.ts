@@ -1,6 +1,6 @@
 // The place import as a plugin port: an app (the Bangladesh pack, or any
 // place pack) loads a place dataset through
-// `ctx.api.call("dashboard.delivery_locations.import")`, a stable app-API
+// `ctx.api.call("delivery_locations.import")`, a stable app-API
 // operation, gated by the `write_places` scope its manifest requests and the
 // merchant grants.
 import { describe, expect, it } from "vitest";
