@@ -402,7 +402,11 @@ describe("storefront product semantic section D1 queries", () => {
             },
         });
         expect(serializedBytes(summary)).toBeLessThanOrEqual(STOREFRONT_PRODUCT_SECTION_RESULT_MAX_BYTES);
-        expect(probe.statements).toHaveLength(4);
+        // Identity, counts, media, the stored recommendation list and, since this
+        // product has no stored list, the one bounded fallback (never a live ranking).
+        expect(probe.statements).toHaveLength(5);
+        expect(probe.statements.filter((statement) => statement.includes("fb_source AS MATERIALIZED")))
+            .toHaveLength(1);
         expect(probe.maxActive).toBeGreaterThan(0);
         expect(probe.maxActive).toBeLessThanOrEqual(3);
         expect(probe.statements.some((statement) => statement.includes("categories.description")))
