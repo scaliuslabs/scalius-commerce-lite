@@ -582,9 +582,11 @@ function isRefundedPaymentRow(payment: Pick<OrderPayment, "paymentType" | "statu
     return payment.paymentType === "refund" && payment.status === PaymentRecordStatus.REFUNDED;
 }
 
-function computePaymentStateFromLedger(params: {
+export function computePaymentStateFromLedger(params: {
     totalAmountMinor: number;
     payments: Array<Pick<OrderPayment, "paymentType" | "status" | "amountMinor">>;
+    /** A deferred (invoice) order: its terms days, null for any other order. */
+    paymentTermsDays?: number | null;
 }) {
     const capturedAmount = params.payments
         .filter(isCapturedPaymentRow)
@@ -592,6 +594,21 @@ function computePaymentStateFromLedger(params: {
     const refundedAmount = params.payments
         .filter(isRefundedPaymentRow)
         .reduce((sum, payment) => sum + payment.amountMinor, 0);
+
+    // A part-paid invoice: giving back what was received leaves the rest
+    // still owed (goods may already be delivered). Its balance is the total
+    // less what it keeps, and only the merchant closes it (cancel), never a
+    // refund.
+    const deferred = params.paymentTermsDays !== null && params.paymentTermsDays !== undefined;
+    if (deferred && refundedAmount > 0 && capturedAmount < params.totalAmountMinor) {
+        return {
+            isFullRefund: false,
+            ...computeOrderPaymentState({
+                totalAmountMinor: params.totalAmountMinor,
+                paidAmountMinor: Math.max(0, capturedAmount - refundedAmount),
+            }),
+        };
+    }
     const isFullRefund = capturedAmount > 0 && refundedAmount >= capturedAmount;
 
     // Money given back from a fully paid order never turns into money owed:
@@ -663,6 +680,7 @@ export async function finalizeAcceptedRefundAttemptIds(
             version: number;
             currencyCode: string;
             currencyDecimalPlaces: number;
+            paymentTermsDays: number | null;
         };
         currency: OrderCurrencySnapshot;
         paymentRows: Array<Pick<OrderPayment, "paymentType" | "status" | "amountMinor">>;
@@ -678,6 +696,7 @@ export async function finalizeAcceptedRefundAttemptIds(
                 version: orders.version,
                 currencyCode: orders.currencyCode,
                 currencyDecimalPlaces: orders.currencyDecimalPlaces,
+                paymentTermsDays: orders.paymentTermsDays,
             })
             .from(orders)
             .where(eq(orders.id, orderId))
@@ -735,6 +754,7 @@ export async function finalizeAcceptedRefundAttemptIds(
         const paymentState = computePaymentStateFromLedger({
             totalAmountMinor: order.totalAmountMinor,
             payments: paymentRows,
+            paymentTermsDays: order.paymentTermsDays,
         });
         const nextOrderStatus = getOrderStatusAfterRefund(order.status, paymentState.isFullRefund);
         const shouldReleaseInventory =
