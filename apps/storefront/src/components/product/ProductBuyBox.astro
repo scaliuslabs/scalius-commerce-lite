@@ -11,6 +11,7 @@ import type { StorefrontProductPage } from "@scalius/shared/plugins/storefront-p
 import type { DeliveryFact } from "@/lib/delivery-facts";
 import type { ProductFulfilment } from "@/lib/delivery-facts";
 import type { StoreContactLink } from "@/lib/store-contact";
+import type { ShopCopy } from "@/lib/storefront-shop-copy";
 import DeliveryFacts from "@/components/DeliveryFacts.astro";
 import ComponentProductBlocks from "@/components/apps/ComponentProductBlocks.astro";
 import DigitalPromise from "./DigitalPromise.astro";
@@ -31,6 +32,8 @@ interface Props {
   /** The EMI line (the buy box's setting and the product's EMI plan). */
   emi: boolean;
   contactLinks: readonly StoreContactLink[];
+  /** The contact buttons' words in the store's language. */
+  contactCopy: ShopCopy["product"]["contact"];
   /** App blocks of the buy box, and the page projection they draw from. */
   componentBlocks: readonly AppProductBlock[];
   blockData: () => StorefrontProductPage;
@@ -39,7 +42,7 @@ interface Props {
   canPurchaseAny: boolean;
 }
 
-const { summary, reviewCopy, features, emi, contactLinks, componentBlocks, blockData, fulfilment, deliveryFacts, canPurchaseAny } = Astro.props;
+const { summary, reviewCopy, features, emi, contactLinks, contactCopy, componentBlocks, blockData, fulfilment, deliveryFacts, canPurchaseAny } = Astro.props;
 const { product } = summary;
 ---
 
@@ -52,15 +55,15 @@ const { product } = summary;
     <ProductEmiLine slot="after-price" emi={product.emi} currencyCode={summary.currencyCode ?? ""} currencySymbol={summary.currencySymbol ?? ""} />
   )}
   {contactLinks.length > 0 && (
-    <nav slot="after-actions" data-product-contact aria-label="Contact the store" class="mt-3 flex flex-wrap gap-2">
+    <nav slot="after-actions" data-product-contact aria-label={contactCopy.nav} class="mt-3 flex flex-wrap gap-2">
       {contactLinks.map((link) => (
         <a
           href={link.href}
           data-product-contact-link={link.kind}
           class="inline-flex min-h-11 items-center justify-center rounded-md border border-primary px-4 text-sm font-semibold text-primary hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-          aria-label={link.kind === "phone" ? `Call ${link.label}` : "Contact on WhatsApp"}
+          aria-label={link.kind === "phone" ? contactCopy.callNumber(link.label) : contactCopy.whatsappLabel}
           {...(link.kind === "whatsapp" ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-        >{link.kind === "phone" ? "Call" : "WhatsApp"}</a>
+        >{link.kind === "phone" ? contactCopy.call : contactCopy.whatsapp}</a>
       ))}
     </nav>
   )}

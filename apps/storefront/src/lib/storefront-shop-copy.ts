@@ -24,6 +24,16 @@ export interface ShopCopy {
     nextPhoto: string;
     /** Where the phone gallery is, read out as it changes: "Photo 2 of 5" (placeholders allowed). */
     photoOf: (position: number | string, total: number | string) => string;
+    /** The buy box's contact buttons (Business phone and WhatsApp). */
+    contact: {
+      /** The buttons' landmark name. */
+      nav: string;
+      call: string;
+      /** The call button for assistive technology: "Call 01711-000000". */
+      callNumber: (number: string) => string;
+      whatsapp: string;
+      whatsappLabel: string;
+    };
   };
   compare: {
     title: string;
@@ -55,6 +65,13 @@ const EN: ShopCopy = {
     previousPhoto: "Previous photo",
     nextPhoto: "Next photo",
     photoOf: (position, total) => `Photo ${position} of ${total}`,
+    contact: {
+      nav: "Contact the store",
+      call: "Call",
+      callNumber: (number) => `Call ${number}`,
+      whatsapp: "WhatsApp",
+      whatsappLabel: "Contact on WhatsApp",
+    },
   },
   compare: {
     title: "Compare products",
@@ -84,6 +101,13 @@ const BN: ShopCopy = {
     previousPhoto: "আগের ছবি",
     nextPhoto: "পরের ছবি",
     photoOf: (position, total) => `${total}টির মধ্যে ${position} নম্বর ছবি`,
+    contact: {
+      nav: "দোকানের সাথে যোগাযোগ",
+      call: "কল করুন",
+      callNumber: (number) => `${number} নম্বরে কল করুন`,
+      whatsapp: "WhatsApp",
+      whatsappLabel: "WhatsApp-এ যোগাযোগ করুন",
+    },
   },
   compare: {
     title: "পণ্য তুলনা",

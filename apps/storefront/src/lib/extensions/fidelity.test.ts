@@ -13,6 +13,7 @@ import { DEFAULT_STOREFRONT_THEME } from "@scalius/shared/storefront-theme";
 import { requestThemeFor } from "@/lib/storefront-theme-context";
 import { resolveProductListQueryState } from "@/lib/product-list-query";
 import { listingPageData, productCardsOf, productPageData } from "./data";
+import { shopCopy } from "@/lib/storefront-shop-copy";
 
 const root = fileURLToPath(new URL("../../..", import.meta.url));
 const virtualModules: Record<string, string> = {
@@ -76,7 +77,7 @@ const projection = productPageData({
 const buyBox = {
   summary: { product, category: null, variants, options, details: false, currencyCode: "USD", currencySymbol: "$" },
   reviewCopy: ENGLISH_CHECKOUT_LANGUAGE_DATA,
-  features: { shown: false, title: "Features" }, emi: false, contactLinks: [], componentBlocks: [],
+  features: { shown: false, title: "Features" }, emi: false, contactLinks: [], contactCopy: shopCopy("en").product.contact, componentBlocks: [],
   blockData: () => projection, fulfilment: "physical", deliveryFacts: [], canPurchaseAny: true,
 };
 const documentOf = (markup: string) => {
