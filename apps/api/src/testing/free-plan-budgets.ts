@@ -46,6 +46,11 @@
  * about 108k rows, still above Free's 100k daily writes); a 3-line checkout
  * with Meta, GA4 and TikTok on (45 calls of Free's 50); a hosted payment
  * confirmation with the three purchases (25 calls).
+ * FTS5 update guards (2026-10-21, migration 0169): a SKU's stock write no longer
+ * deletes and re-inserts its unchanged search text, nor a product's revision
+ * bump: rows written per 20-line checkout commit 559 -> 365, 99-line
+ * 2,523 -> 1,503, 3-line order 93 -> 69, SKU stock change 48 -> 6, bulk run
+ * chunk 1,944 -> 996. Budgets lowered to the new measurements.
  */
 import type { WorkersPlan } from "@scalius/shared/plan-limits";
 
@@ -84,22 +89,22 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "page-search-miss": { d1Calls: 6, d1Statements: 15, externalFetches: 0, rowsWritten: 1, rowsRead: 764, fullScans: 17 },
     "page-search-hit": { d1Calls: 1, d1Statements: 1, externalFetches: 0, rowsWritten: 1, rowsRead: 3, fullScans: 0 },
     "checkout-20-quote": { d1Calls: 10, d1Statements: 18, externalFetches: 0, rowsWritten: 1, rowsRead: 51, fullScans: 4 },
-    "checkout-20-commit": { d1Calls: 38, d1Statements: 139, externalFetches: 0, rowsWritten: 593, rowsRead: 217, fullScans: 56 },
+    "checkout-20-commit": { d1Calls: 38, d1Statements: 139, externalFetches: 0, rowsWritten: 385, rowsRead: 217, fullScans: 56 },
     "checkout-99-quote": { d1Calls: 11, d1Statements: 19, externalFetches: 0, rowsWritten: 1, rowsRead: 217, fullScans: 4 },
-    "checkout-99-commit": { d1Calls: 34, d1Statements: 394, externalFetches: 0, rowsWritten: 2676, rowsRead: 887, fullScans: 205 },
+    "checkout-99-commit": { d1Calls: 34, d1Statements: 394, externalFetches: 0, rowsWritten: 1580, rowsRead: 887, fullScans: 205 },
     "admin-order-list": { d1Calls: 9, d1Statements: 15, externalFetches: 0, rowsWritten: 1, rowsRead: 1319, fullScans: 4 },
     "admin-order-list-deep": { d1Calls: 3, d1Statements: 7, externalFetches: 0, rowsWritten: 1, rowsRead: 57, fullScans: 0 },
     "admin-product-save": { d1Calls: 24, d1Statements: 39, externalFetches: 0, rowsWritten: 549, rowsRead: 161, fullScans: 29 },
     "order-status-change": { d1Calls: 50, d1Statements: 42, externalFetches: 0, rowsWritten: 35, rowsRead: 1286, fullScans: 5 },
     "order-refund": { d1Calls: 50, d1Statements: 53, externalFetches: 0, rowsWritten: 73, rowsRead: 1292, fullScans: 6 },
-    "sku-stock-change": { d1Calls: 13, d1Statements: 17, externalFetches: 0, rowsWritten: 53, rowsRead: 21, fullScans: 7 },
+    "sku-stock-change": { d1Calls: 13, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 21, fullScans: 7 },
     "cron-idle": { d1Calls: 24, d1Statements: 24, externalFetches: 0, rowsWritten: 110, rowsRead: 7548, fullScans: 11, meanRowsWritten: 0, meanRowsRead: 14.63 },
     "cron-nightly": { d1Calls: 22, d1Statements: 29, externalFetches: 0, rowsWritten: 432, rowsRead: 24972, fullScans: 54 },
     "drain-busy": { d1Calls: 12, d1Statements: 19, externalFetches: 0, rowsWritten: 103, rowsRead: 218, fullScans: 11 },
-    "order-3-line-commit": { d1Calls: 34, d1Statements: 80, externalFetches: 0, rowsWritten: 106, rowsRead: 73, fullScans: 26 },
-    "order-lifecycle": { d1Calls: 34, d1Statements: 80, externalFetches: 0, rowsWritten: 106, rowsRead: 73, fullScans: 26 },
-    "bulk-run-chunk": { d1Calls: 7, d1Statements: 195, externalFetches: 0, rowsWritten: 2043, rowsRead: 295, fullScans: 7 },
-    "order-3-line-commit-tracking": { d1Calls: 45, d1Statements: 108, externalFetches: 3, rowsWritten: 178, rowsRead: 102, fullScans: 28 },
+    "order-3-line-commit": { d1Calls: 34, d1Statements: 80, externalFetches: 0, rowsWritten: 74, rowsRead: 73, fullScans: 26 },
+    "order-lifecycle": { d1Calls: 34, d1Statements: 80, externalFetches: 0, rowsWritten: 74, rowsRead: 73, fullScans: 26 },
+    "bulk-run-chunk": { d1Calls: 7, d1Statements: 195, externalFetches: 0, rowsWritten: 1047, rowsRead: 295, fullScans: 7 },
+    "order-3-line-commit-tracking": { d1Calls: 45, d1Statements: 108, externalFetches: 3, rowsWritten: 153, rowsRead: 102, fullScans: 28 },
     "payment-webhook-confirmed": { d1Calls: 25, d1Statements: 37, externalFetches: 1, rowsWritten: 14, rowsRead: 31, fullScans: 1 },
   },
   paid: {
@@ -118,22 +123,22 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "page-search-miss": { d1Calls: 6, d1Statements: 15, externalFetches: 0, rowsWritten: 1, rowsRead: 764, fullScans: 17 },
     "page-search-hit": { d1Calls: 1, d1Statements: 1, externalFetches: 0, rowsWritten: 1, rowsRead: 3, fullScans: 0 },
     "checkout-20-quote": { d1Calls: 10, d1Statements: 18, externalFetches: 0, rowsWritten: 1, rowsRead: 51, fullScans: 4 },
-    "checkout-20-commit": { d1Calls: 38, d1Statements: 139, externalFetches: 0, rowsWritten: 593, rowsRead: 217, fullScans: 56 },
+    "checkout-20-commit": { d1Calls: 38, d1Statements: 139, externalFetches: 0, rowsWritten: 385, rowsRead: 217, fullScans: 56 },
     "checkout-99-quote": { d1Calls: 11, d1Statements: 19, externalFetches: 0, rowsWritten: 1, rowsRead: 217, fullScans: 4 },
-    "checkout-99-commit": { d1Calls: 34, d1Statements: 394, externalFetches: 0, rowsWritten: 2676, rowsRead: 887, fullScans: 205 },
+    "checkout-99-commit": { d1Calls: 34, d1Statements: 394, externalFetches: 0, rowsWritten: 1580, rowsRead: 887, fullScans: 205 },
     "admin-order-list": { d1Calls: 9, d1Statements: 15, externalFetches: 0, rowsWritten: 1, rowsRead: 1319, fullScans: 4 },
     "admin-order-list-deep": { d1Calls: 3, d1Statements: 7, externalFetches: 0, rowsWritten: 1, rowsRead: 57, fullScans: 0 },
     "admin-product-save": { d1Calls: 38, d1Statements: 60, externalFetches: 0, rowsWritten: 1254, rowsRead: 345, fullScans: 57 },
     "order-status-change": { d1Calls: 50, d1Statements: 42, externalFetches: 0, rowsWritten: 35, rowsRead: 1286, fullScans: 5 },
     "order-refund": { d1Calls: 50, d1Statements: 53, externalFetches: 0, rowsWritten: 73, rowsRead: 1292, fullScans: 6 },
-    "sku-stock-change": { d1Calls: 13, d1Statements: 17, externalFetches: 0, rowsWritten: 53, rowsRead: 21, fullScans: 7 },
+    "sku-stock-change": { d1Calls: 13, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 21, fullScans: 7 },
     "cron-idle": { d1Calls: 63, d1Statements: 69, externalFetches: 0, rowsWritten: 175, rowsRead: 7976, fullScans: 21, meanRowsWritten: 0, meanRowsRead: 28.77 },
     "cron-nightly": { d1Calls: 210, d1Statements: 311, externalFetches: 0, rowsWritten: 432, rowsRead: 27538, fullScans: 430 },
     "drain-busy": { d1Calls: 13, d1Statements: 25, externalFetches: 0, rowsWritten: 118, rowsRead: 236, fullScans: 17 },
-    "order-3-line-commit": { d1Calls: 34, d1Statements: 80, externalFetches: 0, rowsWritten: 106, rowsRead: 73, fullScans: 26 },
-    "order-lifecycle": { d1Calls: 34, d1Statements: 80, externalFetches: 0, rowsWritten: 106, rowsRead: 73, fullScans: 26 },
-    "bulk-run-chunk": { d1Calls: 7, d1Statements: 195, externalFetches: 0, rowsWritten: 2043, rowsRead: 295, fullScans: 7 },
-    "order-3-line-commit-tracking": { d1Calls: 45, d1Statements: 108, externalFetches: 3, rowsWritten: 178, rowsRead: 102, fullScans: 28 },
+    "order-3-line-commit": { d1Calls: 34, d1Statements: 80, externalFetches: 0, rowsWritten: 74, rowsRead: 73, fullScans: 26 },
+    "order-lifecycle": { d1Calls: 34, d1Statements: 80, externalFetches: 0, rowsWritten: 74, rowsRead: 73, fullScans: 26 },
+    "bulk-run-chunk": { d1Calls: 7, d1Statements: 195, externalFetches: 0, rowsWritten: 1047, rowsRead: 295, fullScans: 7 },
+    "order-3-line-commit-tracking": { d1Calls: 45, d1Statements: 108, externalFetches: 3, rowsWritten: 153, rowsRead: 102, fullScans: 28 },
     "payment-webhook-confirmed": { d1Calls: 25, d1Statements: 37, externalFetches: 1, rowsWritten: 14, rowsRead: 31, fullScans: 1 },
   },
 };
