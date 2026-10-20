@@ -129,7 +129,7 @@
           "title": "Create code EID10: 10% off Fri-Sun, 2,000 minimum",
           "steps": [
             ["read", "dashboard.settings.currency_get"],
-            ["write", "dashboard.discounts.create", "method code, codes [EID10], effects percentage_off basisPoints 1000, conditions minimum_merchandise_subtotal amountMinor, startsAt/endsAtEpochSeconds, timezone"],
+            ["write", "dashboard.discounts.create", "method code, codes [EID10], effects percentage_off basisPoints 1000, conditions minimum_merchandise_subtotal amountMinor, startsAt/endsAt (ISO 8601), timezone"],
             ["read", "dashboard.discounts.preview", "check a sample cart"],
             ["write", "dashboard.discounts.activate"],
             ["verify", "dashboard.discounts.get"]

@@ -1,4 +1,5 @@
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
+import { nullableIsoTimestampSchema } from "../../schemas/timestamps";
 import {
     recordOrderEvent,
     approveOrderReturn,
@@ -101,7 +102,7 @@ const orderReturnSchema = z.object({
     updatedAt: z.coerce.date(),
     receiptRecovery: z.object({
         required: z.literal(true),
-        startedAt: z.number().int().nullable(),
+        startedAt: nullableIsoTimestampSchema,
     }).nullable(),
     receipts: z.array(returnReceiptSchema),
     lines: z.array(returnLineSchema),

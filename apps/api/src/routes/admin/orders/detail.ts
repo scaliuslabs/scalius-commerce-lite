@@ -68,7 +68,7 @@ import {
     productVariantSchema,
     selectedProductOptionSchema,
 } from "../../../schemas/entities";
-import { nullableTimestampSchema, timestampSchema } from "../../../schemas/timestamps";
+import { isoTimestampSchema, nullableTimestampSchema, timestampSchema } from "../../../schemas/timestamps";
 import { orderBillingAddressShape } from "../../../schemas/billing-address";
 import { composeOrderLineExtras, orderLineExtrasShape, withOrderLineExtras } from "../../shared/order-line-extras";
 import {
@@ -285,7 +285,7 @@ const timelineEventSchema = z.object({
     data: z.record(z.string(), z.unknown()).nullable(),
     actorName: z.string().nullable(),
     own: z.boolean().openapi({ description: "The viewer wrote this comment and may delete it." }),
-    createdAt: timestampSchema,
+    createdAt: isoTimestampSchema,
 });
 
 const getTimelineRoute = createRoute({

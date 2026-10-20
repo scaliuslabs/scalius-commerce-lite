@@ -495,18 +495,6 @@
           "delivery"
         ]
       },
-      "NullableTimestamp": {
-        "type": "string",
-        "nullable": true,
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "number"
-          }
-        ]
-      },
       "StorefrontHomepageSections": {
         "type": "object",
         "properties": {
@@ -6267,6 +6255,18 @@
           "currencyCode",
           "expiresAt",
           "status"
+        ]
+      },
+      "NullableTimestamp": {
+        "type": "string",
+        "nullable": true,
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "number"
+          }
         ]
       },
       "PluginUiJson": {
@@ -15248,7 +15248,8 @@
               "dueAt": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 40
+                "maxLength": 40,
+                "format": "date-time"
               }
             },
             "required": [
@@ -15591,18 +15592,21 @@
           "createdAt": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 40
+            "maxLength": 40,
+            "format": "date-time"
           },
           "updatedAt": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 40
+            "maxLength": 40,
+            "format": "date-time"
           },
           "deletedAt": {
             "type": "string",
             "nullable": true,
             "minLength": 1,
-            "maxLength": 40
+            "maxLength": 40,
+            "format": "date-time"
           }
         },
         "required": [
@@ -15691,12 +15695,14 @@
           "createdAt": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 40
+            "maxLength": 40,
+            "format": "date-time"
           },
           "updatedAt": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 40
+            "maxLength": 40,
+            "format": "date-time"
           }
         },
         "required": [
@@ -15787,13 +15793,15 @@
           "createdAt": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 40
+            "maxLength": 40,
+            "format": "date-time"
           },
           "voidedAt": {
             "type": "string",
             "nullable": true,
             "minLength": 1,
-            "maxLength": 40
+            "maxLength": 40,
+            "format": "date-time"
           }
         },
         "required": [
@@ -15880,17 +15888,20 @@
             "type": "string",
             "nullable": true,
             "minLength": 1,
-            "maxLength": 40
+            "maxLength": 40,
+            "format": "date-time"
           },
           "createdAt": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 40
+            "maxLength": 40,
+            "format": "date-time"
           },
           "updatedAt": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 40
+            "maxLength": 40,
+            "format": "date-time"
           }
         },
         "required": [
@@ -16015,18 +16026,21 @@
           "createdAt": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 40
+            "maxLength": 40,
+            "format": "date-time"
           },
           "updatedAt": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 40
+            "maxLength": 40,
+            "format": "date-time"
           },
           "deletedAt": {
             "type": "string",
             "nullable": true,
             "minLength": 1,
-            "maxLength": 40
+            "maxLength": 40,
+            "format": "date-time"
           }
         },
         "required": [
@@ -16096,7 +16110,8 @@
           "updatedAt": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 40
+            "maxLength": 40,
+            "format": "date-time"
           }
         },
         "required": [
@@ -16146,7 +16161,8 @@
             "type": "string",
             "nullable": true,
             "minLength": 1,
-            "maxLength": 40
+            "maxLength": 40,
+            "format": "date-time"
           },
           "mergedIntoCustomerId": {
             "type": "string",
@@ -16188,7 +16204,8 @@
                 "updatedAt": {
                   "type": "string",
                   "minLength": 1,
-                  "maxLength": 40
+                  "maxLength": 40,
+                  "format": "date-time"
                 }
               },
               "required": [
@@ -16202,18 +16219,21 @@
           "createdAt": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 40
+            "maxLength": 40,
+            "format": "date-time"
           },
           "updatedAt": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 40
+            "maxLength": 40,
+            "format": "date-time"
           },
           "deletedAt": {
             "type": "string",
             "nullable": true,
             "minLength": 1,
-            "maxLength": 40
+            "maxLength": 40,
+            "format": "date-time"
           }
         },
         "required": [
@@ -16505,11 +16525,13 @@
           },
           "createdAt": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "format": "date-time"
           },
           "finishedAt": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "format": "date-time"
           }
         },
         "required": [
@@ -16846,15 +16868,18 @@
           },
           "failingSince": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "format": "date-time"
           },
           "lastSuccessAt": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "format": "date-time"
           },
           "lastFailureAt": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "format": "date-time"
           },
           "secretHint": {
             "type": "string",
@@ -16867,10 +16892,12 @@
             "description": "Send it as `expectedVersion` to change or delete it."
           },
           "createdAt": {
-            "type": "string"
+            "type": "string",
+            "format": "date-time"
           },
           "updatedAt": {
-            "type": "string"
+            "type": "string",
+            "format": "date-time"
           }
         },
         "required": [
@@ -17225,10 +17252,12 @@
             "type": "integer"
           },
           "createdAt": {
-            "type": "string"
+            "type": "string",
+            "format": "date-time"
           },
           "updatedAt": {
-            "type": "string"
+            "type": "string",
+            "format": "date-time"
           }
         },
         "required": [
@@ -17399,10 +17428,12 @@
             "type": "integer"
           },
           "createdAt": {
-            "type": "string"
+            "type": "string",
+            "format": "date-time"
           },
           "updatedAt": {
-            "type": "string"
+            "type": "string",
+            "format": "date-time"
           }
         },
         "required": [
@@ -23299,10 +23330,12 @@
             "minimum": 1
           },
           "createdAt": {
-            "type": "string"
+            "type": "string",
+            "format": "date-time"
           },
           "updatedAt": {
-            "type": "string"
+            "type": "string",
+            "format": "date-time"
           }
         },
         "required": [
@@ -29642,26 +29675,6 @@
                                   "folderId": {
                                     "type": "string",
                                     "nullable": true
-                                  },
-                                  "createdAt": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string"
-                                      },
-                                      {
-                                        "type": "number"
-                                      }
-                                    ]
-                                  },
-                                  "updatedAt": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string"
-                                      },
-                                      {
-                                        "type": "number"
-                                      }
-                                    ]
                                   }
                                 },
                                 "required": [
@@ -29673,19 +29686,27 @@
                                 "additionalProperties": {}
                               },
                               "publishedAt": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
+                                "type": "string",
+                                "nullable": true,
+                                "format": "date-time"
                               },
                               "sortOrder": {
                                 "type": "number"
                               },
                               "createdAt": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
+                                "type": "string",
+                                "nullable": true,
+                                "format": "date-time"
                               },
                               "updatedAt": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
+                                "type": "string",
+                                "nullable": true,
+                                "format": "date-time"
                               },
                               "deletedAt": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
+                                "type": "string",
+                                "nullable": true,
+                                "format": "date-time"
                               },
                               "localizedSlugs": {
                                 "type": "object",
@@ -29937,26 +29958,6 @@
                                 "folderId": {
                                   "type": "string",
                                   "nullable": true
-                                },
-                                "createdAt": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "number"
-                                    }
-                                  ]
-                                },
-                                "updatedAt": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "number"
-                                    }
-                                  ]
                                 }
                               },
                               "required": [
@@ -29968,19 +29969,27 @@
                               "additionalProperties": {}
                             },
                             "publishedAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
                             },
                             "sortOrder": {
                               "type": "number"
                             },
                             "createdAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
                             },
                             "updatedAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
                             },
                             "deletedAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
                             },
                             "localizedSlugs": {
                               "type": "object",
@@ -30235,26 +30244,6 @@
                                 "folderId": {
                                   "type": "string",
                                   "nullable": true
-                                },
-                                "createdAt": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "number"
-                                    }
-                                  ]
-                                },
-                                "updatedAt": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "number"
-                                    }
-                                  ]
                                 }
                               },
                               "required": [
@@ -30266,19 +30255,27 @@
                               "additionalProperties": {}
                             },
                             "publishedAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
                             },
                             "sortOrder": {
                               "type": "number"
                             },
                             "createdAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
                             },
                             "updatedAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
                             },
                             "deletedAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
                             },
                             "localizedSlugs": {
                               "type": "object",
@@ -30548,26 +30545,6 @@
                                   "folderId": {
                                     "type": "string",
                                     "nullable": true
-                                  },
-                                  "createdAt": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string"
-                                      },
-                                      {
-                                        "type": "number"
-                                      }
-                                    ]
-                                  },
-                                  "updatedAt": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string"
-                                      },
-                                      {
-                                        "type": "number"
-                                      }
-                                    ]
                                   }
                                 },
                                 "required": [
@@ -30579,19 +30556,27 @@
                                 "additionalProperties": {}
                               },
                               "publishedAt": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
+                                "type": "string",
+                                "nullable": true,
+                                "format": "date-time"
                               },
                               "sortOrder": {
                                 "type": "number"
                               },
                               "createdAt": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
+                                "type": "string",
+                                "nullable": true,
+                                "format": "date-time"
                               },
                               "updatedAt": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
+                                "type": "string",
+                                "nullable": true,
+                                "format": "date-time"
                               },
                               "deletedAt": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
+                                "type": "string",
+                                "nullable": true,
+                                "format": "date-time"
                               },
                               "localizedSlugs": {
                                 "type": "object",
@@ -30844,26 +30829,6 @@
                                 "folderId": {
                                   "type": "string",
                                   "nullable": true
-                                },
-                                "createdAt": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "number"
-                                    }
-                                  ]
-                                },
-                                "updatedAt": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "number"
-                                    }
-                                  ]
                                 }
                               },
                               "required": [
@@ -30875,19 +30840,27 @@
                               "additionalProperties": {}
                             },
                             "publishedAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
                             },
                             "sortOrder": {
                               "type": "number"
                             },
                             "createdAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
                             },
                             "updatedAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
                             },
                             "deletedAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
                             },
                             "localizedSlugs": {
                               "type": "object",
@@ -32488,26 +32461,6 @@
                                 "folderId": {
                                   "type": "string",
                                   "nullable": true
-                                },
-                                "createdAt": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "number"
-                                    }
-                                  ]
-                                },
-                                "updatedAt": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "number"
-                                    }
-                                  ]
                                 }
                               },
                               "required": [
@@ -32519,19 +32472,27 @@
                               "additionalProperties": {}
                             },
                             "publishedAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
                             },
                             "sortOrder": {
                               "type": "number"
                             },
                             "createdAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
                             },
                             "updatedAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
                             },
                             "deletedAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
                             },
                             "localizedSlugs": {
                               "type": "object",
@@ -38784,10 +38745,12 @@
                                 "type": "boolean"
                               },
                               "createdAt": {
-                                "type": "integer"
+                                "type": "string",
+                                "format": "date-time"
                               },
                               "updatedAt": {
-                                "type": "integer"
+                                "type": "string",
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -43325,10 +43288,12 @@
                                   "type": "boolean"
                                 },
                                 "createdAt": {
-                                  "type": "integer"
+                                  "type": "string",
+                                  "format": "date-time"
                                 },
                                 "updatedAt": {
-                                  "type": "integer"
+                                  "type": "string",
+                                  "format": "date-time"
                                 }
                               },
                               "required": [
@@ -43665,10 +43630,12 @@
                                   "type": "boolean"
                                 },
                                 "createdAt": {
-                                  "type": "integer"
+                                  "type": "string",
+                                  "format": "date-time"
                                 },
                                 "updatedAt": {
-                                  "type": "integer"
+                                  "type": "string",
+                                  "format": "date-time"
                                 }
                               },
                               "required": [
@@ -44098,10 +44065,12 @@
                                   "type": "boolean"
                                 },
                                 "createdAt": {
-                                  "type": "integer"
+                                  "type": "string",
+                                  "format": "date-time"
                                 },
                                 "updatedAt": {
-                                  "type": "integer"
+                                  "type": "string",
+                                  "format": "date-time"
                                 }
                               },
                               "required": [
@@ -44786,10 +44755,12 @@
                                   "type": "boolean"
                                 },
                                 "createdAt": {
-                                  "type": "integer"
+                                  "type": "string",
+                                  "format": "date-time"
                                 },
                                 "updatedAt": {
-                                  "type": "integer"
+                                  "type": "string",
+                                  "format": "date-time"
                                 }
                               },
                               "required": [
@@ -58757,10 +58728,12 @@
                                 "type": "boolean"
                               },
                               "createdAt": {
-                                "type": "integer"
+                                "type": "string",
+                                "format": "date-time"
                               },
                               "updatedAt": {
-                                "type": "integer"
+                                "type": "string",
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -59096,10 +59069,12 @@
                                 "type": "boolean"
                               },
                               "createdAt": {
-                                "type": "integer"
+                                "type": "string",
+                                "format": "date-time"
                               },
                               "updatedAt": {
-                                "type": "integer"
+                                "type": "string",
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -59448,10 +59423,12 @@
                                 "type": "boolean"
                               },
                               "createdAt": {
-                                "type": "integer"
+                                "type": "string",
+                                "format": "date-time"
                               },
                               "updatedAt": {
-                                "type": "integer"
+                                "type": "string",
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -59714,10 +59691,12 @@
                                 "type": "boolean"
                               },
                               "createdAt": {
-                                "type": "integer"
+                                "type": "string",
+                                "format": "date-time"
                               },
                               "updatedAt": {
-                                "type": "integer"
+                                "type": "string",
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -59981,10 +59960,12 @@
                                 "type": "boolean"
                               },
                               "createdAt": {
-                                "type": "integer"
+                                "type": "string",
+                                "format": "date-time"
                               },
                               "updatedAt": {
-                                "type": "integer"
+                                "type": "string",
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -60248,10 +60229,12 @@
                                 "type": "boolean"
                               },
                               "createdAt": {
-                                "type": "integer"
+                                "type": "string",
+                                "format": "date-time"
                               },
                               "updatedAt": {
-                                "type": "integer"
+                                "type": "string",
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -102917,15 +102900,18 @@
                               },
                               "createdAt": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "format": "date-time"
                               },
                               "updatedAt": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "format": "date-time"
                               },
                               "deletedAt": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "format": "date-time"
                               },
                               "productCount": {
                                 "type": "number"
@@ -103188,23 +103174,15 @@
                         "maximum": 100000000
                       },
                       "createdAt": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "format": "date-time"
-                          },
-                          {
-                            "type": "string"
-                          }
-                        ]
+                        "type": "string",
+                        "format": "date-time"
                       }
                     },
                     "required": [
                       "id",
                       "url",
                       "filename",
-                      "size",
-                      "createdAt"
+                      "size"
                     ]
                   },
                   "parentId": {
@@ -104980,23 +104958,15 @@
                         "maximum": 100000000
                       },
                       "createdAt": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "format": "date-time"
-                          },
-                          {
-                            "type": "string"
-                          }
-                        ]
+                        "type": "string",
+                        "format": "date-time"
                       }
                     },
                     "required": [
                       "id",
                       "url",
                       "filename",
-                      "size",
-                      "createdAt"
+                      "size"
                     ]
                   },
                   "parentId": {
@@ -106380,15 +106350,18 @@
                               },
                               "createdAt": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "format": "date-time"
                               },
                               "updatedAt": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "format": "date-time"
                               },
                               "deletedAt": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -107076,15 +107049,18 @@
                         },
                         "createdAt": {
                           "type": "string",
-                          "nullable": true
+                          "nullable": true,
+                          "format": "date-time"
                         },
                         "updatedAt": {
                           "type": "string",
-                          "nullable": true
+                          "nullable": true,
+                          "format": "date-time"
                         },
                         "deletedAt": {
                           "type": "string",
-                          "nullable": true
+                          "nullable": true,
+                          "format": "date-time"
                         },
                         "description": {
                           "type": "string",
@@ -112327,13 +112303,19 @@
                                 "type": "boolean"
                               },
                               "createdAt": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
+                                "type": "string",
+                                "nullable": true,
+                                "format": "date-time"
                               },
                               "updatedAt": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
+                                "type": "string",
+                                "nullable": true,
+                                "format": "date-time"
                               },
                               "deletedAt": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
+                                "type": "string",
+                                "nullable": true,
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -113976,13 +113958,19 @@
                                   "type": "boolean"
                                 },
                                 "createdAt": {
-                                  "$ref": "#/components/schemas/NullableTimestamp"
+                                  "type": "string",
+                                  "nullable": true,
+                                  "format": "date-time"
                                 },
                                 "updatedAt": {
-                                  "$ref": "#/components/schemas/NullableTimestamp"
+                                  "type": "string",
+                                  "nullable": true,
+                                  "format": "date-time"
                                 },
                                 "deletedAt": {
-                                  "$ref": "#/components/schemas/NullableTimestamp"
+                                  "type": "string",
+                                  "nullable": true,
+                                  "format": "date-time"
                                 },
                                 "metaTitle": {
                                   "type": "string",
@@ -114207,13 +114195,19 @@
                           "type": "boolean"
                         },
                         "createdAt": {
-                          "$ref": "#/components/schemas/NullableTimestamp"
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date-time"
                         },
                         "updatedAt": {
-                          "$ref": "#/components/schemas/NullableTimestamp"
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date-time"
                         },
                         "deletedAt": {
-                          "$ref": "#/components/schemas/NullableTimestamp"
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date-time"
                         },
                         "description": {
                           "type": "string",
@@ -117404,19 +117398,23 @@
                               },
                               "subscribedAt": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "format": "date-time"
                               },
                               "unsubscribedAt": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "format": "date-time"
                               },
                               "requestedAt": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "format": "date-time"
                               },
                               "updatedAt": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -117514,7 +117512,8 @@
                                 "nullable": true
                               },
                               "createdAt": {
-                                "type": "string"
+                                "type": "string",
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -117793,19 +117792,23 @@
                               },
                               "subscribedAt": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "format": "date-time"
                               },
                               "unsubscribedAt": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "format": "date-time"
                               },
                               "requestedAt": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "format": "date-time"
                               },
                               "updatedAt": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -117903,7 +117906,8 @@
                                 "nullable": true
                               },
                               "createdAt": {
-                                "type": "string"
+                                "type": "string",
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -119588,10 +119592,12 @@
                                 "type": "boolean"
                               },
                               "createdAt": {
-                                "type": "integer"
+                                "type": "string",
+                                "format": "date-time"
                               },
                               "updatedAt": {
-                                "type": "integer"
+                                "type": "string",
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -120265,10 +120271,12 @@
                                 "type": "boolean"
                               },
                               "createdAt": {
-                                "type": "integer"
+                                "type": "string",
+                                "format": "date-time"
                               },
                               "updatedAt": {
-                                "type": "integer"
+                                "type": "string",
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -120620,10 +120628,12 @@
                           "type": "boolean"
                         },
                         "createdAt": {
-                          "type": "integer"
+                          "type": "string",
+                          "format": "date-time"
                         },
                         "updatedAt": {
-                          "type": "integer"
+                          "type": "string",
+                          "format": "date-time"
                         }
                       },
                       "required": [
@@ -120978,10 +120988,12 @@
                           "type": "boolean"
                         },
                         "createdAt": {
-                          "type": "integer"
+                          "type": "string",
+                          "format": "date-time"
                         },
                         "updatedAt": {
-                          "type": "integer"
+                          "type": "string",
+                          "format": "date-time"
                         }
                       },
                       "required": [
@@ -121372,10 +121384,12 @@
                           "type": "boolean"
                         },
                         "createdAt": {
-                          "type": "integer"
+                          "type": "string",
+                          "format": "date-time"
                         },
                         "updatedAt": {
-                          "type": "integer"
+                          "type": "string",
+                          "format": "date-time"
                         }
                       },
                       "required": [
@@ -121643,10 +121657,12 @@
                           "type": "boolean"
                         },
                         "createdAt": {
-                          "type": "integer"
+                          "type": "string",
+                          "format": "date-time"
                         },
                         "updatedAt": {
-                          "type": "integer"
+                          "type": "string",
+                          "format": "date-time"
                         }
                       },
                       "required": [
@@ -122570,26 +122586,6 @@
                                   "folderId": {
                                     "type": "string",
                                     "nullable": true
-                                  },
-                                  "createdAt": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string"
-                                      },
-                                      {
-                                        "type": "number"
-                                      }
-                                    ]
-                                  },
-                                  "updatedAt": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string"
-                                      },
-                                      {
-                                        "type": "number"
-                                      }
-                                    ]
                                   }
                                 },
                                 "required": [
@@ -122601,7 +122597,9 @@
                                 "additionalProperties": {}
                               },
                               "publishedAt": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
+                                "type": "string",
+                                "nullable": true,
+                                "format": "date-time"
                               },
                               "sortOrder": {
                                 "type": "number"
@@ -122611,13 +122609,19 @@
                                 "minimum": 1
                               },
                               "createdAt": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
+                                "type": "string",
+                                "nullable": true,
+                                "format": "date-time"
                               },
                               "updatedAt": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
+                                "type": "string",
+                                "nullable": true,
+                                "format": "date-time"
                               },
                               "deletedAt": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
+                                "type": "string",
+                                "nullable": true,
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -122886,34 +122890,6 @@
                       "folderId": {
                         "type": "string",
                         "nullable": true
-                      },
-                      "createdAt": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {
-                            "type": "string",
-                            "format": "date-time"
-                          }
-                        ]
-                      },
-                      "updatedAt": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {
-                            "type": "string",
-                            "format": "date-time"
-                          }
-                        ]
                       }
                     },
                     "required": [
@@ -122933,16 +122909,9 @@
                     "default": "page"
                   },
                   "publishedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "format": "date-time"
-                      },
-                      {
-                        "type": "string"
-                      },
-                      {}
-                    ]
+                    "type": "string",
+                    "nullable": true,
+                    "format": "date-time"
                   },
                   "isPublished": {
                     "type": "boolean",
@@ -124410,26 +124379,6 @@
                             "folderId": {
                               "type": "string",
                               "nullable": true
-                            },
-                            "createdAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                }
-                              ]
-                            },
-                            "updatedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                }
-                              ]
                             }
                           },
                           "required": [
@@ -124441,7 +124390,9 @@
                           "additionalProperties": {}
                         },
                         "publishedAt": {
-                          "$ref": "#/components/schemas/NullableTimestamp"
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date-time"
                         },
                         "sortOrder": {
                           "type": "number"
@@ -124451,13 +124402,19 @@
                           "minimum": 1
                         },
                         "createdAt": {
-                          "$ref": "#/components/schemas/NullableTimestamp"
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date-time"
                         },
                         "updatedAt": {
-                          "$ref": "#/components/schemas/NullableTimestamp"
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date-time"
                         },
                         "deletedAt": {
-                          "$ref": "#/components/schemas/NullableTimestamp"
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date-time"
                         }
                       },
                       "required": [
@@ -124682,16 +124639,9 @@
                     "type": "boolean"
                   },
                   "publishedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "format": "date-time"
-                      },
-                      {
-                        "type": "string"
-                      },
-                      {}
-                    ]
+                    "type": "string",
+                    "nullable": true,
+                    "format": "date-time"
                   },
                   "hideHeader": {
                     "type": "boolean"
@@ -124740,34 +124690,6 @@
                       "folderId": {
                         "type": "string",
                         "nullable": true
-                      },
-                      "createdAt": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {
-                            "type": "string",
-                            "format": "date-time"
-                          }
-                        ]
-                      },
-                      "updatedAt": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {
-                            "type": "string",
-                            "format": "date-time"
-                          }
-                        ]
                       }
                     },
                     "required": [
@@ -125380,13 +125302,15 @@
                                   "shipping"
                                 ]
                               },
-                              "startsAtEpochSeconds": {
-                                "type": "integer",
-                                "nullable": true
+                              "startsAt": {
+                                "type": "string",
+                                "nullable": true,
+                                "format": "date-time"
                               },
-                              "endsAtEpochSeconds": {
-                                "type": "integer",
-                                "nullable": true
+                              "endsAt": {
+                                "type": "string",
+                                "nullable": true,
+                                "format": "date-time"
                               },
                               "timezone": {
                                 "type": "string"
@@ -125433,15 +125357,18 @@
                                 "minimum": 0,
                                 "description": "Total savings given, in minor units."
                               },
-                              "createdAtEpochSeconds": {
-                                "type": "integer"
+                              "createdAt": {
+                                "type": "string",
+                                "format": "date-time"
                               },
-                              "updatedAtEpochSeconds": {
-                                "type": "integer"
+                              "updatedAt": {
+                                "type": "string",
+                                "format": "date-time"
                               },
-                              "deletedAtEpochSeconds": {
-                                "type": "integer",
-                                "nullable": true
+                              "deletedAt": {
+                                "type": "string",
+                                "nullable": true,
+                                "format": "date-time"
                               },
                               "codes": {
                                 "type": "array",
@@ -125556,8 +125483,8 @@
                               "priority",
                               "conflictPolicy",
                               "combinesWith",
-                              "startsAtEpochSeconds",
-                              "endsAtEpochSeconds",
+                              "startsAt",
+                              "endsAt",
                               "timezone",
                               "maxRedemptions",
                               "maxRedemptionsPerCustomer",
@@ -125567,9 +125494,9 @@
                               "redemptionCount",
                               "customerRedemptionCount",
                               "discountSpendMinor",
-                              "createdAtEpochSeconds",
-                              "updatedAtEpochSeconds",
-                              "deletedAtEpochSeconds",
+                              "createdAt",
+                              "updatedAt",
+                              "deletedAt",
                               "codes",
                               "conditions",
                               "effects",
@@ -125793,16 +125720,16 @@
                     ],
                     "additionalProperties": false
                   },
-                  "startsAtEpochSeconds": {
-                    "type": "integer",
+                  "startsAt": {
+                    "type": "string",
                     "nullable": true,
-                    "minimum": 0,
+                    "format": "date-time",
                     "default": null
                   },
-                  "endsAtEpochSeconds": {
-                    "type": "integer",
+                  "endsAt": {
+                    "type": "string",
                     "nullable": true,
-                    "minimum": 0,
+                    "format": "date-time",
                     "default": null
                   },
                   "timezone": {
@@ -126499,13 +126426,15 @@
                             "shipping"
                           ]
                         },
-                        "startsAtEpochSeconds": {
-                          "type": "integer",
-                          "nullable": true
+                        "startsAt": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date-time"
                         },
-                        "endsAtEpochSeconds": {
-                          "type": "integer",
-                          "nullable": true
+                        "endsAt": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date-time"
                         },
                         "timezone": {
                           "type": "string"
@@ -126552,15 +126481,18 @@
                           "minimum": 0,
                           "description": "Total savings given, in minor units."
                         },
-                        "createdAtEpochSeconds": {
-                          "type": "integer"
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
                         },
-                        "updatedAtEpochSeconds": {
-                          "type": "integer"
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
                         },
-                        "deletedAtEpochSeconds": {
-                          "type": "integer",
-                          "nullable": true
+                        "deletedAt": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date-time"
                         },
                         "codes": {
                           "type": "array",
@@ -126670,8 +126602,8 @@
                         "priority",
                         "conflictPolicy",
                         "combinesWith",
-                        "startsAtEpochSeconds",
-                        "endsAtEpochSeconds",
+                        "startsAt",
+                        "endsAt",
                         "timezone",
                         "maxRedemptions",
                         "maxRedemptionsPerCustomer",
@@ -126681,9 +126613,9 @@
                         "redemptionCount",
                         "customerRedemptionCount",
                         "discountSpendMinor",
-                        "createdAtEpochSeconds",
-                        "updatedAtEpochSeconds",
-                        "deletedAtEpochSeconds",
+                        "createdAt",
+                        "updatedAt",
+                        "deletedAt",
                         "codes",
                         "conditions",
                         "effects",
@@ -126892,16 +126824,16 @@
                     ],
                     "additionalProperties": false
                   },
-                  "startsAtEpochSeconds": {
-                    "type": "integer",
+                  "startsAt": {
+                    "type": "string",
                     "nullable": true,
-                    "minimum": 0,
+                    "format": "date-time",
                     "default": null
                   },
-                  "endsAtEpochSeconds": {
-                    "type": "integer",
+                  "endsAt": {
+                    "type": "string",
                     "nullable": true,
-                    "minimum": 0,
+                    "format": "date-time",
                     "default": null
                   },
                   "timezone": {
@@ -128590,30 +128522,22 @@
                                 "minimum": 1
                               },
                               "createdAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  }
-                                ]
+                                "type": "string",
+                                "format": "date-time"
                               },
                               "updatedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  }
-                                ]
+                                "type": "string",
+                                "format": "date-time"
                               },
                               "trashedAt": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
+                                "type": "string",
+                                "nullable": true,
+                                "format": "date-time"
                               },
                               "deletedAt": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
+                                "type": "string",
+                                "nullable": true,
+                                "format": "date-time"
                               },
                               "usageCount": {
                                 "type": "integer",
@@ -129220,30 +129144,22 @@
                               "minimum": 1
                             },
                             "createdAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                }
-                              ]
+                              "type": "string",
+                              "format": "date-time"
                             },
                             "updatedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                }
-                              ]
+                              "type": "string",
+                              "format": "date-time"
                             },
                             "trashedAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
                             },
                             "deletedAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
                             }
                           },
                           "required": [
@@ -130121,30 +130037,22 @@
                               "minimum": 1
                             },
                             "createdAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                }
-                              ]
+                              "type": "string",
+                              "format": "date-time"
                             },
                             "updatedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                }
-                              ]
+                              "type": "string",
+                              "format": "date-time"
                             },
                             "trashedAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
                             },
                             "deletedAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
                             }
                           },
                           "required": [
@@ -130659,30 +130567,22 @@
                               "minimum": 1
                             },
                             "createdAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                }
-                              ]
+                              "type": "string",
+                              "format": "date-time"
                             },
                             "updatedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                }
-                              ]
+                              "type": "string",
+                              "format": "date-time"
                             },
                             "trashedAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
                             },
                             "deletedAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
                             }
                           },
                           "required": [
@@ -130935,30 +130835,22 @@
                               "minimum": 1
                             },
                             "createdAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                }
-                              ]
+                              "type": "string",
+                              "format": "date-time"
                             },
                             "updatedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                }
-                              ]
+                              "type": "string",
+                              "format": "date-time"
                             },
                             "trashedAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
                             },
                             "deletedAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
                             }
                           },
                           "required": [
@@ -131244,30 +131136,22 @@
                               "minimum": 1
                             },
                             "createdAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                }
-                              ]
+                              "type": "string",
+                              "format": "date-time"
                             },
                             "updatedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                }
-                              ]
+                              "type": "string",
+                              "format": "date-time"
                             },
                             "trashedAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
                             },
                             "deletedAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
                             }
                           },
                           "required": [
@@ -131541,30 +131425,22 @@
                               "minimum": 1
                             },
                             "createdAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                }
-                              ]
+                              "type": "string",
+                              "format": "date-time"
                             },
                             "updatedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                }
-                              ]
+                              "type": "string",
+                              "format": "date-time"
                             },
                             "trashedAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
                             },
                             "deletedAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
                             }
                           },
                           "required": [
@@ -131846,30 +131722,22 @@
                               "minimum": 1
                             },
                             "createdAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                }
-                              ]
+                              "type": "string",
+                              "format": "date-time"
                             },
                             "updatedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                }
-                              ]
+                              "type": "string",
+                              "format": "date-time"
                             },
                             "trashedAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
                             },
                             "deletedAt": {
-                              "$ref": "#/components/schemas/NullableTimestamp"
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time"
                             }
                           },
                           "required": [
@@ -141166,24 +141034,12 @@
                                 "description": "SKUs with units on hand there"
                               },
                               "createdAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  }
-                                ]
+                                "type": "string",
+                                "format": "date-time"
                               },
                               "updatedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  }
-                                ]
+                                "type": "string",
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -141409,24 +141265,12 @@
                           "description": "SKUs with units on hand there"
                         },
                         "createdAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ]
+                          "type": "string",
+                          "format": "date-time"
                         },
                         "updatedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ]
+                          "type": "string",
+                          "format": "date-time"
                         }
                       },
                       "required": [
@@ -141685,24 +141529,12 @@
                           "description": "SKUs with units on hand there"
                         },
                         "createdAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ]
+                          "type": "string",
+                          "format": "date-time"
                         },
                         "updatedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ]
+                          "type": "string",
+                          "format": "date-time"
                         }
                       },
                       "required": [
@@ -141902,24 +141734,12 @@
                           "description": "SKUs with units on hand there"
                         },
                         "createdAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ]
+                          "type": "string",
+                          "format": "date-time"
                         },
                         "updatedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ]
+                          "type": "string",
+                          "format": "date-time"
                         }
                       },
                       "required": [
@@ -142108,24 +141928,12 @@
                           "description": "SKUs with units on hand there"
                         },
                         "createdAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ]
+                          "type": "string",
+                          "format": "date-time"
                         },
                         "updatedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ]
+                          "type": "string",
+                          "format": "date-time"
                         }
                       },
                       "required": [
@@ -142305,24 +142113,12 @@
                           "description": "SKUs with units on hand there"
                         },
                         "createdAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ]
+                          "type": "string",
+                          "format": "date-time"
                         },
                         "updatedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ]
+                          "type": "string",
+                          "format": "date-time"
                         }
                       },
                       "required": [
@@ -191234,8 +191030,9 @@
                                     ]
                                   },
                                   "startedAt": {
-                                    "type": "integer",
-                                    "nullable": true
+                                    "type": "string",
+                                    "nullable": true,
+                                    "format": "date-time"
                                   }
                                 },
                                 "required": [
@@ -191902,8 +191699,9 @@
                                   ]
                                 },
                                 "startedAt": {
-                                  "type": "integer",
-                                  "nullable": true
+                                  "type": "string",
+                                  "nullable": true,
+                                  "format": "date-time"
                                 }
                               },
                               "required": [
@@ -198853,14 +198651,8 @@
                                 "description": "The viewer wrote this comment and may delete it."
                               },
                               "createdAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  }
-                                ]
+                                "type": "string",
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -199067,14 +198859,8 @@
                           "description": "The viewer wrote this comment and may delete it."
                         },
                         "createdAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ]
+                          "type": "string",
+                          "format": "date-time"
                         }
                       },
                       "required": [
@@ -205225,7 +205011,8 @@
                           "type": "string"
                         },
                         "pickupReadyAt": {
-                          "type": "string"
+                          "type": "string",
+                          "format": "date-time"
                         },
                         "replayed": {
                           "type": "boolean"
@@ -246053,7 +245840,8 @@
                               },
                               "updatedAt": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -246288,7 +246076,8 @@
                               },
                               "updatedAt": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -246485,7 +246274,8 @@
                               },
                               "updatedAt": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -246720,7 +246510,8 @@
                               },
                               "updatedAt": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -246917,7 +246708,8 @@
                               },
                               "updatedAt": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -247152,7 +246944,8 @@
                               },
                               "updatedAt": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -247349,7 +247142,8 @@
                               },
                               "updatedAt": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -247584,7 +247378,8 @@
                               },
                               "updatedAt": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -247781,7 +247576,8 @@
                               },
                               "updatedAt": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -248016,7 +247812,8 @@
                               },
                               "updatedAt": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -248213,7 +248010,8 @@
                               },
                               "updatedAt": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -248448,7 +248246,8 @@
                               },
                               "updatedAt": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -248645,7 +248444,8 @@
                               },
                               "updatedAt": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -248880,7 +248680,8 @@
                               },
                               "updatedAt": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -249077,7 +248878,8 @@
                               },
                               "updatedAt": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "format": "date-time"
                               }
                             },
                             "required": [
@@ -249312,7 +249114,8 @@
                               },
                               "updatedAt": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "format": "date-time"
                               }
                             },
                             "required": [

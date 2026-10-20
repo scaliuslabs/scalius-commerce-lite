@@ -13,8 +13,8 @@ function validDraft() {
         method: "code" as const,
         priority: 100,
         conflictPolicy: "best" as const,
-        startsAtEpochSeconds: null,
-        endsAtEpochSeconds: null,
+        startsAt: null,
+        endsAt: null,
         timezone: "Asia/Dhaka",
         codes: [{ code: " save10 ", isActive: true }],
         conditions: [{
@@ -44,8 +44,8 @@ describe("promotion draft validation", () => {
         expect(createPromotionDraftSchema.safeParse({
             ...validDraft(),
             timezone: "Not/A_Real_Zone",
-            startsAtEpochSeconds: 200,
-            endsAtEpochSeconds: 100,
+            startsAt: "1970-01-01T00:03:20.000Z",
+            endsAt: "1970-01-01T00:01:40.000Z",
             codes: [
                 { code: "SAVE10", isActive: true },
                 { code: "save10", isActive: false },

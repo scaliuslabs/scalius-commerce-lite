@@ -27,7 +27,7 @@ vi.mock("@scalius/api-client/sdk", () => ({
   getApiV1AdminCollectionsByIds: vi.fn(async () => ({ collections: [{ id: "col_eid", name: "Eid picks" }] })),
   getApiV1AdminCategoriesFormOptions: vi.fn(async () => ({ categories: [{ id: "cat_honey", name: "Honey", status: "published" }] })),
   getApiV1AdminDiscounts: vi.fn(async () => ({
-    discounts: [{ id: "promo_eid", name: "Eid", title: null, status: "active", deletedAtEpochSeconds: null, endsAtEpochSeconds: Date.now() / 1000 + 86_400 }],
+    discounts: [{ id: "promo_eid", name: "Eid", title: null, status: "active", deletedAt: null, endsAt: new Date(Date.now() + 86_400_000).toISOString() }],
   })),
 }));
 vi.mock("@tanstack/react-router", () => ({

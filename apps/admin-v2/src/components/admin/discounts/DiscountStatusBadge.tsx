@@ -17,7 +17,7 @@ export const STATUS_LABEL = {
 export function DiscountStatusBadge({
   discount,
 }: {
-  discount: Pick<DiscountRecord, "status" | "startsAtEpochSeconds" | "endsAtEpochSeconds" | "maxRedemptions" | "redemptionCount">;
+  discount: Pick<DiscountRecord, "status" | "startsAt" | "endsAt" | "maxRedemptions" | "redemptionCount">;
 }) {
   const t = useMessages(discountsMessages);
   const status = discountStatus(discount);

@@ -53,10 +53,10 @@ function record(type: DiscountDraft["type"] = "products", patch: Partial<Discoun
   const input = draftToInput({ ...emptyDraft(type, Date.UTC(2026, 0, 1)), code: "SAVED20", value: "20", minimum: "amount", minimumValue: "100", appliesTo: { kind: "products", ids: ["one", "two", "three"] }, buyScope: { kind: "products", ids: ["one"] }, getScope: { kind: "products", ids: ["two"] }, buyValue: "2", getQuantity: "1", getValueKind: "free", eligibility: "segments", customerSegmentIds: ["vip", "dhaka", "loyal"], limitTotal: true, totalUses: "50", oncePerCustomer: true, ...patch }, "BDT");
   return {
     ...input, id: "promo_saved", revision, status: "active", priority: 100, conflictPolicy: "best", combinesWith: input.combinesWith!,
-    title: input.title ?? null, startsAtEpochSeconds: input.startsAtEpochSeconds ?? null, endsAtEpochSeconds: input.endsAtEpochSeconds ?? null,
+    title: input.title ?? null, startsAt: input.startsAt ?? null, endsAt: input.endsAt ?? null,
     timezone: "Asia/Dhaka", maxRedemptions: input.maxRedemptions ?? null, maxRedemptionsPerCustomer: input.maxRedemptionsPerCustomer ?? null,
     currency: "BDT", maxDiscountSpendMinor: null, budgetCurrencyCode: null, redemptionCount: 7, customerRedemptionCount: 0, discountSpendMinor: 0,
-    createdAtEpochSeconds: 0, updatedAtEpochSeconds: 0, deletedAtEpochSeconds: null,
+    createdAt: "1970-01-01T00:00:00.000Z", updatedAt: "1970-01-01T00:00:00.000Z", deletedAt: null,
     codes: (input.codes ?? []).map(({ code }) => ({ code, isActive: true })),
     conditions: (input.conditions ?? []).map((condition, index) => ({ id: `c${index}`, ...condition })),
     effects: input.effects.map((effect, index) => ({ id: `e${index}`, ...effect })),

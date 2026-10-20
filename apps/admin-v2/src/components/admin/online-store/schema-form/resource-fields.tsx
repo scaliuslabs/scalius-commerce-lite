@@ -426,17 +426,17 @@ export function PromotionSelect({ id, value, onChange }: {
   // Running discounts (a page of them): a countdown needs one with an end date.
   const { data: page } = useQuery(discountsQueryOptions({ view: "active", limit: 90 }));
   const data = page?.discounts;
-  const now = Date.now() / 1000;
+  const now = Date.now();
   const live = (data ?? []).filter((discount) =>
-    discount.deletedAtEpochSeconds === null
+    discount.deletedAt === null
     && discount.status !== "archived"
-    && discount.endsAtEpochSeconds !== null
-    && discount.endsAtEpochSeconds > now);
+    && discount.endsAt !== null
+    && Date.parse(discount.endsAt) > now);
   const options = live.map((discount) => ({
     value: discount.id,
     label: discount.title?.trim() || discount.name,
     description: t("promotionEnds", {
-      date: formatDateTime(new Date(discount.endsAtEpochSeconds! * 1000), { dateStyle: "medium", timeStyle: "short" }),
+      date: formatDateTime(new Date(discount.endsAt!), { dateStyle: "medium", timeStyle: "short" }),
     }),
   }));
   const saved = (data ?? []).find((discount) => discount.id === value);

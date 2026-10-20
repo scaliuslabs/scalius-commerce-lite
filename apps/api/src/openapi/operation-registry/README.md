@@ -70,6 +70,11 @@ mirror a dashboard screen, an editor section or a summary card.
   a decimal major-unit amount, in or out (`docs/ARCHITECTURE.md`, Money on the
   wire). The test fails on a decimal money field or a `*Minor` field with no
   currency in reach.
+- **An instant is one ISO 8601 `date-time` string** (`2026-10-21T09:30:00.000Z`,
+  UTC), in or out, as in the webhook representations: no epoch seconds or
+  milliseconds, no bare string, no union of forms. Discount schedules are
+  `startsAt`/`endsAt`. The test fails on any `*At`/`*Since` field of another
+  form (`isoTimestampSchema` in `schemas/timestamps.ts`).
 - **Regional and editor fields stay out.** `emiEligible`, product-level
   `freeDelivery` and product-level discount fields belong to the dashboard's
   editor routes (beta); no stable schema carries them.

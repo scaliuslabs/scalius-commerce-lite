@@ -19,11 +19,11 @@ import type { DiscountListItem, DiscountRecord } from "~/lib/api-query-options/d
 export const discountTitle = (discount: Pick<DiscountRecord, "codes" | "name">) => discount.codes[0]?.code ?? discount.name;
 
 function datesLabel(discount: DiscountListItem, t: (key: DiscountMessageKey, vars?: Record<string, string | number>) => string) {
-  const date = (epoch: number) => formatDateTime(new Date(epoch * 1_000), { dateStyle: "medium" });
-  if (discount.startsAtEpochSeconds === null) return "—";
-  return discount.endsAtEpochSeconds === null
-    ? t("datesFrom", { start: date(discount.startsAtEpochSeconds) })
-    : t("datesBetween", { start: date(discount.startsAtEpochSeconds), end: date(discount.endsAtEpochSeconds) });
+  const date = (iso: string) => formatDateTime(new Date(iso), { dateStyle: "medium" });
+  if (discount.startsAt === null) return "—";
+  return discount.endsAt === null
+    ? t("datesFrom", { start: date(discount.startsAt) })
+    : t("datesBetween", { start: date(discount.startsAt), end: date(discount.endsAt) });
 }
 
 /** The discounts index's columns (Shopify: title with its value, status, method, type, used, dates). */

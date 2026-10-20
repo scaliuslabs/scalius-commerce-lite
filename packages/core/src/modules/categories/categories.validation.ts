@@ -30,13 +30,8 @@ const imageSchema = z
         }),
         filename: z.string().trim().min(1).max(255),
         size: z.number().int().min(0).max(100_000_000),
-        createdAt: z
-            .date()
-            .or(z.string())
-            .transform((val) => (val instanceof Date ? val : new Date(val)))
-            .refine((value) => Number.isFinite(value.getTime()), {
-                message: "Category image creation date is invalid.",
-            }),
+        /** The file's upload time as Files returns it; not stored. */
+        createdAt: z.iso.datetime({ offset: true }).optional(),
     })
     .nullable();
 

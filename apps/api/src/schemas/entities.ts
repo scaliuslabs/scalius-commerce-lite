@@ -13,6 +13,8 @@ import { categoryStatusSchema } from "@scalius/shared/category-publication";
 import { ORDER_SHIPMENT_RECOVERY_REASONS } from "@scalius/core/modules/orders/browser";
 import { ORDER_CHANNELS, ORDER_CHANNEL_SOURCE_MAX_LENGTH } from "@scalius/shared/order-channel";
 import {
+  isoTimestampSchema,
+  nullableIsoTimestampSchema,
   nullableTimestampSchema,
   optionalNullableTimestampSchema,
   optionalTimestampSchema,
@@ -390,8 +392,8 @@ export const customerAddressSchema = z.object({
   areaName: z.string().nullable(),
   /** Saved by staff although it breaks its country's rules. */
   validationSkipped: z.boolean(),
-  createdAt: z.number().int(),
-  updatedAt: z.number().int(),
+  createdAt: isoTimestampSchema,
+  updatedAt: isoTimestampSchema,
 });
 
 /** Order summary — returned by listOrders (admin). */
@@ -673,9 +675,9 @@ export const categorySummarySchema = z.object({
   canonicalPath: z.string().nullable(),
   noIndex: z.boolean(),
   excludeFromSitemap: z.boolean(),
-  createdAt: z.string().nullable(),
-  updatedAt: z.string().nullable(),
-  deletedAt: z.string().nullable(),
+  createdAt: nullableIsoTimestampSchema,
+  updatedAt: nullableIsoTimestampSchema,
+  deletedAt: nullableIsoTimestampSchema,
   productCount: z.number(),
   status: categoryStatusSchema,
   revision: z.number().int().min(1),
@@ -808,9 +810,9 @@ export const collectionSummarySchema = z.object({
   canonicalPath: z.string().nullable(),
   noIndex: z.boolean(),
   excludeFromSitemap: z.boolean(),
-  createdAt: nullableTimestampSchema,
-  updatedAt: nullableTimestampSchema,
-  deletedAt: nullableTimestampSchema,
+  createdAt: nullableIsoTimestampSchema,
+  updatedAt: nullableIsoTimestampSchema,
+  deletedAt: nullableIsoTimestampSchema,
 });
 
 /** Collection detail — returned by getCollectionById and mutations. */
@@ -837,8 +839,6 @@ export const pageFeaturedImageSchema = z
     width: z.number().nullable().optional(),
     height: z.number().nullable().optional(),
     folderId: z.string().nullable().optional(),
-    createdAt: optionalTimestampSchema,
-    updatedAt: optionalTimestampSchema,
   })
   .passthrough();
 
@@ -861,12 +861,12 @@ export const pageSchema = z.object({
   hideFooter: z.boolean(),
   hideTitle: z.boolean(),
   featuredImage: pageFeaturedImageSchema.nullable().optional(),
-  publishedAt: optionalNullableTimestampSchema,
+  publishedAt: nullableIsoTimestampSchema.optional(),
   sortOrder: z.number(),
   revision: z.number().int().min(1),
-  createdAt: nullableTimestampSchema,
-  updatedAt: nullableTimestampSchema,
-  deletedAt: nullableTimestampSchema,
+  createdAt: nullableIsoTimestampSchema,
+  updatedAt: nullableIsoTimestampSchema,
+  deletedAt: nullableIsoTimestampSchema,
 });
 
 /** A public CMS page retains truthful `updatedAt` for sitemap lastmod, but no editor revision. */
@@ -916,10 +916,10 @@ export const mediaSchema = z.object({
   folderId: z.string().nullable(),
   status: z.enum(["ready", "trashed", "deleting", "deleted"]),
   version: z.number().int().min(1),
-  createdAt: timestampSchema,
-  updatedAt: timestampSchema,
-  trashedAt: nullableTimestampSchema,
-  deletedAt: nullableTimestampSchema,
+  createdAt: isoTimestampSchema,
+  updatedAt: isoTimestampSchema,
+  trashedAt: nullableIsoTimestampSchema,
+  deletedAt: nullableIsoTimestampSchema,
 });
 
 /** Media folder. */

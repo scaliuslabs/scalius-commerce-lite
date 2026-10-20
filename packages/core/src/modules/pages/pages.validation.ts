@@ -83,8 +83,6 @@ export const pageFeaturedImageSchema = z
     width: z.number().nullable().optional(),
     height: z.number().nullable().optional(),
     folderId: z.string().nullable().optional(),
-    createdAt: z.union([z.string(), z.number(), z.date()]).optional(),
-    updatedAt: z.union([z.string(), z.number(), z.date()]).optional(),
   })
   .passthrough();
 
@@ -103,18 +101,13 @@ const pageFieldSchemas = {
   featuredImage: pageFeaturedImageSchema.nullable().optional(),
 };
 
-const publishedAtInputSchema = z.date().or(z.string()).nullable();
+/** An ISO 8601 date-time (`2026-10-21T09:30:00.000Z`), or null. */
+const publishedAtInputSchema = z.iso.datetime({ offset: true }).nullable();
 const createPublishedAtSchema = publishedAtInputSchema
   .optional()
-  .transform((val) => (val instanceof Date ? val : val ? new Date(val) : null))
-  .refine((val) => val === null || Number.isFinite(val.getTime()), {
-    message: "Publication time must be a valid date.",
-  });
+  .transform((val) => (val ? new Date(val) : null));
 const updatePublishedAtSchema = publishedAtInputSchema
-  .transform((val) => (val instanceof Date ? val : val ? new Date(val) : null))
-  .refine((val) => val === null || Number.isFinite(val.getTime()), {
-    message: "Publication time must be a valid date.",
-  })
+  .transform((val) => (val ? new Date(val) : null))
   .optional();
 
 /** Schema for creating a new page (POST /api/pages) */

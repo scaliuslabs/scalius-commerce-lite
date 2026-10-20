@@ -355,7 +355,7 @@ describe("storefront checkout authority at the atomic commit", () => {
   );
 
   it.each([0, 9, 10, 11])("checks the discount end time at database commit time (+%ss)", async (offset) => {
-    const { payload, commit } = await discountedCheckout({ endsAtEpochSeconds: databaseNow + 10 });
+    const { payload, commit } = await discountedCheckout({ endsAt: new Date((databaseNow + 10) * 1_000).toISOString() });
     beforeWriteBatch = () => { databaseNow += offset; };
     if (offset >= 10) {
       await expect(commitStorefrontOrderPayload(db, payload, commit))

@@ -4,6 +4,7 @@
 // crosses this edge in decimal major units (the store currency) and is stored
 // in integer minor units.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { isoTimestampSchema, nullableIsoTimestampSchema } from "../../schemas/timestamps";
 import { assertContactSearchAllowed } from "./contact-access";
 import { protectedField as pii } from "../../schemas/protected";
 import {
@@ -507,10 +508,10 @@ const consentViewSchema = z.object({
     consentContact: pii(["email", "phone"], z.string().nullable()),
     source: z.enum(MARKETING_CONSENT_SOURCES).nullable(),
     consentTextVersion: z.string().nullable(),
-    subscribedAt: z.string().nullable(),
-    unsubscribedAt: z.string().nullable(),
-    requestedAt: z.string().nullable(),
-    updatedAt: z.string().nullable(),
+    subscribedAt: nullableIsoTimestampSchema,
+    unsubscribedAt: nullableIsoTimestampSchema,
+    requestedAt: nullableIsoTimestampSchema,
+    updatedAt: nullableIsoTimestampSchema,
 });
 
 const consentEventSchema = z.object({
@@ -526,7 +527,7 @@ const consentEventSchema = z.object({
     contact: pii(["email", "phone"], z.string()),
     consentTextVersion: z.string().nullable(),
     consentText: z.string().nullable(),
-    createdAt: z.string(),
+    createdAt: isoTimestampSchema,
 });
 
 const marketingPayloadSchema = z.object({

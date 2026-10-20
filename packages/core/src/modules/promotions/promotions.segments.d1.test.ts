@@ -244,13 +244,13 @@ describe.each(["d1", "turso"] as const)("promotions limited to customer segments
         const db = openStore(provider);
         const vip = await segment(db, "VIP", tagged("vip"));
         const limited = await live(db, {
-            name: "VIP tee gift", customerSegmentIds: [vip], endsAtEpochSeconds: NOW + 86_400, effects: [buyTeeGetCap],
+            name: "VIP tee gift", customerSegmentIds: [vip], endsAt: new Date((NOW + 86_400) * 1_000).toISOString(), effects: [buyTeeGetCap],
         });
         expect(await listProductBuyGetOffers(db, "prod_tee", { code: "BDT", priceIncrementMinor: 100 }, NOW)).toEqual([]);
         // A member still gets it at checkout.
         expect(applied(await quote(db, [], signedIn("cust_vip")))).toEqual(["VIP tee gift"]);
 
-        const open = await live(db, { name: "Tee gift", endsAtEpochSeconds: NOW + 86_400, effects: [buyTeeGetCap] });
+        const open = await live(db, { name: "Tee gift", endsAt: new Date((NOW + 86_400) * 1_000).toISOString(), effects: [buyTeeGetCap] });
         expect((await listProductBuyGetOffers(db, "prod_tee", { code: "BDT", priceIncrementMinor: 100 }, NOW)).map(({ title }) => title)).toEqual(["Tee gift"]);
 
         const plan = planHomePromotions(db, [limited.id, open.id], NOW * 1_000);

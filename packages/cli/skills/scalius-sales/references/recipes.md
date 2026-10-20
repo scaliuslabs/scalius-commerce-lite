@@ -7,7 +7,7 @@ Every write: dryRun first. [approval] = destructive or financial: show confirmat
 
 ## Create code EID10: 10% off Fri-Sun, 2,000 minimum
 1. read   dashboard.settings.currency_get
-2. write  dashboard.discounts.create needs body.name, body.method, body.effects: method code, codes [EID10], effects percentage_off basisPoints 1000, conditions minimum_merchandise_subtotal amountMinor, startsAt/endsAtEpochSeconds, timezone
+2. write  dashboard.discounts.create needs body.name, body.method, body.effects: method code, codes [EID10], effects percentage_off basisPoints 1000, conditions minimum_merchandise_subtotal amountMinor, startsAt/endsAt (ISO 8601), timezone
 3. read   dashboard.discounts.preview rev: check a sample cart
 4. write  dashboard.discounts.activate rev; needs path.id
 5. verify dashboard.discounts.get

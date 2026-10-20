@@ -363,12 +363,12 @@ export const MERCHANT_TASKS: readonly MerchantTask[] = [
           name: "EID10", method: "code", codes: [{ code: "EID10" }],
           effects: [{ target: "order", allocation: "once", kind: "percentage_off", config: { basisPoints: 1000 } }],
           conditions: [{ kind: "minimum_merchandise_subtotal", config: { amountMinor: 200_000, currencyCode: "BDT" } }],
-          startsAtEpochSeconds: starts, endsAtEpochSeconds: starts + 3 * 86_400 - 1, timezone: "Asia/Dhaka",
+          startsAt: new Date(starts * 1_000).toISOString(), endsAt: new Date((starts + 3 * 86_400 - 1) * 1_000).toISOString(), timezone: "Asia/Dhaka",
         },
       });
       await ctx.agent.change("dashboard.discounts.activate", { path: { id: String(data.id) }, body: { expectedRevision: Number(data.revision) } });
       ctx.facts.discountId = data.id;
-      await ctx.agent.read("dashboard.discounts.get", { path: { id: String(data.id) } }, { select: ["/status", "/codes", "/startsAtEpochSeconds", "/endsAtEpochSeconds"] });
+      await ctx.agent.read("dashboard.discounts.get", { path: { id: String(data.id) } }, { select: ["/status", "/codes", "/startsAt", "/endsAt"] });
     },
     verify(ctx) {
       const code = one(ctx.sqlite, "SELECT 1 FROM promotion_codes WHERE upper(code) = 'EID10'");

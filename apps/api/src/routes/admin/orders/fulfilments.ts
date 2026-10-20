@@ -3,6 +3,7 @@
 // done, void a fulfilment whose parcel came back, and mark a pickup order
 // ready to collect. Courier bookings stay on POST /{id}/shipments.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { isoTimestampSchema } from "../../../schemas/timestamps";
 import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 import type { Context } from "hono";
 import { MANUAL_FULFILLMENT_TYPES } from "@scalius/shared/fulfilment";
@@ -277,7 +278,7 @@ const pickupReadyRoute = createRoute({
                 "application/json": {
                     schema: successEnvelope(z.object({
                         orderId: z.string(),
-                        pickupReadyAt: z.string(),
+                        pickupReadyAt: isoTimestampSchema,
                         replayed: z.boolean(),
                     })),
                 },

@@ -18,6 +18,7 @@ import { promotionEvaluationCartSchema } from "@scalius/core/modules/promotions/
 
 import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { NotFoundError } from "../../utils/api-error";
+import { isoTimestampSchema, nullableIsoTimestampSchema } from "../../schemas/timestamps";
 import { created, noContent, ok } from "../../utils/api-response";
 
 import {
@@ -44,8 +45,8 @@ const discountSchema = z.object({
     priority: z.number().int(),
     conflictPolicy: z.literal("best"),
     combinesWith: z.object({ product: z.boolean(), order: z.boolean(), shipping: z.boolean() }),
-    startsAtEpochSeconds: z.number().int().nullable(),
-    endsAtEpochSeconds: z.number().int().nullable(),
+    startsAt: nullableIsoTimestampSchema,
+    endsAt: nullableIsoTimestampSchema,
     timezone: z.string(),
     maxRedemptions: z.number().int().positive().nullable(),
     maxRedemptionsPerCustomer: z.number().int().positive().nullable(),
@@ -56,9 +57,9 @@ const discountSchema = z.object({
     redemptionCount: z.number().int().nonnegative().openapi({ description: "Orders that used this discount." }),
     customerRedemptionCount: z.number().int().nonnegative(),
     discountSpendMinor: z.number().int().nonnegative().openapi({ description: "Total savings given, in minor units." }),
-    createdAtEpochSeconds: z.number().int(),
-    updatedAtEpochSeconds: z.number().int(),
-    deletedAtEpochSeconds: z.number().int().nullable(),
+    createdAt: isoTimestampSchema,
+    updatedAt: isoTimestampSchema,
+    deletedAt: nullableIsoTimestampSchema,
     codes: z.array(z.object({ code: z.string(), isActive: z.boolean() })),
     conditions: z.array(z.object({
         id: z.string(),
@@ -76,6 +77,22 @@ const discountSchema = z.object({
         description: "Only signed-in customers in any of these customer segments get this discount; empty means every customer.",
     }),
 });
+
+type StoredDiscount = Awaited<ReturnType<typeof getPromotionAggregate>> & object;
+const isoOf = (seconds: number | null | undefined) => (typeof seconds === "number" && Number.isFinite(seconds) ? new Date(seconds * 1_000).toISOString() : null);
+
+/** A stored discount as the HTTP contract carries it: every instant ISO 8601. */
+function discountWire<T extends Pick<StoredDiscount, "startsAtEpochSeconds" | "endsAtEpochSeconds" | "createdAtEpochSeconds" | "updatedAtEpochSeconds" | "deletedAtEpochSeconds">>(discount: T) {
+    const { startsAtEpochSeconds, endsAtEpochSeconds, createdAtEpochSeconds, updatedAtEpochSeconds, deletedAtEpochSeconds, ...rest } = discount;
+    return {
+        ...rest,
+        startsAt: isoOf(startsAtEpochSeconds),
+        endsAt: isoOf(endsAtEpochSeconds),
+        createdAt: isoOf(createdAtEpochSeconds)!,
+        updatedAt: isoOf(updatedAtEpochSeconds)!,
+        deletedAt: isoOf(deletedAtEpochSeconds),
+    };
+}
 
 const mutationSchema = z.object({
     id: z.string(),
@@ -127,7 +144,7 @@ app.openapi(createRoute({
         sort: query.sort,
         includeDeleted: query.includeDeleted === "true",
     }), readStoreCurrency(db)]);
-    return ok(c, { ...result, discounts: result.discounts.map((discount) => ({ ...discount, currency: currency.code })) });
+    return ok(c, { ...result, discounts: result.discounts.map((discount) => ({ ...discountWire(discount), currency: currency.code })) });
 });
 
 app.openapi(createRoute({
@@ -156,7 +173,7 @@ app.openapi(createRoute({
     const discount = await getPromotionAggregate(db, c.req.valid("param").id);
     if (!discount) throw new NotFoundError("Discount not found");
     const [usage, currency] = await Promise.all([getPromotionOrderUsage(db, discount.id), readStoreCurrency(db)]);
-    return ok(c, { ...discount, currency: currency.code, ...usage });
+    return ok(c, { ...discountWire(discount), currency: currency.code, ...usage });
 });
 
 app.openapi(createRoute({

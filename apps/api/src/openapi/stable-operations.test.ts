@@ -183,6 +183,56 @@ function moneyProblems(operations: readonly AgentOperationManifestEntry[], compo
   return [...problems];
 }
 
+/** A field name that names an instant (`createdAt`, `failingSince`, `startsAtEpochSeconds`). */
+const TIME_KEY = /(At|Since|Until|EpochSeconds|Epoch)$/u;
+/** Names that end like a time but are not one. */
+const NOT_TIME_KEY = /^compareAt/u;
+
+/**
+ * Every place a stable schema carries an instant in another form than an
+ * ISO 8601 `date-time` string (or null): an integer, epoch seconds, a bare
+ * string or a union of forms.
+ */
+function timeProblems(operations: readonly AgentOperationManifestEntry[], components: Record<string, unknown> = AGENT_COMPONENT_SCHEMAS as Record<string, unknown>): string[] {
+  const problems = new Set<string>();
+  const resolve = (node: unknown): SchemaNode | null => {
+    if (!node || typeof node !== "object") return null;
+    const ref = (node as { $ref?: unknown }).$ref;
+    return typeof ref === "string" ? resolve(components[ref.replace("#/components/schemas/", "")]) : node as SchemaNode;
+  };
+  /** The non-null forms a schema allows. */
+  const forms = (schema: SchemaNode): SchemaNode[] => {
+    const variants = [...((schema.anyOf ?? []) as unknown[]), ...((schema.oneOf ?? []) as unknown[])].map(resolve).filter((each): each is SchemaNode => each !== null);
+    if (variants.length > 0) return variants.flatMap(forms);
+    return schema.type === "null" ? [] : [schema];
+  };
+  const isIso = (schema: SchemaNode) => forms(schema).length > 0 && forms(schema).every((form) => form.type === "string" && form.format === "date-time");
+  const walk = (label: string, node: unknown, path: string[], refs: Set<string>) => {
+    const ref = node && typeof node === "object" ? (node as { $ref?: unknown }).$ref : undefined;
+    if (typeof ref === "string") {
+      if (refs.has(ref)) return;
+      refs = new Set([...refs, ref]);
+    }
+    const schema = resolve(node);
+    if (!schema) return;
+    const key = path.filter((segment) => segment !== "*").at(-1);
+    if (key && TIME_KEY.test(key) && !NOT_TIME_KEY.test(key) && !isIso(schema)) problems.add(`${label} ${path.join(".")}: an instant is an ISO 8601 date-time string.`);
+    for (const [child, value] of Object.entries((schema.properties ?? {}) as Record<string, unknown>)) walk(label, value, [...path, child], refs);
+    if (schema.items) walk(label, schema.items, [...path, "*"], refs);
+    if (schema.additionalProperties && typeof schema.additionalProperties === "object") walk(label, schema.additionalProperties, [...path, "*"], refs);
+    for (const variant of [...((schema.anyOf ?? []) as unknown[]), ...((schema.oneOf ?? []) as unknown[]), ...((schema.allOf ?? []) as unknown[])]) {
+      walk(label, variant, path, refs);
+    }
+  };
+  for (const operation of operations) {
+    const input = (operation.inputSchema ?? {}) as { parameters?: { name: string; schema?: unknown }[]; requestBody?: { content?: Record<string, { schema?: unknown }> } };
+    for (const parameter of input.parameters ?? []) walk(`${operation.operationId} input`, parameter.schema, [parameter.name], new Set());
+    for (const media of Object.values(input.requestBody?.content ?? {})) walk(`${operation.operationId} input`, media.schema, [], new Set());
+    walk(`${operation.operationId} output`, operation.outputSchema, [], new Set());
+  }
+  return [...problems];
+}
+
 describe("the stable app API", () => {
   it("is a deliberate, coherent set every third-party app can reach through a scope", () => {
     expect(stable.length).toBeGreaterThanOrEqual(100);
@@ -256,6 +306,10 @@ describe("the stable app API", () => {
     const storefront = AGENT_OPERATIONS.filter((operation) => operation.surface === "storefront");
     expect(storefront.length).toBeGreaterThan(0);
     expect(storefront.filter((operation) => operation.stability !== "beta" && operation.exposure === "execute").map((operation) => operation.operationId)).toEqual([]);
+  });
+
+  it("carries every instant as one ISO 8601 date-time string", () => {
+    expect(timeProblems(stable)).toEqual([]);
   });
 
   it("carries money only as integer minor units, with a currency beside every amount it returns", () => {

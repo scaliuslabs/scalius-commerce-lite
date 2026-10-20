@@ -8,6 +8,7 @@
 // merchant's: it may touch only the `custom` namespace. Storefront-visible
 // writes are buyer-visible; database triggers advance their dependencies.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { isoTimestampSchema, nullableIsoTimestampSchema } from "../../schemas/timestamps";
 import {
   createCustomFieldDefinition,
   deleteCustomFieldDefinition,
@@ -61,8 +62,8 @@ export const customFieldDefinitionSchema = z.object({
   storefrontVisible: z.boolean(),
   position: z.number().int(),
   revision: z.number().int().min(1),
-  createdAt: z.string(),
-  updatedAt: z.string(),
+  createdAt: isoTimestampSchema,
+  updatedAt: isoTimestampSchema,
 }).openapi("AdminCustomFieldDefinition");
 
 const definitionListItemSchema = customFieldDefinitionSchema.extend({
@@ -75,7 +76,7 @@ const ownerValuesSchema = z.object({
   fields: z.array(z.object({
     definition: customFieldDefinitionSchema,
     value: z.unknown().describe("JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset."),
-    updatedAt: z.string().nullable(),
+    updatedAt: nullableIsoTimestampSchema,
   })),
 });
 

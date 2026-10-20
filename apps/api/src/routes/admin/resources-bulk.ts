@@ -6,6 +6,7 @@
 // the run and finishes right after the response and on the minute cron. One
 // run per Idempotency-Key; `bulk_runs.get` reads its progress.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { nullableIsoTimestampSchema } from "../../schemas/timestamps";
 import type { Context, MiddlewareHandler } from "hono";
 import { and, desc, eq, lt, or } from "drizzle-orm";
 import { bulkRuns, BULK_RUN_KINDS } from "@scalius/database/schema";
@@ -67,8 +68,8 @@ const BulkRunResource = namedSharedSchema(z.object({
     code: z.string().openapi({ description: "price_changed, price_not_positive, stock_changed, below_reserved, not_found, retired, digital_stock, not_physical, revision_changed or needs_price." }),
   })),
   errorCode: z.string().nullable().openapi({ description: "Why a failed run stopped." }),
-  createdAt: z.string().nullable(),
-  finishedAt: z.string().nullable(),
+  createdAt: nullableIsoTimestampSchema,
+  finishedAt: nullableIsoTimestampSchema,
 }), "BulkRun");
 
 const runResponses = {

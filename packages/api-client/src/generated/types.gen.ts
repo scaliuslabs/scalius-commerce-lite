@@ -148,8 +148,6 @@ export type ProductCardFacts = {
     } | unknown;
 };
 
-export type NullableTimestamp = string | number | null;
-
 export type StorefrontHomepageSections = {
     bindingObjects?: {
         [key: string]: {
@@ -1351,6 +1349,8 @@ export type GiftCardBalance = {
     expiresAt: string | null;
     status: 'active' | 'disabled' | 'expired';
 };
+
+export type NullableTimestamp = string | number | null;
 
 export type PluginUiJson = string | number | boolean | unknown | Array<PluginUiJson & unknown> | {
     [key: string]: PluginUiJson & unknown;
@@ -6965,15 +6965,13 @@ export type GetApiV1PagesResponses = {
                     width?: number | null;
                     height?: number | null;
                     folderId?: string | null;
-                    createdAt?: string | number;
-                    updatedAt?: string | number;
                     [key: string]: unknown;
                 } | null;
-                publishedAt?: NullableTimestamp;
+                publishedAt?: string | null;
                 sortOrder: number;
-                createdAt: NullableTimestamp;
-                updatedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string | null;
+                updatedAt: string | null;
+                deletedAt: string | null;
                 /**
                  * The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle.
                  */
@@ -7058,15 +7056,13 @@ export type GetApiV1PagesSlugBySlugResponses = {
                     width?: number | null;
                     height?: number | null;
                     folderId?: string | null;
-                    createdAt?: string | number;
-                    updatedAt?: string | number;
                     [key: string]: unknown;
                 } | null;
-                publishedAt?: NullableTimestamp;
+                publishedAt?: string | null;
                 sortOrder: number;
-                createdAt: NullableTimestamp;
-                updatedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string | null;
+                updatedAt: string | null;
+                deletedAt: string | null;
                 /**
                  * The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle.
                  */
@@ -7145,15 +7141,13 @@ export type GetApiV1PagesByIdResponses = {
                     width?: number | null;
                     height?: number | null;
                     folderId?: string | null;
-                    createdAt?: string | number;
-                    updatedAt?: string | number;
                     [key: string]: unknown;
                 } | null;
-                publishedAt?: NullableTimestamp;
+                publishedAt?: string | null;
                 sortOrder: number;
-                createdAt: NullableTimestamp;
-                updatedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string | null;
+                updatedAt: string | null;
+                deletedAt: string | null;
                 /**
                  * The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle.
                  */
@@ -7230,15 +7224,13 @@ export type GetApiV1ArticlesResponses = {
                     width?: number | null;
                     height?: number | null;
                     folderId?: string | null;
-                    createdAt?: string | number;
-                    updatedAt?: string | number;
                     [key: string]: unknown;
                 } | null;
-                publishedAt?: NullableTimestamp;
+                publishedAt?: string | null;
                 sortOrder: number;
-                createdAt: NullableTimestamp;
-                updatedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string | null;
+                updatedAt: string | null;
+                deletedAt: string | null;
                 /**
                  * The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle.
                  */
@@ -7323,15 +7315,13 @@ export type GetApiV1ArticlesSlugBySlugResponses = {
                     width?: number | null;
                     height?: number | null;
                     folderId?: string | null;
-                    createdAt?: string | number;
-                    updatedAt?: string | number;
                     [key: string]: unknown;
                 } | null;
-                publishedAt?: NullableTimestamp;
+                publishedAt?: string | null;
                 sortOrder: number;
-                createdAt: NullableTimestamp;
-                updatedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string | null;
+                updatedAt: string | null;
+                deletedAt: string | null;
                 /**
                  * The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle.
                  */
@@ -7850,15 +7840,13 @@ export type GetApiV1StorefrontPagesSlugBySlugResponses = {
                     width?: number | null;
                     height?: number | null;
                     folderId?: string | null;
-                    createdAt?: string | number;
-                    updatedAt?: string | number;
                     [key: string]: unknown;
                 } | null;
-                publishedAt?: NullableTimestamp;
+                publishedAt?: string | null;
                 sortOrder: number;
-                createdAt: NullableTimestamp;
-                updatedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string | null;
+                updatedAt: string | null;
+                deletedAt: string | null;
                 /**
                  * The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle.
                  */
@@ -9771,8 +9759,8 @@ export type PostApiV1StorefrontAgentContextsByContextIdCustomerAddressesResponse
                 zoneName: string | null;
                 areaName: string | null;
                 validationSkipped: boolean;
-                createdAt: number;
-                updatedAt: number;
+                createdAt: string;
+                updatedAt: string;
             }>;
         };
     };
@@ -11198,8 +11186,8 @@ export type PostApiV1CustomerAuthVerifyOtpResponses = {
                     zoneName: string | null;
                     areaName: string | null;
                     validationSkipped: boolean;
-                    createdAt: number;
-                    updatedAt: number;
+                    createdAt: string;
+                    updatedAt: string;
                 } | null;
                 profileComplete: boolean;
             };
@@ -11294,8 +11282,8 @@ export type GetApiV1CustomerAuthMeResponses = {
                     zoneName: string | null;
                     areaName: string | null;
                     validationSkipped: boolean;
-                    createdAt: number;
-                    updatedAt: number;
+                    createdAt: string;
+                    updatedAt: string;
                 } | null;
                 profileComplete: boolean;
             };
@@ -11428,8 +11416,8 @@ export type PutApiV1CustomerAuthProfileResponses = {
                     zoneName: string | null;
                     areaName: string | null;
                     validationSkipped: boolean;
-                    createdAt: number;
-                    updatedAt: number;
+                    createdAt: string;
+                    updatedAt: string;
                 } | null;
                 profileComplete: boolean;
             };
@@ -11606,8 +11594,8 @@ export type GetApiV1CustomerAuthOrdersResponses = {
                     zoneName: string | null;
                     areaName: string | null;
                     validationSkipped: boolean;
-                    createdAt: number;
-                    updatedAt: number;
+                    createdAt: string;
+                    updatedAt: string;
                 } | null;
             };
         };
@@ -15326,8 +15314,8 @@ export type GetApiV1CustomerAuthAddressesResponses = {
                 zoneName: string | null;
                 areaName: string | null;
                 validationSkipped: boolean;
-                createdAt: number;
-                updatedAt: number;
+                createdAt: string;
+                updatedAt: string;
             }>;
         };
     };
@@ -15417,8 +15405,8 @@ export type PostApiV1CustomerAuthAddressesResponses = {
                 zoneName: string | null;
                 areaName: string | null;
                 validationSkipped: boolean;
-                createdAt: number;
-                updatedAt: number;
+                createdAt: string;
+                updatedAt: string;
             }>;
         };
     };
@@ -15494,8 +15482,8 @@ export type DeleteApiV1CustomerAuthAddressesByAddressIdResponses = {
                 zoneName: string | null;
                 areaName: string | null;
                 validationSkipped: boolean;
-                createdAt: number;
-                updatedAt: number;
+                createdAt: string;
+                updatedAt: string;
             }>;
         };
     };
@@ -15587,8 +15575,8 @@ export type PutApiV1CustomerAuthAddressesByAddressIdResponses = {
                 zoneName: string | null;
                 areaName: string | null;
                 validationSkipped: boolean;
-                createdAt: number;
-                updatedAt: number;
+                createdAt: string;
+                updatedAt: string;
             }>;
         };
     };
@@ -15664,8 +15652,8 @@ export type PostApiV1CustomerAuthAddressesByAddressIdDefaultResponses = {
                 zoneName: string | null;
                 areaName: string | null;
                 validationSkipped: boolean;
-                createdAt: number;
-                updatedAt: number;
+                createdAt: string;
+                updatedAt: string;
             }>;
         };
     };
@@ -15741,8 +15729,8 @@ export type PostApiV1CustomerAuthAddressesByAddressIdDefaultBillingResponses = {
                 zoneName: string | null;
                 areaName: string | null;
                 validationSkipped: boolean;
-                createdAt: number;
-                updatedAt: number;
+                createdAt: string;
+                updatedAt: string;
             }>;
         };
     };
@@ -27438,7 +27426,7 @@ export type PostApiV1AdminCategoriesData = {
             url: string;
             filename: string;
             size: number;
-            createdAt: string | string;
+            createdAt?: string;
         } | null;
         /**
          * The parent category's id, or null for a top-level category. The tree has at most four levels.
@@ -28001,7 +27989,7 @@ export type PutApiV1AdminCategoriesByIdData = {
             url: string;
             filename: string;
             size: number;
-            createdAt: string | string;
+            createdAt?: string;
         } | null;
         /**
          * The parent category's id, or null for a top-level category. The tree has at most four levels.
@@ -30370,9 +30358,9 @@ export type GetApiV1AdminCollectionsResponses = {
                 canonicalPath: string | null;
                 noIndex: boolean;
                 excludeFromSitemap: boolean;
-                createdAt: NullableTimestamp;
-                updatedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string | null;
+                updatedAt: string | null;
+                deletedAt: string | null;
             }>;
             pagination: {
                 page: number;
@@ -30892,9 +30880,9 @@ export type GetApiV1AdminCollectionsByIdSectionsBySectionResponses = {
                 canonicalPath: string | null;
                 noIndex: boolean;
                 excludeFromSitemap: boolean;
-                createdAt: NullableTimestamp;
-                updatedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string | null;
+                updatedAt: string | null;
+                deletedAt: string | null;
                 metaTitle: string | null;
                 metaDescription: string | null;
                 descriptionCharacters: number;
@@ -31012,9 +31000,9 @@ export type GetApiV1AdminCollectionsByIdResponses = {
             canonicalPath: string | null;
             noIndex: boolean;
             excludeFromSitemap: boolean;
-            createdAt: NullableTimestamp;
-            updatedAt: NullableTimestamp;
-            deletedAt: NullableTimestamp;
+            createdAt: string | null;
+            updatedAt: string | null;
+            deletedAt: string | null;
             description: string | null;
             content: string | null;
             metaTitle: string | null;
@@ -32683,8 +32671,8 @@ export type GetApiV1AdminCustomersByIdResponses = {
                 zoneName: string | null;
                 areaName: string | null;
                 validationSkipped: boolean;
-                createdAt: number;
-                updatedAt: number;
+                createdAt: string;
+                updatedAt: string;
             }>;
             relatedObjects: Array<{
                 typeId: string;
@@ -32865,8 +32853,8 @@ export type GetApiV1AdminCustomersByIdAddressesResponses = {
                 zoneName: string | null;
                 areaName: string | null;
                 validationSkipped: boolean;
-                createdAt: number;
-                updatedAt: number;
+                createdAt: string;
+                updatedAt: string;
             }>;
         };
     };
@@ -32958,8 +32946,8 @@ export type PostApiV1AdminCustomersByIdAddressesResponses = {
             zoneName: string | null;
             areaName: string | null;
             validationSkipped: boolean;
-            createdAt: number;
-            updatedAt: number;
+            createdAt: string;
+            updatedAt: string;
         };
     };
 };
@@ -33099,8 +33087,8 @@ export type PutApiV1AdminCustomersByIdAddressesByAddressIdResponses = {
             zoneName: string | null;
             areaName: string | null;
             validationSkipped: boolean;
-            createdAt: number;
-            updatedAt: number;
+            createdAt: string;
+            updatedAt: string;
         };
     };
 };
@@ -33175,8 +33163,8 @@ export type PostApiV1AdminCustomersByIdAddressesByAddressIdDefaultResponses = {
             zoneName: string | null;
             areaName: string | null;
             validationSkipped: boolean;
-            createdAt: number;
-            updatedAt: number;
+            createdAt: string;
+            updatedAt: string;
         };
     };
 };
@@ -33251,8 +33239,8 @@ export type PostApiV1AdminCustomersByIdAddressesByAddressIdDefaultBillingRespons
             zoneName: string | null;
             areaName: string | null;
             validationSkipped: boolean;
-            createdAt: number;
-            updatedAt: number;
+            createdAt: string;
+            updatedAt: string;
         };
     };
 };
@@ -33494,16 +33482,14 @@ export type GetApiV1AdminPagesResponses = {
                     width?: number | null;
                     height?: number | null;
                     folderId?: string | null;
-                    createdAt?: string | number;
-                    updatedAt?: string | number;
                     [key: string]: unknown;
                 } | null;
-                publishedAt?: NullableTimestamp;
+                publishedAt?: string | null;
                 sortOrder: number;
                 revision: number;
-                createdAt: NullableTimestamp;
-                updatedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string | null;
+                updatedAt: string | null;
+                deletedAt: string | null;
             }>;
             pagination: {
                 page: number;
@@ -33543,12 +33529,10 @@ export type PostApiV1AdminPagesData = {
             width?: number | null;
             height?: number | null;
             folderId?: string | null;
-            createdAt?: string | number | string;
-            updatedAt?: string | number | string;
             [key: string]: unknown;
         } | null;
         contentType?: 'page' | 'article';
-        publishedAt?: string | string | unknown;
+        publishedAt?: string | null;
         isPublished?: boolean;
         hideHeader?: boolean;
         hideFooter?: boolean;
@@ -34141,16 +34125,14 @@ export type GetApiV1AdminPagesByIdResponses = {
                 width?: number | null;
                 height?: number | null;
                 folderId?: string | null;
-                createdAt?: string | number;
-                updatedAt?: string | number;
                 [key: string]: unknown;
             } | null;
-            publishedAt?: NullableTimestamp;
+            publishedAt?: string | null;
             sortOrder: number;
             revision: number;
-            createdAt: NullableTimestamp;
-            updatedAt: NullableTimestamp;
-            deletedAt: NullableTimestamp;
+            createdAt: string | null;
+            updatedAt: string | null;
+            deletedAt: string | null;
         };
     };
 };
@@ -34172,7 +34154,7 @@ export type PutApiV1AdminPagesByIdData = {
         noIndex?: boolean;
         excludeFromSitemap?: boolean;
         isPublished?: boolean;
-        publishedAt?: string | string | unknown;
+        publishedAt?: string | null;
         hideHeader?: boolean;
         hideFooter?: boolean;
         hideTitle?: boolean;
@@ -34186,8 +34168,6 @@ export type PutApiV1AdminPagesByIdData = {
             width?: number | null;
             height?: number | null;
             folderId?: string | null;
-            createdAt?: string | number | string;
-            updatedAt?: string | number | string;
             [key: string]: unknown;
         } | null;
     };
@@ -34377,8 +34357,8 @@ export type GetApiV1AdminDiscountsResponses = {
                     order: boolean;
                     shipping: boolean;
                 };
-                startsAtEpochSeconds: number | null;
-                endsAtEpochSeconds: number | null;
+                startsAt: string | null;
+                endsAt: string | null;
                 timezone: string;
                 maxRedemptions: number | null;
                 maxRedemptionsPerCustomer: number | null;
@@ -34397,9 +34377,9 @@ export type GetApiV1AdminDiscountsResponses = {
                  * Total savings given, in minor units.
                  */
                 discountSpendMinor: number;
-                createdAtEpochSeconds: number;
-                updatedAtEpochSeconds: number;
-                deletedAtEpochSeconds: number | null;
+                createdAt: string;
+                updatedAt: string;
+                deletedAt: string | null;
                 codes: Array<{
                     code: string;
                     isActive: boolean;
@@ -34467,8 +34447,8 @@ export type PostApiV1AdminDiscountsData = {
             order: boolean;
             shipping: boolean;
         };
-        startsAtEpochSeconds?: number | null;
-        endsAtEpochSeconds?: number | null;
+        startsAt?: string | null;
+        endsAt?: string | null;
         timezone?: string;
         maxRedemptions?: number | null;
         maxRedemptionsPerCustomer?: number | null;
@@ -34711,8 +34691,8 @@ export type GetApiV1AdminDiscountsByIdResponses = {
                 order: boolean;
                 shipping: boolean;
             };
-            startsAtEpochSeconds: number | null;
-            endsAtEpochSeconds: number | null;
+            startsAt: string | null;
+            endsAt: string | null;
             timezone: string;
             maxRedemptions: number | null;
             maxRedemptionsPerCustomer: number | null;
@@ -34731,9 +34711,9 @@ export type GetApiV1AdminDiscountsByIdResponses = {
              * Total savings given, in minor units.
              */
             discountSpendMinor: number;
-            createdAtEpochSeconds: number;
-            updatedAtEpochSeconds: number;
-            deletedAtEpochSeconds: number | null;
+            createdAt: string;
+            updatedAt: string;
+            deletedAt: string | null;
             codes: Array<{
                 code: string;
                 isActive: boolean;
@@ -34777,8 +34757,8 @@ export type PutApiV1AdminDiscountsByIdData = {
             order: boolean;
             shipping: boolean;
         };
-        startsAtEpochSeconds?: number | null;
-        endsAtEpochSeconds?: number | null;
+        startsAt?: string | null;
+        endsAt?: string | null;
         timezone?: string;
         maxRedemptions?: number | null;
         maxRedemptionsPerCustomer?: number | null;
@@ -35201,10 +35181,10 @@ export type GetApiV1AdminMediaResponses = {
                 folderId: string | null;
                 status: 'ready' | 'trashed' | 'deleting' | 'deleted';
                 version: number;
-                createdAt: string | number;
-                updatedAt: string | number;
-                trashedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string;
+                updatedAt: string;
+                trashedAt: string | null;
+                deletedAt: string | null;
                 /**
                  * Distinct places that show the file: products, categories, collections, pages, banners, theme, navigation, invoice, social image, video covers and staff photos.
                  */
@@ -35384,10 +35364,10 @@ export type PostApiV1AdminMediaUploadsImportUrlResponses = {
                 folderId: string | null;
                 status: 'ready' | 'trashed' | 'deleting' | 'deleted';
                 version: number;
-                createdAt: string | number;
-                updatedAt: string | number;
-                trashedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string;
+                updatedAt: string;
+                trashedAt: string | null;
+                deletedAt: string | null;
             };
         };
     };
@@ -35656,10 +35636,10 @@ export type PostApiV1AdminMediaUploadsByIdCompleteResponses = {
                 folderId: string | null;
                 status: 'ready' | 'trashed' | 'deleting' | 'deleted';
                 version: number;
-                createdAt: string | number;
-                updatedAt: string | number;
-                trashedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string;
+                updatedAt: string;
+                trashedAt: string | null;
+                deletedAt: string | null;
             };
         };
     };
@@ -35794,10 +35774,10 @@ export type GetApiV1AdminMediaByIdResponses = {
                 folderId: string | null;
                 status: 'ready' | 'trashed' | 'deleting' | 'deleted';
                 version: number;
-                createdAt: string | number;
-                updatedAt: string | number;
-                trashedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string;
+                updatedAt: string;
+                trashedAt: string | null;
+                deletedAt: string | null;
             };
         };
     };
@@ -35889,10 +35869,10 @@ export type PatchApiV1AdminMediaByIdResponses = {
                 folderId: string | null;
                 status: 'ready' | 'trashed' | 'deleting' | 'deleted';
                 version: number;
-                createdAt: string | number;
-                updatedAt: string | number;
-                trashedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string;
+                updatedAt: string;
+                trashedAt: string | null;
+                deletedAt: string | null;
             };
         };
     };
@@ -35976,10 +35956,10 @@ export type PostApiV1AdminMediaByIdTrashResponses = {
                 folderId: string | null;
                 status: 'ready' | 'trashed' | 'deleting' | 'deleted';
                 version: number;
-                createdAt: string | number;
-                updatedAt: string | number;
-                trashedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string;
+                updatedAt: string;
+                trashedAt: string | null;
+                deletedAt: string | null;
             };
         };
     };
@@ -36057,10 +36037,10 @@ export type PostApiV1AdminMediaByIdRestoreResponses = {
                 folderId: string | null;
                 status: 'ready' | 'trashed' | 'deleting' | 'deleted';
                 version: number;
-                createdAt: string | number;
-                updatedAt: string | number;
-                trashedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string;
+                updatedAt: string;
+                trashedAt: string | null;
+                deletedAt: string | null;
             };
         };
     };
@@ -36144,10 +36124,10 @@ export type PostApiV1AdminMediaByIdVariantsResponses = {
                 folderId: string | null;
                 status: 'ready' | 'trashed' | 'deleting' | 'deleted';
                 version: number;
-                createdAt: string | number;
-                updatedAt: string | number;
-                trashedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string;
+                updatedAt: string;
+                trashedAt: string | null;
+                deletedAt: string | null;
             };
         };
     };
@@ -38819,8 +38799,8 @@ export type GetApiV1AdminInventoryLocationsResponses = {
                  * SKUs with units on hand there
                  */
                 stockedSkus: number;
-                createdAt: string | number;
-                updatedAt: string | number;
+                createdAt: string;
+                updatedAt: string;
             }>;
         };
     };
@@ -38887,8 +38867,8 @@ export type PostApiV1AdminInventoryLocationsResponses = {
              * SKUs with units on hand there
              */
             stockedSkus: number;
-            createdAt: string | number;
-            updatedAt: string | number;
+            createdAt: string;
+            updatedAt: string;
         };
     };
 };
@@ -38961,8 +38941,8 @@ export type PatchApiV1AdminInventoryLocationsByLocationIdResponses = {
              * SKUs with units on hand there
              */
             stockedSkus: number;
-            createdAt: string | number;
-            updatedAt: string | number;
+            createdAt: string;
+            updatedAt: string;
         };
     };
 };
@@ -39020,8 +39000,8 @@ export type PostApiV1AdminInventoryLocationsByLocationIdArchiveResponses = {
              * SKUs with units on hand there
              */
             stockedSkus: number;
-            createdAt: string | number;
-            updatedAt: string | number;
+            createdAt: string;
+            updatedAt: string;
         };
     };
 };
@@ -39075,8 +39055,8 @@ export type PostApiV1AdminInventoryLocationsByLocationIdUnarchiveResponses = {
              * SKUs with units on hand there
              */
             stockedSkus: number;
-            createdAt: string | number;
-            updatedAt: string | number;
+            createdAt: string;
+            updatedAt: string;
         };
     };
 };
@@ -39134,8 +39114,8 @@ export type PostApiV1AdminInventoryLocationsByLocationIdDefaultResponses = {
              * SKUs with units on hand there
              */
             stockedSkus: number;
-            createdAt: string | number;
-            updatedAt: string | number;
+            createdAt: string;
+            updatedAt: string;
         };
     };
 };
@@ -53183,7 +53163,7 @@ export type GetApiV1AdminOrdersByIdReturnsResponses = {
                 updatedAt: string | null;
                 receiptRecovery: {
                     required: true;
-                    startedAt: number | null;
+                    startedAt: string | null;
                 } | null;
                 receipts: Array<{
                     id: string;
@@ -53364,7 +53344,7 @@ export type GetApiV1AdminOrdersByIdReturnsByReturnIdResponses = {
                 updatedAt: string | null;
                 receiptRecovery: {
                     required: true;
-                    startedAt: number | null;
+                    startedAt: string | null;
                 } | null;
                 receipts: Array<{
                     id: string;
@@ -55339,7 +55319,7 @@ export type GetApiV1AdminOrdersByIdTimelineResponses = {
                  * The viewer wrote this comment and may delete it.
                  */
                 own: boolean;
-                createdAt: string | number;
+                createdAt: string;
             }>;
             nextCursor: string | null;
             hasMore: boolean;
@@ -55409,7 +55389,7 @@ export type PostApiV1AdminOrdersByIdTimelineResponses = {
              * The viewer wrote this comment and may delete it.
              */
             own: boolean;
-            createdAt: string | number;
+            createdAt: string;
         };
     };
 };
