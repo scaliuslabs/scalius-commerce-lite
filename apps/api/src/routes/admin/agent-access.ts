@@ -2,11 +2,6 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { nanoid } from "nanoid";
 import { deleteAgentArtifactObjects } from "../../agent-access/artifact-delivery";
 import { claimAgentBrowserHandoff } from "../../agent-access/browser-handoffs";
-import {
-  APPROVAL_ID_PATTERN,
-  decideAgentApproval,
-  readAgentApproval,
-} from "../../agent-access/approvals";
 import { loadAgentAccessBackend } from "../../agent-access/backend";
 import { resolveAgentPrincipalFromGrant } from "../../agent-access/principal";
 import {
@@ -652,8 +647,9 @@ app.openapi(claimBrowserHandoffRoute, async (c) => {
 
 // A person approves one gated agent change (audit R2 F3): only the grant's
 // owner, in the same 2FA-verified dashboard session, never an agent.
+// approvals.ts loads the operation dispatcher, so the handlers import it on use.
 const approvalParams = z.object({
-  approvalId: z.string().regex(APPROVAL_ID_PATTERN),
+  approvalId: z.string().regex(/^abh_[A-Za-z0-9_-]{20}$/),
 });
 const approvalSchema = z.object({
   approvalId: z.string(),
@@ -677,6 +673,7 @@ const getApprovalRoute = createRoute({
 });
 app.openapi(getApprovalRoute, async (c) => {
   const ownerUserId = assertBrowserHandoffSession(c);
+  const { readAgentApproval } = await import("../../agent-access/approvals");
   const approval = await readAgentApproval(c.get("db"), c.env, c.req.valid("param").approvalId, ownerUserId);
   if (!approval) throw new NotFoundError("This approval request is unavailable or expired");
   noStore(c);
@@ -705,6 +702,7 @@ const decideApprovalRoute = createRoute({
 app.openapi(decideApprovalRoute, async (c) => {
   const ownerUserId = assertBrowserHandoffSession(c);
   const { decision } = c.req.valid("json");
+  const { decideAgentApproval } = await import("../../agent-access/approvals");
   const applied = await decideAgentApproval(c.get("db"), c.req.valid("param").approvalId, ownerUserId, decision);
   if (!applied) throw new NotFoundError("This approval request is unavailable, already answered, or expired");
   logOpsEvent("info", "agent_access.approval_decided", { decision });
