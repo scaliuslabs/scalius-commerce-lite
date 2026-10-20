@@ -134,6 +134,9 @@ export const CACHE_DEP_LATER_TRIGGERS: Readonly<Record<string, string>> = {
   // A redemption advances its promotion only when it exhausts it (or a removed one un-exhausts it).
   cdep_promotion_redemptions_ins: "0167_promotion_exhaustion_dependency",
   cdep_promotion_redemptions_del: "0167_promotion_exhaustion_dependency",
+  // The band guard reads the store's default low-stock level once per update.
+  cdep_product_variants_band: "0169_fk_indexes_and_trigger_guards",
+  cdep_product_variants_band_old: "0169_fk_indexes_and_trigger_guards",
 };
 
 /**
@@ -540,23 +543,40 @@ function changedColumns(table: string, spec: CacheDepTableSpec, rule: CacheDepRu
 /** Inputs of a SKU's buyer availability band (a change of anything else cannot move it). */
 const BAND_INPUTS = ["stock", "reserved_stock", "track_inventory", "low_stock_threshold"] as const;
 
+/** The store's default low-stock level (`inventory` settings document), or NULL. */
+const STORE_LOW_STOCK_DEFAULT = {
+  sqlite: "(SELECT CAST(json_extract(`value`, '$.defaultLowStockThreshold') AS INTEGER) FROM `settings` WHERE `category` = 'inventory' AND `key` = 'document' AND json_valid(`value`))",
+  postgres: `(SELECT CAST(json_extract("value", '$.defaultLowStockThreshold') AS bigint) FROM "settings" WHERE "category" = 'inventory' AND "key" = 'document' AND json_valid("value"))`,
+} as const;
+
 /**
  * The SKU's buyer availability band as a number (out 0, low 1, in 2,
  * untracked 3), the twin of `resolveBuyerAvailabilityBand` with the SKU's own
- * level, else the store default (`inventory` settings document).
+ * level, else `storeDefault`.
  */
-function bandSql(dialect: "sqlite" | "postgres", image: "OLD" | "NEW"): string {
+function bandSql(dialect: "sqlite" | "postgres", image: "OLD" | "NEW", storeDefault: string): string {
   const d = dialect === "sqlite" ? sqlite : postgres;
   const col = (name: string) => `${image}.${d.id(name)}`;
   const available = `(${col("stock")} - ${col("reserved_stock")})`;
-  const storeDefault = dialect === "sqlite"
-    ? "(SELECT CAST(json_extract(`value`, '$.defaultLowStockThreshold') AS INTEGER) FROM `settings` WHERE `category` = 'inventory' AND `key` = 'document' AND json_valid(`value`))"
-    : `(SELECT CAST(json_extract("value", '$.defaultLowStockThreshold') AS bigint) FROM "settings" WHERE "category" = 'inventory' AND "key" = 'document' AND json_valid("value"))`;
   const threshold = `COALESCE(${col("low_stock_threshold")}, ${storeDefault})`;
   if (dialect === "sqlite") {
     return `((${col("track_inventory")} = 0) * 3 + (${col("track_inventory")} <> 0) * (${available} > 0) * (1 + (COALESCE(${threshold}, 0) <= 0 OR ${available} > ${threshold})))`;
   }
   return `(CASE WHEN ${col("track_inventory")} = 0 THEN 3 WHEN ${available} <= 0 THEN 0 WHEN COALESCE(${threshold}, 0) > 0 AND ${available} <= ${threshold} THEN 1 ELSE 2 END)`;
+}
+
+/**
+ * Whether the update moved the SKU's band. The store default is read once,
+ * in a FROM subquery both bands read (a subquery without FROM is never
+ * flattened into its reader, so the settings row is parsed once per update,
+ * not once per use). Deployed 0100 read it at every use (up to four times);
+ * its render keeps that text, and 0169 reinstalls the trigger.
+ */
+function bandChangedSql(dialect: "sqlite" | "postgres"): string {
+  const storeDefault = STORE_LOW_STOCK_DEFAULT[dialect];
+  if (renderingBaseline) return `${bandSql(dialect, "OLD", storeDefault)} <> ${bandSql(dialect, "NEW", storeDefault)}`;
+  const bands = `${bandSql(dialect, "OLD", "band_store.store_default")} <> ${bandSql(dialect, "NEW", "band_store.store_default")}`;
+  return `(SELECT ${bands} FROM (SELECT ${storeDefault} AS store_default) AS band_store)`;
 }
 
 // ---------------------------------------------------------------------------
@@ -671,7 +691,7 @@ function guards(table: string, spec: CacheDepTableSpec, rule: CacheDepRule, dial
     if (rule.event !== "update") throw new Error(`${table}.${rule.name}: a band rule is an update rule.`);
     for (const column of BAND_INPUTS) assertColumn(table, column);
     simple.push(`(${BAND_INPUTS.map((column) => `OLD.${d.id(column)} ${d.distinct} NEW.${d.id(column)}`).join(" OR ")})`);
-    subquery.push(`${bandSql(dialect, "OLD")} <> ${bandSql(dialect, "NEW")}`);
+    subquery.push(bandChangedSql(dialect));
   }
   const where = (renderingBaseline ? CACHE_DEP_BASELINE_WHERE[`${table}:${rule.name}`] : undefined) ?? rule.where;
   for (const [column, value] of Object.entries(where?.equals ?? {})) {
@@ -806,8 +826,12 @@ const generatedBaseline = (() => {
 const postgresByName = new Map(generatedWithRetired.map((trigger) => [trigger.name, trigger.postgres]));
 const baselineWhereTriggers = new Set(Object.keys(CACHE_DEP_BASELINE_WHERE)
   .map((key) => `${CACHE_DEP_TRIGGER_PREFIX}${key.replace(":", "_")}`));
+/** Band rules, whose 0100 text read the store default at every use (`bandChangedSql`). */
+const bandTriggers = new Set(registryTables(false).flatMap(([table, spec]) =>
+  spec.rules.filter((rule) => rule.bandChanged).map((rule) => triggerName(table, rule))));
 const baselineByName = new Map([
-  ...generatedBaseline.filter((trigger) => trigger.table in CACHE_DEP_BASELINE_COLUMNS || baselineWhereTriggers.has(trigger.name)),
+  ...generatedBaseline.filter((trigger) => trigger.table in CACHE_DEP_BASELINE_COLUMNS
+    || baselineWhereTriggers.has(trigger.name) || bandTriggers.has(trigger.name)),
   ...generatedProjectionBaseline.filter((trigger) => PROJECTION_TABLES.has(trigger.table)),
 ].map((trigger) => [trigger.name, trigger]));
 

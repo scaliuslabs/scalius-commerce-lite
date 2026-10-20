@@ -888,8 +888,8 @@ describe("provider-neutral schema upgrades", () => {
       {
         version: 169,
         name: "0169_fk_indexes_and_trigger_guards",
-        sqliteStatements: 18,
-        postgresStatements: 18,
+        sqliteStatements: 22,
+        postgresStatements: 22,
       },
     ]);
   });

@@ -34,4 +34,50 @@ CREATE INDEX "warranty_claims_warranty_idx" ON "warranty_claims" ("warranty_id")
 --> statement-breakpoint
 CREATE INDEX "warranty_claims_order_item_idx" ON "warranty_claims" ("order_item_id");
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (169, '0169_fk_indexes_and_trigger_guards', '5bf32515d910e92fe3f3455e4d53b57711d315ca49a63b46ff44673a0c29577d');
+-- A SKU's band triggers read the store's default low-stock level once per
+-- update instead of at every use (up to four settings JSON parses on every
+-- stock write). Same guards, same keys; generated from packages/shared/src/
+-- cache-deps.ts by packages/database/scripts/cache-dep-triggers.ts.
+DROP TRIGGER IF EXISTS "cdep_product_variants_band" ON "product_variants";
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."cdep_product_variants_band_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  IF NOT coalesce(((SELECT (CASE WHEN OLD."track_inventory" = 0 THEN 3 WHEN (OLD."stock" - OLD."reserved_stock") <= 0 THEN 0 WHEN COALESCE(COALESCE(OLD."low_stock_threshold", band_store.store_default), 0) > 0 AND (OLD."stock" - OLD."reserved_stock") <= COALESCE(OLD."low_stock_threshold", band_store.store_default) THEN 1 ELSE 2 END) <> (CASE WHEN NEW."track_inventory" = 0 THEN 3 WHEN (NEW."stock" - NEW."reserved_stock") <= 0 THEN 0 WHEN COALESCE(COALESCE(NEW."low_stock_threshold", band_store.store_default), 0) > 0 AND (NEW."stock" - NEW."reserved_stock") <= COALESCE(NEW."low_stock_threshold", band_store.store_default) THEN 1 ELSE 2 END) FROM (SELECT (SELECT CAST(json_extract("value", '$.defaultLowStockThreshold') AS bigint) FROM "settings" WHERE "category" = 'inventory' AND "key" = 'document' AND json_valid("value")) AS store_default) AS band_store)), false) THEN
+    RETURN NULL;
+  END IF;
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['p:' || NEW."product_id", 't:product_variants']::text[]) AS key_list(value)));
+  RETURN NULL;
+END
+$trigger_function$;
+CREATE CONSTRAINT TRIGGER "cdep_product_variants_band"
+AFTER UPDATE ON "product_variants"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+WHEN ((OLD."stock" IS DISTINCT FROM NEW."stock" OR OLD."reserved_stock" IS DISTINCT FROM NEW."reserved_stock" OR OLD."track_inventory" IS DISTINCT FROM NEW."track_inventory" OR OLD."low_stock_threshold" IS DISTINCT FROM NEW."low_stock_threshold"))
+EXECUTE FUNCTION scalius_compat."cdep_product_variants_band_fn"();
+--> statement-breakpoint
+DROP TRIGGER IF EXISTS "cdep_product_variants_band_old" ON "product_variants";
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION scalius_compat."cdep_product_variants_band_old_fn"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $trigger_function$
+BEGIN
+  IF NOT coalesce(((SELECT (CASE WHEN OLD."track_inventory" = 0 THEN 3 WHEN (OLD."stock" - OLD."reserved_stock") <= 0 THEN 0 WHEN COALESCE(COALESCE(OLD."low_stock_threshold", band_store.store_default), 0) > 0 AND (OLD."stock" - OLD."reserved_stock") <= COALESCE(OLD."low_stock_threshold", band_store.store_default) THEN 1 ELSE 2 END) <> (CASE WHEN NEW."track_inventory" = 0 THEN 3 WHEN (NEW."stock" - NEW."reserved_stock") <= 0 THEN 0 WHEN COALESCE(COALESCE(NEW."low_stock_threshold", band_store.store_default), 0) > 0 AND (NEW."stock" - NEW."reserved_stock") <= COALESCE(NEW."low_stock_threshold", band_store.store_default) THEN 1 ELSE 2 END) FROM (SELECT (SELECT CAST(json_extract("value", '$.defaultLowStockThreshold') AS bigint) FROM "settings" WHERE "category" = 'inventory' AND "key" = 'document' AND json_valid("value")) AS store_default) AS band_store)), false) THEN
+    RETURN NULL;
+  END IF;
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['p:' || OLD."product_id", 't:product_variants']::text[]) AS key_list(value)));
+  RETURN NULL;
+END
+$trigger_function$;
+CREATE CONSTRAINT TRIGGER "cdep_product_variants_band_old"
+AFTER UPDATE ON "product_variants"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+WHEN ((OLD."product_id" IS DISTINCT FROM NEW."product_id") AND (OLD."stock" IS DISTINCT FROM NEW."stock" OR OLD."reserved_stock" IS DISTINCT FROM NEW."reserved_stock" OR OLD."track_inventory" IS DISTINCT FROM NEW."track_inventory" OR OLD."low_stock_threshold" IS DISTINCT FROM NEW."low_stock_threshold"))
+EXECUTE FUNCTION scalius_compat."cdep_product_variants_band_old_fn"();
+--> statement-breakpoint
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (169, '0169_fk_indexes_and_trigger_guards', '1a3adbac4726960c9bab33d5e44dcb86e6aa387d5ceb4b756a2a0532010ad47f');

@@ -194,4 +194,35 @@ BEGIN
   VALUES (NEW.`rowid`, NEW.`label`, NEW.`target_value`, NEW.`target_id`);
 END;
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (169, '0169_fk_indexes_and_trigger_guards', '5bf32515d910e92fe3f3455e4d53b57711d315ca49a63b46ff44673a0c29577d');
+-- A SKU's band triggers read the store's default low-stock level once per
+-- update instead of at every use (up to four settings JSON parses on every
+-- stock write). Same guards, same keys; generated from packages/shared/src/
+-- cache-deps.ts by packages/database/scripts/cache-dep-triggers.ts.
+DROP TRIGGER IF EXISTS `cdep_product_variants_band`;
+--> statement-breakpoint
+CREATE TRIGGER `cdep_product_variants_band` AFTER UPDATE ON `product_variants`
+WHEN (OLD.`stock` IS NOT NEW.`stock` OR OLD.`reserved_stock` IS NOT NEW.`reserved_stock` OR OLD.`track_inventory` IS NOT NEW.`track_inventory` OR OLD.`low_stock_threshold` IS NOT NEW.`low_stock_threshold`)
+  AND (SELECT ((OLD.`track_inventory` = 0) * 3 + (OLD.`track_inventory` <> 0) * ((OLD.`stock` - OLD.`reserved_stock`) > 0) * (1 + (COALESCE(COALESCE(OLD.`low_stock_threshold`, band_store.store_default), 0) <= 0 OR (OLD.`stock` - OLD.`reserved_stock`) > COALESCE(OLD.`low_stock_threshold`, band_store.store_default)))) <> ((NEW.`track_inventory` = 0) * 3 + (NEW.`track_inventory` <> 0) * ((NEW.`stock` - NEW.`reserved_stock`) > 0) * (1 + (COALESCE(COALESCE(NEW.`low_stock_threshold`, band_store.store_default), 0) <= 0 OR (NEW.`stock` - NEW.`reserved_stock`) > COALESCE(NEW.`low_stock_threshold`, band_store.store_default)))) FROM (SELECT (SELECT CAST(json_extract(`value`, '$.defaultLowStockThreshold') AS INTEGER) FROM `settings` WHERE `category` = 'inventory' AND `key` = 'document' AND json_valid(`value`)) AS store_default) AS band_store)
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || NEW.`product_id`, 't:product_variants')) AS key_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
+DROP TRIGGER IF EXISTS `cdep_product_variants_band_old`;
+--> statement-breakpoint
+CREATE TRIGGER `cdep_product_variants_band_old` AFTER UPDATE ON `product_variants`
+WHEN (OLD.`product_id` IS NOT NEW.`product_id`)
+  AND (OLD.`stock` IS NOT NEW.`stock` OR OLD.`reserved_stock` IS NOT NEW.`reserved_stock` OR OLD.`track_inventory` IS NOT NEW.`track_inventory` OR OLD.`low_stock_threshold` IS NOT NEW.`low_stock_threshold`)
+  AND (SELECT ((OLD.`track_inventory` = 0) * 3 + (OLD.`track_inventory` <> 0) * ((OLD.`stock` - OLD.`reserved_stock`) > 0) * (1 + (COALESCE(COALESCE(OLD.`low_stock_threshold`, band_store.store_default), 0) <= 0 OR (OLD.`stock` - OLD.`reserved_stock`) > COALESCE(OLD.`low_stock_threshold`, band_store.store_default)))) <> ((NEW.`track_inventory` = 0) * 3 + (NEW.`track_inventory` <> 0) * ((NEW.`stock` - NEW.`reserved_stock`) > 0) * (1 + (COALESCE(COALESCE(NEW.`low_stock_threshold`, band_store.store_default), 0) <= 0 OR (NEW.`stock` - NEW.`reserved_stock`) > COALESCE(NEW.`low_stock_threshold`, band_store.store_default)))) FROM (SELECT (SELECT CAST(json_extract(`value`, '$.defaultLowStockThreshold') AS INTEGER) FROM `settings` WHERE `category` = 'inventory' AND `key` = 'document' AND json_valid(`value`)) AS store_default) AS band_store)
+BEGIN
+  INSERT INTO `cache_dep` (`dep`, `seq`)
+  SELECT key_rows.dep, COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 FROM (SELECT key_list.value AS dep FROM json_each(json_array('p:' || OLD.`product_id`, 't:product_variants')) AS key_list) AS key_rows
+  WHERE key_rows.dep IS NOT NULL AND COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 0
+  UNION ALL SELECT 'store', COALESCE((SELECT `seq` FROM `cache_clock` WHERE `id` = 1), 0) + 1 WHERE COALESCE((SELECT `coarse` FROM `cache_clock` WHERE `id` = 1), 0) = 1
+  ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
+END;
+--> statement-breakpoint
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (169, '0169_fk_indexes_and_trigger_guards', '1a3adbac4726960c9bab33d5e44dcb86e6aa387d5ceb4b756a2a0532010ad47f');

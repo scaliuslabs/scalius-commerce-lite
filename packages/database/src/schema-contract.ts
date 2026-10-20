@@ -625,7 +625,7 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
   {
     version: 169,
     name: "0169_fk_indexes_and_trigger_guards",
-    sourceSha256: "5bf32515d910e92fe3f3455e4d53b57711d315ca49a63b46ff44673a0c29577d",
+    sourceSha256: "1a3adbac4726960c9bab33d5e44dcb86e6aa387d5ceb4b756a2a0532010ad47f",
   },
 ] as const;
 
