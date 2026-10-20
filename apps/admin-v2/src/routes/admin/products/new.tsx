@@ -4,6 +4,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { ProductForm } from "~/components/admin/ProductForm";
 import { categoryFormOptionsQueryOptions } from "~/lib/api-query-options/categories";
 import { seoSettingsQueryOptions } from "~/lib/api-query-options/settings";
+import { salesChannelsQueryOptions } from "~/lib/api-query-options/sales-channels";
 import { DEFAULT_PRODUCT_CONDITION, type Category } from "~/components/admin/product-form/types";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { LoadingFallback } from "~/components/admin/shared/LoadingFallback";
@@ -40,12 +41,18 @@ const defaultValues = {
   customizationSchema: [],
 };
 
+const activeDefaultValues = { ...defaultValues, isActive: true };
+
 export const Route = createFileRoute("/admin/products/new")({
   loader: async ({ context: { queryClient } }) => {
-    await Promise.all([
+    const [, , channels] = await Promise.all([
       queryClient.ensureQueryData(categoryFormOptionsQueryOptions()),
       queryClient.ensureQueryData(seoSettingsQueryOptions()).catch(() => null),
+      queryClient.ensureQueryData(salesChannelsQueryOptions()).catch(() => null),
     ]);
+    // A new product starts Active, as Shopify's does, once the store sells
+    // somewhere; a store whose every channel is off (or unreadable) starts it as a draft.
+    return { startActive: Boolean(channels?.some((channel) => channel.status === "active")) };
   },
   head: () => pageHead("addProduct"),
   errorComponent: RouteErrorComponent,
@@ -54,6 +61,7 @@ export const Route = createFileRoute("/admin/products/new")({
 
 function NewProductPage() {
   const { data: categoryData } = useSuspenseQuery(categoryFormOptionsQueryOptions());
+  const { startActive } = Route.useLoaderData();
   const allCategories = categoryData.categories as Category[];
   const [createComposition, setCreateComposition] = useState<ProductCreateComposition | null>(null);
   const [optionMatrixIssue, setOptionMatrixIssue] = useState<string | null>(null);
@@ -68,7 +76,7 @@ function NewProductPage() {
       <ProductForm
         key={generation}
         categories={allCategories}
-        defaultValues={defaultValues}
+        defaultValues={startActive ? activeDefaultValues : defaultValues}
         isEdit={false}
         matrixRef={matrixRef}
         createComposition={createComposition}

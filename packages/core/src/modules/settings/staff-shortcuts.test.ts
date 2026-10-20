@@ -4,7 +4,7 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { ValidationError } from "@scalius/core/errors";
 
 import { SettingsRevisionConflictError } from "../../settings-store";
-import { dismissSetupGuide, readSetupGuideDismissed } from "./staff-setup-guide";
+import { dismissSetupGuide, readSetupGuideDismissed, showSetupGuide } from "./staff-setup-guide";
 import {
   deleteStaffPreferencesStatement,
   readStaffShortcuts,
@@ -93,6 +93,9 @@ describe("staff setup guide dismissal", () => {
     await dismissSetupGuide(db, "user_1");
     expect(await readSetupGuideDismissed(db, "user_1")).toBe(true);
     expect(await readSetupGuideDismissed(db, "user_2")).toBe(false);
+    await showSetupGuide(db, "user_1");
+    expect(await readSetupGuideDismissed(db, "user_1")).toBe(false);
+    await dismissSetupGuide(db, "user_1");
     await safeBatch(db, [deleteStaffPreferencesStatement(db, "user_1")] as never);
     expect(await readSetupGuideDismissed(db, "user_1")).toBe(false);
   });

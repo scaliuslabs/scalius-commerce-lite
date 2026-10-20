@@ -26,6 +26,10 @@ export const DASHBOARD_HOME_OPERATIONS = {
     exposure: "excluded",
     reason: "Dismissing the setup guide is the signed-in staff member's own Home preference.",
   },
+  "dashboard.home.setup_guide_show": {
+    exposure: "excluded",
+    reason: "Showing the setup guide again is the signed-in staff member's own Home preference.",
+  },
   "dashboard.search_reindex.reindex": {
     exposure: "excluded",
     reason:

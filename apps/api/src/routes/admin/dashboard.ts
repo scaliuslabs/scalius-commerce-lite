@@ -19,7 +19,7 @@ import { getSetupGuideFacts, getStoreSetupStatus } from "@scalius/core/modules/o
 import { getPaymentGatewaySettingsSnapshot } from "@scalius/core/modules/payments";
 import { getPluginInstallation, pluginNeedsApproval } from "@scalius/core/modules/plugins";
 import { getPlatformSettings } from "@scalius/core/modules/platform";
-import { dismissSetupGuide, getCurrencySettings, readSetupGuideDismissed } from "@scalius/core/modules/settings";
+import { dismissSetupGuide, getCurrencySettings, readSetupGuideDismissed, showSetupGuide } from "@scalius/core/modules/settings";
 
 import { BUNDLED_PLUGINS } from "../../plugins/bundled.gen";
 import { PLUGIN_CATALOG } from "../../plugins/catalog.gen";
@@ -197,13 +197,20 @@ const setupGuideSchema = z.object({
     countryCode: z.string().length(2).openapi({ description: "The store's country; the guide shows country-specific steps for it." }),
     setupNeeded: z.boolean().openapi({ description: "The new-store setup step (name, country, currency, time zone) still applies." }),
     steps: z.object({
-        product: z.boolean().openapi({ description: "A product exists outside the trash." }),
+        product: z.boolean().openapi({ description: "A live product exists: active and outside the trash." }),
         details: z.boolean().openapi({ description: "The store has a name." }),
         theme: z.boolean().openapi({ description: "The theme was published from the editor." }),
         payments: z.boolean().openapi({ description: "Checkout offers a payment method that is ready, in the store's currency and for its country." }),
         shipping: z.boolean().openapi({ description: "A live delivery rate serves a place, or local pickup is on." }),
         domain: z.boolean().openapi({ description: "The storefront web address is set." }),
-        order: z.boolean().openapi({ description: "An order exists." }),
+        order: z.boolean().openapi({ description: "A buyer placed an order through the storefront's checkout." }),
+    }),
+    drafts: z.object({
+        count: z.number().int().min(0).openapi({ description: "Draft products outside the trash (counted up to 1,000)." }),
+        newestId: z.string().nullable().openapi({ description: "The newest draft product, or null when there is none." }),
+    }).openapi({ description: "Drafts, which the product step asks the merchant to make active." }),
+    testOrderUrl: z.string().nullable().openapi({
+        description: "A storefront link that puts a live product in the cart and opens checkout; null until the store has a web address and a live product.",
     }),
     bangladeshPack: z.object({ active: z.boolean() }).nullable().openapi({
         description: "The Bangladesh pack, for a Bangladesh store whose deployment includes it; null otherwise.",
@@ -257,9 +264,14 @@ async function readSetupSteps(c: Context<{ Bindings: Env }>) {
     const offered = providers
         .filterForCurrency(snapshot.activePaymentMethods.enabledMethods, currency.currencyCode)
         .filter((method) => providers.countryIssue(method, setup.current.countryCode) === null);
+    const storefrontOrigin = platform.storefrontUrl.trim().replace(/\/+$/, "");
     return {
         countryCode,
         setupNeeded: setup.needed,
+        drafts: { count: facts.draftProducts, newestId: facts.newestDraftProductId },
+        testOrderUrl: /^https?:\/\//.test(storefrontOrigin) && facts.testOrderProductSlug
+            ? `${storefrontOrigin}/buy/${encodeURIComponent(facts.testOrderProductSlug)}`
+            : null,
         steps: {
             product: facts.hasProducts,
             details: setup.current.storeName.trim() !== "",
@@ -292,12 +304,12 @@ app.openapi(setupGuideRoute, async (c) => {
 
 const SETUP_CHECKLIST_STEPS = [
     { id: "details", title: "Name the store and choose its country and currency", operationId: "dashboard.settings.store_setup_apply" },
-    { id: "product", title: "Add a product", operationId: "dashboard.products.create" },
+    { id: "product", title: "Add a product and make it active", operationId: "dashboard.products.create" },
     { id: "payments", title: "Offer a payment method buyers in the store's country can use", operationId: "dashboard.payments.methods_update" },
     { id: "shipping", title: "Set delivery rates or local pickup", operationId: "dashboard.shipping_zones.create" },
     { id: "theme", title: "Publish the theme", operationId: "dashboard.theme.publish" },
     { id: "domain", title: "Set the storefront web address", operationId: "dashboard.settings.platform_update" },
-    { id: "order", title: "Take a first order", operationId: "dashboard.resources.orders.create" },
+    { id: "order", title: "Place a test order through the storefront's checkout", operationId: "dashboard.resources.orders.create" },
 ] as const;
 
 const setupChecklistSchema = z.object({
@@ -358,6 +370,24 @@ app.openapi(dismissSetupGuideRoute, async (c) => {
     await dismissSetupGuide(c.get("db"), c.get("user").id);
     c.header("Cache-Control", "private, no-store");
     return ok(c, { dismissed: true as const });
+});
+
+const showSetupGuideRoute = createRoute({
+    method: "post",
+    path: "/setup-guide/show",
+    tags: ["Admin - Dashboard"],
+    summary: "Show Home's setup guide again",
+    description: "Brings the setup guide back for the signed-in staff member only (Undo after a dismiss, or Home's menu). Saying it again changes nothing.",
+    operationId: "dashboard.home.setup_guide_show",
+    responses: {
+        200: { description: "Setup guide shown", content: { "application/json": { schema: successEnvelope(z.object({ dismissed: z.literal(false) })) } } },
+    },
+});
+
+app.openapi(showSetupGuideRoute, async (c) => {
+    await showSetupGuide(c.get("db"), c.get("user").id);
+    c.header("Cache-Control", "private, no-store");
+    return ok(c, { dismissed: false as const });
 });
 
 export { app as adminDashboardRoutes };
