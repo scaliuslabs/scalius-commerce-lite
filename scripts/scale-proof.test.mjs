@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { docBlock, parseArgs, renderResults, replaceDocBlock } from "./scale-proof.mjs";
+import { FREE_MISS_ROWS_CEILING, docBlock, missCeilingFindings, parseArgs, renderResults, replaceDocBlock } from "./scale-proof.mjs";
 
 const d1 = {
   provider: "d1",
@@ -38,6 +38,17 @@ describe("scale proof tables", () => {
     expect(text).toContain("| postgres | 1 hot SKU | 16 | 20 | 3.0 | 80 | 200 | 4 (HTTP 500) | 37 |");
     expect(text).toContain("| d1 | 3 lines over many SKUs | 16 | 100 | 8.0 | 90 | 300 | 0 | n/a |");
     expect(text).toContain("| d1 | 900 | 214 |");
+  });
+
+  it("names every D1 read over the Free miss ceiling and leaves PostgreSQL tuples out", () => {
+    expect(FREE_MISS_ROWS_CEILING).toBe(25_000);
+    expect(missCeilingFindings([d1, pg])).toEqual([]);
+    expect(renderResults([d1])).toContain("Every D1 read is within the Free miss ceiling (25,000 rows, 200 misses a day).");
+    const heavy = { ...d1, reads: [...d1.reads, { name: "search", status: 200, p50: 69, p95: 85, rowsRead: 52_134 }, { name: "edge", status: 200, p50: 1, p95: 1, rowsRead: 25_000 }] };
+    const heavyPg = { ...pg, reads: [{ name: "search", status: 200, p50: 1, p95: 1, rowsRead: 194_209 }] };
+    expect(missCeilingFindings([heavy, heavyPg])).toEqual(["search: 52,134 rows (95 misses a day)"]);
+    expect(renderResults([heavy])).toContain("Over the Free miss ceiling (25,000 rows, 200 misses a day): search: 52,134 rows (95 misses a day).");
+    expect(renderResults([heavyPg])).not.toContain("miss ceiling");
   });
 
   it("replaces only the marked block of the document", () => {
