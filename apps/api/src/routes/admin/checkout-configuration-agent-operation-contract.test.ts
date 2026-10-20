@@ -45,6 +45,7 @@ const expectedOperations: ExpectedOperation[] = [
   ["put", "/api/v1/admin/settings/shipping-methods/pickup", "dashboard.shipping_zones.pickup_update"],
   ["put", "/api/v1/admin/settings/shipping-methods/template", "dashboard.shipping_zones.apply_template"],
   ["put", "/api/v1/admin/settings/shipping-methods/{id}", "dashboard.shipping_zones.update"],
+  ["patch", "/api/v1/admin/settings/shipping-methods/{id}/rates/{rateId}", "dashboard.shipping_zones.rate_update"],
   ["delete", "/api/v1/admin/settings/shipping-methods/{id}", "dashboard.shipping_zones.delete"],
   ["get", "/api/v1/admin/settings/delivery-locations", "dashboard.delivery_locations.list"],
   ["get", "/api/v1/admin/settings/delivery-locations/countries", "dashboard.delivery_locations.countries"],
@@ -85,6 +86,7 @@ const operationsWithJsonBodies = new Set([
   "dashboard.payments.stripe_update",
   "dashboard.shipping_zones.create",
   "dashboard.shipping_zones.update",
+  "dashboard.shipping_zones.rate_update",
   "dashboard.shipping_zones.pickup_update",
   "dashboard.shipping_zones.apply_template",
   "dashboard.delivery_locations.create",
@@ -121,6 +123,7 @@ const backendScenarios = {
     "dashboard.shipping_methods.list",
     "dashboard.shipping_zones.create",
     "dashboard.shipping_zones.update",
+    "dashboard.shipping_zones.rate_update",
     "dashboard.shipping_zones.delete",
     "dashboard.shipping_zones.pickup_update",
     "dashboard.shipping_zones.apply_template",
@@ -184,7 +187,7 @@ describe("checkout configuration agent operation contract", () => {
       expect(ids.has(operationId), `duplicate ${operationId}`).toBe(false);
       ids.add(operationId);
     }
-    expect(ids.size).toBe(44);
+    expect(ids.size).toBe(45);
   });
 
   it("marks every declared JSON mutation body as required", () => {
@@ -193,7 +196,7 @@ describe("checkout configuration agent operation contract", () => {
       if (!operationsWithJsonBodies.has(operationId)) continue;
       expect(spec.paths?.[path]?.[method]?.requestBody?.required, operationId).toBe(true);
     }
-    expect(operationsWithJsonBodies.size).toBe(23);
+    expect(operationsWithJsonBodies.size).toBe(24);
   });
 
   it("maps every server outcome to one backend scenario and keeps local UI actions local", () => {

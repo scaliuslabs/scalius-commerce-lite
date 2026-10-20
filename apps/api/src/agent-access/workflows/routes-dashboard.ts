@@ -1698,6 +1698,7 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     operationIds: [
       "dashboard.shipping_methods.list",
       "dashboard.shipping_zones.apply_template",
+      "dashboard.shipping_zones.rate_update",
       "dashboard.shipping_zones.update",
       "dashboard.shipping_zones.create",
     ],
@@ -1705,7 +1706,7 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     requiresConfirmation: true,
     requiresVerification: true,
     rules: [
-      "Read the zones first: without zones, the Dhaka template creates inside/outside zones; then set each zone's rate.",
+      "Read the zones first: without zones, the Dhaka template creates inside/outside zones; then set each zone's rate fee with rate_update (zone id, revision and rate id from the read; fees in major units).",
       "Every delivery rate belongs to a zone; an address in no zone gets no delivery.",
     ],
   },

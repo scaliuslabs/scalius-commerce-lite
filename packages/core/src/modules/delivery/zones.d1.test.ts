@@ -13,6 +13,7 @@ import {
     listDeliveryZones,
     resolveDeliveryRate,
     updateDeliveryZone,
+    updateDeliveryZoneRate,
     updatePickupRates,
 } from "./zones";
 
@@ -401,6 +402,36 @@ describe("shipping zone editing", () => {
         expect(await names(db, { city: "dhaka", zone: "savar" })).toEqual(["Near Dhaka"]);
         expect(await names(db, { city: "ctg", zone: "agrabad" })).toEqual(["Outside Dhaka"]);
         await expect(applyDeliveryZoneTemplate(db, "dhaka_two_zone", BDT)).rejects.toMatchObject({ status: 409 });
+    });
+
+    it("sets one rate's fee and threshold against the zone revision, leaving the rest of the zone alone", async () => {
+        const { db } = seedLocations();
+        await applyDeliveryZoneTemplate(db, "dhaka_two_zone", BDT);
+        const before = await listDeliveryZones(db, BDT.decimalPlaces);
+        const inside = before.zones.find((zone) => zone.name === "Inside Dhaka")!;
+        const outside = before.zones.find((zone) => zone.name === "Bangladesh")!;
+        const rateId = inside.rates[0]!.id;
+
+        await expect(updateDeliveryZoneRate(db, inside.id, rateId, { fee: 65 }, inside.revision, BDT))
+            .resolves.toEqual({ id: inside.id, revision: inside.revision + 1 });
+        await updateDeliveryZoneRate(db, inside.id, rateId, { freeOver: 3000 }, inside.revision + 1, BDT);
+
+        const after = await listDeliveryZones(db, BDT.decimalPlaces);
+        const insideAfter = after.zones.find((zone) => zone.id === inside.id)!;
+        expect(insideAfter.rates).toEqual([{ ...inside.rates[0]!, fee: 65, freeOver: 3000 }]);
+        expect(insideAfter.locations).toEqual(inside.locations);
+        expect(after.zones.find((zone) => zone.id === outside.id)).toEqual(outside);
+        expect((await listDeliveryRatesForDestination(db, { city: "dhaka" }))[0]).toMatchObject({ feeMinor: 6_500, freeOverMinor: 300_000 });
+
+        // A stale revision, a rate of another zone, paisa and an empty change are refused.
+        await expect(updateDeliveryZoneRate(db, inside.id, rateId, { fee: 70 }, inside.revision, BDT)).rejects.toMatchObject({ status: 409 });
+        await expect(updateDeliveryZoneRate(db, inside.id, outside.rates[0]!.id, { fee: 70 }, insideAfter.revision, BDT))
+            .rejects.toMatchObject({ status: 404 });
+        await expect(updateDeliveryZoneRate(db, inside.id, rateId, { fee: 60.5 }, insideAfter.revision, BDT))
+            .rejects.toMatchObject({ status: 400 });
+        await expect(updateDeliveryZoneRate(db, inside.id, rateId, {}, insideAfter.revision, BDT)).rejects.toMatchObject({ status: 400 });
+        await updateDeliveryZoneRate(db, inside.id, rateId, { freeOver: null }, insideAfter.revision, BDT);
+        expect((await listDeliveryZones(db, BDT.decimalPlaces)).zones.find((zone) => zone.id === inside.id)!.rates[0]!.freeOver).toBeNull();
     });
 });
 

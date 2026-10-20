@@ -9,6 +9,7 @@ import {
     deleteDeliveryZone,
     listDeliveryZones,
     updateDeliveryZone,
+    updateDeliveryZoneRate,
     updatePickupRates,
 } from "@scalius/core/modules/delivery";
 import { getCurrencyConfig } from "@scalius/core/modules/settings";
@@ -241,6 +242,51 @@ app.openapi(updateZoneRoute, async (c) => {
     const { id } = c.req.valid("param");
     const { expectedRevision, ...zone } = c.req.valid("json");
     const result = await updateDeliveryZone(db, id, zone, expectedRevision, await readStoreCurrency(db));
+
+    return ok(c, result);
+});
+
+const rateParams = zoneParams.extend({ rateId: z.string().min(1).max(128) });
+
+const updateRateRoute = createRoute({
+    method: "patch",
+    path: "/{id}/rates/{rateId}",
+    operationId: "dashboard.shipping_zones.rate_update",
+    tags: TAGS,
+    summary: "Set one delivery rate's fee, free-delivery threshold or availability in a zone",
+    description: "A narrow change to one rate: the zone id, its revision and the rate id come from dashboard.shipping_methods.list (zones[].id, zones[].revision, zones[].rates[].id). Amounts are decimal major units in the store currency, as that read returns them (60 is ৳60 in a BDT store); freeOver null removes the threshold. Everything else in the zone stays as it is.",
+    request: {
+        params: rateParams,
+        body: {
+            required: true,
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        expectedRevision: z.number().int().min(1).openapi({ description: "The zone's revision from the read." }),
+                        fee: amount("Enter a charge up to 1,00,000.").optional().openapi({ description: "The delivery charge, in major units." }),
+                        freeOver: amount("Enter an amount up to 1,00,000.").nullable().optional().openapi({
+                            description: "Free delivery from this order subtotal, in major units; null removes it.",
+                        }),
+                        isActive: z.boolean().optional(),
+                    }).refine((body) => body.fee !== undefined || body.freeOver !== undefined || body.isActive !== undefined, {
+                        message: "Change the fee, the free-delivery threshold or whether the rate is active.",
+                    }),
+                },
+            },
+        },
+    },
+    responses: {
+        200: { description: "Rate saved", content: { "application/json": { schema: successEnvelope(revisionSchema) } } },
+        ...errorResponses,
+        409: conflictResponse,
+    },
+});
+
+app.openapi(updateRateRoute, async (c) => {
+    const db = c.get("db");
+    const { id, rateId } = c.req.valid("param");
+    const { expectedRevision, ...patch } = c.req.valid("json");
+    const result = await updateDeliveryZoneRate(db, id, rateId, patch, expectedRevision, await readStoreCurrency(db));
 
     return ok(c, result);
 });

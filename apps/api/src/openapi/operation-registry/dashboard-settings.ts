@@ -285,6 +285,7 @@ export const DASHBOARD_SETTINGS_OPERATIONS = {
   "dashboard.shipping_zones.delete": { risk: "destructive" },
   "dashboard.shipping_zones.pickup_update": { revision: "required" },
   "dashboard.shipping_zones.update": { revision: "required" },
+  "dashboard.shipping_zones.rate_update": { revision: "required", limits: { request: 16_384, response: 8_192 } },
   "dashboard.taxes.classes_create": {},
   "dashboard.taxes.classes_delete": {
     risk: "destructive",
