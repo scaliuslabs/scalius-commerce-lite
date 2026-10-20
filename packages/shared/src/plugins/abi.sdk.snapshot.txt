@@ -218,8 +218,10 @@ export interface PluginMessaging {
         html: string;
         text?: string;
         marketing?: boolean;
+        idempotencyKey?: string;
     }): Promise<{
         queued: boolean;
+        duplicate?: boolean;
     }>;
     sms(input: {
         customerId?: string;
@@ -696,6 +698,7 @@ export interface PluginRuntimeBridge {
     customFieldsSet(ownerType: string, ownerId: string, values: Record<string, unknown>): Promise<void>;
     messagingEmail(input: unknown): Promise<{
         queued: boolean;
+        duplicate?: boolean;
     }>;
     messagingSms(input: unknown): Promise<{
         queued: boolean;

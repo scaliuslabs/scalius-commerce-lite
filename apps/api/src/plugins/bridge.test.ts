@@ -251,6 +251,21 @@ describe("plugin messaging", () => {
       .rejects.toThrow(/^\[messaging\.invalid\] /);
   });
 
+  it("sends an email once per idempotency key, and again after a failed send", async () => {
+    const bridge = bridgeWith(["customers.view"]);
+    const send = (key: string) => bridge.messagingEmail({ customerId: "cus_1", subject: "Order", html: "<p>New order</p>", idempotencyKey: key });
+    vi.mocked(messaging.sendEmail).mockClear();
+    vi.mocked(messaging.sendEmail).mockResolvedValueOnce({ success: false } as never);
+    expect(await send("split-notice-1")).toEqual({ queued: false });
+    expect(await send("split-notice-1")).toEqual({ queued: true });
+    expect(await send("split-notice-1")).toEqual({ queued: true, duplicate: true });
+    expect(messaging.sendEmail).toHaveBeenCalledTimes(2);
+    // Another key is another message.
+    expect(await send("split-notice-2")).toEqual({ queued: true });
+    expect(messaging.sendEmail).toHaveBeenCalledTimes(3);
+    await expect(send("short")).rejects.toThrow(/^\[messaging\.invalid\] idempotencyKey/);
+  });
+
   it("sends `to` only a staff member, an address its declared recipient fields hold, or anyone with send_messages_any", async () => {
     const db = environment.db();
     const letters: PluginManifestInput = {

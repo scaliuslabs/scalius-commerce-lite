@@ -92,7 +92,7 @@ export interface PluginBridgeApi {
   httpFetch(url: string, init?: PluginHttpInit): Promise<PluginHttpResult>;
   customFieldsGet(ownerType: string, ownerId: string): Promise<Record<string, unknown>>;
   customFieldsSet(ownerType: string, ownerId: string, values: Record<string, unknown>): Promise<void>;
-  messagingEmail(input: { customerId?: string; to?: string; subject: string; html: string; text?: string; marketing?: boolean }): Promise<{ queued: boolean }>;
+  messagingEmail(input: { customerId?: string; to?: string; subject: string; html: string; text?: string; marketing?: boolean; idempotencyKey?: string }): Promise<{ queued: boolean; duplicate?: boolean }>;
   messagingSms(input: { customerId?: string; to?: string; text: string; marketing?: boolean }): Promise<{ queued: boolean }>;
   messagingNotifyStaff(input: { title: string; body?: string; url?: string }): Promise<void>;
   /** A push to one buyer (`customers.view`): Web Push or the store's app push provider. */
@@ -430,7 +430,7 @@ export class PluginBridgeHost implements PluginBridgeApi {
 
   // ── messaging ──────────────────────────────────────────────────────────
 
-  async messagingEmail(input: { customerId?: string; to?: string; subject: string; html: string; text?: string; marketing?: boolean }): Promise<{ queued: boolean }> {
+  async messagingEmail(input: { customerId?: string; to?: string; subject: string; html: string; text?: string; marketing?: boolean; idempotencyKey?: string }): Promise<{ queued: boolean; duplicate?: boolean }> {
     return this.guard("messagingEmail", async () => {
       const { sendPluginEmail } = await import("./messaging");
       return sendPluginEmail(await this.messagingContext(), input);

@@ -83,7 +83,7 @@ export interface PluginRuntimeBridge {
   httpFetch(url: string, init?: unknown): Promise<{ status: number; headers: Record<string, string>; body: string }>;
   customFieldsGet(ownerType: string, ownerId: string): Promise<Record<string, unknown>>;
   customFieldsSet(ownerType: string, ownerId: string, values: Record<string, unknown>): Promise<void>;
-  messagingEmail(input: unknown): Promise<{ queued: boolean }>;
+  messagingEmail(input: unknown): Promise<{ queued: boolean; duplicate?: boolean }>;
   messagingSms(input: unknown): Promise<{ queued: boolean }>;
   messagingNotifyStaff(input: unknown): Promise<void>;
   /** Optional on older hosts: a clear refusal. */

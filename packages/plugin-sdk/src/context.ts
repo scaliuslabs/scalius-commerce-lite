@@ -177,7 +177,21 @@ export interface PluginMessaging {
    * footer and RFC 8058 List-Unsubscribe headers. Transactional mail leaves it unset.
    * Limits: `PLUGIN_MESSAGE_LIMITS` per message, `messagesPerMinute` of the store's plan.
    */
-  email(input: { customerId?: string; to?: string; subject: string; html: string; text?: string; marketing?: boolean }): Promise<{ queued: boolean }>;
+  email(input: {
+    customerId?: string;
+    to?: string;
+    subject: string;
+    html: string;
+    text?: string;
+    marketing?: boolean;
+    /**
+     * Sends at most once per key (8 to 200 printable characters) within 24
+     * hours: a repeat, e.g. a redelivered event's handler, answers
+     * `duplicate: true` and sends nothing. A failed send releases the key.
+     * Derive it from what the message is about (`seller-notice-${splitId}`).
+     */
+    idempotencyKey?: string;
+  }): Promise<{ queued: boolean; duplicate?: boolean }>;
   sms(input: { customerId?: string; to?: string; text: string; marketing?: boolean }): Promise<{ queued: boolean }>;
   /** A dashboard notification for staff. */
   notifyStaff(input: { title: string; body?: string; url?: string }): Promise<void>;
