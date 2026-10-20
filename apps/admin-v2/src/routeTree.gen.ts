@@ -78,6 +78,7 @@ import { Route as AdminSettingsMarketsRouteImport } from './routes/admin/setting
 import { Route as AdminSettingsNotificationsRouteImport } from './routes/admin/settings/notifications'
 import { Route as AdminSettingsPaymentsRouteImport } from './routes/admin/settings/payments'
 import { Route as AdminSettingsPoliciesRouteImport } from './routes/admin/settings/policies'
+import { Route as AdminSettingsPrivacyRouteImport } from './routes/admin/settings/privacy'
 import { Route as AdminSettingsSalesChannelsRouteImport } from './routes/admin/settings/sales-channels'
 import { Route as AdminSettingsShippingRouteImport } from './routes/admin/settings/shipping'
 import { Route as AdminSettingsStoreRouteImport } from './routes/admin/settings/store'
@@ -483,6 +484,11 @@ const AdminSettingsPoliciesRoute = AdminSettingsPoliciesRouteImport.update({
   path: '/policies',
   getParentRoute: () => AdminSettingsRouteRoute,
 } as any)
+const AdminSettingsPrivacyRoute = AdminSettingsPrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => AdminSettingsRouteRoute,
+} as any)
 const AdminSettingsSalesChannelsRoute =
   AdminSettingsSalesChannelsRouteImport.update({
     id: '/sales-channels',
@@ -824,6 +830,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings/notifications': typeof AdminSettingsNotificationsRoute
   '/admin/settings/payments': typeof AdminSettingsPaymentsRoute
   '/admin/settings/policies': typeof AdminSettingsPoliciesRoute
+  '/admin/settings/privacy': typeof AdminSettingsPrivacyRoute
   '/admin/settings/sales-channels': typeof AdminSettingsSalesChannelsRoute
   '/admin/settings/shipping': typeof AdminSettingsShippingRoute
   '/admin/settings/store': typeof AdminSettingsStoreRoute
@@ -942,6 +949,7 @@ export interface FileRoutesByTo {
   '/admin/settings/notifications': typeof AdminSettingsNotificationsRoute
   '/admin/settings/payments': typeof AdminSettingsPaymentsRoute
   '/admin/settings/policies': typeof AdminSettingsPoliciesRoute
+  '/admin/settings/privacy': typeof AdminSettingsPrivacyRoute
   '/admin/settings/sales-channels': typeof AdminSettingsSalesChannelsRoute
   '/admin/settings/shipping': typeof AdminSettingsShippingRoute
   '/admin/settings/store': typeof AdminSettingsStoreRoute
@@ -1064,6 +1072,7 @@ export interface FileRoutesById {
   '/admin/settings/notifications': typeof AdminSettingsNotificationsRoute
   '/admin/settings/payments': typeof AdminSettingsPaymentsRoute
   '/admin/settings/policies': typeof AdminSettingsPoliciesRoute
+  '/admin/settings/privacy': typeof AdminSettingsPrivacyRoute
   '/admin/settings/sales-channels': typeof AdminSettingsSalesChannelsRoute
   '/admin/settings/shipping': typeof AdminSettingsShippingRoute
   '/admin/settings/store': typeof AdminSettingsStoreRoute
@@ -1187,6 +1196,7 @@ export interface FileRouteTypes {
     | '/admin/settings/notifications'
     | '/admin/settings/payments'
     | '/admin/settings/policies'
+    | '/admin/settings/privacy'
     | '/admin/settings/sales-channels'
     | '/admin/settings/shipping'
     | '/admin/settings/store'
@@ -1305,6 +1315,7 @@ export interface FileRouteTypes {
     | '/admin/settings/notifications'
     | '/admin/settings/payments'
     | '/admin/settings/policies'
+    | '/admin/settings/privacy'
     | '/admin/settings/sales-channels'
     | '/admin/settings/shipping'
     | '/admin/settings/store'
@@ -1426,6 +1437,7 @@ export interface FileRouteTypes {
     | '/admin/settings/notifications'
     | '/admin/settings/payments'
     | '/admin/settings/policies'
+    | '/admin/settings/privacy'
     | '/admin/settings/sales-channels'
     | '/admin/settings/shipping'
     | '/admin/settings/store'
@@ -1991,6 +2003,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSettingsPoliciesRouteImport
       parentRoute: typeof AdminSettingsRouteRoute
     }
+    '/admin/settings/privacy': {
+      id: '/admin/settings/privacy'
+      path: '/privacy'
+      fullPath: '/admin/settings/privacy'
+      preLoaderRoute: typeof AdminSettingsPrivacyRouteImport
+      parentRoute: typeof AdminSettingsRouteRoute
+    }
     '/admin/settings/sales-channels': {
       id: '/admin/settings/sales-channels'
       path: '/sales-channels'
@@ -2357,6 +2376,7 @@ interface AdminSettingsRouteRouteChildren {
   AdminSettingsNotificationsRoute: typeof AdminSettingsNotificationsRoute
   AdminSettingsPaymentsRoute: typeof AdminSettingsPaymentsRoute
   AdminSettingsPoliciesRoute: typeof AdminSettingsPoliciesRoute
+  AdminSettingsPrivacyRoute: typeof AdminSettingsPrivacyRoute
   AdminSettingsSalesChannelsRoute: typeof AdminSettingsSalesChannelsRoute
   AdminSettingsShippingRoute: typeof AdminSettingsShippingRoute
   AdminSettingsStoreRoute: typeof AdminSettingsStoreRoute
@@ -2387,6 +2407,7 @@ const AdminSettingsRouteRouteChildren: AdminSettingsRouteRouteChildren = {
   AdminSettingsNotificationsRoute: AdminSettingsNotificationsRoute,
   AdminSettingsPaymentsRoute: AdminSettingsPaymentsRoute,
   AdminSettingsPoliciesRoute: AdminSettingsPoliciesRoute,
+  AdminSettingsPrivacyRoute: AdminSettingsPrivacyRoute,
   AdminSettingsSalesChannelsRoute: AdminSettingsSalesChannelsRoute,
   AdminSettingsShippingRoute: AdminSettingsShippingRoute,
   AdminSettingsStoreRoute: AdminSettingsStoreRoute,
