@@ -218,7 +218,7 @@ const tokens = {
     popover: "#ffffff", "popover-foreground": "#1d1d1f",
     primary: "#f26522", "primary-foreground": "#ffffff",
     secondary: "#eef1f6", "secondary-foreground": "#1d1d1f",
-    muted: "#eef1f6", "muted-foreground": "#6b7280",
+    muted: "#eef1f6", "muted-foreground": "#565e6c",
     accent: "#fff1e8", "accent-foreground": "#9a3412",
     destructive: "#b91c1c", "destructive-foreground": "#ffffff",
     border: "#e5e7eb", input: "#d1d5db", ring: "#f26522",
@@ -254,7 +254,7 @@ const templates = [
     themeVersion: 11,
     theme: {
       tokens,
-      blocks: { navigation: { source: "tree+menu", maxTopItems: 12, linkBudget: 200 } },
+      blocks: { navigation: { source: "tree+menu", maxTopItems: 12, linkBudget: 150 } },
       apps: {
         skins: {
           header: { app: "scalius.volt/volt_header", values: {} },
@@ -361,7 +361,7 @@ export const manifest = {
     scopes: ["write_products", "write_inventory", "write_files"],
     routes: { admin: ["demo", "demo-import", "demo-remove"] },
     cron: ["demo_continue"],
-    admin: { pages: ["demo"] },
+    admin: ["demo"],
   }],
   storefront: {
     sections,
@@ -391,7 +391,7 @@ export default definePlugin({
     admin: {
       demo: async (request, ctx) => ({ body: await demoPage(ctx, VOLT_DEMO_PACK, adminContext(request).locale) }),
       "demo-import": (_request, ctx) => sliceAnswer(() => importSlice(ctx, VOLT_DEMO_PACK)),
-      "demo-remove": (_request, ctx) => sliceAnswer(() => removeSlice(ctx)),
+      "demo-remove": (_request, ctx) => sliceAnswer(() => removeSlice(ctx, VOLT_DEMO_PACK)),
     },
   },
   cron: {
@@ -399,7 +399,7 @@ export default definePlugin({
     demo_continue: async (ctx) => {
       const job = await readJob(ctx);
       if (job.mode === "import") await importSlice(ctx, VOLT_DEMO_PACK);
-      else if (job.mode === "remove") await removeSlice(ctx);
+      else if (job.mode === "remove") await removeSlice(ctx, VOLT_DEMO_PACK);
     },
   },
 });

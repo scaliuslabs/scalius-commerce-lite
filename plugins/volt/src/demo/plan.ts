@@ -19,7 +19,7 @@ export interface Step {
 }
 
 /** What one created resource left in the app's Objects: enough to link to it and to remove it. */
-export interface DemoRecord {
+export interface DemoRecord extends Record<string, unknown> {
   kind: StepKind;
   key: string;
   resource_id: string;

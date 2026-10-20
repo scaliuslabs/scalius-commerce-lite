@@ -30,10 +30,10 @@ export const SLICE_BUDGET = 36;
 
 type Records = Map<string, PluginRecordVersion<DemoRecord> & { id: string }>;
 
-function items(ctx: PluginContext): PluginObjectCollection<DemoRecord & Record<string, unknown>> {
+function items(ctx: PluginContext): PluginObjectCollection<DemoRecord> {
   const collection = ctx.objects.demo_items;
   if (!collection) throw new Error("The demo_items object is not declared.");
-  return collection as PluginObjectCollection<DemoRecord & Record<string, unknown>>;
+  return collection as unknown as PluginObjectCollection<DemoRecord>;
 }
 
 export async function readJob(ctx: PluginContext): Promise<DemoJob> {
@@ -200,7 +200,7 @@ export async function importSlice(ctx: PluginContext, pack: DemoPack, budget = S
 }
 
 /** One removal slice: trash what the demo created, newest dependants first, at the revision it was created with. */
-export async function removeSlice(ctx: PluginContext, budget = SLICE_BUDGET): Promise<SliceResult> {
+export async function removeSlice(ctx: PluginContext, pack: DemoPack, budget = SLICE_BUDGET): Promise<SliceResult> {
   let job = await readJob(ctx);
   const records = await readRecords(ctx);
   if (job.mode !== "remove") job = { ...IDLE, mode: "remove", id: Date.now().toString(36), total: records.size };
@@ -210,10 +210,25 @@ export async function removeSlice(ctx: PluginContext, budget = SLICE_BUDGET): Pr
   let spent = 3 + Math.ceil(budget / 25) + 1;
   let error: string | null = null;
 
+  // What a kept product shows stays with it: its photos, fields, brand and category chain are forgotten, not trashed.
+  const forgotten = new Set<string>();
+  const keepWith = (productKey: string) => {
+    const product = pack.products.find((entry) => entry.key === productKey);
+    if (!product) return;
+    const parents = new Map(pack.categories.map((category) => [category.key, category.parent]));
+    const ids = [`fields:${product.key}`, ...product.images.map((_, index) => mediaStepId(`product-${product.key}`, index))];
+    if (product.brand) ids.push(`brand:${product.brand}`);
+    for (let category: string | undefined = product.category, depth = 0; category && depth < 5; category = parents.get(category), depth += 1) {
+      ids.push(`category:${category}`, mediaStepId(`category-${category}`));
+    }
+    for (const id of ids) if (records.has(id)) { forgotten.add(id); gone.push(id); }
+  };
   // Brands go in one call (the operation takes up to 90).
-  const brands = ordered.filter((entry) => entry.data.kind === "brand");
+  const brandsOf = () => ordered.filter((entry) => entry.data.kind === "brand" && !forgotten.has(entry.id));
+  let brands = brandsOf();
   for (const entry of ordered) {
     if (spent >= budget) break;
+    if (forgotten.has(entry.id)) continue;
     const { kind, resource_id: id, revision } = entry.data;
     const idempotencyKey = `volt-rm-${job.id}-${entry.id}`.slice(0, 200);
     let result: { ok: boolean; status: number; error: { code: string; message: string } | null } | null = null;
@@ -222,6 +237,7 @@ export async function removeSlice(ctx: PluginContext, budget = SLICE_BUDGET): Pr
       continue;
     }
     if (kind === "brand") {
+      brands = brandsOf();
       if (entry !== brands[0]) continue;
       result = await ctx.api.call("dashboard.brands.trash", { body: { brands: brands.slice(0, 90).map((brand) => ({ id: brand.data.resource_id, expectedRevision: brand.data.revision })) }, idempotencyKey });
       spent += 1;
@@ -243,6 +259,7 @@ export async function removeSlice(ctx: PluginContext, budget = SLICE_BUDGET): Pr
         // Changed since the import (or already in use): the merchant's now; keep it and forget it.
         kept += kind === "brand" ? brands.length : 1;
         gone.push(...(kind === "brand" ? brands.map((brand) => brand.id) : [entry.id]));
+        if (kind === "product") keepWith(entry.data.key);
         continue;
       }
       error = `${entry.id}: ${result.error?.message ?? `HTTP ${result.status}`}`.slice(0, 300);

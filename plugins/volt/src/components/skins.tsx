@@ -80,8 +80,7 @@ export function TrustStrip({ items, context }: { items: Array<{ title: string; d
 }
 
 export function UspSkin({ data, context }: SectionSkinProps<"usp-strip">) {
-  const source = data.settings.source;
-  return <TrustStrip items={list(source.items)} context={context} />;
+  return <TrustStrip items={list(data.settings?.source?.items)} context={context} />;
 }
 
 // ── Featured categories: small tiles in a dense grid, "See All" under it ──
@@ -123,7 +122,7 @@ interface ProductsSettings {
 
 export function ProductTabsSkin({ settings, data, context, instanceId }: SectionSkinProps<"product-tabs", ProductsSettings>) {
   const limit = whole(data.settings.limit, 4, 12, 8);
-  const tabs = list(data.settings.tabs).filter((tab) => tab.products.cards.length > 0);
+  const tabs = list(data.settings.tabs).filter((tab) => list(tab.products?.cards).length > 0);
   if (tabs.length === 0) return null;
   const columns = whole(settings.columns, 2, 6, 5);
   const id = `volt-tabs-${instanceId.replace(/[^a-z0-9_-]/gi, "").slice(0, 40)}`;
@@ -154,39 +153,39 @@ export function ProductTabsSkin({ settings, data, context, instanceId }: Section
 
 export function ProductGridSkin({ settings, data, context }: SectionSkinProps<"product-grid", ProductsSettings>) {
   const columns = whole(data.settings.columns, 2, 6, 5);
-  const cards = list(data.settings.products.cards).slice(0, columns * whole(data.settings.rows, 1, 6, 2));
+  const cards = list(data.settings.products?.cards).slice(0, columns * whole(data.settings.rows, 1, 6, 2));
   if (cards.length === 0) return null;
   return (
     <Section name="grid">
-      <SectionHead title={text(data.settings.title) ?? data.settings.products.title} subtitle={text(settings.subtitle)}
-        link={data.settings.products.url} linkLabel={text(settings.link_label)} />
+      <SectionHead title={text(data.settings.title) ?? data.settings.products?.title} subtitle={text(settings.subtitle)}
+        link={data.settings.products?.url ?? null} linkLabel={text(settings.link_label)} />
       <CardGrid cards={cards} context={context} columns={columns} />
     </Section>
   );
 }
 
 export function ProductRailSkin({ settings, data, context }: SectionSkinProps<"product-rail", ProductsSettings>) {
-  const cards = list(data.settings.products.cards).slice(0, whole(data.settings.limit, 4, 24, 12));
+  const cards = list(data.settings.products?.cards).slice(0, whole(data.settings.limit, 4, 24, 12));
   if (cards.length === 0) return null;
   return (
     <Section name="rail">
-      <SectionHead title={text(data.settings.title) ?? data.settings.products.title} subtitle={text(settings.subtitle)}
-        link={data.settings.products.url} linkLabel={text(settings.link_label)} />
+      <SectionHead title={text(data.settings.title) ?? data.settings.products?.title} subtitle={text(settings.subtitle)}
+        link={data.settings.products?.url ?? null} linkLabel={text(settings.link_label)} />
       <CardGrid cards={cards} context={context} columns={whole(settings.columns, 2, 6, 5)} row />
     </Section>
   );
 }
 
 export function DealSkin({ settings, data, context }: SectionSkinProps<"deal-block", ProductsSettings>) {
-  const cards = list(data.settings.products.cards);
+  const cards = list(data.settings.products?.cards);
   if (cards.length === 0) return null;
   const image = data.settings.image ?? null;
   return (
     <Section name="deals">
-      <SectionHead title={text(data.settings.title) ?? data.settings.products.title} subtitle={text(settings.subtitle)}
-        link={data.settings.products.url} linkLabel={text(settings.link_label)} />
+      <SectionHead title={text(data.settings.title) ?? data.settings.products?.title} subtitle={text(settings.subtitle)}
+        link={data.settings.products?.url ?? null} linkLabel={text(settings.link_label)} />
       <div class={cx("volt-deals", image && "has-banner")}>
-        {image ? <a class="volt-deals-banner" href={data.settings.products.url ?? "#"}><Image image={image} sizes="(min-width: 64rem) 25vw, 100vw" /></a> : null}
+        {image ? <a class="volt-deals-banner" href={data.settings.products?.url ?? "#"}><Image image={image} sizes="(min-width: 64rem) 25vw, 100vw" /></a> : null}
         <CardGrid cards={cards} context={context} columns={whole(settings.columns, 2, 6, image ? 4 : 5)} row={!!image} />
       </div>
     </Section>

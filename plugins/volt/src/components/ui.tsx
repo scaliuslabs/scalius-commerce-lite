@@ -15,8 +15,9 @@ import { Icon } from "./icons";
 
 export type Context = StorefrontRenderContext;
 
-export function cx(...parts: Array<string | false | null | undefined>): string {
-  return parts.filter(Boolean).join(" ");
+/** Classes from parts, falsy parts dropped; undefined when none is left (no empty `class`). */
+export function cx(...parts: Array<string | false | null | undefined>): string | undefined {
+  return parts.filter(Boolean).join(" ") || undefined;
 }
 
 /** A setting's text, or null when it is unset or blank. */
