@@ -4,7 +4,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
-import { bundlePlugin, loadPluginContract, pluginPackageDir, resolvePluginEntry, root, sealBundle } from "./plugin-build.mjs";
+import { bundlePlugin, loadPluginContract, packStorefront, pluginPackageDir, resolvePluginEntry, root, sealBundle } from "./plugin-build.mjs";
 import { BUNDLE_MAX_BYTES } from "./plugin-registry.mjs";
 
 export const BUNDLE_WARN_BYTES = 1024 * 1024;
@@ -116,6 +116,25 @@ export async function validatePlugin(directory) {
     }
   }
   if (assetProblems === 0) add("pass", "Listing images", declared.length === 0 ? "none declared (an icon helps merchants find the app)" : `${declared.length} checked`);
+
+  // The storefront part, exactly as pack builds it: compile the module, islands
+  // and stylesheet, check public files and smoke-render every component with
+  // its defaults (a skin that breaks its target's embed rule fails here, not at pack).
+  try {
+    const files = await packStorefront(contract, manifest, directory);
+    const { sections, productBlocks, skins, islands } = manifest.storefront;
+    const parts = [
+      ["section", sections.length],
+      ["product block", productBlocks.length],
+      ["skin", skins.length],
+      ["island", islands.length],
+    ].filter(([, count]) => count > 0).map(([noun, count]) => `${count} ${noun}${count === 1 ? "" : "s"}`);
+    add("pass", "Storefront", files.length === 0 ? "none declared" : `${parts.join(", ") || "files"} compiled and rendered with their defaults`);
+  } catch (error) {
+    const first = error?.errors?.[0];
+    const message = first ? `${first.text}${first.location ? ` (${first.location.file}:${first.location.line})` : ""}` : String(error?.message ?? error);
+    add("fail", "Storefront", message.startsWith(`${directory}: `) ? message.slice(directory.length + 2) : message);
+  }
 
   // The packed bundle also carries the image digests; their size is fixed, so measure with placeholders.
   const size = Buffer.byteLength(sealBundle(bundled, assets));

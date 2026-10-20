@@ -6,11 +6,11 @@
 // (assets.gen.ts), the catalog of first-party plugins not bundled
 // (catalog.gen.ts) and the sandbox wrapper in step.
 //
-//   pnpm plugin create <vendor.name> [--dir plugins/<name>]   scaffold a plugin package
+//   pnpm plugin create <vendor.name> [--dir <folder>]          scaffold an app (outside this repo: on the published SDK)
 //   pnpm plugin validate [path]                                check a plugin the way a store loads it
-//   pnpm plugin preview <path> [--out <html>]                  render storefront fixtures to a static HTML file
-//   pnpm plugin dev <path>                                    rebuild and preview fixtures as sources change
-//   pnpm plugin pack <path> [--key <pem>] [--developer <name>] pack, sign and zip a plugin for upload or a registry
+//   pnpm plugin preview <path> [--out <html>] [--fixture <json>]   render storefront fixtures to a static HTML file
+//   pnpm plugin dev <path> [--fixture <json>]                 rebuild and preview fixtures as sources change
+//   pnpm plugin pack <path> [--key <pem | folder>] [--developer <name>]   pack, sign and zip a plugin for upload or a registry
 //   pnpm plugin keygen <out-dir>                               make an Ed25519 signing key
 //   pnpm plugin index <dist-dir> ... --out <dir> --name <name> [--base-url <url>]   build a static registry
 //   pnpm plugin add <path | package>                           pack, check and bundle a plugin
@@ -56,7 +56,7 @@ import {
 } from "./plugin-registry.mjs";
 import { scaffoldFiles } from "./plugin-scaffold.mjs";
 import { runValidate } from "./plugin-validate.mjs";
-import { devPlugin, previewPlugin } from "./plugin-dev.mjs";
+import { devPlugin, previewPlugin, readPreviewFixture } from "./plugin-dev.mjs";
 import { stripJsonc } from "./check-worker-env.mjs";
 import { resolvePlan, withPlanProfile } from "./plan.mjs";
 
@@ -184,16 +184,40 @@ function setSandbox(value) {
     : "Sandbox off: only bundled plugins run.");
 }
 
+/** Whether `directory` is a package of this workspace (pnpm-workspace.yaml: apps/*, packages/*, plugins/*). */
+export function isWorkspacePackageDir(directory) {
+  const path = relative(root, directory).split("\\").join("/");
+  return /^(?:apps|packages|plugins)\/[^/]+$/.test(path);
+}
+
+/** The SDK release a standalone app depends on (`^<version>`). */
+export function sdkVersion() {
+  return JSON.parse(readFileSync(join(root, "packages/plugin-sdk/package.json"), "utf8")).version;
+}
+
 function create(id, args) {
-  if (!id || !PLUGIN_ID.test(id)) throw new Error("Usage: pnpm plugin create <vendor.name> (lowercase, e.g. acme.loyalty)");
-  const dirIndex = args.indexOf("--dir");
+  if (!id || !PLUGIN_ID.test(id)) throw new Error("Usage: pnpm plugin create <vendor.name> [--dir <folder>] (lowercase, e.g. acme.loyalty)");
+  const flags = parseCommandArgs(args).flags;
   const name = id.split(".")[1];
-  const directory = resolve(root, dirIndex === -1 ? `plugins/${name}` : args[dirIndex + 1] ?? "");
-  if (existsSync(directory)) throw new Error(`${relative(root, directory)} already exists.`);
-  for (const [file, contents] of Object.entries(scaffoldFiles(id, basename(directory)))) {
+  const dir = flags.get("--dir");
+  const directory = typeof dir === "string" ? userPath(dir) : join(root, "plugins", name);
+  const shown = relative(process.env.INIT_CWD || process.cwd(), directory) || ".";
+  if (existsSync(directory)) throw new Error(`${shown} already exists.`);
+  const standalone = !isWorkspacePackageDir(directory);
+  for (const [file, contents] of Object.entries(scaffoldFiles(id, basename(directory), { standalone, sdkVersion: sdkVersion() }))) {
     const path = join(directory, file);
     mkdirSync(resolve(path, ".."), { recursive: true });
     writeFileSync(path, contents);
+  }
+  if (standalone) {
+    console.log(`Created ${shown}: a standalone app on @scalius/plugin-sdk@^${sdkVersion()}. Then:
+  cd ${shown} && npm install      install the SDK, TypeScript and Vitest
+  npm test                        run its tests
+  npm run typecheck               check its types
+  pnpm plugin validate ${shown}   check it the way a store loads it (from this repository)
+  pnpm plugin preview ${shown}    render its storefront parts with fixture data
+  pnpm plugin pack ${shown} --key <folder>   pack and sign the upload package`);
+    return;
   }
   const where = relative(root, directory);
   console.log(`Created ${where}. Run pnpm install, then:
@@ -208,7 +232,7 @@ async function validate(target) {
 }
 
 async function pack(target, flags) {
-  if (!target) throw new Error("Usage: pnpm plugin pack <path> [--key <pem>] [--developer <name>]");
+  if (!target) throw new Error("Usage: pnpm plugin pack <path> [--key <pem | folder>] [--developer <name>]");
   const key = flags.get("--key");
   const packed = await packSigned(userPath(target), {
     key: typeof key === "string" ? userPath(key) : null,
@@ -217,7 +241,7 @@ async function pack(target, flags) {
   console.log(`Packed ${packed.id}@${packed.version} (${packed.sha256.slice(0, 12)}) in ${relative(process.cwd(), packed.dist) || "dist"}`);
   console.log(packed.signature
     ? `Signed by key ${packed.signature.keyId} (${packed.signature.developer}).`
-    : "Not signed: a store needs a Super Admin to accept it as unsigned. Sign it with --key <pem> (make a key with: pnpm plugin keygen <folder>).");
+    : "Not signed: a store needs a Super Admin to accept it as unsigned. Sign it with --key <folder> (make a key with: pnpm plugin keygen <folder>).");
   console.log(`Upload package: ${relative(process.cwd(), packed.zipPath)}`);
 }
 
@@ -232,6 +256,7 @@ async function keygen(outDir) {
   if (!relative(root, directory).startsWith("..")) {
     console.log("! This folder is inside the repository. Move signing-key.pem somewhere private before you commit anything.");
   }
+  console.log(`Sign a pack with: pnpm plugin pack <app> --key ${outDir}`);
   console.log("Share the public key: stores add it with `pnpm plugin trust <your name> <public key>`.");
 }
 
@@ -279,7 +304,7 @@ async function main(argv) {
   const positional = rest.filter((value) => !value.startsWith("--"));
   switch (command) {
     case "create":
-      return create(positional[0], rest);
+      return create(parseCommandArgs(rest).positional[0], rest);
     case "validate":
       return validate(parseCommandArgs(rest).positional[0]);
     case "dev":
@@ -287,10 +312,13 @@ async function main(argv) {
       const parsed = parseCommandArgs(rest);
       if (!parsed.positional[0]) throw new Error(`Usage: pnpm plugin ${command} <path>`);
       const directory = userPath(parsed.positional[0]);
-      if (command === "dev") return devPlugin(directory);
+      const fixturePath = parsed.flags.get("--fixture");
+      const options = typeof fixturePath === "string" ? { fixture: readPreviewFixture(userPath(fixturePath)) } : {};
       const out = parsed.flags.get("--out");
-      const preview = await previewPlugin(directory, typeof out === "string" ? userPath(out) : undefined);
+      if (command === "dev") return devPlugin(directory, typeof out === "string" ? userPath(out) : undefined, options);
+      const preview = await previewPlugin(directory, typeof out === "string" ? userPath(out) : undefined, options);
       console.log(`${preview.id}: ${preview.views} fixture view(s). Open ${pathToFileURL(preview.output).href}`);
+      if (preview.empty.length > 0) console.log(`! ${preview.empty.join(", ")} rendered nothing with these fixtures; pass the fields or records it reads with --fixture <json>.`);
       return undefined;
     }
     case "pack": {

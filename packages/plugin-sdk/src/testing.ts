@@ -51,6 +51,17 @@ export {
 } from "@scalius/shared/plugins";
 export { sanitizePluginHtml } from "@scalius/shared/plugins/html";
 export { fixtures } from "./fixtures";
+export {
+  contractSchemaIssue,
+  createContractApi,
+  stableContract,
+  type ContractApi,
+  type ContractApiOptions,
+  type ContractCall,
+  type ContractHandler,
+  type StableContract,
+  type StableContractOperation,
+} from "./testing-contract";
 
 export interface PluginTestHarnessOptions {
   settings?: Record<string, PluginSettingValue>;
@@ -61,8 +72,13 @@ export interface PluginTestHarnessOptions {
    */
   features?: string[];
   store?: Partial<PluginStoreInfo>;
-  /** Answers `ctx.api.call`; by default every operation is unknown (404). */
-  api?: (operationId: string, input: PluginApiCallInput | undefined) => PluginApiResult | Promise<PluginApiResult>;
+  /**
+   * Answers `ctx.api.call`; by default every operation is unknown (404).
+   * Pass `createContractApi({ handlers })` to get the platform's refusals
+   * for calls the stable app API would refuse. `call.scopes` are the
+   * app's granted scopes (the manifest's, with the features that are on).
+   */
+  api?: (operationId: string, input: PluginApiCallInput | undefined, call: { scopes: readonly string[] }) => PluginApiResult | Promise<PluginApiResult>;
   /** Answers `ctx.orders.riskHistory`; by default a buyer with no earlier orders. */
   riskHistory?: (orderId: string) => { orders: number; cancelled: number; returnedToSender: number };
   /**
@@ -179,7 +195,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
 
   const bridge: PluginRuntimeBridge = {
     apiCall: async (operationId, input) => copy(options.api
-      ? await options.api(operationId, input as PluginApiCallInput | undefined)
+      ? await options.api(operationId, input as PluginApiCallInput | undefined, { scopes: [...manifest.scopes] })
       : { ok: false, status: 404, data: null, error: { code: "api.unknown_operation", message: `Unknown operation ${operationId}.` } }),
     objectsGet: async (name, id) => {
       const data = object(name).get(id);

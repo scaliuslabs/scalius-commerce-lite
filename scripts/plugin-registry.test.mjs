@@ -129,6 +129,8 @@ describe("keys, signed packs and the upload ZIP", () => {
   it("defaults the developer to the manifest author, and an unsigned pack drops any old signature", async () => {
     const signed = await packSigned(plugin.dir, { key: key.keyFile });
     expect(signed.signature.developer).toBe("acme");
+    // --key takes the folder keygen wrote, too.
+    expect((await packSigned(plugin.dir, { key: keyDir })).signature.keyId).toBe(signed.signature.keyId);
     const unsigned = await packSigned(plugin.dir);
     expect(unsigned.signature).toBeNull();
     expect(existsSync(join(plugin.dir, "dist/signature.json"))).toBe(false);

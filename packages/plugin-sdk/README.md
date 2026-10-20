@@ -2,6 +2,45 @@
 
 The SDK for Scalius apps (plugins), for plugin authors. An app declares what it may do (the manifest) and writes the handlers the platform calls. Workspace imports use source; the package build emits portable JavaScript and declarations for publishing.
 
+## Quick start
+
+An app is an ordinary npm package that depends on `@scalius/plugin-sdk`. It can live in its own repository; it does not need a clone of Scalius to build or test.
+
+```sh
+pnpm plugin create acme.tally --dir ~/code/acme-tally   # from a Scalius checkout: scaffold a standalone app
+cd ~/code/acme-tally
+npm install                                             # @scalius/plugin-sdk, TypeScript, Vitest
+npm test                                                # the harness: the platform's runtime, in memory
+npm run typecheck
+```
+
+The scaffold writes `package.json` (`"@scalius/plugin-sdk": "^<SDK version>"`, no workspace protocol), its own `tsconfig.json`, `src/index.ts` (manifest and handlers), `src/storefront.tsx` (a section), `src/index.test.ts` and a `.gitignore` that keeps `*.pem` out of version control. Inside this repository, `--dir plugins/<name>` (the default) makes a workspace package instead.
+
+Check, preview and pack it with the Scalius checkout's tooling, from any folder:
+
+```sh
+pnpm --dir ~/scalius plugin validate ~/code/acme-tally          # every check a store makes, including the storefront render
+pnpm --dir ~/scalius plugin preview ~/code/acme-tally           # dist/preview.html with fixture data
+pnpm --dir ~/scalius plugin keygen ~/.scalius-keys              # once: an Ed25519 signing key
+pnpm --dir ~/scalius plugin pack ~/code/acme-tally --key ~/.scalius-keys   # dist/ and the signed upload ZIP
+```
+
+The tooling uses the SDK the app installed; before `npm install` it uses the checkout's own SDK. Until `@scalius/plugin-sdk` is on the npm registry, install a local build: `pnpm --dir ~/scalius/packages/plugin-sdk pack` writes `scalius-plugin-sdk-<version>.tgz` (the published layout: `dist/` with declarations, no workspace dependencies), and `npm install ~/scalius/packages/plugin-sdk/scalius-plugin-sdk-<version>.tgz` adds it to the app.
+
+## Install and activate an app locally
+
+How a new app reaches a store you run with `pnpm dev` (the same steps work on a deployed Free store, with `pnpm run deploy` instead of the restart):
+
+1. `pnpm plugin validate <app>` passes.
+2. `pnpm plugin add <app>` packs it and records it in `scalius.plugins.json`; it regenerates `apps/api/src/plugins/bundled.gen.ts` and, for storefront parts, `apps/storefront/src/extensions/bundled.gen.ts`. An app outside the repository must be an installed package or copied under `plugins/` first (`add` refuses a path outside the repository).
+3. Restart `pnpm dev`, so both Workers compile the new generated files.
+4. Open the dashboard: Apps. The app is listed as installed, not active: nothing of it runs yet. The Apps page and the scheduled tick sync bundled apps into the database.
+5. As a Super Admin, open the app, review the access it asks for (scopes, hosts, storefront parts) and activate it. Its data updates run, then `lifecycle.activate`.
+6. Fill its settings on the app's page. Its storefront sections, product blocks and skins are then offered in the theme editor.
+7. After a code change: `pnpm plugin build <plugin id>` (or `add` again), restart `pnpm dev`. A new version whose access the approved grant covers stays active; one that asks for more waits for approval.
+
+On Workers Paid with the sandbox on, skip steps 2 and 3: upload the ZIP that `pnpm plugin pack` wrote on the Apps page. An unsigned upload, or one signed by a developer the store does not trust yet, installs only after a Super Admin chooses to trust the developer or to install the unsigned app.
+
 Real apps in `plugins/`: `bangladesh` (bKash, Nagad and SSLCommerz payments, SMS, fraud, couriers and place seeding, one feature per service) and `noor` (a theme of skins). Worked examples that no store bundles are test fixtures in `apps/api/src/plugins/testing/apps/`: `hello` (events, routes, cron, Objects, admin pages), `bulk-discount` (checkout functions), `loyalty` (atomic Objects and order commits), `wholesale` (declared reads: a company price list by one hop, per-SKU minimums, custom fields, a quote spent with the order), `risk-guard` (order risk as an `order.created` handler with `ctx.orders`), `wishlist` (storefront blocks), `order-tagger` (timeline entries) and `notes` (declarative checkout and account Buyer UI). The versioned contract is `packages/shared/src/plugins`, the host is `apps/api/src/plugins`, and installed-app state is `packages/core/src/modules/plugins`.
 
 ## Extension points
@@ -27,9 +66,9 @@ Real apps in `plugins/`: `bangladesh` (bKash, Nagad and SSLCommerz payments, SMS
 ## A minimal app
 
 ```ts
-import { definePlugin, PLUGIN_API_VERSION, type PluginManifestInput } from "@scalius/plugin-sdk";
+import { defineManifest, definePlugin, PLUGIN_API_VERSION } from "@scalius/plugin-sdk";
 
-export const manifest = {
+export const manifest = defineManifest({
   id: "acme.tally",                  // <vendor>.<name>
   name: "Order tally",
   version: "1.0.0",
@@ -41,22 +80,24 @@ export const manifest = {
     seen: { name: "Processed events", fields: [{ key: "order_id", name: "Order", type: "order_reference" }] },
     tally: { name: "Tallies", fields: [{ key: "count", name: "Count", type: "integer" }] },
   },
-} satisfies PluginManifestInput;
+});
 
 export default definePlugin({
   manifest,
   events: {
     "order.paid": async (event, ctx) => {
-      if (await ctx.objects.seen!.get(event.id)) return; // delivery is at least once
-      const tally = await ctx.objects.tally!.getVersion("paid");
+      if (await ctx.objects.seen.get(event.id)) return; // delivery is at least once
+      const tally = await ctx.objects.tally.getVersion("paid");
       await ctx.objects.batch([
         { op: "put", object: "seen", id: event.id, record: { order_id: event.resource.id }, expectedRevision: null },
-        { op: "put", object: "tally", id: "paid", record: { count: Number(tally?.data.count ?? 0) + 1 }, expectedRevision: tally?.revision ?? null },
+        { op: "put", object: "tally", id: "paid", record: { count: (tally?.data.count ?? 0) + 1 }, expectedRevision: tally?.revision ?? null },
       ]);
     },
   },
 });
 ```
+
+`defineManifest` keeps the manifest's literal types, so `definePlugin` types each handler's `ctx` by it (`PluginContextOf<typeof manifest>`): `ctx.objects.tally` reads `{ count?: number | null }` records, `ctx.settings.<key>` has its field's type (a `select` is the union of its option values; a setting with a default and no feature that switches it off is always present), and a checkout function's `settings` the same. A mistake in the manifest is reported at the key that is wrong (`placement: "buybox"`: Did you mean `"buy-box"`?). A storefront component types its settings with `SectionProps<StorefrontSettingsOf<typeof manifest, "section", "banner">>` (`"block"`, `"skin"`). The typed context is still a `PluginContext`, so helpers that take one keep working. A manifest written inline or with `satisfies PluginManifestInput` keeps the loose types (`ctx.objects.<name>` may be undefined; records are `Record<string, unknown>`).
 
 Test it with the harness. It runs the platform's runtime over an in-memory bridge and enforces the manifest (declared object types, indexed queries, unique indexes, revisions, allowed hosts).
 
@@ -69,7 +110,17 @@ await harness.event("order.paid", { type: "order", id: "ord_1" }, {}, { id: "evt
 harness.records.get("tally")?.get("paid"); // { count: 1 }
 ```
 
-`createPluginTestHarness(module, { settings, store, api, fetch })` answers `ctx.api` and `ctx.http` from the callbacks you pass. Methods: `event`, `fn`, `route`, `cron`, `lifecycle`, `provider`. State: `records`, `kv`, `customFields`, `logs`, `sent` (recorded messages).
+`createPluginTestHarness(module, { settings, store, api, fetch })` answers `ctx.api` and `ctx.http` from the callbacks you pass. For `api`, pass `createContractApi({ handlers })`: it checks every `ctx.api.call` against the stable app API this SDK release was sealed with (`stableContract`) in the host's order and returns the platform's refusal as the result, so a test fails where production would. It refuses an unknown operation (`api.unknown_operation`), an operation no granted scope covers (`api.operation_forbidden`; the harness passes the manifest's scopes), a missing or unsupported `idempotencyKey` (`idempotency_key_required`, `idempotency_not_supported`), a body on a GET, an undeclared body field (`unknown_body_property`), missing or extra path parameters, and any path, query or body value the route's schema rejects (`VALIDATION_ERROR`: enums such as a `section`, required fields, the `expectedRevision`/`expectedVersion` preconditions). A repeat with the same key replays the first answer without calling your handler; the same key for another request is `idempotency_key_reused`. A handler returns the response's `data` (checked against the response schema, so a test cannot rely on a shape the platform never returns) or a whole `{ ok: false, status, data: null, error }` refusal such as a 409; a valid call without a handler fails the test. `api.calls` lists each call and its result.
+
+```ts
+import { createContractApi, createPluginTestHarness } from "@scalius/plugin-sdk/testing";
+
+const api = createContractApi({
+  handlers: { "dashboard.resources.orders.get": ({ path }) => ({ id: path.id /* …the order resource */ }) },
+});
+const harness = createPluginTestHarness(plugin, { api });
+```
+ Methods: `event`, `fn`, `route`, `cron`, `lifecycle`, `provider`. State: `records`, `kv`, `customFields`, `logs`, `sent` (recorded messages).
 
 ## Build and install
 
@@ -82,13 +133,13 @@ pnpm run deploy                 # compile the app into the API Worker
 
 `pnpm plugin` keeps `scalius.plugins.json` and the generated files in `apps/api/src/plugins/` in step: `bundled.gen.ts`, `sandbox-runtime.gen.ts`, `assets.gen.ts` (the listing images) and `catalog.gen.ts` (the first-party apps in `plugins/` that the lockfile does not list). Do not edit them by hand. Other subcommands:
 
-- `create <vendor.name>` scaffolds an app with an event, a checkout function, a storefront section, an admin page, a data update and a test. `validate [path]` checks the manifest, compatibility, handlers, permissions, images and bundle size, one line each.
-- `keygen <dir>` makes an Ed25519 signing key (keep it out of every repository). `pack <path> [--key <pem>] [--developer <name>]` writes `dist/` and, with a key, `signature.json` and the upload ZIP. `index <dist>... --out <dir> --name <name>` builds or extends a static registry. `add <vendor.name> --registry <index URL>` installs a signed release into the fork; `trust <name> <public key>` adds a developer key to the lockfile's `trustedKeys`.
+- `create <vendor.name> [--dir <folder>]` scaffolds an app with an event, a checkout function, a storefront section, an admin page, a data update and a test: a workspace package under `plugins/`, or, anywhere else, a standalone app on the published SDK (Quick start). `validate [path]` checks the manifest, compatibility, handlers, permissions, images, the storefront part (compiled and smoke-rendered with its defaults, exactly as `pack` does: a skin that breaks its target's embed rule fails here) and bundle size, one line each.
+- `keygen <dir>` makes an Ed25519 signing key, `<dir>/signing-key.pem` (keep it out of every repository). `pack <path> [--key <pem | dir>] [--developer <name>]` writes `dist/` and, with a key (the PEM, or the folder `keygen` wrote), `signature.json` and the upload ZIP. `index <dist>... --out <dir> --name <name>` builds or extends a static registry. `add <vendor.name> --registry <index URL>` installs a signed release into the fork; `trust <name> <public key>` adds a developer key to the lockfile's `trustedKeys`.
 - The harness also runs data updates (`runMigration(version)`, `runMigrations()`) and whole events (`deliver`); `@scalius/plugin-sdk/fixtures` builds typed events, checkout inputs, read records and admin requests.
 - `harness.fn(point, input)` is as strict as checkout: it is typed by point, parses the input with the point's schema (a mismatch throws) and checks the answer the way the host does. An invalid answer returns `ok: false` with `function.invalid_output`, which production skips (or, with `onError: "block"`, stops checkout on). Pass `reads` as the host would resolve them. `ctx.messaging` and `ctx.orders` refuse without the scopes the host requires.
 - `build [plugin id ...]` packs the listed apps (all by default) again. `list` shows each bundled app and whether it is current. `remove <plugin id>` stops bundling one.
 - `sandbox <on|off>` records whether deploys bind the Worker Loader.
-- `preview <path> [--out <html>]` packs the app and writes a static preview using SDK fixtures and the real sanitizer. `dev <path>` watches, repacks and refreshes that preview. Core embeds appear as placeholders; this checks component markup and styles, not checkout actions or browser island behavior. Verify the composed journey in a local store before release.
+- `preview <path> [--out <html>] [--fixture <json>]` packs the app and writes a static preview using SDK fixtures and the real sanitizer. `dev <path> [--fixture <json>]` watches, repacks and refreshes that preview. A view that renders nothing says so. The fixture fills what the defaults leave out, keyed by view (`section:<type>`, `block:<type>`, `skin:<id>`): `{ "product": { "fields": { "engraving": true } }, "settings": { "block:preview": { "maxLetters": 12 } }, "objects": { "section:lookbook": { "looks": { "records": [], "fields": {} } } }, "context": { … } }`; `product` is merged over the fixture product page (blocks and the product-main skin). Core embeds appear as placeholders; this checks component markup and styles, not checkout actions or browser island behavior. Verify the composed journey in a local store before release.
 - `wrangler-config [--local] [--plan paid]` prints the API Wrangler config path. A generated config is `wrangler.deploy.gen.json` (`wrangler.local.deploy.gen.json` with `--local`); Free without the sandbox uses the committed config.
 
 After the deploy, the app shows on the Apps page as not active. A Super Admin reviews its requests and activates it. A first-party app in `plugins/` that is not in `scalius.plugins.json` shows under "Available to install" with its `pnpm plugin add` command.

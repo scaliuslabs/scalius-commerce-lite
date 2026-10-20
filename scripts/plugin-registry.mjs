@@ -10,7 +10,7 @@
 //            then bundles (the Workers Free install path).
 
 import { createHash, createPrivateKey, createPublicKey } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { crc32, deflateRawSync } from "node:zlib";
 import {
@@ -29,7 +29,7 @@ export const BUNDLE_MAX_BYTES = 16 * 1024 * 1024;
 
 // ── Arguments ────────────────────────────────────────────────────────────
 
-const VALUE_FLAGS = new Set(["--dir", "--key", "--developer", "--out", "--name", "--base-url", "--registry", "--version", "--plan"]);
+const VALUE_FLAGS = new Set(["--dir", "--key", "--developer", "--out", "--name", "--base-url", "--registry", "--version", "--plan", "--fixture"]);
 
 /** Splits `pnpm plugin` arguments into positionals and flags, so a flag's value is never mistaken for a path. */
 export function parseCommandArgs(args) {
@@ -106,9 +106,19 @@ export async function generateSigningKey(outDir) {
   return { keyFile, publicKey, keyId: await registry.pluginKeyId(publicKey) };
 }
 
-/** Reads a PKCS#8 PEM signing key: the signing CryptoKey, its base64 raw public key and its key id. */
-export async function readSigningKey(pemPath) {
+/** The key file `--key` names: the PEM itself, or the folder `keygen` wrote it into (`<folder>/signing-key.pem`). */
+export function signingKeyFile(path) {
+  try {
+    return statSync(path).isDirectory() ? join(path, "signing-key.pem") : path;
+  } catch {
+    return path;
+  }
+}
+
+/** Reads a PKCS#8 PEM signing key (a file, or the folder keygen wrote): the signing CryptoKey, its base64 raw public key and its key id. */
+export async function readSigningKey(keyPath) {
   const registry = await loadRegistryContract();
+  const pemPath = signingKeyFile(keyPath);
   let pem;
   try {
     pem = readFileSync(pemPath, "utf8");
