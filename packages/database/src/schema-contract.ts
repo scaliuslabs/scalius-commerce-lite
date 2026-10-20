@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 167,
-  name: "0167_promotion_exhaustion_dependency",
+  version: 168,
+  name: "0168_tax_document_commands",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -616,6 +616,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 167,
     name: "0167_promotion_exhaustion_dependency",
     sourceSha256: "32cbe7582a9e1aa23dbf5e5dfba735ce9f4e7462d3f4e85ddd1ff9f10e6d8f3e",
+  },
+  {
+    version: 168,
+    name: "0168_tax_document_commands",
+    sourceSha256: "4be963196e5a3977f80b9594e3414313266336a813691c57797c73df8e68a3ed",
   },
 ] as const;
 

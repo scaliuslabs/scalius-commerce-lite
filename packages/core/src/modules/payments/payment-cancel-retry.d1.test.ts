@@ -13,8 +13,18 @@ describe("cancel at the provider, retry, pay", () => {
   let sqlite: DatabaseSync;
   let db: Database;
 
+  /** Fails the next batch that lands a payment, as a lost D1 write would. */
+  let failPaymentBatch = false;
+
   beforeEach(() => {
-    ({ sqlite, db } = createSqliteD1Database());
+    failPaymentBatch = false;
+    ({ sqlite, db } = createSqliteD1Database({
+      beforeBatch(_connection, statements) {
+        if (!failPaymentBatch || !statements.some((statement) => statement.query.includes("update \"order_payments\""))) return;
+        failPaymentBatch = false;
+        throw new Error("D1_ERROR: storage operation exceeded timeout");
+      },
+    }));
     sqlite.exec(`
       INSERT INTO products (id, name, slug, price_minor, is_active)
       VALUES ('product_1', 'Kurta', 'kurta', 50000, 1);
@@ -98,6 +108,26 @@ describe("cancel at the provider, retry, pay", () => {
 
     await applyInventoryForStatusChange(db, "order_1", "shipped");
     expect(stock()).toEqual({ stock: 8, reserved_stock: 0 });
+  });
+
+  it("reserves the released stock only in the batch that lands the money", async () => {
+    await applyInventoryForStatusChange(db, "order_1", "cancelled");
+    expect(stock()).toEqual({ stock: 10, reserved_stock: 0 });
+    const movements = () => sqlite.prepare("SELECT count(*) AS n FROM inventory_movements").get();
+    const before = movements();
+
+    failPaymentBatch = true;
+    await expect(pay("pi_2")).resolves.toMatchObject({ success: false });
+    // Neither the money nor the stock: nothing is held for an unpaid order.
+    expect(order()).toEqual({ status: "incomplete", payment_status: "unpaid", inventory_action: "restored" });
+    expect(stock()).toEqual({ stock: 10, reserved_stock: 0 });
+    expect(movements()).toEqual(before);
+
+    // The provider retries the event: both land, once.
+    await expect(pay("pi_2")).resolves.toEqual({ success: true, paymentType: "full" });
+    await expect(pay("pi_2")).resolves.toEqual({ success: true, alreadyProcessed: true });
+    expect(order()).toEqual({ status: "pending", payment_status: "paid", inventory_action: "reserved" });
+    expect(stock()).toEqual({ stock: 10, reserved_stock: 2 });
   });
 
   it("records the payment and reports a shortfall when the released units were sold", async () => {

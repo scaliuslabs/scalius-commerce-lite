@@ -323,6 +323,32 @@ describe("refunds to gift cards and store credit (G5)", () => {
         expect(one("SELECT count(*) AS n FROM gift_cards WHERE source = 'refund'")).toEqual({ n: 1 });
     });
 
+    it("a lost claim on a cash refund commits no refund rows, so nothing is deleted afterwards", async () => {
+        const orderId = await placeOrder();
+        collectCod(orderId, 168000);
+        settle(orderId, "cod");
+        // Any refund row or attempt that ever committed and was removed shows up here.
+        sqlite.exec(`
+            CREATE TEMP TABLE removed_rows (source TEXT NOT NULL);
+            CREATE TEMP TRIGGER log_removed_payment AFTER DELETE ON order_payments BEGIN INSERT INTO removed_rows VALUES ('order_payments'); END;
+            CREATE TEMP TRIGGER log_removed_attempt AFTER DELETE ON refund_attempts BEGIN INSERT INTO removed_rows VALUES ('refund_attempts'); END;
+        `);
+        race = (connection) => connection.prepare("UPDATE orders SET version = version + 1 WHERE id = ?").run(orderId);
+
+        await expect(processRefund(db, {
+            orderId, amount: 100, reason: "requested_by_customer", manualSettlementConfirmed: true,
+        })).rejects.toThrow("concurrent modification");
+        expect(all("SELECT source FROM removed_rows")).toEqual([]);
+        expect(one("SELECT count(*) AS n FROM refund_attempts")).toEqual({ n: 0 });
+        expect(one("SELECT count(*) AS n FROM order_payments WHERE payment_type = 'refund'")).toEqual({ n: 0 });
+
+        // The retry claims the newer version.
+        await expect(processRefund(db, {
+            orderId, amount: 100, reason: "requested_by_customer", manualSettlementConfirmed: true,
+        })).resolves.toMatchObject({ success: true });
+        expect(one("SELECT count(*) AS n FROM refund_attempts")).toEqual({ n: 1 });
+    });
+
     it("recovery finalizes an internally settled attempt instead of releasing it for a second refund", async () => {
         const orderId = await placeOrder();
         await issueCard("gc_testcard0005", 200000);

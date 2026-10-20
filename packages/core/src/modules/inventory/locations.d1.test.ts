@@ -80,7 +80,7 @@ function seedOrder(id: string, lines: Array<{ variantId: string; quantity: numbe
 }
 
 async function reserveOrder(id: string, lines: Array<{ variantId: string; quantity: number }>) {
-    const result = await reserveStockBatch(db, lines.map((line) => ({ ...line, orderId: id })), "regular");
+    const result = await reserveStockBatch(db, lines.map((line) => ({ ...line, orderId: id })), "regular", { salesChannelId: "sc_online_store" });
     if (!result.success) return false;
     sqlite.prepare("UPDATE orders SET inventory_action = 'reserved' WHERE id = ?").run(id);
     return true;
@@ -349,6 +349,28 @@ describe("per-location reads", () => {
         expect(movementLocationCounts(payload, null)).toEqual({ locationPreviousStock: null, locationNewStock: null });
         expect(movementLocationCounts("{", "loc_b")).toEqual({ locationPreviousStock: null, locationNewStock: null });
         expect(movementLocationCounts(null, "loc_b")).toEqual({ locationPreviousStock: null, locationNewStock: null });
+    });
+});
+
+describe("re-reserving a restored order in its sales channel", () => {
+    it("takes only units at the locations the order's channel sells from", async () => {
+        seedCatalog({ var_a: 5 });
+        // Four of the five units sit at a shop the online store does not sell from.
+        const shop = await createInventoryLocation(db, { name: "Shop", code: "SHOP" });
+        await adjust("var_a", -4);
+        await adjust("var_a", 4, shop.id);
+        sqlite.prepare("DELETE FROM sales_channel_locations WHERE channel_id = 'sc_online_store' AND location_id = ?").run(shop.id);
+
+        seedOrder("ord_big", [{ variantId: "var_a", quantity: 2 }]);
+        seedOrder("ord_small", [{ variantId: "var_a", quantity: 1 }]);
+        sqlite.exec("UPDATE orders SET inventory_action = 'restored'");
+
+        await expect(applyInventoryForStatusChange(db, "ord_big", "confirmed")).rejects.toThrow();
+        expect(one("SELECT reserved_stock FROM product_variants")).toEqual({ reserved_stock: 0 });
+        expect(one("SELECT inventory_action FROM orders WHERE id = 'ord_big'")).toEqual({ inventory_action: "restored" });
+
+        expect(await applyInventoryForStatusChange(db, "ord_small", "confirmed")).toBe("reserved");
+        expect(one("SELECT reserved_stock FROM product_variants")).toEqual({ reserved_stock: 1 });
     });
 });
 

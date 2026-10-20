@@ -59,6 +59,7 @@ export const CUSTOMER_SESSION_SWEEP_LIMIT = 200;
 export const SCANNER_TOKEN_CLAIM_SWEEP_LIMIT = 200;
 export const REFUND_ATTEMPT_RECONCILIATION_LIMIT = 5;
 export const EXTERNAL_REFUND_RECONCILIATION_LIMIT = 5;
+export const TAX_DOCUMENT_DRAIN_LIMIT = 10;
 export { DRAIN_TICK_MS, dueSweepIndexes, firstSweepRunOfHour, sweepPeriodMinutes } from "./scheduled/slices";
 
 type ScheduledMaintenanceMetadata = {
@@ -451,6 +452,21 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
             `skipped=${externalRefunds.skipped}, deferred=${externalRefunds.deferred}, ` +
             `errors=${externalRefunds.errors.length}, limit=${externalRefunds.limit}, ` +
             `hasMore=${externalRefunds.hasMore}`,
+        );
+      }
+      // App tax-provider documents still owed (commit, void, refund): the
+      // provider-side half of orders and refunds, with backoff. One indexed
+      // read when none is due.
+      const { drainTaxDocumentCommands } = await import("@scalius/core/modules/tax");
+      const { detachedAppProviders } = await import("./plugins/providers/app-providers");
+      const apps = detachedAppProviders(env, db, getCredentialEncryptionKey(env as unknown as Record<string, unknown>));
+      const taxDocuments = await timed("tax_document_drain", () =>
+        drainTaxDocumentCommands(db, apps, { limit: scaled(TAX_DOCUMENT_DRAIN_LIMIT) }),
+      );
+      if (taxDocuments.scanned > 0) {
+        console.log(
+          `[scheduled] Tax documents: scanned=${taxDocuments.scanned}, done=${taxDocuments.done}, failed=${taxDocuments.failed}, ` +
+            `skipped=${taxDocuments.skipped}, dead=${taxDocuments.dead}, deferred=${taxDocuments.deferred}, busy=${taxDocuments.busy}`,
         );
       }
     },

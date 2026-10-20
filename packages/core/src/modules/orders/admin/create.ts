@@ -216,7 +216,7 @@ export async function createManualOrder(
                 orderId,
             })),
             "regular",
-            { reservationKey: `admin-order-create:v2:${orderId}` },
+            { reservationKey: `admin-order-create:v2:${orderId}`, salesChannelId },
         );
         if (!inventoryPlan.success) {
             throw new ValidationError(

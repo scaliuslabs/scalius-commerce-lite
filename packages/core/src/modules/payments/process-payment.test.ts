@@ -17,12 +17,18 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 
 const mocks = vi.hoisted(() => ({
   applyInventoryForStatusChange: vi.fn(),
+  prepareOrderReReservation: vi.fn(),
 }));
 
-vi.mock("../inventory/inventory-transitions", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../inventory/inventory-transitions")>()),
-  applyInventoryForStatusChange: mocks.applyInventoryForStatusChange,
-}));
+vi.mock("../inventory/inventory-transitions", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../inventory/inventory-transitions")>();
+  mocks.prepareOrderReReservation.mockImplementation(original.prepareOrderReReservation);
+  return {
+    ...original,
+    applyInventoryForStatusChange: mocks.applyInventoryForStatusChange,
+    prepareOrderReReservation: mocks.prepareOrderReReservation,
+  };
+});
 
 import {
   processPaymentConfirmed,
@@ -358,32 +364,36 @@ describe("failed payments", () => {
 });
 
 describe("confirmed payment on an order whose stock was released", () => {
-  it("reserves the stock again before the money lands", async () => {
+  const inventoryAction = () => sqlite.prepare("SELECT inventory_action FROM orders WHERE id = 'order_1'").get();
+
+  it("reserves the stock again in the batch that lands the money", async () => {
     await insertOrder({ inventoryAction: "restored" });
-    mocks.applyInventoryForStatusChange.mockResolvedValueOnce("reserved");
 
     await expect(confirm()).resolves.toEqual({ success: true, paymentType: "full" });
-    expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.PENDING);
-    expect(order()).toMatchObject({ payment_status: PaymentStatus.PAID });
+    expect(mocks.prepareOrderReReservation).toHaveBeenCalledWith(db, "order_1");
+    expect(order()).toMatchObject({ status: OrderStatus.PENDING, payment_status: PaymentStatus.PAID });
+    expect(inventoryAction()).toEqual({ inventory_action: "reserved" });
   });
 
   it("records the money but reports the shortfall when the units are gone", async () => {
     await insertOrder({ inventoryAction: "restored" });
-    const { ValidationError } = await import("@scalius/core/errors");
-    mocks.applyInventoryForStatusChange.mockRejectedValueOnce(
-      new ValidationError("Inventory reserve failed for order order_1: Insufficient stock", { orderId: "order_1", operation: "reserve" }),
-    );
+    mocks.prepareOrderReReservation.mockResolvedValueOnce({ status: "shortfall", error: "Insufficient stock" });
 
     await expect(confirm()).resolves.toEqual({ success: true, paymentType: "full", inventoryShortfall: true });
     expect(order()).toMatchObject({ payment_status: PaymentStatus.PAID });
+    expect(inventoryAction()).toEqual({ inventory_action: "restored" });
   });
 
   it("retries rather than records when the reservation hits a database error", async () => {
     await insertOrder({ inventoryAction: "restored" });
-    mocks.applyInventoryForStatusChange.mockRejectedValueOnce(new Error("D1 unavailable"));
+    mocks.prepareOrderReReservation.mockRejectedValueOnce(new Error("D1 unavailable"));
 
     await expect(confirm()).resolves.toMatchObject({ success: false });
     expect(order()).toMatchObject({ payment_status: PaymentStatus.UNPAID });
-    expect(payments()).toEqual([]);
+    // Only the pending claim the retry resumes.
+    expect(payments()).toMatchObject([{ status: PaymentRecordStatus.PENDING, provider_ref: "pi_1" }]);
+    expect(inventoryAction()).toEqual({ inventory_action: "restored" });
+    await expect(confirm()).resolves.toEqual({ success: true, paymentType: "full" });
+    expect(inventoryAction()).toEqual({ inventory_action: "reserved" });
   });
 });

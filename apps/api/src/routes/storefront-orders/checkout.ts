@@ -46,7 +46,7 @@ import { createCheckoutAppFunctions } from "../../plugins/checkout-functions";
 import { paymentProvidersFromRegistrations } from "../../plugins/providers/payment";
 import { requestProviderRuntime } from "../../plugins/providers/runtime";
 import { requestAppProviders } from "../../plugins/providers/app-providers";
-import { commitTaxDocument } from "@scalius/core/modules/tax";
+import { processTaxDocumentCommandsForOrder } from "@scalius/core/modules/tax";
 import { resolveOrderTrackingSnapshot } from "@scalius/core/integrations/tracking/signals";
 import { getOptionalExecutionContext } from "../../utils/execution-context";
 import { autoFulfilAfterResponse } from "../../background/auto-fulfil";
@@ -804,8 +804,16 @@ app.openapi(createOrderRoute, async (c) => {
 
     const postCommit = Promise.all([
       runStorefrontOrderPostCommitSideEffects(db, { ...c.env, sendNotifications: notificationSender(c) }, result.commitPayload),
-      // An app tax provider's calculation becomes its committed document.
-      committed.alreadyCommitted ? null : commitTaxDocument(result.taxQuote, result.orderId, requestAppProviders(c)),
+      // An app tax provider's calculation becomes its committed document: the
+      // commit wrote the command, sent now (a replay sends what is still owed)
+      // and retried by the scheduled drain.
+      result.taxQuote.jurisdiction?.calculationId
+        ? processTaxDocumentCommandsForOrder(db, result.orderId, requestAppProviders(c)).catch((error: unknown) => {
+          console.warn("[tax] document commands after checkout failed; the scheduled drain retries", {
+            error: error instanceof Error ? error.name : "error",
+          });
+        })
+        : null,
       // An order fully paid at commit (e.g. covered by gift cards) is settled now.
       result.commitPayload.orderData.paymentStatus === PaymentStatus.PAID
         ? autoFulfilAfterResponse(c, db, result.orderId, "checkout-commit")

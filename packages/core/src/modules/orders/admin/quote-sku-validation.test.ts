@@ -941,7 +941,7 @@ describe("resolveAdminOrderItemInventory", () => {
             db,
             [{ variantId: "var_tracked", quantity: 2, orderId: expect.any(String) }],
             "regular",
-            { reservationKey: expect.stringMatching(/^admin-order-create:v2:/) },
+            { reservationKey: expect.stringMatching(/^admin-order-create:v2:/), salesChannelId: "sc_online_store" },
         );
         expect(batch).toHaveBeenCalledWith(expect.arrayContaining([
             { kind: "inventory-guard" },

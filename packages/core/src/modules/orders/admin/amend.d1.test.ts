@@ -273,6 +273,31 @@ describe("manual COD order amendments on D1 storage", () => {
     expect(sqlite.prepare("SELECT unit_price_minor FROM order_items WHERE id = 'item_1'").get())
       .toEqual({ unit_price_minor: 10000 });
   });
+  it("reserves an added unit only from the locations the order's sales channel sells from", async () => {
+    // Eight of the ten units sit at a shop the online store does not sell from; two are reserved.
+    sqlite.exec(`
+      INSERT INTO inventory_locations (id, name, code, country_code, is_default, status, position)
+      VALUES ('loc_shop', 'Shop', 'SHOP', 'BD', 0, 'active', 1);
+      UPDATE inventory_levels SET on_hand = 2 WHERE variant_id = 'variant_1' AND location_id = 'loc_default';
+      INSERT INTO inventory_levels (variant_id, location_id, on_hand) VALUES ('variant_1', 'loc_shop', 8);
+      DELETE FROM sales_channel_locations WHERE channel_id = 'sc_online_store' AND location_id = 'loc_shop';
+    `);
+    await expect((async () => confirmManualOrderAmendment(db, "order_1", await confirmedInput({
+      items: [{ orderItemId: "item_1", productId: "product_1", variantId: "variant_1", quantity: 3 }],
+    }), "admin_1"))()).rejects.toThrow();
+    expect(sqlite.prepare("SELECT reserved_stock FROM product_variants WHERE id = 'variant_1'").get())
+      .toEqual({ reserved_stock: 2 });
+    expect(sqlite.prepare("SELECT version FROM orders WHERE id = 'order_1'").get()).toEqual({ version: 1 });
+
+    // Once its channel sells the shop's units too, the order takes the third one.
+    sqlite.exec("INSERT INTO sales_channel_locations (channel_id, location_id) VALUES ('sc_online_store', 'loc_shop')");
+    await confirmManualOrderAmendment(db, "order_1", await confirmedInput({
+      items: [{ orderItemId: "item_1", productId: "product_1", variantId: "variant_1", quantity: 3 }],
+    }), "admin_1");
+    expect(sqlite.prepare("SELECT reserved_stock FROM product_variants WHERE id = 'variant_1'").get())
+      .toEqual({ reserved_stock: 3 });
+  });
+
   it("replaces a SKU atomically while keeping the retained order identity", async () => {
     const result = await confirmManualOrderAmendment(db, "order_1", await confirmedInput({
       shippingAddress: "456 Revised Street, Dhaka",
