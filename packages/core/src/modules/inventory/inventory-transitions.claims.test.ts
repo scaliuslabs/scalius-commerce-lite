@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { inventoryMovements, productVariants } from "@scalius/database/schema";
-import { applyClaimedInventoryEntryBatch } from "./inventory-transitions";
+import { applyClaimedInventoryEntryBatchWithImpact } from "./inventory-transitions";
+
+const applyClaimedInventoryEntryBatch = async (
+    ...args: Parameters<typeof applyClaimedInventoryEntryBatchWithImpact>
+) => (await applyClaimedInventoryEntryBatchWithImpact(...args)).movementIds;
 
 // The fake databases here carry no projection SQL; catalog-projections.d1.test.ts covers it.
 vi.mock("../products/catalog-projections", () => ({ catalogBuyerStateRefreshStatementsForSkus: () => [] }));
