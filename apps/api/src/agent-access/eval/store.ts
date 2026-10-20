@@ -32,7 +32,47 @@ export interface EvalStore {
   settle(): Promise<void>;
   grants: Record<EvalGrant, { permissions: string[]; riskCeiling: string }>;
   useGrant(grant: EvalGrant): void;
+  /** The every-minute cron's bulk-run drain, run until idle. */
+  drainBulkRuns(): Promise<void>;
   close(): void;
+}
+
+/** An in-memory R2 bucket (put/get/head/delete): enough for agent artifacts. */
+function memoryBucket() {
+  const objects = new Map<string, Uint8Array>();
+  const bytesOf = async (value: unknown): Promise<Uint8Array> => {
+    if (value instanceof Uint8Array) return value;
+    if (value instanceof ArrayBuffer) return new Uint8Array(value);
+    if (typeof value === "string") return new TextEncoder().encode(value);
+    return new Uint8Array(await new Response(value as BodyInit).arrayBuffer());
+  };
+  const object = (key: string, bytes: Uint8Array) => ({
+    key,
+    size: bytes.byteLength,
+    httpMetadata: {},
+    customMetadata: {},
+    body: new Response(bytes).body,
+    arrayBuffer: async () => bytes.slice().buffer,
+    text: async () => new TextDecoder().decode(bytes),
+  });
+  return {
+    async put(key: string, value: unknown) {
+      const bytes = await bytesOf(value);
+      objects.set(key, bytes);
+      return { key, size: bytes.byteLength };
+    },
+    async get(key: string) {
+      const bytes = objects.get(key);
+      return bytes ? object(key, bytes) : null;
+    },
+    async head(key: string) {
+      const bytes = objects.get(key);
+      return bytes ? { key, size: bytes.byteLength, httpMetadata: {}, customMetadata: {} } : null;
+    },
+    async delete(keys: string | string[]) {
+      for (const key of Array.isArray(keys) ? keys : [keys]) objects.delete(key);
+    },
+  };
 }
 
 export function createEvalStore(): EvalStore {
@@ -70,6 +110,7 @@ export function createEvalStore(): EvalStore {
     AGENT_TOKEN_PEPPER: "agent-eval-pepper",
     CREDENTIAL_ENCRYPTION_KEY: Buffer.alloc(32, 9).toString("base64"),
     RL_STANDARD: { limit: async () => ({ success: true }) },
+    BUCKET: memoryBucket(),
   } as unknown as Env;
   const ctx = {
     waitUntil: (promise: Promise<unknown>) => { background.push(promise); },
@@ -84,6 +125,11 @@ export function createEvalStore(): EvalStore {
     grants,
     async settle() {
       while (background.length > 0) await Promise.allSettled(background.splice(0));
+    },
+    async drainBulkRuns() {
+      const { drainBulkRuns } = await import("../../bulk-runs/engine");
+      for (let tick = 0; tick < 5; tick += 1) await drainBulkRuns(db, 3);
+      await this.settle();
     },
     useGrant(grant) {
       const props: AgentOAuthProps = {
