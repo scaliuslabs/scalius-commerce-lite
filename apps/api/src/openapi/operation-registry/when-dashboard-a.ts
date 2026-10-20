@@ -21,7 +21,7 @@ export const DASHBOARD_WHEN_A: Readonly<Record<string, string>> = {
   "dashboard.agent_access.grants.update": "Use when narrowing an agent connection: fewer permissions, a lower risk ceiling, a shorter expiry or a new label (widening needs a new approval).",
   "dashboard.agent_access.tokens.create": "Use when the merchant wants a new personal access token for CI or another agent; returns the bearer token once.",
   "dashboard.agent_access.tokens.rotate": "Use when an agent token may have leaked or is due for rotation: replaces it and returns the new token once.",
-  "dashboard.analytics.create": "Use when adding a tracking or analytics script (GA4, Google Tag Manager, TikTok pixel, Cloudflare Web Analytics, custom snippet) as an inactive draft.",
+  "dashboard.analytics.create": "Use when adding a tracking or analytics script (GA4 from its G- ID alone, Google Tag Manager, TikTok pixel, Cloudflare Web Analytics, custom snippet); Google tags load under Consent Mode v2, denied by default for EEA, UK and Swiss visitors.",
   "dashboard.analytics.delete_permanently": "Use when a trashed analytics or tracking script must be deleted for good.",
   "dashboard.analytics.get": "Use when reading the source of one analytics or tracking script before editing it.",
   "dashboard.analytics.health": "Use when checking whether GA4, Meta Pixel, TikTok and other tracking providers are configured and ready, without calling them.",

@@ -7,6 +7,8 @@ import {
   createAnalyticsSchema,
   getAnalyticsProviderIdentifier,
   isPubliclyInjectableAnalyticsConfig,
+  GA4_GTAG_SCRIPT_SRC,
+  normalizeAnalyticsConfig,
   normalizeCloudflareWebAnalyticsConfig,
   updateAnalyticsSchema,
 } from "./analytics.validation";
@@ -177,6 +179,18 @@ describe("analytics validation", () => {
     expect(normalizeCloudflareWebAnalyticsConfig("site_token_123")).toBe(
       `<script type="module" fetchpriority="low" src="${CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC}" data-cf-beacon='{"token":"site_token_123"}'></script>`,
     );
+  });
+
+  it("turns a bare GA4 measurement ID into the gtag.js snippet that can be activated", () => {
+    const snippet = normalizeAnalyticsConfig("google_analytics", " g-eval12345 ");
+    expect(snippet).toContain(`src="${GA4_GTAG_SCRIPT_SRC}?id=G-EVAL12345"`);
+    expect(snippet).toContain("gtag('config','G-EVAL12345')");
+    expect(isPubliclyInjectableAnalyticsConfig({ type: "google_analytics", config: snippet, isActive: true })).toBe(true);
+    // Active on create from the bare ID; a full snippet is kept as written; a placeholder ID is still refused.
+    expect(createAnalyticsSchema.safeParse({ name: "GA4", type: "google_analytics", config: "G-EVAL12345", location: "head", isActive: true }).success).toBe(true);
+    expect(normalizeAnalyticsConfig("google_analytics", VALID_GA4_CONFIG)).toBe(VALID_GA4_CONFIG.trim());
+    expect(createAnalyticsSchema.safeParse({ name: "GA4", type: "google_analytics", config: "G-XXXXXXXX", location: "head", isActive: true }).success).toBe(false);
+    expect(normalizeAnalyticsConfig("custom", " G-EVAL12345 ")).toBe("G-EVAL12345");
   });
 
   it("canonicalizes pasted Cloudflare Web Analytics beacon snippets", () => {

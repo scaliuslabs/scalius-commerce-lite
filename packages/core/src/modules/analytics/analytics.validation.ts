@@ -84,6 +84,37 @@ export function normalizeCloudflareWebAnalyticsConfig(config: string): string {
     return buildCloudflareWebAnalyticsScript(trimmedConfig);
 }
 
+export const GA4_GTAG_SCRIPT_SRC = "https://www.googletagmanager.com/gtag/js";
+
+const GA4_BARE_MEASUREMENT_ID_PATTERN = /^G-[A-Z0-9]{4,32}$/i;
+
+/**
+ * A GA4 script given as its bare `G-` measurement ID becomes the
+ * platform-generated gtag.js snippet, the way a Cloudflare Web Analytics
+ * token becomes its beacon. The storefront's consent boot script sets the
+ * Consent Mode v2 defaults before it runs (`@scalius/shared/tracking-consent`).
+ * Any other config (a full snippet) is kept as written.
+ */
+export function normalizeGoogleAnalyticsConfig(config: string): string {
+    const trimmedConfig = config.trim();
+    if (!GA4_BARE_MEASUREMENT_ID_PATTERN.test(trimmedConfig)) return trimmedConfig;
+    const measurementId = trimmedConfig.toUpperCase();
+    return `<script async src="${GA4_GTAG_SCRIPT_SRC}?id=${measurementId}"></script>`
+        + `<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${measurementId}');</script>`;
+}
+
+/** The config a script is stored and validated with: canonical for Cloudflare and a bare GA4 ID, trimmed otherwise. */
+export function normalizeAnalyticsConfig(type: string, config: string): string {
+    switch (type) {
+        case "cloudflare_web_analytics":
+            return normalizeCloudflareWebAnalyticsConfig(config);
+        case "google_analytics":
+            return normalizeGoogleAnalyticsConfig(config);
+        default:
+            return config.trim();
+    }
+}
+
 function isValidCloudflareWebAnalyticsConfig(config: string): boolean {
     const trimmedConfig = config.trim();
     if (!trimmedConfig) {
@@ -221,7 +252,7 @@ export function getActiveAnalyticsProviderConfigError(
                 !GA4_MEASUREMENT_ID_PATTERN.test(data.config) ||
                 !hasGa4GtagSignal(data.config)
             ) {
-                return "Active Google Analytics scripts must use a GA4 gtag.js snippet with a G- measurement ID, not a GTM container snippet.";
+                return "Active Google Analytics scripts need a G- measurement ID (alone, or in the GA4 gtag.js snippet), not a GTM container snippet.";
             }
             return null;
         case "google_tag_manager":
@@ -272,7 +303,10 @@ function validateAnalyticsConfig(
     data: AnalyticsConfigInput,
     ctx: z.RefinementCtx,
 ) {
-    const activeConfigError = getActiveAnalyticsConfigError(data);
+    const activeConfigError = getActiveAnalyticsConfigError({
+        ...data,
+        config: normalizeAnalyticsConfig(data.type, data.config),
+    });
     if (activeConfigError) {
         ctx.addIssue({
             code: "custom",
