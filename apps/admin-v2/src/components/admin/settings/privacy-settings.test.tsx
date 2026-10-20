@@ -22,7 +22,8 @@ vi.mock("@tanstack/react-router", () => ({
 
 import { PermissionProvider } from "~/contexts/PermissionContext";
 import { SaveScope, type SaveScopeState } from "../shared/SaveBar";
-import { PrivacySettingsCards, TrackingHealthCard, privacyProblems, trackingSaveBody, type PrivacyValues } from "./PrivacySettings";
+import { CookieBannerCard, CustomerDataCard } from "./PrivacySettings";
+import { privacyProblems, tagIdsFrom, trackingSaveBody, withTagIds, type PrivacyValues } from "./tracking-settings";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -77,6 +78,22 @@ describe("privacy settings save body", () => {
     expect(privacyProblems(values({ ga4: { ...values().ga4, measurementId: "UA-123" } }))).toEqual({ "ga4-measurement-id": "measurementIdInvalid" });
     expect(privacyProblems(values({ tiktok: { ...values().tiktok, isEnabled: true } }))).toEqual({ "tiktok-enabled": "tiktokNeeds" });
   });
+
+  it("reuses the ID a saved tag carries, so the pixel code is typed once", () => {
+    const ids = tagIdsFrom([
+      { type: "tiktok_pixel", identifier: "COLD123", isActive: false },
+      { type: "tiktok_pixel", identifier: "CLIVE456", isActive: true },
+      { type: "google_analytics", identifier: "G-TAG1234", isActive: true },
+      { type: "custom", identifier: null, isActive: true },
+    ]);
+    expect(ids).toEqual({ tiktok: "CLIVE456", ga4: "G-TAG1234" });
+    const on = values({ tiktok: { isEnabled: true, pixelCode: "", accessToken: "tok", testEventCode: "" } });
+    expect(privacyProblems(on, ids)).toEqual({});
+    expect(withTagIds(on, ids, "tiktok").tiktok.pixelCode).toBe("CLIVE456");
+    // A code the merchant typed stays theirs.
+    const typed = values({ tiktok: { ...on.tiktok, pixelCode: "CTYPED1" } });
+    expect(withTagIds(typed, ids, "tiktok").tiktok.pixelCode).toBe("CTYPED1");
+  });
 });
 
 describe("Settings → Customer privacy", () => {
@@ -115,21 +132,22 @@ describe("Settings → Customer privacy", () => {
         <QueryClientProvider client={queryClient}>
           <PermissionProvider isSuperAdmin>
             <SaveScope render={(next) => { scope.current = next; return null; }}>
-              <PrivacySettingsCards />
-              <TrackingHealthCard />
+              <CookieBannerCard />
+              <CustomerDataCard />
             </SaveScope>
           </PermissionProvider>
         </QueryClientProvider>,
       );
     });
     await vi.waitFor(() => expect(container.textContent).toContain("Cookie banner"));
-    await vi.waitFor(() => expect(container.textContent).toContain("Tracking health"));
+    await vi.waitFor(() => expect(container.textContent).toContain("What customers allow"));
   };
 
   it("shows the banner choice, Europe's fixed rule and what each market gets", async () => {
     await render();
     expect(container.textContent).toContain("Tell customers");
-    expect(container.textContent).toContain("Always ask first.");
+    await vi.waitFor(() => expect(container.textContent).toContain("Customers there are always asked first."));
+    expect(container.textContent).toContain("Everywhere else");
     await vi.waitFor(() => expect(container.textContent).toContain("Required by law"));
     const rows = [...container.querySelectorAll("li")].map((row) => row.textContent);
     expect(rows).toContain("BangladeshTells customers");
@@ -147,17 +165,27 @@ describe("Settings → Customer privacy", () => {
     await vi.waitFor(() => expect(scope.current?.dirty).toBe(false));
   });
 
-  it("reports each destination's health and sends a test event", async () => {
+  it("names Europe's rule only for a store that sells there", async () => {
+    sdk.getApiV1AdminSettingsMarkets.mockImplementation(() => envelope({ items: [
+      { id: "mkt_backup", name: "Bangladesh", countries: ["BD"], isBackup: true },
+    ] }));
     await render();
-    expect(container.textContent).toContain("Test mode");
-    expect(container.textContent).toContain("9 sent · 1 failed · 0 skipped · 0 waiting");
-    expect(container.textContent).toContain("2 sales not sent because the customer said no");
-    expect(container.textContent).toContain("Invalid token");
-    expect(container.textContent).toContain("Not set up");
-    expect(container.textContent).toContain("Of 10 orders: 8 allowed analytics, 6 allowed ads, 7 allowed selling data.");
-    const send = [...container.querySelectorAll("button")].find((button) => button.textContent === "Send test event")!;
-    await act(async () => send.click());
-    await vi.waitFor(() => expect(container.textContent).toContain("Accepted. Look for it in Events Manager, Test events."));
-    expect(sdk.postApiV1AdminAnalyticsTestEvent).toHaveBeenCalledWith({ body: { destination: "meta" } });
+    await vi.waitFor(() => expect(container.textContent).toContain("Where you sell"));
+    expect(container.textContent).not.toContain("Europe, the UK and Switzerland");
+    // One market: no list of markets that repeats the choice.
+    expect(container.textContent).not.toContain("Your markets");
+  });
+
+  it("says what customers allowed, with the match details behind Details", async () => {
+    await render();
+    expect(container.textContent).toContain("Of 10 orders: 8 allowed visit counting, 6 allowed ads, 7 allowed selling their data.");
+    expect(container.textContent).not.toContain("Facebook browser ID");
+    const details = await vi.waitFor(() => {
+      const button = [...container.querySelectorAll("button")].find((element) => element.textContent === "Details");
+      expect(button).toBeTruthy();
+      return button!;
+    });
+    await act(async () => details.click());
+    await vi.waitFor(() => expect(container.textContent).toContain("Facebook browser ID"));
   });
 });

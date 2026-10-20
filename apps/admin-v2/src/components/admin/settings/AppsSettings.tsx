@@ -23,16 +23,9 @@ import { SCANNER_TOKEN_TTL_SECONDS } from "@scalius/shared/scanner-auth";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "~/components/ui/dialog";
+import { ChoiceField, ReadOnlyValue } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { SearchableSelect } from "~/components/ui/searchable-select";
-import { Switch } from "~/components/ui/switch";
 import { Textarea } from "~/components/ui/textarea";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
@@ -98,7 +91,7 @@ function secretInputProps(value: string, onChange: (value: string) => void) {
 
 // ── Tracking ─────────────────────────────────────────────────────────────
 
-type ScriptSummary = ApiResult<typeof getApiV1AdminAnalytics>["scripts"][number];
+export type ScriptSummary = ApiResult<typeof getApiV1AdminAnalytics>["scripts"][number];
 type ScriptSource = ApiResult<typeof getApiV1AdminAnalyticsByIdSource>;
 type Placement = "head" | "body_start" | "body_end";
 
@@ -111,11 +104,23 @@ const SCRIPT_MARKS: Partial<Record<string, ProviderMarkId>> = {
 };
 const PLACEMENTS: readonly Placement[] = ["head", "body_start", "body_end"];
 
+/**
+ * The tags each destination card owns (Integrations: Google, Facebook and
+ * Instagram, TikTok). The Tracking card keeps the rest: your own code and
+ * Cloudflare Web Analytics.
+ */
+export const DESTINATION_SCRIPT_TYPES = {
+  ga4: ["google_analytics", "google_tag_manager"],
+  meta: ["facebook_pixel"],
+  tiktok: ["tiktok_pixel"],
+} as const satisfies Record<string, readonly AnalyticsScriptType[]>;
+export const OTHER_SCRIPT_TYPES: readonly AnalyticsScriptType[] = ["custom", "cloudflare_web_analytics"];
+
 function scriptType(type: string): AnalyticsScriptType {
   return analyticsScriptTypes.includes(type as AnalyticsScriptType) ? (type as AnalyticsScriptType) : "custom";
 }
 
-function ScriptMark({ type }: { type: string }) {
+export function ScriptMark({ type }: { type: string }) {
   return <Mark provider={SCRIPT_MARKS[type]} fallback={<Code2 className="size-4" />} />;
 }
 
@@ -140,7 +145,12 @@ interface ScriptDraft {
   allowDuplicateProvider: boolean;
 }
 
-function ScriptForm({ script, scripts }: { script: ScriptSource | null; scripts: readonly ScriptSummary[] }) {
+function ScriptForm({ script, scripts, types }: {
+  script: ScriptSource | null;
+  scripts: readonly ScriptSummary[];
+  /** The services a new tag can be; the first is chosen. */
+  types: readonly AnalyticsScriptType[];
+}) {
   const t = useMessages(appsMessages);
   const common = useMessages(settingsMessages);
   const queryClient = useQueryClient();
@@ -149,11 +159,12 @@ function ScriptForm({ script, scripts }: { script: ScriptSource | null; scripts:
   const canToggle = hasPermission(ADMIN_PERMISSIONS.ANALYTICS_TOGGLE);
   const [saved] = useState<ScriptDraft>(() => {
     if (!script) {
+      const type = types[0] ?? "custom";
       return {
-        name: t("cloudflare_web_analytics"),
-        type: "cloudflare_web_analytics",
+        name: t(type),
+        type,
         config: "",
-        location: "body_end",
+        location: type === "cloudflare_web_analytics" ? "body_end" : "head",
         isActive: false,
         allowDuplicateProvider: false,
       };
@@ -245,14 +256,14 @@ function ScriptForm({ script, scripts }: { script: ScriptSource | null; scripts:
 
   return (
     <>
-      {script ? null : (
+      {script || types.length < 2 ? null : (
         <SettingsField id="tracking-service" label={t("service")}>
           <SearchableSelect
             id="tracking-service"
             value={draft.type}
             onValueChange={(value) => changeType(value as AnalyticsScriptType)}
             triggerClassName="w-full"
-            options={analyticsScriptTypes.map((type) => ({ value: type, label: t(type) }))}
+            options={types.map((type) => ({ value: type, label: t(type) }))}
           />
         </SettingsField>
       )}
@@ -310,10 +321,12 @@ function ScriptForm({ script, scripts }: { script: ScriptSource | null; scripts:
         </SettingsField>
       ) : null}
       {!script && canToggle ? (
-        <label className="flex min-h-11 items-center justify-between gap-4 text-body font-medium">
-          {t("turnOnNow")}
-          <Switch checked={draft.isActive} onCheckedChange={(on) => set("isActive", on)} />
-        </label>
+        // Saved with the dialog's Save: a checkbox (DESIGN F9).
+        <ChoiceField
+          id="tracking-turn-on"
+          label={t("turnOnNow")}
+          control={<Checkbox id="tracking-turn-on" checked={draft.isActive} onCheckedChange={(checked) => set("isActive", checked === true)} />}
+        />
       ) : null}
       {duplicate ? (
         <SettingsField id="tracking-keep-both" label={t("keepBoth", { service })} help={t("keepOne")}>
@@ -358,10 +371,22 @@ function EditScript({ id, scripts }: { id: string; scripts: readonly ScriptSumma
   });
   if (isError) return <SettingsLoadFailure title={t("trackingTitle")} onRetry={refetch} />;
   if (!data) return <SettingsCardLoading />;
-  return <ScriptForm key={data.revision} script={data} scripts={scripts} />;
+  return <ScriptForm key={data.revision} script={data} scripts={scripts} types={[scriptType(data.type)]} />;
 }
 
-function TrackingCardBody() {
+/**
+ * Tags of some services, one row each: the row opens the tag, its checkbox
+ * turns it on or off with the page's Save (DESIGN F9). Without one, an add
+ * button for the first service. The Tracking card and each destination card
+ * draw their own.
+ */
+export function ScriptList({ types, emptyLabel, addLabel }: {
+  types: readonly AnalyticsScriptType[];
+  /** Shown when there is no tag yet; without it the list draws nothing then. */
+  emptyLabel?: string;
+  /** The add button's words; "Add tracking" by default. */
+  addLabel?: string;
+}) {
   const t = useMessages(appsMessages);
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
@@ -369,9 +394,10 @@ function TrackingCardBody() {
   const canEdit = hasPermission(ADMIN_PERMISSIONS.ANALYTICS_EDIT);
   const canToggle = hasPermission(ADMIN_PERMISSIONS.ANALYTICS_TOGGLE);
   const { data, isError, refetch } = useQuery(trackingQuery);
-  const scripts = data?.scripts ?? [];
+  const all = data?.scripts ?? [];
+  const scripts = all.filter((script) => (types as readonly string[]).includes(scriptType(script.type)));
 
-  // Row switches are page drafts, saved by the page save bar.
+  // Row checkboxes are page drafts, saved by the page save bar.
   const [switched, setSwitched] = useState<Record<string, boolean>>({});
   const [keepBoth, setKeepBoth] = useState(false);
   const isOn = (script: ScriptSummary) => switched[script.id] ?? script.isActive;
@@ -382,7 +408,7 @@ function TrackingCardBody() {
         .filter((script) =>
           isOn(script) &&
           script.type !== "custom" &&
-          scripts.some((other) => other.id !== script.id && other.type === script.type && isOn(other)))
+          all.some((other) => other.id !== script.id && other.type === script.type && isOn(other)))
         .map((script) => script.type),
     ),
   ];
@@ -419,63 +445,78 @@ function TrackingCardBody() {
 
   if (isError) return <SettingsLoadFailure title={t("trackingTitle")} onRetry={refetch} />;
   if (!data) return <SettingsCardLoading />;
+  const add = (
+    <SettingsDialog
+      title={addLabel ?? t("addTracking")}
+      trigger={<Button type="button" variant="outline" size="sm" disabled={!canCreate}>{addLabel ?? t("addTracking")}</Button>}
+    >
+      <ScriptForm script={null} scripts={all} types={types} />
+    </SettingsDialog>
+  );
+  return (
+    <div className="flex flex-col">
+      {scripts.map((script) => (
+        <div key={script.id} className="flex items-center border-t border-border first:border-t-0">
+          <SettingsDialog
+            title={t("editTracking", { name: script.name })}
+            trigger={
+              <SettingsRow
+                disabled={!canEdit}
+                label={<MarkLabel mark={<ScriptMark type={script.type} />}>{script.name}</MarkLabel>}
+                value={script.configIssue
+                  ? `${t(scriptType(script.type))} · ${t("needsRealId")}`
+                  : [t(scriptType(script.type)), script.identifier].filter(Boolean).join(" · ")}
+              />
+            }
+          >
+            <EditScript id={script.id} scripts={all} />
+          </SettingsDialog>
+          <label className="me-4 flex size-11 shrink-0 items-center justify-center">
+            <Checkbox
+              checked={isOn(script)}
+              disabled={!canToggle || (!script.isActive && Boolean(script.configIssue))}
+              aria-label={t("switchLabel", { name: script.name })}
+              onCheckedChange={(checked) => setSwitched((current) => ({ ...current, [script.id]: checked === true }))}
+            />
+          </label>
+        </div>
+      ))}
+      {duplicateTypes.length ? (
+        <div className="px-4 py-3">
+          <SettingsField
+            id={`tracking-keep-both-${types[0]}`}
+            label={t("keepBoth", { service: duplicateTypes.map((type) => t(scriptType(type))).join(", ") })}
+            help={t("keepOne")}
+          >
+            <Checkbox
+              id={`tracking-keep-both-${types[0]}`}
+              checked={keepBoth}
+              aria-describedby={`tracking-keep-both-${types[0]}-note`}
+              onCheckedChange={(checked) => setKeepBoth(checked === true)}
+            />
+          </SettingsField>
+        </div>
+      ) : null}
+      {scripts.length === 0 && emptyLabel ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+          <p className="text-body text-muted-foreground">{emptyLabel}</p>
+          {add}
+        </div>
+      ) : (
+        <div className="px-4 py-3 empty:hidden">{scripts.length > 0 && types.length > 1 ? add : null}</div>
+      )}
+    </div>
+  );
+}
+
+function TrackingCardBody() {
+  const t = useMessages(appsMessages);
   return (
     <SettingsCard id="tracking"
       title={t("trackingTitle")}
       description={t("trackingDescription")}
-      action={
-        <SettingsDialog
-          title={t("addTracking")}
-          trigger={<Button type="button" variant="outline" size="sm" disabled={!canCreate}>{t("addTracking")}</Button>}
-        >
-          <ScriptForm script={null} scripts={scripts} />
-        </SettingsDialog>
-      }
-      rows={
-        scripts.length
-          ? scripts.map((script) => (
-              <div key={script.id} className="flex items-center border-t border-border first:border-t-0">
-                <SettingsDialog
-                  title={t("editTracking", { name: script.name })}
-                  trigger={
-                    <SettingsRow
-                      disabled={!canEdit}
-                      label={<MarkLabel mark={<ScriptMark type={script.type} />}>{script.name}</MarkLabel>}
-                      value={script.configIssue
-                        ? `${t(scriptType(script.type))} · ${t("needsRealId")}`
-                        : t(scriptType(script.type))}
-                    />
-                  }
-                >
-                  <EditScript id={script.id} scripts={scripts} />
-                </SettingsDialog>
-                <Switch
-                  className="me-6"
-                  checked={isOn(script)}
-                  disabled={!canToggle || (!script.isActive && Boolean(script.configIssue))}
-                  aria-label={t("switchLabel", { name: script.name })}
-                  onCheckedChange={(on) => setSwitched((current) => ({ ...current, [script.id]: on }))}
-                />
-              </div>
-            ))
-          : null
-      }
-    >
-      {duplicateTypes.length ? (
-        <SettingsField
-          id="tracking-keep-both-rows"
-          label={t("keepBoth", { service: duplicateTypes.map((type) => t(scriptType(type))).join(", ") })}
-          help={t("keepOne")}
-        >
-          <Checkbox
-            id="tracking-keep-both-rows"
-            checked={keepBoth}
-            aria-describedby="tracking-keep-both-rows-note"
-            onCheckedChange={(checked) => setKeepBoth(checked === true)}
-          />
-        </SettingsField>
-      ) : null}
-    </SettingsCard>
+      rows={<ScriptList types={OTHER_SCRIPT_TYPES} emptyLabel={t("noOtherTracking")} />}
+    />
   );
 }
 
@@ -512,7 +553,11 @@ const metaConnectionQuery = {
   },
 };
 
-function MetaConnectionFields({ canEdit }: { canEdit: boolean }) {
+/**
+ * Sales sent to Meta from the store's server (the Conversions API). With a
+ * Meta pixel tag saved, its pixel ID is reused: the merchant types it once.
+ */
+export function MetaConnectionFields({ canEdit, tagPixelId }: { canEdit: boolean; tagPixelId?: string }) {
   const t = useMessages(appsMessages);
   const common = useMessages(settingsMessages);
   const { values: draft, setValue: set, isLoaded } = useSettingsForm<MetaDraft>({
@@ -522,7 +567,7 @@ function MetaConnectionFields({ canEdit }: { canEdit: boolean }) {
     saveFn: (values, expectedRevision) =>
       apiData(postApiV1AdminSettingsMetaConversions({
         body: {
-          pixelId: values.pixelId.trim(),
+          pixelId: values.pixelId.trim() || tagPixelId || "",
           isEnabled: values.isEnabled,
           ...(values.accessToken !== MASKED_VALUE ? { accessToken: values.accessToken.trim() } : {}),
           ...(values.testEventCode !== MASKED_VALUE ? { testEventCode: values.testEventCode.trim() } : {}),
@@ -533,23 +578,50 @@ function MetaConnectionFields({ canEdit }: { canEdit: boolean }) {
     defaultValues: { pixelId: "", accessToken: "", testEventCode: "", isEnabled: false },
     errorMessage: common("saveFailed"),
     canEdit,
-    isValid: (values) => !values.isEnabled || Boolean(values.pixelId.trim() && values.accessToken.trim()),
+    isValid: (values) => !values.isEnabled || Boolean((values.pixelId.trim() || tagPixelId) && values.accessToken.trim()),
+    problems: (values) => values.isEnabled && !((values.pixelId.trim() || tagPixelId) && values.accessToken.trim())
+      ? [{ message: t("needsPixelAndToken"), target: "meta-enabled" }]
+      : [],
     fields: { pixelId: "meta-pixel", accessToken: "meta-token", testEventCode: "meta-test-code" },
   });
   if (!isLoaded) return <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" aria-hidden="true" />;
-  const missing = draft.isEnabled && (!draft.pixelId.trim() || !draft.accessToken.trim());
+  const missing = draft.isEnabled && (!(draft.pixelId.trim() || tagPixelId) || !draft.accessToken.trim());
+  // The tag's pixel ID stands in for an empty or equal one; a different saved ID stays editable.
+  const reusesTag = Boolean(tagPixelId) && (!draft.pixelId.trim() || draft.pixelId.trim() === tagPixelId);
   return (
     <>
-      <SettingsField id="meta-pixel" label={t("pixelId")} help={t("pixelHelp")}>
-        <Input
-          id="meta-pixel"
-          inputMode="numeric"
-          autoComplete="off"
-          value={draft.pixelId}
-          aria-describedby="meta-pixel-note"
-          onChange={(event) => set("pixelId", event.target.value)}
-        />
-      </SettingsField>
+      {/* Saved with the form: a checkbox (DESIGN F9). */}
+      <ChoiceField
+        id="meta-enabled"
+        label={t("sendToMeta")}
+        help={missing ? undefined : t("sendToMetaHelp")}
+        error={missing ? t("needsPixelAndToken") : undefined}
+        control={
+          <Checkbox
+            id="meta-enabled"
+            checked={draft.isEnabled}
+            disabled={!canEdit}
+            aria-invalid={missing}
+            aria-describedby={missing ? "meta-enabled-error" : "meta-enabled-help"}
+            onCheckedChange={(checked) => set("isEnabled", checked === true)}
+          />
+        }
+      />
+      {reusesTag ? (
+        <ReadOnlyValue label={t("pixelId")} value={tagPixelId} help={t("pixelFromTag")} mono />
+      ) : (
+        <SettingsField id="meta-pixel" label={t("pixelId")} help={t("pixelHelp")}>
+          <Input
+            id="meta-pixel"
+            inputMode="numeric"
+            autoComplete="off"
+            value={draft.pixelId}
+            disabled={!canEdit}
+            aria-describedby="meta-pixel-note"
+            onChange={(event) => set("pixelId", event.target.value)}
+          />
+        </SettingsField>
+      )}
       <SettingsField
         id="meta-token"
         label={t("accessToken")}
@@ -573,11 +645,6 @@ function MetaConnectionFields({ canEdit }: { canEdit: boolean }) {
           {...secretInputProps(draft.testEventCode, (value) => set("testEventCode", value))}
         />
       </SettingsField>
-      <label className="flex min-h-11 items-center justify-between gap-4 text-body font-medium">
-        {t("sendToMeta")}
-        <Switch checked={draft.isEnabled} onCheckedChange={(on) => set("isEnabled", on)} />
-      </label>
-      {missing ? <p role="alert" className="text-body text-destructive">{t("needsPixelAndToken")}</p> : null}
     </>
   );
 }
@@ -588,7 +655,7 @@ function toDate(value: MetaLog["createdAt"]): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function RecentEvents() {
+export function RecentEvents() {
   const t = useMessages(appsMessages);
   const { data, isError, refetch } = useQuery({
     queryKey: queryKeys.settings.metaConversionsLogs(EVENTS_PARAMS),
@@ -620,58 +687,6 @@ function RecentEvents() {
       })}
     </ul>
   );
-}
-
-function FacebookCardBody() {
-  const t = useMessages(appsMessages);
-  const common = useMessages(settingsMessages);
-  const canEdit = usePermissions().hasPermission(ADMIN_PERMISSIONS.ANALYTICS_EDIT);
-  const { data, isError, refetch } = useQuery(metaQuery);
-  if (isError) return <SettingsLoadFailure title={t("facebookTitle")} onRetry={refetch} />;
-  if (!data) return <SettingsCardLoading />;
-  const settings = data.settings;
-  const status = settings?.isEnabled && settings.pixelId
-    ? t("connectionOn", { pixel: settings.pixelId })
-    : settings?.pixelId || settings?.accessToken
-      ? common("off")
-      : t("notSetUp");
-  return (
-    <SettingsCard id="facebook"
-      title={
-        <span className="flex items-center gap-3">
-          <OfficialProviderMark provider="meta" size="sm" />
-          {t("facebookTitle")}
-        </span>
-      }
-      description={t("facebookDescription")}
-      rows={
-        <>
-          <SettingsDialog
-            title={t("connection")}
-            trigger={<SettingsRow label={t("connection")} value={status} disabled={!canEdit} />}
-          >
-            <MetaConnectionFields canEdit={canEdit} />
-          </SettingsDialog>
-          <Dialog>
-            <DialogTrigger asChild>
-              <SettingsRow label={t("recentEvents")} value={t("recentEventsValue")} />
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-xl">
-              <DialogHeader>
-                <DialogTitle>{t("recentEvents")}</DialogTitle>
-              </DialogHeader>
-              <RecentEvents />
-            </DialogContent>
-          </Dialog>
-        </>
-      }
-    />
-  );
-}
-
-export function FacebookCard() {
-  const { hasPermission } = usePermissions();
-  return hasPermission(ADMIN_PERMISSIONS.ANALYTICS_VIEW) ? <FacebookCardBody /> : null;
 }
 
 // ── Courier fraud check ─────────────────────────────────────────────────
@@ -729,10 +744,12 @@ function AppFraudProviderForm({
   return (
     <>
       {appProvider ? <AppProviderStatus provider={appProvider} /> : null}
-      <label className="flex min-h-11 items-center justify-between gap-4 text-body font-medium">
-        {t("useOnOrders")}
-        <Switch checked={draft.isActive} onCheckedChange={(on) => setDraft({ isActive: on })} />
-      </label>
+      {/* Saved with the dialog's Save: a checkbox (DESIGN F9). */}
+      <ChoiceField
+        id="fraud-use-on-orders"
+        label={t("useOnOrders")}
+        control={<Checkbox id="fraud-use-on-orders" checked={draft.isActive} onCheckedChange={(checked) => setDraft({ isActive: checked === true })} />}
+      />
       {provider && canEdit ? (
         <>
           <div>

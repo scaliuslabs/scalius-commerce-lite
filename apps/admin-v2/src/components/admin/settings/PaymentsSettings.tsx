@@ -709,21 +709,22 @@ export function PaymentOptionsCard() {
         ))}
       </RadioGroup>
       {/* Saved with the card, like the mode above it: a checkbox (F9). */}
-      <ChoiceField
-        id="advance-payment"
-        className="border-t border-border pt-4"
-        label={t("advance")}
-        help={t("advanceHelp")}
-        control={
-          <Checkbox
-            id="advance-payment"
-            checked={values.partialPaymentEnabled}
-            disabled={!canEdit}
-            aria-describedby="advance-payment-help"
-            onCheckedChange={(checked) => setValue("partialPaymentEnabled", checked === true)}
-          />
-        }
-      />
+      <div className="border-t border-border pt-4">
+        <ChoiceField
+          id="advance-payment"
+          label={t("advance")}
+          help={t("advanceHelp")}
+          control={
+            <Checkbox
+              id="advance-payment"
+              checked={values.partialPaymentEnabled}
+              disabled={!canEdit}
+              aria-describedby="advance-payment-help"
+              onCheckedChange={(checked) => setValue("partialPaymentEnabled", checked === true)}
+            />
+          }
+        />
+      </div>
       {values.partialPaymentEnabled ? (
         <SettingsField id="advance-amount" label={t("advanceAmount")} help={t("advanceAmountHelp")}>
           <Input
