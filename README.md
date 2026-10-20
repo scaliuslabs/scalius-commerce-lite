@@ -78,7 +78,7 @@ pnpm dev
 |-----|---------|
 | `http://localhost:4323/admin` | Dashboard |
 | `http://localhost:4322` | Storefront |
-| `http://localhost:8787/api/v1/docs` | Swagger UI (spec at `/api/v1/openapi.json`, health at `/api/v1/health`) |
+| `http://localhost:8787/api/v1/openapi.json` | OpenAPI contract (open it in any OpenAPI viewer; health at `/api/v1/health`) |
 | `http://127.0.0.1:8025` | Mailpit inbox |
 
 `pnpm dev:doctor` reports on Node, secrets, database state, and ports without changing anything. Add a profile after you start servers: `dev:doctor:api`, `dev:doctor:admin`, `dev:doctor:storefront`, or `dev:doctor:all`.
