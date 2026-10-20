@@ -1,4 +1,5 @@
 import { OBJECT_HANDLE_PATTERN, prepareObjectData, objectDataWire } from "@scalius/shared/plugins/objects";
+import { customFieldWireValue, isCustomFieldMoney, parseCustomFieldValidations, parseCustomFieldValue, type CustomFieldType } from "@scalius/shared/custom-fields";
 // `@scalius/plugin-sdk/testing`: run a plugin's handlers in a unit test with
 // the same runtime the platform uses (./runtime), over an in-memory bridge.
 // Objects enforce the manifest the way the platform does (declared
@@ -112,6 +113,11 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
   const codec = { decimalPlaces: options.store?.decimalPlaces ?? 2, currencyCode: options.store?.currency ?? "BDT" };
   const defaultStatus = (name: string) => manifest.objects[name]!.storefront ? "draft" as const : "active" as const;
   const wire = (name: string, data: Record<string, unknown>) => objectDataWire(manifest.objects[name]!, data, codec);
+  // A money filter matches the stored minor units, as the platform's index does.
+  const storedWhere = (name: string, where: Record<string, unknown>): Record<string, Scalar> => Object.fromEntries(Object.entries(where).map(([key, value]) => {
+    const money = manifest.objects[name]!.fields.some((field) => field.key === key && field.type === "money");
+    return [key, (money && isCustomFieldMoney(value) ? value.amountMinor : value) as Scalar];
+  }));
   const kv = new Map<string, unknown>();
   // Revisions, as the platform keeps them: every write advances one.
   const revisions = new Map<string, number>();
@@ -270,8 +276,9 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       });
     },
     objectsQuery: async (name, query) => {
-      const { where = {}, orderBy, limit = 50, cursor } = (query ?? {}) as { where?: Record<string, Scalar>; orderBy?: { field: string; direction?: string }; limit?: number; cursor?: string | null };
+      const { where: requested = {}, orderBy, limit = 50, cursor } = (query ?? {}) as { where?: Record<string, unknown>; orderBy?: { field: string; direction?: string }; limit?: number; cursor?: string | null };
       const store = object(name);
+      const where = storedWhere(name, requested);
       if (!indexFor(name, where, orderBy?.field)) refuse("object.unindexed_query", "Query by the leading fields of a declared index and order by its next field.");
       const field = orderBy?.field ?? "id";
       const sign = orderBy?.direction === "desc" ? -1 : 1;
@@ -285,7 +292,8 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       });
     },
     objectsCount: async (name, where) => {
-      const filter = (where ?? {}) as Record<string, Scalar>;
+      object(name);
+      const filter = storedWhere(name, (where ?? {}) as Record<string, unknown>);
       if (!indexFor(name, filter, undefined)) refuse("object.unindexed_query", "Count by the leading fields of a declared index.");
       return [...object(name).values()].filter((data) => Object.entries(filter).every(([key, value]) => compare(scalar(data[key]), scalar(value)) === 0)).length;
     },
@@ -332,7 +340,19 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       const declared = new Set(manifest.customFields.filter((field) => field.ownerType === ownerType).map((field) => field.key));
       const undeclared = Object.keys(values).find((key) => !declared.has(key));
       if (undeclared) refuse("custom_fields.undeclared", `Custom field ${ownerType}.${undeclared} is not declared in the manifest.`);
-      customFields.set(`${ownerType}:${ownerId}`, { ...customFields.get(`${ownerType}:${ownerId}`), ...copy(values) });
+      // The platform's codec: a value it would refuse is refused here (money takes { amountMinor, currency } only).
+      const next: Record<string, unknown> = { ...customFields.get(`${ownerType}:${ownerId}`) };
+      for (const [key, value] of Object.entries(values)) {
+        const field = manifest.customFields.find((entry) => entry.ownerType === ownerType && entry.key === key)!;
+        const type = field.type as CustomFieldType;
+        const validations = parseCustomFieldValidations(type, field.to ? { to: field.to } : {}, codec);
+        const parsed = parseCustomFieldValue({ type, validations: validations.ok ? validations.value : {} }, value, codec);
+        if (!parsed.ok) refuse("custom_fields.invalid", `${ownerType}.${key}: ${parsed.issue.message}`);
+        // Kept in the wire form a read returns (money as { amountMinor, currency }).
+        if (parsed.value === null) delete next[key];
+        else next[key] = customFieldWireValue(type, parsed.value, codec);
+      }
+      customFields.set(`${ownerType}:${ownerId}`, next);
     },
     // The host's refusals (apps/api/src/plugins/messaging.ts): a message to a
     // customer needs read_customers; `to` a staff email, a declared recipient

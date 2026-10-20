@@ -74,7 +74,7 @@ const ownerValuesSchema = z.object({
   ownerId: z.string(),
   fields: z.array(z.object({
     definition: customFieldDefinitionSchema,
-    value: z.unknown().describe("JSON per the field type (lists as arrays, money in decimal major units); null when unset."),
+    value: z.unknown().describe("JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset."),
     updatedAt: z.string().nullable(),
   })),
 });

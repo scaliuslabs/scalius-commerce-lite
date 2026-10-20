@@ -20,12 +20,13 @@ import { and, asc, desc, eq, gt, gte, lt, or, sql, type SQL } from "drizzle-orm"
 import type { AppObjectCommit } from "@scalius/shared/checkout-app-facts";
 import { ObjectError } from "./errors";
 import { objectTypeId, prepareObjectData, objectDataWire, OBJECT_HANDLE_PATTERN, type ObjectTypeDeclaration, type ObjectStatus, type ObjectField } from "@scalius/shared/plugins/objects";
-import type { CustomFieldCodecContext } from "@scalius/shared/custom-fields";
+import { customFieldMoney, isCustomFieldMoney, type CustomFieldCodecContext, type CustomFieldMoney } from "@scalius/shared/custom-fields";
 import { readStoreCurrency } from "../markets";
 import { storeCurrencyCodeSql, storeCurrencyFromCode, storeDecimalPlacesFromCode } from "../settings";
 import { encodeIndexTuple, indexPrefixUpperBound, indexScalar, type IndexScalar } from "./index-encoding";
 
-export type ObjectWhere = Record<string, string | number | boolean | null>;
+/** Equality filters; a money field matches `{ amountMinor, currency }` or its integer minor units. */
+export type ObjectWhere = Record<string, string | number | boolean | null | CustomFieldMoney>;
 
 export interface ObjectQueryInput {
   where?: ObjectWhere;
@@ -628,8 +629,11 @@ async function storedWhere(db: Database, declaration: ObjectTypeDeclaration, whe
   const money = declaration.fields.filter((field) => field.type === "money" && where[field.key] !== undefined && where[field.key] !== null);
   if (!money.length) return where;
   const currency = await readStoreCurrency(db);
-  const checked = prepareObjectData({ fields: money.map((field) => ({ ...field, required: false })) }, Object.fromEntries(money.map((field) => [field.key, where[field.key]])),
-    { currencyCode: currency.code, decimalPlaces: currency.decimalPlaces, priceIncrementMinor: currency.priceIncrementMinor });
+  const context = { currencyCode: currency.code, decimalPlaces: currency.decimalPlaces, priceIncrementMinor: currency.priceIncrementMinor };
+  // A bare whole number (a query-string filter) is minor units of the store currency.
+  const asMoney = (value: unknown) => isCustomFieldMoney(value) ? value
+    : typeof value === "number" || (typeof value === "string" && /^\d{1,16}$/.test(value)) ? customFieldMoney(Number(value), context) : value;
+  const checked = prepareObjectData({ fields: money.map((field) => ({ ...field, required: false })) }, Object.fromEntries(money.map((field) => [field.key, asMoney(where[field.key])])), context);
   if (!checked.ok) throw new ObjectError("object.invalid", "Check the object filter.", checked.issues);
   return { ...where, ...checked.data } as ObjectWhere;
 }

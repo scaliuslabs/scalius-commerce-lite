@@ -4,7 +4,7 @@ import { objectTypes, objectRecords } from "@scalius/database/schema";
 import type { BatchItem } from "drizzle-orm/batch";
 import { and, eq, sql } from "drizzle-orm";
 import {
-  OBJECT_SECTION_RECORDS_MAX, objectDataWire, objectFieldSchema, objectTypeId,
+  OBJECT_SECTION_RECORDS_MAX, objectDataStorefront, objectFieldSchema, objectTypeId,
   parseObjectTypeHandle, type ObjectField,
 } from "@scalius/shared/plugins/objects";
 import { deps } from "../../cache-deps";
@@ -101,7 +101,7 @@ export function planStorefrontObjects(db: Database, requests: readonly Storefron
           if (!entry.recordId) return [];
           const stored = parseJson(entry.data);
           if (!stored || typeof stored !== "object" || Array.isArray(stored)) return [];
-          const data = objectDataWire({ fields }, stored as Record<string, unknown>, context);
+          const data = objectDataStorefront({ fields }, stored as Record<string, unknown>, context);
           const references = parseJson(entry.references) as Array<{ type: string; id: string }> | null;
           const live = new Set((Array.isArray(references) ? references : []).map((reference) => `${reference.type}\0${reference.id}`));
           for (const field of fields) {

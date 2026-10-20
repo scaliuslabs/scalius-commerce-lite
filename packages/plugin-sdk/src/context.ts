@@ -50,9 +50,21 @@ export interface PluginApi {
   call<T = unknown>(operationId: string, input?: PluginApiCallInput): Promise<PluginApiResult<T>>;
 }
 
+/**
+ * Money in an object field or custom field, as every app boundary carries it
+ * (the API, webhooks, functions, ports): integer minor units of `currency`,
+ * the store currency (`ctx.store.currency`). `{ amountMinor: 125000, currency:
+ * "BDT" }` is 1,250 taka. Writes take exactly this shape; a list field holds
+ * an array of them.
+ */
+export interface PluginMoney {
+  amountMinor: number;
+  currency: string;
+}
+
 export interface PluginObjectQuery {
-  /** Equality on declared index fields. */
-  where?: Record<string, string | number | boolean | null>;
+  /** Equality on declared index fields; a money field matches a `PluginMoney` (or its `amountMinor`). */
+  where?: Record<string, string | number | boolean | null | PluginMoney>;
   orderBy?: { field: string; direction?: "asc" | "desc" };
   limit?: number;
   cursor?: string | null;
@@ -93,7 +105,8 @@ export interface PluginObjectCollection<T extends Record<string, unknown> = Reco
   update(id: string, patch: Partial<T>, options?: { expectedRevision?: number }): Promise<PluginRecordVersion<T>>;
   /**
    * Adds `delta` to a whole-number field (absent: 0; a missing record is
-   * created), atomically. A result outside `min`/`max` changes nothing and
+   * created), atomically. A money field is not a whole number: `update` it
+   * with the new `PluginMoney`. A result outside `min`/`max` changes nothing and
    * fails with `object.out_of_range`: a balance never goes below its floor,
    * however many debits race.
    */
@@ -147,7 +160,7 @@ export interface PluginHttp {
 }
 
 export interface PluginCustomFields {
-  /** Values of this plugin's own fields on one resource. */
+  /** Values of this plugin's own fields on one resource, typed per field (money as `PluginMoney`). */
   get(ownerType: string, ownerId: string): Promise<Record<string, unknown>>;
   set(ownerType: string, ownerId: string, values: Record<string, unknown>): Promise<void>;
 }
