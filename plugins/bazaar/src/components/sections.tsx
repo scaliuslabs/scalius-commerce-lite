@@ -151,7 +151,7 @@ export function ImageRow({ settings, context }: SectionProps<ImageRowSettings>) 
 
 /** The store's hero as the marketplace carousel: full width, arrows on the sides, the photo fading into the page. */
 export function HeroSkin({ data, context, settings }: SectionSkinProps<"hero", { fade: boolean; interval: number }>) {
-  const slides = data.settings.slides.filter((slide) => slide.image);
+  const slides = (data.settings.slides ?? []).filter((slide) => slide.image);
   if (slides.length === 0) return null;
   const eager = data.aboveFold === true;
   const label = t(context, { en: "Featured offers", bn: "বিশেষ অফার" });
@@ -183,7 +183,7 @@ export function HeroSkin({ data, context, settings }: SectionSkinProps<"hero", {
 /** A product row of the store's as a card carousel. */
 export function ProductRowSkin({ data, context, settings }: SectionSkinProps<"product-rail", { link_label: string | null }>) {
   const list = data.settings.products;
-  if (list.cards.length === 0) return null;
+  if (!list || (list.cards ?? []).length === 0) return null;
   const heading = data.settings.title || list.title;
   return (
     <Band title={heading} link={list.url} linkLabel={text(settings.link_label) ?? t(context, { en: "See more", bn: "আরও দেখুন" })}>
@@ -197,7 +197,7 @@ export function ProductRowSkin({ data, context, settings }: SectionSkinProps<"pr
 /** The store's deal block as the deal row, with the promotion's end when it has one. */
 export function DealsSkin({ data, context }: SectionSkinProps<"deal-block">) {
   const list = data.settings.products;
-  if (list.cards.length === 0) return null;
+  if (!list || (list.cards ?? []).length === 0) return null;
   const heading = data.settings.title || list.title || t(context, { en: "Today's Deals", bn: "আজকের অফার" });
   const ends = data.settings.promotion?.endsAt ?? null;
   return (
@@ -210,7 +210,7 @@ export function DealsSkin({ data, context }: SectionSkinProps<"deal-block">) {
 
 /** The store's category tiles as quad cards: four categories to a card, a title per card. */
 export function QuadTilesSkin({ data, context, settings }: SectionSkinProps<"category-tiles", { link_label: string | null }>) {
-  const tiles = data.settings.categories.filter((tile) => tile.image);
+  const tiles = (data.settings.categories ?? []).filter((tile) => tile.image);
   if (tiles.length === 0) return null;
   const groups: StorefrontTile[][] = [];
   for (let index = 0; index < tiles.length && groups.length < 4; index += 4) groups.push(tiles.slice(index, index + 4));

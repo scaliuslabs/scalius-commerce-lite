@@ -35,9 +35,10 @@ type Section = NonNullable<Storefront["sections"]>[number];
 type Skin = NonNullable<Storefront["skins"]>[number];
 type Template = NonNullable<Storefront["templates"]>[number];
 type Field = NonNullable<Section["settings"]>[number];
+type ListField = Extract<Field, { type: "list" }>["fields"][number];
 
-const cardFields = (): Field[] => {
-  const photo = (n: string): Field[] => [
+const cardFields = (): ListField[] => {
+  const photo = (n: string): ListField[] => [
     { key: `image${n}`, label: n ? `Photo ${n.slice(1)}` : "Photo 1", type: "image" },
     { key: `caption${n}`, label: n ? `Caption ${n.slice(1)}` : "Caption 1", type: "text", maxLength: 40 },
   ];
