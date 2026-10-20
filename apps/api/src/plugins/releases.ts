@@ -68,16 +68,39 @@ export interface PluginRelease {
 
 // ── Fetching ───────────────────────────────────────────────────────────────
 
-async function fetchBytes(url: string, maxBytes: number): Promise<Uint8Array> {
+const MAX_REGISTRY_REDIRECTS = 3;
+
+/** A public https:// address, or the registry error: every hop (redirects too) passes the outbound guard. */
+function registryUrl(url: string): URL {
   const checked = checkOutboundUrl(url);
   if (!checked.ok || checked.url.protocol !== "https:") {
     throw new PluginError("registry.unavailable", "Registry addresses must be public https:// addresses.");
   }
+  return checked.url;
+}
+
+async function fetchBytes(url: string, maxBytes: number): Promise<Uint8Array> {
+  let target = registryUrl(url);
+  const checked = { url: target };
   let response: Response;
-  try {
-    response = await fetch(checked.url.href, { redirect: "follow", signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
-  } catch {
-    throw new PluginError("registry.unavailable", `${checked.url.host} did not answer.`);
+  for (let hop = 0; ; hop += 1) {
+    try {
+      response = await fetch(target.href, { redirect: "manual", signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+    } catch {
+      throw new PluginError("registry.unavailable", `${target.host} did not answer.`);
+    }
+    const location = response.status >= 300 && response.status < 400 ? response.headers.get("Location") : null;
+    if (!location) break;
+    await response.body?.cancel().catch(() => undefined);
+    if (hop >= MAX_REGISTRY_REDIRECTS) throw new PluginError("registry.unavailable", `${target.host} redirected too many times.`);
+    let next: string;
+    try {
+      next = new URL(location, target).href;
+    } catch {
+      throw new PluginError("registry.unavailable", `${target.host} redirected to an invalid address.`);
+    }
+    target = registryUrl(next);
+    checked.url = target;
   }
   if (!response.ok) {
     await response.body?.cancel().catch(() => undefined);
