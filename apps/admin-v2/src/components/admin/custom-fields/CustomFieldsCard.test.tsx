@@ -232,8 +232,8 @@ describe("custom data card", () => {
       entry("JSON zero", "json", 0),
       entry("JSON text", "json", ""),
       entry("JSON list", "json", []),
-      entry("Money", "money", 12.5),
-      entry("No cost", "money", 0),
+      entry("Money", "money", { amountMinor: 1250, currency: "BDT" }),
+      entry("No cost", "money", { amountMinor: 0, currency: "BDT" }),
       entry("Product", "product_reference", "prod_known"),
       entry("Collection", "collection_reference", "col_known"),
       entry("Variant", "variant_reference", "var_saved"),
@@ -283,7 +283,7 @@ describe("custom data card", () => {
       ["list.date_time", ["2026-03-01T00:00:01Z"], [formatDateTime(new Date("2026-03-01T00:00:01Z"), { dateStyle: "medium", timeStyle: "medium" })]],
       ["list.url", ["/saved", "https://example.test"], ["/saved", "https://example.test"]],
       ["list.color", ["#aabbcc", "#ffffff"], ["#aabbcc", "#ffffff"]],
-      ["list.money", [0, 12.5], ["৳0.00", "৳12.50"]],
+      ["list.money", [{ amountMinor: 0, currency: "BDT" }, { amountMinor: 1250, currency: "BDT" }], ["৳0.00", "৳12.50"]],
       ["list.product_reference", ["prod_known", "prod_missing"], ["Saved product", "prod_missing"]],
       ["list.collection_reference", ["col_known", "col_missing"], ["Saved collection", "col_missing"]],
       ["list.variant_reference", ["var_b", "var_a"], ["var_b", "var_a"]],
@@ -300,10 +300,10 @@ describe("custom data card", () => {
 
   it.each([
     ["JPY", "¥", 123, "¥123"],
-    ["KWD", "KD", 1.234, "KD1.234"],
+    ["KWD", "KD", 1234, "KD1.234"],
   ] as const)("uses the saved %s currency exponent", async (currencyCode, currencySymbol, amount, expected) => {
     sdk.getApiV1AdminSettingsCurrency.mockImplementation(() => ok({ currencyCode, currencySymbol }));
-    load([entry("Amount", "money", amount)]);
+    load([entry("Amount", "money", { amountMinor: amount, currency: currencyCode })]);
     await render(false, false);
     await vi.waitFor(() => expect(savedValue("Amount")).toBe(expected));
   });

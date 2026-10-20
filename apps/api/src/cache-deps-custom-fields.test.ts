@@ -57,7 +57,7 @@ async function seeded() {
   };
   const set = (ownerType: CustomFieldOwnerType, ownerId: string, values: Array<[{ id: string }, unknown]>) =>
     setCustomFieldValues(db, ownerType, ownerId, { values: values.map(([definition, value]) => ({ definitionId: definition.id, value })) }, merchant);
-  await set("product", "p_linen", [[fields.care, "Hand wash"], [fields.msrp, 3000], [fields.cost, "secret"]]);
+  await set("product", "p_linen", [[fields.care, "Hand wash"], [fields.msrp, { amountMinor: 300000, currency: "BDT" }], [fields.cost, "secret"]]);
   await set("variant", "v_linen", [[fields.fit, "Slim"]]);
   await set("category", "cat_panjabi", [[fields.banner, "Eid edit"]]);
   await set("brand", "brd_walton01", [[fields.origin, "Bangladesh"]]);

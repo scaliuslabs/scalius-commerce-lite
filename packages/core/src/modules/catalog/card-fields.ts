@@ -2,7 +2,7 @@
 import { customFieldDefinitions, customFieldValues, themeSettings } from "@scalius/database/schema";
 import type { Database, safeBatch } from "@scalius/database/client";
 import { and, eq, notInArray, sql, type SQLWrapper } from "drizzle-orm";
-import { customFieldWireValue, type CustomFieldWireValue } from "@scalius/shared/custom-fields";
+import { customFieldStorefrontValue, type CustomFieldWireValue } from "@scalius/shared/custom-fields";
 import { parseStoredStorefrontThemeDocument } from "@scalius/shared/storefront-theme";
 import { deps } from "../../cache-deps";
 import { storeCurrencyCodeSql, storeCurrencyFromCode, storeDecimalPlacesFromCode } from "../settings";
@@ -51,7 +51,7 @@ export function selectProductCardFields(db: Database, productIds: readonly strin
 export function resolveProductCardFields(rows: readonly StorefrontCustomFieldRow[]): Map<string, ProductCardFields> {
     const result = new Map<string, ProductCardFields>();
     for (const row of rows) {
-        const value = customFieldWireValue(row.cfType, row.cfValue, {
+        const value = customFieldStorefrontValue(row.cfType, row.cfValue, {
             decimalPlaces: storeDecimalPlacesFromCode(row.cfCurrencyCode),
             currencyCode: storeCurrencyFromCode(row.cfCurrencyCode),
         });

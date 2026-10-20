@@ -41,7 +41,7 @@ const typeSchema = z.object({
 }).openapi("ObjectType");
 const recordSchema = z.object({
   id: z.string(), typeId: z.string(), handle: z.string().nullable(), status: statusSchema,
-  displayName: z.string(), data: z.record(z.string(), z.unknown()),
+  displayName: z.string(), data: z.record(z.string(), z.unknown()).openapi({ description: "Field values by key, typed as the custom-field HTTP contract: money as { amountMinor, currency } (integer minor units of the store currency)." }),
   position: z.number().int(), revision: z.number().int(), createdAt: z.string(), updatedAt: z.string(),
 }).openapi("ObjectRecord");
 const typeParam = z.object({ type: z.string().min(1).max(160) });
@@ -68,22 +68,29 @@ async function customType(c: Context, handle: string) {
   return type;
 }
 
-/** Schema uses wire values (money/decimal majors), matching the field codec. */
+/** Schema uses wire values (money as `{ amountMinor, currency }`, decimals as text or numbers), matching the field codec. */
 export function objectFieldsJsonSchema(fields: Pick<ObjectField, "key" | "name" | "type" | "to" | "required" | "validations">[]) {
   const properties: Record<string, Record<string, unknown>> = {};
   for (const field of fields) {
     const list = field.type.startsWith("list.");
     const item = list ? field.type.slice(5) : field.type;
-    const value: Record<string, unknown> = item === "json" ? {} : {
-      type: item === "boolean" ? "boolean" : item === "integer" ? "integer" : item === "money" || item === "decimal" ? ["number", "string"] : "string",
+    let value: Record<string, unknown> = item === "json" ? {} : {
+      type: item === "boolean" ? "boolean" : item === "integer" ? "integer" : item === "decimal" ? ["number", "string"] : "string",
     };
     if (item === "date") value.format = "date";
     if (item === "date_time") value.format = "date-time";
     if (item === "url") value.format = "uri";
     if (field.validations?.choices) value.enum = field.validations.choices;
     if (field.validations?.regex) value.pattern = field.validations.regex;
-    if (field.validations?.min != null) value[item === "integer" || item === "decimal" || item === "money" ? "minimum" : "minLength"] = Number(field.validations.min);
-    if (field.validations?.max != null) value[item === "integer" || item === "decimal" || item === "money" ? "maximum" : "maxLength"] = Number(field.validations.max);
+    if (item === "money") {
+      // Integer minor units of the store currency; bounds are minor units too.
+      const amountMinor: Record<string, unknown> = { type: "integer", minimum: Number(field.validations?.min ?? 0) };
+      if (field.validations?.max != null) amountMinor.maximum = Number(field.validations.max);
+      value = { type: "object", properties: { amountMinor, currency: { type: "string", description: "The store currency (ISO 4217)." } }, required: ["amountMinor", "currency"], additionalProperties: false };
+    } else {
+      if (field.validations?.min != null) value[item === "integer" || item === "decimal" ? "minimum" : "minLength"] = Number(field.validations.min);
+      if (field.validations?.max != null) value[item === "integer" || item === "decimal" ? "maximum" : "maxLength"] = Number(field.validations.max);
+    }
     properties[field.key] = { ...(list ? { type: "array", items: value } : value), title: field.name, ...(field.to ? { "x-object-type": field.to } : {}) };
   }
   return { type: "object", properties, required: fields.filter((field) => field.required).map((field) => field.key), additionalProperties: false };
@@ -154,7 +161,7 @@ app.openapi(createRoute({
 
 app.openapi(createRoute({
   operationId: "objects.list", method: "get", path: "/{type}", tags: [TAG], summary: "List object records using indexed filters and a cursor",
-  description: "where accepts a JSON scalar object or bracket parameters such as where[customer]=cus_123. Only index-leading fields may filter or sort.",
+  description: "where accepts a JSON scalar object or bracket parameters such as where[customer]=cus_123; a money field matches its integer minor units of the store currency (where[price]=1250). Only index-leading fields may filter or sort.",
   request: { params: typeParam, query: z.object({
     where: z.string().max(4096).optional(), cursor: z.string().max(4096).optional(),
     limit: z.coerce.number().int().min(1).max(100).default(50), status: statusSchema.optional(),
@@ -170,6 +177,7 @@ app.openapi(createRoute({
     const field = type.fields.find((field) => field.key === key);
     if (typeof value !== "string") continue;
     if (field?.type === "integer" && /^-?\d+$/.test(value)) where![key] = Number(value);
+    if (field?.type === "money" && /^\d{1,16}$/.test(value)) where![key] = Number(value);
     if (field?.type === "boolean" && (value === "true" || value === "false")) where![key] = value === "true";
   }
   return ok(c, await listObjectRecords(c.get("db"), type.id, { ...query, where, ...(orderBy ? { orderBy: { field: orderBy, direction } } : {}) }));

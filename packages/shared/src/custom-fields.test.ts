@@ -12,6 +12,9 @@ import {
   customFieldItemType,
   customFieldReferenceIds,
   customFieldReferenceTarget,
+  customFieldMoneyFromMajor,
+  customFieldMoneyMajorText,
+  customFieldStorefrontValue,
   customFieldValidationsToWire,
   customFieldWireValue,
   isCustomFieldKey,
@@ -167,23 +170,39 @@ describe("custom field value codec", () => {
     expect(stored("boolean", false)).toBe("false");
   });
 
-  it("stores money as integer minor units and shows it in decimal major units", () => {
-    expect(stored("money", 12.5)).toBe("1250");
-    expect(stored("money", "0.10")).toBe("10");
-    expect(stored("list.money", [1, "2.25"])).toBe('["100","225"]');
-    expect(customFieldWireValue("money", "1250", USD)).toBe(12.5);
-    expect(customFieldWireValue("list.money", '["100","225"]', USD)).toEqual([1, 2.25]);
-    // Never rounded, never negative.
-    expect(issue("money", "1.255").code).toBe("invalid");
-    expect(issue("money", -1).code).toBe("invalid");
+  it("stores money as integer minor units and carries it as { amountMinor, currency }", () => {
+    const usd = (amountMinor: number) => ({ amountMinor, currency: "USD" });
+    expect(stored("money", usd(1250))).toBe("1250");
+    expect(stored("money", usd(0))).toBe("0");
+    expect(stored("list.money", [usd(100), usd(225)])).toBe('["100","225"]');
+    expect(customFieldWireValue("money", "1250", USD)).toEqual(usd(1250));
+    expect(customFieldWireValue("list.money", '["100","225"]', USD)).toEqual([usd(100), usd(225)]);
+    // The storefront contract alone shows major units.
+    expect(customFieldStorefrontValue("money", "1250", USD)).toBe(12.5);
+    expect(customFieldStorefrontValue("list.money", '["100","225"]', USD)).toEqual([1, 2.25]);
+    // One format: no decimals, no bare numbers, no other currency, never negative or fractional.
+    for (const refused of [12.5, "12.50", 1250, { amountMinor: 1250 }, { amountMinor: 1250, currency: "USD", extra: 1 }, usd(-1), usd(12.5)]) {
+      expect(issue("money", refused).code).toBe("invalid");
+    }
+    expect(issue("money", { amountMinor: 1250, currency: "EUR" }).message).toMatch(/USD/);
     // A BDT store's default increment: taka amounts are whole numbers.
-    expect(stored("money", 120, {}, BDT)).toBe("12000");
-    expect(issue("money", 12.5, {}, BDT)).toMatchObject({ code: "whole_amount", message: "Taka amounts are whole numbers." });
+    const bdt = (amountMinor: number) => ({ amountMinor, currency: "BDT" });
+    expect(stored("money", bdt(12000), {}, BDT)).toBe("12000");
+    expect(issue("money", bdt(1250), {}, BDT)).toMatchObject({ code: "whole_amount", message: "Taka amounts are whole numbers." });
     // A merchant who prices in paisa stores paisa; reads never re-check the increment.
-    expect(stored("money", 12.5, {}, { ...BDT, priceIncrementMinor: 1 })).toBe("1250");
-    expect(customFieldWireValue("money", "1250", { decimalPlaces: 2, currencyCode: "BDT" })).toBe(12.5);
+    expect(stored("money", bdt(1250), {}, { ...BDT, priceIncrementMinor: 1 })).toBe("1250");
+    expect(customFieldWireValue("money", "1250", { decimalPlaces: 2, currencyCode: "BDT" })).toEqual(bdt(1250));
     // A zero-decimal currency stores whole units.
-    expect(stored("money", 500, {}, { decimalPlaces: 0, currencyCode: "JPY" })).toBe("500");
+    expect(stored("money", { amountMinor: 500, currency: "JPY" }, {}, { decimalPlaces: 0, currencyCode: "JPY" })).toBe("500");
+  });
+
+  it("converts a typed major-unit amount once, for forms", () => {
+    expect(customFieldMoneyFromMajor("12.50", USD)).toEqual({ amountMinor: 1250, currency: "USD" });
+    expect(customFieldMoneyFromMajor("1.255", USD)).toBeNull();
+    expect(customFieldMoneyFromMajor("-1", USD)).toBeNull();
+    expect(customFieldMoneyFromMajor("abc", USD)).toBeNull();
+    expect(customFieldMoneyMajorText({ amountMinor: 1250, currency: "USD" }, USD)).toBe("12.5");
+    expect(customFieldMoneyMajorText(12.5, USD)).toBe("");
   });
 
   it("round-trips every type through the wire form", () => {
@@ -196,6 +215,7 @@ describe("custom field value codec", () => {
       ["date_time", "2026-10-02T10:00:00+06:00", "2026-10-02T04:00:00Z"],
       ["list.decimal", ["1.10", 2], ["1.1", "2"]],
       ["list.date", ["2026-01-01"], ["2026-01-01"]],
+      ["money", { amountMinor: 1250, currency: "USD" }, { amountMinor: 1250, currency: "USD" }],
     ];
     for (const [type, input, wire] of samples) {
       const value = stored(type, input);
@@ -253,7 +273,7 @@ describe("custom field validations", () => {
     expect(issue("integer", 11, { max: "10" })).toMatchObject({ code: "too_large", limit: 10 });
     expect(issue("decimal", "0.09", { min: "0.1" })).toMatchObject({ code: "too_small", limit: "0.1" });
     expect(stored("decimal", "100000000000000000.5", { min: "99999999999999999.9" })).toBe("100000000000000000.5");
-    expect(issue("money", 4.99, { min: "500" })).toMatchObject({ code: "too_small", limit: 5 });
+    expect(issue("money", { amountMinor: 499, currency: "USD" }, { min: "500" })).toMatchObject({ code: "too_small", limit: 500, message: "The minimum is 5 USD." });
     expect(issue("date", "2025-12-31", { min: "2026-01-01" }).code).toBe("too_small");
     expect(issue("date_time", "2026-01-01T00:00:01Z", { max: "2026-01-01T00:00:00.500Z" }).code).toBe("too_large");
     expect(issue("list.integer", [1, 20], { max: "10" })).toMatchObject({ code: "too_large", index: 1 });
@@ -266,11 +286,13 @@ describe("custom field validations", () => {
     expect(issue("single_line_text", "XL", { choices: ["S", "M", "L"] }).code).toBe("not_a_choice");
   });
 
-  it("parses wire validations per type, money bounds from major units", () => {
-    const parsed = parseCustomFieldValidations("money", { min: 5, max: "100.50" }, USD);
+  it("parses wire validations per type, money bounds in minor units", () => {
+    const parsed = parseCustomFieldValidations("money", { min: 500, max: "10050" }, USD);
     expect(parsed).toEqual({ ok: true, value: { min: "500", max: "10050" } });
     if (!parsed.ok) throw new Error("unreachable");
-    expect(customFieldValidationsToWire("money", parsed.value, USD)).toEqual({ min: 5, max: 100.5, regex: null, choices: null });
+    expect(customFieldValidationsToWire("money", parsed.value, USD)).toEqual({ min: 500, max: 10050, regex: null, choices: null });
+    expect(parseCustomFieldValidations("money", { min: 5.5 }, USD).ok).toBe(false);
+    expect(parseCustomFieldValidations("money", { min: -1 }, USD).ok).toBe(false);
     expect(parseCustomFieldValidations("single_line_text", { max: 20, regex: "[a-z]+", choices: ["a", " b "] }, USD))
       .toEqual({ ok: true, value: { max: "20", regex: "[a-z]+", choices: ["a", "b"] } });
     expect(parseCustomFieldValidations("date", { min: "2026-01-01", max: null }, USD)).toEqual({ ok: true, value: { min: "2026-01-01" } });

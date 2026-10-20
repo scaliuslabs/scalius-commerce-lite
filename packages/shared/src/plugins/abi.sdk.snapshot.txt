@@ -95,8 +95,12 @@ export interface PluginApiResult<T = unknown> {
 export interface PluginApi {
     call<T = unknown>(operationId: string, input?: PluginApiCallInput): Promise<PluginApiResult<T>>;
 }
+export interface PluginMoney {
+    amountMinor: number;
+    currency: string;
+}
 export interface PluginObjectQuery {
-    where?: Record<string, string | number | boolean | null>;
+    where?: Record<string, string | number | boolean | null | PluginMoney>;
     orderBy?: {
         field: string;
         direction?: "asc" | "desc";
@@ -323,7 +327,7 @@ export interface PluginRouteResponse {
 // packages/plugin-sdk/src/fixtures.d.ts
 import type { EventTopic } from "@scalius/shared/events";
 import type { FunctionCart, FunctionReads, PluginFunctionInput } from "@scalius/shared/plugins";
-import type { PluginEvent, PluginRouteRequest } from "./context";
+import type { PluginEvent, PluginMoney, PluginRouteRequest } from "./context";
 declare function event<T extends EventTopic>(topic: T, overrides?: Partial<PluginEvent<T>>): PluginEvent<T>;
 declare function cartLine(overrides?: Partial<FunctionCart["lines"][number]>): FunctionCart["lines"][number];
 declare function cart(overrides?: Partial<FunctionCart>): FunctionCart;
@@ -331,6 +335,7 @@ declare function checkoutDiscountsInput(overrides?: {
     cart?: Partial<FunctionCart>;
     reads?: FunctionReads;
 }): PluginFunctionInput<"checkout.discounts">;
+declare function money(amountMinor: number, currency?: string): PluginMoney;
 declare function readRecord<T extends Record<string, unknown>>(data: T, revision?: number): {
     revision: number;
     data: T;
@@ -341,6 +346,7 @@ export declare const fixtures: {
     cartLine: typeof cartLine;
     cart: typeof cart;
     checkoutDiscountsInput: typeof checkoutDiscountsInput;
+    money: typeof money;
     readRecord: typeof readRecord;
     adminRouteRequest: typeof adminRouteRequest;
 };

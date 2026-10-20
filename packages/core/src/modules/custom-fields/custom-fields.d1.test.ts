@@ -145,21 +145,21 @@ describe("custom field values", () => {
         };
     }
 
-    it("sets, reads and clears an owner's values with money in major units", async () => {
+    it("sets, reads and clears an owner's values with money as { amountMinor, currency }", async () => {
         const db = database();
         const { care, weight, msrp, related, swatch } = await fields(db);
         const saved = await setCustomFieldValues(db, "product", "prod_a", {
             values: [
                 { definitionId: care.id, value: " Hand wash " },
                 { definitionId: weight.id, value: "1.250" },
-                { definitionId: msrp.id, value: 1500 },
+                { definitionId: msrp.id, value: { amountMinor: 150000, currency: "BDT" } },
                 { definitionId: related.id, value: ["prod_b"] },
                 { definitionId: swatch.id, value: "med_a" },
             ],
         }, merchant);
         const read = await readCustomFieldValues(db, "product", "prod_a");
         expect(read.fields.map((field) => [field.definition.key, field.value])).toEqual([
-            ["care", "Hand wash"], ["weight", "1.25"], ["msrp", 1500], ["related", ["prod_b"]], ["swatch", "med_a"],
+            ["care", "Hand wash"], ["weight", "1.25"], ["msrp", { amountMinor: 150000, currency: "BDT" }], ["related", ["prod_b"]], ["swatch", "med_a"],
         ]);
         expect(saved.fields.map((field) => field.value)).toEqual(read.fields.map((field) => field.value));
         expect(sqlite!.prepare("SELECT value FROM custom_field_values WHERE definition_id = ?").get(msrp.id)).toEqual({ value: "150000" });
@@ -174,7 +174,7 @@ describe("custom field values", () => {
         const db = database();
         const { care, weight, related, msrp } = await fields(db);
         const invalid = await rejection(setCustomFieldValues(db, "product", "prod_a", {
-            values: [{ definitionId: weight.id, value: "2" }, { definitionId: care.id, value: "x".repeat(21) }, { definitionId: msrp.id, value: 12.5 }],
+            values: [{ definitionId: weight.id, value: "2" }, { definitionId: care.id, value: "x".repeat(21) }, { definitionId: msrp.id, value: { amountMinor: 1250, currency: "BDT" } }],
         }, merchant));
         expect(invalid).toBeInstanceOf(ValidationError);
         expect((invalid.details as { issues: unknown[] }).issues).toEqual([
@@ -247,7 +247,7 @@ describe("custom field values", () => {
         const db = database();
         const { care, weight, msrp } = await fields(db);
         await setCustomFieldValues(db, "product", "prod_a", {
-            values: [{ definitionId: care.id, value: "Hand wash" }, { definitionId: weight.id, value: 2 }, { definitionId: msrp.id, value: 1200 }],
+            values: [{ definitionId: care.id, value: "Hand wash" }, { definitionId: weight.id, value: 2 }, { definitionId: msrp.id, value: { amountMinor: 120000, currency: "BDT" } }],
         }, merchant);
         const rows = await selectStorefrontCustomFieldRows(db, "product", "prod_a").all();
         expect(presentStorefrontCustomFields(rows)).toEqual([

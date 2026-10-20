@@ -25,6 +25,7 @@ import { useMessages, formatNumber } from "~/i18n";
 import { objectMessages } from "~/i18n/objects";
 import { OBJECT_RECORD_PAGE_SIZE, objectRecordsQueryOptions } from "~/lib/api-query-options/objects";
 import { useAppName } from "./use-app-name";
+import { moneyMajor } from "~/components/admin/custom-fields/custom-field-draft";
 
 export function ObjectRecordsList({ type }: { type: string }) {
   const t = useMessages(objectMessages);
@@ -91,7 +92,10 @@ export function ObjectRecordsList({ type }: { type: string }) {
         const value = row.original.data[key];
         if (value === undefined || value === null) return "—";
         const fieldType = definition?.fields.find((field) => field.key === key)?.type;
-        if (fieldType === "money" && (typeof value === "number" || typeof value === "string")) return fmt(value);
+        if (fieldType === "money") {
+          const major = moneyMajor(value);
+          return major === null ? "—" : fmt(major);
+        }
         if ((fieldType === "date" || fieldType === "date_time") && typeof value === "string") return <ListDate value={value} />;
         if (typeof value === "boolean") return t(value ? "yes" : "no");
         if (typeof value === "number") return formatNumber(value);

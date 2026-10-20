@@ -9,6 +9,8 @@ import {
   CUSTOM_FIELD_SCALAR_TYPES,
   customFieldBoundKind,
   customFieldOwnerIsStorefront,
+  customFieldMoneyFromMajor,
+  customFieldMoneyMajorText,
   customFieldSupportsChoices,
   customFieldSupportsRegex,
   isCustomFieldKey,
@@ -69,12 +71,16 @@ interface Draft {
 
 type Errors = Partial<Record<"name" | "key" | "validations", string>>;
 
-function boundDraft(type: CustomFieldType, value: string | number | null | undefined): string {
+/** Money context: bounds cross the API in minor units and are typed in major units. */
+type BoundContext = { decimalPlaces: number; currencyCode: string };
+
+function boundDraft(type: CustomFieldType, value: string | number | null | undefined, context: BoundContext): string {
   if (value === null || value === undefined) return "";
+  if (customFieldItemType(type) === "money") return customFieldMoneyMajorText({ amountMinor: Number(value), currency: context.currencyCode }, context);
   return customFieldItemType(type) === "date_time" && typeof value === "string" ? localDateTime(value) : String(value);
 }
 
-function draftOf(definition: CustomFieldDefinition | null): Draft {
+function draftOf(definition: CustomFieldDefinition | null, context: BoundContext): Draft {
   return {
     name: definition?.name ?? "",
     key: definition?.key ?? "",
@@ -83,8 +89,8 @@ function draftOf(definition: CustomFieldDefinition | null): Draft {
     itemType: definition ? customFieldItemType(definition.type) : "single_line_text",
     list: definition ? isCustomFieldListType(definition.type) : false,
     storefrontVisible: definition?.storefrontVisible ?? false,
-    min: definition ? boundDraft(definition.type, definition.validations.min) : "",
-    max: definition ? boundDraft(definition.type, definition.validations.max) : "",
+    min: definition ? boundDraft(definition.type, definition.validations.min, context) : "",
+    max: definition ? boundDraft(definition.type, definition.validations.max, context) : "",
     regex: definition?.validations.regex ?? "",
     choices: definition?.validations.choices?.join("\n") ?? "",
     to: definition?.validations.to ?? "",
@@ -96,12 +102,14 @@ function typeOf(draft: Draft): CustomFieldType {
   return draft.list && isCustomFieldType(listed) ? listed : draft.itemType;
 }
 
-/** The wire validations of a draft (bounds as typed; date-times converted from local time). */
-function validationsOf(draft: Draft): CustomFieldWireValidations {
+/** The wire validations of a draft (bounds as typed; date-times from local time; money to minor units). */
+function validationsOf(draft: Draft, context: BoundContext): CustomFieldWireValidations {
   const type = typeOf(draft);
   const bound = (text: string) => {
     const value = text.trim();
     if (!value) return null;
+    // An unreadable amount is sent as typed, so the codec refuses it.
+    if (customFieldItemType(type) === "money") return customFieldMoneyFromMajor(value, context)?.amountMinor ?? value;
     if (customFieldItemType(type) === "date_time") {
       const date = new Date(value);
       return Number.isNaN(date.getTime()) ? value : date.toISOString();
@@ -129,7 +137,7 @@ export function CustomFieldDefinitionDialog({ ownerType, definition, open, onOpe
   const t = useMessages(customFieldMessages);
   const currencyCode = useCurrency().code ?? DEFAULT_CURRENCY.code;
   const context = useMemo(() => ({ decimalPlaces: getDecimalPlaces(currencyCode), currencyCode }), [currencyCode]);
-  const [draft, setDraft] = useState<Draft>(() => draftOf(definition));
+  const [draft, setDraft] = useState<Draft>(() => draftOf(definition, context));
   const [errors, setErrors] = useState<Errors>({});
   const save = useSaveCustomFieldDefinition();
   const reset = save.reset;
@@ -140,13 +148,13 @@ export function CustomFieldDefinitionDialog({ ownerType, definition, open, onOpe
 
   useEffect(() => {
     if (!open) return;
-    setDraft(draftOf(definition));
+    setDraft(draftOf(definition, context));
     setErrors({});
     sentKeys.current = new Set();
     reset();
-  }, [open, definition, reset]);
+  }, [open, definition, reset, context]);
 
-  const dirty = JSON.stringify(draft) !== JSON.stringify(draftOf(definition));
+  const dirty = JSON.stringify(draft) !== JSON.stringify(draftOf(definition, context));
   const { requestClose, discardDialog } = useDirtyDialogClose({ dirty, busy: save.isPending, onClose: () => onOpenChange(false) });
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => {
     setDraft((current) => {
@@ -168,7 +176,7 @@ export function CustomFieldDefinitionDialog({ ownerType, definition, open, onOpe
     const name = draft.name.trim();
     if (!name) found.name = t("nameRequired");
     if (creating && !isCustomFieldKey(draft.key.trim())) found.key = t("keyInvalid");
-    const validations = validationsOf(draft);
+    const validations = validationsOf(draft, context);
     const checked = parseCustomFieldValidations(type, validations, context);
     if (!checked.ok) found.validations = t("issue.invalid_validation");
     if (Object.keys(found).length > 0) {

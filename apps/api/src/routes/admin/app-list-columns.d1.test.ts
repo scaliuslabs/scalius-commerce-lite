@@ -68,8 +68,8 @@ beforeEach(async () => {
   await activatePlugin(db, "acme.members", { actorUserId: "owner", expectedRevision: 1 });
   const installation = await requirePluginInstallation(db, "acme.members");
   const declaration = installation.manifest.objects.members!;
-  await putObjectRecord(db, "acme.members", "members", declaration, "cus_a", { tier: "gold", points: 1200, vip: true, wallet: 250.5 });
-  await putObjectRecord(db, "acme.members", "members", declaration, "cus_b", { tier: "silver", points: 40, vip: false, wallet: 0 });
+  await putObjectRecord(db, "acme.members", "members", declaration, "cus_a", { tier: "gold", points: 1200, vip: true, wallet: { amountMinor: 25050, currency: "BDT" } });
+  await putObjectRecord(db, "acme.members", "members", declaration, "cus_b", { tier: "silver", points: 40, vip: false, wallet: { amountMinor: 0, currency: "BDT" } });
   await setPluginCustomFieldValues(db, "acme.members", pluginBridgeAuthority(installation).customFields, "order", "ord_1", { pack_note: "Gift wrap" });
 });
 afterEach(() => sqlite.close());

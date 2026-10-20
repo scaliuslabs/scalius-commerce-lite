@@ -19,13 +19,13 @@ export const customFieldOwnerIdSchema = z.string().trim().min(1).max(128);
 
 const expectedRevisionSchema = z.number().int().min(1);
 
-/** Validations as sent: bounds in the field's own units (money in major units). */
+/** Validations as sent: bounds in the field's own units (money in integer minor units of the store currency). */
 export const customFieldValidationsInputSchema = z.object({
     to: z.string().max(150).nullable().optional().describe("Object references: qualified target type, for example custom.size_chart."),
     min: z.union([z.string(), z.number()]).nullable().optional()
-        .describe("Text and URL: minimum length. Numbers, money, dates: minimum value (money in decimal major units)."),
+        .describe("Text and URL: minimum length. Numbers, money, dates: minimum value (money in integer minor units of the store currency)."),
     max: z.union([z.string(), z.number()]).nullable().optional()
-        .describe("Text and URL: maximum length. Numbers, money, dates: maximum value (money in decimal major units)."),
+        .describe("Text and URL: maximum length. Numbers, money, dates: maximum value (money in integer minor units of the store currency)."),
     regex: z.string().max(200).nullable().optional()
         .describe("Single- and multi-line text: a pattern the whole value must match."),
     choices: z.array(z.string()).max(128).nullable().optional()
@@ -70,7 +70,7 @@ export const setCustomFieldValuesSchema = z.object({
     values: z.array(z.object({
         definitionId: customFieldDefinitionIdSchema,
         value: z.unknown()
-            .describe("JSON per the field type (lists as arrays, money in decimal major units); null, \"\" or [] clears it."),
+            .describe("JSON per the field type (lists as arrays, money as { amountMinor, currency } in the store currency); null, \"\" or [] clears it."),
     })).min(1).max(CUSTOM_FIELD_DEFINITIONS_PER_OWNER_MAX),
 });
 

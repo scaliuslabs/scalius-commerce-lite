@@ -39,7 +39,7 @@ function Harness({ type, initial, disabled = false }: { type: CustomFieldType; i
       <CustomFieldInput id="when" type={type} validations={validations} draft={draft} onChange={setDraft} disabled={disabled} invalid={Boolean(problem)} describedBy="when-note" label="Schedule" />
     </Field>
     <output data-draft>{JSON.stringify(draft)}</output>
-    <output data-wire>{JSON.stringify(valueFromDraft(type, draft))}</output>
+    <output data-wire>{JSON.stringify(valueFromDraft(type, draft, context))}</output>
   </>;
 }
 

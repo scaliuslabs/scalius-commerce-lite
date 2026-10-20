@@ -9,11 +9,11 @@ import { collections, customFieldDefinitions, customFieldValues, media, objectRe
 import type { Database } from "@scalius/database/client";
 import { and, asc, eq, sql, type SQL } from "drizzle-orm";
 import {
-    customFieldWireValue,
+    customFieldStorefrontValue,
     type CustomFieldCodecContext,
     type CustomFieldType,
 } from "@scalius/shared/custom-fields";
-import { OBJECT_FIELDS_MAX, objectDataWire, objectFieldSchema } from "@scalius/shared/plugins/objects";
+import { OBJECT_FIELDS_MAX, objectDataStorefront, objectFieldSchema } from "@scalius/shared/plugins/objects";
 import { deps } from "../../cache-deps";
 import { getCurrentMediaUrl } from "../../integrations/storage";
 import { normalizePublicMediaUrl } from "@scalius/shared/media-url";
@@ -111,7 +111,7 @@ function presentObjectReference(row: StorefrontCustomFieldRow, context: CustomFi
         const parsed = objectFieldSchema.array().max(OBJECT_FIELDS_MAX).safeParse(JSON.parse(record.fields));
         if (!parsed.success) return undefined;
         const fields = parsed.data.filter((field) => field.type !== "customer_reference" && field.type !== "order_reference");
-        const data = objectDataWire({ fields }, JSON.parse(record.data), context);
+        const data = objectDataStorefront({ fields }, JSON.parse(record.data), context);
         const live = new Set(record.references.map((reference) => `${reference.type}\0${reference.id}`));
         return { handle: record.handle, fields: fields.map((field) => {
             let value = data[field.key] ?? null;
@@ -226,7 +226,7 @@ export function presentStorefrontCustomFields(rows: readonly StorefrontCustomFie
             decimalPlaces: storeDecimalPlacesFromCode(row.cfCurrencyCode),
             currencyCode: storeCurrencyFromCode(row.cfCurrencyCode),
         };
-        let value = customFieldWireValue(row.cfType, row.cfValue, context);
+        let value = customFieldStorefrontValue(row.cfType, row.cfValue, context);
         if (value === null) continue;
         const isObject = row.cfType === "object_reference" || row.cfType === "list.object_reference";
         const object = row.cfType === "object_reference" ? presentObjectReference(row, context) : undefined;

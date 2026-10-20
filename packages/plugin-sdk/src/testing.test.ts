@@ -160,6 +160,44 @@ describe("the harness is as strict as the platform", () => {
   });
 });
 
+describe("money in objects and custom fields", () => {
+  it("reads and writes { amountMinor, currency } in the store currency, as the platform does", async () => {
+    const wallet = definePlugin({
+      manifest: {
+        ...manifest, id: "acme.wallet", functions: [], events: [], migrations: [],
+        routes: { admin: [{ name: "credit", methods: ["POST"] }], public: [], webhooks: [] },
+        objects: { wallets: { name: "Wallets", fields: [{ key: "balance", name: "Balance", type: "money" }, { key: "history", name: "History", type: "list.money" }], indexes: ["balance"] } },
+        customFields: [{ ownerType: "customer", key: "credit_limit", name: "Credit limit", type: "money" }],
+      },
+      routes: {
+        admin: {
+          credit: async (request, ctx) => {
+            const body = request.body as { balance: unknown };
+            await ctx.objects.wallets!.put("cus_1", { balance: body.balance, history: [body.balance] });
+            await ctx.customFields.set("customer", "cus_1", { credit_limit: body.balance });
+            const read = await ctx.objects.wallets!.get("cus_1");
+            // What an app reads it can write back unchanged.
+            await ctx.objects.wallets!.update("cus_1", { history: [...(read!.history as unknown[]), read!.balance] });
+            const found = await ctx.objects.wallets!.query({ where: { balance: body.balance as never } });
+            return { body: { read: await ctx.objects.wallets!.get("cus_1"), field: await ctx.customFields.get("customer", "cus_1"), found: found.records.length } };
+          },
+        },
+      },
+    });
+    const harness = createPluginTestHarness({ default: wallet }, { store: { currency: "BDT", decimalPlaces: 2 } });
+    const balance = fixtures.money(125_000);
+    expect(balance).toEqual({ amountMinor: 125000, currency: "BDT" });
+    expect(await harness.route("admin", "credit", { method: "POST", body: { balance } })).toMatchObject({
+      ok: true,
+      value: { body: { read: { balance, history: [balance, balance] }, field: { credit_limit: balance }, found: 1 } },
+    });
+    expect(harness.records.get("wallets")!.get("cus_1")).toEqual({ balance: 125000, history: [125000, 125000] });
+    for (const refused of [1250, "1250.00", { amountMinor: 125000, currency: "USD" }]) {
+      expect(await harness.route("admin", "credit", { method: "POST", body: { balance: refused } })).toMatchObject({ ok: false, error: { code: "object.invalid" } });
+    }
+  });
+});
+
 describe("fixtures", () => {
   it("is the same export from the testing entry and the fixtures entry", () => {
     expect(fixtures).toBe(fixturesModule.fixtures);
