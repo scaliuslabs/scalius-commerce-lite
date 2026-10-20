@@ -8,7 +8,8 @@
 // URLs carry only opaque ids (order, `cnv_`, `att_`), a message sequence
 // number, a list cursor and one short status flag from STATUS_FLAGS.
 
-import { formatStoreDateTime, storeTimeZone } from "./store-time-zone";
+import { formatCount, formatStoreDateTime, pageLanguage, storeTimeZone } from "./store-time-zone";
+import { storefrontLanguage } from "./storefront-copy";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { groupConversationMessages } from "@scalius/shared/conversation-grouping";
 import { formatMoney } from "@/lib/currency";
@@ -40,8 +41,8 @@ export type ConversationAccess = "account" | "receipt";
 
 export { CONVERSATION_LIMITS, isConversationAttachmentId, isConversationId };
 
-/** English, like the other account pages. One place so a later language pass can swap it. */
-export const CONVERSATION_COPY = {
+/** The conversations' words in English and Bangla; `conversationCopy()` picks the page's language. */
+const CONVERSATION_COPY_EN = {
   inboxTitle: "Inbox",
   inboxEmpty: "No messages yet. Questions about an order start from the order page.",
   signInTitle: "Sign in to see your messages",
@@ -76,7 +77,162 @@ export const CONVERSATION_COPY = {
   imageFromStore: "Image from the store",
   imageFromYou: "Image you sent",
   viewOrder: "View order",
-} as const;
+  imageUnavailable: "Image unavailable",
+  noLongerAvailable: "No longer available",
+  soldOut: "Sold out",
+  viewProduct: "View product",
+  showMore: "Show more",
+  showLess: "Show less",
+  orderTitle: "Order {number}",
+  yourOrder: "Your order",
+  messageToStore: "Message to the store",
+  statusOpen: "Waiting for the store",
+  statusPending: "Store replied",
+  statusClosed: "Closed",
+  requestCancel: "Cancellation request",
+  requestReturn: "Return request",
+  requestRefund: "Refund request",
+  request: "Request",
+  requestSubmitted: "{type} submitted",
+  requestStatus: "{type} status: {status}",
+  requestUpdated: "{type} updated",
+  requestStates: {
+    submitted: "submitted", under_review: "under review", approved: "approved", rejected: "declined",
+    withdrawn: "withdrawn", completed: "completed",
+  } as Record<string, string>,
+  conversationUpdated: "Conversation updated",
+  unreadNew: "{count} new",
+  notInInbox: "This conversation isn't in your inbox.",
+  noMessages: "No messages yet",
+  conversationsLabel: "Conversations",
+  messagesLabel: "Messages",
+  historyLabel: "Conversation history",
+  reply: "Reply",
+  writeReply: "Write a reply",
+  writeMessage: "Write your message",
+  markRead: "Mark messages as read",
+  newMessages: "New messages",
+  reloadConversation: "Reload conversation",
+  newFromStore: "{count} from the store",
+  newMessageCount: { one: "{count} new message", other: "{count} new messages" },
+  accountChangedSend: "Your account changed. Reload before sending a message.",
+  accountChangedRead: "Your account changed. Reload to see your messages.",
+  changedReload: "This conversation changed. Reload to continue.",
+  signInToReceive: "Sign in again to receive messages.",
+  noLongerHere: "This conversation is no longer available here.",
+  moreAvailable: "More messages are available. Reload to see the latest.",
+  earlierLoaded: "Earlier messages loaded.",
+  earlierFailed: "Couldn't load earlier messages. Try again.",
+  statusSent: "Message sent.",
+  statusStarted: "Message sent. We'll reply here.",
+  statusInvalid: "Write a message of up to 5,000 characters, then send it again.",
+  statusImage: "Those images couldn't be attached. Use up to 3 JPEG, PNG or WebP images of 5 MB or less.",
+  statusRate: "You're sending too quickly. Please wait a moment and try again.",
+  statusLimit: "You already have 5 open conversations. Reply in one of them, or wait for the store to close one.",
+  statusSignin: "Your session expired. Sign in again to send messages.",
+  statusMissing: "This conversation isn't available from this browser.",
+};
+
+export type ConversationCopy = typeof CONVERSATION_COPY_EN;
+
+const CONVERSATION_COPY_BN: ConversationCopy = {
+  inboxTitle: "ইনবক্স",
+  inboxEmpty: "এখনো কোনো মেসেজ নেই। কোনো অর্ডার নিয়ে প্রশ্ন থাকলে অর্ডারের পেজ থেকে লিখুন।",
+  signInTitle: "আপনার মেসেজ দেখতে সাইন ইন করুন",
+  signInBody: "সাইন ইন করলে স্টোরের সাথে আপনার কথোপকথন এখানে দেখা যাবে।",
+  signIn: "সাইন ইন",
+  unavailable: "স্টোরের সাথে যোগাযোগ করা যায়নি। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।",
+  retry: "আবার চেষ্টা করুন",
+  notFound: "এই কথোপকথনটি পাওয়া যাচ্ছে না।",
+  backToInbox: "ইনবক্স",
+  olderConversations: "পুরোনো কথোপকথন",
+  earlierMessages: "আগের মেসেজ দেখুন",
+  latestMessages: "সাম্প্রতিক মেসেজ দেখুন",
+  newDivider: "নতুন",
+  you: "আপনি",
+  store: "স্টোর",
+  messageLabel: "মেসেজ",
+  subjectLabel: "বিষয়",
+  send: "পাঠান",
+  sending: "পাঠানো হচ্ছে…",
+  attachLabel: "ছবি যোগ করুন (ঐচ্ছিক)",
+  attachHint: "সর্বোচ্চ ৩টি ছবি: জেপিইজি, পিএনজি বা ওয়েবপি, প্রতিটি ৫ মেগাবাইট পর্যন্ত।",
+  startTitle: "স্টোরকে মেসেজ পাঠান",
+  startIntro: "পণ্য, ডেলিভারি বা যেকোনো বিষয়ে জিজ্ঞেস করুন। আমরা এখানেই উত্তর দেব।",
+  startSubmit: "মেসেজ পাঠান",
+  startNeedsVerification: "স্টোরকে মেসেজ পাঠাতে আগে আপনার অ্যাকাউন্ট পেজে ফোন নম্বর বা ইমেইল যাচাই করুন।",
+  startNeedsVerificationLink: "আপনার অ্যাকাউন্টে যান",
+  orderPanelTitle: "এই অর্ডার নিয়ে প্রশ্ন আছে?",
+  orderPanelIntro: "আমাদের মেসেজ পাঠান, আমরা এখানেই উত্তর দেব।",
+  orderPanelOpenInbox: "ইনবক্সে খুলুন",
+  orderPanelTruncated: "সাম্প্রতিক মেসেজগুলো দেখানো হচ্ছে।",
+  closedNote: "এই কথোপকথনটি বন্ধ। মেসেজ পাঠালে এটি আবার খুলবে।",
+  imageFromStore: "স্টোরের পাঠানো ছবি",
+  imageFromYou: "আপনার পাঠানো ছবি",
+  viewOrder: "অর্ডার দেখুন",
+  imageUnavailable: "ছবিটি পাওয়া যাচ্ছে না",
+  noLongerAvailable: "আর পাওয়া যাচ্ছে না",
+  soldOut: "স্টক শেষ",
+  viewProduct: "পণ্যটি দেখুন",
+  showMore: "আরও দেখুন",
+  showLess: "কম দেখান",
+  orderTitle: "অর্ডার {number}",
+  yourOrder: "আপনার অর্ডার",
+  messageToStore: "স্টোরকে মেসেজ",
+  statusOpen: "স্টোরের উত্তরের অপেক্ষায়",
+  statusPending: "স্টোর উত্তর দিয়েছে",
+  statusClosed: "বন্ধ",
+  requestCancel: "বাতিলের অনুরোধ",
+  requestReturn: "ফেরতের অনুরোধ",
+  requestRefund: "রিফান্ডের অনুরোধ",
+  request: "অনুরোধ",
+  requestSubmitted: "{type} পাঠানো হয়েছে",
+  requestStatus: "{type}-এর অবস্থা: {status}",
+  requestUpdated: "{type} আপডেট হয়েছে",
+  requestStates: {
+    submitted: "পাঠানো হয়েছে", under_review: "যাচাই চলছে", approved: "অনুমোদিত", rejected: "নাকচ হয়েছে",
+    withdrawn: "তুলে নেওয়া হয়েছে", completed: "সম্পন্ন",
+  },
+  conversationUpdated: "কথোপকথন আপডেট হয়েছে",
+  unreadNew: "{count}টি নতুন",
+  notInInbox: "এই কথোপকথনটি আপনার ইনবক্সে নেই।",
+  noMessages: "এখনো কোনো মেসেজ নেই",
+  conversationsLabel: "কথোপকথন",
+  messagesLabel: "মেসেজ",
+  historyLabel: "কথোপকথনের ইতিহাস",
+  reply: "উত্তর",
+  writeReply: "উত্তর লিখুন",
+  writeMessage: "আপনার মেসেজ লিখুন",
+  markRead: "মেসেজগুলো পড়া হয়েছে চিহ্নিত করুন",
+  newMessages: "নতুন মেসেজ",
+  reloadConversation: "কথোপকথন আবার লোড করুন",
+  newFromStore: "স্টোর থেকে {count}",
+  newMessageCount: { one: "{count}টি নতুন মেসেজ", other: "{count}টি নতুন মেসেজ" },
+  accountChangedSend: "আপনার অ্যাকাউন্ট বদলেছে। মেসেজ পাঠানোর আগে পেজটি আবার লোড করুন।",
+  accountChangedRead: "আপনার অ্যাকাউন্ট বদলেছে। মেসেজ দেখতে পেজটি আবার লোড করুন।",
+  changedReload: "এই কথোপকথনটি বদলেছে। চালিয়ে যেতে পেজটি আবার লোড করুন।",
+  signInToReceive: "মেসেজ পেতে আবার সাইন ইন করুন।",
+  noLongerHere: "এই কথোপকথনটি এখানে আর পাওয়া যাচ্ছে না।",
+  moreAvailable: "আরও মেসেজ আছে। সাম্প্রতিকগুলো দেখতে পেজটি আবার লোড করুন।",
+  earlierLoaded: "আগের মেসেজগুলো লোড হয়েছে।",
+  earlierFailed: "আগের মেসেজগুলো লোড করা যায়নি। আবার চেষ্টা করুন।",
+  statusSent: "মেসেজ পাঠানো হয়েছে।",
+  statusStarted: "মেসেজ পাঠানো হয়েছে। আমরা এখানেই উত্তর দেব।",
+  statusInvalid: "সর্বোচ্চ ৫,০০০ অক্ষরের মেসেজ লিখে আবার পাঠান।",
+  statusImage: "ছবিগুলো যোগ করা যায়নি। সর্বোচ্চ ৩টি জেপিইজি, পিএনজি বা ওয়েবপি ছবি দিন, প্রতিটি ৫ মেগাবাইট বা তার কম।",
+  statusRate: "আপনি খুব দ্রুত পাঠাচ্ছেন। একটু অপেক্ষা করে আবার চেষ্টা করুন।",
+  statusLimit: "আপনার ইতিমধ্যে ৫টি খোলা কথোপকথন আছে। সেগুলোর একটিতে উত্তর দিন, অথবা স্টোর একটি বন্ধ করা পর্যন্ত অপেক্ষা করুন।",
+  statusSignin: "আপনার সেশনের মেয়াদ শেষ। মেসেজ পাঠাতে আবার সাইন ইন করুন।",
+  statusMissing: "এই ব্রাউজার থেকে কথোপকথনটি পাওয়া যাচ্ছে না।",
+};
+
+/** The conversations' words in the page's language (Bangla on a Bangla page). */
+export function conversationCopy(language: string = pageLanguage()): ConversationCopy {
+  return storefrontLanguage(language) === "bn" ? CONVERSATION_COPY_BN : CONVERSATION_COPY_EN;
+}
+
+const fill = (template: string, values: Record<string, string>) =>
+  template.replace(/\{(\w+)\}/g, (match, key: string) => values[key] ?? match);
 
 // ---------------------------------------------------------------------------
 // Post/Redirect/Get status flags
@@ -99,19 +255,6 @@ export const STATUS_FLAGS = [
 ] as const;
 export type ConversationStatusFlag = (typeof STATUS_FLAGS)[number];
 
-const STATUS_MESSAGES: Record<ConversationStatusFlag, { tone: "success" | "error"; text: string }> = {
-  sent: { tone: "success", text: "Message sent." },
-  started: { tone: "success", text: "Message sent. We'll reply here." },
-  invalid: { tone: "error", text: "Write a message of up to 5,000 characters, then send it again." },
-  image: { tone: "error", text: "Those images couldn't be attached. Use up to 3 JPEG, PNG or WebP images of 5 MB or less." },
-  rate: { tone: "error", text: "You're sending too quickly. Please wait a moment and try again." },
-  limit: { tone: "error", text: "You already have 5 open conversations. Reply in one of them, or wait for the store to close one." },
-  unverified: { tone: "error", text: CONVERSATION_COPY.startNeedsVerification },
-  signin: { tone: "error", text: "Your session expired. Sign in again to send messages." },
-  missing: { tone: "error", text: "This conversation isn't available from this browser." },
-  unavailable: { tone: "error", text: CONVERSATION_COPY.unavailable },
-};
-
 export function isConversationStatusFlag(value: unknown): value is ConversationStatusFlag {
   return typeof value === "string" && (STATUS_FLAGS as readonly string[]).includes(value);
 }
@@ -123,7 +266,20 @@ export function readConversationStatusFlag(url: URL): ConversationStatusFlag | n
 }
 
 export function conversationStatusMessage(flag: ConversationStatusFlag): { tone: "success" | "error"; text: string } {
-  return STATUS_MESSAGES[flag];
+  const copy = conversationCopy();
+  const text: Record<ConversationStatusFlag, string> = {
+    sent: copy.statusSent,
+    started: copy.statusStarted,
+    invalid: copy.statusInvalid,
+    image: copy.statusImage,
+    rate: copy.statusRate,
+    limit: copy.statusLimit,
+    unverified: copy.startNeedsVerification,
+    signin: copy.statusSignin,
+    missing: copy.statusMissing,
+    unavailable: copy.unavailable,
+  };
+  return { tone: flag === "sent" || flag === "started" ? "success" : "error", text: text[flag] };
 }
 
 /** What a failed API answer means for the buyer. */
@@ -240,7 +396,7 @@ export function checkAttachmentFiles(entries: Iterable<FormDataEntryValue>): Att
 /** "Sep 24, 2026, 5:46 PM" in the store's time zone, like the order pages. */
 export function formatConversationTime(unixSeconds: number | null | undefined, timeZone: string = storeTimeZone()): string {
   if (typeof unixSeconds !== "number" || !Number.isFinite(unixSeconds) || unixSeconds <= 0) return "";
-  return formatStoreDateTime(unixSeconds * 1000, "en", { dateStyle: "medium", timeStyle: "short" }, timeZone);
+  return formatStoreDateTime(unixSeconds * 1000, pageLanguage(), { dateStyle: "medium", timeStyle: "short" }, timeZone);
 }
 
 function isoTime(unixSeconds: number): string {
@@ -249,36 +405,17 @@ function isoTime(unixSeconds: number): string {
 }
 
 export function conversationTitle(summary: Pick<BuyerConversationSummary, "subjectType" | "subject" | "orderNumber">): string {
+  const copy = conversationCopy();
   if (summary.subjectType === "order") {
-    return summary.orderNumber ? `Order ${summary.orderNumber}` : "Your order";
+    return summary.orderNumber ? fill(copy.orderTitle, { number: String(summary.orderNumber) }) : copy.yourOrder;
   }
-  return summary.subject?.trim() || "Message to the store";
+  return summary.subject?.trim() || copy.messageToStore;
 }
-
-const STATUS_LABELS: Record<BuyerConversationSummary["status"], string> = {
-  open: "Waiting for the store",
-  pending: "Store replied",
-  closed: "Closed",
-};
 
 export function conversationStatusLabel(status: BuyerConversationSummary["status"]): string {
-  return STATUS_LABELS[status] ?? status;
+  const copy = conversationCopy();
+  return ({ open: copy.statusOpen, pending: copy.statusPending, closed: copy.statusClosed } as Record<string, string>)[status] ?? status;
 }
-
-const REQUEST_TYPE_LABELS: Record<string, string> = {
-  cancel_pre_shipment: "Cancellation request",
-  return: "Return request",
-  refund: "Refund request",
-};
-
-const REQUEST_STATUS_LABELS: Record<string, string> = {
-  submitted: "submitted",
-  under_review: "under review",
-  approved: "approved",
-  rejected: "declined",
-  withdrawn: "withdrawn",
-  completed: "completed",
-};
 
 function eventText(value: unknown): string {
   return typeof value === "string" ? value : "";
@@ -287,14 +424,16 @@ function eventText(value: unknown): string {
 /** A system line: "Cancellation request submitted", "Return request status: approved". */
 export function conversationEventLine(message: Pick<BuyerConversationMessage, "eventKind" | "eventData" | "body">): string {
   const data = message.eventData ?? {};
-  const type = REQUEST_TYPE_LABELS[eventText(data.type)] ?? "Request";
-  if (message.eventKind === "support_request_submitted") return `${type} submitted`;
+  const copy = conversationCopy();
+  const types: Record<string, string> = { cancel_pre_shipment: copy.requestCancel, return: copy.requestReturn, refund: copy.requestRefund };
+  const type = types[eventText(data.type)] ?? copy.request;
+  if (message.eventKind === "support_request_submitted") return fill(copy.requestSubmitted, { type });
   if (message.eventKind === "support_request_status") {
     const status = eventText(data.toStatus) || eventText(data.status);
-    const label = REQUEST_STATUS_LABELS[status] ?? status.replace(/_/g, " ");
-    return label ? `${type} status: ${label}` : `${type} updated`;
+    const label = copy.requestStates[status] ?? status.replace(/_/g, " ");
+    return label ? fill(copy.requestStatus, { type, status: label }) : fill(copy.requestUpdated, { type });
   }
-  return message.body?.trim() || "Conversation updated";
+  return message.body?.trim() || copy.conversationUpdated;
 }
 
 /** Same-origin image URL for an attachment. Opaque ids only; the proxy adds the session or receipt proof. */
@@ -324,25 +463,27 @@ export interface RenderMessagesOptions {
 function renderAttachments(message: BuyerConversationMessage, options: RenderMessagesOptions, mine: boolean): string {
   const images = message.attachments.filter((attachment) => isConversationAttachmentId(attachment.id));
   if (images.length === 0) return "";
-  const alt = mine ? CONVERSATION_COPY.imageFromYou : CONVERSATION_COPY.imageFromStore;
+  const copy = conversationCopy();
+  const alt = mine ? copy.imageFromYou : copy.imageFromStore;
   return `<div class="mt-2 flex flex-wrap gap-2">${images.map((attachment) => {
     const url = escapeHtml(options.attachmentUrl(attachment.id));
     const size = attachment.width && attachment.height
       ? ` width="${attachment.width}" height="${attachment.height}"`
       : "";
-    return `<a href="${url}" target="_blank" rel="noopener" class="block min-w-0 max-w-full overflow-hidden rounded-lg border border-border bg-background"><img data-message-image src="${url}" alt="${escapeHtml(alt)}"${size} loading="lazy" decoding="async" class="${images.length === 1 ? "max-h-60 max-w-full object-contain" : "h-24 w-24 object-cover"}" /><span hidden data-message-image-error class="flex h-24 w-24 items-center justify-center p-2 text-center text-sm text-muted-foreground">Image unavailable</span></a>`;
+    return `<a href="${url}" target="_blank" rel="noopener" class="block min-w-0 max-w-full overflow-hidden rounded-lg border border-border bg-background"><img data-message-image src="${url}" alt="${escapeHtml(alt)}"${size} loading="lazy" decoding="async" class="${images.length === 1 ? "max-h-60 max-w-full object-contain" : "h-24 w-24 object-cover"}" /><span hidden data-message-image-error class="flex h-24 w-24 items-center justify-center p-2 text-center text-sm text-muted-foreground">${escapeHtml(copy.imageUnavailable)}</span></a>`;
   }).join("")}</div>`;
 }
 
 function renderProducts(products: readonly ConversationProductCard[]): string {
+  const copy = conversationCopy();
   return products.slice(0, 3).map((product) => {
     const href = product.pdpUrl?.startsWith("/") && !product.pdpUrl.startsWith("//") && !product.pdpUrl.includes("\\") ? product.pdpUrl : null;
     const image = product.imageUrl && /^https?:\/\//.test(product.imageUrl) ? product.imageUrl : null;
     const price = product.price ? formatMoney(product.price.amount, { code: product.price.currency }) : "";
-    const availability = product.status === "unavailable" ? "No longer available" : product.status === "sold_out" ? "Sold out" : "";
+    const availability = product.status === "unavailable" ? copy.noLongerAvailable : product.status === "sold_out" ? copy.soldOut : "";
     return `<div class="mt-2 flex gap-3 rounded-lg border border-border bg-card p-3 text-card-foreground">
       ${image ? `<img src="${escapeHtml(image)}" alt="" width="48" height="48" loading="lazy" class="h-12 w-12 shrink-0 rounded-md object-cover" />` : ""}
-      <div class="min-w-0 flex-1"><p class="break-words text-sm font-medium">${escapeHtml(product.title)}</p>${product.variantLabel ? `<p class="text-xs text-muted-foreground">${escapeHtml(product.variantLabel)}</p>` : ""}${price ? `<p class="mt-1 text-sm">${escapeHtml(price)}</p>` : ""}${availability ? `<p class="text-xs text-muted-foreground">${availability}</p>` : ""}${href ? `<a href="${escapeHtml(href)}" class="inline-flex min-h-11 items-center text-sm font-medium text-primary underline">View product</a>` : ""}</div>
+      <div class="min-w-0 flex-1"><p class="break-words text-sm font-medium">${escapeHtml(product.title)}</p>${product.variantLabel ? `<p class="text-xs text-muted-foreground">${escapeHtml(product.variantLabel)}</p>` : ""}${price ? `<p class="mt-1 text-sm">${escapeHtml(price)}</p>` : ""}${availability ? `<p class="text-xs text-muted-foreground">${escapeHtml(availability)}</p>` : ""}${href ? `<a href="${escapeHtml(href)}" class="inline-flex min-h-11 items-center text-sm font-medium text-primary underline">${escapeHtml(copy.viewProduct)}</a>` : ""}</div>
     </div>`;
   }).join("");
 }
@@ -353,12 +494,14 @@ export function renderConversationMessages(
   options: RenderMessagesOptions,
 ): string {
   let dividerShown = false;
+  const copy = conversationCopy();
+  const language = pageLanguage();
   return groupConversationMessages(messages.map((message) => ({ ...message, kind: message.eventKind === "product_reply" ? "message" as const : message.kind, authorType: message.from, visibility: "public" })), {
-    dayKey: (time) => formatStoreDateTime(time * 1000, "en", { dateStyle: "medium" }),
+    dayKey: (time) => formatStoreDateTime(time * 1000, language, { dateStyle: "medium" }),
   }).map(({ message, groupStart, showAuthor, startsDay }) => {
     const time = formatConversationTime(message.createdAt);
-    const clock = formatStoreDateTime(message.createdAt * 1000, "en", { timeStyle: "short" });
-    const day = formatStoreDateTime(message.createdAt * 1000, "en", { dateStyle: "medium" });
+    const clock = formatStoreDateTime(message.createdAt * 1000, language, { timeStyle: "short" });
+    const day = formatStoreDateTime(message.createdAt * 1000, language, { dateStyle: "medium" });
     const timeTag = time ? `<time datetime="${escapeHtml(isoTime(message.createdAt))}" title="${escapeHtml(time)}">${escapeHtml(clock)}</time>` : "";
     const dayLine = `<div data-message-day${startsDay ? "" : " hidden"} class="my-4 text-center text-xs text-muted-foreground">${escapeHtml(day)}</div>`;
     const meta = `data-seq="${message.seq}" data-message-id="${escapeHtml(message.id)}" data-from="${message.from}" data-created="${message.createdAt}" data-day="${escapeHtml(day)}" data-kind="${message.kind}"`;
@@ -366,7 +509,7 @@ export function renderConversationMessages(
       && typeof options.readSeq === "number"
       && message.seq > options.readSeq
       && message.from !== "buyer"
-      ? (dividerShown = true, `<li class="flex items-center gap-3 text-xs font-medium text-primary" role="separator"><span class="h-px flex-1 bg-primary/30"></span>${escapeHtml(CONVERSATION_COPY.newDivider)}<span class="h-px flex-1 bg-primary/30"></span></li>`)
+      ? (dividerShown = true, `<li class="flex items-center gap-3 text-xs font-medium text-primary" role="separator"><span class="h-px flex-1 bg-primary/30"></span>${escapeHtml(copy.newDivider)}<span class="h-px flex-1 bg-primary/30"></span></li>`)
       : "";
 
     const products = (message as BuyerConversationMessage & { products?: ConversationProductCard[] }).products ?? [];
@@ -375,11 +518,11 @@ export function renderConversationMessages(
     }
 
     const mine = message.from === "buyer";
-    const author = mine ? CONVERSATION_COPY.you : CONVERSATION_COPY.store;
+    const author = mine ? copy.you : copy.store;
     const bubble = mine
       ? "rounded-2xl rounded-ee-md bg-primary px-4 py-2.5 text-primary-foreground"
       : "rounded-2xl rounded-es-md border border-border bg-muted px-4 py-2.5 text-foreground";
-    const body = message.body ? `<p data-message-body class="whitespace-pre-line break-words [overflow-wrap:anywhere] text-base leading-relaxed sm:text-sm">${escapeHtml(message.body)}</p><button type="button" hidden data-message-expand class="mt-1 min-h-11 text-sm underline">Show more</button>` : "";
+    const body = message.body ? `<p data-message-body class="whitespace-pre-line break-words [overflow-wrap:anywhere] text-base leading-relaxed sm:text-sm">${escapeHtml(message.body)}</p><button type="button" hidden data-message-expand data-show-more="${escapeHtml(copy.showMore)}" data-show-less="${escapeHtml(copy.showLess)}" class="mt-1 min-h-11 text-sm underline">${escapeHtml(copy.showMore)}</button>` : "";
     return `${divider}<li class="${groupStart ? "mt-4" : "mt-1"} ${mine ? "justify-end" : "justify-start"}" ${meta}>
   ${dayLine}
   <div class="flex ${mine ? "justify-end" : "justify-start"}"><div class="min-w-0 max-w-[min(36rem,90%)]">
@@ -405,8 +548,9 @@ export function renderInboxItems(items: readonly BuyerConversationSummary[]): st
     const href = `/account/inbox/${encodeURIComponent(item.id)}`;
     const unread = item.unread > 0;
     const time = formatConversationTime(item.lastMessageAt);
-    const day = (value: number) => formatStoreDateTime(value, "en", { dateStyle: "short" });
-    const compactTime = item.lastMessageAt ? formatStoreDateTime(item.lastMessageAt * 1000, "en", day(item.lastMessageAt * 1000) === day(Date.now()) ? { timeStyle: "short" } : { month: "short", day: "numeric" }) : "";
+    const language = pageLanguage();
+    const day = (value: number) => formatStoreDateTime(value, language, { dateStyle: "short" });
+    const compactTime = item.lastMessageAt ? formatStoreDateTime(item.lastMessageAt * 1000, language, day(item.lastMessageAt * 1000) === day(Date.now()) ? { timeStyle: "short" } : { month: "short", day: "numeric" }) : "";
     return `<li>
   <a href="${escapeHtml(href)}" data-astro-prefetch="false" class="flex items-start gap-3 rounded-xl border border-border bg-card p-4 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
     <span aria-hidden="true" class="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${unread ? "bg-primary" : "bg-transparent"}"></span>
@@ -422,12 +566,12 @@ export function renderInboxItems(items: readonly BuyerConversationSummary[]): st
 
 export function unreadLabel(count: number): string {
   if (count <= 0) return "";
-  const shown = count > 99 ? "99+" : String(count);
-  return `${shown} new`;
+  const shown = count > 99 ? `${formatCount(99)}+` : formatCount(count);
+  return fill(conversationCopy().unreadNew, { count: shown });
 }
 
-/** Badge text for the Inbox link: "", "3", "99+". */
+/** Badge text for the Inbox link: "", "3", "99+" (in the page's digits). */
 export function inboxBadgeText(unread: number): string {
   if (!Number.isFinite(unread) || unread <= 0) return "";
-  return unread > 99 ? "99+" : String(Math.floor(unread));
+  return unread > 99 ? `${formatCount(99)}+` : formatCount(Math.floor(unread));
 }

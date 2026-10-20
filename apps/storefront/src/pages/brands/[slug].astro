@@ -23,6 +23,8 @@ import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { htmlToPlainText } from "@scalius/shared/html-sanitize";
+import { catalogCopy } from "@/lib/catalog-copy";
+import { formatCount, pageLanguage } from "@/lib/store-time-zone";
 import RichTextStyles from "@/components/RichTextStyles.astro";
 import {
   countActiveProductListFilters,
@@ -65,7 +67,9 @@ const pagination = brandResult.pagination;
 if (isMissingProductListPage(pagination)) return new Response(null, { status: 404 });
 
 const brandPath = `/brands/${encodeURIComponent(brand.slug)}`;
-const title = `${brand.metaTitle || brand.name}${pagination.page > 1 ? ` – Page ${pagination.page}` : ""}`;
+// The store's words, in its language (the layout read set it).
+const copy = catalogCopy(pageLanguage());
+const title = `${brand.metaTitle || brand.name}${pagination.page > 1 ? copy.search.page(formatCount(pagination.page)) : ""}`;
 const plainDescription = htmlToPlainText(brand.description);
 const description =
   brand.metaDescription ||
@@ -151,7 +155,7 @@ await resolveRequestTheme(Astro, layoutData, resourceBindingContext(brand, `/bra
       queryState,
       pathname: Astro.url.pathname,
       resetPath: brandPath,
-      searchLabel: `Search ${brand.name}`,
+      searchLabel: copy.listing.searchIn(brand.name),
       countEndpoint: `${brandPath}/products`,
       currencySymbol,
       currencyCode,
@@ -161,12 +165,10 @@ await resolveRequestTheme(Astro, layoutData, resourceBindingContext(brand, `/bra
   >
     <CatalogEmptyState
       slot="empty"
-      title={activeFilterCount > 0 ? "No matching products" : "No products yet"}
-      description={activeFilterCount > 0
-        ? "Try fewer filters or a broader price range."
-        : "Explore the rest of the catalog."}
+      title={activeFilterCount > 0 ? copy.search.noMatching : copy.listing.emptyTitle}
+      description={activeFilterCount > 0 ? copy.listing.emptyFiltered : copy.listing.emptyDescription}
       actionHref={activeFilterCount > 0 ? brandPath : "/search"}
-      actionLabel={activeFilterCount > 0 ? "Clear filters" : "Browse products"}
+      actionLabel={activeFilterCount > 0 ? copy.listing.clearFilters : copy.listing.browseProducts}
     />
   </CatalogListingPage>
 </Layout>

@@ -11,8 +11,10 @@
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { formatAccountDate } from "@/lib/account-format";
+import { storefrontLanguage } from "@/lib/storefront-copy";
+import { formatCount, formatPageNumber, pageLanguage } from "@/lib/store-time-zone";
 
-export const DOWNLOAD_COPY = {
+const DOWNLOAD_COPY_EN = {
   pageTitle: "Downloads",
   pageIntro: "Files and licence keys from your orders.",
   signInTitle: "Sign in to see your downloads",
@@ -62,7 +64,65 @@ export const DOWNLOAD_COPY = {
   promiseAccessDetail: "From your order page, or Downloads in your account.",
   promiseShippingTitle: "No shipping needed",
   promiseShippingDetail: "Nothing is posted, so there is no delivery fee.",
-} as const;
+  sizeUnits: ["B", "KB", "MB", "GB"],
+};
+
+export type DownloadCopy = typeof DOWNLOAD_COPY_EN;
+
+const DOWNLOAD_COPY_BN: DownloadCopy = {
+  pageTitle: "ডাউনলোড",
+  pageIntro: "আপনার অর্ডারের ফাইল ও লাইসেন্স কি।",
+  signInTitle: "আপনার ডাউনলোড দেখতে সাইন ইন করুন",
+  signInBody: "সাইন ইন করলে আপনার কেনা ফাইল ও লাইসেন্স কি এখানে দেখা যাবে।",
+  signIn: "সাইন ইন",
+  unavailable: "স্টোরের সাথে যোগাযোগ করা যায়নি। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।",
+  retry: "আবার চেষ্টা করুন",
+  empty: "এখনো ডাউনলোডের কিছু নেই। অর্ডারের ফাইল ও লাইসেন্স কি ডেলিভারি হলে এখানে দেখা যাবে।",
+  order: "অর্ডার {number}",
+  productFallback: "পণ্য",
+  deliveredOn: "ডেলিভারি {date}",
+  filesHeading: "ফাইল",
+  keysHeading: "লাইসেন্স কি",
+  download: "ডাউনলোড করুন",
+  usage: "{limit}টির মধ্যে {count}টি ডাউনলোড ব্যবহার হয়েছে",
+  unlimited: "যতবার খুশি ডাউনলোড",
+  availableUntil: "{date} পর্যন্ত পাওয়া যাবে",
+  endedOn: "{date} তারিখে মেয়াদ শেষ হয়েছে",
+  usedUp: "সব ডাউনলোড ব্যবহার হয়ে গেছে।",
+  askForMore: "আরও ডাউনলোডের জন্য স্টোরকে বলুন",
+  revoked: "স্টোর এই ফাইলটি দেখার সুযোগ বন্ধ করেছে।",
+  expired: "এই ফাইলটির মেয়াদ শেষ হয়েছে।",
+  notAvailable: "এই ফাইলটি এখন পাওয়া যাচ্ছে না।",
+  keyEndingIn: "শেষে {last4} থাকা লাইসেন্স কি",
+  showKey: "কি দেখুন",
+  statusLimit: "এই ফাইলের সব ডাউনলোড ব্যবহার হয়ে গেছে। আরও ডাউনলোডের জন্য স্টোরকে বলুন।",
+  statusRevoked: "স্টোর এই ফাইলটি দেখার সুযোগ বন্ধ করেছে।",
+  statusExpired: "এই ফাইলটির মেয়াদ শেষ হয়েছে।",
+  statusRate: "অনেকবার চেষ্টা করা হয়েছে। এক মিনিট পরে আবার চেষ্টা করুন।",
+  statusSignin: "এই ফাইল ডাউনলোড করতে আবার সাইন ইন করুন।",
+  statusMissing: "এই ব্রাউজার থেকে ডাউনলোডটি পাওয়া যাচ্ছে না। আপনার অ্যাকাউন্ট থেকে বা অর্ডারের মেসেজের লিংক থেকে অর্ডারটি খুলুন।",
+  statusUnavailable: "ডাউনলোড শুরু করা যায়নি। একটু পরে আবার চেষ্টা করুন।",
+  keyPageTitle: "আপনার লাইসেন্স কি",
+  keyPageIntro: "এই কি গোপন রাখুন: যার কাছে এটি থাকবে সে-ই আপনার কেনা জিনিস ব্যবহার করতে পারবে।",
+  keyLabel: "লাইসেন্স কি",
+  copyKey: "কি কপি করুন",
+  copiedKey: "কপি হয়েছে",
+  back: "ফিরে যান",
+  keyUnavailable: "এই কি দেখানো যায়নি। ফিরে গিয়ে আবার চেষ্টা করুন।",
+  promiseLabel: "ডিজিটাল ডেলিভারি",
+  promiseDeliveryTitle: "ডিজিটালি ডেলিভারি হয়",
+  promiseDeliveryDetail: "অর্ডার নিশ্চিত হওয়ার সাথে সাথে আপনার কাছে পাঠানো হয়।",
+  promiseAccessTitle: "ফাইল ডাউনলোড করুন বা কি দেখুন",
+  promiseAccessDetail: "আপনার অর্ডারের পেজ থেকে, বা অ্যাকাউন্টের ডাউনলোড থেকে।",
+  promiseShippingTitle: "শিপিং লাগে না",
+  promiseShippingDetail: "কিছু পাঠানো হয় না, তাই কোনো ডেলিভারি চার্জ নেই।",
+  sizeUnits: ["বাইট", "কেবি", "এমবি", "জিবি"],
+};
+
+/** Downloads and licence keys in the page's language (Bangla on a Bangla page). */
+export function downloadCopy(language: string = pageLanguage()): DownloadCopy {
+  return storefrontLanguage(language) === "bn" ? DOWNLOAD_COPY_BN : DOWNLOAD_COPY_EN;
+}
 
 export function fillCopy(template: string, values: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (match, key: string) => (key in values ? String(values[key]) : match));
@@ -116,22 +176,21 @@ export const DOWNLOAD_STATUS_PARAM = "download";
 export const DOWNLOAD_STATUS_FLAGS = ["limit", "revoked", "expired", "rate", "signin", "missing", "unavailable"] as const;
 export type DownloadStatusFlag = (typeof DOWNLOAD_STATUS_FLAGS)[number];
 
-const STATUS_TEXT: Record<DownloadStatusFlag, string> = {
-  limit: DOWNLOAD_COPY.statusLimit,
-  revoked: DOWNLOAD_COPY.statusRevoked,
-  expired: DOWNLOAD_COPY.statusExpired,
-  rate: DOWNLOAD_COPY.statusRate,
-  signin: DOWNLOAD_COPY.statusSignin,
-  missing: DOWNLOAD_COPY.statusMissing,
-  unavailable: DOWNLOAD_COPY.statusUnavailable,
-};
-
 export function isDownloadStatusFlag(value: unknown): value is DownloadStatusFlag {
   return typeof value === "string" && (DOWNLOAD_STATUS_FLAGS as readonly string[]).includes(value);
 }
 
 export function downloadStatusText(flag: DownloadStatusFlag): string {
-  return STATUS_TEXT[flag];
+  const copy = downloadCopy();
+  return {
+    limit: copy.statusLimit,
+    revoked: copy.statusRevoked,
+    expired: copy.statusExpired,
+    rate: copy.statusRate,
+    signin: copy.statusSignin,
+    missing: copy.statusMissing,
+    unavailable: copy.statusUnavailable,
+  }[flag];
 }
 
 /** What a refused ticket or reveal means for the buyer. */
@@ -354,9 +413,10 @@ export function downloadFileState(file: DownloadFileView, nowMs = Date.now()): D
 }
 
 export function downloadUsageText(file: Pick<DownloadFileView, "downloadCount" | "downloadLimit">): string {
+  const copy = downloadCopy();
   return file.downloadLimit === null
-    ? DOWNLOAD_COPY.unlimited
-    : fillCopy(DOWNLOAD_COPY.usage, { count: Math.min(file.downloadCount, file.downloadLimit), limit: file.downloadLimit });
+    ? copy.unlimited
+    : fillCopy(copy.usage, { count: formatCount(Math.min(file.downloadCount, file.downloadLimit)), limit: formatCount(file.downloadLimit) });
 }
 
 /** "Available until …" / "Access ended …", or "" when access never ends. */
@@ -365,21 +425,22 @@ export function downloadExpiryText(expiresAt: string | null, nowMs = Date.now())
   const at = Date.parse(expiresAt);
   const date = formatAccountDate(expiresAt, { time: false });
   if (!date || !Number.isFinite(at)) return "";
-  return fillCopy(at <= nowMs ? DOWNLOAD_COPY.endedOn : DOWNLOAD_COPY.availableUntil, { date });
+  return fillCopy(at <= nowMs ? downloadCopy().endedOn : downloadCopy().availableUntil, { date });
 }
 
-const SIZE_UNITS = ["KB", "MB", "GB"] as const;
-
+/** "1.5 MB", "১.৫ এমবি": the page's digits and unit words. */
 export function formatFileSize(bytes: number | null | undefined): string {
   if (typeof bytes !== "number" || !Number.isFinite(bytes) || bytes <= 0) return "";
-  if (bytes < 1024) return `${Math.round(bytes)} B`;
+  const language = pageLanguage();
+  const units = downloadCopy(language).sizeUnits;
+  if (bytes < 1024) return `${formatPageNumber(Math.round(bytes), language)} ${units[0]}`;
   let value = bytes / 1024;
-  let unit = 0;
-  while (value >= 1024 && unit < SIZE_UNITS.length - 1) {
+  let unit = 1;
+  while (value >= 1024 && unit < units.length - 1) {
     value /= 1024;
     unit += 1;
   }
-  return `${value >= 10 ? Math.round(value) : Math.round(value * 10) / 10} ${SIZE_UNITS[unit]}`;
+  return `${formatPageNumber(value >= 10 ? Math.round(value) : Math.round(value * 10) / 10, language)} ${units[unit]}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -410,9 +471,10 @@ function hiddenFields(context: DeliveryMarkupContext, fields: Record<string, str
 function reasonMarkup(state: DownloadFileState, context: DeliveryMarkupContext): string {
   if (state === "available") return "";
   if (state === "limit") {
-    return `<p class="text-sm text-foreground">${escapeHtml(DOWNLOAD_COPY.usedUp)} <a href="${escapeHtml(context.askHref)}" data-astro-prefetch="false" class="font-medium text-primary hover:underline">${escapeHtml(DOWNLOAD_COPY.askForMore)}</a></p>`;
+    return `<p class="text-sm text-foreground">${escapeHtml(downloadCopy().usedUp)} <a href="${escapeHtml(context.askHref)}" data-astro-prefetch="false" class="font-medium text-primary hover:underline">${escapeHtml(downloadCopy().askForMore)}</a></p>`;
   }
-  const text = state === "revoked" ? DOWNLOAD_COPY.revoked : state === "expired" ? DOWNLOAD_COPY.expired : DOWNLOAD_COPY.notAvailable;
+  const copy = downloadCopy();
+  const text = state === "revoked" ? copy.revoked : state === "expired" ? copy.expired : copy.notAvailable;
   return `<p class="text-sm text-foreground">${escapeHtml(text)}</p>`;
 }
 
@@ -430,7 +492,7 @@ export function downloadFileMarkup(file: DownloadFileView, context: DeliveryMark
   const state = downloadFileState(file, now);
   const facts = [formatFileSize(file.sizeBytes), downloadUsageText(file), downloadExpiryText(file.expiresAt, now)].filter(Boolean);
   const action = state === "available"
-    ? `<form method="post" action="/api/downloads/ticket" class="shrink-0">${hiddenFields(context, { entitlementId: file.entitlementId })}<button type="submit" class="${PRIMARY_BUTTON}">${escapeHtml(DOWNLOAD_COPY.download)}<span class="sr-only"> ${escapeHtml(file.displayName)}</span></button></form>`
+    ? `<form method="post" action="/api/downloads/ticket" class="shrink-0">${hiddenFields(context, { entitlementId: file.entitlementId })}<button type="submit" class="${PRIMARY_BUTTON}">${escapeHtml(downloadCopy().download)}<span class="sr-only"> ${escapeHtml(file.displayName)}</span></button></form>`
     : "";
   return `<li id="${escapeHtml(downloadRowId(file.entitlementId))}" class="group flex scroll-mt-24 flex-wrap items-center justify-between gap-3 py-3">
     <div class="min-w-0 flex-1">
@@ -443,10 +505,10 @@ export function downloadFileMarkup(file: DownloadFileView, context: DeliveryMark
 
 /** One key row: masked ("•••• ABCD") with a Show key POST form. */
 export function licenceKeyMarkup(key: LicenceKeyView, context: DeliveryMarkupContext): string {
-  const label = fillCopy(DOWNLOAD_COPY.keyEndingIn, { last4: key.last4 });
+  const label = fillCopy(downloadCopy().keyEndingIn, { last4: key.last4 });
   return `<li class="flex flex-wrap items-center justify-between gap-3 py-3">
     <p class="min-w-0"><span class="sr-only">${escapeHtml(label)}</span><span aria-hidden="true" class="font-mono text-sm tracking-wider text-foreground">•••• ${escapeHtml(key.last4)}</span></p>
-    <form method="post" action="/account/licence-key" class="shrink-0">${hiddenFields(context, { keyId: key.keyId })}<button type="submit" class="${SECONDARY_BUTTON}">${escapeHtml(DOWNLOAD_COPY.showKey)}<span class="sr-only"> (${escapeHtml(label)})</span></button></form>
+    <form method="post" action="/account/licence-key" class="shrink-0">${hiddenFields(context, { keyId: key.keyId })}<button type="submit" class="${SECONDARY_BUTTON}">${escapeHtml(downloadCopy().showKey)}<span class="sr-only"> (${escapeHtml(label)})</span></button></form>
   </li>`;
 }
 
@@ -459,10 +521,10 @@ export function digitalDeliveryListsMarkup(
   const heading = (text: string) => `<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">${escapeHtml(text)}</p>`;
   const parts: string[] = [];
   if (files.length > 0) {
-    parts.push(`<div>${heading(DOWNLOAD_COPY.filesHeading)}<ul class="divide-y divide-border">${files.map((file) => downloadFileMarkup(file, context)).join("")}</ul></div>`);
+    parts.push(`<div>${heading(downloadCopy().filesHeading)}<ul class="divide-y divide-border">${files.map((file) => downloadFileMarkup(file, context)).join("")}</ul></div>`);
   }
   if (keys.length > 0) {
-    parts.push(`<div>${heading(DOWNLOAD_COPY.keysHeading)}<ul class="divide-y divide-border">${keys.map((key) => licenceKeyMarkup(key, context)).join("")}</ul></div>`);
+    parts.push(`<div>${heading(downloadCopy().keysHeading)}<ul class="divide-y divide-border">${keys.map((key) => licenceKeyMarkup(key, context)).join("")}</ul></div>`);
   }
   return parts.join("");
 }
@@ -479,11 +541,11 @@ export function renderDownloadLines(lines: readonly BuyerDigitalLine[], options:
     };
     const delivered = formatAccountDate(line.deliveredAt, { time: false });
     const meta = [
-      `<a href="${escapeHtml(orderHref)}" data-astro-prefetch="false" class="font-medium text-primary hover:underline">${escapeHtml(fillCopy(DOWNLOAD_COPY.order, { number: formatOrderNumber(line.orderNumber, line.orderId) }))}</a>`,
-      delivered ? escapeHtml(fillCopy(DOWNLOAD_COPY.deliveredOn, { date: delivered })) : "",
+      `<a href="${escapeHtml(orderHref)}" data-astro-prefetch="false" class="font-medium text-primary hover:underline">${escapeHtml(fillCopy(downloadCopy().order, { number: formatOrderNumber(line.orderNumber, line.orderId) }))}</a>`,
+      delivered ? escapeHtml(fillCopy(downloadCopy().deliveredOn, { date: delivered })) : "",
     ].filter(Boolean).join(" · ");
     return `<li class="rounded-xl border border-border bg-card p-5">
-      <h2 class="break-words text-base font-semibold text-foreground">${escapeHtml(line.productName ?? DOWNLOAD_COPY.productFallback)}</h2>
+      <h2 class="break-words text-base font-semibold text-foreground">${escapeHtml(line.productName ?? downloadCopy().productFallback)}</h2>
       ${line.variantLabel ? `<p class="text-sm text-muted-foreground">${escapeHtml(line.variantLabel)}</p>` : ""}
       <p class="mt-1 text-sm text-muted-foreground">${meta}</p>
       <div class="mt-4 space-y-4">${digitalDeliveryListsMarkup(line.files, line.licenceKeys, context)}</div>

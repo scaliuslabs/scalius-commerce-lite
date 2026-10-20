@@ -474,4 +474,59 @@ describe("account order detail", () => {
     await vi.waitFor(() => expect(document.getElementById("orderContent")?.classList.contains("hidden")).toBe(false));
     expect(text("orderTitle")).toBe("Order #1001");
   });
+
+  it("writes a Bangla store's order in Bangla words and digits, worded by the API's keys", async () => {
+    const { BANGLA_CHECKOUT_LANGUAGE_DATA } = await import("@scalius/shared/checkout-language");
+    const { englishTexts, latinNumbers } = await import("./route-tests/bangla-text");
+    document.documentElement.lang = "bn";
+    document.documentElement.dataset.storeRegion = "BD";
+    // The page embeds the store's checkout language (the server picks it).
+    const embedded = document.createElement("script");
+    embedded.type = "application/json";
+    embedded.id = "orderCheckoutCopy";
+    embedded.textContent = JSON.stringify(BANGLA_CHECKOUT_LANGUAGE_DATA);
+    document.querySelector("[data-order-detail-page]")!.prepend(embedded);
+    try {
+      api.getCustomerSession.mockResolvedValue({ authenticated: true });
+      // Merchant data is Bangla; the API's English step and update labels are worded here by key.
+      // The support action and intro are the API's own sentences (composed in core), Bangla here.
+      api.getCustomerOrderDetail.mockResolvedValueOnce({ success: true, detail: detail(
+        { status: "shipped", statusLabel: "On its way", shippingMethodName: "ঢাকার ভেতরে", expectedDelivery: "১-২ দিন", customerName: "রহিম", shippingAddress: "বাড়ি ১, রোড ২", cityName: "ঢাকা", zoneName: "মিরপুর", taxLabel: "ভ্যাট", taxAmountMinor: 5_000, pricesIncludeTax: true },
+        {
+          items: [{ ...detail().items[0]!, productName: "সুতির পাঞ্জাবি", variantLabel: "মাঝারি" }],
+          supportRequestActions: [{ type: "cancel_pre_shipment", label: "বাতিলের অনুরোধ", description: "পাঠানোর আগে স্টোরকে অর্ডারটি দেখতে বলুন।", eligible: true, disabledReason: null }],
+          supportRequestIntro: "এই অর্ডার নিয়ে সাহায্য দরকার?",
+          shipments: [{ id: "shp_1", status: "in_transit", statusLabel: "On its way", providerName: "পাঠাও", courierName: null, trackingId: "PX123", trackingUrl: null, lastChecked: null, updatedAt: "2026-09-25T02:00:00.000Z", createdAt: null } as never],
+          progress: { ...detail().progress!, steps: detail().progress!.steps.map((step, index) => ({ ...step, done: index <= 2 })) },
+          timeline: [
+            { id: "t3", type: "order", status: "shipped", label: "On its way", happenedAt: "2026-09-25T02:00:00.000Z", details: "With Pathao." },
+            { id: "t4", type: "payment", status: "failed", label: "Payment didn't go through", happenedAt: "2026-09-24T03:00:00.000Z", details: null },
+            ...detail().timeline,
+          ],
+        },
+      ) });
+      await loadOrderDetail();
+      const content = document.getElementById("orderContent")!;
+      expect(content.classList.contains("hidden")).toBe(false);
+      expect(text("orderTitle")).toBe("অর্ডার #1001");
+      expect(text("orderStatus")).toBe("পথে আছে");
+      expect(text("orderTimeline")).toContain("পাঠাও-এর কাছে আছে।");
+      expect(text("orderTimeline")).toContain("পেমেন্ট হয়নি");
+      expect(text("orderShipments")).toContain("পথে আছে");
+      document.querySelector<HTMLButtonElement>("[data-support-request-type]")!.click();
+      expect(text("orderSupportReasons")).toContain("ভুল করে অর্ডার দিয়েছি");
+      document.getElementById("orderSupportSubmit")!.click();
+      expect(text("orderSupportFormError")).toBe("একটি কারণ বেছে নিন।");
+      // The page's static buttons are server-rendered in the store's language (the render test covers them).
+      const { accountCopy } = await import("./account-copy");
+      document.getElementById("orderBuyAgain")!.textContent = accountCopy("bn").orders.buyAgain;
+      document.getElementById("orderSupportCancel")!.textContent = accountCopy("bn").order.cancel;
+      expect(englishTexts(content)).toEqual([]);
+      expect(latinNumbers(content)).toEqual([]);
+    } finally {
+      embedded.remove();
+      document.documentElement.lang = "";
+      delete document.documentElement.dataset.storeRegion;
+    }
+  });
 });

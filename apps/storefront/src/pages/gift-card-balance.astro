@@ -8,7 +8,7 @@ import Layout from "@/layouts/Layout.astro";
 import { getLayoutData } from "@/lib/api";
 import { checkGiftCardBalance, type GiftCardApiResult, type GiftCardBalance } from "@/lib/api/gift-cards";
 import {
-  GIFT_CARD_PAGE_COPY as copy,
+  giftCardPageCopy,
   giftCardBalanceView,
   giftCardExpiryText,
   giftCardMoney,
@@ -36,6 +36,7 @@ if (isPost) {
 }
 const layoutData = await getLayoutData();
 const view = giftCardBalanceView(result);
+const copy = giftCardPageCopy();
 
 const fieldClass =
   "min-h-11 w-full rounded-lg border border-input bg-background px-3 font-mono text-base uppercase tracking-wide text-foreground shadow-sm outline-none transition placeholder:normal-case placeholder:tracking-normal placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20 aria-[invalid=true]:border-destructive";

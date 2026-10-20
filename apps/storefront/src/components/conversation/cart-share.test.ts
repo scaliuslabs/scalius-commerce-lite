@@ -8,7 +8,7 @@ const cart = vi.hoisted(() => ({ items: {} as Record<string, VariantCartItem> })
 vi.mock("@/store/cart", () => ({ hydrateCartFromStorage: () => cart }));
 vi.mock("@/lib/presence-url", () => ({ pagePath: (path: string) => path }));
 vi.mock("@/lib/account-inbox", () => ({ formatConversationTime: (time: number) => `time ${time}` }));
-vi.mock("@/lib/store-time-zone", () => ({ formatCount: (count: number) => String(count) }));
+vi.mock("@/lib/store-time-zone", () => ({ formatCount: (count: number) => String(count), pageLanguage: () => "en" }));
 const item = (overrides: Partial<VariantCartItem> = {}): VariantCartItem => ({ id: "prod_a", variantId: "sku_a", name: "Bag", quantity: 2, price: 100, ...overrides });
 const line = { productId: "prod_a", skuId: "sku_a", quantity: 2 };
 const shared = (overrides: Partial<ConversationCartShare> = {}): ConversationCartShare => ({ lines: [line], products: [{ ...line, title: "Shared bag", variantLabel: "Blue", status: "available" }], sharedAt: 100, withdrawnAt: null, version: 1, ...overrides });

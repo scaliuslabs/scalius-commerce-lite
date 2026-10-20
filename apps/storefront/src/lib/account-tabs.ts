@@ -2,7 +2,9 @@
 // Downloads, Gift cards and Warranties (active ones) while the account has something there (or the
 // buyer is on that page). One server read, GET /customer-auth/account-summary,
 // gives every count, so every account page renders the same strip and nothing
-// shifts between pages.
+// shifts between pages. Labels and badge digits are in the page's language.
+import { accountCopy } from "./account-copy";
+import { formatCount } from "./store-time-zone";
 
 export interface AccountSummary {
   unreadInbox: number;
@@ -28,27 +30,28 @@ export interface AccountNavTab {
 
 function badgeText(count: number): string {
   if (!Number.isFinite(count) || count <= 0) return "";
-  return count > 99 ? "99+" : String(Math.floor(count));
+  return count > 99 ? `${formatCount(99)}+` : formatCount(Math.floor(count));
 }
 
 /** The tabs in their fixed order for this page. */
 export function accountNavTabs(current: AccountSection, summary: AccountSummary | null): AccountNavTab[] {
   const has = (key: AccountSection, count: number) => key === current || count > 0;
+  const words = accountCopy().shell;
   const tabs: Array<AccountNavTab & { show: boolean }> = [
-    { key: "orders", href: "/account", label: "Orders", badge: "", badgeLabel: "", show: true },
-    { key: "profile", href: "/account/profile", label: "Profile", badge: "", badgeLabel: "", show: true },
-    { key: "inbox", href: "/account/inbox", label: "Inbox", badge: badgeText(summary?.unreadInbox ?? 0), badgeLabel: "unread", show: true },
+    { key: "orders", href: "/account", label: words.orders, badge: "", badgeLabel: "", show: true },
+    { key: "profile", href: "/account/profile", label: words.profile, badge: "", badgeLabel: "", show: true },
+    { key: "inbox", href: "/account/inbox", label: words.inbox, badge: badgeText(summary?.unreadInbox ?? 0), badgeLabel: words.unread, show: true },
     {
       key: "reviews",
       href: "/account/reviews",
-      label: "Reviews",
+      label: words.reviews,
       badge: badgeText(summary?.reviewsToWrite ?? 0),
-      badgeLabel: "to review",
+      badgeLabel: words.toReview,
       show: has("reviews", (summary?.reviewsToWrite ?? 0) + (summary?.reviewsWritten ?? 0)),
     },
-    { key: "downloads", href: "/account/downloads", label: "Downloads", badge: "", badgeLabel: "", show: has("downloads", summary?.downloads ?? 0) },
-    { key: "gift-cards", href: "/account/gift-cards", label: "Gift cards", badge: "", badgeLabel: "", show: has("gift-cards", summary?.giftCards ?? 0) },
-    { key: "warranties", href: "/account/warranties", label: "Warranties", badge: "", badgeLabel: "", show: has("warranties", summary?.activeWarranties ?? 0) },
+    { key: "downloads", href: "/account/downloads", label: words.downloads, badge: "", badgeLabel: "", show: has("downloads", summary?.downloads ?? 0) },
+    { key: "gift-cards", href: "/account/gift-cards", label: words.giftCards, badge: "", badgeLabel: "", show: has("gift-cards", summary?.giftCards ?? 0) },
+    { key: "warranties", href: "/account/warranties", label: words.warranties, badge: "", badgeLabel: "", show: has("warranties", summary?.activeWarranties ?? 0) },
   ];
   return tabs.filter((tab) => tab.show).map(({ show: _show, ...tab }) => tab);
 }

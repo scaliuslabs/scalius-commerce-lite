@@ -19,12 +19,17 @@ import {
   type AccountPaymentRecoveryAction,
 } from "@/lib/account-payment-recovery";
 import {
-  ACCOUNT_OFFLINE_MESSAGE,
   accountMoney,
+  accountOfflineMessage,
+  accountOrderStatusText,
+  accountShipmentStatusText,
   formatAccountDate,
   formatOrderPlaces,
   orderPaymentLine,
+  wordOrderTracking,
 } from "@/lib/account-format";
+import { accountCopy } from "@/lib/account-copy";
+import { formatCount, pageLanguage } from "@/lib/store-time-zone";
 import { addOrderToCart } from "@/lib/account-buy-again";
 import { accountPill, orderStatusTone } from "@/lib/account-ui";
 import { getProductImageUrl } from "@/lib/product-media";
@@ -36,7 +41,7 @@ import { escapeHtml } from "@scalius/shared/html-escape";
 import { fromMinor } from "@scalius/shared/money";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { formatBdMobile } from "@scalius/shared/phone-input";
-import { ENGLISH_CHECKOUT_LANGUAGE_DATA as copy } from "@scalius/shared/checkout-language";
+import { ENGLISH_CHECKOUT_LANGUAGE_DATA, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { summarizeOrderDiscounts } from "@/lib/order-discount-summary";
 import { orderDeliveryRow } from "@/lib/order-delivery-row";
 import { orderShowsLineDiscounts, presentedLineTotalMinor } from "@/lib/order-line-discounts";
@@ -94,20 +99,20 @@ type DetailWindow = Window & {
 };
 const detailWindow = window as DetailWindow;
 
-const CANCEL_REASONS = [
-  "Ordered by mistake",
-  "Found a better price",
-  "Delivery is too slow",
-  "Need to change the address or items",
-  "Other",
-];
-const RETURN_REASONS = [
-  "Damaged or defective",
-  "Wrong item received",
-  "Not as described",
-  "Changed my mind",
-  "Other",
-];
+/**
+ * The checkout language the page embeds (`#orderCheckoutCopy`, the store's
+ * language with the merchant's wording); English when it is missing.
+ */
+let copy: CheckoutLanguageData = ENGLISH_CHECKOUT_LANGUAGE_DATA;
+
+function readCheckoutCopy(): void {
+  try {
+    const parsed = JSON.parse(document.getElementById("orderCheckoutCopy")?.textContent ?? "null") as Partial<CheckoutLanguageData> | null;
+    copy = parsed && typeof parsed === "object" ? { ...ENGLISH_CHECKOUT_LANGUAGE_DATA, ...parsed } : ENGLISH_CHECKOUT_LANGUAGE_DATA;
+  } catch {
+    copy = ENGLISH_CHECKOUT_LANGUAGE_DATA;
+  }
+}
 
 let currentDetail: AccountOrderDetail | null = null;
 let currentCheckoutConfig: CheckoutConfig | null = null;
@@ -127,15 +132,17 @@ function byId<T extends HTMLElement = HTMLElement>(id: string): T | null {
 }
 
 function writeError(result: { status?: number; error?: string }, fallback: string): string {
-  return !result.status || result.status >= 500 ? ACCOUNT_OFFLINE_MESSAGE : result.error || fallback;
+  return !result.status || result.status >= 500 ? accountOfflineMessage() : result.error || fallback;
 }
 
-const trackingText: OrderTrackingText = {
-  done: copy.orderTrackingStepDoneText,
-  trackingId: copy.orderTrackingIdText,
-  trackWithCourier: copy.orderTrackWithCourierText,
-  formatDate: (iso) => formatAccountDate(iso),
-};
+function trackingText(): OrderTrackingText {
+  return {
+    done: copy.orderTrackingStepDoneText,
+    trackingId: copy.orderTrackingIdText,
+    trackWithCourier: copy.orderTrackWithCourierText,
+    formatDate: (iso) => formatAccountDate(iso),
+  };
+}
 
 /** The courier's page the API gives with the shipment (couriers declare it; the store never guesses one). */
 function trackingUrl(shipment: CustomerOrderShipment): string | null {
@@ -204,11 +211,12 @@ function availableGateways(): string[] {
 }
 
 function recoveryButtonLabel(gateway: string): string {
-  if (gateway === "stripe") return "Enter card details";
-  if (currentDetail?.paymentRecovery.paymentType === "balance") return "Pay balance";
+  const words = accountCopy().recovery;
+  if (gateway === "stripe") return words.enterCard;
+  if (currentDetail?.paymentRecovery.paymentType === "balance") return words.payBalance;
   const name = currentCheckoutConfig?.gateways?.find((candidate) => candidate.id === gateway)?.name;
   const presentation = getGatewayPresentation(gateway, name ?? gateway);
-  return `Continue with ${presentation.providerLabel ?? presentation.buyerLabel}`;
+  return words.continueWith(presentation.providerLabel ?? presentation.buyerLabel);
 }
 
 function resetStripe(): void {
@@ -261,7 +269,7 @@ function renderPaymentRecovery(detail: AccountOrderDetail): void {
   const description = byId("orderPaymentRecoveryDescription");
   if (title) title.textContent = recoveryAction.title;
   if (description) {
-    description.textContent = `${recoveryAction.description} Amount due: ${accountMoney(recoveryAction.amountDue, detail.order.currencyCode)}.`;
+    description.textContent = accountCopy().recovery.amountDue(recoveryAction.description, accountMoney(recoveryAction.amountDue, detail.order.currencyCode));
   }
   if (methods) {
     methods.innerHTML = gateways.map((gateway) => {
@@ -282,16 +290,17 @@ async function loadStripeScript(): Promise<void> {
   stripeScript ??= new Promise<void>((resolve, reject) => {
     const script = document.querySelector<HTMLScriptElement>('script[src="https://js.stripe.com/v3/"]') ?? document.head.appendChild(Object.assign(document.createElement("script"), { src: "https://js.stripe.com/v3/", async: true }));
     script.addEventListener("load", () => resolve(), { once: true });
-    script.addEventListener("error", () => reject(new Error("Card payment form is unavailable. Refresh and try again.")), { once: true });
+    script.addEventListener("error", () => reject(new Error(accountCopy().recovery.cardFormUnavailable)), { once: true });
   });
   return stripeScript;
 }
 
 async function prepareStripe(session: CustomerOrderPaymentSession): Promise<void> {
   const stripe = session.stripe;
-  if (!stripe?.publishableKey || !stripe.clientSecret) throw new Error("Card payment could not start. Try again.");
+  const words = accountCopy().recovery;
+  if (!stripe?.publishableKey || !stripe.clientSecret) throw new Error(words.cardCouldNotStart);
   await loadStripeScript();
-  if (!detailWindow.Stripe) throw new Error("Card payment form is unavailable. Refresh and try again.");
+  if (!detailWindow.Stripe) throw new Error(words.cardFormUnavailable);
   stripeClientSecret = stripe.clientSecret;
   stripeOrderId = currentDetail?.order.id ?? null;
   if (!stripeCard) {
@@ -303,31 +312,32 @@ async function prepareStripe(session: CustomerOrderPaymentSession): Promise<void
     stripeCard.on("change", (event) => setStripeError(event.error?.message ?? null));
   }
   byId("accountStripeSection")?.classList.remove("hidden");
-  setRecoveryMessage("Enter your card details, then confirm payment.");
-  setRecoveryButton("Confirm card payment");
+  setRecoveryMessage(words.enterCardThenConfirm);
+  setRecoveryButton(words.confirmCard);
 }
 
 async function confirmStripe(): Promise<void> {
+  const words = accountCopy().recovery;
   if (!stripeInstance || !stripeCard || !stripeClientSecret) {
-    setRecoveryMessage("The card form is not ready yet.", "error");
+    setRecoveryMessage(words.cardNotReady, "error");
     return;
   }
   recoveryLoading = true;
-  setRecoveryButton("Confirming…", true);
+  setRecoveryButton(words.confirming, true);
   try {
     const { error, paymentIntent } = await stripeInstance.confirmCardPayment(stripeClientSecret, {
       payment_method: { card: stripeCard },
     });
-    if (error) throw new Error(error.message || "Card payment failed.");
+    if (error) throw new Error(error.message || words.cardFailed);
     if (paymentIntent?.status !== "succeeded" && paymentIntent?.status !== "requires_capture") {
-      throw new Error("Payment was not completed.");
+      throw new Error(words.notCompleted);
     }
-    setRecoveryMessage("Payment submitted. Updating the order…", "success");
-    setRecoveryButton("Updating…", true);
+    setRecoveryMessage(words.submitted, "success");
+    setRecoveryButton(words.updating, true);
     window.setTimeout(() => void loadOrderDetail(), 1500);
   } catch (error: unknown) {
-    setRecoveryMessage(error instanceof Error ? error.message : "Payment could not be completed.", "error");
-    setRecoveryButton("Confirm card payment");
+    setRecoveryMessage(error instanceof Error ? error.message : words.couldNotComplete, "error");
+    setRecoveryButton(words.confirmCard);
   } finally {
     recoveryLoading = false;
   }
@@ -341,26 +351,27 @@ async function startRecovery(): Promise<void> {
     return;
   }
   recoveryLoading = true;
-  setRecoveryButton("Preparing payment…", true);
+  const words = accountCopy().recovery;
+  setRecoveryButton(words.preparing, true);
   setStripeError(null);
   try {
     const result = await createCustomerOrderPaymentSession(detail.order.id, {
       gateway: selectedGateway,
       replaceExistingAttempt: detail.paymentRecovery.paymentType !== "balance",
-      onProcessing: (event) => setRecoveryMessage(`${event.message} Retrying in ${event.retryAfterSeconds}s…`),
+      onProcessing: (event) => setRecoveryMessage(words.retryingIn(event.message, formatCount(event.retryAfterSeconds))),
     });
-    if (!result.success || !result.session) throw new Error(writeError(result, "Payment could not start. Try again."));
+    if (!result.success || !result.session) throw new Error(writeError(result, words.couldNotStart));
     if (result.session.gateway === "stripe") {
       selectedGateway = "stripe";
       await prepareStripe(result.session);
       return;
     }
     const gatewayUrl = normalizeHostedGatewayUrl(result.session.hosted?.gatewayUrl);
-    if (!gatewayUrl) throw new Error("The payment page could not open. Try again.");
-    setRecoveryButton("Redirecting…", true);
+    if (!gatewayUrl) throw new Error(words.pageCouldNotOpen);
+    setRecoveryButton(words.redirecting, true);
     window.location.assign(gatewayUrl);
   } catch (error: unknown) {
-    setRecoveryMessage(error instanceof Error ? error.message : "Payment could not start. Try again.", "error");
+    setRecoveryMessage(error instanceof Error ? error.message : words.couldNotStart, "error");
     setRecoveryButton(recoveryButtonLabel(selectedGateway));
   } finally {
     recoveryLoading = false;
@@ -369,8 +380,9 @@ async function startRecovery(): Promise<void> {
 
 // ---------- order help ----------
 
-function supportReasons(type: CustomerOrderSupportRequestType): string[] {
-  return type === "cancel_pre_shipment" ? CANCEL_REASONS : RETURN_REASONS;
+function supportReasons(type: CustomerOrderSupportRequestType): readonly string[] {
+  const words = accountCopy().order;
+  return type === "cancel_pre_shipment" ? words.cancelReasons : words.returnReasons;
 }
 
 function setSupportError(message: string | null): void {
@@ -391,7 +403,7 @@ function hideSupportForm(): void {
   selectedSupportType = null;
   supportLoading = false;
   setSupportError(null);
-  setSupportButton("Submit request");
+  setSupportButton(accountCopy().order.submit);
   const message = byId<HTMLTextAreaElement>("orderSupportMessage");
   if (message) message.value = "";
   byId("orderSupportForm")?.classList.add("hidden");
@@ -402,7 +414,7 @@ function openSupportForm(type: CustomerOrderSupportRequestType): void {
   if (!action?.eligible || supportLoading) return;
   selectedSupportType = type;
   setSupportError(null);
-  setSupportButton("Submit request");
+  setSupportButton(accountCopy().order.submit);
   const title = byId("orderSupportFormTitle");
   if (title) title.textContent = action.label;
   const reasons = byId("orderSupportReasons");
@@ -454,23 +466,24 @@ async function submitSupportRequest(): Promise<void> {
   if (!detail || supportLoading || !selectedSupportType) return;
   const reason = document.querySelector<HTMLInputElement>('input[name="orderSupportReason"]:checked')?.value ?? "";
   const message = byId<HTMLTextAreaElement>("orderSupportMessage")?.value.trim() || null;
+  const words = accountCopy().order;
   if (!reason) {
-    setSupportError("Choose a reason.");
+    setSupportError(words.chooseReason);
     return;
   }
-  if (reason === "Other" && !message) {
-    setSupportError("Tell the store what you need.");
+  if (reason === words.other && !message) {
+    setSupportError(words.tellStore);
     byId("orderSupportMessage")?.focus();
     return;
   }
   supportLoading = true;
   setSupportError(null);
-  setSupportButton("Submitting…", true);
+  setSupportButton(words.submitting, true);
   const result = await createCustomerOrderSupportRequest(detail.order.id, { type: selectedSupportType, reason, message });
   supportLoading = false;
   if (!result.success) {
-    setSupportError(writeError(result, "Request could not be sent. Try again."));
-    setSupportButton("Submit request");
+    setSupportError(writeError(result, words.requestFailed));
+    setSupportButton(words.submit);
     return;
   }
   hideSupportForm();
@@ -488,12 +501,13 @@ async function buyAgain(): Promise<void> {
   const result = await addOrderToCart(currentDetail.items);
   button.disabled = false;
   if (!message) return;
+  const words = accountCopy().orders;
   message.textContent = !result
-    ? ACCOUNT_OFFLINE_MESSAGE
+    ? accountOfflineMessage()
     : result.added === 0
-      ? "These items are no longer available."
+      ? words.allGone
       : result.missing > 0
-        ? "Some items are no longer available, so they weren't added."
+        ? words.someGone
         : "";
 }
 
@@ -501,19 +515,22 @@ async function buyAgain(): Promise<void> {
 
 function renderProgress(detail: AccountOrderDetail): void {
   const progress = byId("orderProgress");
-  // Pickup and no-delivery orders track as "Ready for pickup"/"Picked up" or "Preparing"/"Completed".
-  if (progress && detail.progress) progress.innerHTML = orderProgressMarkup(relabelOrderProgress(detail.progress, detail.order, copy), trackingText);
+  // The API's steps and updates in the page's words (by their keys), then
+  // pickup and no-delivery orders track as "Ready for pickup"/"Picked up" or "Preparing"/"Completed".
+  const courier = detail.shipments[0] ? detail.shipments[0].providerName || detail.shipments[0].courierName : null;
+  const worded = wordOrderTracking(detail.progress, detail.timeline, courier);
+  if (progress && worded.progress) progress.innerHTML = orderProgressMarkup(relabelOrderProgress(worded.progress, detail.order, copy), trackingText());
   const expected = byId("orderExpectedDelivery");
   if (expected) {
     const show = Boolean(detail.order.expectedDelivery)
       && resolveOrderDeliveryBlock(detail.order, copy).mode === "ship"
       && !detail.progress?.outcome
       && !detail.progress?.steps[3]?.done;
-    expected.textContent = show ? `Expected delivery: ${detail.order.expectedDelivery}` : "";
+    expected.textContent = show ? accountCopy().order.expectedDelivery(detail.order.expectedDelivery!) : "";
     expected.classList.toggle("hidden", !show);
   }
   const timeline = byId("orderTimeline");
-  if (timeline) timeline.innerHTML = orderTimelineMarkup(relabelOrderTimeline(detail.timeline, detail.order, copy), trackingText);
+  if (timeline) timeline.innerHTML = orderTimelineMarkup(relabelOrderTimeline(worded.timeline, detail.order, copy), trackingText());
 }
 
 function renderItemsAndSummary(detail: AccountOrderDetail): void {
@@ -523,6 +540,7 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
   const items = byId("orderItems");
   // An order-level promotion is one line in the summary, never a discount on each item.
   const showsLineDiscounts = orderShowsLineDiscounts(detail.discounts);
+  const words = accountCopy().order;
   if (items) {
     const lineMarkup = (item: AccountOrderDetail["items"][number]) => {
       const hasMinor = item.lineSubtotalMinor != null && item.unitPriceMinor != null;
@@ -533,7 +551,7 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
           }, showsLineDiscounts))
         : accountMoney(item.lineTotal, order.currencyCode);
       const unit = hasMinor ? minor(item.unitPriceMinor!) : accountMoney(item.unitPrice, order.currencyCode);
-      const name = escapeHtml(item.productName || "Product");
+      const name = escapeHtml(item.productName || words.product);
       // Buyer inputs: display only, escaped, never in links or data attributes.
       const properties = orderLinePropertyRows(item.properties, (property) => minor(property.priceMinor), copy);
       // Files, keys, card codes and the review form get the line's full width.
@@ -544,8 +562,8 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
           ${item.productSlug ? `<a href="${escapeHtml(pagePath(`/products/${encodeURIComponent(item.productSlug)}`))}" class="font-medium text-foreground hover:underline">${name}</a>` : `<p class="font-medium text-foreground">${name}</p>`}
           ${item.variantLabel ? `<p class="text-muted-foreground">${escapeHtml(item.variantLabel)}</p>` : ""}
           ${properties.length > 0 ? `<ul class="text-muted-foreground">${properties.map((row) => `<li class="break-words"><span class="text-foreground">${escapeHtml(row.label)}:</span> ${escapeHtml(row.value)}${row.surcharge ? ` (${escapeHtml(row.surcharge)})` : ""}</li>`).join("")}</ul>` : ""}
-          <p class="text-muted-foreground">Qty ${item.quantity} × ${escapeHtml(unit)}</p>
-          ${showsLineDiscounts && (item.discountAmountMinor ?? 0) > 0 ? `<p class="text-muted-foreground">Discount -${escapeHtml(minor(item.discountAmountMinor!))}</p>` : ""}
+          <p class="text-muted-foreground">${escapeHtml(words.quantity(formatCount(item.quantity), unit))}</p>
+          ${showsLineDiscounts && (item.discountAmountMinor ?? 0) > 0 ? `<p class="text-muted-foreground">${escapeHtml(words.lineDiscount(minor(item.discountAmountMinor!)))}</p>` : ""}
         </div>
         <p class="shrink-0 text-sm font-medium tabular-nums text-foreground">${escapeHtml(lineTotal)}</p>
       </div>${extras ? `<div class="text-sm sm:ps-[4.75rem]">${extras}</div>` : ""}</li>`;
@@ -574,7 +592,7 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
     const money = (value: number) => accountMoney(value, order.currencyCode);
     const tax = order.taxAmountMinor ?? 0;
     const giftCardTenders = readReceiptGiftCardTenders(paymentFacts(detail));
-    const paymentLine = orderPaymentLine(paymentFacts(detail));
+    const paymentLine = orderPaymentLine(paymentFacts(detail), copy);
     const { delivery, lines } = summarizeOrderDiscounts({
       discounts: detail.discounts,
       shipping: major(order.shippingAmountMinor ?? 0),
@@ -588,7 +606,7 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
     const showsDeliveryRow = !(deliveryMode === "none" && !order.shippingMethodName && delivery.charged === 0 && delivery.fee === 0);
     const deliveryRow = orderDeliveryRow({ mode: deliveryMode, methodName: order.shippingMethodName, ...delivery }, copy, money);
     summary.innerHTML = [
-      row("Subtotal", cell(minor(order.subtotalAmountMinor ?? 0))),
+      row(words.subtotal, cell(minor(order.subtotalAmountMinor ?? 0))),
       !showsDeliveryRow ? "" : row(
         deliveryRow.label,
         [
@@ -598,8 +616,8 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
         ].join(""),
       ),
       ...lines.map((line) => row(line.label, cell(`−${money(line.amount)}`, "text-foreground"))),
-      tax > 0 ? row(`${order.taxLabel || "Tax"}${order.pricesIncludeTax ? " (included)" : ""}`, cell(minor(tax))) : "",
-      row("Total", cell(minor(order.totalAmountMinor ?? 0)), true),
+      tax > 0 ? row(order.pricesIncludeTax ? words.taxIncluded(order.taxLabel || words.tax) : order.taxLabel || words.tax, cell(minor(tax))) : "",
+      row(words.total, cell(minor(order.totalAmountMinor ?? 0)), true),
       // Gift cards are payment: one row per card after the total, then what is left.
       ...giftCardTenders.map((tender) =>
         row(receiptGiftCardTenderLabel(tender, copy), cell(`−${money(tender.amount)}`, "text-foreground"))),
@@ -612,10 +630,11 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
 
 function renderDelivery(detail: AccountOrderDetail): void {
   const { order } = detail;
+  const words = accountCopy().order;
   const block = resolveOrderDeliveryBlock(order, copy);
   const heading = byId("deliveryHeading");
   if (heading) {
-    heading.textContent = block.mode === "pickup" ? block.heading : block.mode === "none" ? copy.orderReceiptDeliveryText : "Shipping address";
+    heading.textContent = block.mode === "pickup" ? block.heading : block.mode === "none" ? copy.orderReceiptDeliveryText : words.shippingAddress;
   }
   const address = byId("orderAddress");
   if (address) {
@@ -630,8 +649,8 @@ function renderDelivery(detail: AccountOrderDetail): void {
         ? [block.text]
         : [
             block.address,
-            formatOrderPlaces(order),
-            order.shippingMethodName ? `Delivery method: ${order.shippingMethodName}` : null,
+            formatOrderPlaces(order, pageLanguage()),
+            order.shippingMethodName ? words.deliveryMethod(order.shippingMethodName) : null,
           ];
     address.innerHTML = [
       order.customerName,
@@ -651,12 +670,12 @@ function renderDelivery(detail: AccountOrderDetail): void {
     shipments.innerHTML = detail.shipments.map((shipment) => {
       const updated = formatAccountDate(shipment.lastChecked || shipment.updatedAt || shipment.createdAt);
       return orderShipmentMarkup({
-        statusLabel: shipment.statusLabel,
+        statusLabel: accountShipmentStatusText(shipment.status),
         courier: shipment.providerName || shipment.courierName,
         trackingId: shipment.trackingId,
         trackingUrl: trackingUrl(shipment),
-        updated: updated ? `Updated ${updated}` : null,
-      }, trackingText);
+        updated: updated ? words.updated(updated) : null,
+      }, trackingText());
     }).join("");
   }
 }
@@ -664,7 +683,8 @@ function renderDelivery(detail: AccountOrderDetail): void {
 function renderPayment(detail: AccountOrderDetail): void {
   const { order } = detail;
   // "Gift card + Cash on delivery" and "৳800 due on delivery" when cards paid part.
-  const line = orderPaymentLine(paymentFacts(detail));
+  const line = orderPaymentLine(paymentFacts(detail), copy);
+  const words = accountCopy().order;
   const paidByGiftCards = readReceiptGiftCardTenders(paymentFacts(detail)).length > 0;
   const money = (value: number) => accountMoney(value, order.currencyCode);
   const refunds = detail.refundAttempts.map((refund) => `
@@ -678,9 +698,9 @@ function renderPayment(detail: AccountOrderDetail): void {
       `<p class="font-medium text-foreground">${escapeHtml(line.method)}</p>`,
       `<p class="text-muted-foreground">${escapeHtml(line.state)}</p>`,
       // The card rows in the summary already say what the gift cards paid.
-      line.balanceDue > 0 && order.paidAmount > 0 && !paidByGiftCards ? `<p class="text-muted-foreground">${escapeHtml(money(order.paidAmount))} paid</p>` : "",
-      detail.cod?.collectedAmount ? `<p class="text-muted-foreground">${escapeHtml(money(detail.cod.collectedAmount))} collected</p>` : "",
-      detail.paymentPlan ? `<p class="text-muted-foreground">Advance ${escapeHtml(money(detail.paymentPlan.depositAmount))}</p>` : "",
+      line.balanceDue > 0 && order.paidAmount > 0 && !paidByGiftCards ? `<p class="text-muted-foreground">${escapeHtml(words.paid(money(order.paidAmount)))}</p>` : "",
+      detail.cod?.collectedAmount ? `<p class="text-muted-foreground">${escapeHtml(words.collected(money(detail.cod.collectedAmount)))}</p>` : "",
+      detail.paymentPlan ? `<p class="text-muted-foreground">${escapeHtml(words.advance(money(detail.paymentPlan.depositAmount)))}</p>` : "",
       refunds,
     ].join("");
   }
@@ -689,7 +709,7 @@ function renderPayment(detail: AccountOrderDetail): void {
     const active = detail.activeRefundOperation;
     refundNotice.classList.toggle("hidden", !active);
     refundNotice.innerHTML = active
-      ? `<p class="font-medium">${escapeHtml(active.label)}</p><p class="mt-1">${escapeHtml(active.message)} ${escapeHtml(money(active.amount))} is on its way back to you.</p>`
+      ? `<p class="font-medium">${escapeHtml(active.label)}</p><p class="mt-1">${escapeHtml(active.message)} ${escapeHtml(words.refundOnWay(money(active.amount)))}</p>`
       : "";
   }
 }
@@ -709,16 +729,17 @@ export function renderOrderDetail(detail: AccountOrderDetail, checkoutConfig: Ch
   const buyAgainMessage = byId("orderBuyAgainMessage");
   if (buyAgainMessage) buyAgainMessage.textContent = "";
   const { order } = detail;
+  const words = accountCopy().order;
   const title = byId("orderTitle");
-  if (title) title.textContent = `Order ${formatOrderNumber(order.orderNumber, order.id)}`;
+  if (title) title.textContent = words.title(formatOrderNumber(order.orderNumber, order.id));
   const subtitle = byId("orderSubtitle");
-  if (subtitle) subtitle.textContent = `Placed ${formatAccountDate(order.createdAt)}`;
+  if (subtitle) subtitle.textContent = words.placed(formatAccountDate(order.createdAt));
   const status = byId("orderStatus");
   // A finished pickup order reads "Picked up"; a service/digital-only one "Completed", never "Delivered".
   if (status) {
     status.className = accountPill(orderStatusTone(order.status));
     status.textContent = orderCompletionWording(order, copy)?.statusLabel
-      ?? order.statusLabel ?? detail.progress?.outcome?.label ?? order.status;
+      ?? accountOrderStatusText(order.status);
   }
   renderReturnNotice();
   renderProgress(detail);
@@ -756,13 +777,15 @@ export async function loadOrderDetail(): Promise<void> {
   if (!root) return;
   const run = (detailWindow.__scaliusOrderDetailRun ?? 0) + 1;
   detailWindow.__scaliusOrderDetailRun = run;
+  readCheckoutCopy();
+  const words = accountCopy().order;
   showOnly("loading");
   const orderId = root.dataset.orderId ?? "";
-  if (!orderId) return showError("Order not found", "This order link is incomplete.", false);
+  if (!orderId) return showError(words.notFound, words.linkIncomplete, false);
 
   const session = await getCustomerSession();
   if (detailWindow.__scaliusOrderDetailRun !== run) return;
-  if (session.unavailable) return showError("We couldn't reach the store", ACCOUNT_OFFLINE_MESSAGE);
+  if (session.unavailable) return showError(words.unreachable, accountOfflineMessage());
   if (!session.authenticated) {
     currentDetail = null;
     hideRecovery();
@@ -774,15 +797,15 @@ export async function loadOrderDetail(): Promise<void> {
   if (!result.success || !result.detail) {
     if (result.status === 401) return showOnly("unauth");
     return result.status === 404
-      ? showError("Order not found", "We couldn't find this order in your account.", false)
-      : showError("We couldn't reach the store", ACCOUNT_OFFLINE_MESSAGE);
+      ? showError(words.notFound, words.notInAccount, false)
+      : showError(words.unreachable, accountOfflineMessage());
   }
   try {
     renderOrderDetail(result.detail as AccountOrderDetail, checkoutConfig);
     showOnly("content");
   } catch (error) {
     console.error("[customer-order-detail] render failed", error);
-    showError("Something went wrong", "This order could not be shown. Try again.");
+    showError(words.wentWrong, words.couldNotShow);
   }
 }
 

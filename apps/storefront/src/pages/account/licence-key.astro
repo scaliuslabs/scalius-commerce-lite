@@ -6,7 +6,9 @@
 // third-party script runs next to the key. A GET goes to the Downloads page.
 import "@/styles/global.css";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
-import { DOWNLOAD_COPY as copy, downloadStatusText, isDigitalId } from "@/lib/account-downloads";
+import { downloadCopy, downloadStatusText, isDigitalId } from "@/lib/account-downloads";
+import { getLayoutData } from "@/lib/api";
+import { pageLanguage } from "@/lib/store-time-zone";
 import {
   PRIVATE_HEADERS,
   formAccess,
@@ -24,7 +26,9 @@ if (shouldRejectCrossOriginCookieRequest(Astro.request)) {
   return new Response("Forbidden", { status: 403, headers: { "Content-Type": "text/plain; charset=utf-8", ...PRIVATE_HEADERS } });
 }
 
-const form = await readSmallForm(Astro.request);
+// The store's language for the page's words (the layout read only; no layout scripts run here).
+const [form] = await Promise.all([readSmallForm(Astro.request), getLayoutData().catch(() => null)]);
+const copy = downloadCopy();
 const access = formAccess(form);
 const returnTo = formReturnPath(form, access);
 const keyId = form?.get("keyId");
@@ -46,7 +50,7 @@ const errorText = result.ok
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang={pageLanguage()}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width" />

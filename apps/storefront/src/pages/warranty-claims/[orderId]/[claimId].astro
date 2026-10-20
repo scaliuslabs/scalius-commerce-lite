@@ -9,7 +9,7 @@ import ConversationReplyForm from "@/components/conversation/ConversationReplyFo
 import { getActiveCheckoutLanguage, getLayoutData } from "@/lib/api";
 import { checkoutLanguageBaseCode, getCheckoutLanguagePreset } from "@scalius/shared/checkout-language";
 import {
-  CONVERSATION_COPY,
+  conversationCopy,
   conversationStatusLabel,
   isOrderId,
   readConversationStatusFlag,
@@ -58,19 +58,19 @@ const earlierHref = thread?.hasMore ? `${pageHref}?conversationBefore=${earliest
   <div class={ACCOUNT_CONTAINER}>
     <a href={receiptHref} data-astro-prefetch="false" class={ui.textButton}>
       <svg aria-hidden="true" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
-      {CONVERSATION_COPY.viewOrder}
+      {conversationCopy().viewOrder}
     </a>
     <h1 class="mt-2 text-2xl font-semibold tracking-tight text-foreground">{title}</h1>
 
     {failure === "no_access" && (
       <div class={`${ui.empty} mt-6`} role="alert">
         <p class={ui.emptyBody}>{copy.warrantyClaimReceiptExpiredText}</p>
-        <a href="/track-order" data-astro-prefetch="false" class={`${ui.primaryButton} mt-6`}>{CONVERSATION_COPY.viewOrder}</a>
+        <a href="/track-order" data-astro-prefetch="false" class={`${ui.primaryButton} mt-6`}>{conversationCopy().viewOrder}</a>
       </div>
     )}
     {failure === "unavailable" && (
       <div class={`${ui.errorNotice} mt-6`} role="alert">
-        {CONVERSATION_COPY.unavailable} <a href={pageHref} data-astro-prefetch="false" class="underline">{CONVERSATION_COPY.retry}</a>
+        {conversationCopy().unavailable} <a href={pageHref} data-astro-prefetch="false" class="underline">{conversationCopy().retry}</a>
       </div>
     )}
 
@@ -78,9 +78,9 @@ const earlierHref = thread?.hasMore ? `${pageHref}?conversationBefore=${earliest
       <div id="conversation" data-conversation-panel style="overflow-anchor:none" class="mt-2">
         <p class="text-sm text-muted-foreground"><span data-conversation-thread-status>{conversationStatusLabel(thread.status)}</span></p>
         <div class={`${ui.card} ${ui.cardBody} mt-6`}>
-          {earlierHref && <a href={earlierHref} data-conversation-earlier data-before={earliestSeq} data-before-param="conversationBefore" data-astro-prefetch="false" class="inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline">{CONVERSATION_COPY.earlierMessages}</a>}
+          {earlierHref && <a href={earlierHref} data-conversation-earlier data-before={earliestSeq} data-before-param="conversationBefore" data-astro-prefetch="false" class="inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline">{conversationCopy().earlierMessages}</a>}
           <ol id="claimMessages" class="mx-auto max-w-3xl [overflow-anchor:none]" aria-label="Messages" hidden={thread.messages.length === 0} set:html={messagesHtml} />
-          {beforeSeq ? <a href={`${pageHref}#conversation`} data-astro-prefetch="false" class="mt-4 inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline">{CONVERSATION_COPY.latestMessages}</a> : <ConversationReplyForm
+          {beforeSeq ? <a href={`${pageHref}#conversation`} data-astro-prefetch="false" class="mt-4 inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline">{conversationCopy().latestMessages}</a> : <ConversationReplyForm
             action={`/api/warranties/orders/${encodeURIComponent(target.orderId)}/claims/${encodeURIComponent(target.claimId)}/messages`}
             readAction={`/api/warranties/orders/${encodeURIComponent(target.orderId)}/claims/${encodeURIComponent(target.claimId)}/read`}
             returnTo={pageHref}
@@ -92,7 +92,7 @@ const earlierHref = thread?.hasMore ? `${pageHref}?conversationBefore=${earliest
             status={readConversationStatusFlag(Astro.url)}
             label="Reply"
             placeholder="Write a reply"
-            note={thread.status === "closed" ? CONVERSATION_COPY.closedNote : null}
+            note={thread.status === "closed" ? conversationCopy().closedNote : null}
           />}
         </div>
       </div>

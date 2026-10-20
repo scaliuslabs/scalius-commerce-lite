@@ -36,7 +36,10 @@ import {
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@scalius/shared/utils";
 import { formatMoney } from "@/lib/currency";
-import { formatCount } from "@/lib/store-time-zone";
+import { formatCount, pageLanguage, storeRegion } from "@/lib/store-time-zone";
+import { cartDrawerCopy, type CartDrawerCopy } from "@/lib/cart-drawer-copy";
+import { storefrontCopy, storefrontLanguage } from "@/lib/storefront-copy";
+import { formatNumber, numberLocale } from "@scalius/shared/locale-format";
 import { PRODUCT_IMAGE_FALLBACK, productImageSources, resolveProductImageUrl } from "@/lib/product-media";
 import type { ImageSlot } from "@/lib/responsive-image";
 import { previewCartDiscounts } from "@/lib/cart/browser-api";
@@ -234,7 +237,16 @@ function CartLineImage({ url, alt }: { url: string | undefined; alt: string }) {
   );
 }
 
+/** An offer's saving in the page's digits: "20% off", "২০% ছাড়", or "free". */
+function offerSaving(percentOff: number, copy: CartDrawerCopy): string {
+  if (percentOff >= 100) return copy.offerFree;
+  return copy.offerPercent(formatNumber(percentOff / 100, numberLocale(pageLanguage(), storeRegion()), { style: "percent", maximumFractionDigits: 0 }));
+}
+
 export default function CartFlyout({ onReady }: Props) {
+  // The page's language: Bangla words and digits on a Bangla page.
+  const copy = cartDrawerCopy();
+  const priceCopy = storefrontCopy(storefrontLanguage(pageLanguage())).price;
   const cart = useStore(cartStore);
   const isOpen = useStore(cartOpenState);
   const { discounts, issues, ruleErrors } = useDrawerCartFacts(cart, isOpen);
@@ -248,7 +260,7 @@ export default function CartFlyout({ onReady }: Props) {
     lineIssues.length > 0 || Object.keys(rules.lines).length > 0 || rules.cart.length > 0;
   const blockedText = cartRuleMessages.length > 0 && lineIssues.length === 0 && Object.keys(rules.lines).length === 0
     ? cartRuleMessages.join(" ")
-    : "Fix the highlighted items to check out.";
+    : copy.fixToCheckout;
   // Shopify's drawer: discounts listed above, the total already net of them.
   const discountTotal = discounts?.totalDiscount ?? 0;
   const estimatedTotal = Math.max(0, Math.round((cart.totalAmount - discountTotal) * 100) / 100);
@@ -293,10 +305,11 @@ export default function CartFlyout({ onReady }: Props) {
   }, [addedKey, issues, cart.items]);
   const outcome = addedOutcome && addedOutcome.key === addedKey ? addedOutcome : null;
   const addedText = !outcome
-    ? "Added to your cart"
+    ? copy.added
     : outcome.left > 0
-      ? `Added ${formatCount(outcome.left)} (all that's left)`
-      : "Sold out: nothing more could be added";
+      ? copy.addedLeft(formatCount(outcome.left))
+      : copy.soldOut;
+  const itemsText = copy.itemCount(formatCount(cart.totalItems), cart.totalItems === 1);
 
   // Scroll & Swipe Logic
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -430,9 +443,7 @@ export default function CartFlyout({ onReady }: Props) {
         )}
       >
         <SheetDescription className="sr-only">
-          {addedItem
-            ? `${addedItem.name} was added to your cart. View your cart, check out, or continue shopping.`
-            : "Review cart items, change quantities, or continue to checkout."}
+          {addedItem ? copy.describeAdded(addedItem.name) : copy.describe}
         </SheetDescription>
         {/*
           SWIPE ZONE (Mobile Only)
@@ -459,15 +470,16 @@ export default function CartFlyout({ onReady }: Props) {
         >
           <div className="flex items-center gap-2">
             <SheetTitle className="text-[15px] sm:text-lg font-bold text-foreground tracking-tight flex items-center gap-2">
-              Cart
-              <span className="bg-primary text-primary-foreground text-[10px] sm:text-xs font-bold px-1.5 py-0.5 rounded-full leading-none min-w-[18px] text-center">
-                {cart.totalItems}
+              {copy.title}
+              <span aria-hidden="true" className="bg-primary text-primary-foreground text-[10px] sm:text-xs font-bold px-1.5 py-0.5 rounded-full leading-none min-w-[18px] text-center">
+                {formatCount(cart.totalItems)}
               </span>
+              <span className="sr-only">{itemsText}</span>
             </SheetTitle>
           </div>
 
           <SheetClose
-            aria-label="Close cart"
+            aria-label={copy.close}
             className="group -me-2 flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-90 focus:outline-none sm:-me-2 sm:h-9 sm:w-9 cursor-pointer"
           >
             <X className="h-4 w-4 sm:h-5 sm:w-5 transition-transform duration-300 group-hover:rotate-90" />
@@ -484,8 +496,8 @@ export default function CartFlyout({ onReady }: Props) {
             <p role="status" className="sr-only">
               {announced
                 ? outcome
-                  ? `${addedItem.name}: ${addedText}. Cart has ${cart.totalItems} ${cart.totalItems === 1 ? "item" : "items"}.`
-                  : `${addedItem.name} added to your cart. Cart has ${cart.totalItems} ${cart.totalItems === 1 ? "item" : "items"}.`
+                  ? copy.announceOutcome(addedItem.name, addedText, itemsText)
+                  : copy.announceAdded(addedItem.name, itemsText)
                 : ""}
             </p>
           </div>
@@ -505,7 +517,7 @@ export default function CartFlyout({ onReady }: Props) {
                 </div>
                 <div className="space-y-0.5">
                   <h3 className="text-sm font-bold text-foreground">
-                    Cart is empty
+                    {copy.empty}
                   </h3>
                 </div>
                 <Button
@@ -514,7 +526,7 @@ export default function CartFlyout({ onReady }: Props) {
                   size="sm"
                   className="mt-1 h-11 rounded-full bg-primary px-5 text-xs font-bold text-primary-foreground hover:bg-primary/90 sm:h-9 cursor-pointer"
                 >
-                  Start shopping
+                  {copy.startShopping}
                 </Button>
               </div>
             ) : (
@@ -582,7 +594,7 @@ export default function CartFlyout({ onReady }: Props) {
                                 <a
                                   href={cartLineEditHref(item)!}
                                   className="inline-flex min-h-9 items-center font-medium text-foreground underline underline-offset-2"
-                                  aria-label={`Edit ${item.name}`}
+                                  aria-label={copy.editItem(item.name)}
                                   onClick={() => {
                                     // Session storage, not the URL: the inputs are buyer content.
                                     writeCartLineEdit({
@@ -594,7 +606,7 @@ export default function CartFlyout({ onReady }: Props) {
                                     });
                                   }}
                                 >
-                                  Edit
+                                  {copy.edit}
                                 </a>
                               )}
                             </div>
@@ -610,17 +622,17 @@ export default function CartFlyout({ onReady }: Props) {
                                     updateCartItemByKey(key, { quantity: Math.floor(issues[key]!.availableQuantity!) });
                                   }}
                                 >
-                                  Update quantity to {Math.floor(issues[key].availableQuantity!)}
+                                  {copy.updateQuantity(formatCount(Math.floor(issues[key].availableQuantity!)))}
                                 </button>
                               ) : issues[key].action === "remove" || issues[key].action === "reduce_quantity" ? (
                                 <button
                                   type="button"
                                   className="min-h-9 rounded-md border border-border px-2 text-xs font-medium text-foreground hover:bg-muted cursor-pointer"
                                   onClick={() => {
-                                    removeWithUndo(`${item.name} removed`, () => removeCartItemByKey(key));
+                                    removeWithUndo(copy.removed(item.name), () => removeCartItemByKey(key));
                                   }}
                                 >
-                                  Remove
+                                  {copy.remove}
                                 </button>
                               ) : null}
                             </div>
@@ -642,11 +654,11 @@ export default function CartFlyout({ onReady }: Props) {
                       <div className="flex items-end justify-between mt-1">
                         <div className="flex h-11 items-center overflow-hidden rounded-md bg-muted/50 ring-1 ring-inset ring-input sm:h-8">
                           <button
-                            aria-label={`Decrease ${item.name} quantity`}
+                            aria-label={copy.decrease(item.name)}
                             onClick={() => {
                               const newQ = Math.max(0, item.quantity - 1);
                               if (newQ === 0)
-                                removeWithUndo(`${item.name} removed`, () => removeCartItemByKey(key));
+                                removeWithUndo(copy.removed(item.name), () => removeCartItemByKey(key));
                               else
                                 updateCartItemByKey(key, { quantity: newQ });
                             }}
@@ -655,10 +667,10 @@ export default function CartFlyout({ onReady }: Props) {
                             <Minus className="h-3 w-3" />
                           </button>
                           <span className="flex h-full w-7 items-center justify-center text-center text-xs font-bold leading-none text-foreground tabular-nums sm:w-6">
-                            {item.quantity}
+                            {formatCount(item.quantity)}
                           </span>
                           <button
-                            aria-label={`Increase ${item.name} quantity`}
+                            aria-label={copy.increase(item.name)}
                             onClick={() => {
                               updateCartItemByKey(key, {
                                 quantity: item.quantity + 1,
@@ -671,9 +683,9 @@ export default function CartFlyout({ onReady }: Props) {
                         </div>
 
                         <button
-                          aria-label={`Remove ${item.name} from cart`}
+                          aria-label={copy.removeItem(item.name)}
                           onClick={() => {
-                            removeWithUndo(`${item.name} removed`, () => removeCartItemByKey(key));
+                            removeWithUndo(copy.removed(item.name), () => removeCartItemByKey(key));
                           }}
                           className="flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive active:scale-90 sm:h-8 sm:w-8 cursor-pointer"
                         >
@@ -709,8 +721,9 @@ export default function CartFlyout({ onReady }: Props) {
                               {product.name}
                             </span>
                             <span className="mt-auto pt-0.5 text-xs font-semibold tabular-nums text-foreground">
-                              {product.priceVaries ? "From " : ""}
-                              {formatMoney(product.discountedPrice)}
+                              {product.priceVaries
+                                ? priceCopy.from(formatMoney(product.discountedPrice))
+                                : formatMoney(product.discountedPrice)}
                             </span>
                           </a>
                         </li>
@@ -736,7 +749,7 @@ export default function CartFlyout({ onReady }: Props) {
           <p className="shrink-0 border-t border-border bg-card px-4 py-2 text-sm text-muted-foreground" role="status">
             {undo.message} ·{" "}
             <button type="button" onClick={undoRemoval} className="font-medium text-foreground underline underline-offset-2 cursor-pointer">
-              Undo
+              {copy.undo}
             </button>
           </p>
         )}
@@ -746,7 +759,7 @@ export default function CartFlyout({ onReady }: Props) {
           <div className="shrink-0 space-y-1 border-t border-border bg-card px-4 py-2 text-sm">
             {discounts.discounts.map((line, position) => ({ line, key: discountLineKey(line, position) })).filter(({ line }) => line.amount > 0).map(({ line, key }) => (
               <div key={key} className="flex justify-between gap-3 text-primary">
-                <span className="min-w-0">{formatDiscountLineLabel("Discount", line)}</span>
+                <span className="min-w-0">{formatDiscountLineLabel(copy.discount, line)}</span>
                 <span className="shrink-0 tabular-nums">-{formatMoney(line.amount)}</span>
               </div>
             ))}
@@ -754,7 +767,7 @@ export default function CartFlyout({ onReady }: Props) {
               <div key={offer.promotionId} className="flex items-center justify-between gap-2 text-foreground">
                 <span className="line-clamp-2 min-w-0 break-words">
                   <span className="font-medium">{offer.title}:</span>{" "}
-                  {offer.products.map(({ name }) => name).join(" / ")} {offer.percentOff >= 100 ? "free" : `${offer.percentOff}% off`}
+                  {offer.products.map(({ name }) => name).join(" / ")} {offerSaving(offer.percentOff, copy)}
                 </span>
                 {offer.products[0]?.variantId && offer.products[0].price !== null ? (
                   <button
@@ -772,11 +785,11 @@ export default function CartFlyout({ onReady }: Props) {
                       });
                     }}
                   >
-                    Add
+                    {copy.add}
                   </button>
                 ) : offer.products[0] ? (
                   <a href={pagePath(`/products/${encodeURIComponent(offer.products[0].slug)}`)} className="shrink-0 text-sm font-medium underline underline-offset-2">
-                    View
+                    {copy.view}
                   </a>
                 ) : null}
               </div>
@@ -790,7 +803,7 @@ export default function CartFlyout({ onReady }: Props) {
             <div className="space-y-3 sm:space-y-4">
               <div className="flex items-end justify-between gap-3">
                 <div className="text-sm text-muted-foreground">
-                  {discountTotal > 0 ? "Estimated total (excl. shipping)" : "Subtotal (excl. shipping)"}
+                  {discountTotal > 0 ? copy.estimatedTotal : copy.subtotal}
                 </div>
                 <div className="text-lg font-semibold text-foreground tabular-nums sm:text-xl">
                   {formatMoney(estimatedTotal)}
@@ -801,7 +814,7 @@ export default function CartFlyout({ onReady }: Props) {
               )}
               <div className="flex flex-col gap-2 sm:gap-3">
                 <Button asChild variant="outline" className="h-11 w-full rounded-xl text-[14px] font-bold cursor-pointer">
-                  <a href={cartHref} onClick={() => setCartOpen(false)}>View cart</a>
+                  <a href={cartHref} onClick={() => setCartOpen(false)}>{copy.viewCart}</a>
                 </Button>
                 {checkoutBlocked ? (
                   <Button
@@ -809,13 +822,13 @@ export default function CartFlyout({ onReady }: Props) {
                     aria-describedby="drawerCheckoutBlocked"
                     className="h-11 w-full rounded-xl text-[14px] font-bold bg-primary text-primary-foreground shadow-md flex items-center justify-center gap-2"
                   >
-                    <span>Checkout</span>
+                    <span>{copy.checkout}</span>
                     <ArrowRight className="h-4 w-4" />
                   </Button>
                 ) : (
                   <Button asChild className="h-11 w-full rounded-xl text-[14px] font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer">
                     <a href={checkoutHref} onClick={() => setCartOpen(false)}>
-                      <span>Checkout</span>
+                      <span>{copy.checkout}</span>
                       <ArrowRight className="h-4 w-4" />
                     </a>
                   </Button>
@@ -827,14 +840,14 @@ export default function CartFlyout({ onReady }: Props) {
                   onClick={() => setCartOpen(false)}
                   className="min-h-11 text-sm text-muted-foreground hover:text-foreground underline decoration-border underline-offset-2 cursor-pointer sm:min-h-9"
                 >
-                  Continue shopping
+                  {copy.continueShopping}
                 </button>
                 <button
                   type="button"
-                  onClick={() => removeWithUndo("Cart cleared", clearCart)}
+                  onClick={() => removeWithUndo(copy.cleared, clearCart)}
                   className="min-h-11 text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer sm:min-h-9"
                 >
-                  Clear cart
+                  {copy.clearCart}
                 </button>
               </div>
             </div>

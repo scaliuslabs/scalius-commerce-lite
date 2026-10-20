@@ -1,6 +1,7 @@
 import type { CustomerPaymentRecovery } from "./api/customer-auth";
 import { normalizeHostedCheckoutUrl } from "./checkout/redirect-url";
 import { isPaymentMethodIdShape } from "./payment-method-id";
+import { accountCopy } from "./account-copy";
 
 export type AccountPaymentRecoveryAction = {
   visible: boolean;
@@ -24,25 +25,24 @@ function normalize(value: string | null | undefined): string {
 }
 
 function recoveryTitle(paymentType: CustomerPaymentRecovery["paymentType"]): string {
-  if (paymentType === "balance") return "Remaining balance is due";
-  if (paymentType === "deposit") return "Advance payment is due";
-  return "Payment needs attention";
+  const words = accountCopy().recovery;
+  if (paymentType === "balance") return words.balanceTitle;
+  if (paymentType === "deposit") return words.depositTitle;
+  return words.retryTitle;
 }
 
 function recoveryDescription(paymentType: CustomerPaymentRecovery["paymentType"]): string {
-  if (paymentType === "balance") {
-    return "Complete the remaining online payment for this order.";
-  }
-  if (paymentType === "deposit") {
-    return "Pay the required advance to keep this order moving.";
-  }
-  return "Retry the online payment for this order.";
+  const words = accountCopy().recovery;
+  if (paymentType === "balance") return words.balanceText;
+  if (paymentType === "deposit") return words.depositText;
+  return words.retryText;
 }
 
 function recoveryButtonLabel(recovery: CustomerPaymentRecovery): string {
-  if (recovery.requiresCardForm) return "Enter card details";
-  if (recovery.paymentType === "balance") return "Pay balance";
-  return recovery.label || "Retry payment";
+  const words = accountCopy().recovery;
+  if (recovery.requiresCardForm) return words.enterCard;
+  if (recovery.paymentType === "balance") return words.payBalance;
+  return recovery.label || words.retryPayment;
 }
 
 export function getAccountPaymentRecoveryAction(
@@ -74,27 +74,16 @@ export function getAccountPaymentReturnNotice(
   }
 
   const normalizedResult = normalize(result);
+  const words = accountCopy().recovery;
   if (normalizedResult === "cancelled") {
-    return {
-      tone: "warning",
-      title: "Payment was cancelled",
-      message: "Your order is still saved. You can retry payment from this page.",
-    };
+    return { tone: "warning", title: words.cancelledTitle, message: words.cancelledText };
   }
 
   if (normalizedResult === "failed") {
-    return {
-      tone: "warning",
-      title: "Payment did not complete",
-      message: "The gateway reported a failed payment. You can retry when ready.",
-    };
+    return { tone: "warning", title: words.failedTitle, message: words.failedText };
   }
 
-  return {
-    tone: "info",
-    title: "Payment submitted",
-    message: "We are checking the gateway confirmation. This page will show the latest payment status.",
-  };
+  return { tone: "info", title: words.submittedTitle, message: words.submittedText };
 }
 
 export function normalizeHostedGatewayUrl(url: string | null | undefined): string | null {

@@ -156,12 +156,15 @@ export function SettingsField({
   label,
   help,
   error,
+  optional,
   children,
 }: {
   id: string;
   label: ReactNode;
   help?: ReactNode;
   error?: ReactNode;
+  /** Adds "(optional)" after the label. */
+  optional?: boolean;
   children: ReactNode;
 }) {
   // Inline errors appear once the merchant leaves the field (or presses Save),
@@ -191,6 +194,7 @@ export function SettingsField({
       id={id}
       label={label}
       help={help}
+      optional={optional}
       error={shown}
       noteId={`${id}-note`}
       announceError

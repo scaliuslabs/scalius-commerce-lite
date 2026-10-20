@@ -7,7 +7,7 @@ import Layout from "@/layouts/Layout.astro";
 import AccountShell from "@/components/account/AccountShell.astro";
 import { getLayoutData } from "@/lib/api";
 import {
-  CONVERSATION_COPY as copy,
+  conversationCopy,
   CONVERSATION_LIMITS,
   conversationStatusMessage,
   newClientMessageKey,
@@ -18,6 +18,7 @@ import {
 import { readInbox } from "@/lib/account-inbox-server";
 import { readAccountSummaryForRequest } from "@/lib/account-server";
 import { accountUi as ui } from "@/lib/account-ui";
+import { accountCopy } from "@/lib/account-copy";
 import { PRIVATE_NO_STORE_CACHE_CONTROL } from "@/lib/cache-policy";
 
 const cursor = readInboxCursor(Astro.url.searchParams.get("cursor"));
@@ -26,6 +27,8 @@ const [layoutData, inbox, summary] = await Promise.all([
   readInbox(Astro.request, cursor),
   readAccountSummaryForRequest(Astro.request),
 ]);
+// The store's language (the layout read set it).
+const copy = conversationCopy();
 const flag = readConversationStatusFlag(Astro.url);
 const status = flag ? conversationStatusMessage(flag) : null;
 const startFailed = Boolean(flag && status?.tone === "error");
@@ -88,11 +91,11 @@ const shellState = inbox.ok ? "ok" : inbox.reason === "signed_out" ? "signed_out
           </div>
         </details>
 
-          <ul data-buyer-inbox-live={!cursor ? true : undefined} hidden={items.length === 0} class="space-y-3" aria-label="Conversations" set:html={renderInboxItems(items)} />
+          <ul data-buyer-inbox-live={!cursor ? true : undefined} hidden={items.length === 0} class="space-y-3" aria-label={copy.conversationsLabel} set:html={renderInboxItems(items)} />
           <div hidden={items.length > 0} data-buyer-inbox-empty class={ui.empty}>
-            <h2 class={ui.emptyTitle}>No messages yet</h2>
+            <h2 class={ui.emptyTitle}>{copy.noMessages}</h2>
             <p class={ui.emptyBody}>{copy.inboxEmpty}</p>
-            <a href="/account" data-astro-prefetch="false" class={`${ui.secondaryButton} mt-6`}>Go to your orders</a>
+            <a href="/account" data-astro-prefetch="false" class={`${ui.secondaryButton} mt-6`}>{accountCopy().shell.goToOrders}</a>
           </div>
           <div class="text-center">
             <a hidden={!olderHref} data-buyer-inbox-older href={olderHref ?? "/account/inbox"} data-astro-prefetch="false" class="inline-flex min-h-11 items-center rounded-lg border border-border px-6 text-sm font-medium text-foreground hover:bg-muted">{copy.olderConversations}</a>

@@ -15,7 +15,7 @@ import {
   type GiftCardApiResult,
 } from "@/lib/api/gift-cards";
 import {
-  GIFT_CARD_PAGE_COPY as copy,
+  giftCardPageCopy,
   accountGiftCardStatus,
   giftCardExpiryText,
   giftCardMoney,
@@ -31,7 +31,7 @@ import {
   readGiftCardFormFields,
 } from "@/lib/account-gift-cards";
 import { formatAccountDate } from "@/lib/account-format";
-import { CONVERSATION_COPY } from "@/lib/account-inbox";
+import { conversationCopy } from "@/lib/account-inbox";
 import { PRIVATE_NO_STORE_CACHE_CONTROL } from "@/lib/cache-policy";
 import { readAccountSummaryForRequest } from "@/lib/account-server";
 import { accountUi as ui } from "@/lib/account-ui";
@@ -49,7 +49,8 @@ let revealError: { giftCardId: string; text: string } | null = null;
 let actionResult: GiftCardApiResult<unknown> | null = null;
 
 if (isPost) {
-  const fields = await readGiftCardFormFields(Astro.request);
+  // The store's language first: the answers below are written in it (the page's later read reuses this one).
+  const [fields] = await Promise.all([readGiftCardFormFields(Astro.request), getLayoutData()]);
   if (fields.intent === "reveal" && fields.giftCardId) {
     const result = await revealAccountGiftCardCode(fields.giftCardId, Astro.request);
     actionResult = result;
@@ -59,7 +60,7 @@ if (isPost) {
     const result = await saveAccountGiftCard(fields.code ?? null, Astro.request);
     actionResult = result;
     saveMessage = result.ok
-      ? { tone: "status", text: copy.saved.replace("{card}", maskedGiftCard(result.data.last4)) }
+      ? { tone: "status", text: giftCardPageCopy().saved.replace("{card}", maskedGiftCard(result.data.last4)) }
       : { tone: "error", text: giftCardSaveFailureText(result.reason) };
   }
 }
@@ -74,6 +75,8 @@ const signedOut = !cards.ok && cards.reason === "signed_out";
 if (!cards.ok && !signedOut) Astro.response.status = 503;
 else if (actionResult && !actionResult.ok) Astro.response.status = giftCardPageStatus(actionResult);
 const list: AccountGiftCard[] = cards.ok ? cards.data : [];
+const copy = giftCardPageCopy();
+const shellCopy = conversationCopy();
 const shellState = cards.ok ? "ok" : signedOut ? "signed_out" : "unavailable";
 
 const field =
@@ -88,8 +91,8 @@ const secondaryButton = `${ui.secondaryButton} shrink-0`;
     summary={summary}
     state={shellState}
     title={copy.accountTitle}
-    signedOut={{ title: copy.signInTitle, body: copy.signInBody, action: CONVERSATION_COPY.signIn }}
-    unavailable={{ text: CONVERSATION_COPY.unavailable, retryHref: "/account/gift-cards", retryText: CONVERSATION_COPY.retry }}
+    signedOut={{ title: copy.signInTitle, body: copy.signInBody, action: shellCopy.signIn }}
+    unavailable={{ text: shellCopy.unavailable, retryHref: "/account/gift-cards", retryText: shellCopy.retry }}
   >
     {cards.ok && (
       <div class="space-y-6">

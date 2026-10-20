@@ -22,7 +22,7 @@ import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { htmlToPlainText } from "@scalius/shared/html-sanitize";
 import RichTextStyles from "@/components/RichTextStyles.astro";
 import { catalogCopy } from "@/lib/catalog-copy";
-import { pageLanguage } from "@/lib/store-time-zone";
+import { formatCount, pageLanguage } from "@/lib/store-time-zone";
 import {
   countActiveProductListFilters,
   isIndexableProductListView,
@@ -72,8 +72,10 @@ const currentFilters = queryState.currentFilters;
 const categories = collection.categories ?? [];
 const collectionDescription = collection.description ?? null;
 const collectionContent = collection.content ?? null;
+// The store's words, in its language (the layout read set it).
+const copy = catalogCopy(pageLanguage());
 const title = `${collection.metaTitle || collection.name}${
-  pagination.page > 1 ? ` – Page ${pagination.page}` : ""
+  pagination.page > 1 ? copy.search.page(formatCount(pagination.page)) : ""
 }`;
 const plainDescription = htmlToPlainText(collection.description);
 const description =
@@ -196,8 +198,8 @@ await resolveRequestTheme(Astro, layoutData, resourceBindingContext(collection, 
       queryState,
       pathname: collectionPath,
       resetPath: collectionPath,
-      searchLabel: "Search this collection",
-      newestLabel: categories.length > 0 ? catalogCopy(pageLanguage()).sort.latest : catalogCopy(pageLanguage()).sort.featured,
+      searchLabel: copy.listing.searchCollection,
+      newestLabel: categories.length > 0 ? copy.sort.latest : copy.sort.featured,
       countEndpoint: collectionPath,
       currencySymbol,
       currencyCode,
@@ -205,16 +207,14 @@ await resolveRequestTheme(Astro, layoutData, resourceBindingContext(collection, 
       subListings: catalogCategoryLinks(categories),
       listingTemplate: collection.listingTemplate ?? null,
     }}
-    content={!hasListingQuery && collectionContent ? { html: collectionContent, label: `${collection.name} guide` } : null}
+    content={!hasListingQuery && collectionContent ? { html: collectionContent, label: copy.listing.guide(collection.name) } : null}
   >
     <CatalogEmptyState
       slot="empty"
-      title={activeFilterCount > 0 ? "No matching products" : "No products yet"}
-      description={activeFilterCount > 0
-        ? "Try fewer filters or a different search."
-        : "Explore the rest of the catalog."}
+      title={activeFilterCount > 0 ? copy.search.noMatching : copy.listing.emptyTitle}
+      description={activeFilterCount > 0 ? copy.listing.emptyFiltered : copy.listing.emptyDescription}
       actionHref={activeFilterCount > 0 ? collectionPath : "/search"}
-      actionLabel={activeFilterCount > 0 ? "Clear filters" : "Browse products"}
+      actionLabel={activeFilterCount > 0 ? copy.listing.clearFilters : copy.listing.browseProducts}
     />
   </CatalogListingPage>
 </Layout>

@@ -8,7 +8,12 @@ import Layout from "@/layouts/Layout.astro";
 import AccountShell from "@/components/account/AccountShell.astro";
 import StoreContact from "@/components/StoreContact.astro";
 import OrderConversationPanel from "@/components/conversation/OrderConversationPanel.astro";
-import { getLayoutData } from "@/lib/api";
+import { getActiveCheckoutLanguage, getLayoutData } from "@/lib/api";
+import { accountCopy } from "@/lib/account-copy";
+import { serializeJsonForInlineScript } from "@/lib/safe-json";
+import { checkoutLanguageBaseCode, getCheckoutLanguagePreset, resolveCheckoutLanguageData } from "@scalius/shared/checkout-language";
+import { storefrontLanguage } from "@/lib/storefront-copy";
+import { pageLanguage } from "@/lib/store-time-zone";
 import { sessionCookieOf } from "@/lib/account-inbox-server";
 import { readAccountSummaryForRequest } from "@/lib/account-server";
 import { accountUi as ui } from "@/lib/account-ui";
@@ -18,10 +23,19 @@ export const prerender = false;
 
 const orderId = Astro.params.id ?? "";
 const signedIn = Boolean(sessionCookieOf(Astro.request));
-const [layoutData, summary] = await Promise.all([
+const [layoutData, summary, checkoutLanguage] = await Promise.all([
   getLayoutData(),
   signedIn ? readAccountSummaryForRequest(Astro.request) : Promise.resolve(null),
+  signedIn ? getActiveCheckoutLanguage().catch(() => null) : Promise.resolve(null),
 ]);
+// The store's language: the page's words, and the checkout language the
+// order renders with in the browser (status, delivery, payment wording).
+const words = accountCopy();
+const orderWords = words.order;
+// The merchant's own checkout wording when it is the page's language, else that language's preset.
+const checkoutCopy = checkoutLanguage?.languageData && checkoutLanguageBaseCode(checkoutLanguage.code) === storefrontLanguage(pageLanguage())
+  ? resolveCheckoutLanguageData(checkoutLanguage.code, checkoutLanguage.languageData)
+  : getCheckoutLanguagePreset(pageLanguage());
 Astro.response.headers.set("Cache-Control", PRIVATE_NO_STORE_CACHE_CONTROL);
 const trackHref = `/track-order?${new URLSearchParams({ order: orderId })}`;
 const card = `${ui.card} ${ui.cardBody}`;
@@ -29,26 +43,27 @@ const heading = `${ui.cardTitle} mb-3`;
 const skeleton = "theme-skeleton block";
 ---
 
-<Layout title="Order" layoutData={layoutData}>
+<Layout title={orderWords.pageTitle} layoutData={layoutData}>
   <meta slot="head" name="robots" content="noindex,nofollow" />
   <AccountShell
     current="orders"
     summary={summary}
     state={signedIn ? "ok" : "signed_out"}
-    back={{ href: "/account", label: "Orders" }}
-    signedOut={{ title: "Sign in to see this order" }}
+    back={{ href: "/account", label: words.shell.orders }}
+    signedOut={{ title: orderWords.signInTitle }}
   >
-    <a slot="signed-out" href={trackHref} data-astro-prefetch="false" class={ui.secondaryButton}>Track this order instead</a>
+    <a slot="signed-out" href={trackHref} data-astro-prefetch="false" class={ui.secondaryButton}>{orderWords.trackInstead}</a>
 
     <div data-order-detail-page data-order-id={orderId}>
+      {signedIn && <script type="application/json" id="orderCheckoutCopy" set:html={serializeJsonForInlineScript(checkoutCopy)}></script>}
       <noscript>
         <style>#orderLoading { display: none; }</style>
         <div class={ui.empty}>
-          <p class={ui.emptyBody}>This order page needs JavaScript. You can still follow the order without it.</p>
-          <a href={trackHref} class={`${ui.secondaryButton} mt-6`}>Track this order</a>
+          <p class={ui.emptyBody}>{orderWords.noScript}</p>
+          <a href={trackHref} class={`${ui.secondaryButton} mt-6`}>{orderWords.trackThis}</a>
         </div>
       </noscript>
-      <div id="orderLoading" aria-busy="true" aria-label="Loading your order">
+      <div id="orderLoading" aria-busy="true" aria-label={orderWords.loading}>
         <span class={`${skeleton} h-9 w-56`}></span>
         <span class={`${skeleton} mt-2 h-4 w-40`}></span>
         <div class="mt-6 grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:gap-6">
@@ -59,10 +74,10 @@ const skeleton = "theme-skeleton block";
 
       <div id="orderUnauthenticated" class="hidden">
         <div class="mx-auto max-w-md py-12 text-center">
-          <h1 class="mb-6 text-2xl font-semibold text-foreground">Sign in to see this order</h1>
+          <h1 class="mb-6 text-2xl font-semibold text-foreground">{orderWords.signInTitle}</h1>
           <div class="flex flex-col justify-center gap-3 sm:flex-row">
-            <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-auth-modal'))" class={ui.primaryButton}>Sign in</button>
-            <a href={trackHref} data-astro-prefetch="false" class={ui.secondaryButton}>Track this order instead</a>
+            <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-auth-modal'))" class={ui.primaryButton}>{words.shell.signIn}</button>
+            <a href={trackHref} data-astro-prefetch="false" class={ui.secondaryButton}>{orderWords.trackInstead}</a>
           </div>
         </div>
       </div>
@@ -72,8 +87,8 @@ const skeleton = "theme-skeleton block";
           <h1 id="orderErrorTitle" class="mb-2 text-2xl font-semibold text-foreground"></h1>
           <p id="orderErrorMessage" class="mb-6 text-muted-foreground"></p>
           <div class="flex flex-col justify-center gap-3 sm:flex-row">
-            <button type="button" id="orderRetry" class={ui.primaryButton}>Retry</button>
-            <a href="/account" data-astro-prefetch="false" class={ui.secondaryButton}>Back to your orders</a>
+            <button type="button" id="orderRetry" class={ui.primaryButton}>{words.shell.retry}</button>
+            <a href="/account" data-astro-prefetch="false" class={ui.secondaryButton}>{orderWords.backToOrders}</a>
           </div>
         </div>
       </div>
@@ -93,12 +108,12 @@ const skeleton = "theme-skeleton block";
         <div class="grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:gap-6">
           <div class="grid gap-4 lg:gap-6">
             <section class={card} aria-labelledby="statusHeading">
-              <h2 id="statusHeading" class={heading}>Status</h2>
+              <h2 id="statusHeading" class={heading}>{orderWords.status}</h2>
               <div id="orderProgress"></div>
               <p id="orderExpectedDelivery" class="mt-3 hidden text-sm text-muted-foreground"></p>
               <details class="group mt-4 border-t border-border pt-2" open>
                 <summary class="flex min-h-11 cursor-pointer list-none items-center justify-between text-sm font-semibold text-foreground">
-                  Updates
+                  {orderWords.updates}
                   <svg aria-hidden="true" class="h-4 w-4 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                 </summary>
                 <ol id="orderTimeline" class="mt-2 space-y-3 border-s border-border ps-4"></ol>
@@ -107,8 +122,8 @@ const skeleton = "theme-skeleton block";
 
             <section class={card} aria-labelledby="summaryHeading">
               <div class="mb-3 flex items-center justify-between gap-3">
-                <h2 id="summaryHeading" class={ui.cardTitle}>Items</h2>
-                <button type="button" id="orderBuyAgain" class={`${ui.secondaryButton} min-h-10`}>Buy again</button>
+                <h2 id="summaryHeading" class={ui.cardTitle}>{orderWords.items}</h2>
+                <button type="button" id="orderBuyAgain" class={`${ui.secondaryButton} min-h-10`}>{words.orders.buyAgain}</button>
               </div>
               <p id="orderBuyAgainMessage" role="status" class="mb-3 text-sm text-muted-foreground empty:hidden"></p>
               <ul id="orderItems" class="divide-y divide-border"></ul>
@@ -118,21 +133,21 @@ const skeleton = "theme-skeleton block";
 
           <div class="grid gap-4 lg:gap-6">
             <section class={card} aria-labelledby="deliveryHeading">
-              <h2 id="deliveryHeading" class={heading}>Shipping address</h2>
+              <h2 id="deliveryHeading" class={heading}>{orderWords.shippingAddress}</h2>
               <div id="orderAddress" class="space-y-0.5 break-words text-sm text-muted-foreground"></div>
               <div id="orderNote" class="mt-3 hidden border-t border-border pt-3 text-sm"></div>
               <div id="orderShipments" class="mt-4 space-y-3 empty:hidden"></div>
             </section>
 
             <section class={card} aria-labelledby="paymentHeading">
-              <h2 id="paymentHeading" class={heading}>Payment</h2>
+              <h2 id="paymentHeading" class={heading}>{orderWords.payment}</h2>
               <div id="orderPayment" class="space-y-1 text-sm"></div>
               <div id="orderPaymentRecovery" class="mt-4 hidden space-y-3 rounded-lg border border-border p-4">
                 <div>
                   <h3 id="orderPaymentRecoveryTitle" class="text-sm font-semibold text-foreground"></h3>
                   <p id="orderPaymentRecoveryDescription" class="mt-1 text-sm text-muted-foreground"></p>
                 </div>
-                <div id="orderPaymentRecoveryMethods" class="grid gap-2" role="radiogroup" aria-label="Payment method"></div>
+                <div id="orderPaymentRecoveryMethods" class="grid gap-2" role="radiogroup" aria-label={orderWords.paymentMethod}></div>
                 <div id="accountStripeSection" class="hidden space-y-2">
                   <div id="accountStripeCardElement" class="rounded-lg border border-input bg-background p-3"></div>
                   <p id="accountStripeError" class="hidden text-sm text-destructive"></p>
@@ -143,22 +158,22 @@ const skeleton = "theme-skeleton block";
             </section>
 
             <section class={card} aria-labelledby="helpHeading">
-              <h2 id="helpHeading" class={ui.cardTitle}>Order help</h2>
+              <h2 id="helpHeading" class={ui.cardTitle}>{orderWords.help}</h2>
               <p id="orderSupportIntro" class="mt-1 text-sm text-muted-foreground"></p>
               <div id="orderSupportActions" class="mt-4 grid gap-2 empty:hidden"></div>
               <div id="orderSupportRequests" class="mt-4 space-y-3 empty:hidden"></div>
               <div id="orderSupportForm" class="mt-4 hidden rounded-lg border border-border p-4">
                 <h3 id="orderSupportFormTitle" class="text-sm font-semibold text-foreground"></h3>
                 <fieldset class="mt-3">
-                  <legend class="text-sm font-medium text-foreground">Reason</legend>
+                  <legend class="text-sm font-medium text-foreground">{orderWords.reason}</legend>
                   <div id="orderSupportReasons" class="mt-1"></div>
                 </fieldset>
-                <label class="mt-3 block text-sm font-medium text-foreground" for="orderSupportMessage">Note (required for Other)</label>
+                <label class="mt-3 block text-sm font-medium text-foreground" for="orderSupportMessage">{orderWords.note}</label>
                 <textarea id="orderSupportMessage" class={`${ui.field} mt-1.5 min-h-20`} maxlength="1000"></textarea>
                 <p id="orderSupportFormError" role="alert" class="mt-2 hidden text-sm text-destructive"></p>
                 <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
-                  <button type="button" id="orderSupportCancel" class={ui.secondaryButton}>Cancel</button>
-                  <button type="button" id="orderSupportSubmit" class={ui.primaryButton}>Submit request</button>
+                  <button type="button" id="orderSupportCancel" class={ui.secondaryButton}>{orderWords.cancel}</button>
+                  <button type="button" id="orderSupportSubmit" class={ui.primaryButton}>{orderWords.submit}</button>
                 </div>
               </div>
               <StoreContact layoutData={layoutData} class="mt-4 text-sm text-muted-foreground" />

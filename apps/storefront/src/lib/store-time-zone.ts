@@ -7,6 +7,7 @@
 import { DEFAULT_STORE_TIME_ZONE, isValidTimeZone } from "@scalius/shared/commerce-time";
 import {
   DEFAULT_STORE_REGION,
+  baseLanguage,
   dateLocale,
   formatDateTime,
   formatNumber,
@@ -71,5 +72,9 @@ export function formatStoreDateTime(
   options: Intl.DateTimeFormatOptions,
   timeZone: string = storeTimeZone(),
 ): string {
-  return formatDateTime(value, dateLocale(language, storeRegion()), { ...options, timeZone });
+  // Bangla writes times on the 24-hour clock ("১৫:৪২"), never with a Latin "PM".
+  const clock = baseLanguage(language) === "bn" && (options.timeStyle || options.hour) && options.hourCycle === undefined && options.hour12 === undefined
+    ? { hourCycle: "h23" as const }
+    : {};
+  return formatDateTime(value, dateLocale(language, storeRegion()), { ...options, ...clock, timeZone });
 }

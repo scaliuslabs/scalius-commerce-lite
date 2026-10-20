@@ -14,6 +14,7 @@ import {
   storeShapeFromFacts,
   type StorefrontTemplateId,
 } from "@scalius/shared/storefront-theme";
+import { englishTexts, latinNumbers } from "./bangla-text";
 
 const root = fileURLToPath(new URL("../../..", import.meta.url));
 const VIRTUAL_MODULES: Record<string, string> = {
@@ -41,6 +42,14 @@ const PAGE_MODULES = {
   categories: "categories/index",
   search: "search/index",
   "search-empty": "search/index",
+  // The customer account follows the store's language too (signed in: the session cookie).
+  "account-orders": "account",
+  "account-order": "account/orders/[id]",
+  "account-profile": "account/profile",
+  "account-inbox": "account/inbox/index",
+  "account-thread": "account/inbox/[id]",
+  "account-downloads": "account/downloads",
+  "account-gift-cards": "account/gift-cards",
 } as const;
 type PageKind = keyof typeof PAGE_MODULES;
 
@@ -136,6 +145,73 @@ const SHIPPING_METHODS = [
   { id: "outside", name: "ঢাকার বাইরে", fee: 120, freeOver: null, sortOrder: 1, isActive: true, kind: "delivery", rateSource: "flat", countries: [{ code: "BD", entire: false }] },
 ];
 const envelope = (data: unknown) => JSON.stringify({ success: true, data });
+const THREAD_ID = "cnv_thread12345678";
+const SECONDS = Date.parse("2026-09-12T08:00:00.000Z") / 1000;
+const ACCOUNT_ORDER = {
+  id: "ord_1", orderNumber: 1042, invoiceNumber: null, status: "shipped", statusLabel: "On its way", openSupportRequestType: "return",
+  currencyCode: "BDT", totalAmount: 3560, paidAmount: 0, balanceDue: 3560, shippingCharge: 60, shippingMethodId: "dhaka",
+  shippingMethodName: "ঢাকা", shippingMethodDescription: null, shippingMethodBaseAmountMinor: 6000, shippingFeeWaived: false,
+  discountAmount: 0, paymentStatus: "unpaid", paymentMethod: "cod", fulfillmentStatus: "unfulfilled", requiresShipping: true,
+  shippingMethodKind: "delivery", notes: null, createdAt: "2026-09-12T08:00:00.000Z",
+  latestShipment: {
+    id: "shp_1", providerType: "courier", providerName: "পাঠাও", status: "in_transit", rawStatus: null, trackingId: "PX12345",
+    trackingUrl: null, courierName: null, statusLabel: "On its way", lastChecked: null, updatedAt: null, createdAt: "2026-09-12T08:00:00.000Z",
+  },
+  items: [{ productId: "prod_1", variantId: "sku_m", quantity: 2, price: 1750, productName: "সুতির পাঞ্জাবি", productSlug: "panjabi", productImage: IMAGE, variantLabel: "মাঝারি" }],
+};
+const CUSTOMER = { id: "cus_1", name: "রহিম উদ্দিন", email: null, phone: "01712345678" };
+const ACCOUNT_ANSWERS: Record<string, unknown> = {
+  "/customer-auth/account-summary": { unreadInbox: 2, reviewsToWrite: 1, reviewsWritten: 0, downloads: 1, giftCards: 1, activeWarranties: 0 },
+  "/customer-auth/orders": {
+    orders: [ACCOUNT_ORDER, { ...ACCOUNT_ORDER, id: "ord_2", orderNumber: 1041, status: "delivered", latestShipment: null, items: ACCOUNT_ORDER.items.concat(ACCOUNT_ORDER.items, ACCOUNT_ORDER.items, ACCOUNT_ORDER.items, ACCOUNT_ORDER.items) }],
+    customer: CUSTOMER, summary: { totalOrders: 12 }, pagination: { hasMore: true, nextCursor: "c2" }, phoneVerification: null,
+  },
+  "/customer-auth/me": { authenticated: true, customer: CUSTOMER },
+  "/customer-auth/marketing": { channels: [{ channel: "email", status: "not_subscribed", available: false }, { channel: "sms", status: "subscribed", available: true }] },
+  "/customer-auth/addresses": { addresses: [{
+    id: "adr_1", countryCode: "BD", line1: "বাড়ি ১২, রোড ৫", line2: null, city: "dhaka", zone: "mirpur", area: null, cityName: "ঢাকা",
+    zoneName: "মিরপুর", areaName: null, dependentLocality: null, locality: null, adminArea: null, postalCode: null,
+    isDefault: true, isDefaultBilling: false, name: "রহিম উদ্দিন", phone: null, company: null,
+  }] },
+  "/locations/cities": [{ id: "dhaka", name: "ঢাকা" }],
+  "/locations/zones": [{ id: "mirpur", name: "মিরপুর" }],
+  "/locations/areas": [{ id: "mirpur-1", name: "মিরপুর ১" }],
+  "/customer-auth/conversations": {
+    items: [
+      { id: THREAD_ID, subjectType: "order", subject: null, orderNumber: "#1042", orderId: "ord_1", status: "pending", unread: 2, lastMessageAt: SECONDS },
+      { id: "cnv_store123456789", subjectType: "store", subject: "ডেলিভারির সময়", orderNumber: null, orderId: null, status: "open", unread: 0, lastMessageAt: SECONDS - 86_400 },
+    ],
+    nextCursor: "n2", canStartStoreConversation: true,
+  },
+  [`/customer-auth/conversations/${THREAD_ID}`]: { conversation: {
+    id: THREAD_ID, subjectType: "order", subject: null, orderNumber: "#1042", orderId: "ord_1", status: "closed", lastSeq: 4, readSeq: 1, hasMore: true,
+    messages: [
+      { id: "msg_1", seq: 1, from: "buyer", kind: "message", body: "আমার অর্ডার কবে আসবে?", createdAt: SECONDS, attachments: [], eventKind: null, eventData: null },
+      { id: "msg_2", seq: 2, from: "system", kind: "event", body: null, createdAt: SECONDS + 60, attachments: [], eventKind: "support_request_status", eventData: { type: "return", toStatus: "under_review" } },
+      { id: "msg_3", seq: 3, from: "store", kind: "message", body: "আগামীকাল পৌঁছাবে।", createdAt: SECONDS + 120, attachments: [{ id: "att_image1234", width: 100, height: 100 }], eventKind: null, eventData: null },
+      { id: "msg_4", seq: 4, from: "store", kind: "message", body: "এটি দেখুন", createdAt: SECONDS + 180, attachments: [], eventKind: "product_reply", eventData: null,
+        products: [{ title: "লিনেন পাঞ্জাবি", variantLabel: null, pdpUrl: "/products/linen", imageUrl: IMAGE, price: { amount: 2200, currency: "BDT" }, status: "sold_out" }] },
+    ],
+  } },
+  "/customer-auth/downloads": { lines: [{
+    orderId: "ord_1", orderNumber: 1042, orderItemId: "item_1", productName: "নকশার বই", variantLabel: null, deliveredAt: "2026-09-12T08:00:00.000Z",
+    files: [
+      { entitlementId: "ent_1", displayName: "নকশার ফাইল", downloadCount: 1, downloadLimit: 5, expiresAt: "2099-01-01T00:00:00.000Z", revoked: false, available: true, sizeBytes: 1_572_864 },
+      { entitlementId: "ent_2", displayName: "পুরোনো নকশার ফাইল", downloadCount: 5, downloadLimit: 5, expiresAt: null, revoked: false, available: true, sizeBytes: 2048 },
+    ],
+    licenceKeys: [{ keyId: "key_1", last4: "7K2Q" }],
+  }] },
+  "/customer-auth/gift-cards": { giftCards: [{
+    id: "gc_1", last4: "7K2Q", currencyCode: "BDT", initialAmount: 1000, initialAmountMinor: 100000, balance: 500, balanceMinor: 50000,
+    expiresAt: null, expired: false, createdAt: "2026-09-12T08:00:00.000Z", status: "active", source: "purchase",
+    transactions: [
+      { id: "gct_1", kind: "issue", amount: 1000, amountMinor: 100000, balanceAfter: 1000, balanceAfterMinor: 100000, orderId: null, orderNumber: null, createdAt: "2026-09-12T08:00:00.000Z" },
+      { id: "gct_2", kind: "redeem", amount: -500, amountMinor: -50000, balanceAfter: 500, balanceAfterMinor: 50000, orderId: "ord_1", orderNumber: "1042", createdAt: "2026-09-13T08:00:00.000Z" },
+    ],
+  }] },
+  "/customer-auth/orders/ord_1/conversation": { conversation: null },
+  "/checkout-languages/active": { language: { code: "bn", languageData: {} } },
+};
 const NO_SECTION_DATA = { lists: [], media: [], brands: [], promotions: [], categories: [], collections: [], homeProduct: null };
 
 async function render(kind: PageKind, template: StorefrontTemplateId) {
@@ -163,6 +239,8 @@ async function render(kind: PageKind, template: StorefrontTemplateId) {
     // An empty search suggests the store's popular products and its categories.
     if (path === "/api/v1/products/recommendations") return { reason: "popular", products: LISTING.products.slice(0, 4) };
     if (path === "/api/v1/categories") return [CATEGORY];
+    const accountPath = path.replace(/^\/api\/v1/, "");
+    if (accountPath in ACCOUNT_ANSWERS) return ACCOUNT_ANSWERS[accountPath];
     throw new Error(`Unexpected render read: ${path}`);
   };
   vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
@@ -179,11 +257,21 @@ async function render(kind: PageKind, template: StorefrontTemplateId) {
     categories: "/categories",
     search: "/search?q=পাঞ্জাবি",
     "search-empty": "/search?q=শাড়ি",
+    // Saved notices show: a verified phone, a saved address, a sent message.
+    "account-orders": "/account?phone=verified",
+    "account-order": "/account/orders/ord_1",
+    "account-profile": "/account/profile?saved=address",
+    "account-inbox": "/account/inbox?conversation=sent",
+    "account-thread": `/account/inbox/${THREAD_ID}`,
+    "account-downloads": "/account/downloads?download=limit",
+    "account-gift-cards": "/account/gift-cards",
   };
   const url = new URL(paths[kind], "https://shop.test");
+  const request = new Request(url, { headers: { Cookie: "cs_tok=session-token" } });
+  const params = { slug: "panjabi", id: kind === "account-order" ? "ord_1" : THREAD_ID };
   const response = await runtimeModule.requestRuntime.run(
     { PUBLIC_API_URL: API, PUBLIC_API_BASE_URL: "https://api.shop.test", STOREFRONT_URL: "https://shop.test", DASHBOARD_URL: "https://admin.shop.test", inflightReads: new Map() },
-    () => container.renderToResponse(pages[kind], { request: new Request(url), locals: {}, params: { slug: "panjabi" } }),
+    () => container.renderToResponse(pages[kind], { request, locals: {}, params }),
   );
   const html = await response.text();
   expect(response.status, html.slice(0, 300)).toBe(200);
@@ -192,53 +280,6 @@ async function render(kind: PageKind, template: StorefrontTemplateId) {
   return document;
 }
 
-/** What a buyer reads or hears: the title, visible text, and the labels assistive technology reads. */
-function buyerText(document: Document): string[] {
-  const body = document.body.cloneNode(true) as HTMLElement;
-  for (const hidden of body.querySelectorAll("script, style, template, noscript, [hidden]")) hidden.remove();
-  const labels = [...body.querySelectorAll("[aria-label], [placeholder], [title], img[alt]")].flatMap((element) =>
-    ["aria-label", "placeholder", "title", "alt"].map((name) => element.getAttribute(name) ?? ""));
-  // Each text node on its own: elements' text runs together in textContent.
-  const texts: string[] = [];
-  const walk = (node: Node) => {
-    if (node.nodeType === 3) texts.push(node.textContent ?? "");
-    for (const child of node.childNodes) walk(child);
-  };
-  walk(body);
-  return [document.title, ...texts, ...labels];
-}
-
-/**
- * English words a Bangla page must not show. Merchant data in these fixtures
- * is Bangla, so any Latin-letter word is the store's own interface talking
- * English: the known interface words below are named in failures, and every
- * other Latin word is reported too, so a new missed string fails the same way.
- * `ALLOWED` holds the Latin words a Bangla page may truly carry.
- */
-const KNOWN_ENGLISH = new Set([
-  "Home", "Breadcrumb", "All", "categories", "Search", "results", "products", "Delivery", "delivery", "Cash", "Free",
-  "Pickup", "Returns", "Sort", "Filter", "Filters", "Price", "Add", "cart", "Buy", "now", "Quantity", "Reviews",
-  "Description", "Details", "Previous", "Next", "Page", "Show", "more", "less", "Clear", "Apply", "Remove", "Browse",
-  "Close", "Zoom", "Latest", "Featured", "Availability", "Top", "Similar",
-]);
-const ALLOWED = new Set<string>([]);
-const LATIN_WORD = /(?<![\p{L}\p{N}])([A-Za-z]{2,})(?![\p{L}\p{N}])/gu;
-
-/** Each English text with its words: `"Sort by:" (known: Sort)`. */
-function englishTexts(document: Document): string[] {
-  const found = buyerText(document).flatMap((text) => {
-    const words = [...text.matchAll(LATIN_WORD)].map((match) => match[1]!).filter((word) => !ALLOWED.has(word));
-    if (words.length === 0) return [];
-    const known = words.filter((word) => KNOWN_ENGLISH.has(word));
-    return [`"${text.trim().replace(/\s+/g, " ").slice(0, 80)}"${known.length > 0 ? ` (known: ${known.join(", ")})` : ""}`];
-  });
-  return [...new Set(found)];
-}
-
-/** Latin digits beside a Bangla currency sign or count word ("৳1,750", "12 টি"): numbers not in Bangla digits. */
-function latinNumbers(document: Document): string[] {
-  return [...new Set(buyerText(document).flatMap((text) => [...text.matchAll(/৳\s?[0-9][0-9,.]*|[0-9]+\s?টি/gu)].map((match) => match[0])))];
-}
 
 describe("a Bangla store's pages speak Bangla", () => {
   it("finds English words and Latin-digit prices when a page has them", () => {
@@ -261,6 +302,12 @@ describe("a Bangla store's pages speak Bangla", () => {
       }
       if (kind === "search-empty") expect(document.querySelector("[data-catalog-empty-state]"), template).not.toBeNull();
       if (kind === "product") expect(document.querySelector("[data-product-summary]"), template).not.toBeNull();
+      if (kind.startsWith("account-")) expect(document.querySelector("[data-account-shell][data-account-state=ok]"), template).not.toBeNull();
+      if (kind === "account-orders") expect(document.querySelectorAll("a[data-buy-again]"), template).toHaveLength(2);
+      if (kind === "account-profile") expect(document.querySelector("form[data-address-form]"), template).not.toBeNull();
+      if (kind === "account-thread") expect(document.querySelectorAll("#conversationMessages > li"), template).not.toHaveLength(0);
+      if (kind === "account-downloads") expect(document.querySelector("form[action='/account/licence-key']"), template).not.toBeNull();
+      if (kind === "account-gift-cards") expect(document.querySelector("details"), template).not.toBeNull();
       const english = englishTexts(document);
       const latin = latinNumbers(document);
       if (english.length > 0 || latin.length > 0) findings[template] = { english, latin };

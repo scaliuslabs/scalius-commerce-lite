@@ -37,7 +37,7 @@ import { permissionMessages } from "~/i18n/settings-users";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { aiAccessQuery } from "~/lib/api-query-options/settings-screens";
 
-import { AccessFields, defaultSelection } from "./AccessFields";
+import { AccessFields, defaultSelection, selectionProblem } from "./AccessFields";
 import { AgentSetup } from "./AgentSetup";
 import {
   createAgentToken,
@@ -284,7 +284,7 @@ function CreateKeyForm({ onCreated }: { onCreated: (key: string) => void }) {
   useSaveBar({
     // Any change counts (the name or the access); changing it back clears it.
     dirty: name !== "" || JSON.stringify(selection) !== JSON.stringify(defaultSelection("pat")),
-    invalid: !name.trim(),
+    invalid: !name.trim() || selectionProblem(selection) !== null,
     // A failure is listed in the dialog's banner; the form keeps its values.
     save: async () => {
       const result = await createAgentToken({ ...selection, label: name.trim() });
@@ -308,7 +308,7 @@ function CreateKeyForm({ onCreated }: { onCreated: (key: string) => void }) {
           onChange={(event) => setName(event.target.value)}
         />
       </SettingsField>
-      <AccessFields kind="pat" value={selection} onChange={setSelection} />
+      <AccessFields kind="pat" value={selection} onChange={setSelection} allowCustom />
     </>
   );
 }

@@ -13,7 +13,7 @@
 // its httpOnly cookie on the server and never reaches the markup.
 import ConversationReplyForm from "./ConversationReplyForm.astro";
 import {
-  CONVERSATION_COPY as copy,
+  conversationCopy,
   currentReturnPath,
   isOrderId,
   readConversationStatusFlag,
@@ -36,6 +36,7 @@ interface Props {
   class?: string;
 }
 
+const copy = conversationCopy();
 const {
   orderId,
   access,
@@ -76,7 +77,7 @@ const latestHref = historyUrl.pathname + historyUrl.search + historyUrl.hash;
     <ol
       id="orderConversationMessages"
       class="mx-auto mt-4 max-w-3xl [overflow-anchor:none]"
-      aria-label="Messages"
+      aria-label={copy.messagesLabel}
       hidden={!thread || thread.messages.length === 0}
       set:html={messagesHtml}
     />

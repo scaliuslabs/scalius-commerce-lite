@@ -88,6 +88,8 @@ export interface AgentGrantSelection {
   permissions: string[];
   expiresInDays: number;
   riskCeiling?: AgentRisk;
+  /** Custom keys only: whether deletes and money actions wait for the merchant's approval (on by default). */
+  confirmPolicy?: "destructive_financial" | "none";
 }
 
 export interface CreateAgentTokenInput extends AgentGrantSelection {

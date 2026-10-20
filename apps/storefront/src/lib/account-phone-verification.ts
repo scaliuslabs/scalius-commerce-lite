@@ -11,16 +11,21 @@ import {
 } from "@/lib/api/customer-auth";
 import { formatWait } from "@/lib/customer-auth-ui";
 import { formatBdMobile } from "@scalius/shared/phone-input";
+import { accountCopy } from "@/lib/account-copy";
+import { formatPageNumber, pageLanguage } from "@/lib/store-time-zone";
 
 const field = "w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20 aria-[invalid=true]:border-destructive disabled:opacity-50";
 const linkButton = "inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline";
-const VERIFY_LABEL = "Verify phone";
-const RESEND_LABEL = "Send a new code";
-const SUBMIT_LABEL = "Verify";
-
-/** "Verify your phone number 01712-345678 to add orders you placed with it." */
+/** "Verify your phone number 01712-345678 to add orders you placed with it." (the phone keeps its Latin digits). */
 export function phoneVerificationNotice(phone: string): string {
-  return `Verify your phone number ${formatBdMobile(phone)} to add orders you placed with it.`;
+  return accountCopy().phone.notice(formatBdMobile(phone));
+}
+
+/** A wait as a clock in the page's digits: "1:05", "১:০৫". */
+function waitText(seconds: number): string {
+  const [minutes, rest] = formatWait(seconds).split(":");
+  const language = pageLanguage();
+  return `${formatPageNumber(Number(minutes), language)}:${formatPageNumber(Number(rest), language).padStart(2, formatPageNumber(0, language))}`;
 }
 
 /** Countdowns of the notice on screen; a re-render stops the old ones. */
@@ -71,6 +76,10 @@ export interface PhoneVerificationOptions {
 }
 
 function renderNotice(prompt: PhoneVerificationPrompt, options: PhoneVerificationOptions): HTMLElement {
+  const words = accountCopy().phone;
+  const VERIFY_LABEL = words.verify;
+  const RESEND_LABEL = words.resend;
+  const SUBMIT_LABEL = words.submit;
   const notice = element("section", "rounded-xl border border-border bg-card p-4");
   notice.dataset.phoneVerification = "";
   notice.append(element("p", "text-sm text-foreground", phoneVerificationNotice(prompt.phone)));
@@ -83,7 +92,7 @@ function renderNotice(prompt: PhoneVerificationPrompt, options: PhoneVerificatio
   const form = element("form", "mt-3 hidden space-y-3");
   form.method = "post";
   form.noValidate = true;
-  const label = element("label", "mb-1.5 block text-sm font-medium text-foreground", "Code");
+  const label = element("label", "mb-1.5 block text-sm font-medium text-foreground", words.code);
   label.htmlFor = codeId;
   const input = element("input", `${field} max-w-48`);
   input.id = codeId;
@@ -130,7 +139,7 @@ function renderNotice(prompt: PhoneVerificationPrompt, options: PhoneVerificatio
     resend.disabled = true;
     countdown(
       seconds,
-      (left) => { resend.textContent = `${RESEND_LABEL} in ${formatWait(left)}`; },
+      (left) => { resend.textContent = words.resendIn(waitText(left)); },
       () => { resend.disabled = false; resend.textContent = RESEND_LABEL; },
     );
   };
@@ -139,7 +148,7 @@ function renderNotice(prompt: PhoneVerificationPrompt, options: PhoneVerificatio
     if (trigger.disabled) return;
     stopWait();
     trigger.disabled = true;
-    trigger.textContent = "Sending…";
+    trigger.textContent = words.sending;
     say("");
     const result = await sendPhoneVerificationCode();
     trigger.textContent = idleLabel;
@@ -156,7 +165,7 @@ function renderNotice(prompt: PhoneVerificationPrompt, options: PhoneVerificatio
       // Too many codes: say so with the honest wait, and hold the button until it passes.
       stopWait = countdown(
         result.retryAfterSeconds,
-        (left) => say(`${result.error} Try again in ${formatWait(left)}.`, "error"),
+        (left) => say(words.tryAgainIn(result.error, waitText(left)), "error"),
         () => { trigger.disabled = false; say(""); },
       );
       return;
@@ -177,12 +186,12 @@ function renderNotice(prompt: PhoneVerificationPrompt, options: PhoneVerificatio
     const code = input.value.replace(/\s+/g, "");
     if (!code) {
       input.setAttribute("aria-invalid", "true");
-      say("Enter the code we sent.", "error");
+      say(words.enterCode, "error");
       input.focus();
       return;
     }
     submit.disabled = true;
-    submit.textContent = "Verifying…";
+    submit.textContent = words.verifying;
     say("");
     const result = await verifyPhone(code);
     if (result.success) {

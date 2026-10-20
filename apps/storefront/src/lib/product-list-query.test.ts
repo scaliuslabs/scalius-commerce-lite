@@ -403,6 +403,13 @@ describe("product list query canonicalization", () => {
     expect(productListMetaDescription("Footwear", names, 60)).toBe("Shop Footwear: Press Glass Storage Set and more.");
   });
 
+  it("describes a Bangla page's listing in Bangla", () => {
+    expect(productListMetaDescription("পাঞ্জাবি", ["সুতির পাঞ্জাবি", "লিনেন পাঞ্জাবি"], 155, "bn"))
+      .toBe("পাঞ্জাবি কিনুন: সুতির পাঞ্জাবি এবং লিনেন পাঞ্জাবি।");
+    expect(productListMetaDescription("পাঞ্জাবি", ["ক", "খ", "গ", "ঘ"], 155, "bn")).toBe("পাঞ্জাবি কিনুন: ক, খ, গ ও আরও অনেক কিছু।");
+    expect(productListMetaDescription("পাঞ্জাবি", [], 155, "bn")).toBe("পাঞ্জাবি কিনুন।");
+  });
+
   it("treats pages past the last one as missing, but never page 1 of an empty listing", () => {
     // Footwear: 10 products on one page.
     expect(isMissingProductListPage({ page: 1, totalPages: 1 })).toBe(false);

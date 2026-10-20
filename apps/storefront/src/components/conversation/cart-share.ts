@@ -1,18 +1,21 @@
 import { hydrateCartFromStorage, type VariantCartItem } from "@/store/cart";
 import { cartItemVariantLabel } from "@/lib/cart/item-options";
 import { pagePath } from "@/lib/presence-url";
-import { formatCount } from "@/lib/store-time-zone";
+import { formatCount, pageLanguage } from "@/lib/store-time-zone";
 import { formatConversationTime } from "@/lib/account-inbox";
 import { pluralCategory } from "@scalius/shared/locale-words";
 import {
-  CART_SHARE_COPY as copy, CART_SHARE_LIMIT, parseConversationCartShare, sameSharedCartLines,
+  cartShareCopy, CART_SHARE_LIMIT, parseConversationCartShare, sameSharedCartLines,
   validSharedCartLines, type ConversationCartShare, type SharedCartLine,
 } from "@/lib/conversation-cart-share";
 
 interface PreviewLine extends SharedCartLine { title: string; variantLabel: string | null; unavailable?: boolean }
 type Write = { method: "PUT"; expectedVersion: number; lines: SharedCartLine[] } | { method: "DELETE"; expectedVersion: number };
 const cleanups = new Map<HTMLElement, () => void>();
-const countWords = (value: number, one: string, many: string) => `${formatCount(value)} ${pluralCategory(value, "en") === "one" ? one : many}`;
+/** "3 products", "৩টি পণ্য": the page's digits and plural word. */
+const countWords = (value: number, forms: { one: string; other: string }) =>
+  (pluralCategory(value, pageLanguage()) === "one" ? forms.one : forms.other).replace("{count}", formatCount(value));
+const fill = (template: string, values: Record<string, string>) => template.replace(/\{(\w+)\}/g, (match, key: string) => values[key] ?? match);
 
 /** Merge personalized lines by SKU: the explicit preview contains only the quantities that will be shared. */
 export function previewCart(items: readonly VariantCartItem[]): PreviewLine[] {
@@ -28,12 +31,13 @@ export function previewCart(items: readonly VariantCartItem[]): PreviewLine[] {
 }
 
 function renderLines(list: HTMLElement, lines: readonly PreviewLine[]) {
+  const copy = cartShareCopy();
   list.replaceChildren(...lines.map((line) => {
     const item = document.createElement("li");
     item.className = "flex items-start justify-between gap-4";
     const label = document.createElement("span");
     label.className = "min-w-0 break-words [overflow-wrap:anywhere]";
-    label.textContent = line.title || "No longer available";
+    label.textContent = line.title || copy.noLongerAvailable;
     if (line.variantLabel) {
       const variant = document.createElement("span");
       variant.className = "mt-0.5 block text-xs text-muted-foreground";
@@ -42,16 +46,17 @@ function renderLines(list: HTMLElement, lines: readonly PreviewLine[]) {
     if (line.unavailable && line.title) {
       const unavailable = document.createElement("span");
       unavailable.className = "mt-0.5 block text-xs text-muted-foreground";
-      unavailable.textContent = "No longer available"; label.append(unavailable);
+      unavailable.textContent = copy.noLongerAvailable; label.append(unavailable);
     }
     const quantity = document.createElement("span");
     quantity.className = "shrink-0 text-muted-foreground";
-    quantity.textContent = `Qty ${formatCount(line.quantity)}`;
+    quantity.textContent = fill(copy.quantity, { count: formatCount(line.quantity) });
     item.append(label, quantity); return item;
   }));
 }
 
 function bind(root: HTMLElement): () => void {
+  const copy = cartShareCopy();
   const get = <T extends HTMLElement>(name: string) => root.querySelector<T>(`[data-cart-share-${name}]`)!;
   const opener = get<HTMLButtonElement>("open");
   const update = get<HTMLButtonElement>("update");
@@ -90,23 +95,23 @@ function bind(root: HTMLElement): () => void {
     update.hidden = !isActive; stop.hidden = !isActive;
     expand.disabled = !isActive;
     get("summary").textContent = share ? share.withdrawnAt !== null
-      ? `You stopped sharing your cart · ${formatConversationTime(share.withdrawnAt)}`
-      : `Shared cart · ${countWords(new Set(share.lines.map((line) => line.productId)).size, "product", "products")} · ${formatConversationTime(share.sharedAt)}` : "";
+      ? fill(copy.stopped, { time: formatConversationTime(share.withdrawnAt) })
+      : fill(copy.shared, { products: countWords(new Set(share.lines.map((line) => line.productId)).size, copy.products), time: formatConversationTime(share.sharedAt) }) : "";
     if (!isActive) { get("saved").hidden = true; expand.setAttribute("aria-expanded", "false"); }
     renderLines(get("saved-lines"), savedLines());
     for (const button of [opener, update, stop, retry]) button.disabled = busy;
     if (!preview) return;
     renderLines(get("preview"), preview);
-    const products = countWords(new Set(preview.map((line) => line.productId)).size, "product", "products");
-    const items = countWords(preview.reduce((sum, line) => sum + line.quantity, 0), "item", "items");
-    title.textContent = `${isActive ? "Update shared cart:" : "Share"} ${products} (${items})?`;
-    get("replaces").textContent = isActive ? `This replaces what you shared at ${formatConversationTime(share!.sharedAt)}.` : "";
+    const products = countWords(new Set(preview.map((line) => line.productId)).size, copy.products);
+    const items = countWords(preview.reduce((sum, line) => sum + line.quantity, 0), copy.items);
+    title.textContent = fill(isActive ? copy.confirmUpdate : copy.confirmShare, { products, items });
+    get("replaces").textContent = isActive ? fill(copy.replaces, { time: formatConversationTime(share!.sharedAt) }) : "";
     const empty = preview.length === 0;
     const invalid = preview.length > CART_SHARE_LIMIT || !validSharedCartLines(preview);
     const unchanged = isActive && sameSharedCartLines(preview, share!.lines);
     get("note").textContent = empty ? (isActive ? copy.emptyUpdate : copy.empty) : invalid ? copy.limits : unchanged ? copy.unchanged : copy.consent;
     confirm.hidden = empty && !isActive;
-    confirm.textContent = busy ? "Checking…" : empty ? "Stop sharing" : isActive ? "Update shared cart" : "Share cart";
+    confirm.textContent = busy ? copy.checking : empty ? copy.stopSharing : isActive ? copy.updateShared : copy.shareCart;
     confirm.disabled = busy || share === undefined || (!empty && (invalid || unchanged));
   };
   const close = () => {
@@ -142,11 +147,11 @@ function bind(root: HTMLElement): () => void {
     share = value; pending = null; busy = false; setRetry(null); render();
     if (focusReturn.hidden) focusReturn = active() ? update : opener;
     close();
-    status(method === "PUT" ? copy.sent : `You stopped sharing your cart · ${formatConversationTime(value.withdrawnAt)}`);
+    status(method === "PUT" ? copy.sent : fill(copy.stopped, { time: formatConversationTime(value.withdrawnAt) }));
   };
   const write = async (intent: Write, mayRetryDelete = true): Promise<void> => {
     if (busy || !alive()) return;
-    pending = intent; busy = true; setRetry(null); status("Checking…"); render();
+    pending = intent; busy = true; setRetry(null); status(copy.checking); render();
     const result = await request(intent.method, intent);
     if (!alive()) return;
     if (result.share && result.share.version > intent.expectedVersion
@@ -155,7 +160,7 @@ function bind(root: HTMLElement): () => void {
     } else if (result.status === 400 || result.status === 422) {
       pending = null; status(copy.unavailable);
     } else if ([401, 403, 404].includes(result.status)) {
-      pending = null; status("This conversation isn't available. Reload to check your access.");
+      pending = null; status(copy.notAvailable);
     } else {
       const refreshed = await read();
       if (!alive()) return;
@@ -176,7 +181,7 @@ function bind(root: HTMLElement): () => void {
     busy = false; render();
   };
   const load = async () => {
-    busy = true; setRetry(null); status("Checking shared cart…"); render();
+    busy = true; setRetry(null); status(copy.checkingShared); render();
     const ok = await read();
     if (!alive()) return;
     busy = false;

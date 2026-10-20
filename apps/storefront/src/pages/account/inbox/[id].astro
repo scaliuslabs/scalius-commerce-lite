@@ -9,7 +9,7 @@ import ConversationReplyForm from "@/components/conversation/ConversationReplyFo
 import AccountShell from "@/components/account/AccountShell.astro";
 import { getLayoutData } from "@/lib/api";
 import {
-  CONVERSATION_COPY as copy,
+  conversationCopy,
   conversationStatusLabel,
   conversationTitle,
   isConversationId,
@@ -40,6 +40,8 @@ const failure = thread ? null : read && !read.ok ? read.reason : "no_access";
 if (failure === "no_access") Astro.response.status = 404;
 if (failure === "unavailable") Astro.response.status = 503;
 
+// The store's language (the layout read set it).
+const copy = conversationCopy();
 const threadHref = conversationId ? `/account/inbox/${encodeURIComponent(conversationId)}` : "/account/inbox";
 const earliestSeq = thread?.messages.reduce((min, message) => Math.min(min, message.seq), Number.MAX_SAFE_INTEGER) ?? 0;
 const earlierHref = thread?.hasMore && earliestSeq > 1
@@ -74,21 +76,21 @@ const title = thread ? conversationTitle(thread) : copy.notFound;
 
     {failure === "no_access" && (
       <div class={ui.empty} role="alert">
-        <p class={ui.emptyBody}>This conversation isn't in your inbox.</p>
+        <p class={ui.emptyBody}>{copy.notInInbox}</p>
         <a href="/account/inbox" data-astro-prefetch="false" class={`${ui.primaryButton} mt-6`}>{copy.backToInbox}</a>
       </div>
     )}
 
     {thread && conversationId && (
       <div id="conversation" data-conversation-panel class={`${ui.card} flex min-h-0 flex-1 flex-col overflow-hidden [overflow-anchor:none]`}>
-        <div data-conversation-scroller role="region" aria-label="Conversation history" tabindex="0" class="min-h-0 flex-1 px-4 py-3 [overflow-anchor:none] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary sm:px-5">
+        <div data-conversation-scroller role="region" aria-label={copy.historyLabel} tabindex="0" class="min-h-0 flex-1 px-4 py-3 [overflow-anchor:none] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary sm:px-5">
           <p class="mb-3 break-words text-sm font-medium text-muted-foreground">{title}</p>
           {earlierHref && (
             <div class="mb-4 text-center">
               <a href={earlierHref} data-conversation-earlier data-before={earliestSeq} data-before-param="before" data-astro-prefetch="false" class="inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline">{copy.earlierMessages}</a>
             </div>
           )}
-          <ol id="conversationMessages" class="mx-auto max-w-3xl [overflow-anchor:none]" aria-label="Messages" hidden={thread.messages.length === 0} set:html={messagesHtml} />
+          <ol id="conversationMessages" class="mx-auto max-w-3xl [overflow-anchor:none]" aria-label={copy.messagesLabel} hidden={thread.messages.length === 0} set:html={messagesHtml} />
         </div>
         <div data-conversation-tray class="shrink-0 border-t border-border px-3 py-2 sm:px-4">
           {beforeSeq ? (
@@ -107,8 +109,8 @@ const title = thread ? conversationTitle(thread) : copy.notFound;
               lastShownSeq={Math.max(0, ...thread.messages.map((message) => message.seq))}
               idPrefix="conversationReply"
               status={readConversationStatusFlag(Astro.url)}
-              label="Reply"
-              placeholder="Write a reply"
+              label={copy.reply}
+              placeholder={copy.writeReply}
               note={thread.status === "closed" ? copy.closedNote : null}
             />
           )}

@@ -8,7 +8,7 @@ import Layout from "@/layouts/Layout.astro";
 import AccountShell from "@/components/account/AccountShell.astro";
 import { getLayoutData } from "@/lib/api";
 import {
-  DOWNLOAD_COPY as copy,
+  downloadCopy,
   downloadStatusText,
   readDownloadNotice,
   renderDownloadLines,
@@ -16,6 +16,7 @@ import {
 import { readAccountDownloads } from "@/lib/account-downloads-server";
 import { readAccountSummaryForRequest } from "@/lib/account-server";
 import { accountUi as ui } from "@/lib/account-ui";
+import { accountCopy } from "@/lib/account-copy";
 
 export const prerender = false;
 
@@ -25,6 +26,8 @@ const [layoutData, downloads, summary] = await Promise.all([
   readAccountSummaryForRequest(Astro.request),
 ]);
 const notice = readDownloadNotice(Astro.url.search);
+// The store's language (the layout read set it).
+const copy = downloadCopy();
 Astro.response.headers.set("Cache-Control", "private, no-store");
 if (!downloads.ok && downloads.reason !== "signed_out") Astro.response.status = 503;
 const lines = downloads.ok ? downloads.data : [];
@@ -55,7 +58,7 @@ const listMarkup = downloads.ok ? renderDownloadLines(lines, { returnTo: "/accou
         ) : (
           <div class={ui.empty}>
             <p class={ui.emptyBody}>{copy.empty}</p>
-            <a href="/account" data-astro-prefetch="false" class={`${ui.secondaryButton} mt-6`}>Go to your orders</a>
+            <a href="/account" data-astro-prefetch="false" class={`${ui.secondaryButton} mt-6`}>{accountCopy().shell.goToOrders}</a>
           </div>
         )}
       </div>

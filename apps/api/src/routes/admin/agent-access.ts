@@ -59,7 +59,12 @@ const selectionBodySchema = z.object({
   riskCeiling: riskSchema.optional(),
   expiresInDays: z.number().int().min(1).max(365).optional(),
 }).strict();
-const tokenBodySchema = selectionBodySchema.extend({ resource: resourceSchema });
+const tokenBodySchema = selectionBodySchema.extend({
+  resource: resourceSchema,
+  confirmPolicy: z.enum(["destructive_financial", "none"]).optional().openapi({
+    description: "Whether destructive and financial operations wait for the merchant's approval (`destructive_financial`, the default) or run directly (`none`). A view-only key never needs it. Only the store owner's own session can turn it off.",
+  }),
+});
 const passthroughResponse = successEnvelope(z.record(z.string(), z.unknown()));
 
 function assertSuperAdmin(c: {
@@ -254,9 +259,13 @@ const createTokenRoute = createRoute({
 app.openapi(createTokenRoute, async (c) => {
   const principal = c.get("agentPrincipal");
   const user = assertSuperAdmin(c);
-  const body = c.req.valid("json");
+  const { confirmPolicy, ...body } = c.req.valid("json");
   if (principal && body.resource !== principal.resource) {
     throw new ForbiddenError("An agent can create connections only for its own resource");
+  }
+  // The approval step is the merchant's safeguard: an agent never turns it off.
+  if (principal && confirmPolicy === "none") {
+    throw new ForbiddenError("Only the store owner can turn off approvals for a connection");
   }
   const selection = resolveGrantSelection(
     body,
@@ -281,6 +290,10 @@ app.openapi(createTokenRoute, async (c) => {
       },
     } : {}),
   });
+  if (confirmPolicy === "none" && selection.preset !== "read") {
+    const { writeAgentConfirmPolicy } = await import("../../agent-access/mcp/confirm");
+    await writeAgentConfirmPolicy(c.env, result.grantId, "none");
+  }
   noStore(c);
   return created(c, {
     connection: await getAgentConnection(c.get("db"), result.grantId),

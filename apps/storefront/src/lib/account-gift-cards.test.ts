@@ -9,15 +9,15 @@ import {
   giftCardTransactionAmount,
   giftCardTransactionText,
   readGiftCardFormFields,
-  GIFT_CARD_PAGE_COPY,
+  giftCardPageCopy,
 } from "./account-gift-cards";
 import { readAccountGiftCard, readGiftCardBalance } from "./api/gift-cards";
 
 describe("gift-card balance page", () => {
   it("answers every miss with the same sentence", () => {
-    expect(giftCardBalanceFailureText("not_found")).toBe(GIFT_CARD_PAGE_COPY.notFound);
-    expect(giftCardBalanceFailureText("unusable")).toBe(GIFT_CARD_PAGE_COPY.notFound);
-    expect(giftCardBalanceFailureText("rate_limited")).toBe(GIFT_CARD_PAGE_COPY.rateLimited);
+    expect(giftCardBalanceFailureText("not_found")).toBe(giftCardPageCopy().notFound);
+    expect(giftCardBalanceFailureText("unusable")).toBe(giftCardPageCopy().notFound);
+    expect(giftCardBalanceFailureText("rate_limited")).toBe(giftCardPageCopy().rateLimited);
     expect(giftCardPageStatus({ ok: false, reason: "rate_limited", status: 429 })).toBe(429);
     expect(giftCardPageStatus({ ok: false, reason: "not_found", status: 404 })).toBe(200);
   });
