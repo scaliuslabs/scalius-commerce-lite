@@ -51,7 +51,9 @@ export const BUNDLE_BUDGETS = {
     // The status card's cancel confirmation loads when first asked for (list UX).
     // -3.5: the Messages card (thread, reply box, copy) and the cash-on-delivery
     // dialogs load after the page; measured 284.1.
-    "admin/orders/$orderId/index.tsx": 284.5,
+    // -0.8: the timeline, returns, notifications and payment and hand-over dialogs'
+    // own copy loads with them, not in the page's catalog; measured 283.3.
+    "admin/orders/$orderId/index.tsx": 283.7,
     "admin/products/index.tsx": 290,
     // +1 (catalogue dashboard): the brand field and the lazy merchandising cards' loaders.
     // +1 (catalogue dashboard): categories named by their tree path, and saving the
@@ -60,20 +62,26 @@ export const BUNDLE_BUDGETS = {
     // +0.1: truthful app consent copy (storefront components, en + bn).
     // -8.3: the cards under the variants (digital delivery, gift card, attributes, search
     // listing) and the category picker's list load after the page; measured 360.6.
-    "admin/products/$productId/edit.tsx": 361,
+    // -1.3: the variant editor's copy loads with the editor; measured 359.3.
+    "admin/products/$productId/edit.tsx": 359.7,
     // The editor plus the navigation shell and the save system's real
     // variant diff and in-flight-save rebase (edits typed while saving stay dirty).
     // +2 (catalogue dashboard): the same category paths and section-save code as the edit
     // page, and the shared icon and SDK chunks the new catalogue screens regrouped.
     // +0.3: the local "Bengali System" fallback face that keeps the Taka sign off the platform font search.
     // -8.5: the same lazy cards and category list as the edit page; measured 357.3.
-    "admin/products/new.tsx": 357.5,
+    // -1: the variant editor's copy loads with the editor; measured 356.1.
+    "admin/products/new.tsx": 356.5,
     // +0.3 over the default: the type preview's "Bengali System" fallback face.
-    "admin/online-store/theme_.editor.tsx": 360.3,
+    // -4.7: theme sections check custom field keys without the value codec; measured 355.2.
+    "admin/online-store/theme_.editor.tsx": 355.6,
     "admin/inventory/index.tsx": 255,
     // The customer page's own copy is apart from the list's (list UX).
     "admin/customers/index.tsx": 245,
-    "admin/settings/store.tsx": 291,
+    // -53.3: the dialogs' fields (email check, phone input, image pickers, the
+    // web-address check) load after the page, so zod and their widgets do too;
+    // the contact row formats a landline without them. Measured 237.3.
+    "admin/settings/store.tsx": 237.7,
   },
 };
 
