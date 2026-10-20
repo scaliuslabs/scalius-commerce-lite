@@ -90,6 +90,13 @@ import { storefrontExtensionSettingSchemas } from "@scalius/shared/plugins/store
 import { activePluginStorefrontServices } from "./app-render";
 import { deps } from "../../cache-deps";
 import {
+  ga4MeasurementDocument,
+  tiktokEventsDocument,
+  tiktokServerEnabled,
+  trackingConsentDocument,
+  TRACKING_SETTINGS_DOCUMENTS,
+} from "../../integrations/tracking/settings";
+import {
     NAME_FIELDS,
     localizedSlugSql,
     parseTranslationContext,
@@ -529,7 +536,42 @@ const LAYOUT_DOCUMENTS = [
   businessDocument,
   securityDocument,
   policiesDocument,
+  // The consent banner and the server tracking destinations (audit spec S4).
+  ...TRACKING_SETTINGS_DOCUMENTS,
 ];
+
+function storedFlag(rows: readonly SettingsDocumentRow[], key: string): { isEnabled?: unknown } | null {
+  const row = rows.find((each) => each.category === key);
+  try {
+    return row ? JSON.parse(row.value) as { isEnabled?: unknown } : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * What the storefront needs to know about tracking: the consent banner of
+ * markets outside the EEA/UK/CH, whether any server destination is on (the
+ * banner then shows even without a pixel), and whether TikTok takes browser
+ * events (its token reads strictly; decrypted only when the stored document
+ * turns it on).
+ */
+async function layoutTracking(
+  rows: readonly SettingsDocumentRow[],
+  ctx: { encryptionKey?: string },
+  metaBrowserEvents: boolean,
+) {
+  const consent = await trackingConsentDocument.fromRows(rows, ctx);
+  const ga4On = storedFlag(rows, ga4MeasurementDocument.key)?.isEnabled === true;
+  const tiktokStored = storedFlag(rows, tiktokEventsDocument.key)?.isEnabled === true;
+  const tiktok = tiktokStored ? await tiktokEventsDocument.fromRows(rows, ctx) : null;
+  const tiktokBrowserEvents = tiktok !== null && tiktokServerEnabled(tiktok) && !tiktok.secretErrors.accessToken;
+  return {
+    consentOtherRegions: consent.value.otherRegions,
+    serverEvents: metaBrowserEvents || ga4On || tiktokStored,
+    tiktokBrowserEvents,
+  };
+}
 
 /**
  * Whether the storefront sends Meta browser events: an enabled pixel whose
@@ -764,6 +806,7 @@ export async function getLayoutData(
     navigationData,
   );
   const metaCapi = { browserEventsEnabled };
+  const tracking = await layoutTracking(rows, ctx, browserEventsEnabled);
   const publicBusiness = {
     companyName: business.value.companyName,
     legalName: business.value.legalName,
@@ -799,6 +842,7 @@ export async function getLayoutData(
     storeShape,
     media: media.value,
     metaCapi,
+    tracking,
     business: publicBusiness,
     seo: {
       discovery: seo.value.discovery,

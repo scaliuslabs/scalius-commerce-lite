@@ -831,6 +831,12 @@ describe("provider-neutral schema upgrades", { timeout: 30_000 }, () => {
         sqliteStatements: 4,
         postgresStatements: 4,
       },
+      {
+        version: 160,
+        name: "0160_order_tracking_signals",
+        sqliteStatements: 11,
+        postgresStatements: 11,
+      },
     ]);
   });
 
@@ -1081,6 +1087,7 @@ describe("provider-neutral schema upgrades", { timeout: 30_000 }, () => {
           { version: 157, name: "0157_order_search_update_guards" },
           { version: 158, name: "0158_app_access_contract" },
           { version: 159, name: "0159_bulk_runs" },
+          { version: 160, name: "0160_order_tracking_signals" },
         ],
       });
     } finally {

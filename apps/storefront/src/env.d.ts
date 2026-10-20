@@ -119,6 +119,18 @@ interface Window {
   __CURRENCY_PRICE_INCREMENT__?: number;
   __META_CAPI_BROWSER_EVENTS_ENABLED__?: boolean;
   __TIKTOK_PIXEL_ENABLED__?: boolean;
+  /** The consent that holds on this page (components/consent): set by the head boot script. */
+  __scaliusConsent?: {
+    analytics: boolean;
+    marketing: boolean;
+    saleOfData: boolean;
+    source: "banner" | "default" | "gpc";
+    regime?: "opt_in" | "notice" | "link_only";
+    stored?: boolean;
+  };
+  /** Click ids from the landing URL kept in memory until marketing is granted. */
+  __scaliusClickIds?: Record<string, string>;
+  gtag?: (...args: unknown[]) => void;
   /** The store search app the predictive search asks (layout `appServices.search`). */
   __SEARCH_PROVIDER__?: string;
   /** The address autocomplete app (layout `appServices.address`). */

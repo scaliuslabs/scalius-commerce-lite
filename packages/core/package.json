@@ -86,6 +86,9 @@
     "./integrations/email/*": "./src/integrations/email/*.ts",
     "./integrations/firebase/*": "./src/integrations/firebase/*.ts",
     "./integrations/meta/*": "./src/integrations/meta/*.ts",
+    "./integrations/ga4/*": "./src/integrations/ga4/*.ts",
+    "./integrations/tiktok/*": "./src/integrations/tiktok/*.ts",
+    "./integrations/tracking/*": "./src/integrations/tracking/*.ts",
     "./search": "./src/search/index.ts",
     "./testing": "./src/testing/index.ts",
     "./utils/*": "./src/utils/*.ts"

@@ -8,6 +8,7 @@ import { isPaymentMethodIdShape } from "@/lib/payment-method-id";
 import { apiFetch } from "@/lib/api/transport";
 import type { CreateOrderPayload } from "@/lib/api/types";
 import { createOrder } from "../../../lib/api/orders";
+import { checkoutTrackingSignals } from "../../../lib/tracking/checkout-signals";
 import { getCheckoutErrorMessage } from "../../../lib/checkout/error-messages";
 import {
   getPaymentSessionApiErrorMessage,
@@ -98,7 +99,12 @@ export const POST: APIRoute = async ({ request }) => {
     const { initialPaymentSession, ...payload } = rawPayload;
     const customerSessionToken = getCustomerSessionTokenFromCookie(request.headers.get("cookie"));
 
-    const result = await createOrder(payload, { customerSessionToken });
+    // The buyer's consent and first-party tracking ids, read here from the
+    // buyer's own request (the browser never sends them in the body).
+    const result = await createOrder(
+      { ...payload, trackingSignals: checkoutTrackingSignals(request) },
+      { customerSessionToken },
+    );
 
     if (!result.success) {
       return new Response(JSON.stringify({

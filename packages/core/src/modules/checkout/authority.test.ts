@@ -283,6 +283,8 @@ describe("storefront checkout authority read", () => {
     expect(snapshot.sideEffects).toEqual({
       orderCreatedNotification: true,
       metaPurchase: true,
+      // No GA4 or TikTok server destination is configured; the banner default.
+      tracking: { ga4: false, tiktok: false, consent: { otherRegions: "notice" } },
     });
   });
 });

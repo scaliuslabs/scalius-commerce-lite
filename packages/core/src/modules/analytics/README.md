@@ -51,6 +51,40 @@ An active script refuses placeholder values (`G-XXXX`, `GTM-XXXX`, `PIXEL_ID`, `
 
 The storefront's browser events (`POST /api/v1/meta/events`) and their fail-closed circuit are in the [Meta README](../../integrations/meta/README.md).
 
+## Tracking consent and server events
+
+Audit spec §3.10 (slice S4). The rules live in `@scalius/shared/tracking-consent`; the settings documents and senders in `packages/core/src/integrations/tracking/` (signals, deliveries, settings), `integrations/ga4/` and `integrations/tiktok/`.
+
+### Consent
+
+- **Regime.** A market that sells to any EEA, UK or Swiss country is opt-in: nothing that needs consent runs until the buyer agrees. Other markets follow the `tracking_consent` document's `otherRegions`: `notice` (default; tags run until the buyer refuses), `opt_in` or `link_only` (no banner, only "Your privacy choices"). The page's regime is its market's (URL presence); a server sender uses the order's shipping (else billing) country.
+- **Categories.** Analytics: GA4 and Tag Manager. Marketing: Meta and TikTok pixels and their server events. Sale of data: sharing with ad partners (Meta Limited Data Use, TikTok `limited_data_use` when refused). Global Privacy Control (`Sec-GPC`, `navigator.globalPrivacyControl`) denies marketing and sale of data.
+- **Storefront.** `components/consent/`: the head boot script (folded into the runtime globals, before Partytown) reads the `scalius_consent` cookie (`v1-a<0|1>-m<0|1>-s<0|1>`, 180 days) and GPC, publishes `window.__scaliusConsent`, pushes Google Consent Mode v2 defaults (`ad_storage`, `analytics_storage`, `ad_user_data`, `ad_personalization`, `wait_for_update: 500`) before any tag, and marks `<html data-consent-banner>` so the banner paints with the page. Meta and TikTok snippets (and custom snippets that load them) render inert (`type="text/plain" data-scalius-consent="marketing"`, their `<noscript>` pixel removed) and start when marketing is granted; revoking calls `fbq('consent','revoke')` and `ttq.revokeConsent()`. Click ids from the landing URL stay in memory until marketing is granted. The HTML never depends on the cookie, so pages stay cached per market (`set:tracking_consent:document`).
+- **Banner.** Code-owned, theme-tokened, fixed at the bottom (no layout shift, small text so it is never the LCP element), keyboard reachable, en and bn copy. It shows only when a tag or a server destination needs consent.
+
+### Server events
+
+| Funnel step | Meta (Pixel / CAPI) | GA4 (gtag / Measurement Protocol) | TikTok (ttq / Events API) | Event id |
+|---|---|---|---|---|
+| Product view | ViewContent B+S | view_item B | ViewContent B+S | shared random |
+| List view | ViewContent B (product_group) | view_item_list B | none | shared random |
+| Search | Search B+S | search B | Search B+S | shared random |
+| Add to cart | AddToCart B+S | add_to_cart B | AddToCart B+S | shared random |
+| Begin checkout | InitiateCheckout B+S | begin_checkout B | InitiateCheckout B+S | shared random |
+| Payment info | AddPaymentInfo B+S | add_payment_info B | AddPaymentInfo B+S | shared random |
+| Purchase | Purchase B + S (outbox) | purchase B + S (deliveries) | Purchase B + S (deliveries) | `Purchase:<orderId>`; GA4 `transaction_id` |
+| Refund | none | refund S | none | `refund:<paymentId>` |
+| Newsletter | Lead B+S | generate_lead B | SubmitForm B+S | shared random |
+| Account created | CompleteRegistration B+S | sign_up B | CompleteRegistration B+S | `CompleteRegistration:<customerId>` |
+
+B: browser, S: server. TikTok's purchase is `Purchase` (`CompletePayment` is retired: "About Standard Events in TikTok Ads Manager", ads.tiktok.com/help/article/standard-events-parameters). Browser S events go through `POST /api/v1/meta/events`, which sends to Meta and, under its own circuit (`tiktok-events:browser-events:circuit`), to TikTok; both need marketing consent in the browser. TikTok's pixel identifies the buyer (`ttq.identify` with SHA-256 email, E.164 phone and customer id) before the purchase.
+
+- **Snapshot.** The checkout commit writes `order_tracking_signals` in the order batch when Meta CAPI, GA4 MP or TikTok Events API is on: the consent snapshot, `fbp`, `fbc`, `_ttp`, `ttclid`, the `_ga` client and session ids, `gclid`, IP and user agent (advertising ids, IP and UA only with marketing, GA ids only with analytics). The storefront's checkout proxy reads them from the buyer's own request. It is not an event fact, and the cron purges it after 8 days. Cost: one statement and one row; two statements and up to three rows when GA4 or TikTok is owed a purchase (same D1 call).
+- **Meta Purchase** (outbox) adds fbp, fbc, IP and UA to the hashed contact, reports the commit time as `event_time`, and is skipped (`consent_denied`) when the snapshot denies marketing. An order without a snapshot follows its country's default.
+- **GA4 and TikTok deliveries** (`tracking_deliveries`, unique per destination and dedup key): the purchase is sent once per order after the commit (a hosted payment after its confirmation, else the hourly re-check), retried with backoff by the cron's `tracking_outbox_flush` job (one D1 call with Meta's due rows when idle). A confirmed refund of an order whose GA4 purchase was sent queues the GA4 refund (trigger on `order_payments`). GA4 uses the `_ga` client id (else a stable per-order id), `session_id`, `user_id`, `timestamp_micros` within 72 hours and `consent.ad_user_data`/`ad_personalization`.
+- **Settings and test mode.** `GET`/`POST /api/v1/admin/settings/tracking` (`dashboard.tracking.get`/`update`; `analytics.view`/`analytics.edit`): the banner, GA4 (`measurementId`, `apiSecret` encrypted, `debugMode` sends to the validation server) and TikTok (`pixelCode`, `accessToken` encrypted, `testEventCode`). Meta's test event code stays in `meta_conversions`.
+- **Health.** `GET /api/v1/admin/analytics/tracking-health` (`dashboard.analytics.tracking_health`, `analytics.view`): the last 24 hours per destination (configured, test mode, events sent/failed/skipped/pending, purchases skipped by consent, match-signal counts, latest error) and across orders (consent outcomes, match-signal coverage in percent). Counts only. `POST /api/v1/admin/analytics/test-event` (`dashboard.analytics.send_test_event`, `analytics.edit`) sends one test event: Meta and TikTok under their test event code, GA4 to the validation server.
+
 ## Routes
 
 All paths start with `/api/v1/admin`.
@@ -62,6 +96,9 @@ All paths start with `/api/v1/admin`.
 | `GET /analytics/{id}/source`, `PUT /analytics/{id}` | `analytics.edit` |
 | `POST /analytics/{id}/toggle` | `analytics.toggle` |
 | `DELETE /analytics/{id}` (trash), `POST /analytics/{id}/restore`, `DELETE /analytics/{id}/permanent` | `analytics.edit` |
+| `GET /analytics/tracking-health` | `analytics.view` |
+| `POST /analytics/test-event` | `analytics.edit` |
+| `GET /settings/tracking`, `POST /settings/tracking` | `analytics.view`, `analytics.edit` |
 | `GET /reports/overview`, `GET /reports`, `GET /reports/{reportId}`, `GET /reports/{reportId}/export` | `dashboard.analytics` |
 | `GET /dashboard/home-summary`, `GET /dashboard/activity` (1 to 90 days) | `dashboard.view` |
 

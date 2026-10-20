@@ -289,6 +289,8 @@ export const DASHBOARD_WHEN_B: Readonly<Record<string, string>> = {
   "dashboard.theme.version_restore": "Use when putting an earlier published theme back into the draft.",
   "dashboard.theme.versions_list": "Use when listing published theme versions and who published them.",
   "dashboard.theme.workspace_get": "Use when starting a theme edit: live and draft revisions, last publisher, landing pages.",
+  "dashboard.tracking.get": "Use when reading the cookie-consent regime and the GA4 Measurement Protocol and TikTok Events API settings (secrets masked) before changing them.",
+  "dashboard.tracking.update": "Use when changing cookie-consent rules or connecting GA4 (measurement ID + API secret) or TikTok Events API (pixel code + access token); each section saves at its own revision.",
   "dashboard.translations.delete": "Use when deleting a resource's translation in a language.",
   "dashboard.translations.get": "Use when reading a product, page or collection's translation in a language.",
   "dashboard.translations.list": "Use when listing what is translated or missing in a language.",

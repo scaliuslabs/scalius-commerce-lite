@@ -28,6 +28,10 @@ export const DASHBOARD_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/analytics/*/toggle": {
     POST: { permission: PERMISSIONS.ANALYTICS_TOGGLE },
   },
+  // One test event to Meta, GA4 (validation server) or TikTok (audit spec S4).
+  "/api/v1/admin/analytics/test-event": {
+    POST: { permission: PERMISSIONS.ANALYTICS_EDIT },
+  },
   // =============================================
   // Search API
   // =============================================

@@ -1,4 +1,4 @@
-// Agent operation registry rows for the dashboard discount, analytics and Meta conversions routes.
+// Agent operation registry rows for the dashboard discount, analytics, server tracking and Meta conversions routes.
 import type { OperationRegistryEntry } from "./entry";
 
 export const DASHBOARD_MARKETING_OPERATIONS = {
@@ -15,12 +15,14 @@ export const DASHBOARD_MARKETING_OPERATIONS = {
     revision: "required",
     limits: { response: 16_384 },
   },
+  "dashboard.analytics.send_test_event": { openWorld: true, batch: "forbidden", limits: { response: 16_384 } },
   "dashboard.analytics.set_active": {
     openWorld: true,
     revision: "required",
     batch: "forbidden",
     limits: { response: 16_384 },
   },
+  "dashboard.analytics.tracking_health": { limits: { response: 16_384 } },
   "dashboard.analytics.trash": {
     risk: "destructive",
     revision: "required",
@@ -53,6 +55,13 @@ export const DASHBOARD_MARKETING_OPERATIONS = {
   },
   "dashboard.meta_conversions.logs_list": {},
   "dashboard.meta_conversions.update": {
+    revision: "required",
+    risk: "security",
+    batch: "forbidden",
+    limits: { response: 16_384 },
+  },
+  "dashboard.tracking.get": { limits: { response: 16_384 } },
+  "dashboard.tracking.update": {
     revision: "required",
     risk: "security",
     batch: "forbidden",

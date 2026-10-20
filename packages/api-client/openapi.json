@@ -25639,6 +25639,14 @@
                       "fbc": {
                         "type": "string"
                       },
+                      "ttp": {
+                        "type": "string",
+                        "maxLength": 128
+                      },
+                      "ttclid": {
+                        "type": "string",
+                        "maxLength": 500
+                      },
                       "external_id": {
                         "anyOf": [
                           {
@@ -25741,6 +25749,9 @@
                       }
                     },
                     "additionalProperties": {}
+                  },
+                  "limitedDataUse": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -27070,6 +27081,30 @@
                             "browserEventsEnabled"
                           ]
                         },
+                        "tracking": {
+                          "type": "object",
+                          "properties": {
+                            "consentOtherRegions": {
+                              "type": "string",
+                              "enum": [
+                                "opt_in",
+                                "notice",
+                                "link_only"
+                              ]
+                            },
+                            "serverEvents": {
+                              "type": "boolean"
+                            },
+                            "tiktokBrowserEvents": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "consentOtherRegions",
+                            "serverEvents",
+                            "tiktokBrowserEvents"
+                          ]
+                        },
                         "business": {
                           "type": "object",
                           "properties": {
@@ -27697,6 +27732,7 @@
                         "storeShape",
                         "media",
                         "metaCapi",
+                        "tracking",
                         "business",
                         "seo",
                         "platform",
@@ -70013,6 +70049,96 @@
                       "channels"
                     ],
                     "additionalProperties": false
+                  },
+                  "trackingSignals": {
+                    "type": "object",
+                    "nullable": true,
+                    "properties": {
+                      "consent": {
+                        "type": "object",
+                        "nullable": true,
+                        "properties": {
+                          "analytics": {
+                            "type": "boolean"
+                          },
+                          "marketing": {
+                            "type": "boolean"
+                          },
+                          "saleOfData": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "analytics",
+                          "marketing",
+                          "saleOfData"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "gpc": {
+                        "type": "boolean"
+                      },
+                      "fbp": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 512
+                      },
+                      "fbc": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 512
+                      },
+                      "ttp": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 512
+                      },
+                      "ttclid": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 512
+                      },
+                      "gaClientId": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 512
+                      },
+                      "gaSessionId": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 512
+                      },
+                      "gclid": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 512
+                      },
+                      "clientIp": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 64
+                      },
+                      "userAgent": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 512
+                      }
+                    },
+                    "required": [
+                      "consent",
+                      "gpc",
+                      "fbp",
+                      "fbc",
+                      "ttp",
+                      "ttclid",
+                      "gaClientId",
+                      "gaSessionId",
+                      "gclid",
+                      "clientIp",
+                      "userAgent"
+                    ],
+                    "additionalProperties": false,
+                    "description": "The buyer's consent choice and first-party tracking ids, read by the storefront from its own cookies. Never required; stored only when a server tracking destination is on."
                   },
                   "expectedAmountDueMinor": {
                     "type": "integer",
@@ -130206,6 +130332,513 @@
         }
       }
     },
+    "/api/v1/admin/analytics/tracking-health": {
+      "get": {
+        "operationId": "dashboard.analytics.tracking_health",
+        "tags": [
+          "Admin - Analytics"
+        ],
+        "summary": "Get server tracking health for the last 24 hours",
+        "description": "Per destination (Meta CAPI, GA4 Measurement Protocol, TikTok Events API): configuration, test mode, server events sent, failed, skipped and pending, purchases skipped by consent, match-signal counts and the latest error; across orders: consent outcomes and match-signal coverage (percent of orders carrying em, ph, fbp, fbc, ip, ua, ttp, ttclid and GA ids). Counts only: no identifier or contact data.",
+        "responses": {
+          "200": {
+            "description": "Tracking health",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "windowHours": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true
+                        },
+                        "since": {
+                          "type": "string"
+                        },
+                        "consent": {
+                          "type": "object",
+                          "properties": {
+                            "otherRegions": {
+                              "type": "string"
+                            },
+                            "orders": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "analyticsGranted": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "marketingGranted": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "saleOfDataGranted": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "bySource": {
+                              "type": "object",
+                              "properties": {
+                                "banner": {
+                                  "type": "integer"
+                                },
+                                "default": {
+                                  "type": "integer"
+                                },
+                                "gpc": {
+                                  "type": "integer"
+                                }
+                              },
+                              "required": [
+                                "banner",
+                                "default",
+                                "gpc"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "otherRegions",
+                            "orders",
+                            "analyticsGranted",
+                            "marketingGranted",
+                            "saleOfDataGranted",
+                            "bySource"
+                          ]
+                        },
+                        "matchSignalCoverage": {
+                          "type": "object",
+                          "properties": {
+                            "orders": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "percent": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "number"
+                              }
+                            }
+                          },
+                          "required": [
+                            "orders",
+                            "percent"
+                          ]
+                        },
+                        "destinations": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "destination": {
+                                "type": "string",
+                                "enum": [
+                                  "meta",
+                                  "ga4",
+                                  "tiktok"
+                                ]
+                              },
+                              "configured": {
+                                "type": "boolean"
+                              },
+                              "testMode": {
+                                "type": "boolean"
+                              },
+                              "events": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "sent": {
+                                      "type": "integer",
+                                      "minimum": 0
+                                    },
+                                    "failed": {
+                                      "type": "integer",
+                                      "minimum": 0
+                                    },
+                                    "skipped": {
+                                      "type": "integer",
+                                      "minimum": 0
+                                    },
+                                    "pending": {
+                                      "type": "integer",
+                                      "minimum": 0
+                                    },
+                                    "event": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "sent",
+                                    "failed",
+                                    "skipped",
+                                    "pending",
+                                    "event"
+                                  ]
+                                }
+                              },
+                              "skippedByConsent": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "matchSignals": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "integer",
+                                  "minimum": 0
+                                }
+                              },
+                              "lastError": {
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "at": {
+                                    "type": "string"
+                                  },
+                                  "message": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "at",
+                                  "message"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "destination",
+                              "configured",
+                              "testMode",
+                              "events",
+                              "skippedByConsent",
+                              "matchSignals",
+                              "lastError"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "windowHours",
+                        "since",
+                        "consent",
+                        "matchSignalCoverage",
+                        "destinations"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 16384,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when asked whether server tracking (Meta CAPI, GA4, TikTok Events API) is delivering: 24-hour sent/failed/skipped counts, consent outcomes, match-signal coverage and the last error.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "analytics.view"
+        }
+      }
+    },
+    "/api/v1/admin/analytics/test-event": {
+      "post": {
+        "operationId": "dashboard.analytics.send_test_event",
+        "tags": [
+          "Admin - Analytics"
+        ],
+        "summary": "Send one test event to a tracking destination",
+        "description": "Meta and TikTok send a ViewContent under their saved test event code (409 without one), so it shows in Events Manager > Test events and never in live data. GA4 sends a sample purchase to the Measurement Protocol validation server and returns its validation messages (nothing is recorded).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "destination": {
+                    "type": "string",
+                    "enum": [
+                      "meta",
+                      "ga4",
+                      "tiktok"
+                    ]
+                  }
+                },
+                "required": [
+                  "destination"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The provider's answer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "destination": {
+                          "type": "string",
+                          "enum": [
+                            "meta",
+                            "ga4",
+                            "tiktok"
+                          ]
+                        },
+                        "accepted": {
+                          "type": "boolean"
+                        },
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "test_event_code",
+                            "ga4_validation"
+                          ]
+                        },
+                        "eventId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "object",
+                          "additionalProperties": {}
+                        }
+                      },
+                      "required": [
+                        "destination",
+                        "accepted",
+                        "mode",
+                        "eventId",
+                        "details"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": true,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 16384,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when proving Meta, GA4 or TikTok server tracking works: sends one test event (Meta/TikTok under the saved test code, GA4 to the validation server) and returns the provider's answer.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "analytics.edit"
+        }
+      }
+    },
     "/api/v1/admin/analytics/{id}/source": {
       "get": {
         "operationId": "dashboard.analytics.get",
@@ -157575,6 +158208,563 @@
           "when": "Use when old Meta Conversions API logs should be trimmed now.",
           "dryRun": "none",
           "confirmation": "required"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "analytics.edit"
+        }
+      }
+    },
+    "/api/v1/admin/settings/tracking": {
+      "get": {
+        "operationId": "dashboard.tracking.get",
+        "tags": [
+          "Admin - Tracking"
+        ],
+        "summary": "Get tracking consent, GA4 Measurement Protocol and TikTok Events API settings",
+        "responses": {
+          "200": {
+            "description": "Settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "consent": {
+                          "type": "object",
+                          "properties": {
+                            "otherRegions": {
+                              "type": "string",
+                              "enum": [
+                                "opt_in",
+                                "notice",
+                                "link_only"
+                              ],
+                              "description": "The banner of markets that sell to no EEA, UK or Swiss country: `notice` (default; tags run until the buyer refuses), `opt_in` (nothing runs until the buyer agrees) or `link_only` (no banner, only the footer's \"Your privacy choices\"). EEA, UK and Swiss markets are always opt-in."
+                            },
+                            "revision": {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          },
+                          "required": [
+                            "otherRegions",
+                            "revision"
+                          ]
+                        },
+                        "ga4": {
+                          "type": "object",
+                          "properties": {
+                            "isEnabled": {
+                              "type": "boolean"
+                            },
+                            "measurementId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "apiSecret": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Masked when saved; null when none."
+                            },
+                            "debugMode": {
+                              "type": "boolean",
+                              "description": "Send to the Measurement Protocol validation server (nothing is recorded)."
+                            },
+                            "revision": {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          },
+                          "required": [
+                            "isEnabled",
+                            "measurementId",
+                            "apiSecret",
+                            "debugMode",
+                            "revision"
+                          ]
+                        },
+                        "tiktok": {
+                          "type": "object",
+                          "properties": {
+                            "isEnabled": {
+                              "type": "boolean"
+                            },
+                            "pixelCode": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "accessToken": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Masked when saved; null when none."
+                            },
+                            "testEventCode": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Events go to Events Manager > Test events while set."
+                            },
+                            "revision": {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          },
+                          "required": [
+                            "isEnabled",
+                            "pixelCode",
+                            "accessToken",
+                            "testEventCode",
+                            "revision"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "consent",
+                        "ga4",
+                        "tiktok"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 16384,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when reading the cookie-consent regime and the GA4 Measurement Protocol and TikTok Events API settings (secrets masked) before changing them.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "analytics.view"
+        }
+      },
+      "post": {
+        "operationId": "dashboard.tracking.update",
+        "tags": [
+          "Admin - Tracking"
+        ],
+        "summary": "Save tracking consent, GA4 Measurement Protocol or TikTok Events API settings",
+        "description": "Each section saves at its own `expectedRevision` (409 when stale). Enabling GA4 needs a `G-` measurement ID and an API secret; enabling TikTok needs a pixel code and an access token. Placeholder values are refused.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "consent": {
+                    "type": "object",
+                    "properties": {
+                      "otherRegions": {
+                        "type": "string",
+                        "enum": [
+                          "opt_in",
+                          "notice",
+                          "link_only"
+                        ]
+                      },
+                      "expectedRevision": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "otherRegions",
+                      "expectedRevision"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "ga4": {
+                    "type": "object",
+                    "properties": {
+                      "isEnabled": {
+                        "type": "boolean"
+                      },
+                      "measurementId": {
+                        "type": "string",
+                        "maxLength": 32
+                      },
+                      "apiSecret": {
+                        "type": "string",
+                        "maxLength": 4096,
+                        "description": "Omitted or masked keeps the stored value; empty clears it."
+                      },
+                      "debugMode": {
+                        "type": "boolean"
+                      },
+                      "expectedRevision": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "expectedRevision"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "tiktok": {
+                    "type": "object",
+                    "properties": {
+                      "isEnabled": {
+                        "type": "boolean"
+                      },
+                      "pixelCode": {
+                        "type": "string",
+                        "maxLength": 64
+                      },
+                      "accessToken": {
+                        "type": "string",
+                        "maxLength": 4096,
+                        "description": "Omitted or masked keeps the stored value; empty clears it."
+                      },
+                      "testEventCode": {
+                        "type": "string",
+                        "maxLength": 64
+                      },
+                      "expectedRevision": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "expectedRevision"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Settings saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "consent": {
+                          "type": "object",
+                          "properties": {
+                            "otherRegions": {
+                              "type": "string",
+                              "enum": [
+                                "opt_in",
+                                "notice",
+                                "link_only"
+                              ],
+                              "description": "The banner of markets that sell to no EEA, UK or Swiss country: `notice` (default; tags run until the buyer refuses), `opt_in` (nothing runs until the buyer agrees) or `link_only` (no banner, only the footer's \"Your privacy choices\"). EEA, UK and Swiss markets are always opt-in."
+                            },
+                            "revision": {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          },
+                          "required": [
+                            "otherRegions",
+                            "revision"
+                          ]
+                        },
+                        "ga4": {
+                          "type": "object",
+                          "properties": {
+                            "isEnabled": {
+                              "type": "boolean"
+                            },
+                            "measurementId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "apiSecret": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Masked when saved; null when none."
+                            },
+                            "debugMode": {
+                              "type": "boolean",
+                              "description": "Send to the Measurement Protocol validation server (nothing is recorded)."
+                            },
+                            "revision": {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          },
+                          "required": [
+                            "isEnabled",
+                            "measurementId",
+                            "apiSecret",
+                            "debugMode",
+                            "revision"
+                          ]
+                        },
+                        "tiktok": {
+                          "type": "object",
+                          "properties": {
+                            "isEnabled": {
+                              "type": "boolean"
+                            },
+                            "pixelCode": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "accessToken": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Masked when saved; null when none."
+                            },
+                            "testEventCode": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Events go to Events Manager > Test events while set."
+                            },
+                            "revision": {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          },
+                          "required": [
+                            "isEnabled",
+                            "pixelCode",
+                            "accessToken",
+                            "testEventCode",
+                            "revision"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "consent",
+                        "ga4",
+                        "tiktok"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "security",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 16384,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when changing cookie-consent rules or connecting GA4 (measurement ID + API secret) or TikTok Events API (pixel code + access token); each section saves at its own revision.",
+          "dryRun": "none",
+          "confirmation": "none"
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -250199,11 +251389,27 @@
           ]
         },
         {
+          "operationId": "dashboard.analytics.send_test_event",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.analytics.send_test_event"
+          ]
+        },
+        {
           "operationId": "dashboard.analytics.set_active",
           "surface": "dashboard",
           "mode": "curated",
           "workflowIds": [
             "dashboard.analytics-provider"
+          ]
+        },
+        {
+          "operationId": "dashboard.analytics.tracking_health",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.analytics.tracking_health"
           ]
         },
         {
@@ -254931,6 +256137,22 @@
             "dashboard.theme-history",
             "dashboard.theme-publish",
             "theme.draft-landing-page.v1"
+          ]
+        },
+        {
+          "operationId": "dashboard.tracking.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.tracking.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.tracking.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.tracking.update"
           ]
         },
         {

@@ -1,5 +1,6 @@
 // src/lib/api/orders.ts
 
+import type { CheckoutTrackingSignals } from "../tracking/checkout-signals";
 import { apiFetch } from "./transport";
 import { getRuntimePresence } from "./runtime";
 import { isMarketSubfolder } from "@scalius/shared/markets";
@@ -215,7 +216,8 @@ function getApiErrorCode(data: unknown): string | undefined {
  * @returns A promise resolving to an object with the new order's ID or an error.
  */
 export async function createOrder(
-  payload: CreateOrderPayload,
+  // The checkout proxy adds what it read about tracking from the buyer's request.
+  payload: CreateOrderPayload & { trackingSignals?: CheckoutTrackingSignals },
   options: CreateOrderOptions = {},
 ): Promise<CreateOrderResult> {
   try {
