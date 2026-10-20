@@ -19,6 +19,7 @@ import {
   pluginEventDeliveries,
   pluginInstallations,
   pluginKv,
+  webhookSubscriptions,
   pluginLogEntries,
   pluginMigrations,
   pluginRegistrations,
@@ -873,6 +874,8 @@ export async function uninstallPlugin(
     await safeBatch(db, [
       revisionGuard(db, pluginId, options.expectedRevision),
       db.delete(pluginInstallations).where(eq(pluginInstallations.pluginId, pluginId)),
+      // Its own webhook endpoints go with it, kept data or not (their deliveries cascade).
+      db.delete(webhookSubscriptions).where(eq(webhookSubscriptions.pluginId, pluginId)),
       // Its channels go (or, when orders name them, stay switched off).
       ...salesChannelStatements(db, pluginId, [], false, hadChannels),
       ...(options.keepData

@@ -9576,6 +9576,28 @@
    ],
    "staff": "media.upload"
   },
+  "read_gift_cards": {
+   "rbac": [
+    "gift_cards.view"
+   ],
+   "staff": "gift_cards.view"
+  },
+  "write_gift_cards": {
+   "rbac": [
+    "gift_cards.view",
+    "gift_cards.manage"
+   ],
+   "staff": "gift_cards.manage",
+   "sensitive": true
+  },
+  "write_webhooks": {
+   "rbac": [
+    "webhooks.view",
+    "webhooks.manage"
+   ],
+   "staff": "webhooks.manage",
+   "sensitive": true
+  },
   "read_settings": {
    "rbac": [
     "settings.general.view"

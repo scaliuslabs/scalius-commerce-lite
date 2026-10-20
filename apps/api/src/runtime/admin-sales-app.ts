@@ -10,6 +10,9 @@ import { adminGiftCardRoutes } from "../routes/admin/gift-cards";
 import { adminWarrantyClaimRoutes } from "../routes/admin/warranty-claims";
 import { adminResourceRoutes } from "../routes/admin/resources";
 import { adminResourceBulkRoutes } from "../routes/admin/resources-bulk";
+import { adminResourceGiftCardRoutes } from "../routes/admin/resources-gift-cards";
+import { adminResourceProductRoutes } from "../routes/admin/resources-products";
+import { adminResourceWebhookRoutes } from "../routes/admin/resources-webhooks";
 
 const app = createAdminRuntimeApiApp();
 app.route("/admin/customers", adminCustomerMarketingRoutes);
@@ -25,5 +28,9 @@ app.route("/admin/warranty-claims", adminWarrantyClaimRoutes);
 app.route("/admin/resources", adminResourceRoutes);
 // Bulk runs of prices, stock, tags, status and publishing (routes/admin/resources-bulk.ts).
 app.route("/admin/resources", adminResourceBulkRoutes);
+// Gift cards, PIM product writes and an app's own webhook subscriptions.
+app.route("/admin/resources", adminResourceGiftCardRoutes);
+app.route("/admin/resources", adminResourceProductRoutes);
+app.route("/admin/resources", adminResourceWebhookRoutes);
 
 export default app;

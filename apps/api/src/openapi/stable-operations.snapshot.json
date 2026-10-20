@@ -13591,6 +13591,471 @@
     ]
    }
   },
+  "dashboard.resources.gift_cards.adjust": {
+   "method": "POST",
+   "path": "/api/v1/admin/resources/gift-cards/{id}/adjust",
+   "risk": "financial",
+   "idempotency": "supported",
+   "revision": "required",
+   "scopes": [
+    "write_gift_cards"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 4,
+       "maxLength": 80
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "expectedVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "exclusiveMinimum": true,
+          "description": "The card's `version` you read; a card changed since is refused with 409."
+         },
+         "amountMinor": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+         },
+         "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+         }
+        },
+        "required": [
+         "expectedVersion",
+         "amountMinor",
+         "reason"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "giftCard": {
+        "$ref": "#/components/schemas/GiftCardResource"
+       }
+      },
+      "required": [
+       "giftCard"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "dashboard.resources.gift_cards.create": {
+   "method": "POST",
+   "path": "/api/v1/admin/resources/gift-cards",
+   "risk": "financial",
+   "idempotency": "supported",
+   "revision": "none",
+   "scopes": [
+    "write_gift_cards"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "amountMinor": {
+          "type": "integer",
+          "minimum": 0,
+          "exclusiveMinimum": true,
+          "maximum": 9007199254740991,
+          "description": "Its value, in minor units of the store currency."
+         },
+         "expiresAt": {
+          "type": "string",
+          "nullable": true,
+          "format": "date-time",
+          "description": "Omit for the store's default expiry; null for none."
+         },
+         "customerId": {
+          "type": "string",
+          "nullable": true,
+          "minLength": 1,
+          "maxLength": 80
+         },
+         "recipient": {
+          "type": "object",
+          "nullable": true,
+          "properties": {
+           "name": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 120
+           },
+           "email": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 254
+           },
+           "phone": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 40
+           }
+          },
+          "additionalProperties": false
+         },
+         "message": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 400
+         },
+         "note": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 500
+         },
+         "notify": {
+          "type": "boolean",
+          "default": false,
+          "description": "Send the code to the recipient (else the owning customer) now."
+         }
+        },
+        "required": [
+         "amountMinor"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "giftCard": {
+        "$ref": "#/components/schemas/GiftCardResource"
+       }
+      },
+      "required": [
+       "giftCard"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "dashboard.resources.gift_cards.get": {
+   "method": "GET",
+   "path": "/api/v1/admin/resources/gift-cards/{id}",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_gift_cards",
+    "write_gift_cards"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 4,
+       "maxLength": 80
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "giftCard": {
+        "$ref": "#/components/schemas/GiftCardResource"
+       }
+      },
+      "required": [
+       "giftCard"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "dashboard.resources.gift_cards.list": {
+   "method": "GET",
+   "path": "/api/v1/admin/resources/gift-cards",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_gift_cards",
+    "write_gift_cards"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "enum": [
+        "active",
+        "disabled",
+        "expired",
+        "empty"
+       ]
+      },
+      "required": false,
+      "name": "status",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 200,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 50,
+       "default": 20
+      },
+      "required": false,
+      "name": "limit",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "giftCards": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/GiftCardSummaryResource"
+        }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
+       }
+      },
+      "required": [
+       "giftCards",
+       "nextCursor"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "dashboard.resources.gift_cards.update": {
+   "method": "PATCH",
+   "path": "/api/v1/admin/resources/gift-cards/{id}",
+   "risk": "financial",
+   "idempotency": "supported",
+   "revision": "required",
+   "scopes": [
+    "write_gift_cards"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 4,
+       "maxLength": 80
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "expectedVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "exclusiveMinimum": true,
+          "description": "The card's `version` you read; a card changed since is refused with 409."
+         },
+         "status": {
+          "type": "string",
+          "enum": [
+           "active",
+           "disabled"
+          ]
+         },
+         "expiresAt": {
+          "type": "string",
+          "nullable": true,
+          "format": "date-time",
+          "description": "null removes the expiry."
+         },
+         "customerId": {
+          "type": "string",
+          "nullable": true,
+          "minLength": 1,
+          "maxLength": 80
+         },
+         "note": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 500
+         }
+        },
+        "required": [
+         "expectedVersion"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "giftCard": {
+        "$ref": "#/components/schemas/GiftCardResource"
+       }
+      },
+      "required": [
+       "giftCard"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
   "dashboard.resources.orders.create": {
    "method": "POST",
    "path": "/api/v1/admin/resources/orders",
@@ -15172,6 +15637,265 @@
     ]
    }
   },
+  "dashboard.resources.products.create": {
+   "method": "POST",
+   "path": "/api/v1/admin/resources/products",
+   "risk": "write",
+   "idempotency": "supported",
+   "revision": "none",
+   "scopes": [
+    "write_products"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "name": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 100
+         },
+         "description": {
+          "type": "string",
+          "nullable": true,
+          "minLength": 10
+         },
+         "slug": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 100,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$/u",
+          "description": "Omit to derive the web address from the name; a taken one gets a -2, -3… suffix."
+         },
+         "status": {
+          "type": "string",
+          "enum": [
+           "active",
+           "draft"
+          ],
+          "default": "draft",
+          "description": "An active product needs a price above 0 on every SKU."
+         },
+         "condition": {
+          "type": "string",
+          "enum": [
+           "new",
+           "refurbished",
+           "used"
+          ]
+         },
+         "categoryId": {
+          "type": "string",
+          "nullable": true,
+          "minLength": 1,
+          "maxLength": 180
+         },
+         "brandId": {
+          "type": "string",
+          "nullable": true,
+          "minLength": 1,
+          "maxLength": 128
+         },
+         "metaTitle": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 200
+         },
+         "metaDescription": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 500
+         },
+         "options": {
+          "type": "array",
+          "items": {
+           "type": "object",
+           "properties": {
+            "name": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 40
+            },
+            "values": {
+             "type": "array",
+             "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+             },
+             "minItems": 1,
+             "maxItems": 150
+            },
+            "standardMapping": {
+             "type": "string",
+             "enum": [
+              "size",
+              "color",
+              "material",
+              "pattern",
+              "none"
+             ],
+             "default": "none",
+             "description": "Which standard attribute it is for catalog feeds; each one at most once."
+            }
+           },
+           "required": [
+            "name",
+            "values"
+           ],
+           "additionalProperties": false
+          },
+          "maxItems": 5,
+          "default": [],
+          "description": "Merchant-named options (up to five). Leave empty for a product sold as one SKU."
+         },
+         "variants": {
+          "type": "array",
+          "items": {
+           "type": "object",
+           "properties": {
+            "sku": {
+             "type": "string",
+             "minLength": 3,
+             "maxLength": 100,
+             "description": "Unique in the store, any case."
+            },
+            "priceMinor": {
+             "type": "integer",
+             "minimum": 0,
+             "maximum": 9007199254740991,
+             "description": "Its price, in minor units of the store currency at its price increment."
+            },
+            "optionValues": {
+             "type": "object",
+             "additionalProperties": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+             },
+             "description": "One value of every option, by option name (`{ \"Size\": \"M\", \"Color\": \"Red\" }`); leave it out on a product without options."
+            },
+            "barcode": {
+             "type": "string",
+             "nullable": true,
+             "minLength": 1,
+             "maxLength": 50,
+             "description": "Omit or null to generate an internal barcode."
+            },
+            "barcodeType": {
+             "type": "string",
+             "nullable": true,
+             "enum": [
+              "ean13",
+              "upc",
+              "isbn",
+              "gtin",
+              "code128",
+              "custom",
+              null
+             ],
+             "description": "Required with `barcode`."
+            },
+            "trackInventory": {
+             "type": "boolean",
+             "default": true,
+             "description": "Count its stock. It starts at 0: set quantities through inventory."
+            },
+            "weightGrams": {
+             "type": "number",
+             "nullable": true,
+             "minimum": 0,
+             "maximum": 1000000
+            }
+           },
+           "required": [
+            "sku",
+            "priceMinor"
+           ],
+           "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 150,
+          "description": "With options, one SKU per combination, each using every option's value; without options, exactly one."
+         },
+         "mediaIds": {
+          "type": "array",
+          "items": {
+           "type": "string",
+           "minLength": 8,
+           "maxLength": 160
+          },
+          "maxItems": 50,
+          "default": [],
+          "description": "Ready media library files (`dashboard.media.import_url`), in gallery order; the first is featured."
+         },
+         "salesChannelIds": {
+          "type": "array",
+          "items": {
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 160
+          },
+          "maxItems": 50,
+          "description": "The sales channels to publish it to. Omit to publish it to every channel."
+         }
+        },
+        "required": [
+         "name",
+         "condition",
+         "variants"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "product": {
+        "$ref": "#/components/schemas/ProductResource"
+       }
+      },
+      "required": [
+       "product"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
   "dashboard.resources.products.get": {
    "method": "GET",
    "path": "/api/v1/admin/resources/products/{id}",
@@ -15350,6 +16074,152 @@
       "required": [
        "products",
        "nextCursor"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "dashboard.resources.products.update": {
+   "method": "PATCH",
+   "path": "/api/v1/admin/resources/products/{id}",
+   "risk": "write",
+   "idempotency": "supported",
+   "revision": "required",
+   "scopes": [
+    "write_products"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "exclusiveMinimum": true,
+          "description": "The product's `revision` you read; a product changed since is refused with 409 and nothing is saved."
+         },
+         "name": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 100
+         },
+         "description": {
+          "type": "string",
+          "nullable": true,
+          "minLength": 10
+         },
+         "slug": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 100,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$/u"
+         },
+         "status": {
+          "type": "string",
+          "enum": [
+           "active",
+           "draft"
+          ],
+          "description": "An active product needs a price above 0."
+         },
+         "condition": {
+          "type": "string",
+          "nullable": true,
+          "enum": [
+           "new",
+           "refurbished",
+           "used",
+           null
+          ]
+         },
+         "categoryId": {
+          "type": "string",
+          "nullable": true,
+          "minLength": 1,
+          "maxLength": 180
+         },
+         "brandId": {
+          "type": "string",
+          "nullable": true,
+          "minLength": 1,
+          "maxLength": 128
+         },
+         "metaTitle": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 200
+         },
+         "metaDescription": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 500
+         },
+         "priceMinor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "A product without options: its price, in minor units of the store currency. A product with options prices each SKU (`variants.bulk_set_prices`)."
+         }
+        },
+        "required": [
+         "expectedRevision"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "product": {
+        "$ref": "#/components/schemas/ProductResource"
+       }
+      },
+      "required": [
+       "product"
       ]
      }
     },
@@ -15965,6 +16835,471 @@
       },
       "required": [
        "variants"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "dashboard.resources.webhook_subscriptions.create": {
+   "method": "POST",
+   "path": "/api/v1/admin/resources/webhook-subscriptions",
+   "risk": "write",
+   "idempotency": "supported",
+   "revision": "none",
+   "scopes": [
+    "write_webhooks"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "url": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048,
+          "description": "HTTPS endpoint on one of the app's approved hosts (`allowedHosts`). Private, loopback and reserved addresses are refused."
+         },
+         "topics": {
+          "type": "array",
+          "items": {
+           "type": "string",
+           "enum": [
+            "*",
+            "order.*",
+            "return.*",
+            "product.*",
+            "inventory.*",
+            "customer.*",
+            "fulfillment.*",
+            "shipment.*",
+            "payment.*",
+            "checkout.*",
+            "discount.*",
+            "review.*",
+            "gift_card.*",
+            "object.*",
+            "order.created",
+            "order.updated",
+            "order.paid",
+            "order.cancelled",
+            "order.fulfilled",
+            "order.refunded",
+            "return.updated",
+            "product.created",
+            "product.updated",
+            "product.deleted",
+            "product.publication_changed",
+            "inventory.level_changed",
+            "inventory.purchase_order_updated",
+            "inventory.transfer_updated",
+            "customer.created",
+            "customer.updated",
+            "customer.consent_changed",
+            "fulfillment.created",
+            "fulfillment.voided",
+            "shipment.updated",
+            "payment.updated",
+            "checkout.abandoned",
+            "discount.created",
+            "discount.updated",
+            "discount.deleted",
+            "discount.redeemed",
+            "review.created",
+            "review.updated",
+            "gift_card.created",
+            "gift_card.updated",
+            "gift_card.transaction",
+            "object.created",
+            "object.updated",
+            "object.deleted",
+            "customer.redact_requested",
+            "customer.data_requested"
+           ],
+           "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*`; the app's grant must cover it (its manifest `events`)."
+          },
+          "minItems": 1,
+          "maxItems": 50
+         },
+         "description": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 200
+         },
+         "customerData": {
+          "type": "array",
+          "items": {
+           "type": "string",
+           "enum": [
+            "name",
+            "email",
+            "phone",
+            "address"
+           ]
+          },
+          "maxItems": 4,
+          "description": "The buyer contact data deliveries include, within the app's protected data scopes; the rest read null. None by default."
+         }
+        },
+        "required": [
+         "url",
+         "topics"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "subscription": {
+        "$ref": "#/components/schemas/AppWebhookSubscription"
+       },
+       "secret": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "subscription",
+       "secret"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "dashboard.resources.webhook_subscriptions.delete": {
+   "method": "DELETE",
+   "path": "/api/v1/admin/resources/webhook-subscriptions/{id}",
+   "risk": "destructive",
+   "idempotency": "supported",
+   "revision": "required",
+   "scopes": [
+    "write_webhooks"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 64
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 0,
+       "exclusiveMinimum": true
+      },
+      "required": true,
+      "name": "expectedVersion",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "id": {
+        "type": "string"
+       },
+       "deleted": {
+        "type": "boolean",
+        "enum": [
+         true
+        ]
+       }
+      },
+      "required": [
+       "id",
+       "deleted"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "dashboard.resources.webhook_subscriptions.list": {
+   "method": "GET",
+   "path": "/api/v1/admin/resources/webhook-subscriptions",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "write_webhooks"
+   ],
+   "input": {},
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "subscriptions": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/AppWebhookSubscription"
+        },
+        "maxItems": 5
+       },
+       "maxSubscriptions": {
+        "type": "integer",
+        "description": "How many one app may keep."
+       },
+       "apiVersion": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "subscriptions",
+       "maxSubscriptions",
+       "apiVersion"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "dashboard.resources.webhook_subscriptions.update": {
+   "method": "PATCH",
+   "path": "/api/v1/admin/resources/webhook-subscriptions/{id}",
+   "risk": "write",
+   "idempotency": "supported",
+   "revision": "required",
+   "scopes": [
+    "write_webhooks"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 64
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "expectedVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "exclusiveMinimum": true,
+          "description": "The subscription's `version` you read; a stale one is refused with 409."
+         },
+         "url": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048,
+          "description": "HTTPS endpoint on one of the app's approved hosts (`allowedHosts`). Private, loopback and reserved addresses are refused."
+         },
+         "topics": {
+          "type": "array",
+          "items": {
+           "type": "string",
+           "enum": [
+            "*",
+            "order.*",
+            "return.*",
+            "product.*",
+            "inventory.*",
+            "customer.*",
+            "fulfillment.*",
+            "shipment.*",
+            "payment.*",
+            "checkout.*",
+            "discount.*",
+            "review.*",
+            "gift_card.*",
+            "object.*",
+            "order.created",
+            "order.updated",
+            "order.paid",
+            "order.cancelled",
+            "order.fulfilled",
+            "order.refunded",
+            "return.updated",
+            "product.created",
+            "product.updated",
+            "product.deleted",
+            "product.publication_changed",
+            "inventory.level_changed",
+            "inventory.purchase_order_updated",
+            "inventory.transfer_updated",
+            "customer.created",
+            "customer.updated",
+            "customer.consent_changed",
+            "fulfillment.created",
+            "fulfillment.voided",
+            "shipment.updated",
+            "payment.updated",
+            "checkout.abandoned",
+            "discount.created",
+            "discount.updated",
+            "discount.deleted",
+            "discount.redeemed",
+            "review.created",
+            "review.updated",
+            "gift_card.created",
+            "gift_card.updated",
+            "gift_card.transaction",
+            "object.created",
+            "object.updated",
+            "object.deleted",
+            "customer.redact_requested",
+            "customer.data_requested"
+           ],
+           "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*`; the app's grant must cover it (its manifest `events`)."
+          },
+          "minItems": 1,
+          "maxItems": 50
+         },
+         "description": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 200
+         },
+         "customerData": {
+          "type": "array",
+          "items": {
+           "type": "string",
+           "enum": [
+            "name",
+            "email",
+            "phone",
+            "address"
+           ]
+          },
+          "maxItems": 4,
+          "description": "The buyer contact data deliveries include, within the app's protected data scopes; the rest read null. None by default."
+         },
+         "status": {
+          "type": "string",
+          "enum": [
+           "active",
+           "disabled"
+          ]
+         }
+        },
+        "required": [
+         "expectedVersion"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "subscription": {
+        "$ref": "#/components/schemas/AppWebhookSubscription"
+       }
+      },
+      "required": [
+       "subscription"
       ]
      }
     },
@@ -17341,6 +18676,109 @@
     "updatedAt"
    ]
   },
+  "AppWebhookSubscription": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "url": {
+     "type": "string"
+    },
+    "topics": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "apiVersion": {
+     "type": "string",
+     "description": "The payload version deliveries use."
+    },
+    "customerData": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "enum": [
+       "name",
+       "email",
+       "phone",
+       "address"
+      ]
+     }
+    },
+    "description": {
+     "type": "string",
+     "nullable": true
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "active",
+      "disabled"
+     ]
+    },
+    "disabledReason": {
+     "type": "string",
+     "nullable": true,
+     "enum": [
+      "manual",
+      "failing",
+      null
+     ],
+     "description": "`failing`: sustained delivery failure turned it off."
+    },
+    "failureStreak": {
+     "type": "integer"
+    },
+    "failingSince": {
+     "type": "string",
+     "nullable": true
+    },
+    "lastSuccessAt": {
+     "type": "string",
+     "nullable": true
+    },
+    "lastFailureAt": {
+     "type": "string",
+     "nullable": true
+    },
+    "secretHint": {
+     "type": "string",
+     "description": "The signing secret's last four characters."
+    },
+    "version": {
+     "type": "integer",
+     "minimum": 0,
+     "exclusiveMinimum": true,
+     "description": "Send it as `expectedVersion` to change or delete it."
+    },
+    "createdAt": {
+     "type": "string"
+    },
+    "updatedAt": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "id",
+    "url",
+    "topics",
+    "apiVersion",
+    "customerData",
+    "description",
+    "status",
+    "disabledReason",
+    "failureStreak",
+    "failingSince",
+    "lastSuccessAt",
+    "lastFailureAt",
+    "secretHint",
+    "version",
+    "createdAt",
+    "updatedAt"
+   ]
+  },
   "BulkRun": {
    "type": "object",
    "properties": {
@@ -17683,6 +19121,265 @@
     "lines",
     "createdAt",
     "voidedAt"
+   ]
+  },
+  "GiftCardResource": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "last4": {
+     "type": "string",
+     "description": "The code's last four characters; the code itself never leaves the store."
+    },
+    "currency": {
+     "type": "string",
+     "minLength": 3,
+     "maxLength": 3
+    },
+    "initialAmountMinor": {
+     "type": "integer",
+     "description": "The value it was issued with, in minor units of `currency`."
+    },
+    "balanceMinor": {
+     "type": "integer",
+     "description": "What is left to spend, in minor units of `currency`."
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "active",
+      "disabled"
+     ]
+    },
+    "expiresAt": {
+     "type": "string",
+     "nullable": true,
+     "format": "date-time"
+    },
+    "expired": {
+     "type": "boolean"
+    },
+    "source": {
+     "type": "string",
+     "enum": [
+      "purchase",
+      "manual",
+      "refund"
+     ]
+    },
+    "customerId": {
+     "type": "string",
+     "nullable": true,
+     "description": "The customer who owns it, if any."
+    },
+    "recipientName": {
+     "type": "string",
+     "nullable": true,
+     "x-scalius-protected": "name"
+    },
+    "version": {
+     "type": "integer",
+     "minimum": 0,
+     "exclusiveMinimum": true,
+     "description": "Send it as `expectedVersion` to change the card; every balance movement advances it."
+    },
+    "createdAt": {
+     "type": "string",
+     "format": "date-time"
+    },
+    "recipientEmail": {
+     "type": "string",
+     "nullable": true,
+     "x-scalius-protected": "email"
+    },
+    "recipientPhone": {
+     "type": "string",
+     "nullable": true,
+     "x-scalius-protected": "phone"
+    },
+    "message": {
+     "type": "string",
+     "nullable": true,
+     "description": "The message the recipient reads with the card."
+    },
+    "note": {
+     "type": "string",
+     "nullable": true,
+     "description": "The store's own note; buyers never see it."
+    },
+    "sourceOrderId": {
+     "type": "string",
+     "nullable": true,
+     "description": "The order it was bought or refunded on, if any."
+    },
+    "transactions": {
+     "type": "array",
+     "items": {
+      "$ref": "#/components/schemas/GiftCardTransactionResource"
+     },
+     "description": "Its ledger, in minor units of `currency`."
+    }
+   },
+   "required": [
+    "id",
+    "last4",
+    "currency",
+    "initialAmountMinor",
+    "balanceMinor",
+    "status",
+    "expiresAt",
+    "expired",
+    "source",
+    "customerId",
+    "recipientName",
+    "version",
+    "createdAt",
+    "recipientEmail",
+    "recipientPhone",
+    "message",
+    "note",
+    "sourceOrderId",
+    "transactions"
+   ]
+  },
+  "GiftCardSummaryResource": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "last4": {
+     "type": "string",
+     "description": "The code's last four characters; the code itself never leaves the store."
+    },
+    "currency": {
+     "type": "string",
+     "minLength": 3,
+     "maxLength": 3
+    },
+    "initialAmountMinor": {
+     "type": "integer",
+     "description": "The value it was issued with, in minor units of `currency`."
+    },
+    "balanceMinor": {
+     "type": "integer",
+     "description": "What is left to spend, in minor units of `currency`."
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "active",
+      "disabled"
+     ]
+    },
+    "expiresAt": {
+     "type": "string",
+     "nullable": true,
+     "format": "date-time"
+    },
+    "expired": {
+     "type": "boolean"
+    },
+    "source": {
+     "type": "string",
+     "enum": [
+      "purchase",
+      "manual",
+      "refund"
+     ]
+    },
+    "customerId": {
+     "type": "string",
+     "nullable": true,
+     "description": "The customer who owns it, if any."
+    },
+    "recipientName": {
+     "type": "string",
+     "nullable": true,
+     "x-scalius-protected": "name"
+    },
+    "version": {
+     "type": "integer",
+     "minimum": 0,
+     "exclusiveMinimum": true,
+     "description": "Send it as `expectedVersion` to change the card; every balance movement advances it."
+    },
+    "createdAt": {
+     "type": "string",
+     "format": "date-time"
+    }
+   },
+   "required": [
+    "id",
+    "last4",
+    "currency",
+    "initialAmountMinor",
+    "balanceMinor",
+    "status",
+    "expiresAt",
+    "expired",
+    "source",
+    "customerId",
+    "recipientName",
+    "version",
+    "createdAt"
+   ]
+  },
+  "GiftCardTransactionResource": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "kind": {
+     "type": "string",
+     "enum": [
+      "issue",
+      "redeem",
+      "release",
+      "refund",
+      "adjust"
+     ]
+    },
+    "amountMinor": {
+     "type": "integer",
+     "description": "Signed: positive adds value, negative spends it, in minor units of the card's `currency`."
+    },
+    "balanceAfterMinor": {
+     "type": "integer"
+    },
+    "orderId": {
+     "type": "string",
+     "nullable": true
+    },
+    "actorType": {
+     "type": "string",
+     "enum": [
+      "system",
+      "admin",
+      "customer"
+     ]
+    },
+    "reason": {
+     "type": "string",
+     "nullable": true
+    },
+    "createdAt": {
+     "type": "string",
+     "format": "date-time"
+    }
+   },
+   "required": [
+    "id",
+    "kind",
+    "amountMinor",
+    "balanceAfterMinor",
+    "orderId",
+    "actorType",
+    "reason",
+    "createdAt"
    ]
   },
   "NullableTimestamp": {

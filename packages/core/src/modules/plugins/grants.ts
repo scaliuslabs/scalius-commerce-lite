@@ -11,14 +11,17 @@ import type { PluginInstallationSource } from "@scalius/database/schema";
 
 /**
  * RBAC resources a plugin can never hold: staff and roles (`team`), agent
- * credentials (`agent_access`), webhook endpoints (a second, unaudited egress
- * path around `allowedHosts`) and app management (`apps`: activating,
+ * credentials (`agent_access`) and app management (`apps`: activating,
  * configuring or removing plugins, and using other apps, stays with people).
+ *
+ * Webhooks are not reserved: `write_webhooks` confers them, and they reach
+ * only the app's own subscriptions (`dashboard.resources.webhook_subscriptions.*`
+ * check the caller, its approved hosts, topics and customer data). The staff
+ * webhook operations (`dashboard.webhooks.*`) are internal, so no app calls them.
  */
 export const PLUGIN_RESERVED_PERMISSION_RESOURCES: ReadonlySet<string> = new Set([
   "team",
   "agent_access",
-  "webhooks",
   "apps",
 ]);
 

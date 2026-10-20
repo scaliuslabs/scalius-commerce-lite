@@ -58,6 +58,7 @@ const webhookSubscriptionSchema = z.object({
   lastFailureAt: z.string().nullable(),
   secretHint: z.string().openapi({ description: "The secret's last four characters." }),
   version: z.number().int(),
+  appId: z.string().nullable().openapi({ description: "The app that created it (it manages it through the app API); null for the store's own." }),
   createdAt: z.string(),
   updatedAt: z.string(),
 }).openapi("WebhookSubscription");

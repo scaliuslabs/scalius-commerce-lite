@@ -9,7 +9,7 @@ import { capTotal } from "@scalius/shared/pagination";
 import type { BatchItem } from "drizzle-orm/batch";
 import { alias } from "drizzle-orm/sqlite-core";
 import type { Database } from "@scalius/database/client";
-import { safeBatch } from "@scalius/database/client";
+import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database/client";
 import { customers, giftCards, giftCardTransactions, orders, user } from "@scalius/database/schema";
 import { ConflictError, NotFoundError, ValidationError } from "../../errors";
 import type { GiftCardSource, GiftCardStatus, GiftCardTransactionKind } from "./browser";
@@ -319,9 +319,19 @@ export async function getStaffGiftCardSummary(db: Database, giftCardId: string):
  * idempotent by request key (a retry adds nothing). The ledger guard refuses
  * an adjustment below zero.
  */
+const GIFT_CARD_VERSION_CONFLICT = "GIFT_CARD_VERSION_CONFLICT";
+
 export async function adjustGiftCardBalance(
     db: Database,
-    input: { giftCardId: string; amountMinor: number; reason: string; requestKey: string; actorUserId: string },
+    input: {
+        giftCardId: string;
+        amountMinor: number;
+        reason: string;
+        requestKey: string;
+        actorUserId: string;
+        /** The card's `version` the caller read: a card changed since is refused (409) in the same batch, writing nothing. */
+        expectedVersion?: number;
+    },
 ): Promise<StaffGiftCardSummary> {
     const reason = input.reason.normalize("NFC").trim();
     if (!reason || [...reason].length > 500) throw new ValidationError("Give a reason for the adjustment (up to 500 characters).");
@@ -337,8 +347,11 @@ export async function adjustGiftCardBalance(
         throw new ValidationError("A gift card balance can't go below zero.");
     }
     const idempotencyKey = `adjust:${(await giftCardIdFromRequestKey("adjust", requestKey)).slice(3)}`;
+    const versionGuard = input.expectedVersion === undefined ? [] : [buildBatchGuard(db, sql`EXISTS (
+        SELECT 1 FROM ${giftCards} WHERE ${giftCards.id} = ${card.id} AND ${giftCards.version} = ${input.expectedVersion}
+    )`, GIFT_CARD_VERSION_CONFLICT)];
     try {
-        await safeBatch(db, [buildGiftCardTransactionInsert(db, {
+        await safeBatch(db, [...versionGuard, buildGiftCardTransactionInsert(db, {
             giftCardId: card.id,
             kind: "adjust",
             amountMinor: input.amountMinor,
@@ -348,6 +361,13 @@ export async function adjustGiftCardBalance(
         })] as never);
     } catch (error) {
         if (isGiftCardIdempotencyConflict(error)) return getStaffGiftCardSummary(db, card.id);
+        if (isBatchGuardError(error, GIFT_CARD_VERSION_CONFLICT)) {
+            // A repeat of an adjustment that already landed (it moved the version) replays it.
+            const landed = await db.select({ id: giftCardTransactions.id }).from(giftCardTransactions)
+                .where(eq(giftCardTransactions.idempotencyKey, idempotencyKey)).get();
+            if (landed) return getStaffGiftCardSummary(db, card.id);
+            throw new ConflictError("This gift card changed since you read it. Read it again and retry with its version.");
+        }
         if (isGiftCardLedgerError(error)) throw new ConflictError("The balance changed. Reload the gift card and try again.");
         throw error;
     }

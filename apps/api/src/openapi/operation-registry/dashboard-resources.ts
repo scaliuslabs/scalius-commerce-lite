@@ -27,6 +27,10 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   },
   "dashboard.resources.products.list": { stability: "stable", uncurated: true },
   "dashboard.resources.products.get": { stability: "stable", uncurated: true },
+  // PIM sync (routes/admin/resources-products.ts): the editor's create and
+  // base-section writes in minor units; stock stays with inventory.
+  "dashboard.resources.products.create": { stability: "stable", batch: "forbidden", uncurated: true },
+  "dashboard.resources.products.update": { stability: "stable", revision: "required", batch: "forbidden", uncurated: true },
   "dashboard.resources.variants.get": { stability: "stable", uncurated: true },
   "dashboard.resources.variants.lookup": { stability: "stable", risk: "read", uncurated: true },
   "dashboard.resources.customers.list": { stability: "stable", uncurated: true },
@@ -42,6 +46,39 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
     stability: "stable",
     revision: "required",
     limits: { request: 262_144 },
+    uncurated: true,
+  },
+  // Gift cards (routes/admin/resources-gift-cards.ts): stored value, so every
+  // write is financial and confirmation-gated for agents; an app needs the
+  // Sensitive write_gift_cards. The code never leaves the store.
+  "dashboard.resources.gift_cards.list": { stability: "stable", uncurated: true },
+  "dashboard.resources.gift_cards.get": { stability: "stable", uncurated: true },
+  "dashboard.resources.gift_cards.create": storedValue(),
+  "dashboard.resources.gift_cards.adjust": storedValue({ revision: "required" }),
+  "dashboard.resources.gift_cards.update": storedValue({ revision: "required" }),
+  // An app's own webhook subscriptions (routes/admin/resources-webhooks.ts):
+  // apps only (write_webhooks), within their approved hosts, topics and
+  // customer data. Create returns the signing secret to the app once and
+  // never replays it.
+  "dashboard.resources.webhook_subscriptions.list": { stability: "stable", limits: { response: 32_768 }, uncurated: true },
+  "dashboard.resources.webhook_subscriptions.create": {
+    stability: "stable",
+    batch: "forbidden",
+    limits: { request: 16_384, response: 16_384 },
+    uncurated: true,
+  },
+  "dashboard.resources.webhook_subscriptions.update": {
+    stability: "stable",
+    revision: "required",
+    batch: "forbidden",
+    limits: { request: 16_384, response: 16_384 },
+    uncurated: true,
+  },
+  "dashboard.resources.webhook_subscriptions.delete": {
+    stability: "stable",
+    risk: "destructive",
+    revision: "required",
+    batch: "forbidden",
     uncurated: true,
   },
   // Bulk runs (routes/admin/resources-bulk.ts): up to 5,000 items, dryRun
@@ -63,6 +100,17 @@ function bulkRun(overrides: Partial<OperationRegistryEntry> = {}): OperationRegi
     dryRun: "native",
     batch: "forbidden",
     limits: { request: 524_288 },
+    ...overrides,
+  };
+}
+
+function storedValue(overrides: Partial<OperationRegistryEntry> = {}): OperationRegistryEntry {
+  return {
+    stability: "stable",
+    risk: "financial",
+    confirmation: "required",
+    batch: "forbidden",
+    uncurated: true,
     ...overrides,
   };
 }

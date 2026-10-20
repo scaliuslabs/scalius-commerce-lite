@@ -19,6 +19,7 @@ import { planLimits } from "@scalius/shared/plan-limits";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
 import { realtimeFlushObserver } from "./flush";
 import { createWebhookRepresentationResolver } from "./representations";
+import { appWebhookAccessReader } from "../plugins/webhook-access";
 import { API_EVENT_FAN_OUT_TARGETS } from "./targets";
 
 export { EVENT_SOURCE_TABLES } from "./source-tables";
@@ -32,6 +33,7 @@ export async function sendEventDeliveries(
   deliveries: readonly EventDelivery[],
 ): Promise<{ sent: number }> {
   const resolveRepresentation = createWebhookRepresentationResolver(db);
+  const appAccess = appWebhookAccessReader(db);
   const encryptionKey = getCredentialEncryptionKey(env as unknown as Record<string, unknown>);
   for (const delivery of deliveries) {
     if (delivery.type === "plugins.deliver") {
@@ -48,6 +50,7 @@ export async function sendEventDeliveries(
       deliveryId: delivery.deliveryId,
       encryptionKey,
       resolveRepresentation,
+      appAccess,
       onSubscriptionDisabled: (subscription) =>
         sendWebhookDisabledNotice(db, env, { subscriptionId: subscription.id, url: subscription.url }),
     });

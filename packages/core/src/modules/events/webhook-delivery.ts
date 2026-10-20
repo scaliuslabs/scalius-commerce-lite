@@ -15,6 +15,7 @@ import type { Database } from "@scalius/database/client";
 import { chunkRowsForD1, safeBatch } from "@scalius/database/client";
 import {
   eventOutbox,
+  pluginInstallations,
   webhookDeliveries,
   webhookSubscriptions,
   type WebhookDelivery,
@@ -32,6 +33,7 @@ import {
   signWebhookPayload,
   topicMatchesAnyFilter,
   type EventRepresentation,
+  type EventTopicFilter,
 } from "@scalius/shared/events";
 import type { ProtectedCustomerData } from "@scalius/shared/plugins/protected-data";
 import { checkOutboundUrl } from "@scalius/shared/outbound-url";
@@ -44,7 +46,8 @@ import {
   type EventFanOutTarget,
   type OutboxEvent,
 } from "./event-outbox";
-import { parseStoredCustomerData, parseStoredTopicFilters, readWebhookSecret } from "./webhook-subscriptions";
+import { parseStoredCustomerData, parseStoredTopicFilters, readWebhookSecret, type AppWebhookAccess } from "./webhook-subscriptions";
+import { eventFilterCovered, isPluginHostAllowed } from "@scalius/shared/plugins/manifest";
 
 export const WEBHOOK_MAX_ATTEMPTS = 8;
 /** Delay after attempt n (1-based) fails; 7 waits over about 22.6 hours. */
@@ -252,11 +255,19 @@ export const webhookFanOutTarget: EventFanOutTarget = {
     return Boolean(row);
   },
   async fanOut(db, event) {
-    // Endpoints created after the event never receive it.
+    // Endpoints created after the event never receive it, and an app's only
+    // while the app is active (each delivery re-checks its grant).
     const subscriptions = await db
       .select({ id: webhookSubscriptions.id, topics: webhookSubscriptions.topics })
       .from(webhookSubscriptions)
-      .where(and(eq(webhookSubscriptions.status, "active"), lte(webhookSubscriptions.createdAt, event.occurredAt)))
+      .where(and(
+        eq(webhookSubscriptions.status, "active"),
+        lte(webhookSubscriptions.createdAt, event.occurredAt),
+        sql`(${webhookSubscriptions.pluginId} IS NULL OR EXISTS (
+          SELECT 1 FROM ${pluginInstallations}
+          WHERE ${pluginInstallations.pluginId} = ${webhookSubscriptions.pluginId} AND ${pluginInstallations.status} = 'active'
+        ))`,
+      ))
       .all();
     const matching = subscriptions.filter((subscription) =>
       topicMatchesAnyFilter(event.topic, parseStoredTopicFilters(subscription.topics)));
@@ -312,6 +323,12 @@ export async function processWebhookDelivery(options: {
   resolveRepresentation: WebhookRepresentationResolver;
   fetch?: WebhookFetch;
   onSubscriptionDisabled?: (subscription: { id: string; url: string }) => Promise<void>;
+  /**
+   * An app-owned subscription's live grant (null: the app is not active).
+   * Without it, app-owned deliveries are cancelled: they never send on a
+   * grant nobody checked.
+   */
+  appAccess?: (pluginId: string) => Promise<AppWebhookAccess | null>;
 }): Promise<WebhookDeliveryOutcome> {
   const { db, deliveryId } = options;
   const claimId = `whc_${crypto.randomUUID().replace(/-/g, "")}`;
@@ -348,6 +365,17 @@ export async function processWebhookDelivery(options: {
     await finishDelivery(db, delivery, claimId, { status: "cancelled", error: eventRow ? "event_unreadable" : "event_pruned" });
     return { status: "cancelled", deliveryId, subscriptionDisabled: false, retryInSeconds: null };
   }
+  // An app's endpoint delivers only within its app's live grant.
+  let customerData = new Set(parseStoredCustomerData(subscription.customerData));
+  if (subscription.pluginId) {
+    const access = options.appAccess ? await options.appAccess(subscription.pluginId) : null;
+    const refusal = appDeliveryRefusal(access, subscription.url, event.topic);
+    if (refusal) {
+      await finishDelivery(db, delivery, claimId, { status: "cancelled", error: refusal });
+      return { status: "cancelled", deliveryId, subscriptionDisabled: false, retryInSeconds: null };
+    }
+    customerData = new Set([...customerData].filter((category) => access!.customerData.includes(category)));
+  }
 
   const secret = await readWebhookSecret(subscription, options.encryptionKey);
   let body: string | null = null;
@@ -358,7 +386,7 @@ export async function processWebhookDelivery(options: {
         event,
         subscription.apiVersion,
         await options.resolveRepresentation(event),
-        new Set(parseStoredCustomerData(subscription.customerData)),
+        customerData,
       );
     } catch (error) {
       internalError = `representation_failed: ${normalizeError(error)}`;
@@ -414,6 +442,19 @@ export async function processWebhookDelivery(options: {
     countsAgainstEndpoint: true,
     terminal: urlRefused,
   });
+}
+
+/** Why an app's delivery may not send under its live grant, or null when it may. */
+function appDeliveryRefusal(access: AppWebhookAccess | null, url: string, topic: EventTopicFilter): string | null {
+  if (!access) return "app_inactive";
+  if (!eventFilterCovered(topic, access.topics)) return "app_topic_not_granted";
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return "app_host_not_granted";
+  }
+  return isPluginHostAllowed(parsed.hostname, access.allowedHosts, parsed.port) ? null : "app_host_not_granted";
 }
 
 async function finishDelivery(

@@ -2289,6 +2289,103 @@ export type BulkRun = {
     finishedAt: string | null;
 };
 
+export type GiftCardSummaryResource = {
+    id: string;
+    /**
+     * The code's last four characters; the code itself never leaves the store.
+     */
+    last4: string;
+    currency: string;
+    /**
+     * The value it was issued with, in minor units of `currency`.
+     */
+    initialAmountMinor: number;
+    /**
+     * What is left to spend, in minor units of `currency`.
+     */
+    balanceMinor: number;
+    status: 'active' | 'disabled';
+    expiresAt: string | null;
+    expired: boolean;
+    source: 'purchase' | 'manual' | 'refund';
+    /**
+     * The customer who owns it, if any.
+     */
+    customerId: string | null;
+    recipientName: string | null;
+    /**
+     * Send it as `expectedVersion` to change the card; every balance movement advances it.
+     */
+    version: number;
+    createdAt: string;
+};
+
+export type GiftCardResource = GiftCardSummaryResource & {
+    recipientEmail: string | null;
+    recipientPhone: string | null;
+    /**
+     * The message the recipient reads with the card.
+     */
+    message: string | null;
+    /**
+     * The store's own note; buyers never see it.
+     */
+    note: string | null;
+    /**
+     * The order it was bought or refunded on, if any.
+     */
+    sourceOrderId: string | null;
+    /**
+     * Its ledger, in minor units of `currency`.
+     */
+    transactions: Array<GiftCardTransactionResource>;
+};
+
+export type GiftCardTransactionResource = {
+    id: string;
+    kind: 'issue' | 'redeem' | 'release' | 'refund' | 'adjust';
+    /**
+     * Signed: positive adds value, negative spends it, in minor units of the card's `currency`.
+     */
+    amountMinor: number;
+    balanceAfterMinor: number;
+    orderId: string | null;
+    actorType: 'system' | 'admin' | 'customer';
+    reason: string | null;
+    createdAt: string;
+};
+
+export type AppWebhookSubscription = {
+    id: string;
+    url: string;
+    topics: Array<string>;
+    /**
+     * The payload version deliveries use.
+     */
+    apiVersion: string;
+    customerData: Array<'name' | 'email' | 'phone' | 'address'>;
+    description: string | null;
+    status: 'active' | 'disabled';
+    /**
+     * `failing`: sustained delivery failure turned it off.
+     */
+    disabledReason: 'manual' | 'failing' | null;
+    failureStreak: number;
+    failingSince: string | null;
+    lastSuccessAt: string | null;
+    lastFailureAt: string | null;
+    /**
+     * The signing secret's last four characters.
+     */
+    secretHint: string;
+    /**
+     * Send it as `expectedVersion` to change or delete it.
+     */
+    version: number;
+    createdAt: string;
+    updatedAt: string;
+};
+
 export type PriceList = {
     id: string;
     name: string;
@@ -3219,6 +3316,10 @@ export type WebhookSubscription = {
      */
     secretHint: string;
     version: number;
+    /**
+     * The app that created it (it manages it through the app API); null for the store's own.
+     */
+    appId: string | null;
     createdAt: string;
     updatedAt: string;
 };
@@ -3609,7 +3710,7 @@ export type AppDetail = AppSummary & {
      * The requested scopes, for the consent screen.
      */
     scopes: Array<{
-        name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_settings' | 'write_places';
+        name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_places';
         /**
          * The highest risk among the operations the scope lets this app call.
          */
@@ -3817,7 +3918,7 @@ export type AppGrant = {
     /**
      * Access scopes: store data and actions the app may read or change.
      */
-    scopes: Array<'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_settings' | 'write_places'>;
+    scopes: Array<'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_places'>;
     allowedHosts: Array<string>;
     events: Array<string>;
     functions: Array<string>;
@@ -3865,7 +3966,7 @@ export type AppFeature = {
          * Store access this feature adds, for its consent dialog.
          */
         scopes: Array<{
-            name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_settings' | 'write_places';
+            name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_places';
             /**
              * The highest risk among the operations the scope lets this app call.
              */
@@ -21914,6 +22015,133 @@ export type GetApiV1AdminResourcesProductsResponses = {
 
 export type GetApiV1AdminResourcesProductsResponse = GetApiV1AdminResourcesProductsResponses[keyof GetApiV1AdminResourcesProductsResponses];
 
+export type PostApiV1AdminResourcesProductsData = {
+    body: {
+        name: string;
+        description?: string | null;
+        /**
+         * Omit to derive the web address from the name; a taken one gets a -2, -3… suffix.
+         */
+        slug?: string;
+        /**
+         * An active product needs a price above 0 on every SKU.
+         */
+        status?: 'active' | 'draft';
+        condition: 'new' | 'refurbished' | 'used';
+        categoryId?: string | null;
+        brandId?: string | null;
+        metaTitle?: string | null;
+        metaDescription?: string | null;
+        /**
+         * Merchant-named options (up to five). Leave empty for a product sold as one SKU.
+         */
+        options?: Array<{
+            name: string;
+            values: Array<string>;
+            /**
+             * Which standard attribute it is for catalog feeds; each one at most once.
+             */
+            standardMapping?: 'size' | 'color' | 'material' | 'pattern' | 'none';
+        }>;
+        /**
+         * With options, one SKU per combination, each using every option's value; without options, exactly one.
+         */
+        variants: Array<{
+            /**
+             * Unique in the store, any case.
+             */
+            sku: string;
+            /**
+             * Its price, in minor units of the store currency at its price increment.
+             */
+            priceMinor: number;
+            /**
+             * One value of every option, by option name (`{ "Size": "M", "Color": "Red" }`); leave it out on a product without options.
+             */
+            optionValues?: {
+                [key: string]: string;
+            };
+            /**
+             * Omit or null to generate an internal barcode.
+             */
+            barcode?: string | null;
+            /**
+             * Required with `barcode`.
+             */
+            barcodeType?: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'code128' | 'custom' | null;
+            /**
+             * Count its stock. It starts at 0: set quantities through inventory.
+             */
+            trackInventory?: boolean;
+            weightGrams?: number | null;
+        }>;
+        /**
+         * Ready media library files (`dashboard.media.import_url`), in gallery order; the first is featured.
+         */
+        mediaIds?: Array<string>;
+        /**
+         * The sales channels to publish it to. Omit to publish it to every channel.
+         */
+        salesChannelIds?: Array<string>;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/resources/products';
+};
+
+export type PostApiV1AdminResourcesProductsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesProductsError = PostApiV1AdminResourcesProductsErrors[keyof PostApiV1AdminResourcesProductsErrors];
+
+export type PostApiV1AdminResourcesProductsResponses = {
+    /**
+     * The product
+     */
+    201: {
+        success: true;
+        data: {
+            product: ProductResource;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesProductsResponse = PostApiV1AdminResourcesProductsResponses[keyof PostApiV1AdminResourcesProductsResponses];
+
 export type GetApiV1AdminResourcesProductsByIdData = {
     body?: never;
     path: {
@@ -21963,6 +22191,89 @@ export type GetApiV1AdminResourcesProductsByIdResponses = {
 };
 
 export type GetApiV1AdminResourcesProductsByIdResponse = GetApiV1AdminResourcesProductsByIdResponses[keyof GetApiV1AdminResourcesProductsByIdResponses];
+
+export type PatchApiV1AdminResourcesProductsByIdData = {
+    body: {
+        /**
+         * The product's `revision` you read; a product changed since is refused with 409 and nothing is saved.
+         */
+        expectedRevision: number;
+        name?: string;
+        description?: string | null;
+        slug?: string;
+        /**
+         * An active product needs a price above 0.
+         */
+        status?: 'active' | 'draft';
+        condition?: 'new' | 'refurbished' | 'used' | null;
+        categoryId?: string | null;
+        brandId?: string | null;
+        metaTitle?: string | null;
+        metaDescription?: string | null;
+        /**
+         * A product without options: its price, in minor units of the store currency. A product with options prices each SKU (`variants.bulk_set_prices`).
+         */
+        priceMinor?: number;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/products/{id}';
+};
+
+export type PatchApiV1AdminResourcesProductsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PatchApiV1AdminResourcesProductsByIdError = PatchApiV1AdminResourcesProductsByIdErrors[keyof PatchApiV1AdminResourcesProductsByIdErrors];
+
+export type PatchApiV1AdminResourcesProductsByIdResponses = {
+    /**
+     * The product
+     */
+    200: {
+        success: true;
+        data: {
+            product: ProductResource;
+        };
+    };
+};
+
+export type PatchApiV1AdminResourcesProductsByIdResponse = PatchApiV1AdminResourcesProductsByIdResponses[keyof PatchApiV1AdminResourcesProductsByIdResponses];
 
 export type GetApiV1AdminResourcesVariantsByIdData = {
     body?: never;
@@ -23287,6 +23598,617 @@ export type GetApiV1AdminResourcesBulkRunsResponses = {
 };
 
 export type GetApiV1AdminResourcesBulkRunsResponse = GetApiV1AdminResourcesBulkRunsResponses[keyof GetApiV1AdminResourcesBulkRunsResponses];
+
+export type GetApiV1AdminResourcesGiftCardsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        status?: 'active' | 'disabled' | 'expired' | 'empty';
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/api/v1/admin/resources/gift-cards';
+};
+
+export type GetApiV1AdminResourcesGiftCardsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesGiftCardsError = GetApiV1AdminResourcesGiftCardsErrors[keyof GetApiV1AdminResourcesGiftCardsErrors];
+
+export type GetApiV1AdminResourcesGiftCardsResponses = {
+    /**
+     * A page of gift cards
+     */
+    200: {
+        success: true;
+        data: {
+            giftCards: Array<GiftCardSummaryResource>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesGiftCardsResponse = GetApiV1AdminResourcesGiftCardsResponses[keyof GetApiV1AdminResourcesGiftCardsResponses];
+
+export type PostApiV1AdminResourcesGiftCardsData = {
+    body: {
+        /**
+         * Its value, in minor units of the store currency.
+         */
+        amountMinor: number;
+        /**
+         * Omit for the store's default expiry; null for none.
+         */
+        expiresAt?: string | null;
+        customerId?: string | null;
+        recipient?: {
+            name?: string | null;
+            email?: string | null;
+            phone?: string | null;
+        } | null;
+        message?: string | null;
+        note?: string | null;
+        /**
+         * Send the code to the recipient (else the owning customer) now.
+         */
+        notify?: boolean;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/resources/gift-cards';
+};
+
+export type PostApiV1AdminResourcesGiftCardsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesGiftCardsError = PostApiV1AdminResourcesGiftCardsErrors[keyof PostApiV1AdminResourcesGiftCardsErrors];
+
+export type PostApiV1AdminResourcesGiftCardsResponses = {
+    /**
+     * The issued gift card
+     */
+    201: {
+        success: true;
+        data: {
+            giftCard: GiftCardResource;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesGiftCardsResponse = PostApiV1AdminResourcesGiftCardsResponses[keyof PostApiV1AdminResourcesGiftCardsResponses];
+
+export type GetApiV1AdminResourcesGiftCardsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/gift-cards/{id}';
+};
+
+export type GetApiV1AdminResourcesGiftCardsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesGiftCardsByIdError = GetApiV1AdminResourcesGiftCardsByIdErrors[keyof GetApiV1AdminResourcesGiftCardsByIdErrors];
+
+export type GetApiV1AdminResourcesGiftCardsByIdResponses = {
+    /**
+     * The gift card
+     */
+    200: {
+        success: true;
+        data: {
+            giftCard: GiftCardResource;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesGiftCardsByIdResponse = GetApiV1AdminResourcesGiftCardsByIdResponses[keyof GetApiV1AdminResourcesGiftCardsByIdResponses];
+
+export type PatchApiV1AdminResourcesGiftCardsByIdData = {
+    body: {
+        /**
+         * The card's `version` you read; a card changed since is refused with 409.
+         */
+        expectedVersion: number;
+        status?: 'active' | 'disabled';
+        /**
+         * null removes the expiry.
+         */
+        expiresAt?: string | null;
+        customerId?: string | null;
+        note?: string | null;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/gift-cards/{id}';
+};
+
+export type PatchApiV1AdminResourcesGiftCardsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PatchApiV1AdminResourcesGiftCardsByIdError = PatchApiV1AdminResourcesGiftCardsByIdErrors[keyof PatchApiV1AdminResourcesGiftCardsByIdErrors];
+
+export type PatchApiV1AdminResourcesGiftCardsByIdResponses = {
+    /**
+     * The gift card
+     */
+    200: {
+        success: true;
+        data: {
+            giftCard: GiftCardResource;
+        };
+    };
+};
+
+export type PatchApiV1AdminResourcesGiftCardsByIdResponse = PatchApiV1AdminResourcesGiftCardsByIdResponses[keyof PatchApiV1AdminResourcesGiftCardsByIdResponses];
+
+export type PostApiV1AdminResourcesGiftCardsByIdAdjustData = {
+    body: {
+        /**
+         * The card's `version` you read; a card changed since is refused with 409.
+         */
+        expectedVersion: number;
+        amountMinor: number;
+        reason: string;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/gift-cards/{id}/adjust';
+};
+
+export type PostApiV1AdminResourcesGiftCardsByIdAdjustErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesGiftCardsByIdAdjustError = PostApiV1AdminResourcesGiftCardsByIdAdjustErrors[keyof PostApiV1AdminResourcesGiftCardsByIdAdjustErrors];
+
+export type PostApiV1AdminResourcesGiftCardsByIdAdjustResponses = {
+    /**
+     * The gift card
+     */
+    200: {
+        success: true;
+        data: {
+            giftCard: GiftCardResource;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesGiftCardsByIdAdjustResponse = PostApiV1AdminResourcesGiftCardsByIdAdjustResponses[keyof PostApiV1AdminResourcesGiftCardsByIdAdjustResponses];
+
+export type GetApiV1AdminResourcesWebhookSubscriptionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/resources/webhook-subscriptions';
+};
+
+export type GetApiV1AdminResourcesWebhookSubscriptionsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesWebhookSubscriptionsError = GetApiV1AdminResourcesWebhookSubscriptionsErrors[keyof GetApiV1AdminResourcesWebhookSubscriptionsErrors];
+
+export type GetApiV1AdminResourcesWebhookSubscriptionsResponses = {
+    /**
+     * The app's subscriptions
+     */
+    200: {
+        success: true;
+        data: {
+            subscriptions: Array<AppWebhookSubscription>;
+            /**
+             * How many one app may keep.
+             */
+            maxSubscriptions: number;
+            apiVersion: string;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesWebhookSubscriptionsResponse = GetApiV1AdminResourcesWebhookSubscriptionsResponses[keyof GetApiV1AdminResourcesWebhookSubscriptionsResponses];
+
+export type PostApiV1AdminResourcesWebhookSubscriptionsData = {
+    body: {
+        /**
+         * HTTPS endpoint on one of the app's approved hosts (`allowedHosts`). Private, loopback and reserved addresses are refused.
+         */
+        url: string;
+        topics: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'inventory.*' | 'customer.*' | 'fulfillment.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'object.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'inventory.level_changed' | 'inventory.purchase_order_updated' | 'inventory.transfer_updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card.transaction' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested'>;
+        description?: string | null;
+        /**
+         * The buyer contact data deliveries include, within the app's protected data scopes; the rest read null. None by default.
+         */
+        customerData?: Array<'name' | 'email' | 'phone' | 'address'>;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/resources/webhook-subscriptions';
+};
+
+export type PostApiV1AdminResourcesWebhookSubscriptionsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesWebhookSubscriptionsError = PostApiV1AdminResourcesWebhookSubscriptionsErrors[keyof PostApiV1AdminResourcesWebhookSubscriptionsErrors];
+
+export type PostApiV1AdminResourcesWebhookSubscriptionsResponses = {
+    /**
+     * The subscription and its signing secret (shown once)
+     */
+    201: {
+        success: true;
+        data: {
+            subscription: AppWebhookSubscription;
+            secret: string;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesWebhookSubscriptionsResponse = PostApiV1AdminResourcesWebhookSubscriptionsResponses[keyof PostApiV1AdminResourcesWebhookSubscriptionsResponses];
+
+export type DeleteApiV1AdminResourcesWebhookSubscriptionsByIdData = {
+    body?: never;
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query: {
+        expectedVersion: number;
+    };
+    url: '/api/v1/admin/resources/webhook-subscriptions/{id}';
+};
+
+export type DeleteApiV1AdminResourcesWebhookSubscriptionsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type DeleteApiV1AdminResourcesWebhookSubscriptionsByIdError = DeleteApiV1AdminResourcesWebhookSubscriptionsByIdErrors[keyof DeleteApiV1AdminResourcesWebhookSubscriptionsByIdErrors];
+
+export type DeleteApiV1AdminResourcesWebhookSubscriptionsByIdResponses = {
+    /**
+     * Deleted
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            deleted: true;
+        };
+    };
+};
+
+export type DeleteApiV1AdminResourcesWebhookSubscriptionsByIdResponse = DeleteApiV1AdminResourcesWebhookSubscriptionsByIdResponses[keyof DeleteApiV1AdminResourcesWebhookSubscriptionsByIdResponses];
+
+export type PatchApiV1AdminResourcesWebhookSubscriptionsByIdData = {
+    body: {
+        /**
+         * The subscription's `version` you read; a stale one is refused with 409.
+         */
+        expectedVersion: number;
+        /**
+         * HTTPS endpoint on one of the app's approved hosts (`allowedHosts`). Private, loopback and reserved addresses are refused.
+         */
+        url?: string;
+        topics?: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'inventory.*' | 'customer.*' | 'fulfillment.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'object.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'inventory.level_changed' | 'inventory.purchase_order_updated' | 'inventory.transfer_updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card.transaction' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested'>;
+        description?: string | null;
+        /**
+         * The buyer contact data deliveries include, within the app's protected data scopes; the rest read null. None by default.
+         */
+        customerData?: Array<'name' | 'email' | 'phone' | 'address'>;
+        status?: 'active' | 'disabled';
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/webhook-subscriptions/{id}';
+};
+
+export type PatchApiV1AdminResourcesWebhookSubscriptionsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PatchApiV1AdminResourcesWebhookSubscriptionsByIdError = PatchApiV1AdminResourcesWebhookSubscriptionsByIdErrors[keyof PatchApiV1AdminResourcesWebhookSubscriptionsByIdErrors];
+
+export type PatchApiV1AdminResourcesWebhookSubscriptionsByIdResponses = {
+    /**
+     * The subscription
+     */
+    200: {
+        success: true;
+        data: {
+            subscription: AppWebhookSubscription;
+        };
+    };
+};
+
+export type PatchApiV1AdminResourcesWebhookSubscriptionsByIdResponse = PatchApiV1AdminResourcesWebhookSubscriptionsByIdResponses[keyof PatchApiV1AdminResourcesWebhookSubscriptionsByIdResponses];
 
 export type GetApiV1AdminCategoriesFormOptionsData = {
     body?: never;
@@ -56133,6 +57055,9 @@ export type PatchApiV1AdminProductsByIdSectionsBySectionData = {
             productCondition?: 'new' | 'refurbished' | 'used' | null;
             slug?: string;
             emiEligible?: boolean;
+            description?: string | null;
+            metaTitle?: string | null;
+            metaDescription?: string | null;
         };
     } | {
         section: 'text';

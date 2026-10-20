@@ -97,10 +97,18 @@ export const webhookSubscriptions = sqliteTable("webhook_subscriptions", {
     lastFailureAt: integer("last_failure_at"),
     version: integer("version").notNull().default(1),
     createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    /**
+     * The app that owns it (`plugin_installations.plugin_id`), or null for the
+     * store's own. An app manages only its own subscriptions, and they deliver
+     * only while it is active, within its approved hosts, topics and customer
+     * data; uninstalling it deletes them.
+     */
+    pluginId: text("plugin_id"),
     createdAt: integer("created_at").notNull().default(UNIX_NOW),
     updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
 }, (table) => [
     index("webhook_subscriptions_status_idx").on(table.status, table.createdAt),
+    index("webhook_subscriptions_plugin_idx").on(table.pluginId),
     check("webhook_subscriptions_status_check", sql`${table.status} IN ('active', 'disabled')`),
     check(
         "webhook_subscriptions_disabled_shape",

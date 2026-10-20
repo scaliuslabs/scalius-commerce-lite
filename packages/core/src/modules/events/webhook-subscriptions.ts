@@ -3,6 +3,11 @@
 // and stored only as AES-GCM ciphertext under CREDENTIAL_ENCRYPTION_KEY.
 // `customerData` (H5) lists the protected customer data categories an
 // endpoint's deliveries carry; the rest read null. None by default.
+//
+// An app may own subscriptions (`pluginId`): every read and write here takes
+// the owner, so an app sees and changes only its own, and its endpoints must
+// stay inside what its grant approved (hosts, topics, customer data; checked
+// again at each delivery, so a narrowed grant narrows them at once).
 
 import type { Database } from "@scalius/database/client";
 import {
@@ -17,6 +22,7 @@ import {
   type EventTopicFilter,
 } from "@scalius/shared/events";
 import { checkOutboundUrl, describeOutboundUrlIssue } from "@scalius/shared/outbound-url";
+import { eventFilterCovered, isPluginHostAllowed } from "@scalius/shared/plugins/manifest";
 import {
   PROTECTED_CUSTOMER_DATA,
   isProtectedCustomerData,
@@ -44,6 +50,25 @@ export class WebhookVersionConflictError extends AppError {
 
 /** Endpoints per store: keeps every event's fan-out one small batch. */
 export const MAX_WEBHOOK_SUBSCRIPTIONS = 20;
+/** Endpoints one app may own, within the store's limit. */
+export const MAX_APP_WEBHOOK_SUBSCRIPTIONS = 5;
+
+/**
+ * What an app's grant lets its subscriptions do: its approved hosts
+ * (`allowedHosts`), event topics and protected customer data. Null when the
+ * app is not active.
+ */
+export interface AppWebhookAccess {
+  allowedHosts: readonly string[];
+  topics: readonly EventTopicFilter[];
+  customerData: readonly ProtectedCustomerData[];
+}
+
+/** Whose subscriptions a call reaches: an app's own, or (omitted) every one, for staff. */
+export interface WebhookOwner {
+  pluginId: string;
+  access: AppWebhookAccess;
+}
 export const WEBHOOK_DESCRIPTION_MAX_LENGTH = 200;
 
 export interface WebhookSubscriptionView {
@@ -63,6 +88,8 @@ export interface WebhookSubscriptionView {
   lastFailureAt: number | null;
   secretHint: string;
   version: number;
+  /** The app that owns it; null for the store's own. */
+  appId: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -111,6 +138,7 @@ export function toWebhookSubscriptionView(row: WebhookSubscription): WebhookSubs
     lastFailureAt: row.lastFailureAt ?? null,
     secretHint: row.secretHint,
     version: Number(row.version),
+    appId: row.pluginId ?? null,
     createdAt: Number(row.createdAt),
     updatedAt: Number(row.updatedAt),
   };
@@ -179,18 +207,48 @@ function newSubscriptionId(): string {
   return `whs_${crypto.randomUUID().replace(/-/g, "")}`;
 }
 
-export async function listWebhookSubscriptions(db: Database): Promise<WebhookSubscriptionView[]> {
+export async function listWebhookSubscriptions(db: Database, owner?: WebhookOwner): Promise<WebhookSubscriptionView[]> {
   const rows = await db
     .select()
     .from(webhookSubscriptions)
+    .where(owner ? eq(webhookSubscriptions.pluginId, owner.pluginId) : undefined)
     .orderBy(asc(webhookSubscriptions.createdAt), asc(webhookSubscriptions.id))
     .limit(MAX_WEBHOOK_SUBSCRIPTIONS)
     .all();
   return rows.map(toWebhookSubscriptionView);
 }
 
-export async function getWebhookSubscription(db: Database, id: string): Promise<WebhookSubscriptionView> {
-  const row = await db.select().from(webhookSubscriptions).where(eq(webhookSubscriptions.id, id)).get();
+/** Matches the subscription, and only the owner's when one is given. */
+function ownedBy(id: string, owner: WebhookOwner | undefined) {
+  return owner
+    ? and(eq(webhookSubscriptions.id, id), eq(webhookSubscriptions.pluginId, owner.pluginId))
+    : eq(webhookSubscriptions.id, id);
+}
+
+/** An app's endpoint must stay within its grant: an approved host, granted topics and customer data. */
+function assertWithinAppAccess(
+  owner: WebhookOwner | undefined,
+  values: { url?: string; topics?: EventTopicFilter[]; customerData?: ProtectedCustomerData[] },
+): void {
+  if (!owner) return;
+  if (values.url !== undefined) {
+    const url = new URL(values.url);
+    if (!isPluginHostAllowed(url.hostname, owner.access.allowedHosts, url.port)) {
+      throw new ValidationError("The endpoint's host is not one of the app's approved hosts (allowedHosts).", { field: "url" });
+    }
+  }
+  const ungranted = values.topics?.filter((topic) => !eventFilterCovered(topic, owner.access.topics)) ?? [];
+  if (ungranted.length > 0) {
+    throw new ValidationError(`The app's grant does not cover ${ungranted.join(", ")}: request the events in its manifest.`, { field: "topics" });
+  }
+  const hidden = values.customerData?.filter((category) => !owner.access.customerData.includes(category)) ?? [];
+  if (hidden.length > 0) {
+    throw new ValidationError(`The app may not read customer ${hidden.join(", ")} data.`, { field: "customerData" });
+  }
+}
+
+export async function getWebhookSubscription(db: Database, id: string, owner?: WebhookOwner): Promise<WebhookSubscriptionView> {
+  const row = await db.select().from(webhookSubscriptions).where(ownedBy(id, owner)).get();
   if (!row) throw new NotFoundError("Webhook not found");
   return toWebhookSubscriptionView(row);
 }
@@ -209,18 +267,25 @@ async function assertUrlFree(db: Database, url: string, exceptId?: string): Prom
 export async function createWebhookSubscription(
   db: Database,
   input: { url: unknown; topics: unknown; description?: unknown; customerData?: unknown },
-  options: { actorId: string | null; encryptionKey: string | undefined },
+  options: { actorId: string | null; encryptionKey: string | undefined; owner?: WebhookOwner },
 ): Promise<{ subscription: WebhookSubscriptionView; secret: string }> {
   const url = validateWebhookUrl(input.url);
   const topics = validateWebhookTopics(input.topics);
   const customerData = input.customerData === undefined ? [] : validateWebhookCustomerData(input.customerData);
   const description = validateDescription(input.description);
+  assertWithinAppAccess(options.owner, { url, topics, customerData });
   const count = await db
-    .select({ count: sql<number>`count(*)` })
+    .select({
+      count: sql<number>`count(*)`,
+      owned: options.owner ? sql<number>`sum(CASE WHEN ${webhookSubscriptions.pluginId} = ${options.owner.pluginId} THEN 1 ELSE 0 END)` : sql<number>`0`,
+    })
     .from(webhookSubscriptions)
     .get();
   if (Number(count?.count ?? 0) >= MAX_WEBHOOK_SUBSCRIPTIONS) {
     throw new ConflictError(`A store can have at most ${MAX_WEBHOOK_SUBSCRIPTIONS} webhooks. Delete one first.`);
+  }
+  if (options.owner && Number(count?.owned ?? 0) >= MAX_APP_WEBHOOK_SUBSCRIPTIONS) {
+    throw new ConflictError(`An app can have at most ${MAX_APP_WEBHOOK_SUBSCRIPTIONS} webhooks. Delete one first.`);
   }
   await assertUrlFree(db, url);
 
@@ -238,6 +303,7 @@ export async function createWebhookSubscription(
       secretCiphertext: await encryptSecret(secret, options.encryptionKey),
       secretHint: secretHint(secret),
       createdBy: options.actorId,
+      pluginId: options.owner?.pluginId ?? null,
     })
     .returning();
   return { subscription: toWebhookSubscriptionView(rows[0]!), secret };
@@ -250,6 +316,7 @@ async function updateGuarded(
   id: string,
   expectedVersion: number,
   values: SubscriptionSet,
+  owner?: WebhookOwner,
 ): Promise<WebhookSubscriptionView> {
   if (!Number.isSafeInteger(expectedVersion) || expectedVersion < 1) {
     throw new ValidationError("expectedVersion must be a positive integer.", { field: "expectedVersion" });
@@ -257,13 +324,13 @@ async function updateGuarded(
   const rows = await db
     .update(webhookSubscriptions)
     .set({ ...values, version: sql`${webhookSubscriptions.version} + 1`, updatedAt: sql`unixepoch()` })
-    .where(and(eq(webhookSubscriptions.id, id), eq(webhookSubscriptions.version, expectedVersion)))
+    .where(and(ownedBy(id, owner), eq(webhookSubscriptions.version, expectedVersion)))
     .returning();
   if (rows[0]) return toWebhookSubscriptionView(rows[0]);
   const current = await db
     .select({ version: webhookSubscriptions.version })
     .from(webhookSubscriptions)
-    .where(eq(webhookSubscriptions.id, id))
+    .where(ownedBy(id, owner))
     .get();
   if (!current) throw new NotFoundError("Webhook not found");
   throw new WebhookVersionConflictError(id, expectedVersion, Number(current.version));
@@ -280,16 +347,20 @@ export async function updateWebhookSubscription(
     customerData?: unknown;
     status?: "active" | "disabled";
   },
+  owner?: WebhookOwner,
 ): Promise<WebhookSubscriptionView> {
   const values: SubscriptionSet = {};
-  if (input.url !== undefined) {
-    const url = validateWebhookUrl(input.url);
+  const url = input.url === undefined ? undefined : validateWebhookUrl(input.url);
+  const topics = input.topics === undefined ? undefined : validateWebhookTopics(input.topics);
+  const customerData = input.customerData === undefined ? undefined : validateWebhookCustomerData(input.customerData);
+  assertWithinAppAccess(owner, { url, topics, customerData });
+  if (url !== undefined) {
     await assertUrlFree(db, url, id);
     values.url = url;
   }
-  if (input.topics !== undefined) values.topics = JSON.stringify(validateWebhookTopics(input.topics));
+  if (topics !== undefined) values.topics = JSON.stringify(topics);
   if (input.description !== undefined) values.description = validateDescription(input.description);
-  if (input.customerData !== undefined) values.customerData = JSON.stringify(validateWebhookCustomerData(input.customerData));
+  if (customerData !== undefined) values.customerData = JSON.stringify(customerData);
   if (input.status === "disabled") {
     Object.assign(values, {
       status: "disabled" as const,
@@ -306,7 +377,7 @@ export async function updateWebhookSubscription(
       failingSince: null,
     });
   }
-  return updateGuarded(db, id, input.expectedVersion, values);
+  return updateGuarded(db, id, input.expectedVersion, values, owner);
 }
 
 export async function rotateWebhookSecret(
@@ -330,10 +401,21 @@ export async function rotateWebhookSecret(
   return { subscription: toWebhookSubscriptionView(rows[0]), secret };
 }
 
-export async function deleteWebhookSubscription(db: Database, id: string): Promise<void> {
+export async function deleteWebhookSubscription(
+  db: Database,
+  id: string,
+  owner?: WebhookOwner,
+  /** The version the caller read: a subscription changed since is refused (409) and kept. */
+  expectedVersion?: number,
+): Promise<void> {
   const rows = await db
     .delete(webhookSubscriptions)
-    .where(eq(webhookSubscriptions.id, id))
+    .where(expectedVersion === undefined ? ownedBy(id, owner) : and(ownedBy(id, owner), eq(webhookSubscriptions.version, expectedVersion)))
     .returning({ id: webhookSubscriptions.id });
-  if (rows.length === 0) throw new NotFoundError("Webhook not found");
+  if (rows.length > 0) return;
+  const current = expectedVersion === undefined
+    ? undefined
+    : await db.select({ version: webhookSubscriptions.version }).from(webhookSubscriptions).where(ownedBy(id, owner)).get();
+  if (!current) throw new NotFoundError("Webhook not found");
+  throw new WebhookVersionConflictError(id, expectedVersion!, Number(current.version));
 }

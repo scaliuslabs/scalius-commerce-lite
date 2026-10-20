@@ -153,7 +153,7 @@
    },
    "scopes": {
     "default": [],
-    "maxItems": 25,
+    "maxItems": 28,
     "type": "array",
     "items": {
      "type": "string",
@@ -181,6 +181,9 @@
       "write_objects",
       "read_files",
       "write_files",
+      "read_gift_cards",
+      "write_gift_cards",
+      "write_webhooks",
       "read_settings",
       "write_places"
      ]
@@ -1456,6 +1459,9 @@
           "write_objects",
           "read_files",
           "write_files",
+          "read_gift_cards",
+          "write_gift_cards",
+          "write_webhooks",
           "read_settings",
           "write_places"
          ]
@@ -3109,7 +3115,7 @@
       },
       "scopes": {
        "default": [],
-       "maxItems": 25,
+       "maxItems": 28,
        "type": "array",
        "items": {
         "type": "string",
@@ -3137,6 +3143,9 @@
          "write_objects",
          "read_files",
          "write_files",
+         "read_gift_cards",
+         "write_gift_cards",
+         "write_webhooks",
          "read_settings",
          "write_places"
         ]

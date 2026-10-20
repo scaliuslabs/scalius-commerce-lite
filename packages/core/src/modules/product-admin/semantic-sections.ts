@@ -111,6 +111,11 @@ const productBasePatchSchema = z.object({
     slug: z.string().min(3).max(100).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).optional(),
     /** Shows the store's EMI line (when the store has EMI plans). Informational only. */
     emiEligible: z.boolean().optional(),
+    /** Whole-field replacements, saved in the same write (the `text` section edits a range). */
+    description: z.string().min(10).nullable().optional(),
+    metaTitle: z.string().max(PRODUCT_SEMANTIC_TEXT_CHUNK_MAX).nullable().optional(),
+    metaDescription: z.string().max(PRODUCT_SEMANTIC_TEXT_CHUNK_MAX).nullable().optional()
+        .refine((value) => !value?.includes("<!--variant_images:"), "Legacy variant-image metadata is not allowed. Assign images directly to SKUs."),
 }).refine(
     (patch) => Object.values(patch).some((value) => value !== undefined),
     "Provide at least one base field.",
@@ -642,6 +647,9 @@ async function updateBaseSection(
         productCondition: products.productCondition,
         slug: products.slug,
         emiEligible: products.emiEligible,
+        description: products.description,
+        metaTitle: products.metaTitle,
+        metaDescription: products.metaDescription,
     }).from(products).where(eq(products.id, productId)).get(), readStoreCurrency(db)]);
     if (!current) return null;
     const { price, discountPercentage, discountAmount, ...otherPatch } = patch;
@@ -684,6 +692,9 @@ async function updateBaseSection(
         productCondition: next.productCondition,
         slug: next.slug,
         emiEligible: next.emiEligible,
+        description: next.description,
+        metaTitle: next.metaTitle,
+        metaDescription: next.metaDescription,
     }).where(eq(products.id, productId))];
 
     if (price !== undefined || patch.isActive !== undefined) {
