@@ -100,9 +100,14 @@ vi.mock("@scalius/core/modules/checkout", async (importOriginal) => {
       identity: unknown,
       input: unknown,
       key: unknown,
-      options?: { apps?: (registrations: never[]) => unknown },
+      options?: { apps?: (registrations: never[]) => unknown; session?: { token: string; hashKey: unknown } | null },
     ) => {
       const existingAttempt = await mocks.resolveExistingCheckoutAttempt(db, identity);
+      // The batch's session row, here the session seam.
+      const session = options?.session
+        ? await mocks.getCustomerBySession(db, options.session.token, options.session.hashKey)
+          .then((value: { customerId?: string } | null) => ({ value }), (error: unknown) => ({ error }))
+        : null;
       let authority: Promise<unknown> | null = null;
       if (existingAttempt?.status !== "replay" && existingAttempt?.status !== "processing") {
         const pending: Promise<unknown> = mocks.loadStorefrontCheckoutAuthority(db, input, key);
@@ -121,6 +126,10 @@ vi.mock("@scalius/core/modules/checkout", async (importOriginal) => {
           if (!snapshot) throw new Error("replay");
           if ("error" in snapshot) throw snapshot.error;
           return snapshot.value;
+        },
+        session: () => {
+          if (session && "error" in session) throw session.error;
+          return session?.value?.customerId ? { customerId: session.value.customerId } : null;
         },
       };
     },

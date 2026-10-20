@@ -260,8 +260,8 @@ describe("checkout route D1 budget with app checkout functions", () => {
           3,
         ],
         "signedIn": [
-          4,
-          4,
+          3,
+          3,
         ],
       }
     `);

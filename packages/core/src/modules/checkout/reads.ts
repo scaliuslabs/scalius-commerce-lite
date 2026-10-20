@@ -5,7 +5,9 @@ import { selectReservationVariantStates, type ReservationVariantState } from "..
 import {
   type ContactCustomerCandidate,
   type OrderContact,
+  hashCustomerSessionToken,
   selectContactCustomerCandidates,
+  selectSessionCustomer,
 } from "../customers";
 import {
     resolveCheckoutAttemptRow,
@@ -72,19 +74,18 @@ export async function loadStorefrontCheckoutReads<TResponse>(
     identity: CheckoutAttemptIdentity,
     authorityInput: CheckoutReadsAuthorityInput,
     credentialEncryptionKey?: string,
-    options: {
-        paymentProviders?: (registrations: readonly RegisteredPlugin[]) => PaymentProviders;
-        apps?: (registrations: RegisteredPlugin[]) => CheckoutAppFunctions;
-        linePricer?: (apps: CheckoutAppFunctions) => AppLinePricer | undefined;
+    options: CheckoutReadsOptions & {
+        /** The `customerId` is the signed-in buyer's (`session`), read once the batch has answered. */
+        linePricer?: (apps: CheckoutAppFunctions, customerId: PromiseLike<string | null>) => AppLinePricer | undefined;
         /** `cart.transform`: rewritten lines are read again (one more round trip, only while such an app is active). */
-        transformer?: (apps: CheckoutAppFunctions) => CartTransformer | undefined;
+        transformer?: (apps: CheckoutAppFunctions, customerId: PromiseLike<string | null>) => CartTransformer | undefined;
     } = {},
 ): Promise<StorefrontCheckoutReads<TResponse>> {
     let linePricer: AppLinePricer | undefined;
     let transformer: CartTransformer | undefined;
-    const reads = await readCheckoutOnce<TResponse>(db, identity, authorityInput, credentialEncryptionKey, options, (apps) => {
-        linePricer = options.linePricer?.(apps);
-        transformer = options.transformer?.(apps);
+    const reads = await readCheckoutOnce<TResponse>(db, identity, authorityInput, credentialEncryptionKey, options, (apps, customerId) => {
+        linePricer = options.linePricer?.(apps, customerId);
+        transformer = options.transformer?.(apps, customerId);
         // With a transform the first pass is what the transform sees: catalogue
         // prices, as on the cart page (`validateStorefrontCartItems`). The
         // apps price the lines once, as the order holds them.
@@ -133,10 +134,33 @@ export async function loadStorefrontCheckoutReads<TResponse>(
 
 type CheckoutReadsAuthorityInput = StorefrontCheckoutAuthorityInput & { customerPhone: string | null; customerEmail?: string | null };
 
+/** The buyer's session cookie: hashed, then read in the checkout's batch. */
+export interface CheckoutSessionInput {
+    token: string;
+    hashKey: string | undefined;
+}
+
+interface CheckoutReadsOptions {
+    paymentProviders?: (registrations: readonly RegisteredPlugin[]) => PaymentProviders;
+    apps?: (registrations: RegisteredPlugin[]) => CheckoutAppFunctions;
+    /**
+     * The request's session (null: none sent). It replaces
+     * `authorityInput.customerId`: segment prices, the apps and an
+     * account-owned attempt read the signed-in buyer from this batch.
+     */
+    session?: CheckoutSessionInput | null;
+}
+
 export interface StorefrontCheckoutReads<TResponse> {
     existingAttempt: CheckoutAttemptReplayResult<TResponse> | null;
     commitReads: StorefrontOrderCommitReads;
     authority(): StorefrontCheckoutAuthoritySnapshot;
+    /**
+     * The customer the request's session signs in; null without a session or
+     * when it no longer signs anyone in. Throws when the session could not be
+     * read (no session key).
+     */
+    session(): { customerId: string } | null;
     /** Active checkout function registrations, every point. */
     functionRegistrations: RegisteredPlugin[];
     /** The request's gateways: built-in and the active app providers. */
@@ -163,15 +187,23 @@ async function readCheckoutOnce<TResponse>(
     identity: CheckoutAttemptIdentity,
     authorityInput: CheckoutReadsAuthorityInput,
     credentialEncryptionKey: string | undefined,
-    options: {
-        paymentProviders?: (registrations: readonly RegisteredPlugin[]) => PaymentProviders;
-        apps?: (registrations: RegisteredPlugin[]) => CheckoutAppFunctions;
-    },
-    bind: (apps: CheckoutAppFunctions) => Pick<StorefrontCheckoutAuthorityInput, "linePricer" | "deferSubmittedPriceCheck">,
+    options: CheckoutReadsOptions,
+    bind: (apps: CheckoutAppFunctions, customerId: PromiseLike<string | null>) => Pick<StorefrontCheckoutAuthorityInput, "linePricer" | "deferSubmittedPriceCheck">,
 ): Promise<StorefrontCheckoutReads<TResponse>> {
+    const session = options.session
+        ? await hashCustomerSessionToken(options.session.token, options.session.hashKey)
+            .then((tokenHash) => ({ tokenHash }), (error: unknown) => ({ error }))
+        : null;
+    let signedInCustomerId: string | null = null;
+    // The signed-in buyer, from this batch's session row: everything that
+    // needs it awaits it only once the batch has answered.
+    const customerId: PromiseLike<string | null> = options.session !== undefined
+        ? { then: (onFulfilled, onRejected) => Promise.resolve(signedInCustomerId).then(onFulfilled, onRejected) }
+        : { then: (onFulfilled, onRejected) => Promise.resolve(authorityInput.customerId ?? null).then(onFulfilled, onRejected) };
     let bound: Pick<StorefrontCheckoutAuthorityInput, "linePricer" | "deferSubmittedPriceCheck"> = {};
     const plan = createStorefrontCheckoutAuthorityReadPlan(db, {
         ...authorityInput,
+        customerId,
         linePricer: () => bound.linePricer?.(),
         deferSubmittedPriceCheck: () => bound.deferSubmittedPriceCheck?.() ?? false,
     });
@@ -185,6 +217,7 @@ async function readCheckoutOnce<TResponse>(
         selectContactCustomerCandidates(db, contact),
         selectReservationVariantStates(db, variantIds),
         selectActiveCheckoutRegistrations(db),
+        ...(session && "tokenHash" in session ? [selectSessionCustomer(db, session.tokenHash)] : []),
     ];
     let results: unknown[];
     try {
@@ -192,15 +225,17 @@ async function readCheckoutOnce<TResponse>(
     } catch (error) {
         throw tagCheckoutError(error, "CHECKOUT_AUTHORITY_BATCH");
     }
-    const [attemptRows, customerRows, variantRows, registrationRows] = results.slice(plan.statements.length) as [
+    const [attemptRows, customerRows, variantRows, registrationRows, sessionRows] = results.slice(plan.statements.length) as [
         CheckoutAttemptRow[],
         ContactCustomerCandidate[],
         ReservationVariantState[],
         ActiveFunctionRegistrationRow[] | undefined,
+        Array<{ customerId: string }> | undefined,
     ];
+    signedInCustomerId = sessionRows?.[0]?.customerId ?? null;
     const existingAttempt = resolveCheckoutAttemptRow<TResponse>(
         attemptRows[0], identity,
-        attemptRows[0]?.linkedOrderAccountOwnerCustomerId ? await authorityInput.customerId : undefined,
+        attemptRows[0]?.linkedOrderAccountOwnerCustomerId ? await customerId : undefined,
     );
     const registrations = resolveActiveFunctionRegistrations(registrationRows ?? []);
     const paymentRegistrations = registrations.filter((registration) => registration.kind === "provider");
@@ -209,7 +244,7 @@ async function readCheckoutOnce<TResponse>(
         : BUILT_IN_PAYMENT_PROVIDERS;
     const functionRegistrations = registrations.filter((registration) => registration.kind !== "provider");
     const apps = options.apps?.(functionRegistrations) ?? NO_CHECKOUT_APP_FUNCTIONS;
-    bound = bind(apps);
+    bound = bind(apps, customerId);
     const settled: SettledAuthority = existingAttempt
         ? { ok: false, error: new Error("Replayed checkout does not resolve authority.") }
         : await plan.resolve(
@@ -232,6 +267,10 @@ async function readCheckoutOnce<TResponse>(
         authority() {
             if (!settled.ok) throw settled.error;
             return settled.snapshot;
+        },
+        session() {
+            if (session && "error" in session) throw session.error;
+            return signedInCustomerId ? { customerId: signedInCustomerId } : null;
         },
         functionRegistrations,
         paymentProviders,
