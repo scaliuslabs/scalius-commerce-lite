@@ -12,6 +12,7 @@ import { loadStorefrontCheckoutAuthority } from "./authority";
 import { commitStorefrontOrderPayload } from "./commit";
 import { createStorefrontOrder, createTrustedStorefrontCheckoutPolicySnapshot } from "./prepare";
 import type { CreateStorefrontOrderInput } from "../orders/types";
+import { createOrder } from "../orders";
 
 describe("checkout freezes the warranty revision (W2)", () => {
     let sqlite: DatabaseSync;
@@ -133,5 +134,32 @@ describe("checkout freezes the warranty revision (W2)", () => {
 
         const later = await checkout([{ productId: "p_phone", variantId: "v_phone", quantity: 1, price: 20000 }]);
         expect(revisions(later.orderId)).toEqual([{ product_id: "p_phone", warranty_revision_id: "wrr_phone_rev_03" }]);
+    });
+
+    it("freezes the same revision on a staff order: every channel commits through one kernel", async () => {
+        const { id } = await createOrder(db, {
+            requestKey: crypto.randomUUID(),
+            customerName: "Warranty Buyer",
+            customerPhone: "+8801712345678",
+            customerEmail: null,
+            shippingAddress: null,
+            city: null,
+            zone: null,
+            area: null,
+            notes: null,
+            items: [
+                { productId: "p_phone", variantId: "v_phone", quantity: 1 },
+                { productId: "p_cable", variantId: "v_cable", quantity: 2 },
+            ],
+            discountAmount: null,
+            shippingCharge: 0,
+            shippingMethodId: "m_pickup",
+        }, "user_staff");
+        const commits = batches.filter((statements) => statements.some((statement) => statement.query.startsWith('insert into "orders"')));
+        expect(commits).toHaveLength(1);
+        expect(revisions(id)).toEqual([
+            { product_id: "p_cable", warranty_revision_id: null },
+            { product_id: "p_phone", warranty_revision_id: "wrr_phone_rev_02" },
+        ]);
     });
 });
