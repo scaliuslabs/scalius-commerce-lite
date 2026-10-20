@@ -345,7 +345,7 @@ function shapeOperationResult(
   let data = unwrapRouteBody(result.data);
   Object.assign(meta, paginationMeta(operation, data));
   if (options.select && options.select.length > 0) data = selectPointers(data, options.select);
-  const fitted = fitToBudget(data, options.budget);
+  const fitted = fitToBudget(data, options.budget, { paged: meta.nextCursor !== undefined || meta.hasMore !== undefined });
   return { ok: true, data: fitted.data, meta: { ...meta, ...fitted.meta } };
 }
 
