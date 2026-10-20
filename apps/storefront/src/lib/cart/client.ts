@@ -1509,6 +1509,21 @@ export function refreshCartBlockingState() {
   updateCheckoutButtonState();
 }
 
+/** A cart item that needs attention unfolds the phone order summary once, so the buyer sees which. */
+let summaryOpenedForCartIssues = false;
+function revealOrderSummaryForCartIssues(blocked: boolean): void {
+  if (!blocked) {
+    summaryOpenedForCartIssues = false;
+    return;
+  }
+  if (summaryOpenedForCartIssues) return;
+  summaryOpenedForCartIssues = true;
+  const root = document.getElementById("cartPageRoot");
+  if (root?.dataset.summary !== "closed") return;
+  root.dataset.summary = "open";
+  document.getElementById("orderSummaryToggle")?.setAttribute("aria-expanded", "true");
+}
+
 export function updateCheckoutButtonState() {
   const submitButton = document.getElementById(
     "submitButton",
@@ -1523,12 +1538,14 @@ export function updateCheckoutButtonState() {
     document.getElementById("cartPageRoot")?.dataset.cartReady !== "false";
   const isEmpty = Object.keys(cartStore.get().items).length === 0;
   const copy = activeCheckoutCopy();
+  const cartBlocked = hasBlockingCartIssues();
+  revealOrderSummaryForCartIssues(cartBlocked && cartReady && !isEmpty);
   applyCheckoutButtonState(submitButton, {
     checkoutUnavailable,
     unavailableMessage,
     isEmpty: isEmpty || !cartReady,
     emptyMessage: copy.cartEmptyErrorText,
-    cartBlocked: hasBlockingCartIssues(),
+    cartBlocked,
     cartBlockedMessage: cartBlockedMessage(),
     cartAttentionMessage: copy.cartAttentionText,
     cartRulesBlocked: hasCartRuleErrors(),

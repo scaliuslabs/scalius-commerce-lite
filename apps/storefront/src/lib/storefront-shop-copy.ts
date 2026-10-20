@@ -48,6 +48,9 @@ export interface ShopCopy {
     shopByCategory: string;
     /** Under the cart page's lines (the drawer has only Check out). */
     clearCart: string;
+    /** The phone checkout's order summary bar, beside the total. */
+    showSummary: string;
+    hideSummary: string;
   };
 }
 
@@ -85,6 +88,8 @@ const EN: ShopCopy = {
     popularNow: "Popular now",
     shopByCategory: "Shop by category",
     clearCart: "Clear cart",
+    showSummary: "Show order summary",
+    hideSummary: "Hide order summary",
   },
 };
 
@@ -122,6 +127,8 @@ const BN: ShopCopy = {
     popularNow: "এখন জনপ্রিয়",
     shopByCategory: "ক্যাটাগরি অনুযায়ী কিনুন",
     clearCart: "কার্ট খালি করুন",
+    showSummary: "অর্ডারের সারাংশ দেখুন",
+    hideSummary: "অর্ডারের সারাংশ লুকান",
   },
 };
 

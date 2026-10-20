@@ -128,4 +128,62 @@ describe("cart page first paint", () => {
     expect(noscript).toContain("copy.noScriptText");
     expect(cartPage).toMatch(/<div class="grid [^"]*" data-cart-grid>/);
   });
+
+  describe("phone checkout order (P14)", () => {
+    const layoutScript =
+      cartPage.match(/<script is:inline>((?:(?!<\/script>)[\s\S])*?getElementById\("orderSummaryToggle"\)[\s\S]*?)<\/script>/)?.[1] ?? "";
+    const mount = (wide: boolean, url = "/cart") => {
+      window.history.replaceState(null, "", url);
+      Object.defineProperty(window, "matchMedia", {
+        configurable: true,
+        value: () => ({ matches: wide, addEventListener: () => undefined }),
+      });
+      document.body.innerHTML = `
+        <div id="cartPageRoot" data-summary="closed">
+          <div data-cart-grid>
+            <div id="cartColumn"><button id="orderSummaryToggle" aria-expanded="false"></button></div>
+            <div id="checkoutPanel"><button id="submitButton"></button></div>
+          </div>
+        </div>`;
+      new Function(layoutScript)();
+      const grid = document.querySelector("[data-cart-grid]")!;
+      return {
+        order: [...grid.children].map((child) => child.id),
+        summary: document.getElementById("cartPageRoot")!.dataset.summary,
+        expanded: document.getElementById("orderSummaryToggle")!.getAttribute("aria-expanded"),
+      };
+    };
+    afterEach(() => window.history.replaceState(null, "", "/"));
+
+    it("puts the cart before the form on phones and after it on wide screens, in the DOM itself", () => {
+      expect(layoutScript).not.toBe("");
+      expect(mount(false).order).toEqual(["cartColumn", "checkoutPanel"]);
+      expect(mount(true).order).toEqual(["checkoutPanel", "cartColumn"]);
+      // No CSS reordering: what is read and tabbed is what is seen (WCAG 1.3.2, 2.4.3).
+      expect(cartPage).not.toMatch(/\b(lg:)?order-[12]\b/);
+    });
+
+    it("folds the summary for a buyer who came to check out and opens it for one who came to view the cart", () => {
+      expect(mount(false, "/cart#checkoutFormCard")).toMatchObject({ summary: "closed", expanded: "false" });
+      expect(mount(false, "/cart")).toMatchObject({ summary: "open", expanded: "true" });
+      sessionStorage.setItem("quickBuyData", "{}");
+      expect(mount(false, "/cart")).toMatchObject({ summary: "closed", expanded: "false" });
+    });
+
+    it("toggles the summary before the page scripts load, and never hides an empty cart's message", () => {
+      const toggle = cartPage.match(/<button\s+type="button"\s+id="orderSummaryToggle"[\s\S]*?>/)?.[0] ?? "";
+      expect(toggle).toContain('aria-controls="orderSummaryBody"');
+      expect(toggle).toMatch(/onclick="[^"]*dataset\.summary[^"]*aria-expanded/);
+      expect(toggle).toContain("lg:hidden");
+      expect(cartPage).toContain('#cartPageRoot[data-summary="closed"]:not([data-cart-state="empty"]) #orderSummaryBody { display: none; }');
+      expect(cartPage).toContain('<span id="orderSummaryToggleTotal"');
+    });
+
+    it("says the total on Place order and why it is disabled in a line the button names", () => {
+      const button = cartPage.slice(cartPage.indexOf('id="submitButton"'), cartPage.indexOf("</button>", cartPage.indexOf('id="submitButton"')));
+      expect(button).toContain('id="submitButtonTotal"');
+      expect(button).toContain('aria-describedby={checkoutUnavailable ? "submitButtonReason" : undefined}');
+      expect(cartPage).toMatch(/<p id="submitButtonReason"[^>]*hidden=\{!checkoutUnavailable\}/);
+    });
+  });
 });

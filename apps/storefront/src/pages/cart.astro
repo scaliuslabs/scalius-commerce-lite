@@ -387,6 +387,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
     data-delivery-need="method"
     data-delivery-mode={pickupOnly ? "pickup" : "delivery"}
     data-mode-switch={deliveryModeSwitch ? "true" : "false"}
+    data-summary="closed"
     class="group container mx-auto max-w-6xl px-4 pb-6 pt-5 sm:px-6 sm:pt-7"
   >
     {/* Before first paint: with nothing saved, the server-rendered empty state
@@ -500,11 +501,206 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
       </div>
     </aside>
 
-    {/* The form comes first in reading and keyboard order; on phones the cart shows above it. */}
+    {/* Reading and keyboard order follow what is on screen (WCAG 1.3.2, 2.4.3):
+        on phones the order summary bar and cart come first, then the form; on
+        wide screens the form is on the start side and the cart beside it, so
+        the script after the grid moves the cart column after the form there. */}
     {/* The grid holds a screen of space from first paint, so the footer stays
         below the fold and does not move when the lines render (CLS). */}
     <div class="grid min-h-[100svh] content-start gap-4 lg:grid-cols-12 lg:gap-8" data-cart-grid>
-      <div id="checkoutPanel" class="hidden order-2 min-w-0 lg:order-1 lg:col-span-7">
+      <div
+        id="cartColumn"
+        class="min-w-0 lg:col-span-5 lg:sticky lg:self-start group-data-[cart-state=empty]:lg:col-span-12"
+        style="top: calc(var(--header-height, 64px) + 1rem);"
+      >
+        {/* Phones (Shopify): the summary folds into one bar with the total, so
+            the form starts near the top. Works before the page scripts load. */}
+        <button
+          type="button"
+          id="orderSummaryToggle"
+          aria-controls="orderSummaryBody"
+          aria-expanded="false"
+          onclick="var r=document.getElementById('cartPageRoot');var o=r.dataset.summary!=='open';r.dataset.summary=o?'open':'closed';this.setAttribute('aria-expanded',o?'true':'false');"
+          class="mb-3 flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 text-start text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring lg:hidden group-data-[cart-state=empty]:hidden"
+        >
+          <span class="flex items-center gap-1.5">
+            <span class="group-data-[summary=open]:hidden">{cartWords.showSummary}</span>
+            <span class="hidden group-data-[summary=open]:inline">{cartWords.hideSummary}</span>
+            <svg class="size-4 shrink-0 transition-transform group-data-[summary=open]:rotate-180" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z" clip-rule="evenodd" />
+            </svg>
+          </span>
+          <span id="orderSummaryToggleTotal" class="text-base font-semibold tabular-nums"></span>
+        </button>
+        <div id="orderSummaryBody" data-summary-body>
+        <section
+          aria-labelledby="cartHeading"
+          class="overflow-hidden rounded-xl border border-border bg-card group-data-[cart-state=empty]:mx-auto group-data-[cart-state=empty]:max-w-lg"
+        >
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
+            <h1 id="cartHeading" class="text-lg font-semibold text-foreground">
+              {copy.cartSectionTitle}
+            </h1>
+            <a
+              href="/"
+              class="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring group-data-[cart-state=empty]:hidden sm:min-h-9"
+            >
+              <span aria-hidden="true">←</span>
+              {copy.continueShoppingText}
+            </a>
+          </div>
+
+          {/* Loading skeleton at a cart line's size; the real lines render
+              hidden underneath and appear together with the summary. */}
+          <div class="hidden p-4 group-data-[cart-state=loading]:block" data-cart-loading>
+            <p class="sr-only" role="status">{copy.cartLoadingText}</p>
+            <div class="flex gap-3 py-2" aria-hidden="true">
+              <div class="theme-skeleton size-20 shrink-0"></div>
+              <div class="flex-1 space-y-2 pt-1">
+                <div class="theme-skeleton h-4 w-3/4"></div>
+                <div class="theme-skeleton h-4 w-1/3"></div>
+                <div class="theme-skeleton h-9 w-28"></div>
+              </div>
+            </div>
+          </div>
+          <div
+            class="min-h-24 p-4 group-data-[cart-state=loading]:hidden"
+            id="cartItems"
+            aria-busy="true"
+          >
+            {/* The empty state as HTML, for the first paint; the cart script
+                replaces it with the lines (renderEmptyCartState keeps it in step). */}
+            <div class="text-center py-8 px-4" data-cart-empty>
+              <svg class="mx-auto h-12 w-12 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+              <h2 class="mt-2 text-lg font-medium text-foreground">{copy.emptyCartText}</h2>
+              <p class="mt-1 text-sm text-muted-foreground">{copy.emptyCartDescriptionText}</p>
+              <div class="mt-6 flex flex-col items-center justify-center gap-2 sm:flex-row">
+                <a
+                  href="/"
+                  class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-primary-foreground bg-primary hover:bg-primary/90"
+                >
+                  <svg class="-ms-1 me-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 1 0 010 1.414z" clip-rule="evenodd" />
+                  </svg>
+                  {copy.continueShoppingText}
+                </a>
+              </div>
+            </div>
+          </div>
+          {/* Clear cart is here, not in the drawer (one action there); lib/cart/client.ts offers Undo. */}
+          <div class="hidden px-4 pb-3 text-end group-data-[cart-state=items]:block">
+            <button
+              type="button"
+              id="clearCartButton"
+              class="inline-flex min-h-11 items-center text-sm text-muted-foreground underline decoration-border underline-offset-2 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:min-h-9"
+            >
+              {cartWords.clearCart}
+            </button>
+          </div>
+          <p id="cartUndo" class="mx-4 mb-3 text-sm text-muted-foreground" role="status" hidden></p>
+
+          <div
+            id="cartSummary"
+            class="hidden space-y-2 border-t border-border bg-muted/40 p-4"
+          >
+            <div class="flex justify-between text-sm text-muted-foreground">
+              <span>{copy.subtotalText}</span>
+              <span id="subtotal" class="font-medium tabular-nums text-foreground">—</span>
+            </div>
+            <div class="flex justify-between gap-3 text-sm text-muted-foreground group-data-[delivery-need=none]:hidden" id="shippingRow">
+              {/* A pickup order has no shipping: the row names the pickup. */}
+              <span class="group-data-[delivery-mode=pickup]:hidden">{copy.shippingText}</span>
+              <span class="hidden group-data-[delivery-mode=pickup]:inline">{copy.deliveryModePickupText}</span>
+              <span id="shippingCost" class="text-end font-medium tabular-nums text-foreground">—</span>
+            </div>
+            <p id="shippingProgress" class="hidden text-sm text-primary" role="status"></p>
+            <div id="discountLines" class="space-y-1"></div>
+            <div id="taxRow" class="hidden flex justify-between gap-3 text-sm text-muted-foreground">
+              <span id="taxLabel">{copy.taxText}</span>
+              <span id="taxAmount" class="text-end font-medium tabular-nums text-foreground">—</span>
+            </div>
+
+            <div class="mt-2 border-t border-border pt-2">
+              <div class="flex items-baseline justify-between" aria-live="polite" aria-atomic="true">
+                <span
+                  id="totalLabel"
+                  data-final-label={copy.totalText}
+                  class="text-sm font-semibold text-foreground"
+                  >{copy.estimatedTotalText}</span
+                >
+                <span id="total" class="text-xl font-semibold tabular-nums text-foreground">—</span>
+              </div>
+              <p id="taxStatus" class="mt-1 hidden text-sm text-destructive" role="status"></p>
+              <p id="estimateNote" class="mt-1 hidden text-sm text-muted-foreground" role="status"></p>
+            </div>
+
+            <form id="discountForm" method="post" action="/cart" class="pt-3" novalidate>
+              <label for="discountCodeInput" class="sr-only">{copy.discountCodePlaceholder}</label>
+              <div class="flex gap-2">
+                <input
+                  type="text"
+                  id="discountCodeInput"
+                  aria-describedby="discountMessage"
+                  autocomplete="off"
+                  autocapitalize="characters"
+                  spellcheck="false"
+                  enterkeyhint="done"
+                  maxlength="50"
+                  placeholder={copy.discountCodePlaceholder}
+                  class={`${fieldClass} min-w-0 flex-1`}
+                />
+                <button
+                  type="submit"
+                  id="applyDiscountBtn"
+                  class="h-11 shrink-0 rounded-lg border border-border bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50"
+                >
+                  {copy.applyDiscountText}
+                </button>
+              </div>
+              <p id="discountMessage" class="mt-1.5 text-sm" role="status" aria-live="polite" hidden></p>
+            </form>
+            <ul id="appliedCodes" class="hidden flex flex-wrap gap-2 pt-1"></ul>
+            <ul id="discountOffers" class="hidden space-y-2" role="status"></ul>
+            {/* Cart-level availability answer: below the totals, never above
+                painted lines, so it lands without moving them. */}
+            <div
+              id="cartValidationMessage"
+              class="hidden mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive"
+              role="alert"
+            >
+            </div>
+          </div>
+        </section>
+        <div data-buyer-ui-target="purchase.checkout.cart-line-list.render-after" class="mt-4"></div>
+        </div>
+        {/* An empty cart still leads somewhere: the store's categories and popular products, shown while the cart is empty. */}
+        <div class="mx-auto mt-8 hidden max-w-3xl space-y-8 group-data-[cart-state=empty]:block" data-cart-empty-extras>
+          {emptyCartCategories.length > 0 && (
+            <nav aria-labelledby="cartEmptyCategoriesTitle">
+              <h2 id="cartEmptyCategoriesTitle" class="mb-3 text-base font-semibold text-foreground">{cartWords.shopByCategory}</h2>
+              <ul class="flex flex-wrap gap-2">
+                {emptyCartCategories.map((node) => (
+                  <li>
+                    <a
+                      href={node.canonicalPath ?? `/categories/${encodeURIComponent(node.slug)}`}
+                      class="inline-flex min-h-11 items-center rounded-lg border border-border bg-card px-4 text-sm font-medium text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    >{node.name}</a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          )}
+          <EmptyCartPopular
+            title={cartWords.popularNow}
+            recommendations={popularProducts}
+            currencySymbol={layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol}
+            currencyCode={layoutData?.currency?.code ?? DEFAULT_CURRENCY.code}
+          />
+        </div>
+      </div>
+      <div id="checkoutPanel" class="hidden min-w-0 lg:col-span-7">
         <div id="checkoutSignInPrompt" class="mb-3" data-account-required={checkoutConfig.guestCheckoutEnabled === false ? "true" : "false"}>
           <button
             type="button"
@@ -844,6 +1040,8 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
                 <span id="submitButtonText">
                   {isProcessing ? copy.processingText : submitLabel}
                 </span>
+                {/* "Place order · ৳1,500": the total the summary shows, beside the label (the cart page script fills it). */}
+                <span id="submitButtonTotal" class="tabular-nums" hidden><span aria-hidden="true" class="mx-1.5">·</span><span data-amount></span></span>
               </button>
               {/* Why Place order is disabled, in the checkout language (lib/cart/checkout-button-state.ts). */}
               <p id="submitButtonReason" class="mt-2 text-center text-sm font-medium text-muted-foreground" hidden={!checkoutUnavailable}>{checkoutUnavailable ? checkoutUnavailableMessage : ""}</p>
@@ -882,179 +1080,44 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
           </form>
         </div>
       </div>
-
-      <div
-        id="cartColumn"
-        class="order-1 min-w-0 lg:order-2 lg:col-span-5 lg:sticky lg:self-start group-data-[cart-state=empty]:lg:col-span-12"
-        style="top: calc(var(--header-height, 64px) + 1rem);"
-      >
-        <section
-          aria-labelledby="cartHeading"
-          class="overflow-hidden rounded-xl border border-border bg-card group-data-[cart-state=empty]:mx-auto group-data-[cart-state=empty]:max-w-lg"
-        >
-          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
-            <h1 id="cartHeading" class="text-lg font-semibold text-foreground">
-              {copy.cartSectionTitle}
-            </h1>
-            <a
-              href="/"
-              class="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring group-data-[cart-state=empty]:hidden sm:min-h-9"
-            >
-              <span aria-hidden="true">←</span>
-              {copy.continueShoppingText}
-            </a>
-          </div>
-
-          {/* Loading skeleton at a cart line's size; the real lines render
-              hidden underneath and appear together with the summary. */}
-          <div class="hidden p-4 group-data-[cart-state=loading]:block" data-cart-loading>
-            <p class="sr-only" role="status">{copy.cartLoadingText}</p>
-            <div class="flex gap-3 py-2" aria-hidden="true">
-              <div class="theme-skeleton size-20 shrink-0"></div>
-              <div class="flex-1 space-y-2 pt-1">
-                <div class="theme-skeleton h-4 w-3/4"></div>
-                <div class="theme-skeleton h-4 w-1/3"></div>
-                <div class="theme-skeleton h-9 w-28"></div>
-              </div>
-            </div>
-          </div>
-          <div
-            class="min-h-24 p-4 group-data-[cart-state=loading]:hidden"
-            id="cartItems"
-            aria-busy="true"
-          >
-            {/* The empty state as HTML, for the first paint; the cart script
-                replaces it with the lines (renderEmptyCartState keeps it in step). */}
-            <div class="text-center py-8 px-4" data-cart-empty>
-              <svg class="mx-auto h-12 w-12 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-              <h2 class="mt-2 text-lg font-medium text-foreground">{copy.emptyCartText}</h2>
-              <p class="mt-1 text-sm text-muted-foreground">{copy.emptyCartDescriptionText}</p>
-              <div class="mt-6 flex flex-col items-center justify-center gap-2 sm:flex-row">
-                <a
-                  href="/"
-                  class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-primary-foreground bg-primary hover:bg-primary/90"
-                >
-                  <svg class="-ms-1 me-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                    <path fill-rule="evenodd" d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 1 0 010 1.414z" clip-rule="evenodd" />
-                  </svg>
-                  {copy.continueShoppingText}
-                </a>
-              </div>
-            </div>
-          </div>
-          {/* Clear cart is here, not in the drawer (one action there); lib/cart/client.ts offers Undo. */}
-          <div class="hidden px-4 pb-3 text-end group-data-[cart-state=items]:block">
-            <button
-              type="button"
-              id="clearCartButton"
-              class="inline-flex min-h-11 items-center text-sm text-muted-foreground underline decoration-border underline-offset-2 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:min-h-9"
-            >
-              {cartWords.clearCart}
-            </button>
-          </div>
-          <p id="cartUndo" class="mx-4 mb-3 text-sm text-muted-foreground" role="status" hidden></p>
-
-          <div
-            id="cartSummary"
-            class="hidden space-y-2 border-t border-border bg-muted/40 p-4"
-          >
-            <div class="flex justify-between text-sm text-muted-foreground">
-              <span>{copy.subtotalText}</span>
-              <span id="subtotal" class="font-medium tabular-nums text-foreground">—</span>
-            </div>
-            <div class="flex justify-between gap-3 text-sm text-muted-foreground group-data-[delivery-need=none]:hidden" id="shippingRow">
-              {/* A pickup order has no shipping: the row names the pickup. */}
-              <span class="group-data-[delivery-mode=pickup]:hidden">{copy.shippingText}</span>
-              <span class="hidden group-data-[delivery-mode=pickup]:inline">{copy.deliveryModePickupText}</span>
-              <span id="shippingCost" class="text-end font-medium tabular-nums text-foreground">—</span>
-            </div>
-            <p id="shippingProgress" class="hidden text-sm text-primary" role="status"></p>
-            <div id="discountLines" class="space-y-1"></div>
-            <div id="taxRow" class="hidden flex justify-between gap-3 text-sm text-muted-foreground">
-              <span id="taxLabel">{copy.taxText}</span>
-              <span id="taxAmount" class="text-end font-medium tabular-nums text-foreground">—</span>
-            </div>
-
-            <div class="mt-2 border-t border-border pt-2">
-              <div class="flex items-baseline justify-between" aria-live="polite" aria-atomic="true">
-                <span
-                  id="totalLabel"
-                  data-final-label={copy.totalText}
-                  class="text-sm font-semibold text-foreground"
-                  >{copy.estimatedTotalText}</span
-                >
-                <span id="total" class="text-xl font-semibold tabular-nums text-foreground">—</span>
-              </div>
-              <p id="taxStatus" class="mt-1 hidden text-sm text-destructive" role="status"></p>
-              <p id="estimateNote" class="mt-1 hidden text-sm text-muted-foreground" role="status"></p>
-            </div>
-
-            <form id="discountForm" method="post" action="/cart" class="pt-3" novalidate>
-              <label for="discountCodeInput" class="sr-only">{copy.discountCodePlaceholder}</label>
-              <div class="flex gap-2">
-                <input
-                  type="text"
-                  id="discountCodeInput"
-                  aria-describedby="discountMessage"
-                  autocomplete="off"
-                  autocapitalize="characters"
-                  spellcheck="false"
-                  enterkeyhint="done"
-                  maxlength="50"
-                  placeholder={copy.discountCodePlaceholder}
-                  class={`${fieldClass} min-w-0 flex-1`}
-                />
-                <button
-                  type="submit"
-                  id="applyDiscountBtn"
-                  class="h-11 shrink-0 rounded-lg border border-border bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50"
-                >
-                  {copy.applyDiscountText}
-                </button>
-              </div>
-              <p id="discountMessage" class="mt-1.5 text-sm" role="status" aria-live="polite" hidden></p>
-            </form>
-            <ul id="appliedCodes" class="hidden flex flex-wrap gap-2 pt-1"></ul>
-            <ul id="discountOffers" class="hidden space-y-2" role="status"></ul>
-            {/* Cart-level availability answer: below the totals, never above
-                painted lines, so it lands without moving them. */}
-            <div
-              id="cartValidationMessage"
-              class="hidden mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive"
-              role="alert"
-            >
-            </div>
-          </div>
-        </section>
-        <div data-buyer-ui-target="purchase.checkout.cart-line-list.render-after" class="mt-4"></div>
-        {/* An empty cart still leads somewhere: the store's categories and popular products, shown while the cart is empty. */}
-        <div class="mx-auto mt-8 hidden max-w-3xl space-y-8 group-data-[cart-state=empty]:block" data-cart-empty-extras>
-          {emptyCartCategories.length > 0 && (
-            <nav aria-labelledby="cartEmptyCategoriesTitle">
-              <h2 id="cartEmptyCategoriesTitle" class="mb-3 text-base font-semibold text-foreground">{cartWords.shopByCategory}</h2>
-              <ul class="flex flex-wrap gap-2">
-                {emptyCartCategories.map((node) => (
-                  <li>
-                    <a
-                      href={node.canonicalPath ?? `/categories/${encodeURIComponent(node.slug)}`}
-                      class="inline-flex min-h-11 items-center rounded-lg border border-border bg-card px-4 text-sm font-medium text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                    >{node.name}</a>
-                  </li>
-                ))}
-              </ul>
-            </nav>
-          )}
-          <EmptyCartPopular
-            title={cartWords.popularNow}
-            recommendations={popularProducts}
-            currencySymbol={layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol}
-            currencyCode={layoutData?.currency?.code ?? DEFAULT_CURRENCY.code}
-          />
-        </div>
-      </div>
     </div>
+    {/* Before first paint: the cart column sits where it shows (after the form
+        on wide screens), and a phone buyer who came to check out (the drawer's
+        Check out, Buy now) sees the summary folded; one who came to view the
+        cart sees it open. */}
+    <script is:inline>
+      (function () {
+        var root = document.getElementById("cartPageRoot");
+        var grid = root && root.querySelector("[data-cart-grid]");
+        var cart = document.getElementById("cartColumn");
+        var form = document.getElementById("checkoutPanel");
+        if (!grid || !cart || !form) return;
+        var wide = window.matchMedia("(min-width: 64rem)");
+        var place = function () {
+          var after = cart.previousElementSibling === form;
+          if (wide.matches === after) return;
+          var focused = document.activeElement;
+          if (wide.matches) grid.appendChild(cart);
+          else grid.insertBefore(cart, form);
+          if (focused && focused !== document.activeElement && cart.contains(focused)) focused.focus({ preventScroll: true });
+        };
+        place();
+        if (wide.addEventListener) wide.addEventListener("change", place);
+        var checkingOut = location.hash === "#checkoutFormCard";
+        try {
+          checkingOut = checkingOut || !!sessionStorage.getItem("quickBuyData");
+        } catch (error) {}
+        root.dataset.summary = checkingOut ? "closed" : "open";
+        var toggle = document.getElementById("orderSummaryToggle");
+        if (toggle) toggle.setAttribute("aria-expanded", checkingOut ? "false" : "true");
+      })();
+    </script>
+    {/* Below lg the folded summary hides the cart (never an empty cart's message). */}
+    <style is:global>
+      @media (max-width: 63.99rem) {
+        #cartPageRoot[data-summary="closed"]:not([data-cart-state="empty"]) #orderSummaryBody { display: none; }
+      }
+    </style>
   </div>
 
   <TemplateSections
@@ -1827,8 +1890,32 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
     let submitAfterCartValidation = false;
     let awaitingPhoneValidator = false;
 
+    // The order total rides on the phone summary bar and beside the button's
+    // label ("Place order · ৳1,500"), as the summary shows it: an amount only,
+    // never "—" or "Calculating…", and not while the button says something else.
+    const totalNode = document.getElementById("total");
+    const submitTotal = document.getElementById("submitButtonTotal");
+    const summaryBarTotal = document.getElementById("orderSummaryToggleTotal");
+    let submitShowsLabel = true;
+    const syncOrderTotal = () => {
+      const text = totalNode?.textContent?.trim() ?? "";
+      const amount = /\p{Nd}/u.test(text) ? text : "";
+      if (summaryBarTotal && summaryBarTotal.textContent !== amount) summaryBarTotal.textContent = amount;
+      const amountSlot = submitTotal?.querySelector("[data-amount]");
+      if (amountSlot && amountSlot.textContent !== amount) amountSlot.textContent = amount;
+      if (submitTotal) submitTotal.hidden = !amount || !submitShowsLabel || checkoutUnavailable;
+    };
+    if (totalNode) {
+      const totalWatch = new MutationObserver(syncOrderTotal);
+      totalWatch.observe(totalNode, { childList: true, characterData: true, subtree: true });
+      cartPageSignal.addEventListener("abort", () => totalWatch.disconnect(), { once: true });
+    }
+    syncOrderTotal();
+
     const setSubmitButtonText = (text: string) => {
       if (submitButtonText) submitButtonText.textContent = text;
+      submitShowsLabel = text === initialSubmitText;
+      syncOrderTotal();
     };
 
     const restoreSubmitButton = () => {
