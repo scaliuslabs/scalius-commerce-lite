@@ -111,9 +111,10 @@ function normalizeHttpsOrigin(value: string | null | undefined): string | null {
 }
 
 /**
- * Expose one deployment-stable Early Hints candidate for public HTML. A
- * preconnect transfers no merchant asset bytes, so Cloudflare's separate,
- * URI-only 103 cache cannot serve stale price, inventory, or hero content.
+ * The media CDN preconnect among a public page's Early Hints (stored pages add
+ * their build files, `pageEarlyHintLinks`). A preconnect transfers no merchant
+ * asset bytes, so Cloudflare's separate, URI-only 103 cache cannot serve
+ * stale price, inventory, or hero content.
  */
 export function applyPublicStorefrontPreconnectHint(
   response: Response,
@@ -126,6 +127,50 @@ export function applyPublicStorefrontPreconnectHint(
   const current = response.headers.get("Link");
   if (current?.includes(candidate)) return;
   response.headers.append("Link", candidate);
+}
+
+/** Build files a stored page may name in Early Hints: its stylesheets and preloaded fonts. */
+const EARLY_HINT_ASSET = /^\/_astro\/[A-Za-z0-9._~/-]+\.(?:css|woff2)$/;
+const EARLY_HINT_MEDIA = /^\((?:min|max)-width: ?\d{1,4}px\)$/;
+const MAX_EARLY_HINTS = 6;
+/** The head is at the start of the page: only this much of a stored body is read for it. */
+const EARLY_HINT_HEAD_BYTES = 64 * 1024;
+
+function linkAttributes(tag: string): Map<string, string> {
+  const attributes = new Map<string, string>();
+  for (const match of tag.slice(5).matchAll(/([A-Za-z-]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/g)) {
+    attributes.set(match[1]!.toLowerCase(), match[2] ?? match[3] ?? match[4] ?? "");
+  }
+  return attributes;
+}
+
+/**
+ * The `Link` preloads of a page's own build files, read from its head: every
+ * stylesheet, and every font it preloads (with the preload's width query).
+ * Cloudflare answers the next request for the URL with them as 103 Early
+ * Hints before the Worker runs, so the browser fetches the render-blocking
+ * CSS and the heading font while a hit waits for its frontier. Only
+ * build-scoped `/_astro/` files qualify: immutable, never merchant content,
+ * so a hint remembered from an older response costs at most a wasted fetch.
+ */
+export function pageEarlyHintLinks(html: string): string[] {
+  const headEnd = html.indexOf("</head>");
+  const head = headEnd >= 0 ? html.slice(0, headEnd) : html;
+  const links = new Set<string>();
+  for (const [tag] of head.matchAll(/<link\b[^>]*>/gi)) {
+    if (links.size >= MAX_EARLY_HINTS) break;
+    const attributes = linkAttributes(tag);
+    const href = attributes.get("href") ?? "";
+    if (!EARLY_HINT_ASSET.test(href)) continue;
+    const rel = attributes.get("rel")?.toLowerCase();
+    if (rel === "stylesheet" && href.endsWith(".css")) {
+      links.add(`<${href}>; rel=preload; as=style`);
+    } else if (rel === "preload" && attributes.get("as") === "font" && href.endsWith(".woff2")) {
+      const media = attributes.get("media");
+      links.add(`<${href}>; rel=preload; as=font; type="font/woff2"; crossorigin${media && EARLY_HINT_MEDIA.test(media) ? `; media="${media}"` : ""}`);
+    }
+  }
+  return [...links];
 }
 
 function isCmsPagePath(pathname: string): boolean {
@@ -273,8 +318,12 @@ function toStoredResponse(
   response: Response,
   entry: CacheFrontierEntry | null = null,
   body: BodyInit | null = response.body,
+  earlyHints: readonly string[] = [],
 ): Response {
   const headers = new Headers(response.headers);
+  for (const link of earlyHints) {
+    if (!headers.get("Link")?.includes(link)) headers.append("Link", link);
+  }
   headers.set("Cache-Control", `public, max-age=${entry ? DEPENDENCY_CACHE_RETENTION_SECONDS : PUBLIC_CACHE_MAX_AGE_SECONDS}`);
   headers.delete("Pragma");
   headers.delete("Expires");
@@ -290,12 +339,35 @@ function toStoredResponse(
   return new Response(body, { status: response.status, headers });
 }
 
-function fromStoredResponse(stored: Response, request: Request, pathname: string): Response {
+/**
+ * What a request waited for before its answer, beside its lane in
+ * `X-Cache-Status`: `HIT; frontier-wait=183ms` when it blocked on a frontier
+ * refresh (the round trip to the API), `slow-check=95ms` on the indexed
+ * check. The lane stays the first token; a wait under 1 ms is not reported.
+ */
+interface CacheWaits {
+  frontierMs: number | null;
+  slowCheckMs: number | null;
+}
+
+const NO_WAITS: CacheWaits = { frontierMs: null, slowCheckMs: null };
+
+export function cacheStatusWithWaits(lane: string, waits: CacheWaits): string {
+  const token = (name: string, ms: number | null) => (ms !== null && ms >= 1 ? [`${name}=${Math.round(ms)}ms`] : []);
+  return [lane, ...token("frontier-wait", waits.frontierMs), ...token("slow-check", waits.slowCheckMs)].join("; ");
+}
+
+/** The lane of an `X-Cache-Status` value (`HIT`, `MISS`, `BYPASS`...), without its waits. */
+export function cacheStatusLane(value: string | null): string {
+  return (value ?? "").split(";", 1)[0]!.trim();
+}
+
+function fromStoredResponse(stored: Response, request: Request, pathname: string, waits: CacheWaits = NO_WAITS): Response {
   if (request.method === "HEAD") void stored.body?.cancel().catch(() => undefined);
   const response = new Response(request.method === "HEAD" ? null : stored.body, stored);
   for (const name of Object.values(PAGE_DEPENDENCY_HEADERS)) response.headers.delete(name);
   applyBrowserCachePolicyForPublicResponse(response, pathname);
-  response.headers.set("X-Cache-Status", "HIT");
+  response.headers.set("X-Cache-Status", cacheStatusWithWaits("HIT", waits));
   return response;
 }
 
@@ -417,7 +489,7 @@ async function freshFrontier(
   client: CacheFrontierClient,
   key: string,
   seenSeq: number | null,
-): Promise<CacheFrontier | null> {
+): Promise<{ frontier: CacheFrontier | null; waitedMs: number | null }> {
   const now = context.now ?? Date.now;
   const stored = await readStoredCacheFrontier(context.cache, key).catch(() => null);
   const started = now();
@@ -425,7 +497,7 @@ async function freshFrontier(
     if (started - stored.sentAt > CACHE_FRONTIER_DELTA_MS / 2) {
       refreshFrontierOnce(context, client, key, stored).promise.catch(() => undefined);
     }
-    return stored;
+    return { frontier: stored, waitedMs: null };
   }
   try {
     let flight = refreshFrontierOnce(context, client, key, stored);
@@ -434,11 +506,11 @@ async function freshFrontier(
       flight = refreshFrontierOnce(context, client, key, next);
       next = await flight.promise;
     }
-    if (!next) return null;
+    const finished = now();
     // An `_sv` still ahead of a fresh frontier names no commit yet: ignore it.
-    return isCacheFrontierFresh(next, now(), null) ? next : null;
+    return { frontier: next && isCacheFrontierFresh(next, finished, null) ? next : null, waitedMs: finished - started };
   } catch {
-    return null;
+    return { frontier: null, waitedMs: now() - started };
   }
 }
 
@@ -460,18 +532,20 @@ async function serveFrontierValidated(
   // Browser cache rules follow the page a presence URL renders.
   const pathname = logicalUrl(canonical).pathname;
   const key = publicStorefrontDvcCacheKey(policy.canonicalUrl, context.buildId, workerVersion);
+  const waits: CacheWaits = { frontierMs: null, slowCheckMs: null };
   const stored = await context.cache.match(key);
   const entry = stored ? readStoredPageEntry(stored.headers) : null;
   if (stored && entry) {
     const frontierKey = cacheFrontierKey(canonical.origin, context.buildId, workerVersion);
-    const frontier = await freshFrontier(context, client, frontierKey, readStorefrontSeenSeq(new URL(request.url)));
+    const { frontier, waitedMs } = await freshFrontier(context, client, frontierKey, readStorefrontSeenSeq(new URL(request.url)));
+    waits.frontierMs = waitedMs;
     const now = (context.now ?? Date.now)();
     const decision = frontier && isCacheFrontierFresh(frontier, now, null)
       ? decideCacheFrontierHit(entry, frontier, now) : "render";
     if (decision === "serve") {
       // Unrelated writes must not copy the HTML body. Rebase only when the
       // frontier horizon requires the indexed slow check below.
-      return fromStoredResponse(stored, request, pathname);
+      return fromStoredResponse(stored, request, pathname, waits);
     }
     if (decision === "slow") {
       // Concurrent hits of one stored entry share one check (and one D1 scan);
@@ -480,6 +554,7 @@ async function serveFrontierValidated(
       const checkedAt = flight.startedAt;
       const check = await flight.promise.catch(() => null);
       const finishedAt = (context.now ?? Date.now)();
+      waits.slowCheckMs = finishedAt - checkedAt;
       // The slow proof is only fresh from when its request started. Scheduled
       // transitions can pass while that request is in flight, without a write.
       if (check && check.apiVersion === entry.apiVersion && !check.changed && check.S >= entry.s0 && check.S >= check.floor
@@ -491,7 +566,7 @@ async function serveFrontierValidated(
           const copy = stored.clone();
           context.waitUntil(context.cache.put(key, toStoredResponse(copy, { ...entry, s0: check.S })).catch(() => undefined));
         }
-        return fromStoredResponse(stored, request, pathname);
+        return fromStoredResponse(stored, request, pathname, waits);
       }
     }
   }
@@ -500,17 +575,28 @@ async function serveFrontierValidated(
   if (stored) void stored.body?.cancel().catch(() => undefined);
 
   const dependencies = createPageDependencies();
-  const response = await collectPageDependencies(dependencies, () => context.render(
+  let response = await collectPageDependencies(dependencies, () => context.render(
     withGenerationHeader(toPublicCacheRequest(request, policy.canonicalUrl), null),
   ));
-  if (request.method === "GET" && isStorableResponse(response)) {
+  const storable = request.method === "GET" && isStorableResponse(response);
+  // A rejected entry's wait still delayed this answer.
+  const status = response.headers.get("X-Cache-Status");
+  const withWaits = status ? cacheStatusWithWaits(status, waits) : status;
+  if (withWaits !== status) {
+    response = new Response(response.body, response);
+    response.headers.set("X-Cache-Status", withWaits!);
+  }
+  if (storable) {
     const copy = response.clone();
     context.waitUntil((async () => {
       // The render (and every read its components made while it streamed)
       // has finished once its body has.
       const body = await copy.arrayBuffer();
       const rendered = pageEntryFromDependencies(dependencies);
-      if (rendered) await context.cache.put(key, toStoredResponse(copy, rendered, body));
+      if (!rendered) return;
+      const isHtml = copy.headers.get("Content-Type")?.toLowerCase().includes("text/html") ?? false;
+      const earlyHints = isHtml ? pageEarlyHintLinks(new TextDecoder().decode(body.slice(0, EARLY_HINT_HEAD_BYTES))) : [];
+      await context.cache.put(key, toStoredResponse(copy, rendered, body, earlyHints));
     })().catch(() => undefined));
   }
   return response;

@@ -70,7 +70,7 @@ A request uses the shared page cache (`getPublicStorefrontCachePolicy`) when all
 
 The public and private path lists and the browser `Cache-Control` values are in [apps/storefront/README.md](../apps/storefront/README.md#public-cache-and-private-pages).
 
-`X-Cache-Status` reports the lane: `HIT`, `MISS`, `BYPASS`, `BYPASS_AUTH`, `BYPASS_DEGRADED` (the page rendered from a failed read and called `markRenderUncacheable`, or drew the default theme because the API sent a theme document this storefront cannot read) and `NO_CACHE`. A stored page is also a `MISS` on the request that renders it. Direct API reads report `HIT`, `MISS`, `REFRESH` or `BYPASS`.
+`X-Cache-Status` reports the lane: `HIT`, `MISS`, `BYPASS`, `BYPASS_AUTH`, `BYPASS_DEGRADED` (the page rendered from a failed read and called `markRenderUncacheable`, or drew the default theme because the API sent a theme document this storefront cannot read) and `NO_CACHE`. A stored page is also a `MISS` on the request that renders it. A request that blocked on a frontier refresh or a slow check says how long after its lane: `HIT; frontier-wait=183ms`, `MISS; slow-check=95ms` (waits under 1 ms are not reported). Direct API reads report `HIT`, `MISS`, `REFRESH` or `BYPASS`.
 
 ### Key
 
@@ -92,6 +92,7 @@ A page entry is valid by committed dependencies, not by age, so an unchanged ent
 
 - A page entry carries the union of its parts' dependency hashes (at most 1,024). A page is stored only when every API read of its render came through a batch part with a proof.
 - The gateway validates a hit against a frontier of its data center that is at most 1 s old (`CACHE_FRONTIER_DELTA_MS`). It refreshes the frontier in the background after 0.5 s. If the frontier cannot refresh in 1.5 s, the page renders. One refresh and one slow check run per isolate. Slow-check limits are in [FREE-PLAN.md](./FREE-PLAN.md#frontier-cache-refresh).
+- A stored page carries `Link` preloads of its own build stylesheets and preloaded fonts (`pageEarlyHintLinks`, at most six `/_astro/` files read from its head). Cloudflare answers the next request for the URL with them as 103 Early Hints before the Worker runs, so the browser fetches the render-blocking CSS and the heading font while a hit waits for its frontier. Only build files qualify: a hint remembered from an older deploy costs at most a wasted fetch.
 - A scheduled change (a promotion start or end) sets `validUntil`, and the gateway never serves the entry at or after it. Buyer facts have no stale-if-error allowance.
 - Public product, search and feed projections carry `availabilityBand`. `stock` and `reservedStock` are stable compatibility values, never exact quantity. A write inside one band changes no bytes and no dependency. Cart and checkout stay the live authority.
 
