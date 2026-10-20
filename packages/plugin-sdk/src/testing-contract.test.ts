@@ -20,7 +20,7 @@ describe("createContractApi", () => {
   const api = () => createContractApi({
     handlers: {
       "dashboard.brands.get": ({ path }) => ({ ...brand, id: String(path.id) }),
-      "dashboard.categories.get_section": () => ({ section: "text", field: "description", value: "", totalCharacters: 0, offset: 0, nextOffset: null, isNull: true }),
+      "dashboard.resources.products.list": () => ({ products: [], nextCursor: null }),
       "dashboard.inventory.adjust": () => ({ ok: false, status: 409, data: null, error: { code: "CONFLICT", message: "Stock changed." } }),
       "dashboard.brands.update": ({ body }) => ({ ...brand, name: (body as { name: string }).name, revision: 4 }),
     },
@@ -36,14 +36,14 @@ describe("createContractApi", () => {
     expect(() => createContractApi({ handlers: { "dashboard.brands.fetch": () => null } })).toThrow(/not a stable app API operation/);
   });
 
-  it("checks path enums the way the route does (DX-2: section core)", async () => {
-    const result = await api()("dashboard.categories.get_section", { path: { id: "cat_1", section: "core" } });
+  it("checks path and query values the way the route does (DX-2)", async () => {
+    const result = await api()("dashboard.resources.products.list", { query: { status: "archived" } });
     expect(result).toMatchObject({ ok: false, status: 400, error: { code: "VALIDATION_ERROR" } });
-    expect(result.error?.message).toContain('"summary", "text"');
-    expect(await api()("dashboard.categories.get_section", { path: { id: "cat_1" } })).toMatchObject({ error: { code: "missing_path_parameter" } });
-    expect(await api()("dashboard.categories.get_section", { path: { id: "cat_1", section: "text", extra: 1 } })).toMatchObject({ error: { code: "unknown_path_parameter" } });
-    expect(await api()("dashboard.categories.get_section", { path: { id: "cat_1", section: "text" }, query: { offset: "x" } })).toMatchObject({ error: { code: "VALIDATION_ERROR" } });
-    expect(await api()("dashboard.categories.get_section", { path: { id: "cat_1", section: "text" }, query: { offset: 10, field: null } })).toMatchObject({ ok: true });
+    expect(result.error?.message).toContain('"active", "draft", "trashed"');
+    expect(await api()("dashboard.brands.get", {})).toMatchObject({ error: { code: "missing_path_parameter" } });
+    expect(await api()("dashboard.brands.get", { path: { id: "b", extra: 1 } })).toMatchObject({ error: { code: "unknown_path_parameter" } });
+    expect(await api()("dashboard.resources.products.list", { query: { limit: "x" } })).toMatchObject({ error: { code: "VALIDATION_ERROR" } });
+    expect(await api()("dashboard.resources.products.list", { query: { limit: 10, status: "draft" } })).toMatchObject({ ok: true });
   });
 
   it("refuses malformed input, a GET body and unknown body fields", async () => {
@@ -84,7 +84,7 @@ describe("createContractApi", () => {
   it("fails the test when a handler answers a shape the platform never returns", async () => {
     const wrong = createContractApi({ handlers: { "dashboard.brands.get": () => ({ ...brand, status: "live" }) } });
     await expect(wrong("dashboard.brands.get", { path: { id: "b" } })).rejects.toThrow(/data\.status must be one of/);
-    await expect(api()("dashboard.brands.list", undefined)).rejects.toThrow(/no handler answers it/);
+    await expect(api()("dashboard.resources.orders.list", undefined)).rejects.toThrow(/no handler answers it/);
   });
 });
 

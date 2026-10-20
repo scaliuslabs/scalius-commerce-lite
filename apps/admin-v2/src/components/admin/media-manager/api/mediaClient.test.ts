@@ -44,7 +44,7 @@ describe("MediaApiClient reads", () => {
     return {
       data: {
         success: true,
-        data: { files, pagination: { limit: 24, hasMore: false, nextCursor: null } },
+        data: { files, nextCursor: null },
       },
     };
   }

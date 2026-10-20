@@ -229,6 +229,7 @@ app.openapi(createRoute({
     query: z.object({
       status: z.enum(["running", "done", "failed"]).optional(),
       cursor: z.string().regex(/^bulk_[a-f0-9]{32}$/u).optional().openapi({ description: "The `nextCursor` of the page before." }),
+      limit: z.coerce.number().int().min(1).max(LIST_PAGE).default(LIST_PAGE),
     }),
   },
   responses: {
@@ -243,7 +244,7 @@ app.openapi(createRoute({
   },
 }), async (c) => {
   const db = c.get("db");
-  const { status, cursor } = c.req.valid("query");
+  const { status, cursor, limit } = c.req.valid("query");
   const anchor = cursor ? await readBulkRun(db, cursor) : undefined;
   if (cursor && !anchor) throw new ValidationError("This page cursor is not valid.", { field: "cursor" });
   const rows = await db.select().from(bulkRuns)
@@ -252,12 +253,12 @@ app.openapi(createRoute({
       anchor ? or(lt(bulkRuns.createdAt, anchor.createdAt), and(eq(bulkRuns.createdAt, anchor.createdAt), lt(bulkRuns.id, anchor.id))) : undefined,
     ))
     .orderBy(desc(bulkRuns.createdAt), desc(bulkRuns.id))
-    .limit(LIST_PAGE + 1);
-  const page = rows.slice(0, LIST_PAGE);
+    .limit(limit + 1);
+  const page = rows.slice(0, limit);
   const currency = page.some((row) => row.kind === "variants.set_prices") ? (await readStoreCurrency(db)).code : null;
   return ok(c, {
     runs: page.map((row) => presentBulkRun(row, row.kind === "variants.set_prices" ? currency : null)),
-    nextCursor: rows.length > LIST_PAGE ? page.at(-1)!.id : null,
+    nextCursor: rows.length > limit ? page.at(-1)!.id : null,
   });
 });
 

@@ -116,7 +116,7 @@ export class MediaApiClient {
       kind: filters.kind,
       view: filters.view,
     } }));
-    return { files: data.files.map(toMediaFile), pagination: data.pagination };
+    return { files: data.files.map(toMediaFile), pagination: { limit, hasMore: data.nextCursor !== null, nextCursor: data.nextCursor } };
   }
 
   /** Fetch the authoritative version independently of library filters and pagination. */
@@ -267,7 +267,7 @@ export class MediaApiClient {
     const data = await apiData(getApiV1AdminMedia({
       query: { cursor, limit, variants: "missing", sortOrder: "asc" },
     }));
-    return { files: data.files.map(toMediaFile), pagination: data.pagination };
+    return { files: data.files.map(toMediaFile), pagination: { limit, hasMore: data.nextCursor !== null, nextCursor: data.nextCursor } };
   }
 
   static async abortUpload(sessionId: string): Promise<void> {

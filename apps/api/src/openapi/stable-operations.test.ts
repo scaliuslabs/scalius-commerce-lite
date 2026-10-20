@@ -233,6 +233,39 @@ function timeProblems(operations: readonly AgentOperationManifestEntry[], compon
   return [...problems];
 }
 
+/** Page navigation other than one cursor: request parameters and response keys. */
+const PAGE_PARAMETERS = new Set(["page", "pageSize", "offset", "after", "before"]);
+const PAGE_RESPONSE_KEYS = new Set(["pagination", "page", "totalPages", "hasMore", "hasNextPage", "nextAfter", "nextOffset", "offset", "pageInfo"]);
+
+/**
+ * Every stable list pages one way: `cursor` + `limit` in, `{ <plural>,
+ * nextCursor }` out (`nextCursor: string | null`). A bounded lookup (a
+ * `limit` with no cursor: the top tags, one tree level) returns at most
+ * `limit` and no paging.
+ */
+function paginationProblems(operations: readonly AgentOperationManifestEntry[], components: Record<string, unknown> = AGENT_COMPONENT_SCHEMAS as Record<string, unknown>): string[] {
+  const problems: string[] = [];
+  const resolve = (node: unknown): SchemaNode | null => {
+    if (!node || typeof node !== "object") return null;
+    const ref = (node as { $ref?: unknown }).$ref;
+    return typeof ref === "string" ? resolve(components[ref.replace("#/components/schemas/", "")]) : node as SchemaNode;
+  };
+  for (const operation of operations) {
+    const input = (operation.inputSchema ?? {}) as { parameters?: { name: string; in: string }[] };
+    const query = new Set((input.parameters ?? []).filter((parameter) => parameter.in === "query").map((parameter) => parameter.name));
+    for (const name of query) if (PAGE_PARAMETERS.has(name)) problems.push(`${operation.operationId}: pages by ${name}; take cursor and limit.`);
+    const envelope = resolve(operation.outputSchema);
+    const data = resolve(((envelope?.properties ?? {}) as Record<string, unknown>).data);
+    const keys = Object.keys((data?.properties ?? {}) as Record<string, unknown>);
+    for (const key of keys) if (PAGE_RESPONSE_KEYS.has(key)) problems.push(`${operation.operationId}: returns ${key}; return nextCursor.`);
+    const pages = query.has("cursor") || keys.includes("nextCursor");
+    if (pages && !(query.has("cursor") && query.has("limit") && keys.includes("nextCursor"))) {
+      problems.push(`${operation.operationId}: a cursor list takes cursor and limit and returns nextCursor.`);
+    }
+  }
+  return problems;
+}
+
 describe("the stable app API", () => {
   it("is a deliberate, coherent set every third-party app can reach through a scope", () => {
     expect(stable.length).toBeGreaterThanOrEqual(100);
@@ -306,6 +339,10 @@ describe("the stable app API", () => {
     const storefront = AGENT_OPERATIONS.filter((operation) => operation.surface === "storefront");
     expect(storefront.length).toBeGreaterThan(0);
     expect(storefront.filter((operation) => operation.stability !== "beta" && operation.exposure === "execute").map((operation) => operation.operationId)).toEqual([]);
+  });
+
+  it("pages every list one way: cursor and limit in, nextCursor out", () => {
+    expect(paginationProblems(stable)).toEqual([]);
   });
 
   it("carries every instant as one ISO 8601 date-time string", () => {

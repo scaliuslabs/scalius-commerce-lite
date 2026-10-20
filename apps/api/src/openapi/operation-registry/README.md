@@ -75,6 +75,10 @@ mirror a dashboard screen, an editor section or a summary card.
   milliseconds, no bare string, no union of forms. Discount schedules are
   `startsAt`/`endsAt`. The test fails on any `*At`/`*Since` field of another
   form (`isoTimestampSchema` in `schemas/timestamps.ts`).
+- **Lists page one way**: `cursor` + `limit` in, `{ <plural>, nextCursor }` out.
+  Page-numbered and offset lists (the dashboard's brands, categories,
+  collections, content and discounts lists, `*.get_section`) are beta; a
+  bounded lookup (`limit` without a cursor) returns at most `limit`.
 - **Regional and editor fields stay out.** `emiEligible`, product-level
   `freeDelivery` and product-level discount fields belong to the dashboard's
   editor routes (beta); no stable schema carries them.

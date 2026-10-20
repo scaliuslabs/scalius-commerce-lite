@@ -25749,7 +25749,10 @@ export type GetApiV1AdminResourcesPriceListsByIdPricesData = {
         id: string;
     };
     query?: {
-        page?: number;
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
         limit?: number;
         search?: string;
     };
@@ -25792,10 +25795,11 @@ export type GetApiV1AdminResourcesPriceListsByIdPricesResponses = {
     200: {
         success: true;
         data: {
-            items: Array<PriceListSku>;
-            total: number;
-            page: number;
-            limit: number;
+            prices: Array<PriceListSku>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
         };
     };
 };
@@ -26449,6 +26453,7 @@ export type GetApiV1AdminResourcesBulkRunsData = {
          * The `nextCursor` of the page before.
          */
         cursor?: string;
+        limit?: number;
     };
     url: '/api/v1/admin/resources/bulk-runs';
 };
@@ -35194,11 +35199,10 @@ export type GetApiV1AdminMediaResponses = {
                  */
                 keptForOrders: boolean;
             }>;
-            pagination: {
-                limit: number;
-                hasMore: boolean;
-                nextCursor: string | null;
-            };
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
         };
     };
 };
@@ -48673,9 +48677,9 @@ export type GetApiV1AdminSettingsSalesChannelsByIdProductsData = {
     };
     query?: {
         /**
-         * The last product id of the previous page.
+         * The `nextCursor` of the page before; leave it out for the first page.
          */
-        after?: string;
+        cursor?: string;
         limit?: number;
     };
     url: '/api/v1/admin/settings/sales-channels/{id}/products';
@@ -48718,7 +48722,10 @@ export type GetApiV1AdminSettingsSalesChannelsByIdProductsResponses = {
         success: true;
         data: {
             productIds: Array<string>;
-            nextAfter: string | null;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
         };
     };
 };
@@ -55282,7 +55289,11 @@ export type GetApiV1AdminOrdersByIdTimelineData = {
         id: string;
     };
     query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
         cursor?: string;
+        limit?: number;
     };
     url: '/api/v1/admin/orders/{id}/timeline';
 };
@@ -55322,7 +55333,6 @@ export type GetApiV1AdminOrdersByIdTimelineResponses = {
                 createdAt: string;
             }>;
             nextCursor: string | null;
-            hasMore: boolean;
         };
     };
 };

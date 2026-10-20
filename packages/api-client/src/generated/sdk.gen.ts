@@ -2073,7 +2073,7 @@ export const patchApiV1AdminResourcesPriceListsById = <ThrowOnError extends bool
 /**
  * One page of a price list's SKUs and their prices
  *
- * By product name then SKU, in minor units. `search` matches the product name or the SKU code.
+ * By product name then SKU, in minor units; follow nextCursor. `search` matches the product name or the SKU code.
  */
 export const getApiV1AdminResourcesPriceListsByIdPrices = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminResourcesPriceListsByIdPricesData, ThrowOnError>): RequestResult<GetApiV1AdminResourcesPriceListsByIdPricesResponses, GetApiV1AdminResourcesPriceListsByIdPricesErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminResourcesPriceListsByIdPricesResponses, GetApiV1AdminResourcesPriceListsByIdPricesErrors, ThrowOnError>({ url: '/api/v1/admin/resources/price-lists/{id}/prices', ...options });
 
@@ -5792,7 +5792,7 @@ export const postApiV1AdminOrdersBulkFulfill = <ThrowOnError extends boolean = f
 });
 
 /**
- * Order timeline: 50 events per page, newest first; placed marker only at the end
+ * Order timeline: newest first, follow nextCursor; placed marker only at the end
  */
 export const getApiV1AdminOrdersByIdTimeline = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminOrdersByIdTimelineData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersByIdTimelineResponses, GetApiV1AdminOrdersByIdTimelineErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminOrdersByIdTimelineResponses, GetApiV1AdminOrdersByIdTimelineErrors, ThrowOnError>({ url: '/api/v1/admin/orders/{id}/timeline', ...options });
 

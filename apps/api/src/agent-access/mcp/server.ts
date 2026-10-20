@@ -62,7 +62,7 @@ import {
   applyListControls,
   fitToBudget,
   jsonBytes,
-  paginationMeta,
+  cursorMeta,
   selectPointers,
   unwrapRouteBody,
   type ShapedMeta,
@@ -343,7 +343,7 @@ function shapeOperationResult(
   };
   if (result.oneTimeSecret) return { ok: true, data: unwrapRouteBody(result.data), meta };
   let data = unwrapRouteBody(result.data);
-  Object.assign(meta, paginationMeta(operation, data));
+  Object.assign(meta, cursorMeta(data));
   if (options.select && options.select.length > 0) data = selectPointers(data, options.select);
   const fitted = fitToBudget(data, options.budget, { paged: meta.nextCursor !== undefined || meta.hasMore !== undefined });
   return { ok: true, data: fitted.data, meta: { ...meta, ...fitted.meta } };
@@ -1022,7 +1022,7 @@ export function createAgentMcpServer(deps: McpServerDependencies, options: Agent
   });
 
   server.registerTool("scalius_read", {
-    description: "Run read operations: operationId + input, or steps. Results keep to 8 KB: narrow with select, page with limit and meta.nextCursor.",
+    description: "Run read operations: operationId + input, or steps. Results keep to 8 KB: narrow with select, page a cursor list with limit and meta.nextCursor (a numbered list takes its own page).",
     inputSchema: listed(readArgsSchema, READ_ARGS_JSON),
     outputSchema: sharedOutputSchema,
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },

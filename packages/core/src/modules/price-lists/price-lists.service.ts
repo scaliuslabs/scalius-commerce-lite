@@ -222,40 +222,50 @@ export async function getPriceList(db: Database, id: string): Promise<PriceListR
  * One page of a list's SKUs with their tiers, by product name then SKU
  * (`page` from 1). `search` matches the product name or the SKU code.
  */
-export async function listPriceListVariants(
+/** Where a page of a price list's SKUs (product name, then SKU id) stops: the next page starts after it. */
+export interface PriceListVariantPosition {
+    productName: string;
+    variantId: string;
+}
+
+function priceListVariantRows(
     db: Database,
     id: string,
-    options: { page?: number; limit?: number; search?: string } = {},
-): Promise<{ items: PriceListVariantPrices[]; total: number; page: number; limit: number }> {
-    const limit = Math.min(Math.max(Math.floor(options.limit ?? 50), 1), 100);
-    const page = Math.max(Math.floor(options.page ?? 1), 1);
-    await getPriceList(db, id);
+    options: { limit: number; offset?: number; search?: string; after?: PriceListVariantPosition | null },
+) {
     const search = options.search?.trim().toLowerCase();
     const matches = search
         ? sql`AND (${containsText(products.name, search)} OR ${containsText(productVariants.sku, search)})`
         : sql``;
     const variantsOfList = sql`${productVariants.id} IN (SELECT listed.variant_id FROM price_list_prices AS listed WHERE listed.price_list_id = ${id}) ${matches}`;
-    const [variantRows, totalRows] = await Promise.all([
-        db.select({
-            variantId: productVariants.id,
-            productId: products.id,
-            productName: products.name,
-            variantLabel: variantOptionLabelSql(productVariants.id),
-            isDefault: productVariants.isDefault,
-            sku: productVariants.sku,
-            basePriceMinor: productVariants.priceMinor,
-        })
-            .from(productVariants)
-            .innerJoin(products, eq(products.id, productVariants.productId))
-            .where(variantsOfList)
-            .orderBy(asc(products.name), asc(productVariants.id))
-            .limit(limit)
-            .offset((page - 1) * limit),
-        db.select({ n: sql<number>`count(*)` })
-            .from(productVariants)
-            .innerJoin(products, eq(products.id, productVariants.productId))
-            .where(variantsOfList),
-    ]);
+    const after = options.after
+        ? sql` AND (${products.name} > ${options.after.productName} OR (${products.name} = ${options.after.productName} AND ${productVariants.id} > ${options.after.variantId}))`
+        : sql``;
+    const rows = db.select({
+        variantId: productVariants.id,
+        productId: products.id,
+        productName: products.name,
+        variantLabel: variantOptionLabelSql(productVariants.id),
+        isDefault: productVariants.isDefault,
+        sku: productVariants.sku,
+        basePriceMinor: productVariants.priceMinor,
+    })
+        .from(productVariants)
+        .innerJoin(products, eq(products.id, productVariants.productId))
+        .where(sql`${variantsOfList}${after}`)
+        .orderBy(asc(products.name), asc(productVariants.id))
+        .limit(options.limit)
+        .offset(options.offset ?? 0);
+    const total = db.select({ n: sql<number>`count(*)` })
+        .from(productVariants)
+        .innerJoin(products, eq(products.id, productVariants.productId))
+        .where(variantsOfList);
+    return { rows, total };
+}
+
+type PriceListVariantRow = Awaited<ReturnType<typeof priceListVariantRows>["rows"]>[number];
+
+async function withListPrices(db: Database, id: string, variantRows: PriceListVariantRow[]): Promise<PriceListVariantPrices[]> {
     const ids = variantRows.map((row) => row.variantId);
     const priceRows = ids.length === 0 ? [] : await db.select({
         variantId: priceListPrices.variantId,
@@ -270,19 +280,48 @@ export async function listPriceListVariants(
             sql`${priceListPrices.variantId} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)}))`,
         ))
         .orderBy(asc(priceListPrices.currencyCode), asc(priceListPrices.minQuantity));
+    return variantRows.map((row) => ({
+        variantId: row.variantId,
+        productId: row.productId,
+        productName: row.productName,
+        variantLabel: row.isDefault ? null : row.variantLabel,
+        sku: row.sku,
+        basePriceMinor: row.basePriceMinor,
+        prices: priceRows.filter((price) => price.variantId === row.variantId).map(({ variantId: _variantId, ...price }) => price),
+    }));
+}
+
+/** One numbered page of a price list's SKUs and their prices (the dashboard's editor). */
+export async function listPriceListVariants(
+    db: Database,
+    id: string,
+    options: { page?: number; limit?: number; search?: string } = {},
+): Promise<{ items: PriceListVariantPrices[]; total: number; page: number; limit: number }> {
+    const limit = Math.min(Math.max(Math.floor(options.limit ?? 50), 1), 100);
+    const page = Math.max(Math.floor(options.page ?? 1), 1);
+    await getPriceList(db, id);
+    const query = priceListVariantRows(db, id, { limit, offset: (page - 1) * limit, search: options.search });
+    const [variantRows, totalRows] = await Promise.all([query.rows, query.total]);
+    return { items: await withListPrices(db, id, variantRows), total: Number(totalRows[0]?.n ?? 0), page, limit };
+}
+
+/**
+ * The SKUs after `after` (product name, then SKU id) and their prices, at
+ * most `limit`, with where the next page starts (null after the last).
+ */
+export async function listPriceListVariantsAfter(
+    db: Database,
+    id: string,
+    options: { limit: number; search?: string; after: PriceListVariantPosition | null },
+): Promise<{ items: PriceListVariantPrices[]; next: PriceListVariantPosition | null }> {
+    const limit = Math.min(Math.max(Math.floor(options.limit), 1), 100);
+    await getPriceList(db, id);
+    const variantRows = await priceListVariantRows(db, id, { limit: limit + 1, search: options.search, after: options.after }).rows;
+    const page = variantRows.slice(0, limit);
+    const last = page.at(-1);
     return {
-        items: variantRows.map((row) => ({
-            variantId: row.variantId,
-            productId: row.productId,
-            productName: row.productName,
-            variantLabel: row.isDefault ? null : row.variantLabel,
-            sku: row.sku,
-            basePriceMinor: row.basePriceMinor,
-            prices: priceRows.filter((price) => price.variantId === row.variantId).map(({ variantId: _variantId, ...price }) => price),
-        })),
-        total: Number(totalRows[0]?.n ?? 0),
-        page,
-        limit,
+        items: await withListPrices(db, id, page),
+        next: variantRows.length > limit && last ? { productName: last.productName, variantId: last.variantId } : null,
     };
 }
 

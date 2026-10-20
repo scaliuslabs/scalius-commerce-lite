@@ -270,13 +270,9 @@ export async function listMediaFiles(db: Database, input: {
             usageCount: usage.get(row.id)?.usageCount ?? 0,
             keptForOrders: usage.get(row.id)?.keptForOrders ?? false,
         })),
-        pagination: {
-            limit: boundedLimit,
-            hasMore,
-            nextCursor: hasMore && last && rawValue !== null
-                ? encodeCursor({ sortBy, sortOrder, value: rawValue, id: last.id, scope })
-                : null,
-        },
+        nextCursor: hasMore && last && rawValue !== null
+            ? encodeCursor({ sortBy, sortOrder, value: rawValue, id: last.id, scope })
+            : null,
     };
 }
 

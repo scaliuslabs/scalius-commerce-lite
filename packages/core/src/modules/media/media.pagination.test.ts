@@ -49,7 +49,7 @@ describe("media cursor pagination", () => {
                 view: "ready",
             });
             ids.push(...page.files.map((file) => file.id));
-            cursor = page.pagination.nextCursor ?? undefined;
+            cursor = page.nextCursor ?? undefined;
         } while (cursor);
         return ids;
     }

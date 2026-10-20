@@ -20,6 +20,7 @@ import {
     getPriceList,
     listPriceLists,
     listPriceListVariants,
+    listPriceListVariantsAfter,
     priceListChoices,
     setPriceListPrices,
     updatePriceList,
@@ -131,6 +132,12 @@ describe("price lists", () => {
                 { currencyCode: "BDT", amountMinor: 40000, compareAtMinor: null, minQuantity: 10 },
             ],
         });
+        // Keyset pages (product name, then SKU): Cup, then Tea, then nothing.
+        const first = await listPriceListVariantsAfter(db, list.id, { limit: 1, after: null });
+        expect(first.items.map(({ variantId }) => variantId)).toEqual(["v_cup"]);
+        expect(first.next).toEqual({ productName: "Cup", variantId: "v_cup" });
+        const second = await listPriceListVariantsAfter(db, list.id, { limit: 1, after: first.next });
+        expect(second).toMatchObject({ items: [{ variantId: "v_tea" }], next: null });
         const removed = await setPriceListPrices(db, list.id, { expectedRevision: 2, remove: ["v_cup"] });
         expect(removed).toMatchObject({ revision: 3, priceCount: 2, variantCount: 1 });
     });

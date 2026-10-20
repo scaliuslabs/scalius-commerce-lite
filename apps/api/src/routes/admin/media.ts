@@ -101,7 +101,7 @@ const listRoute = createRoute({
                 }),
                 keptForOrders: z.boolean().openapi({ description: "Past orders show this picture, so it can never be deleted permanently." }),
             })),
-            pagination: cursorPaginationSchema,
+            nextCursor: z.string().nullable().openapi({ description: "Pass it as `cursor` for the next page; null on the last page." }),
         })) } } },
         ...mediaErrorResponses,
     },

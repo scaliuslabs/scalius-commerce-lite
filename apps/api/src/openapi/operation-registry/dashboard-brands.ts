@@ -6,7 +6,8 @@ export const DASHBOARD_BRAND_OPERATIONS = {
   "dashboard.brands.delete_permanently": { risk: "destructive", revision: "required" },
   "dashboard.brands.form_options": {},
   "dashboard.brands.get": { stability: "stable" },
-  "dashboard.brands.list": { stability: "stable" },
+  // Page-numbered (dashboard-shaped): beta until a cursor list joins the stable API.
+  "dashboard.brands.list": {},
   "dashboard.brands.restore": { stability: "stable", revision: "required" },
   "dashboard.brands.set_status": { stability: "stable", revision: "required" },
   "dashboard.brands.trash": { stability: "stable", risk: "destructive", revision: "required" },

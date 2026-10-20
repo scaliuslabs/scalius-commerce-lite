@@ -275,7 +275,6 @@ export const ORDER_TIMELINE_PAGE_SIZE = 50;
 export interface OrderTimelinePage {
     events: OrderTimelineEvent[];
     nextCursor: string | null;
-    hasMore: boolean;
 }
 
 /** The same projection for a page, legacy readers and an idempotent comment response. */
@@ -332,12 +331,12 @@ async function readTimelinePage(db: Database, orderId: string, viewerId: string 
         id: `placed_${orderId}`, kind: "placed", body: null, data: null,
         actorName: order.creatorName ?? null, own: false, createdAt: order.createdAt,
     });
-    return { events, nextCursor, hasMore: nextCursor !== null };
+    return { events, nextCursor };
 }
 
 /** Bounded newest-first pages; the placed marker appears only once history is complete. */
-export function listOrderTimelinePage(db: Database, orderId: string, viewerId?: string | null, cursor?: string): Promise<OrderTimelinePage> {
-    return readTimelinePage(db, orderId, viewerId, cursor, ORDER_TIMELINE_PAGE_SIZE);
+export function listOrderTimelinePage(db: Database, orderId: string, viewerId?: string | null, cursor?: string, limit = ORDER_TIMELINE_PAGE_SIZE): Promise<OrderTimelinePage> {
+    return readTimelinePage(db, orderId, viewerId, cursor, Math.min(Math.max(Math.floor(limit), 1), 100));
 }
 
 /** Compatibility for internal array readers. The dashboard uses the cursor page above. */

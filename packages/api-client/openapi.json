@@ -98048,7 +98048,7 @@
           "App API - Products"
         ],
         "summary": "One page of a price list's SKUs and their prices",
-        "description": "By product name then SKU, in minor units. `search` matches the product name or the SKU code.",
+        "description": "By product name then SKU, in minor units; follow nextCursor. `search` matches the product name or the SKU code.",
         "parameters": [
           {
             "schema": {
@@ -98062,13 +98062,13 @@
           },
           {
             "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 1000,
-              "default": 1
+              "type": "string",
+              "maxLength": 1024,
+              "description": "The `nextCursor` of the page before; leave it out for the first page."
             },
             "required": false,
-            "name": "page",
+            "description": "The `nextCursor` of the page before; leave it out for the first page.",
+            "name": "cursor",
             "in": "query"
           },
           {
@@ -98109,27 +98109,21 @@
                     "data": {
                       "type": "object",
                       "properties": {
-                        "items": {
+                        "prices": {
                           "type": "array",
                           "items": {
                             "$ref": "#/components/schemas/PriceListSku"
                           }
                         },
-                        "total": {
-                          "type": "integer"
-                        },
-                        "page": {
-                          "type": "integer"
-                        },
-                        "limit": {
-                          "type": "integer"
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Pass it as `cursor` for the next page; null on the last page."
                         }
                       },
                       "required": [
-                        "items",
-                        "total",
-                        "page",
-                        "limit"
+                        "prices",
+                        "nextCursor"
                       ]
                     }
                   },
@@ -100053,6 +100047,17 @@
             "required": false,
             "description": "The `nextCursor` of the page before.",
             "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20,
+              "default": 20
+            },
+            "required": false,
+            "name": "limit",
             "in": "query"
           }
         ],
@@ -103653,7 +103658,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -103971,7 +103976,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -106491,7 +106496,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -112446,7 +112451,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -114096,7 +114101,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -122760,7 +122765,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -125628,7 +125633,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -128570,32 +128575,15 @@
                             ]
                           }
                         },
-                        "pagination": {
-                          "type": "object",
-                          "properties": {
-                            "limit": {
-                              "type": "integer",
-                              "minimum": 0,
-                              "exclusiveMinimum": true
-                            },
-                            "hasMore": {
-                              "type": "boolean"
-                            },
-                            "nextCursor": {
-                              "type": "string",
-                              "nullable": true
-                            }
-                          },
-                          "required": [
-                            "limit",
-                            "hasMore",
-                            "nextCursor"
-                          ]
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Pass it as `cursor` for the next page; null on the last page."
                         }
                       },
                       "required": [
                         "files",
-                        "pagination"
+                        "nextCursor"
                       ]
                     }
                   },
@@ -174855,11 +174843,11 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 64,
-              "description": "The last product id of the previous page."
+              "description": "The `nextCursor` of the page before; leave it out for the first page."
             },
             "required": false,
-            "description": "The last product id of the previous page.",
-            "name": "after",
+            "description": "The `nextCursor` of the page before; leave it out for the first page.",
+            "name": "cursor",
             "in": "query"
           },
           {
@@ -174896,14 +174884,15 @@
                             "type": "string"
                           }
                         },
-                        "nextAfter": {
+                        "nextCursor": {
                           "type": "string",
-                          "nullable": true
+                          "nullable": true,
+                          "description": "Pass it as `cursor` for the next page; null on the last page."
                         }
                       },
                       "required": [
                         "productIds",
-                        "nextAfter"
+                        "nextCursor"
                       ]
                     }
                   },
@@ -198560,7 +198549,7 @@
         "tags": [
           "Admin - Orders"
         ],
-        "summary": "Order timeline: 50 events per page, newest first; placed marker only at the end",
+        "summary": "Order timeline: newest first, follow nextCursor; placed marker only at the end",
         "parameters": [
           {
             "schema": {
@@ -198573,10 +198562,23 @@
           {
             "schema": {
               "type": "string",
-              "maxLength": 1024
+              "maxLength": 1024,
+              "description": "The `nextCursor` of the page before; leave it out for the first page."
             },
             "required": false,
+            "description": "The `nextCursor` of the page before; leave it out for the first page.",
             "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            },
+            "required": false,
+            "name": "limit",
             "in": "query"
           }
         ],
@@ -198669,15 +198671,11 @@
                         "nextCursor": {
                           "type": "string",
                           "nullable": true
-                        },
-                        "hasMore": {
-                          "type": "boolean"
                         }
                       },
                       "required": [
                         "events",
-                        "nextCursor",
-                        "hasMore"
+                        "nextCursor"
                       ]
                     }
                   },

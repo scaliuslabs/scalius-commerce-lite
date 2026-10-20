@@ -1,5 +1,5 @@
 // Response shaping for the MCP tools: unwrap the route envelope, project the
-// fields the agent selected, report pagination as one opaque cursor, and keep
+// fields the agent selected, report a cursor list's next page, and keep
 // every result inside its byte budget (8 KB by default) by returning the
 // first rows plus `truncated` rather than a context-filling page.
 
@@ -11,13 +11,11 @@ import { AGENT_STEP_POINTER_PATTERN } from "./references";
 export const AGENT_READ_BUDGET_BYTES = 8 * 1024;
 export const AGENT_MAX_SELECT_POINTERS = 24;
 export const AGENT_DEFAULT_LIST_LIMIT = 20;
-const CURSOR_PREFIX = "sc1.";
 const POISON_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
 export interface ShapedMeta {
   hasMore?: boolean;
   nextCursor?: string | null;
-  total?: number;
   truncated?: true;
   /** Rows returned of `pageRows` in this page when the page was cut to the budget. */
   returned?: number;
@@ -53,29 +51,10 @@ function queryParameters(operation: AgentOperationManifestEntry): Map<string, Qu
   return result;
 }
 
-function encodeCursor(patch: Record<string, AgentInputPrimitive>): string {
-  const bytes = new TextEncoder().encode(JSON.stringify(patch));
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return CURSOR_PREFIX + btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-function decodeCursor(cursor: string): Record<string, unknown> | null {
-  if (!cursor.startsWith(CURSOR_PREFIX)) return null;
-  try {
-    const base64 = cursor.slice(CURSOR_PREFIX.length).replace(/-/g, "+").replace(/_/g, "/");
-    const binary = atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, "="));
-    const parsed = JSON.parse(new TextDecoder().decode(Uint8Array.from(binary, (char) => char.charCodeAt(0))));
-    return isRecord(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Applies the tool-level `limit` and `cursor` to a read's query: `limit`
  * fills the operation's own `limit` parameter (lists default to 20), and a
- * cursor from `meta.nextCursor` restores the page parameter it encodes.
+ * cursor (`meta.nextCursor`) is the operation's own `cursor` parameter.
  */
 export function applyListControls(
   operation: AgentOperationManifestEntry,
@@ -97,68 +76,19 @@ export function applyListControls(
     throw new AgentDispatchError("limit_not_supported", `${operation.operationId} has no limit parameter`, 400);
   }
   if (controls.cursor !== undefined) {
-    const patch = decodeCursor(controls.cursor);
-    if (patch) {
-      for (const [key, value] of Object.entries(patch)) {
-        if (POISON_KEYS.has(key) || !parameters.has(key)) {
-          throw new AgentDispatchError("invalid_cursor", "The cursor does not belong to this operation", 400);
-        }
-        if (value !== null && !["string", "number", "boolean"].includes(typeof value)) {
-          throw new AgentDispatchError("invalid_cursor", "The cursor is malformed", 400);
-        }
-        query[key] = value as AgentInputPrimitive;
-      }
-    } else if (parameters.has("cursor")) {
-      query.cursor = controls.cursor;
-    } else {
+    if (!parameters.has("cursor")) {
       throw new AgentDispatchError("invalid_cursor", `${operation.operationId} does not page by cursor`, 400);
     }
+    query.cursor = controls.cursor;
   }
   return Object.keys(query).length > 0 || input.query ? { ...input, query } : input;
 }
 
-function finiteNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
-
-/** Pagination facts a list response carries, with the next page as one opaque cursor. */
-export function paginationMeta(
-  operation: AgentOperationManifestEntry,
-  data: unknown,
-): Pick<ShapedMeta, "hasMore" | "nextCursor" | "total"> {
-  if (!isRecord(data)) return {};
-  const parameters = queryParameters(operation);
-  const meta: Pick<ShapedMeta, "hasMore" | "nextCursor" | "total"> = {};
-  const pagination = isRecord(data.pagination) ? data.pagination : isRecord(data.meta) ? data.meta : data;
-  const page = finiteNumber(pagination.page);
-  const totalPages = finiteNumber(pagination.totalPages);
-  const total = finiteNumber(pagination.total) ?? finiteNumber(data.total) ?? finiteNumber(data.totalCount);
-  if (total !== undefined) meta.total = total;
-  if (page !== undefined && totalPages !== undefined && parameters.has("page")) {
-    meta.hasMore = page < totalPages;
-    meta.nextCursor = meta.hasMore ? encodeCursor({ page: page + 1 }) : null;
-    return meta;
-  }
-  for (const [key, value] of Object.entries(data)) {
-    if (key === "nextCursor" || key === "cursor" && "hasMore" in data) {
-      meta.nextCursor = typeof value === "string" && value ? (parameters.has("cursor") ? value : encodeCursor({ cursor: value })) : null;
-      meta.hasMore = typeof data.hasMore === "boolean" ? data.hasMore : meta.nextCursor !== null;
-      return meta;
-    }
-    const match = key.match(/^next([A-Z][A-Za-z0-9]*)$/);
-    if (match) {
-      const parameter = match[1]!.charAt(0).toLowerCase() + match[1]!.slice(1);
-      if (parameters.has(parameter)) {
-        const usable = value !== null && value !== undefined && ["string", "number"].includes(typeof value);
-        meta.nextCursor = usable ? encodeCursor({ [parameter]: value as string | number }) : null;
-        meta.hasMore = usable;
-        return meta;
-      }
-    }
-  }
-  if (typeof data.hasMore === "boolean") meta.hasMore = data.hasMore;
-  else if (typeof data.hasNextPage === "boolean") meta.hasMore = data.hasNextPage;
-  return meta;
+/** The next page of a cursor list (`{ ..., nextCursor }`): the one way lists page. */
+export function cursorMeta(data: unknown): Pick<ShapedMeta, "hasMore" | "nextCursor"> {
+  if (!isRecord(data) || !("nextCursor" in data)) return {};
+  const nextCursor = typeof data.nextCursor === "string" && data.nextCursor ? data.nextCursor : null;
+  return { nextCursor, hasMore: nextCursor !== null };
 }
 
 function parsePointer(pointer: string): string[] {

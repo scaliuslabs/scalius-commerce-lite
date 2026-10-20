@@ -227,7 +227,8 @@ describe("the stable app API's resources", () => {
     expect(saved.status).toBe(200);
     expect(saved.body.data.priceList.revision).toBe(list.revision + 1);
     const prices = await call("GET", `/resources/price-lists/${list.id}/prices`);
-    expect(prices.body.data.items).toEqual([expect.objectContaining({
+    expect(prices.body.data.nextCursor).toBeNull();
+    expect(prices.body.data.prices).toEqual([expect.objectContaining({
       variantId: "v_tea", baseCurrency: "BDT", basePriceMinor: 50000,
       prices: [{ currency: list.currency, amountMinor, compareAtMinor: null, minQuantity: 1 }],
     })]);

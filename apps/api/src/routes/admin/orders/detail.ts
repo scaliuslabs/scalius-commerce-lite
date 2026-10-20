@@ -293,15 +293,18 @@ const getTimelineRoute = createRoute({
     method: "get",
     path: "/{id}/timeline",
     tags: ["Admin - Orders"],
-    summary: "Order timeline: 50 events per page, newest first; placed marker only at the end",
+    summary: "Order timeline: newest first, follow nextCursor; placed marker only at the end",
     request: {
         params: z.object({ id: z.string() }),
-        query: z.object({ cursor: z.string().max(1024).optional() }),
+        query: z.object({
+            cursor: z.string().max(1024).optional().openapi({ description: "The `nextCursor` of the page before; leave it out for the first page." }),
+            limit: z.coerce.number().int().min(1).max(100).default(50),
+        }),
     },
     responses: {
         200: {
             description: "Timeline",
-            content: { "application/json": { schema: successEnvelope(z.object({ events: z.array(timelineEventSchema), nextCursor: z.string().nullable(), hasMore: z.boolean() })) } },
+            content: { "application/json": { schema: successEnvelope(z.object({ events: z.array(timelineEventSchema), nextCursor: z.string().nullable() })) } },
         },
         400: errorResponses[400],
         404: errorResponses[404],
@@ -310,7 +313,8 @@ const getTimelineRoute = createRoute({
 
 app.openapi(getTimelineRoute, (async (c: AdminRouteContext<typeof getTimelineRoute>) => {
     const user = c.get("user") as { id?: string } | undefined;
-    const page = await listOrderTimelinePage(c.get("db"), c.req.valid("param").id, user?.id ?? null, c.req.valid("query").cursor);
+    const query = c.req.valid("query");
+    const page = await listOrderTimelinePage(c.get("db"), c.req.valid("param").id, user?.id ?? null, query.cursor, query.limit);
     return ok(c, { ...page, events: page.events.map((event) => ({ ...event, createdAt: event.createdAt.toISOString() })) });
 }) as unknown as AdminRouteHandler<typeof getTimelineRoute>);
 

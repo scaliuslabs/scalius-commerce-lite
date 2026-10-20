@@ -199,20 +199,19 @@ describe("MCP surface v2 execution", () => {
     expect(mocks.dispatchAgentOperation).not.toHaveBeenCalled();
   });
 
-  it("keeps a list within the 8 KB read budget and pages with one opaque cursor", async () => {
+  it("keeps a list within the 8 KB read budget and pages a cursor list by its own cursor", async () => {
     const rows = Array.from({ length: 50 }, (_, index) => ({ id: `ord_${index}`, number: 1000 + index, customerName: "Rahim Uddin", note: "n".repeat(300), status: "pending" }));
-    mocks.dispatchAgentOperation.mockImplementation(async ({ operation, input }) => {
-      return result(operation.operationId, 200, { success: true, data: { orders: rows, pagination: { page: Number(input.query?.page ?? 1), limit: 50, total: 120, totalPages: 3 } } });
+    mocks.dispatchAgentOperation.mockImplementation(async ({ operation }) => {
+      return result(operation.operationId, 200, { success: true, data: { orders: rows, nextCursor: "c2" } });
     });
-    const first = await tool("scalius_read")({ operationId: "dashboard.orders.list" });
+    const first = await tool("scalius_read")({ operationId: "dashboard.resources.orders.list" });
     const value = first.structuredContent as { data: { orders: unknown[] }; meta: Record<string, unknown> };
     expect(bytes(value.data)).toBeLessThanOrEqual(8 * 1024);
-    expect(value.meta).toMatchObject({ truncated: true, pageRows: 50, hasMore: true, total: 120, hint: expect.stringContaining("select") });
+    expect(value.meta).toMatchObject({ truncated: true, pageRows: 50, hasMore: true, nextCursor: "c2", hint: expect.stringContaining("select") });
     expect(value.data.orders.length).toBe(value.meta.returned);
-    expect(value.meta.nextCursor).toMatch(/^sc1\./);
-    await tool("scalius_read")({ operationId: "dashboard.orders.list", cursor: value.meta.nextCursor });
-    expect(mocks.dispatchAgentOperation.mock.calls[1]![0].input.query).toMatchObject({ page: 2 });
-    await tool("scalius_read")({ operationId: "dashboard.orders.list", limit: 5 });
+    await tool("scalius_read")({ operationId: "dashboard.resources.orders.list", cursor: value.meta.nextCursor });
+    expect(mocks.dispatchAgentOperation.mock.calls[1]![0].input.query).toMatchObject({ cursor: "c2" });
+    await tool("scalius_read")({ operationId: "dashboard.resources.orders.list", limit: 5 });
     expect(mocks.dispatchAgentOperation.mock.calls[2]![0].input.query.limit).toBe(5);
   });
 
@@ -229,7 +228,8 @@ describe("MCP surface v2 execution", () => {
     expect(value.data).toEqual(projected);
     expect(bytes(value.data)).toBeLessThanOrEqual(bytes(projected));
     expect(value.data).toMatchObject({ orders: expect.arrayContaining([{ id: "ord_0", number: 0 }]), pagination: { total: 30 } });
-    expect(value.meta).toMatchObject({ hasMore: false, nextCursor: null });
+    // A page-numbered list carries its own pagination; the tool reports no cursor for it.
+    expect(value.meta).not.toHaveProperty("nextCursor");
     expect(value.meta).not.toHaveProperty("truncated");
   });
 

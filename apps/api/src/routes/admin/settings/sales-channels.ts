@@ -97,21 +97,22 @@ app.openapi(createRoute({
   request: {
     params: channelParam,
     query: z.object({
-      after: z.string().min(1).max(64).optional().openapi({ description: "The last product id of the previous page." }),
+      cursor: z.string().min(1).max(64).optional().openapi({ description: "The `nextCursor` of the page before; leave it out for the first page." }),
       limit: z.coerce.number().int().min(1).max(CHANNEL_PRODUCTS_PAGE_MAX).optional(),
     }),
   },
   responses: {
     200: {
       description: "A page of product ids",
-      content: { "application/json": { schema: successEnvelope(z.object({ productIds: z.array(z.string()), nextAfter: z.string().nullable() })) } },
+      content: { "application/json": { schema: successEnvelope(z.object({ productIds: z.array(z.string()), nextCursor: z.string().nullable().openapi({ description: "Pass it as `cursor` for the next page; null on the last page." }) })) } },
     },
     ...errorResponses,
   },
 }), async (c) => {
   noStore(c);
-  const { after, limit } = c.req.valid("query");
-  return ok(c, await listChannelProducts(c.get("db"), c.req.valid("param").id, { after, limit }));
+  const { cursor, limit } = c.req.valid("query");
+  const page = await listChannelProducts(c.get("db"), c.req.valid("param").id, { after: cursor, limit });
+  return ok(c, { productIds: page.productIds, nextCursor: page.nextAfter });
 });
 
 export { app as salesChannelsSettingsRoutes };

@@ -387,6 +387,8 @@ Fraud-checker provider rows (`category = 'fraud-checker'`) and `notification_pro
 
 Lists that can grow large use keyset (cursor) paging: the admin orders, products and customers lists and the public product listing. A cursor names the last row shown. Totals are exact up to a plan cap and read "N+" above it. Numbered `page` requests work only for shallow offsets (`planLimits().lists`). Code: `packages/shared/src/pagination.ts` (cursors) and `packages/core/src/utils/keyset.ts` (SQL). `apps/api/src/routes/admin/list-cursor-contract.test.ts` pins the contract.
 
+The stable app API pages every list one way: `cursor` and `limit` in, `{ <plural>, nextCursor }` out (`nextCursor` is null on the last page; an opaque token). No stable list takes `page`, `offset` or `after`, or returns `pagination`, `hasMore` or a next-page key of its own (`stable-operations.test.ts`). The dashboard's page-numbered lists are beta. MCP reports `meta.nextCursor` for cursor lists only.
+
 ## How to extend
 
 ### Add a feature to an existing domain

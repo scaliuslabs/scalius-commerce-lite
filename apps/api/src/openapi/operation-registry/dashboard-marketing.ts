@@ -37,7 +37,8 @@ export const DASHBOARD_MARKETING_OPERATIONS = {
   },
   "dashboard.discounts.create": { stability: "stable" },
   "dashboard.discounts.get": { stability: "stable" },
-  "dashboard.discounts.list": { stability: "stable" },
+  // Page-numbered (dashboard-shaped): beta until a cursor list joins the stable API.
+  "dashboard.discounts.list": {},
   "dashboard.discounts.pause": { stability: "stable", revision: "required" },
   "dashboard.discounts.preview": {
     risk: "read",
