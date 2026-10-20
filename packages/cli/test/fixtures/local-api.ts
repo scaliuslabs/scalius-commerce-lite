@@ -35,6 +35,8 @@ export interface LocalApi {
     /** Times bulk_runs.get was read; the second read finds the run done. */
     bulkRunReads: number;
     batchWrites: number;
+    /** The `scalius://store` resource body (currency and, when the store reports them, its decimal places). */
+    store: { name: string; currency: string; decimals?: number; timeZone: string };
   };
   close: () => Promise<void>;
 }
@@ -110,6 +112,8 @@ export function localSpec(): Record<string, unknown> {
     },
   };
 }
+
+export const DEFAULT_STORE = { name: "Demo Store", currency: "BDT", decimals: 2, timeZone: "Asia/Dhaka" };
 
 const ORDERS = Array.from({ length: 7 }, (_, index) => ({ id: `ord_${index + 1}`, number: 1040 + index }));
 
@@ -257,7 +261,7 @@ function buildMcpServer(api: LocalApi): McpServer {
     return failure({ code: "operation_not_found", status: 404, message: "Operation is unavailable", retryable: false, hint: "scalius_search" });
   });
   server.registerResource("store", "scalius://store", { mimeType: "application/json" }, async (uri) => ({
-    contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify({ name: "Demo Store", currency: "BDT", timeZone: "Asia/Dhaka" }) }],
+    contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify(api.state.store) }],
   }));
   return server;
 }
@@ -273,7 +277,7 @@ export async function startLocalApi(): Promise<LocalApi> {
     origin: "",
     token: LOCAL_TOKEN,
     requests: [] as RecordedRequest[],
-    state: { refunds: [], products: [], usedTokens: new Set<string>(), failNextProductCreate: 0, orders: ORDERS, bulkWrites: [], bulkDryRuns: [], bulkRunReads: 0, batchWrites: 0 },
+    state: { refunds: [], products: [], usedTokens: new Set<string>(), failNextProductCreate: 0, orders: ORDERS, bulkWrites: [], bulkDryRuns: [], bulkRunReads: 0, batchWrites: 0, store: { ...DEFAULT_STORE } },
     close: async () => undefined,
   } as LocalApi;
   const handler = createMcpHandler(() => buildMcpServer(api));

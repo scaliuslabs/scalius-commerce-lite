@@ -41,11 +41,13 @@ scalius describe <operationId...> [--full|--examples]    = scalius_describe
 scalius read <operationId> [--input j|@f|-] [--limit n] [--cursor c] [--all] [--ndjson] [--max-bytes n]
 scalius write <operationId> [--input ...] [--dry-run] [--yes] [--confirm-token t] [--idempotency-key auto|<key>]
 scalius batch --input '{"steps":[...]}' [--dry-run] [--yes]
-scalius bulk prices  (--ids sku,.. | --filter 'category=<id>') (--set <minor> | --percent <n> | --amount <minor>) [--dry-run] [--yes] [--wait]
+scalius bulk prices  (--ids sku,.. | --filter 'category=<id>') (--set <amount> | --percent <n> | --amount <amount>) [--minor] [--dry-run] [--yes] [--wait]
 scalius bulk stock   (--items sku=qty,.. | --ids sku,.. --quantity <n>) [--location <id>] [--reason <text>]
 scalius bulk tags    (--ids cus,.. | --filter 'tag=VIP,minOrders=4') [--add a,b] [--remove c]
 scalius bulk status  (--ids prod,.. | --filter ...) --status active|draft
 scalius bulk publish (--ids prod,.. | --filter ...) --channels ch,.. --action publish|unpublish
+                     prices: amounts are in the store currency (--set 1500 is 1,500.00 BDT; --amount -100 takes 100 off);
+                     the CLI reads the currency and its decimals from the store; --minor passes minor units (--set 150000 --minor)
                      any kind: [--input '{"body":{...}}'] sends the raw body instead of the flags
 scalius export <orders|customers|products|inventory|report> --out <file> [--since YYYY-MM-DD] [--until YYYY-MM-DD]
 scalius media upload <files...> --yes
@@ -71,7 +73,7 @@ Global: --profile <name>  --output human|json  --select <pointers>  --jq <expres
 
 ## Changes and approval
 
-- `--dry-run` validates and previews a change and writes nothing (exit 11).
+- `--dry-run` validates and previews a change and writes nothing (exit 11). A prices dry run names the store currency and shows the change in it (`Currency: BDT (2 decimal places); set every price to 1500.00 BDT.`); the server's before and after rows stay in minor units.
 - A destructive or financial change (and any operation the registry marks `confirmation: required`, plus security changes) needs the merchant's approval, and applies to `write`, `batch` and `bulk` alike. The store answers the change with 428 `confirmation_required`, its summary and a one-use token. The CLI shows the summary; with `--yes` (or a yes at the interactive prompt) it repeats the identical request with that token and the same idempotency key. Without either, a non-interactive run sends nothing more and exits 10. A token works once, for exactly that input (`--confirm-token` passes one you already hold).
 - Every write that takes an idempotency key gets one automatically (`sck_...`), reused for every retry within the invocation and printed in `meta.idempotencyKey`; pass `--idempotency-key <key>` to replay an earlier attempt.
 

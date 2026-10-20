@@ -4,6 +4,7 @@
 // authority) as every other agent read. A fact the grant cannot read is left
 // out, never guessed.
 
+import { currencyExponent } from "@scalius/shared/currency-policy";
 import type { AgentPrincipal, AgentResource } from "../types";
 import { dispatchAgentOperation } from "../dispatch";
 import { getAuthorizedOperation } from "./operations";
@@ -12,6 +13,8 @@ import { unwrapRouteBody } from "./shape";
 export interface StoreContext {
   name?: string;
   currency?: string;
+  /** Decimal places of the shop currency (BDT 2, JPY 0): how a typed amount becomes minor units. */
+  decimals?: number;
   country?: string;
   locale?: string;
   timeZone?: string;
@@ -83,7 +86,10 @@ export async function loadStoreContext(input: {
   const current = isRecord(setup) && isRecord(setup.current) ? setup.current : null;
   if (current) {
     if (text(current.storeName)) context.name = text(current.storeName);
-    if (text(current.currencyCode, 3)) context.currency = text(current.currencyCode, 3);
+    if (text(current.currencyCode, 3)) {
+      context.currency = text(current.currencyCode, 3);
+      context.decimals = currencyExponent(context.currency!);
+    }
     if (text(current.countryCode, 2)) context.country = text(current.countryCode, 2);
     if (text(current.locale, 5)) context.locale = text(current.locale, 5);
     if (text(current.timeZone, 64)) context.timeZone = text(current.timeZone, 64);

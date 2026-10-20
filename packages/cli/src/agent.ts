@@ -298,6 +298,8 @@ export interface WriteOptions {
   idempotencyKey?: string;
   /** false: return the envelope without printing it (bulk --wait prints the run instead). */
   print?: boolean;
+  /** A dry run's extra facts: `note` is printed above the preview, `fields` join the envelope. */
+  preview?: { note?: string; fields?: Record<string, unknown> };
 }
 
 export interface WriteOutcome {
@@ -406,21 +408,23 @@ export function idempotencyKeyFor(operation: IndexedOperation, requested: string
   return support === "none" ? undefined : `sck_${randomUUID()}`;
 }
 
-function dryRunEnvelope(result: ToolResult): Record<string, unknown> {
+function dryRunEnvelope(result: ToolResult, preview?: WriteOptions["preview"]): Record<string, unknown> {
   const { ok: _ok, dryRun: _dryRun, written: _written, confirmation, steps, ...single } = result.value;
   return {
     ok: true,
     dryRun: true,
     written: false,
+    ...(preview?.fields ?? {}),
     data: steps ?? single,
     ...(isRecord(confirmation) ? { confirmation } : {}),
   };
 }
 
-function previewText(envelope: Record<string, unknown>): string {
+function previewText(envelope: Record<string, unknown>, note?: string): string {
   const confirmation = isRecord(envelope.confirmation) ? envelope.confirmation : undefined;
   return [
     "Dry run: nothing was written.",
+    ...(note ? [note] : []),
     JSON.stringify(envelope.data, null, 2),
     ...(confirmation ? [
       `Needs approval: ${String(confirmation.summary)}`,
@@ -484,8 +488,8 @@ export async function write(runtime: Runtime, output: OutputOptions, operationId
 
   if (options.dryRun) {
     const result = await tool(runtime, profile, audience, "scalius_write", dryRunArgs, true);
-    const envelope = dryRunEnvelope(result);
-    if (options.print !== false) emit(runtime, output, envelope, () => previewText(envelope));
+    const envelope = dryRunEnvelope(result, options.preview);
+    if (options.print !== false) emit(runtime, output, envelope, () => previewText(envelope, options.preview?.note));
     return { code: 11, envelope };
   }
 

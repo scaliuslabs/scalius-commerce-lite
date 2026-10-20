@@ -21,6 +21,7 @@ const api = vi.hoisted(() => ({
   revokeAllAgentGrants: vi.fn(),
   listAgentConnectionEvents: vi.fn(),
   rotateAgentCredential: vi.fn(),
+  getAgentSetupOrigin: vi.fn(),
 }));
 const toasts = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 
@@ -122,6 +123,7 @@ beforeEach(() => {
     canManage: true,
   });
   api.countClearableAgentConnections.mockResolvedValue({ revoked: 0, expired: 0, total: 0 });
+  api.getAgentSetupOrigin.mockResolvedValue("https://api.shop.example");
   api.createAgentToken.mockResolvedValue({ token: SECRET, connection });
   api.listAgentConnectionEvents.mockResolvedValue({
     events: [],
@@ -161,6 +163,33 @@ describe("AI & app access card", () => {
 
     await click(button("Done"));
     expect(document.body.innerHTML).not.toContain(SECRET);
+  });
+
+  it("shows the exact setup command for this store's API origin, with a copy button", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    await render(["agent_access.view"], false);
+    await vi.waitFor(() => expect(document.body.textContent).toContain("Connect an AI assistant"));
+
+    const command = document.querySelector<HTMLInputElement>('input[aria-label="Setup command"]');
+    expect(command?.value).toBe("npx scalius@latest init --server https://api.shop.example");
+    expect(document.body.textContent).toContain("Works with Claude Code, Codex, Cursor.");
+    const remote = document.querySelector<HTMLInputElement>('input[aria-label="Remote address"]');
+    expect(remote?.value).toBe("https://api.shop.example/api/v1/mcp/dashboard");
+
+    await click(button("Copy", command!.parentElement!));
+    expect(writeText).toHaveBeenCalledWith("npx scalius@latest init --server https://api.shop.example");
+    expect(toasts.success).toHaveBeenCalledWith("Command copied");
+  });
+
+  it("shows the setup step instead while the API address is not set", async () => {
+    api.getAgentSetupOrigin.mockResolvedValue(null);
+    await render(["agent_access.view"], false);
+    await vi.waitFor(() => expect(document.body.textContent).toContain("Set your store's API address first."));
+
+    expect(document.querySelector('input[aria-label="Setup command"]')).toBeNull();
+    const link = [...host.querySelectorAll("a")].find((anchor) => anchor.textContent === "Set web addresses");
+    expect(link?.getAttribute("href")).toBe("/admin/settings/store#webAddresses");
   });
 
   it("asks the owner to turn on two-step verification before offering the key form", async () => {

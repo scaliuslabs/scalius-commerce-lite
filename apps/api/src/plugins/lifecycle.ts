@@ -5,7 +5,9 @@
 //               grant key), then `install` on the first activation and
 //               `activate` every time;
 //   feature on  approve that feature's access (Super Admin), then `enable`
-//               with `{ feature }`;
+//               with `{ feature }`, then put its payment or SMS service to use
+//               (`provider-adoption.ts`; activation does the same for the
+//               features it approves, so no lane needs a second step);
 //   feature off `disable` with `{ feature }` while it is still on, then revoke;
 //   deactivate  `deactivate` while still active, then stop;
 //   uninstall   `uninstall` (with the keep/delete choice) when the plugin is
@@ -31,6 +33,7 @@ import {
 } from "@scalius/core/modules/plugins";
 import type { PluginManifest } from "@scalius/shared/plugins";
 import { PluginHost, type PluginHostOptions } from "./host";
+import { putServicesToUse } from "./provider-adoption";
 
 export interface LifecycleContext {
   db: Database;
@@ -84,7 +87,10 @@ export async function activatePluginWithHooks(
     const enabled = await host.invokeLifecycle(installation, "enable", { feature });
     if (!enabled.ok) hookError ??= enabled.error;
   }
-  return { installation: await requirePluginInstallation(context.db, pluginId), hookError };
+  const running = await requirePluginInstallation(context.db, pluginId);
+  // Approved features adopt like ones turned on later (provider-adoption.ts).
+  await putServicesToUse(context, running, turnedOn);
+  return { installation: running, hookError };
 }
 
 export async function setPluginFeatureWithHooks(
@@ -105,7 +111,10 @@ export async function setPluginFeatureWithHooks(
   if (options.enabled && result.changed) {
     const outcome = await hostFor(context).invokeLifecycle(result.installation, "enable", { feature: options.feature });
     if (!outcome.ok) hookError = outcome.error;
-    return { installation: await requirePluginInstallation(context.db, pluginId), changed: true, hookError };
+    const running = await requirePluginInstallation(context.db, pluginId);
+    // Its payment providers join checkout, a ready SMS provider becomes the SMS service (provider-adoption.ts).
+    await putServicesToUse(context, running, [options.feature]);
+    return { installation: running, changed: true, hookError };
   }
   return { ...result, hookError };
 }
