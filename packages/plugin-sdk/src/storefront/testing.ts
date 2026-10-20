@@ -38,7 +38,7 @@ export { checkStorefrontHeaderHtml } from "@scalius/shared/plugins/storefront-ht
  * and how many elements and attributes it left out: assert `dropped` is 0.
  */
 export function storefrontShown(html: string, pluginId: string): { html: string; dropped: number } {
-  const result = sanitizePluginHtml(html, { pluginId, profile: "component" });
+  const result = sanitizePluginHtml(html, { pluginId });
   if (!result.ok) throw new Error(`The storefront would show nothing: ${result.reason}.`);
   return { html: result.html, dropped: result.dropped };
 }

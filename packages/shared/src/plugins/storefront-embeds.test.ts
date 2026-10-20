@@ -4,7 +4,7 @@ import { splitStorefrontEmbeds } from "./storefront-embeds";
 import { storefrontEmbedRule } from "./storefront-protocol";
 
 const checked = (html: string) => {
-  const result = sanitizePluginHtml(html, { pluginId: "acme.theme", profile: "component" });
+  const result = sanitizePluginHtml(html, { pluginId: "acme.theme" });
   if (!result.ok) throw new Error(result.reason);
   return result.html;
 };

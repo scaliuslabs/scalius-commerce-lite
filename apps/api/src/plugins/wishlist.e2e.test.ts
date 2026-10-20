@@ -3,8 +3,8 @@
 // the store's session, through the storefront proxy) saves a product, sees
 // its state and their wishlist page; the app reads the product through
 // /api/v1 under its grant; staff see it ranked on Most wished; a product
-// edit reaches the app's projection; the page HTML survives the storefront
-// sanitizer.
+// edit reaches the app's projection; the page answer names the app's page
+// component and its props.
 import { createHmac } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -16,7 +16,6 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { activatePlugin, installPlugin, requirePluginInstallation } from "@scalius/core/modules/plugins";
 import { hashCustomerSessionToken } from "@scalius/core/modules/customers";
 import { parsePluginUiDocument } from "@scalius/shared/plugins";
-import { sanitizePluginHtml } from "@scalius/shared/plugins/html";
 import { createRuntimeApiApp } from "../runtime/base-app";
 import { BUNDLED_PLUGINS } from "./bundled.gen";
 import { PluginHost } from "./host";
@@ -97,8 +96,7 @@ describe("acme.wishlist end to end", { timeout: 30_000 }, () => {
     // Their page, as the storefront draws it inside the store layout.
     const page = await call("/api/v1/plugins/acme.wishlist/public/wishlist", { headers: proxied("text/html") });
     expect(page.json.page.title).toBe("Your wishlist");
-    const clean = sanitizePluginHtml(page.json.page.html, { pluginId: "acme.wishlist", forms: true });
-    expect(clean.ok && clean.html).toContain('href="/products/linen-panjabi"');
+    expect(page.json.page).toMatchObject({ component: "wishlist_page", props: { signedIn: true, items: [expect.objectContaining({ url: "/products/linen-panjabi" })] } });
 
     // Staff: Most wished, as the dashboard renders it.
     const mostWished = await call("/api/v1/plugins/acme.wishlist/admin/most-wished", { headers: { cookie: staffCookie() } });

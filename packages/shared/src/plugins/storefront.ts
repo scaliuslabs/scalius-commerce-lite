@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { serializeSchemaJsonLd } from "./html";
+import { pluginKeySchema } from "./manifest-patterns";
 
 export { serializeJsonLd } from "./html";
 
@@ -102,12 +103,26 @@ export function sanitizePluginHead(value: unknown): PluginHead {
 /** A same-store path to send the browser to (`/apps/<id>/thanks`, `/products/x`), never another origin. */
 export const pluginRedirectPathSchema = z.string().max(600).regex(/^\/(?![/\\])[^\s\\]*$/, "Use a path on this store.");
 
+/** Most JSON bytes of the props one app page hands its component. */
+export const PLUGIN_PAGE_PROPS_MAX_BYTES = 64 * 1024;
+
+/**
+ * What a proxied route answers for a browser navigation: a page the store
+ * draws in its layout, its body drawn by the app's own component (a
+ * `storefront.components` entry targeting `page`) from `props`. The
+ * component's JSX escapes every string in them; its forms post only to the
+ * app's own routes (`/apps/<plugin id>/…`).
+ */
 export const pluginPageOutputSchema = z.union([
   z.object({
     page: z.object({
       title: z.string().trim().min(1).max(120),
       description: z.string().trim().max(300).optional(),
-      html: z.string(),
+      /** The component that draws the page body (its manifest type). */
+      component: pluginKeySchema(),
+      /** What the component gets as `props` (JSON). */
+      props: z.record(z.string().max(64), z.unknown()).default({})
+        .refine((props) => new TextEncoder().encode(JSON.stringify(props)).byteLength <= PLUGIN_PAGE_PROPS_MAX_BYTES, "A page's props are at most 64 KiB."),
       head: z.unknown().optional(),
       /** Proxy pages are `noindex` unless the app says the page is public content. */
       index: z.boolean().optional(),

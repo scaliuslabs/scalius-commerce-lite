@@ -173,7 +173,9 @@ export class ExtensionHost {
           fallBack(entry, `${extension.pluginId}:${describe(entry.job)}`, `${extension.pluginId} ${describe(entry.job)}: ${result && "error" in result ? result.error : "no result"}`);
           continue;
         }
-        const checked = sanitizePluginHtml(result.html, { pluginId: extension.pluginId, profile: "component", jsonLd: entry.jsonLd });
+        // An app page's forms post only to the app's own routes.
+        const page = entry.job.kind === "component" && entry.job.target === "page";
+        const checked = sanitizePluginHtml(result.html, { pluginId: extension.pluginId, jsonLd: entry.jsonLd, ...(page ? { formsTo: `/apps/${extension.pluginId}/` } : {}) });
         if (!checked.ok) {
           fallBack(entry, `${extension.pluginId}:size:${describe(entry.job)}`, `${extension.pluginId} ${describe(entry.job)} drew markup over its bounds (${checked.reason}).`);
           continue;

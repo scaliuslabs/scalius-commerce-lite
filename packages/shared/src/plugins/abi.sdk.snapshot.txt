@@ -830,7 +830,6 @@ import type { EventTopic } from "@scalius/shared/events";
 import type { PluginApiCallInput, PluginApiResult, PluginEvent, PluginRouteRequest, PluginStoreInfo } from "./context";
 import { type PluginInvocationResult, type PluginLogRecord } from "./runtime";
 export { parsePluginUiActionResult, parsePluginUiDocument, pluginUiActions, pluginUiRouteActions, sanitizePluginHead, } from "@scalius/shared/plugins";
-export { sanitizePluginHtml } from "@scalius/shared/plugins/html";
 export { fixtures } from "./fixtures";
 export interface PluginTestHarnessOptions {
     settings?: Record<string, PluginSettingValue>;

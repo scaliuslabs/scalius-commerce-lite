@@ -4,21 +4,24 @@
 // apps that declare the proxy answer.
 //
 // - A browser navigation the app answers with `{ page }` is drawn inside the
-//   store layout (header, footer, theme): its title, an optional
-//   description, `noindex,follow` unless the app says `index: true`, and the
-//   app's HTML sanitized here (`sanitizePluginHtml`: it is untrusted at this
-//   point) with its head tags (`sanitizePluginHead`). Private and uncached.
+//   store layout (header, footer, theme): its title as the page's h1, an
+//   optional description, `noindex,follow` unless the app says `index: true`,
+//   its head tags (`sanitizePluginHead`), and its body drawn by the app's own
+//   component (a `storefront.components` entry targeting `page`) from the
+//   answer's `props`: the same runtime as its sections (JSX escapes every
+//   string), checked by the render host, its forms posting only to the app's
+//   own routes, its islands under the usual island rules. Private and uncached.
 // - `{ redirect }` is a 303 to that path on this store.
 // - Everything else (JSON, errors, other requests) passes through exactly as
 //   the API answered, keeping its Cache-Control.
 import Layout from "@/layouts/Layout.astro";
-import AppSurface from "@/components/apps/AppSurface.astro";
+import AppComponent from "@/components/apps/AppComponent.astro";
 import AppHeadTags from "@/components/apps/AppHeadTags.astro";
 import { getLayoutData } from "@/lib/api";
 import { answerAppProxyRequest } from "@/lib/app-proxy";
 import { markRenderUncacheable } from "@/lib/cache-policy";
+import { appMarkup, requestExtensions, resolveSkinSettings } from "@/lib/extensions";
 import { buildAbsoluteStorefrontSeoUrl } from "@/lib/seo-base-url";
-import { sanitizePluginHtml } from "@scalius/shared/plugins/html";
 import { sanitizePluginHead } from "@scalius/shared/plugins/storefront";
 
 export const prerender = false;
@@ -30,12 +33,19 @@ if (answer.kind === "response") return answer.response;
 const { page } = answer;
 Astro.response.status = answer.status;
 markRenderUncacheable(Astro.response.headers);
-// Over its size or complexity bound the app's HTML renders nothing (never truncated markup).
-const body = sanitizePluginHtml(page.html, { pluginId, forms: true });
 const head = sanitizePluginHead(page.head);
 const indexed = page.index === true;
 const layoutData = await getLayoutData();
 const canonicalUrl = indexed ? buildAbsoluteStorefrontSeoUrl(Astro.url.pathname) ?? undefined : undefined;
+// The app's page component draws the body; without one (inactive, not
+// approved for storefront code, no such component) the page says so.
+const { byId, host } = await requestExtensions(Astro.locals, Astro.url);
+const extension = byId.get(pluginId);
+const component = extension?.components.find((entry) => entry.type === page.component && entry.targets.includes("page"));
+const html = extension && component
+  ? await host.render(extension, { kind: "component", type: component.type, target: "page", settings: resolveSkinSettings(component.settings, {}), props: page.props }, { jsonLd: indexed })
+  : null;
+const body = extension ? appMarkup(extension, "component", html) : null;
 ---
 
 <Layout
@@ -51,8 +61,14 @@ const canonicalUrl = indexed ? buildAbsoluteStorefrontSeoUrl(Astro.url.pathname)
 
   <div class="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-10" data-app-page={pluginId}>
     <h1 class="text-2xl font-bold leading-tight text-foreground [overflow-wrap:anywhere] lg:text-3xl">{page.title}</h1>
-    {body.ok
-      ? <div class="mt-4"><AppSurface html={body.html} app={pluginId} /></div>
+    {body
+      ? <div class="mt-4 [overflow-wrap:anywhere]" data-app-page-body><AppComponent markup={body} /></div>
       : <p class="mt-4 text-base text-muted-foreground" data-app-page-unavailable>This page could not be shown right now.</p>}
   </div>
 </Layout>
+
+<script>
+  import { installAppForms } from "@/scripts/app-forms";
+
+  installAppForms();
+</script>

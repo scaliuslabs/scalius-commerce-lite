@@ -1,20 +1,14 @@
-// The one sanitizer for HTML an app gives the storefront: an allowlist with
-// two profiles.
+// The one sanitizer for HTML an app gives the storefront: an allowlist for
+// what its storefront module draws (sections, components, skins and app
+// pages; docs/STOREFRONT-COMPONENTS.md, "Security"). Content, table, list and
+// form tags, `h1`, `video`, an SVG drawing subset, inline style that loads
+// nothing (no `url()` or other loading function, no escapes, no comments),
+// `id`s under the app's own prefix (`<app name>-…`, so markup never
+// clobbers the page's ids), forms posting to a same-store path (on an app
+// page, only to the app's own routes: `formsTo`), islands, core embeds and
+// schema.org JSON-LD (re-serialized; left out on a `noindex` page).
 //
-// - "surface": checkout and account blocks and proxy pages
-//   (docs/platform/PLUGINS.md, "Storefront surfaces"). Content, table, list
-//   and form tags; no inline style, no `id`, no `h1` (the page owns it), no
-//   SVG; forms post only to the app's own proxy (`/apps/<plugin id>/...`),
-//   and only for apps with the proxy.
-// - "component": storefront components: sections, product blocks and skins
-//   (docs/STOREFRONT-COMPONENTS.md, "Output"). Adds what a theme draws with:
-//   `h1`, `video`, an SVG drawing subset, inline style that loads nothing
-//   (no `url()` or other loading function, no escapes, no comments), `id`s
-//   under the app's own prefix (`<app name>-…`, so markup never clobbers the
-//   page's ids), forms posting to any same-store path, islands, core embeds
-//   and schema.org JSON-LD (re-serialized; left out on a `noindex` page).
-//
-// Both profiles: no event handlers, no script-capable URLs (links: same-store
+// Always: no event handlers, no script-capable URLs (links: same-store
 // paths, https, mailto/tel and fragments; images and video: https or
 // same-store paths), no `name` outside form controls, no host-owned
 // `data-sx-*` attributes. Unknown tags are unwrapped; executable or raw-text
@@ -31,31 +25,19 @@
 // `<`, `>` or `&`). So the browser reads exactly the tags written here,
 // whatever htmlparser2 made of the input, and decoded entities stay text.
 //
-// Pure and deterministic: the API sanitizes checkout and account block HTML
-// before it stores it; the storefront sanitizes proxy pages and component
-// output before it renders them.
+// Pure and deterministic: the storefront sanitizes every component's output
+// before it renders it.
 
 import { parseDocument } from "htmlparser2";
 import { isTag, isText, type ChildNode, type Element } from "domhandler";
 import { STOREFRONT_COMPONENT_LIMITS } from "./storefront-protocol";
 
-/** Largest HTML a plugin may return for one surface. */
-export const PLUGIN_HTML_MAX_INPUT_BYTES = 128 * 1024;
-/** Largest sanitized HTML one surface renders. */
-export const PLUGIN_HTML_MAX_OUTPUT_BYTES = 64 * 1024;
-export const PLUGIN_HTML_MAX_DEPTH = 32;
-export const PLUGIN_HTML_MAX_ELEMENTS = 2_000;
-
-export type PluginHtmlProfile = "surface" | "component";
-
 export interface PluginHtmlOptions {
-  /** The app the markup belongs to: its proxy (surface forms) and its id prefix (component ids). */
+  /** The app the markup belongs to: its id prefix (`<app name>-`). */
   pluginId: string;
-  /** Surface: whether the app has the storefront proxy (forms are dropped without it). */
-  forms?: boolean;
-  /** Default "surface". */
-  profile?: PluginHtmlProfile;
-  /** Component: keep schema.org JSON-LD (false on a `noindex` page). Default true. */
+  /** Forms post only to paths under this prefix (an app page: `/apps/<plugin id>/`); default any store path. */
+  formsTo?: string;
+  /** Keep schema.org JSON-LD (false on a `noindex` page). Default true. */
   jsonLd?: boolean;
 }
 
@@ -65,7 +47,7 @@ export type PluginHtmlResult =
 
 // ── Elements ──────────────────────────────────────────────────────────────
 
-const SURFACE_TAGS = new Set([
+const CONTENT_TAGS = new Set([
   "a", "abbr", "article", "aside", "b", "blockquote", "br", "button", "caption", "code", "dd", "del", "details",
   "div", "dl", "dt", "em", "figcaption", "figure", "footer", "form", "h2", "h3", "h4", "h5", "h6", "header", "hr",
   "i", "img", "input", "ins", "label", "li", "mark", "nav", "ol", "optgroup", "option", "p", "picture", "pre", "q",
@@ -80,7 +62,7 @@ const SVG_TAGS: Readonly<Record<string, string>> = {
   stop: "stop", clippath: "clipPath",
 };
 
-const COMPONENT_TAGS = new Set([...SURFACE_TAGS, "h1", "video", "scalius-island", "scalius-embed", ...Object.keys(SVG_TAGS)]);
+const TAGS = new Set([...CONTENT_TAGS, "h1", "video", "scalius-island", "scalius-embed", ...Object.keys(SVG_TAGS)]);
 
 /** Dropped with everything inside them (executable, raw text, foreign parsing, or loading). */
 const DROP_WITH_CONTENT = new Set([
@@ -236,12 +218,12 @@ function sanitizeSrcset(value: string, http: boolean): string | null {
   return candidates.every((candidate) => candidate !== null) && candidates.length > 0 ? candidates.join(", ") : null;
 }
 
-/** A form action: a same-store path; on a surface, only the app's own proxy. */
+/** A form action: a same-store path; on an app page, only under the app's own routes. */
 function sanitizeFormAction(value: string, scope: Scope): string | null {
   const safe = sanitizePluginUrl(value, "link");
   if (!safe?.startsWith("/")) return null;
-  if (scope.component) return safe;
-  if (!scope.forms || !safe.startsWith(`/apps/${scope.pluginId}/`)) return null;
+  if (scope.formsTo === null) return safe;
+  if (!safe.startsWith(scope.formsTo)) return null;
   const path = safe.split(/[?#]/, 1)[0]!;
   if (path.split("/").some((segment) => segment === "." || segment === ".." || /%2e|%2f|%5c/i.test(segment))) return null;
   return safe;
@@ -277,8 +259,7 @@ export function serializeSchemaJsonLd(value: unknown): string | null {
 
 interface Scope {
   pluginId: string;
-  component: boolean;
-  forms: boolean;
+  formsTo: string | null;
   jsonLd: boolean;
   /** Component ids start with it: `<app name>-`. */
   idPrefix: string;
@@ -300,7 +281,7 @@ function attribute(name: string, value: string, tag: string, svg: boolean, scope
     return [SVG_ATTRIBUTES[name]!, value];
   }
   const allowed = TAG_ATTRIBUTES[tag]?.has(name) || GENERAL_ATTRIBUTES.has(name)
-    || (scope.component && (COMPONENT_GENERAL_ATTRIBUTES.has(name) || COMPONENT_TAG_ATTRIBUTES[tag]?.has(name)))
+    || COMPONENT_GENERAL_ATTRIBUTES.has(name) || COMPONENT_TAG_ATTRIBUTES[tag]?.has(name)
     || ARIA_ATTRIBUTE.test(name) || DATA_ATTRIBUTE.test(name);
   if (!allowed) return null;
   if (BOOLEAN_ATTRIBUTES.has(name)) return [name, ""];
@@ -324,16 +305,16 @@ function attribute(name: string, value: string, tag: string, svg: boolean, scope
       return style ? [name, style] : null;
     }
     case "href": {
-      const href = sanitizePluginUrl(value, "link", scope.component);
+      const href = sanitizePluginUrl(value, "link", true);
       return href ? [name, href] : null;
     }
     case "src":
     case "poster": {
-      const src = sanitizePluginUrl(value, "image", scope.component);
+      const src = sanitizePluginUrl(value, "image", true);
       return src ? [name, src] : null;
     }
     case "srcset": {
-      const srcset = sanitizeSrcset(value, scope.component);
+      const srcset = sanitizeSrcset(value, true);
       return srcset ? [name, srcset] : null;
     }
     case "rel":
@@ -400,7 +381,7 @@ function walk(nodes: ChildNode[], depth: number, scope: Scope, inForm: boolean, 
     }
     if (!isTag(node)) continue; // comments, CDATA, processing instructions, doctype
     const tag = node.name.toLowerCase();
-    if (tag === "script" && scope.component && (node.attribs.type ?? "").trim().toLowerCase() === "application/ld+json") {
+    if (tag === "script" && (node.attribs.type ?? "").trim().toLowerCase() === "application/ld+json") {
       let json: string | null = null;
       try {
         json = scope.jsonLd ? serializeSchemaJsonLd(JSON.parse(textOf(node.children))) : null;
@@ -411,7 +392,7 @@ function walk(nodes: ChildNode[], depth: number, scope: Scope, inForm: boolean, 
       else scope.dropped += 1;
       continue;
     }
-    if (DROP_WITH_CONTENT.has(tag) || (tag === "svg" && !scope.component)) {
+    if (DROP_WITH_CONTENT.has(tag)) {
       scope.dropped += 1;
       continue;
     }
@@ -419,7 +400,7 @@ function walk(nodes: ChildNode[], depth: number, scope: Scope, inForm: boolean, 
       scope.exceeded = true;
       return;
     }
-    const allowed = (scope.component ? COMPONENT_TAGS : SURFACE_TAGS).has(tag)
+    const allowed = TAGS.has(tag)
       && (svg ? SVG_TAGS[tag] !== undefined || tag === "a" : tag === "svg" || SVG_TAGS[tag] === undefined)
       && !(tag === "form" && inForm);
     const kept = allowed ? attributes(tag, node.attribs, svg || tag === "svg", scope) : null;
@@ -447,13 +428,12 @@ function walk(nodes: ChildNode[], depth: number, scope: Scope, inForm: boolean, 
 }
 
 /**
- * Sanitizes one surface's or component's HTML. `ok: false` means render
- * nothing (and log it for the merchant): the input or output is over its
- * size bound, or the markup is deeper or larger than its profile allows.
+ * Sanitizes one component's HTML. `ok: false` means render nothing (and
+ * log it for the merchant): the input or output is over its size bound, or
+ * the markup is deeper or larger than a render allows.
  */
 export function sanitizePluginHtml(html: string, options: PluginHtmlOptions): PluginHtmlResult {
-  const component = options.profile === "component";
-  const maxBytes = component ? STOREFRONT_COMPONENT_LIMITS.htmlBytes : PLUGIN_HTML_MAX_INPUT_BYTES;
+  const maxBytes = STOREFRONT_COMPONENT_LIMITS.htmlBytes;
   if (typeof html !== "string") return { ok: false, reason: "too_complex" };
   if (byteLength(html) > maxBytes) return { ok: false, reason: "too_large" };
   const normalized = html.replaceAll("\0", "").replace(/[​-‍﻿]/g, "");
@@ -462,12 +442,11 @@ export function sanitizePluginHtml(html: string, options: PluginHtmlOptions): Pl
   });
   const scope: Scope = {
     pluginId: options.pluginId,
-    component,
-    forms: options.forms === true,
+    formsTo: options.formsTo ?? null,
     jsonLd: options.jsonLd !== false,
     idPrefix: `${options.pluginId.slice(options.pluginId.indexOf(".") + 1)}-`,
-    maxDepth: component ? STOREFRONT_COMPONENT_LIMITS.htmlDepth : PLUGIN_HTML_MAX_DEPTH,
-    maxElements: component ? STOREFRONT_COMPONENT_LIMITS.htmlElements : PLUGIN_HTML_MAX_ELEMENTS,
+    maxDepth: STOREFRONT_COMPONENT_LIMITS.htmlDepth,
+    maxElements: STOREFRONT_COMPONENT_LIMITS.htmlElements,
     elements: 0,
     dropped: 0,
     exceeded: false,
@@ -476,6 +455,6 @@ export function sanitizePluginHtml(html: string, options: PluginHtmlOptions): Pl
   walk(document.children, 1, scope, false, false, out);
   if (scope.exceeded) return { ok: false, reason: "too_complex" };
   const output = out.join("");
-  if (byteLength(output) > (component ? maxBytes : PLUGIN_HTML_MAX_OUTPUT_BYTES)) return { ok: false, reason: "too_large" };
+  if (byteLength(output) > maxBytes) return { ok: false, reason: "too_large" };
   return { ok: true, html: output, dropped: scope.dropped };
 }

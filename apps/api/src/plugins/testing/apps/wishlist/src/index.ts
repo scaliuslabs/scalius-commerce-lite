@@ -2,7 +2,8 @@
 // public plugin contract.
 //
 // - Storefront: the wishlist page `/apps/acme.wishlist/wishlist`, drawn
-//   inside the store layout, and the toggle and state routes a heart button
+//   inside the store layout by its own page component (src/storefront.ts)
+//   from the route's props, and the toggle and state routes a heart button
 //   would use (a plain form, so it works without JavaScript).
 // - Identity: the storefront proxy tells public routes who is signed in
 //   (`request.customer.id`); the app never sees a cookie or token.
@@ -22,6 +23,7 @@ import {
   type PluginRouteRequest,
   type PluginRouteResponse,
 } from "@scalius/plugin-sdk";
+import type { WishlistPageProps } from "./storefront";
 
 export const manifest = {
   id: "acme.wishlist",
@@ -90,6 +92,8 @@ export const manifest = {
   },
   storefront: {
     proxy: true,
+    // The wishlist page's body: drawn by the storefront module (src/storefront.ts) from the route's props.
+    components: [{ type: "wishlist_page", name: "Wishlist page", targets: ["page"] }],
   },
 } satisfies PluginManifestInput;
 
@@ -153,10 +157,6 @@ interface ProductFacts extends Record<string, unknown> {
 
 interface WishedProduct extends ProductFacts {
   wishes: number;
-}
-
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (character) => `&#${character.charCodeAt(0)};`);
 }
 
 const wishes = (ctx: PluginContext) => ctx.objects.wishes!;
@@ -269,14 +269,7 @@ export default definePlugin({
         const customer = request.customer;
         if (!customer) {
           if (!wantsPage(request)) return { status: 401, body: { items: [], signedIn: false } };
-          return {
-            body: {
-              page: {
-                title: "Your wishlist",
-                html: '<div class="max-w-3xl py-6"><p class="text-lg font-semibold">Sign in to see your wishlist</p><p class="mt-2 text-muted-foreground">Products you save stay here for next time.</p><p class="mt-4"><a class="underline" href="/account">Sign in</a></p></div>',
-              },
-            },
-          };
+          return { body: { page: { title: "Your wishlist", component: "wishlist_page", props: { signedIn: false } satisfies WishlistPageProps } } };
         }
         const page = await wishes(ctx).query({
           where: { customer_id: customer.id },
@@ -292,22 +285,17 @@ export default definePlugin({
         if (!wantsPage(request)) {
           return { body: { items: items.map(({ product }) => ({ productId: product.product_id, name: product.name, url: `/products/${product.slug}`, imageUrl: product.image_url ?? null })), nextCursor: page.nextCursor } };
         }
-        const rows = items.map(({ product }) => {
-          const href = `/products/${escapeHtml(encodeURIComponent(product.slug))}`;
-          const image = product.image_url
-            ? `<img src="${escapeHtml(product.image_url)}" alt="" width="80" height="80" class="h-20 w-20 rounded-md object-cover">`
-            : '<span class="h-20 w-20 rounded-md bg-muted" aria-hidden="true"></span>';
-          return `<li class="flex items-center gap-4 border-b border-border py-4">${image}<a class="flex-1 font-medium hover:underline" href="${href}">${escapeHtml(product.name || "Product")}</a>`
-            + `<form action="${APP}/toggle" method="post"><input type="hidden" name="productId" value="${escapeHtml(product.product_id)}"><input type="hidden" name="returnTo" value="${APP}/wishlist">`
-            + `<button type="submit" class="text-sm underline">Remove</button></form></li>`;
-        }).join("");
-        const more = page.nextCursor
-          ? `<p class="mt-6 text-center"><a class="underline" href="${APP}/wishlist?cursor=${escapeHtml(encodeURIComponent(page.nextCursor))}">More saved products</a></p>`
-          : "";
-        const body = rows
-          ? `<ul class="mt-4">${rows}</ul>${more}`
-          : '<p class="mt-4 text-muted-foreground">Nothing saved yet. Tap the heart on a product to keep it here.</p><p class="mt-4"><a class="underline" href="/">Continue shopping</a></p>';
-        return { body: { page: { title: "Your wishlist", html: `<div class="max-w-3xl">${body}</div>` } } };
+        const props: WishlistPageProps = {
+          signedIn: true,
+          items: items.map(({ product }) => ({
+            productId: product.product_id,
+            name: product.name,
+            url: `/products/${encodeURIComponent(product.slug)}`,
+            imageUrl: product.image_url ?? null,
+          })),
+          more: page.nextCursor ? `${APP}/wishlist?cursor=${encodeURIComponent(page.nextCursor)}` : null,
+        };
+        return { body: { page: { title: "Your wishlist", component: "wishlist_page", props } } };
       },
     },
 

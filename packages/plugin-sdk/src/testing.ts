@@ -51,7 +51,6 @@ export {
   pluginUiRouteActions,
   sanitizePluginHead,
 } from "@scalius/shared/plugins";
-export { sanitizePluginHtml } from "@scalius/shared/plugins/html";
 export { fixtures } from "./fixtures";
 
 export interface PluginTestHarnessOptions {
