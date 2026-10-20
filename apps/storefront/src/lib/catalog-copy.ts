@@ -49,6 +49,9 @@ export interface CatalogCopy {
     /** "12 products". */
     products: (count: string, one: boolean) => string;
     searchCategory: string;
+    searchCollection: string;
+    /** "Search Aarong": a brand's own listing. */
+    searchIn: (name: string) => string;
     filters: string;
     filter: string;
     closeFilters: string;
@@ -67,6 +70,10 @@ export interface CatalogCopy {
     about: (name: string) => string;
     guide: (name: string) => string;
     browseIn: (name: string) => string;
+    /** The meta description of a listing the merchant has not described: "Shop Shoes." / "Shop Shoes: A, B and C." */
+    metaShop: (name: string, list: string | null) => string;
+    /** Some of the listing's products, then more: "A, B and more". */
+    metaAndMore: (shown: string) => string;
     emptyTitle: string;
     emptyFiltered: string;
     emptyDescription: string;
@@ -223,6 +230,8 @@ const EN: CatalogCopy = {
   listing: {
     products: (count, one) => `${count} ${one ? "product" : "products"}`,
     searchCategory: "Search this category",
+    searchCollection: "Search this collection",
+    searchIn: (name) => `Search ${name}`,
     filters: "Filters",
     filter: "Filter",
     closeFilters: "Close filters",
@@ -240,6 +249,8 @@ const EN: CatalogCopy = {
     about: (name) => `About ${name}`,
     guide: (name) => `${name} guide`,
     browseIn: (name) => `Browse products in ${name}`,
+    metaShop: (name, list) => (list ? `Shop ${name}: ${list}.` : `Shop ${name}.`),
+    metaAndMore: (shown) => `${shown} and more`,
     emptyTitle: "No products yet",
     emptyFiltered: "Try fewer filters or a broader price range.",
     emptyDescription: "Explore the rest of the catalog.",
@@ -393,6 +404,8 @@ const BN: CatalogCopy = {
   listing: {
     products: (count) => `${count}টি পণ্য`,
     searchCategory: "এই ক্যাটাগরিতে খুঁজুন",
+    searchCollection: "এই কালেকশনে খুঁজুন",
+    searchIn: (name) => `${name}-এ খুঁজুন`,
     filters: "ফিল্টার",
     filter: "ফিল্টার",
     closeFilters: "ফিল্টার বন্ধ করুন",
@@ -410,6 +423,8 @@ const BN: CatalogCopy = {
     about: (name) => `${name} সম্পর্কে`,
     guide: (name) => `${name} গাইড`,
     browseIn: (name) => `${name}-এর পণ্য দেখুন`,
+    metaShop: (name, list) => (list ? `${name} কিনুন: ${list}।` : `${name} কিনুন।`),
+    metaAndMore: (shown) => `${shown} ও আরও অনেক কিছু`,
     emptyTitle: "এখনো কোনো পণ্য নেই",
     emptyFiltered: "কম ফিল্টার বা আরও বড় দামের সীমা দিয়ে দেখুন।",
     emptyDescription: "স্টোরের বাকি পণ্যগুলো দেখুন।",

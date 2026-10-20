@@ -5,6 +5,10 @@ import {
 } from "./canonical-query";
 import { normalizeSearchQuery } from "./search-query";
 import { toLatinDigits } from "@scalius/shared/phone-input";
+import { formatList } from "@scalius/shared/locale-words";
+import { catalogCopy } from "./catalog-copy";
+import { storefrontLanguage } from "./storefront-copy";
+import { pageLanguage } from "./store-time-zone";
 
 const PRODUCT_LIST_NAVIGATION_PARAMS = ["q", "page", "sortBy", "limit", "showAll"] as const;
 
@@ -114,22 +118,24 @@ export function isMissingProductListPage(pagination: { page: number; totalPages:
 
 /**
  * Meta description for a listing the merchant has not described, built from
- * its own products: "Shop Home Refresh: Press Glass Storage Set, Loop
- * Silicone Utensil Set, Echo Mini Speaker and more." Up to three names while
- * it stays within `maxLength` characters.
+ * its own products in the page's language: "Shop Home Refresh: Press Glass
+ * Storage Set, Loop Silicone Utensil Set, Echo Mini Speaker and more." Up to
+ * three names while it stays within `maxLength` characters.
  */
 export function productListMetaDescription(
   name: string,
   productNames: readonly string[],
   maxLength = 155,
+  language: string = pageLanguage(),
 ): string {
+  const words = catalogCopy(language).listing;
   const names = [...new Set(productNames.map((productName) => productName.trim()).filter(Boolean))];
   const sentence = (shown: readonly string[]) => {
-    if (shown.length === 0) return `Shop ${name}.`;
+    if (shown.length === 0) return words.metaShop(name, null);
     const list = shown.length < names.length
-      ? `${shown.join(", ")} and more`
-      : shown.length === 1 ? shown[0] : `${shown.slice(0, -1).join(", ")} and ${shown.at(-1)}`;
-    return `Shop ${name}: ${list}.`;
+      ? words.metaAndMore(shown.join(", "))
+      : formatList(shown, storefrontLanguage(language));
+    return words.metaShop(name, list);
   };
   let shown: string[] = [];
   for (const productName of names.slice(0, 3)) {
