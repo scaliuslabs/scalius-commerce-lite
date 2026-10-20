@@ -1369,7 +1369,8 @@ describe("Registry apps in the Apps list", () => {
     await vi.waitFor(() => expect(dialog()?.textContent).toContain("Install Gift box"));
 
     expect(dialog().querySelector("code")?.textContent).toBe("pnpm plugin add acme.wrap --registry https://registry.example/index.json");
-    expect(dialog().textContent).toContain("Then deploy your store to finish.");
+    expect(dialog().textContent).toContain("Ask your developer to add this app to your store.");
+    expect(dialog().textContent).toContain("The app appears here once they update your store.");
     expect(hasButton("Install")).toBe(false);
     await click(button("Copy command", dialog()));
     expect(writeText).toHaveBeenCalledWith("pnpm plugin add acme.wrap --registry https://registry.example/index.json");

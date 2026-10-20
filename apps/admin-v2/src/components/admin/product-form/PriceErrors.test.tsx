@@ -165,7 +165,7 @@ describe("product price errors in a whole-taka store", () => {
 
   it("takes only the fixed field's line off the banner, and nothing is left after a successful save", async () => {
     await typeAmount("1234.50");
-    await act(async () => type(title(), "ab"));
+    await act(async () => type(title(), "   "));
     await save();
     expect(banner().join(" ")).toContain(productFieldLabel("price"));
     expect(banner().join(" ")).toContain(productFieldLabel("name"));
