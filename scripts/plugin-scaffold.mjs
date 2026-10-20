@@ -3,46 +3,85 @@
 // section, an admin page and an object migration), with a test for each. Copy the
 // patterns in packages/plugin-sdk/README.md for the rest (settings, storage, cron, webhooks).
 
-export function scaffoldFiles(id, name) {
+/**
+ * `standalone` scaffolds an app that lives anywhere (its own repository):
+ * it depends on the published `@scalius/plugin-sdk@^<sdkVersion>` and has
+ * a self-contained tsconfig, no workspace protocol and no repo-relative path.
+ * Without it the app is a package of this workspace (`plugins/<name>`).
+ */
+export function scaffoldFiles(id, name, { standalone = false, sdkVersion = "0.1.0" } = {}) {
   const title = name.split("-").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
   const vendor = id.split(".")[0];
+  const project = standalone
+    ? {
+      "package.json": `${JSON.stringify({
+        name: `${vendor}-${name}`,
+        version: "0.1.0",
+        private: true,
+        type: "module",
+        license: "UNLICENSED",
+        exports: { ".": "./src/index.ts" },
+        scripts: { test: "vitest run", typecheck: "tsc --noEmit" },
+        dependencies: { "@scalius/plugin-sdk": `^${sdkVersion}` },
+        devDependencies: { typescript: "^6.0.3", vitest: "^5.0.4" },
+      }, null, 2)}\n`,
+      "tsconfig.json": `${JSON.stringify({
+        compilerOptions: {
+          target: "ES2022",
+          module: "ESNext",
+          moduleResolution: "Bundler",
+          lib: ["ES2022", "DOM"],
+          types: [],
+          strict: true,
+          noUncheckedIndexedAccess: true,
+          skipLibCheck: true,
+          isolatedModules: true,
+          verbatimModuleSyntax: true,
+          jsx: "react-jsx",
+          jsxImportSource: "@scalius/plugin-sdk/storefront",
+          noEmit: true,
+        },
+        include: ["src/**/*"],
+      }, null, 2)}\n`,
+      ".gitignore": "node_modules/\ndist/\n# Signing keys never belong in a repository.\n*.pem\n",
+    }
+    : {
+      "package.json": `${JSON.stringify({
+        name: `@scalius/plugin-${name}`,
+        version: "0.1.0",
+        private: true,
+        type: "module",
+        license: "AGPL-3.0-only",
+        exports: { ".": "./src/index.ts" },
+        scripts: { test: "vitest run", typecheck: "../../node_modules/typescript7/bin/tsc --build" },
+        dependencies: { "@scalius/plugin-sdk": "workspace:*" },
+        devDependencies: { "@scalius/tsconfig": "workspace:*", vitest: "^5.0.3" },
+      }, null, 2)}\n`,
+      "tsconfig.json": `${JSON.stringify({
+        extends: "@scalius/tsconfig/base.json",
+        compilerOptions: {
+          types: [],
+          lib: ["ES2022", "DOM"],
+          jsx: "react-jsx",
+          jsxImportSource: "@scalius/plugin-sdk/storefront",
+          paths: { "@scalius/shared/*": ["../../packages/shared/src/*"] },
+          noEmit: true,
+          tsBuildInfoFile: `../../node_modules/.cache/tsbuild/plugin-${name}.tsbuildinfo`,
+        },
+        include: ["src/**/*"],
+        references: [{ path: "../../packages/shared" }, { path: "../../packages/plugin-sdk" }],
+      }, null, 2)}\n`,
+    };
   return {
-    "package.json": `${JSON.stringify({
-      name: `@scalius/plugin-${name}`,
-      version: "0.1.0",
-      private: true,
-      type: "module",
-      license: "AGPL-3.0-only",
-      exports: { ".": "./src/index.ts" },
-      scripts: { test: "vitest run", typecheck: "../../node_modules/typescript7/bin/tsc --build" },
-      dependencies: { "@scalius/plugin-sdk": "workspace:*" },
-      devDependencies: { "@scalius/tsconfig": "workspace:*", vitest: "^5.0.3" },
-    }, null, 2)}\n`,
-    "tsconfig.json": `${JSON.stringify({
-      extends: "@scalius/tsconfig/base.json",
-      compilerOptions: {
-        types: [],
-        lib: ["ES2022", "DOM"],
-        jsx: "react-jsx",
-        jsxImportSource: "@scalius/plugin-sdk/storefront",
-        paths: { "@scalius/shared/*": ["../../packages/shared/src/*"] },
-        noEmit: true,
-        tsBuildInfoFile: `../../node_modules/.cache/tsbuild/plugin-${name}.tsbuildinfo`,
-      },
-      include: ["src/**/*"],
-      references: [{ path: "../../packages/shared" }, { path: "../../packages/plugin-sdk" }],
-    }, null, 2)}\n`,
-    "src/index.ts": `import {
-  definePlugin,
-  PLUGIN_API_VERSION,
-  ui,
-  type PluginManifestInput,
-} from "@scalius/plugin-sdk";
+    ...project,
+    "src/index.ts": `import { defineManifest, definePlugin, PLUGIN_API_VERSION, ui } from "@scalius/plugin-sdk";
 
 // The manifest declares everything the app does. The platform refuses a
 // handler that is not declared here, and shows the merchant what the app
 // asks for before they turn it on. \`pnpm plugin validate\` checks this file.
-export const manifest = {
+// defineManifest keeps its literal types: handlers get \`ctx.objects.notes\`
+// typed by its fields, and a mistake is reported at the key that is wrong.
+export const manifest = defineManifest({
   id: ${JSON.stringify(id)},
   name: ${JSON.stringify(title)},
   version: "0.1.0",
@@ -82,7 +121,7 @@ export const manifest = {
       ],
     }],
   },
-} satisfies PluginManifestInput;
+});
 
 export default definePlugin({
   manifest,
@@ -90,7 +129,7 @@ export default definePlugin({
   events: {
     // Delivery is at least once: keep a handler safe to run twice for the same event.
     "order.created": async (event, ctx) => {
-      await ctx.objects.notes!.put("last_order", { value: event.resource.id });
+      await ctx.objects.notes.put("last_order", { value: event.resource.id });
       ctx.log.info("Order created", { orderId: event.resource.id });
     },
   },
@@ -106,8 +145,8 @@ export default definePlugin({
         body: ui.page([
           ui.card("At a glance", [
             ui.keyValue([
-              { label: "Latest order", value: String((await ctx.objects.notes!.get("last_order"))?.value ?? "None yet") },
-              { label: "Install note", value: String((await ctx.objects.notes!.get("install_note"))?.value ?? "Not written") },
+              { label: "Latest order", value: (await ctx.objects.notes.get("last_order"))?.value ?? "None yet" },
+              { label: "Install note", value: (await ctx.objects.notes.get("install_note"))?.value ?? "Not written" },
             ]),
           ]),
         ], { title: ${JSON.stringify(title)}, description: "What this app did for the store." }),
@@ -118,17 +157,19 @@ export default definePlugin({
   migrations: {
     // Idempotent: it may run again after a crash, so it keeps what is there.
     "1": async (ctx) => {
-      if ((await ctx.objects.notes!.get("install_note")) === null) {
-        await ctx.objects.notes!.put("install_note", { value: "Installed" }, { expectedRevision: null });
+      if ((await ctx.objects.notes.get("install_note")) === null) {
+        await ctx.objects.notes.put("install_note", { value: "Installed" }, { expectedRevision: null });
       }
     },
   },
 });
 `,
-    "src/storefront.tsx": `import { defineStorefront, type SectionProps } from "@scalius/plugin-sdk/storefront";
+    "src/storefront.tsx": `import type { StorefrontSettingsOf } from "@scalius/plugin-sdk";
+import { defineStorefront, type SectionProps } from "@scalius/plugin-sdk/storefront";
+import type { manifest } from "./index";
 
-// Components receive resolved settings and escape text automatically.
-function Banner({ settings }: SectionProps<{ heading: string; text: string }>) {
+// Components receive resolved settings (typed from the manifest) and escape text automatically.
+function Banner({ settings }: SectionProps<StorefrontSettingsOf<typeof manifest, "section", "banner">>) {
   const heading = settings.heading.trim();
   const text = settings.text.trim();
   if (!heading && !text) return null;

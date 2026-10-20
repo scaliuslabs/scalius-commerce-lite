@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { devPlugin, previewPlugin } from "./plugin-dev.mjs";
+import { devPlugin, previewPlugin, readPreviewFixture } from "./plugin-dev.mjs";
 import { makeTempPlugin } from "./plugin-test-helpers.mjs";
 
 describe("plugin fixture preview", () => {
@@ -16,6 +16,27 @@ describe("plugin fixture preview", () => {
       expect(html).toContain("form-action 'none'");
       expect(html).not.toContain("<script");
       expect(readFileSync(join(app.dir, "dist/manifest.json"), "utf8")).toContain('"acme.tally"');
+    } finally {
+      app.cleanup();
+    }
+  });
+
+  it("says when a view renders nothing, and takes the values it reads from --fixture (DX-5)", async () => {
+    const app = makeTempPlugin();
+    try {
+      const empty = await previewPlugin(app.dir, undefined, { fixture: { settings: { "section:banner": { heading: "", text: "" } } } });
+      expect(empty.empty).toEqual(["section:banner"]);
+      expect(readFileSync(empty.output, "utf8")).toContain("Rendered nothing with these fixtures.");
+
+      const fixturePath = join(app.dir, "fixture.json");
+      writeFileSync(fixturePath, JSON.stringify({ settings: { "section:banner": { heading: "From the fixture" } } }));
+      const filled = await previewPlugin(app.dir, undefined, { fixture: readPreviewFixture(fixturePath) });
+      expect(filled.empty).toEqual([]);
+      expect(readFileSync(filled.output, "utf8")).toContain("From the fixture");
+
+      writeFileSync(fixturePath, JSON.stringify({ setings: {} }));
+      expect(() => readPreviewFixture(fixturePath)).toThrow('unknown key "setings"');
+      await expect(previewPlugin(app.dir, undefined, { fixture: { settings: { "block:nope": {} } } })).rejects.toThrow("not a view of this app");
     } finally {
       app.cleanup();
     }

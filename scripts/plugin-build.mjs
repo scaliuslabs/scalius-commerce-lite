@@ -147,11 +147,56 @@ export async function loadPluginContract() {
   return contractModule;
 }
 
+export const SDK_DIR = join(root, "packages/plugin-sdk");
+const SDK_SPECIFIER = /^@scalius\/plugin-sdk(?:\/.*)?$/;
+
+/**
+ * Where an app's `@scalius/plugin-sdk` imports come from: the SDK the app
+ * installed (its own node_modules: the published package, or this
+ * workspace's when the app is a workspace package), else this repository's
+ * SDK. So `validate`, `pack` and `preview` work on an app anywhere, also
+ * before its `npm install`.
+ */
+export function sdkResolution() {
+  let exportsMap = null;
+  return {
+    name: "scalius-plugin-sdk",
+    setup(build) {
+      build.onResolve({ filter: SDK_SPECIFIER }, async (args) => {
+        if (args.pluginData?.scaliusSdk) return undefined;
+        const own = await build.resolve(args.path, { kind: args.kind, importer: args.importer, resolveDir: args.resolveDir, pluginData: { scaliusSdk: true } });
+        if (own.errors.length === 0) return own;
+        exportsMap ??= JSON.parse(readFileSync(join(SDK_DIR, "package.json"), "utf8")).exports;
+        const subpath = `.${args.path.slice("@scalius/plugin-sdk".length)}`;
+        const target = exportsMap[subpath];
+        if (typeof target !== "string") return { errors: [{ text: `@scalius/plugin-sdk has no export "${subpath}".` }] };
+        return { path: join(SDK_DIR, target) };
+      });
+    },
+  };
+}
+
+/** The SDK an app at `directory` installed (`{ version, path }`), or null when it would use this repository's. */
+export function installedSdk(directory) {
+  for (let current = resolve(directory); ; current = dirname(current)) {
+    const candidate = join(current, "node_modules/@scalius/plugin-sdk/package.json");
+    if (existsSync(candidate)) {
+      try {
+        return { version: JSON.parse(readFileSync(candidate, "utf8")).version, path: dirname(candidate) };
+      } catch {
+        return null;
+      }
+    }
+    if (dirname(current) === current) return null;
+  }
+}
+
 /** Bundles a plugin entry into one self-contained ES module (no imports, no Worker APIs). */
 export async function bundlePlugin(entry) {
   const esbuild = await loadEsbuild();
   const result = await esbuild.build({
     entryPoints: [entry],
+    plugins: [sdkResolution()],
     absWorkingDir: root,
     bundle: true,
     write: false,
@@ -295,6 +340,7 @@ export async function packStorefront(contract, manifest, source) {
   if (moduleEntry) {
     const result = await esbuild.build({
       entryPoints: [moduleEntry],
+      plugins: [sdkResolution()],
       absWorkingDir: root,
       bundle: true,
       write: false,
@@ -376,6 +422,7 @@ export async function packStorefront(contract, manifest, source) {
     if (!entry) fail(`the island ${island.name} has no src/islands/${island.name}.ts.`);
     const result = await esbuild.build({
       entryPoints: [entry],
+      plugins: [sdkResolution()],
       absWorkingDir: root,
       bundle: true,
       write: false,

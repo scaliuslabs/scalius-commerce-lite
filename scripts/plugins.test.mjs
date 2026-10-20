@@ -6,10 +6,11 @@ import { isPathSource, packPlugin, renderBundledGen, renderCatalogGen, renderLoc
 import { BUNDLE_MAX_BYTES } from "./plugin-registry.mjs";
 import { editSource, makeTempPlugin } from "./plugin-test-helpers.mjs";
 import { BUNDLE_WARN_BYTES, formatChecks, validatePlugin } from "./plugin-validate.mjs";
-import { pluginSandboxEnabled, scaffoldFiles, withPluginSandbox } from "./plugins.mjs";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { isWorkspacePackageDir, pluginSandboxEnabled, scaffoldFiles, withPluginSandbox } from "./plugins.mjs";
+import { root } from "./plugin-build.mjs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 describe("pnpm plugin", () => {
   it("adds the Worker Loader binding only to a generated config", () => {
@@ -88,7 +89,8 @@ describe("pnpm plugin", () => {
     expect(source).toContain('"order.created": async');
     expect(source).toContain('"checkout.discounts": ()');
     expect(source).toContain('type: "banner"');
-    expect(source).toContain('ctx.objects.notes!.put');
+    expect(source).toContain('ctx.objects.notes.put');
+    expect(source).toContain("defineManifest({");
     expect(source).not.toMatch(/ctx\.kv|request\.render|route: "banner"/);
     expect(files["src/storefront.tsx"]).toContain("defineStorefront");
     expect(JSON.parse(files["tsconfig.json"]).compilerOptions).toMatchObject({ jsx: "react-jsx", jsxImportSource: "@scalius/plugin-sdk/storefront" });
@@ -102,6 +104,47 @@ describe("pnpm plugin", () => {
   });
 });
 
+describe("a standalone app (outside this repository)", () => {
+  it("depends on the published SDK, with no workspace protocol or repo-relative path", () => {
+    const files = scaffoldFiles("acme.loyalty", "loyalty", { standalone: true, sdkVersion: "0.4.2" });
+    const pkg = JSON.parse(files["package.json"]);
+    expect(pkg.dependencies).toEqual({ "@scalius/plugin-sdk": "^0.4.2" });
+    expect(Object.keys(pkg.devDependencies).sort()).toEqual(["typescript", "vitest"]);
+    for (const [file, text] of Object.entries(files)) {
+      expect(text, file).not.toContain("workspace:");
+      expect(text, file).not.toContain("../../");
+      expect(text, file).not.toContain("@scalius/tsconfig");
+    }
+    expect(JSON.parse(files["tsconfig.json"]).compilerOptions).toMatchObject({ jsxImportSource: "@scalius/plugin-sdk/storefront", moduleResolution: "Bundler" });
+    expect(files[".gitignore"]).toContain("*.pem");
+    expect(files["src/index.ts"]).toContain("defineManifest({");
+  });
+
+  it("is chosen for any folder that is not a workspace package", () => {
+    expect(isWorkspacePackageDir(join(root, "plugins/loyalty"))).toBe(true);
+    expect(isWorkspacePackageDir(join(root, "scratch-apps/loyalty"))).toBe(false);
+    expect(isWorkspacePackageDir(join(tmpdir(), "loyalty"))).toBe(false);
+  });
+
+  it("validates and packs against this repository's SDK before its npm install", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "scalius-app-"));
+    try {
+      for (const [file, text] of Object.entries(scaffoldFiles("acme.outside", "outside", { standalone: true }))) {
+        const path = join(dir, file);
+        mkdirSync(dirname(path), { recursive: true });
+        writeFileSync(path, text);
+      }
+      const outcome = await validatePlugin(dir);
+      expect(formatChecks(outcome.checks)).not.toContain("✗");
+      expect(outcome).toMatchObject({ ok: true, id: "acme.outside" });
+      const packed = await packPlugin(dir);
+      expect(packed.storefront.map((file) => file.path)).toEqual(["storefront.js"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
+});
+
 describe("scaffolded plugin", () => {
   it("passes pnpm plugin validate and behaves as its own test says", async () => {
     const plugin = makeTempPlugin({ id: "acme.loyalty" });
@@ -110,7 +153,7 @@ describe("scaffolded plugin", () => {
       expect(formatChecks(outcome.checks)).not.toContain("✗");
       expect(outcome).toMatchObject({ ok: true, id: "acme.loyalty" });
       expect(outcome.checks.map((check) => check.label)).toEqual([
-        "Plugin entry", "Bundles", "Plugin definition", "Manifest", "Compatibility", "Handlers match the manifest", "Scopes", "Listing images", "Bundle size",
+        "Plugin entry", "Bundles", "Plugin definition", "Manifest", "Compatibility", "Handlers match the manifest", "Scopes", "Listing images", "Storefront", "Bundle size",
       ]);
 
       // The same steps as its generated test, against the packed bundle.
@@ -178,6 +221,28 @@ describe("pnpm plugin validate", () => {
       empty.cleanup();
     }
   });
+
+  it("compiles and smoke-renders the storefront module, so a broken skin fails validate, not pack (DX-4)", async () => {
+    const plugin = makeTempPlugin({ id: "acme.skin" });
+    try {
+      editSource(plugin.dir, (source) => source.replace("  storefront: {", '  storefront: {\n    skins: [{ id: "page", target: "product-main", name: "Page", settings: [] }],'));
+      writeFileSync(join(plugin.dir, "src/storefront.tsx"), `
+        import { defineStorefront, raw } from "@scalius/plugin-sdk/storefront";
+        export default defineStorefront({ sections: { banner: () => null }, skins: { page: () => raw("<main><h1>No buy form</h1></main>") } });
+      `);
+      const outcome = await validatePlugin(plugin.dir);
+      expect(outcome.ok).toBe(false);
+      expect(formatChecks(outcome.checks)).toMatch(/✗ Storefront: skin:page \(product-main\): /);
+
+      writeFileSync(join(plugin.dir, "src/storefront.tsx"), `
+        import { defineStorefront } from "@scalius/plugin-sdk/storefront";
+        export default defineStorefront({ sections: {} });
+      `);
+      expect(formatChecks((await validatePlugin(plugin.dir)).checks)).toContain("✗ Storefront: the section banner has no component");
+    } finally {
+      plugin.cleanup();
+    }
+  }, 60_000);
 
   it("warns above 1 MiB and fails above the registry's 16 MiB, and says when the source does not compile", async () => {
     const big = makeTempPlugin({ id: "acme.big" });
