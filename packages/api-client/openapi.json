@@ -15603,7 +15603,7 @@
               "courier",
               "sms",
               "email",
-              "fraud",
+              "courier_history",
               "tax",
               "translation",
               "ai",
@@ -16979,7 +16979,7 @@
                         "courier",
                         "sms",
                         "email",
-                        "fraud",
+                        "courier_history",
                         "tax",
                         "translation",
                         "ai",
@@ -146841,6 +146841,13 @@
                   },
                   "enabled": {
                     "type": "boolean"
+                  },
+                  "showAtCheckout": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ],
+                    "description": "With enabled: also offers Stripe at checkout, written in the same batch as the keys (the dashboard switch's Turn on is one save)."
                   }
                 },
                 "required": [
@@ -164819,7 +164826,7 @@
                 "courier",
                 "sms",
                 "email",
-                "fraud",
+                "courier_history",
                 "tax",
                 "translation",
                 "ai",
@@ -164868,7 +164875,7 @@
                                   "courier",
                                   "sms",
                                   "email",
-                                  "fraud",
+                                  "courier_history",
                                   "tax",
                                   "translation",
                                   "ai",
@@ -191843,13 +191850,12 @@
                 "properties": {
                   "name": {
                     "type": "string",
-                    "minLength": 3,
-                    "maxLength": 100
+                    "minLength": 1,
+                    "maxLength": 255
                   },
                   "description": {
                     "type": "string",
-                    "nullable": true,
-                    "minLength": 10
+                    "nullable": true
                   },
                   "price": {
                     "type": "number",
@@ -192684,7 +192690,7 @@
                               },
                               "name": {
                                 "type": "string",
-                                "maxLength": 100
+                                "maxLength": 255
                               },
                               "slug": {
                                 "type": "string",
@@ -194582,8 +194588,8 @@
                 "properties": {
                   "name": {
                     "type": "string",
-                    "minLength": 3,
-                    "maxLength": 100,
+                    "minLength": 1,
+                    "maxLength": 255,
                     "description": "Title of the copy"
                   }
                 },
@@ -196115,8 +196121,8 @@
                         "properties": {
                           "name": {
                             "type": "string",
-                            "minLength": 3,
-                            "maxLength": 100
+                            "minLength": 1,
+                            "maxLength": 255
                           },
                           "price": {
                             "type": "number",
@@ -197605,13 +197611,12 @@
                 "properties": {
                   "name": {
                     "type": "string",
-                    "minLength": 3,
-                    "maxLength": 100
+                    "minLength": 1,
+                    "maxLength": 255
                   },
                   "description": {
                     "type": "string",
-                    "nullable": true,
-                    "minLength": 10
+                    "nullable": true
                   },
                   "price": {
                     "type": "number",
@@ -235029,8 +235034,8 @@
                         },
                         "title": {
                           "type": "string",
-                          "minLength": 3,
-                          "maxLength": 100
+                          "minLength": 1,
+                          "maxLength": 255
                         },
                         "descriptionHtml": {
                           "type": "string",

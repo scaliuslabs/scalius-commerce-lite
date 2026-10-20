@@ -3513,7 +3513,7 @@ export type AppProviderEntry = {
      */
     id: string;
     providerId: string;
-    kind: 'payment' | 'courier' | 'sms' | 'email' | 'fraud' | 'tax' | 'translation' | 'ai' | 'messaging' | 'push' | 'search' | 'address' | 'fx' | 'identity';
+    kind: 'payment' | 'courier' | 'sms' | 'email' | 'courier_history' | 'tax' | 'translation' | 'ai' | 'messaging' | 'push' | 'search' | 'address' | 'fx' | 'identity';
     name: string;
     /**
      * Same-origin address of the provider's own mark, else the app's icon.
@@ -3881,7 +3881,7 @@ export type AppFeature = {
         allowedHosts: Array<string>;
         providers: Array<{
             id: string;
-            kind: 'payment' | 'courier' | 'sms' | 'email' | 'fraud' | 'tax' | 'translation' | 'ai' | 'messaging' | 'push' | 'search' | 'address' | 'fx' | 'identity';
+            kind: 'payment' | 'courier' | 'sms' | 'email' | 'courier_history' | 'tax' | 'translation' | 'ai' | 'messaging' | 'push' | 'search' | 'address' | 'fx' | 'identity';
             name: string;
             icon: string | null;
         }>;
@@ -42371,6 +42371,10 @@ export type PostApiV1AdminSettingsStripeData = {
         publishableKey?: string;
         webhookSecret?: string;
         enabled?: boolean;
+        /**
+         * With enabled: also offers Stripe at checkout, written in the same batch as the keys (the dashboard switch's Turn on is one save).
+         */
+        showAtCheckout?: true;
     };
     path?: never;
     query?: never;
@@ -47516,7 +47520,7 @@ export type GetApiV1AdminSettingsProvidersData = {
     body?: never;
     path?: never;
     query: {
-        kind: 'payment' | 'courier' | 'sms' | 'email' | 'fraud' | 'tax' | 'translation' | 'ai' | 'messaging' | 'push' | 'search' | 'address' | 'fx' | 'identity';
+        kind: 'payment' | 'courier' | 'sms' | 'email' | 'courier_history' | 'tax' | 'translation' | 'ai' | 'messaging' | 'push' | 'search' | 'address' | 'fx' | 'identity';
     };
     url: '/api/v1/admin/settings/providers';
 };
@@ -47559,7 +47563,7 @@ export type GetApiV1AdminSettingsProvidersResponses = {
         data: {
             providers: Array<{
                 id: string;
-                kind: 'payment' | 'courier' | 'sms' | 'email' | 'fraud' | 'tax' | 'translation' | 'ai' | 'messaging' | 'push' | 'search' | 'address' | 'fx' | 'identity';
+                kind: 'payment' | 'courier' | 'sms' | 'email' | 'courier_history' | 'tax' | 'translation' | 'ai' | 'messaging' | 'push' | 'search' | 'address' | 'fx' | 'identity';
                 pluginId: string;
                 appName: string;
                 appIcon: string | null;
