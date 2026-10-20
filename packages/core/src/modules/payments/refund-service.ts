@@ -17,9 +17,10 @@ import {
     type OrderPayment,
 } from "@scalius/database/schema";
 import {
-    COD_PAYMENT_METHOD,
+    isManualSettlementMethod,
     isPaymentMethodId,
     paymentProvidersFor,
+    RECORDED_PAYMENT_METHOD,
     type PaymentProvidersSource,
 } from "./gateways/registry";
 import { presentedSettlement } from "@scalius/shared/money-chain";
@@ -221,7 +222,7 @@ export function isInternalRefundProviderStatus(value: string | null | undefined)
 function allocationSettlementMode(allocation: Pick<RefundAllocation, "settlementMode" | "sourcePayment">): RefundSettlementMode {
     if (allocation.settlementMode) return allocation.settlementMode;
     if (allocation.sourcePayment.paymentMethod === GIFT_CARD_PAYMENT_METHOD) return "gift_card";
-    return allocation.sourcePayment.paymentMethod === COD_PAYMENT_METHOD ? "manual_external" : "provider";
+    return isManualSettlementMethod(allocation.sourcePayment.paymentMethod) ? "manual_external" : "provider";
 }
 
 function isInternalSettlement(mode: RefundSettlementMode): mode is "gift_card" | "store_credit" {
@@ -322,7 +323,7 @@ async function findRefundRequestReplay(
         refundId: rows.map((row) => row.providerRefundId).filter(Boolean).join(",") || undefined,
         amount: fromMinor(amountMinor, currency.decimalPlaces),
         isFullRefund: order.paymentStatus === PaymentStatus.REFUNDED,
-        manualSettlementRecorded: settlement === "original" && rows.some((row) => row.gateway === COD_PAYMENT_METHOD),
+        manualSettlementRecorded: settlement === "original" && rows.some((row) => isManualSettlementMethod(row.gateway)),
         availabilityTransitionVariantIds: [],
         replayed: true,
         settlement,
@@ -338,8 +339,9 @@ async function findRefundRequestReplay(
 }
 
 function normalizePaymentGateway(value: string): string {
-    // A gift-card tender is an internal payment: refundable, never dispatched.
-    if (isPaymentMethodId(value) || value === GIFT_CARD_PAYMENT_METHOD) return value;
+    // A gift-card tender is an internal payment: refundable, never dispatched;
+    // a recorded payment is refunded by hand (a manual settlement).
+    if (isPaymentMethodId(value) || value === GIFT_CARD_PAYMENT_METHOD || value === RECORDED_PAYMENT_METHOD) return value;
     throw new ValidationError(`Unsupported payment gateway: ${value}`);
 }
 
@@ -945,7 +947,7 @@ function getRefundAttemptKeyForRequest(request: RefundRequest, allocation: Refun
 }
 
 function getRefundAttemptSourceTransactionId(allocation: RefundAllocation): string | null {
-    if (allocation.sourcePayment.paymentMethod === COD_PAYMENT_METHOD) return null;
+    if (isManualSettlementMethod(allocation.sourcePayment.paymentMethod)) return null;
     return allocation.sourcePayment.providerSecondaryRef ?? allocation.sourcePayment.providerRef ?? null;
 }
 
@@ -1112,7 +1114,7 @@ async function dispatchRefund(
     encryptionKey: string | undefined,
     providers: PaymentProvidersSource | undefined,
 ): Promise<string | undefined> {
-    if (payment.paymentMethod === COD_PAYMENT_METHOD) return undefined;
+    if (isManualSettlementMethod(payment.paymentMethod)) return undefined;
     const gateways = await paymentProvidersFor(providers, payment.paymentMethod);
     const gateway = gateways.get(payment.paymentMethod);
     if (!gateway?.refund) throw new ValidationError(`Unsupported refund gateway: ${payment.paymentMethod}`);
@@ -1510,7 +1512,7 @@ export async function processRefund(
     );
     if (hasManualCodAllocation && params.manualSettlementConfirmed !== true) {
         throw new ValidationError(
-            "Confirm that the customer has already received the manual COD refund before recording it.",
+            "Confirm that the customer has already received the refund by hand (cash or transfer) before recording it.",
         );
     }
     const refundRequestHash = await buildRefundRequestHash({

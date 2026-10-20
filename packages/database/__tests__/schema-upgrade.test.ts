@@ -837,6 +837,12 @@ describe("provider-neutral schema upgrades", { timeout: 30_000 }, () => {
         sqliteStatements: 11,
         postgresStatements: 11,
       },
+      {
+        version: 161,
+        name: "0161_payment_terms",
+        sqliteStatements: 4,
+        postgresStatements: 4,
+      },
     ]);
   });
 
@@ -1088,6 +1094,7 @@ describe("provider-neutral schema upgrades", { timeout: 30_000 }, () => {
           { version: 158, name: "0158_app_access_contract" },
           { version: 159, name: "0159_bulk_runs" },
           { version: 160, name: "0160_order_tracking_signals" },
+          { version: 161, name: "0161_payment_terms" },
         ],
       });
     } finally {

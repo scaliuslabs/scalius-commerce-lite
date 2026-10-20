@@ -18,6 +18,7 @@ import {
 import { and, asc, sql, desc, eq, inArray, notInArray, type SQL, type SQLWrapper } from "drizzle-orm";
 import { BULK_MATCHING_SLICE, matchingSliceCondition, nextMatchingCursor } from "../../../utils/bulk-matching";
 import { ARCHIVABLE_ORDER_STATUSES } from "../archive-policy";
+import { overdueOrderCondition } from "../payment-terms-columns";
 import { containsText } from "../../../utils/text-match";
 import { anySetIsSmall } from "../../../utils/list-lead";
 import type { CursorValueKind } from "@scalius/shared/pagination";
@@ -150,6 +151,8 @@ export const ORDER_LIST_VIEWS = [
     "delivery_failed",
     "returned",
     "ready_for_pickup",
+    /** Invoices (net terms) past their due date with money still due. */
+    "overdue",
 ] as const;
 export type OrderListView = (typeof ORDER_LIST_VIEWS)[number];
 
@@ -176,6 +179,7 @@ function ordersAmong(db: Database, orderIds: SQL): SQL {
 }
 
 // Cash on delivery still out (`cod_tracking_status_idx`): couriers' work in flight.
+// (Overdue invoices read `orders_payment_due_idx`, payment-terms-columns.ts.)
 function codTrackingOrderIds(statuses: readonly string[]): SQL {
     return sql`SELECT ${codTracking.orderId} AS order_id FROM ${codTracking}
         WHERE ${inArray(codTracking.codStatus, [...statuses])}`;
@@ -224,6 +228,8 @@ function orderListViewCondition(db: Database, view: OrderListView): SQL {
                 AND ${codTrackingStatusExists(db, COD_FAILED_STATUSES)}`;
         case "returned":
             return sql`${orders.status} = ${OrderStatus.RETURNED}`;
+        case "overdue":
+            return overdueOrderCondition();
         case "ready_for_pickup": {
             // Shopify's "Ready for pickup": marked ready, not collected yet.
             // Read from the pickup orders' own index (`orders_list_pickup_idx`):

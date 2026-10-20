@@ -102,6 +102,8 @@ export interface ManualOrderAppInput {
   shippingAdminArea?: string | null;
   shippingPostalCode?: string | null;
   locationNames: { cityName: string | null; zoneName: string | null };
+  /** How the order is paid: cash on delivery (the default) or an invoice (`net_terms`). */
+  paymentMethod?: "cod" | "net_terms";
 }
 
 export interface ManualOrderAppOutcome {

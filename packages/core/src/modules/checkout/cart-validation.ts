@@ -1123,6 +1123,8 @@ export function summarizeStorefrontCartFulfilment(
     };
 }
 
+const NO_DEFERRED_METHODS: ReadonlySet<string> = new Set();
+
 function presentStorefrontCartFulfilmentSummary(summary: StorefrontCartFulfilmentSummary) {
     return {
         requiresDeliveryMethod: summary.requiresDeliveryMethod,
@@ -1136,22 +1138,27 @@ function presentStorefrontCartFulfilmentSummary(summary: StorefrontCartFulfilmen
  * cash on delivery when nothing is shipped, collected or performed, and
  * without a method that doesn't serve the delivery country (cash on
  * delivery serves Bangladesh; MARKETS-DESIGN step 3b). A pickup or an order
- * that ships nothing has no delivery country.
+ * that ships nothing has no delivery country. A deferred method (net terms,
+ * an app's invoice) is offered only when `deferredOffered` names it: the
+ * signed-in buyer's eligibility (payment-terms.ts); never to a guest.
  */
 export function resolveCartPaymentMethods(
     enabledMethods: readonly string[],
     summary: Pick<StorefrontCartFulfilmentSummary, "allowsCashOnDelivery">,
     deliveryCountryCode: string | null = null,
-    providers: Pick<PaymentProviders, "countryIssue" | "currencyIssue"> = BUILT_IN_PAYMENT_PROVIDERS,
+    providers: Pick<PaymentProviders, "countryIssue" | "currencyIssue" | "isDeferred"> = BUILT_IN_PAYMENT_PROVIDERS,
     /**
      * The order's currency (its market's, MARKETS-DESIGN step 6): a gateway
      * that cannot charge it is not offered (`chargeCurrencies`). Absent: no
      * currency filter (the shop currency, which settings already checked).
      */
     currencyCode: string | null = null,
+    /** The deferred methods this buyer may be offered (eligible or app-gated); absent: none. */
+    deferredOffered: ReadonlySet<string> = NO_DEFERRED_METHODS,
 ): string[] {
     return enabledMethods.filter((method) =>
-        (method !== "cod" || summary.allowsCashOnDelivery)
+        (!providers.isDeferred(method) || deferredOffered.has(method))
+        && (method !== "cod" || summary.allowsCashOnDelivery)
         && providers.countryIssue(method, deliveryCountryCode) === null
         && (currencyCode === null || providers.currencyIssue(method, currencyCode) === null));
 }

@@ -17,7 +17,7 @@ import {
   type OrderCurrencySnapshot,
 } from "./order-currency";
 import {
-  COD_PAYMENT_METHOD,
+  isManualSettlementMethod,
   paymentProvidersFor,
   type PaymentProviders,
   type PaymentProvidersSource,
@@ -365,7 +365,7 @@ async function probeProviderRefund(
   if (isInternalRefundProviderStatus(attempt.providerStatus)) {
     return { outcome: "accepted", providerRefundId: attempt.providerRefundId, providerStatus: attempt.providerStatus! };
   }
-  if (attempt.gateway === COD_PAYMENT_METHOD) {
+  if (isManualSettlementMethod(attempt.gateway)) {
     return { outcome: "accepted", providerRefundId: attempt.providerRefundId, providerStatus: "accepted" };
   }
   const gateway = providers.get(attempt.gateway);
@@ -848,7 +848,7 @@ export async function reconcileRefundAttemptById(
         providerRefundId: attempt.providerRefundId,
         providerStatus: isInternalRefundProviderStatus(attempt.providerStatus)
           ? attempt.providerStatus!
-          : attempt.gateway === COD_PAYMENT_METHOD ? "manual_confirmed" : "accepted",
+          : isManualSettlementMethod(attempt.gateway) ? "manual_confirmed" : "accepted",
       } satisfies ProviderProbeOutcome
     : await probeProviderRefund(db, attempt, context, options.encryptionKey, await paymentProvidersFor(options.providers, attempt.gateway));
 

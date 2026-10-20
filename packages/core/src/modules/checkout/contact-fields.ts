@@ -31,6 +31,8 @@ export function assertOrderContact(
     paymentMethod: string;
     /** The store takes an advance deposit for this order (partial payment, no gift cards). */
     depositPlan: boolean;
+    /** The method is deferred: paid later by invoice (a phone is then required). */
+    deferred?: boolean;
     countryCode: string | null | undefined;
   },
 ): void {
@@ -38,7 +40,7 @@ export function assertOrderContact(
     { email: settings?.email ?? "optional", phoneOptionalForDigital: settings?.phoneOptionalForDigital === true },
     {
       lines: order.lines.map((line) => ({ fulfillmentKind: line.fulfillmentKind, isGiftCard: line.isGiftCard === true })),
-      payment: orderPaymentKind(order.paymentMethod, { depositPlan: order.depositPlan }),
+      payment: orderPaymentKind(order.paymentMethod, { depositPlan: order.depositPlan, deferred: order.deferred }),
       countryCode: order.countryCode,
     },
   );

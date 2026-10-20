@@ -9,6 +9,16 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   // The manual-order attempt table replays a repeated Idempotency-Key exactly.
   "dashboard.resources.orders.create": { stability: "stable", batch: "forbidden", uncurated: true },
   "dashboard.resources.payments.list": { stability: "stable", uncurated: true },
+  // A payment received against an invoice: the payment row's id is derived
+  // from the required Idempotency-Key, so a repeat records nothing more.
+  "dashboard.resources.payments.create": {
+    stability: "stable",
+    risk: "financial",
+    idempotency: "required",
+    revision: "optional",
+    batch: "forbidden",
+    uncurated: true,
+  },
   "dashboard.resources.fulfillments.list": { stability: "stable", uncurated: true },
   // The fulfilment ledger's own request key carries the Idempotency-Key.
   "dashboard.resources.fulfillments.create": {

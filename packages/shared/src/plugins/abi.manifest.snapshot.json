@@ -521,8 +521,14 @@
            "default": "hosted",
            "type": "string",
            "enum": [
-            "hosted"
+            "hosted",
+            "deferred"
            ]
+          },
+          "dueInDays": {
+           "type": "integer",
+           "minimum": 1,
+           "maximum": 365
           },
           "chargeCurrencies": {
            "anyOf": [

@@ -204,9 +204,10 @@ export interface OrderContactLine {
  * - `cod`: cash on delivery, at pickup or at the service;
  * - `partial`: a deposit online now and the rest later (a deposit plan or EMI);
  * - `online`: the whole amount online now;
- * - `gift_card`: gift cards cover the whole order.
+ * - `gift_card`: gift cards cover the whole order;
+ * - `deferred`: paid later by its due date (an invoice, net terms).
  */
-export type OrderPaymentKind = "cod" | "online" | "partial" | "gift_card";
+export type OrderPaymentKind = "cod" | "online" | "partial" | "gift_card" | "deferred";
 
 /** Why an order needs a phone. */
 export type PhoneRequiredReason =
@@ -220,6 +221,8 @@ export type PhoneRequiredReason =
   | "delivery"
   | "cash_on_delivery"
   | "partial_payment"
+  /** Paid later by invoice: the merchant must be able to reach the buyer about it. */
+  | "deferred_payment"
   /** The order is placed in Bangladesh (its market or shipping country). */
   | "bangladesh";
 
@@ -250,10 +253,13 @@ export function orderPaymentKind(
   options: {
     /** The store takes an advance deposit online (partial payment). */
     depositPlan: boolean;
+    /** The method is deferred (net terms, or an app's deferred method). */
+    deferred?: boolean;
   },
 ): OrderPaymentKind {
   if (paymentMethod === "cod") return "cod";
   if (paymentMethod === "gift_card") return "gift_card";
+  if (paymentMethod === "net_terms" || options.deferred === true) return "deferred";
   return options.depositPlan ? "partial" : "online";
 }
 
@@ -284,6 +290,7 @@ function phoneRequiredReason(
   if (order.lines.some((line) => !line.isGiftCard && line.fulfillmentKind === "physical")) return "delivery";
   if (order.payment === "cod") return "cash_on_delivery";
   if (order.payment === "partial") return "partial_payment";
+  if (order.payment === "deferred") return "deferred_payment";
   const country = order.countryCode?.trim().toUpperCase() || PHONE_REQUIRED_COUNTRY;
   if (country === PHONE_REQUIRED_COUNTRY) return "bangladesh";
   return null;

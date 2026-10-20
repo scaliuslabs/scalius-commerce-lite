@@ -20,10 +20,14 @@ export {
   COD_PAYMENT_METHOD,
   createPaymentProviders,
   isAppPaymentMethod,
+  isManualSettlementMethod,
   isOnlinePaymentMethod,
   isPaymentMethodId,
+  NET_TERMS_LABEL,
+  NET_TERMS_PAYMENT_METHOD,
   onlinePaymentMethodCondition,
   paymentMethodLabel,
+  RECORDED_PAYMENT_METHOD,
   paymentProvidersFor,
 } from "./gateways/registry";
 export type { CheckoutGatewayPrecommitInput, PaymentProviders, PaymentProvidersSource } from "./gateways/registry";
@@ -39,6 +43,7 @@ export type {
 } from "./gateway-settings";
 
 export { recordCODCollection, recordCODFailure, markCODReturned } from "./cod";
+export { recordOrderPayment, type RecordOrderPaymentInput, type RecordOrderPaymentResult } from "./recorded-payment";
 
 // --- Payment processing ---
 export { processPaymentConfirmed, processPaymentFailed, releaseOrderInventory } from "./process-payment";

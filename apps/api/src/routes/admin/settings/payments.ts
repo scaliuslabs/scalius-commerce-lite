@@ -33,6 +33,10 @@ import {
 } from "@scalius/core/modules/settings";
 import { writeSettingsDocuments } from "@scalius/core/settings-store";
 import { getCheckoutFlowValidationIssues, isCheckoutGatewayUsableForFlow } from "@scalius/core/modules/checkout";
+import { readSegmentDefinitions } from "@scalius/core/modules/customers";
+import { NET_TERMS_PAYMENT_METHOD, netTermsNamesAnyone, netTermsSettingsSchema } from "@scalius/shared/payment-terms";
+
+const NET_TERMS_NOBODY_MESSAGE = "Choose who may pay by invoice: a customer tag, a segment, or let apps decide.";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED = "••••••••••••";
@@ -106,6 +110,11 @@ const updateMethodsSchema = z.object({
         .refine((methods) => new Set(methods).size === methods.length, "Payment methods must be unique"),
     defaultMethod: paymentMethodIdSchema,
     expectedRevision: revisionSchema,
+    /**
+     * The invoice (`net_terms`): its net days and who may pay by it (customer
+     * tags, segments, or an app's decision). Omitted: the saved settings stay.
+     */
+    netTerms: netTermsSettingsSchema.optional(),
 });
 
 const saveStripeSchema = z.object({
@@ -183,7 +192,7 @@ const paymentGatewaySchema = z.object({
     id: z.string(),
     label: z.string(),
     checkoutName: z.string(),
-    flow: z.enum(["card", "hosted"]),
+    flow: z.enum(["card", "hosted", "deferred"]),
     /** The app that provides it; null for a built-in gateway. */
     pluginId: z.string().nullable(),
     supportsRefund: z.boolean(),
@@ -197,6 +206,8 @@ const paymentGatewaySchema = z.object({
 const paymentMethodsResponseSchema = z.object({
     enabledMethods: z.array(z.string()),
     defaultMethod: z.string(),
+    /** The invoice's net days and who may pay by it (used while `net_terms` is enabled). */
+    netTerms: netTermsSettingsSchema,
     revision: revisionSchema,
     activeMethods: z.array(z.string()).optional(),
     activeDefaultMethod: z.string().optional(),
@@ -204,7 +215,7 @@ const paymentMethodsResponseSchema = z.object({
     gateways: z.array(paymentGatewaySchema),
     /** Keyed by payment method id: every gateway plus cod (app providers under their qualified ids). */
     gatewayStatus: z.object(Object.fromEntries(
-        [...BUILT_IN_PAYMENT_GATEWAY_IDS, COD_PAYMENT_METHOD].map((id) => [id, gatewayStatusSchema]),
+        [...BUILT_IN_PAYMENT_GATEWAY_IDS, COD_PAYMENT_METHOD, NET_TERMS_PAYMENT_METHOD].map((id) => [id, gatewayStatusSchema]),
     )).catchall(gatewayStatusSchema),
 }).passthrough();
 
@@ -283,9 +294,22 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
         environment: "not_applicable",
         ...selection(COD_PAYMENT_METHOD),
     };
+    // The invoice is ready once it names who may pay by it.
+    const invoiceNamesAnyone = netTermsNamesAnyone(rawConfig.netTerms);
+    gatewayStatus[NET_TERMS_PAYMENT_METHOD] = {
+        configured: invoiceNamesAnyone,
+        enabled: true,
+        usable: invoiceNamesAnyone,
+        missingFields: invoiceNamesAnyone ? [] : ["netTerms.customerTags"],
+        ...(invoiceNamesAnyone ? {} : { blockedReason: NET_TERMS_NOBODY_MESSAGE }),
+        providerEnabled: true,
+        environment: "not_applicable",
+        ...selection(NET_TERMS_PAYMENT_METHOD),
+    };
 
     return ok(c, {
         enabledMethods: rawConfig.enabledMethods,
+        netTerms: rawConfig.netTerms,
         defaultMethod: rawConfig.enabledMethods.includes(rawConfig.defaultMethod)
             ? rawConfig.defaultMethod
             : (rawConfig.enabledMethods[0] ?? COD_PAYMENT_METHOD),
@@ -337,8 +361,15 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
     // App gateways are read only when the merchant selects one.
     const providers = await requestPaymentProviders(c, enabledMethods.find(isAppPaymentMethod) ?? COD_PAYMENT_METHOD);
     const readyMethods: string[] = [];
+    const netTerms = data.netTerms ?? saved.netTerms;
     for (const method of enabledMethods) {
         if (method === COD_PAYMENT_METHOD) {
+            readyMethods.push(method);
+            continue;
+        }
+        // The invoice must name who may pay by it, and its segments must exist.
+        if (method === NET_TERMS_PAYMENT_METHOD) {
+            if (!netTermsNamesAnyone(netTerms)) throw new ValidationError(NET_TERMS_NOBODY_MESSAGE, { issues: [{ path: ["netTerms", "customerTags"], message: NET_TERMS_NOBODY_MESSAGE }] });
             readyMethods.push(method);
             continue;
         }
@@ -381,9 +412,18 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
         throw new ValidationError("Default method is hidden by the current checkout flow settings.");
     }
 
+    if (data.netTerms && data.netTerms.segmentIds.length > 0) {
+        const definitions = await readSegmentDefinitions(db, data.netTerms.segmentIds);
+        const missing = data.netTerms.segmentIds.filter((id) => !definitions.get(id));
+        if (missing.length > 0) {
+            throw new ValidationError("A chosen segment no longer exists. Choose another.", { issues: [{ path: ["netTerms", "segmentIds"], message: `Unknown segment: ${missing.join(", ")}` }] });
+        }
+    }
+
     const { revision } = await paymentMethodsDocument.write(db, {
         enabledMethods,
         defaultMethod: data.defaultMethod,
+        ...(data.netTerms ? { netTerms: data.netTerms } : {}),
     }, {}, { expectedRevision: data.expectedRevision });
 
     return ok(c, { message: "Payment methods updated", revision });

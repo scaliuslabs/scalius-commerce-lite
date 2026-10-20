@@ -29,6 +29,8 @@ import {
     quoteGiftCardTender,
 } from "../gift-cards";
 import { isGiftCardTenderBlocked } from "@scalius/shared/gift-card-tender";
+import { isPaymentTermsDays } from "@scalius/shared/payment-terms";
+import { PAYMENT_TERMS_UNAVAILABLE_MESSAGE } from "./payment-terms";
 import { BUILT_IN_PAYMENT_PROVIDERS, CASH_ON_DELIVERY_AMOUNT_REASON, type PaymentProviders } from "../payments";
 import { assertDiscountCodesApplied } from "../promotions";
 import { PAYMENT_METHOD_UNAVAILABLE_REASON, type CheckoutAppFunctions } from "./app-functions";
@@ -161,6 +163,12 @@ export interface StorefrontCheckoutPolicySnapshot {
     authorityRevision?: number;
     orderCreatedNotificationEnabled?: boolean;
     metaPurchaseEnabled?: boolean;
+    /**
+     * The terms (days) of a deferred method the API found this buyer
+     * eligible for (payment-terms.ts); a deferred order without them is
+     * refused, so no caller can skip the eligibility check.
+     */
+    paymentTermsDays?: number | null;
 }
 
 const STOREFRONT_DELIVERY_PREFLIGHT_RESULT_PROOF = Symbol("scalius.storefrontDeliveryPreflightResult");
@@ -945,6 +953,16 @@ export async function createStorefrontOrder(
         throw new ValidationError("Choose how to pay for this order.");
     }
     if (giftCardHandles.length > 0) assertCashOnDeliveryFits(paymentMethod);
+    // A deferred method (an invoice) charges nothing now: the order commits
+    // unpaid with its terms, takes no advance deposit, and is refused unless
+    // the API found this buyer eligible (the snapshot carries the terms).
+    const paymentProviders = appOptions.paymentProviders ?? BUILT_IN_PAYMENT_PROVIDERS;
+    const deferred = !coveredByGiftCards && paymentProviders.isDeferred(paymentMethod);
+    const paymentTermsDays = deferred ? checkoutPolicySnapshot?.paymentTermsDays ?? null : null;
+    if (deferred && !isPaymentTermsDays(paymentTermsDays)) {
+        throw new ValidationError(PAYMENT_TERMS_UNAVAILABLE_MESSAGE, { reason: PAYMENT_METHOD_UNAVAILABLE_REASON });
+    }
+    const depositApplies = isPartialEnabled && !deferred;
     if (paymentMethod === PaymentMethod.COD) {
         // Cash on delivery collects cash amounts (whole taka in BDT): an
         // amount due it cannot collect exactly is refused before the commit.
@@ -959,7 +977,7 @@ export async function createStorefrontOrder(
             : "Advance deposit is required. COD cannot be selected for the full amount directly.");
     }
     const requiresCashCollection = paymentMethod === PaymentMethod.COD || (!giftCardsApplied && isDepositPaymentRequired({
-        partialPaymentEnabled: isPartialEnabled,
+        partialPaymentEnabled: depositApplies,
         partialPaymentAmount: toMinor(checkoutPolicySnapshot?.partialPaymentAmount ?? fallbackSettings?.partialPaymentAmount ?? 0, taxQuote.decimalPlaces),
     }, taxQuote.totalMinor));
     if (deliveryPreflight.rateToken && deliveryPreflight.rateCod !== requiresCashCollection) {
@@ -976,7 +994,8 @@ export async function createStorefrontOrder(
         customerEmail: contact.customerEmail,
         lines: cartValidation.items,
         paymentMethod,
-        depositPlan: isPartialEnabled && !giftCardsApplied,
+        depositPlan: depositApplies && !giftCardsApplied,
+        deferred,
         // Where the order is placed: its shipping country, else its billing country.
         countryCode: deliveryPreflight.address?.countryCode ?? billing.address?.countryCode ?? null,
     });
@@ -1051,8 +1070,8 @@ export async function createStorefrontOrder(
             totalAmountMinor: taxQuote.totalMinor,
             taxLabel: taxQuote.displayLabel,
             pricesIncludeTax: taxQuote.pricesIncludeTax,
-            // Cash and fully-covered orders are placed; a gateway order waits for its payment.
-            status: paymentMethod === PaymentMethod.COD || paymentMethod === GIFT_CARD_PAYMENT_METHOD
+            // Cash, invoice and fully-covered orders are placed; a gateway order waits for its payment.
+            status: paymentMethod === PaymentMethod.COD || paymentMethod === GIFT_CARD_PAYMENT_METHOD || deferred
                 ? OrderStatus.PENDING
                 : OrderStatus.INCOMPLETE,
             paymentMethod,
@@ -1061,6 +1080,7 @@ export async function createStorefrontOrder(
                 : coveredByGiftCards ? PaymentStatus.PAID : PaymentStatus.PARTIAL,
             paidAmountMinor: giftCardTender.appliedTotalMinor,
             balanceDueMinor: giftCardTender.amountDueMinor,
+            ...(paymentTermsDays !== null ? { paymentTermsDays } : {}),
             fulfillmentStatus: FulfillmentStatus.PENDING,
             inventoryPool: data.inventoryPool,
             inventoryAction: cartValidation.items.some(item => item.inventoryTracked) ? "reserved" : "none",

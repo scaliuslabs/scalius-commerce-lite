@@ -23,6 +23,7 @@ import { providerCountriesSchema, providerCurrencySchema } from "./common";
 import { PROVIDER_KINDS, PROVIDER_OPERATIONS, type ProviderKind } from "./kinds";
 import { paymentAmountLimitsSchema } from "./payment";
 import { MESSAGING_CHANNELS } from "./channels";
+import { PAYMENT_TERMS_MAX_DAYS } from "../../payment-terms";
 
 const providerId = z.string().regex(/^[a-z][a-z0-9-]{0,47}$/);
 const title = z.string().trim().min(1).max(80);
@@ -77,8 +78,17 @@ export const paymentProviderDescriptorSchema = z.object({
   ...base("payment"),
   /** The method name buyers see at checkout (default: `name`). */
   checkoutName: title.optional(),
-  /** Apps redirect the buyer to the provider's hosted page; in-page card forms are built in. */
-  flow: z.enum(["hosted"]).default("hosted"),
+  /**
+   * `hosted`: apps redirect the buyer to the provider's hosted page (in-page
+   * card forms are built in). `deferred`: nothing is charged at checkout;
+   * the order commits unpaid, due in `dueInDays`, and is paid later (an
+   * invoice, a purchase order): its payments reach the order as the
+   * provider's verified events, or staff record them. Offered to signed-in
+   * buyers only; the app's own `checkout.payment_methods` decides further.
+   */
+  flow: z.enum(["hosted", "deferred"]).default("hosted"),
+  /** A `deferred` method's terms: the order is due this many days after placement. */
+  dueInDays: z.number().int().min(1).max(PAYMENT_TERMS_MAX_DAYS).optional(),
   /** The currencies the provider can charge; checkout offers it in no other. */
   chargeCurrencies: z.union([z.literal("any"), z.array(providerCurrencySchema).min(1).max(50)]),
   /**
@@ -105,6 +115,13 @@ export const paymentProviderDescriptorSchema = z.object({
   // A hosted page returns the buyer, and a buyer may ask whether it went through.
   if (descriptor.flow === "hosted" && (!has("verifyReturn") || !has("queryPayment"))) {
     context.addIssue({ code: "custom", path: ["operations"], message: "A hosted payment provider implements verifyReturn and queryPayment." });
+  }
+  // A deferred method names its terms; any other flow has none.
+  if (descriptor.flow === "deferred" && descriptor.dueInDays === undefined) {
+    context.addIssue({ code: "custom", path: ["dueInDays"], message: "A deferred payment provider declares dueInDays." });
+  }
+  if (descriptor.flow !== "deferred" && descriptor.dueInDays !== undefined) {
+    context.addIssue({ code: "custom", path: ["dueInDays"], message: "Only a deferred payment provider declares dueInDays." });
   }
   // A refund whose answer was lost must be asked about, never submitted again.
   if (has("refund") && !has("refundStatus")) {

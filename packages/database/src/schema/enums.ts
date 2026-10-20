@@ -19,6 +19,8 @@ export type OrderStatus = (typeof OrderStatus)[keyof typeof OrderStatus];
 export const PaymentMethod = {
     STRIPE: "stripe",
     COD: "cod",
+    /** An invoice paid later by its due date (`@scalius/shared/payment-terms`). */
+    NET_TERMS: "net_terms",
 } as const;
 
 export type PaymentMethodType = (typeof PaymentMethod)[keyof typeof PaymentMethod];

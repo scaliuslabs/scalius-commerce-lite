@@ -387,6 +387,7 @@ export async function applyOrderStatusChange(
         totalAmountMinor: orders.totalAmountMinor,
         paidAmountMinor: orders.paidAmountMinor,
         balanceDueMinor: orders.balanceDueMinor,
+        paymentTermsDays: orders.paymentTermsDays,
         currencyCode: orders.currencyCode,
         currencyDecimalPlaces: orders.currencyDecimalPlaces,
         shipmentClaimId: orders.shipmentClaimId,
@@ -409,12 +410,14 @@ export async function applyOrderStatusChange(
     await assertNoActiveRefundAttempt(db, orderId);
     await assertNoActivePaymentSessionAttempt(db, orderId);
     const isDeliveredOrCompleted = nextStatus === OrderStatus.DELIVERED || nextStatus === OrderStatus.COMPLETED;
+    // An invoice (net terms) is delivered before it is paid; it completes once paid.
+    const deliveredOnTerms = nextStatus === OrderStatus.DELIVERED && existingOrder.paymentTermsDays !== null;
     if (nextStatus === OrderStatus.DELIVERED && currentStatus !== nextStatus) {
         // Delivered only once every line that is handed over by a real
         // action was (F7); digital and gift-card lines never block.
         await assertOrderLinesHandedOver(db, orderId, existingOrder.requiresShipping);
     }
-    if (isDeliveredOrCompleted) {
+    if (isDeliveredOrCompleted && !deliveredOnTerms) {
         const currency = resolveOrderCurrencySnapshot(existingOrder);
         // A partly refunded order was paid in full: its net paid amount is
         // below the total because money went back, not because any is owed.
@@ -427,6 +430,8 @@ export async function applyOrderStatusChange(
             throw new ValidationError(
                 existingOrder.paymentMethod === PaymentMethod.COD
                     ? "Mark the cash as collected first."
+                    : existingOrder.paymentTermsDays !== null
+                    ? "Record the invoice payment first."
                     : existingOrder.paymentStatus === PaymentStatus.PARTIAL
                     ? "Record the rest of the payment first."
                     : "This order still has money due.",

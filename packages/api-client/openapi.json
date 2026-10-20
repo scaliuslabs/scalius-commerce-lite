@@ -9670,6 +9670,31 @@
             "nullable": true,
             "maxLength": 4000
           },
+          "paymentTerms": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "net"
+                ]
+              },
+              "days": {
+                "type": "integer"
+              },
+              "dueAt": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              }
+            },
+            "required": [
+              "kind",
+              "days",
+              "dueAt"
+            ]
+          },
           "customerId": {
             "type": "string",
             "nullable": true,
@@ -10037,6 +10062,7 @@
           "balanceDueMinor",
           "pricesIncludeTax",
           "paymentMethod",
+          "paymentTerms",
           "customerId",
           "accountCustomerId",
           "contact",
@@ -36236,8 +36262,14 @@
                                 "enum": [
                                   "card",
                                   "hosted",
-                                  "cod"
+                                  "cod",
+                                  "deferred"
                                 ]
+                              },
+                              "dueInDays": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 365
                               },
                               "currencies": {
                                 "type": "array",
@@ -76150,6 +76182,19 @@
             "description": "true lists trashed orders instead.",
             "name": "trashed",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ],
+              "description": "true lists only overdue invoices: deferred (net terms) orders whose `paymentTerms.dueAt` has passed with money still due."
+            },
+            "required": false,
+            "description": "true lists only overdue invoices: deferred (net terms) orders whose `paymentTerms.dueAt` has passed with money still due.",
+            "name": "overdue",
+            "in": "query"
           }
         ],
         "responses": {
@@ -76281,7 +76326,7 @@
           "maxRequestBytes": 1048576,
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
-          "when": "Use when syncing orders page by page by updatedAt (webhook representation).",
+          "when": "Use when syncing orders page by page by updatedAt (webhook representation), or listing overdue invoices (overdue=true).",
           "dryRun": "none",
           "confirmation": "none"
         },
@@ -76592,10 +76637,33 @@
                   "paymentMethod": {
                     "type": "string",
                     "enum": [
-                      "cod"
+                      "cod",
+                      "net_terms"
                     ],
                     "default": "cod",
-                    "description": "How the buyer pays: cash on delivery (more methods join this list)."
+                    "description": "How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with dashboard.resources.payments.create)."
+                  },
+                  "paymentTerms": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "net"
+                        ]
+                      },
+                      "days": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 365
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "days"
+                    ],
+                    "additionalProperties": false,
+                    "description": "An invoice's terms, `{ kind: \"net\", days }` (1 to 365): the order is due that many days after it is placed. Only with `net_terms`; omitted, the store's net days (Settings → Payments)."
                   },
                   "attributes": {
                     "type": "object",
@@ -76772,7 +76840,7 @@
           "maxRequestBytes": 1048576,
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
-          "when": "Use when placing an order for an existing customer with SKUs and quantities; a cash-on-delivery (COD) order, prices in minor units.",
+          "when": "Use when placing an order for an existing customer with SKUs and quantities: cash on delivery (COD) or an invoice paid later (net terms, net 30); prices in minor units.",
           "dryRun": "none",
           "confirmation": "none"
         },
@@ -76925,6 +76993,227 @@
       }
     },
     "/api/v1/admin/resources/orders/{id}/payments": {
+      "post": {
+        "operationId": "dashboard.resources.payments.create",
+        "tags": [
+          "App API - Orders"
+        ],
+        "summary": "Record a payment against an invoice order",
+        "description": "Records money received for a deferred (net terms) order: a bank transfer, cheque or cash against its invoice. No provider is called. The order's paid amount and payment status advance in the same write, `payment.updated` (and `order.paid` once nothing is due) follow, and a refund of it is a manual settlement. Send an Idempotency-Key: a repeat returns the first payment.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "amountMinor": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991,
+                    "description": "What was received, in minor units of the order's `currency`; at most its `balanceDueMinor`."
+                  },
+                  "via": {
+                    "type": "string",
+                    "enum": [
+                      "bank_transfer",
+                      "cash",
+                      "cheque",
+                      "card_terminal",
+                      "mobile_wallet",
+                      "other"
+                    ],
+                    "description": "How it was received."
+                  },
+                  "reference": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120,
+                    "description": "The bank, cheque or transfer reference."
+                  },
+                  "note": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 500
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The order `version` you read; a different one is refused with 409."
+                  }
+                },
+                "required": [
+                  "amountMinor",
+                  "via"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The recorded payment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "payment": {
+                          "$ref": "#/components/schemas/PaymentResource"
+                        }
+                      },
+                      "required": [
+                        "payment"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "financial",
+          "openWorld": false,
+          "idempotency": "required",
+          "revision": "optional",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when recording money received against an invoice (net terms) order: a bank transfer, cheque or cash, in minor units.",
+          "dryRun": "none",
+          "confirmation": "required"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.edit"
+        }
+      },
       "get": {
         "operationId": "dashboard.resources.payments.list",
         "tags": [
@@ -145992,7 +146281,8 @@
                                 "type": "string",
                                 "enum": [
                                   "card",
-                                  "hosted"
+                                  "hosted",
+                                  "deferred"
                                 ]
                               },
                               "pluginId": {
@@ -174210,6 +174500,18 @@
                     "additionalProperties": {
                       "type": "string"
                     }
+                  },
+                  "paymentMethod": {
+                    "type": "string",
+                    "enum": [
+                      "cod",
+                      "net_terms"
+                    ]
+                  },
+                  "paymentTermsDays": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 365
                   }
                 },
                 "required": [
@@ -175990,6 +176292,13 @@
                     "nullable": true,
                     "minLength": 1,
                     "maxLength": 180
+                  },
+                  "paymentMethod": {
+                    "type": "string",
+                    "enum": [
+                      "cod",
+                      "net_terms"
+                    ]
                   }
                 },
                 "required": [
@@ -178092,6 +178401,7 @@
                                   "cod_collected",
                                   "cod_failed",
                                   "cod_returned",
+                                  "payment_recorded",
                                   "refund_recorded",
                                   "return_created",
                                   "return_approved",
@@ -178305,6 +178615,7 @@
                             "cod_collected",
                             "cod_failed",
                             "cod_returned",
+                            "payment_recorded",
                             "refund_recorded",
                             "return_created",
                             "return_approved",
@@ -255105,6 +255416,14 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.resources.orders.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.payments.create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.payments.create"
           ]
         },
         {

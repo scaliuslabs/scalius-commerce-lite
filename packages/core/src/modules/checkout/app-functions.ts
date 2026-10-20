@@ -599,10 +599,17 @@ export function applyAppPaymentMethodOperations(
   methods: readonly CheckoutPaymentMethodOption[],
   results: ReadonlyArray<CheckoutAppFunctionResult<"checkout.payment_methods">>,
   apps?: Pick<CheckoutAppFunctions, "report">,
+  /**
+   * Methods offered only if an app allows them (net terms whose merchant
+   * lets apps decide); an `allow` of any other method is skipped and logged.
+   * A hide always wins over an allow.
+   */
+  gated: ReadonlySet<string> = new Set(),
 ): { methods: CheckoutPaymentMethodOption[]; changed: boolean } {
   let current = methods.map((method) => ({ ...method }));
   const known = new Set(methods.map((method) => method.methodId));
   const hidden = new Set<string>();
+  const allowed = new Set<string>();
   let changed = false;
   for (const result of results) {
     for (const operation of result.output.operations) {
@@ -612,7 +619,13 @@ export function applyAppPaymentMethodOperations(
         apps?.report(result.pluginId, "checkout.payment_methods", `Operation ${operation.op} names payment method ${unknown}, which is not available here; it was skipped.`);
         continue;
       }
-      if (operation.op === "hide") {
+      if (operation.op === "allow") {
+        if (!gated.has(operation.methodId)) {
+          apps?.report(result.pluginId, "checkout.payment_methods", `Operation allow names payment method ${operation.methodId}, which the merchant does not let apps decide; it was skipped.`);
+          continue;
+        }
+        allowed.add(operation.methodId);
+      } else if (operation.op === "hide") {
         if (!hidden.has(operation.methodId)) changed = true;
         hidden.add(operation.methodId);
       } else if (operation.op === "rename") {
@@ -629,5 +642,8 @@ export function applyAppPaymentMethodOperations(
       }
     }
   }
+  // A gated method no app allowed is not offered.
+  for (const methodId of gated) if (known.has(methodId) && !allowed.has(methodId)) hidden.add(methodId);
+  if (gated.size > 0) changed = true;
   return { methods: current.filter((method) => !hidden.has(method.methodId)), changed };
 }

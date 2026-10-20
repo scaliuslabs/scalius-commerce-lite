@@ -11,6 +11,7 @@ import { normalizeOrderChannelSource } from "@scalius/shared/order-channel-sourc
 import { ADDRESS_FIELD_MAX_LENGTH, usesDeliveryHierarchy } from "@scalius/shared/address";
 import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 import { MAX_MINOR_AMOUNT } from "@scalius/shared/money";
+import { PAYMENT_TERMS_MAX_DAYS } from "@scalius/shared/payment-terms";
 
 /** The one order line limit (`@scalius/shared/order-limits`). */
 export const MAX_ORDER_LINE_ITEMS = MAX_ORDER_LINES;
@@ -151,6 +152,9 @@ const orderChannelSourceInputSchema = z
  * extends them (and applies `refineDeliveryLine` again): zod refuses to
  * extend a refined object.
  */
+/** How a staff or app order is paid: cash on delivery, or an invoice paid later by its due date. */
+export const manualOrderPaymentMethodSchema = z.enum(["cod", "net_terms"]);
+
 export const createOrderObjectSchema = sellableOrderContentSchema.extend({
     requestKey: z.uuid("A valid manual-order request key is required"),
     /**
@@ -171,6 +175,10 @@ export const createOrderObjectSchema = sellableOrderContentSchema.extend({
     attributes: z.record(z.string(), z.string()).optional(),
     /** Who placed it: staff ("admin", the default) or an app ("app"). */
     channel: z.enum(["admin", "app"]).optional(),
+    /** Cash on delivery (the default), or an invoice paid later (`net_terms`). */
+    paymentMethod: manualOrderPaymentMethodSchema.optional(),
+    /** An invoice's terms in days; omitted: the store's net days (Settings → Payments). */
+    paymentTermsDays: z.number().int().min(1).max(PAYMENT_TERMS_MAX_DAYS).optional(),
 });
 
 /** Schema for creating a new order (POST /api/orders). */
@@ -201,6 +209,8 @@ export const quoteManualOrderSchema = sellableOrderContentSchema.pick({
 }).extend({
     /** Decides pickup vs delivery (and so whether the address is taxed). */
     shippingMethodId: z.string().trim().min(1).max(180).nullable().optional(),
+    /** Cash on delivery (the default) must collect the total exactly; an invoice need not. */
+    paymentMethod: manualOrderPaymentMethodSchema.optional(),
 });
 
 export type QuoteManualOrderInput = z.infer<typeof quoteManualOrderSchema>;

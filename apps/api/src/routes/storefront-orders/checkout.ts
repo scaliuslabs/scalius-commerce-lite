@@ -36,7 +36,9 @@ import {
     runStorefrontOrderPostCommitSideEffects,
     assertStorefrontCheckoutPolicy,
     loadStorefrontCheckoutReads,
+    offeredDeferredMethods,
     resolveCartPaymentMethods,
+    resolveOrderDeferredTerms,
     type StorefrontCheckoutAuthoritySnapshot,
     type StorefrontCheckoutSettingsSnapshot,
 } from "@scalius/core/modules/checkout";
@@ -599,6 +601,14 @@ app.openapi(createOrderRoute, async (c) => {
     // (A cart validated before step 6 carries no money: the authority's shop currency.)
     const orderCurrencyCode = cartValidation.money?.currencyCode ?? currency.currencyCode;
     assertGatewayCurrencyReadiness(data, orderCurrencyCode, paymentProviders);
+    // Paying later (an invoice): only a signed-in buyer the method reaches.
+    // Its reads happen only for such an order (payment-terms.ts).
+    const deferredTerms = await resolveOrderDeferredTerms(db, {
+      method: data.paymentMethod,
+      customerId: checkoutCustomerIdentity?.customerId ?? null,
+      payment: checkoutAuthority.activePaymentMethods,
+      providers: paymentProviders,
+    });
     diagnostics?.mark("policy");
 
     // This remains memory-only until the authoritative order batch. The
@@ -647,6 +657,7 @@ app.openapi(createOrderRoute, async (c) => {
         contactFields: checkoutAuthority.contactFields,
         shippingCountries: checkoutAuthority.shippingCountries,
         requireFullBillingAddress: checkoutAuthority.checkoutSettings.requireFullBillingAddress,
+        paymentTermsDays: deferredTerms?.days ?? null,
       }),
       checkoutAuthority.taxAuthority,
       { masterSecret: readMasterSecret(c.env) },
@@ -694,14 +705,18 @@ app.openapi(createOrderRoute, async (c) => {
       ),
     );
     // An app may have hidden the chosen method for this cart; readiness and
-    // the merchant's payment policy were already checked above.
-    if (apps.points.has("checkout.payment_methods")) {
+    // the merchant's payment policy were already checked above. An invoice
+    // the merchant lets apps decide must have been allowed by one.
+    const gatedTerms = deferredTerms?.eligibility.gated.has(result.paymentMethod) === true;
+    if (apps.points.has("checkout.payment_methods") || gatedTerms) {
       await assertStorefrontAppPaymentMethod(apps, result.appCart, result.paymentMethod, resolveCartPaymentMethods(
         checkoutAuthority.activePaymentMethods.enabledMethods,
         deliveryPreflight.fulfilment,
         deliveryPreflight.address?.countryCode ?? null,
         paymentProviders,
-      ), paymentProviders);
+        null,
+        deferredTerms ? offeredDeferredMethods(deferredTerms.eligibility) : undefined,
+      ), paymentProviders, deferredTerms?.eligibility.gated);
     }
     // Then the gift cards: still usable, and the amount due the buyer reviewed.
     assertStorefrontGiftCardTenderReviewed(result.giftCardTender, data.expectedAmountDueMinor);

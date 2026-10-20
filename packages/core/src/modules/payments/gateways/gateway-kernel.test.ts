@@ -42,7 +42,7 @@ const isPaymentMethodCurrencyEligible = (id: string, currency: string) => getPay
 describe("built-in gateway registry", () => {
   it("lists the built-in adapters under the ids identity checks know", () => {
     expect(BUILT_IN_PAYMENT_PROVIDERS.gateways.map((gateway) => gateway.id)).toEqual([...BUILT_IN_PAYMENT_GATEWAY_IDS]);
-    expect(BUILT_IN_PAYMENT_PROVIDERS.methodIds()).toEqual(["stripe", "cod"]);
+    expect(BUILT_IN_PAYMENT_PROVIDERS.methodIds()).toEqual(["stripe", "cod", "net_terms"]);
   });
 });
 
@@ -375,7 +375,7 @@ describe("gateway kernel with an app provider's adapter", () => {
     sqlite.prepare(`INSERT INTO order_payments (id, order_id, amount_minor, currency, payment_method, payment_type, status)
       VALUES ('cod_1', 'order_1', 10000, 'BDT', 'cod', 'full', 'succeeded')`).run();
 
-    await expect(processRefund(db, { orderId: "order_1", reason: "x" }, undefined, providers)).rejects.toThrow(/manual COD refund/);
+    await expect(processRefund(db, { orderId: "order_1", reason: "x" }, undefined, providers)).rejects.toThrow(/received the refund by hand/);
     await expect(processRefund(db, { orderId: "order_1", reason: "x", manualSettlementConfirmed: true }, undefined, providers))
       .resolves.toMatchObject({ success: true, manualSettlementRecorded: true });
     expect(state.refunds).toEqual([]);

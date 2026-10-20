@@ -611,6 +611,8 @@ export interface StorefrontOrderCommitPayload {
         paymentStatus: string;
         paidAmountMinor: number;
         balanceDueMinor: number;
+        /** A deferred order's terms (days): it commits unpaid, due that many days from now. */
+        paymentTermsDays?: number | null;
         fulfillmentStatus: string;
         inventoryPool: string;
         inventoryAction: string;

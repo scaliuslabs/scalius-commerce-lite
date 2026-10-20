@@ -64,6 +64,24 @@ describe("manual orders for a named customer", () => {
         expect(owner(id)).toEqual({ customer_id: "cust_guest", account_owner_customer_id: null });
     });
 
+    it("places an invoice order unpaid with its terms and due date, and no cash collection", async () => {
+        const terms = (id: string) => sqlite.prepare(`SELECT payment_method, payment_status, status, payment_terms_days,
+            payment_due_at - created_at AS due_in, inventory_action FROM orders WHERE id = ?`).get(id);
+        const explicit = await createOrder(db, input({ customerId: "cust_account", channel: "app", paymentMethod: "net_terms", paymentTermsDays: 45 }), null);
+        expect(terms(explicit.id)).toEqual({
+            payment_method: "net_terms", payment_status: "unpaid", status: "confirmed",
+            payment_terms_days: 45, due_in: 45 * 86_400, inventory_action: "reserved",
+        });
+        // Without days: the store's net days (the default, net 30).
+        const store = await createOrder(db, input({ customerId: "cust_account", paymentMethod: "net_terms" }), null);
+        expect(terms(store.id)).toMatchObject({ payment_terms_days: 30, due_in: 30 * 86_400 });
+        expect(sqlite.prepare("SELECT COUNT(*) AS n FROM cod_tracking WHERE order_id IN (?, ?)").get(explicit.id, store.id)).toEqual({ n: 0 });
+        // Cash on delivery keeps no terms and its collection record.
+        const cod = await createOrder(db, input({ customerId: "cust_account" }), null);
+        expect(terms(cod.id)).toMatchObject({ payment_method: "cod", payment_terms_days: null, due_in: null });
+        expect(sqlite.prepare("SELECT COUNT(*) AS n FROM cod_tracking WHERE order_id = ?").get(cod.id)).toEqual({ n: 1 });
+    });
+
     it("never links an order by its phone alone, even when an account proved that phone", async () => {
         const { id } = await createOrder(db, input(), null);
         const row = owner(id) as { customer_id: string; account_owner_customer_id: string | null };

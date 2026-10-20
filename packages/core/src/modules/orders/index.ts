@@ -5,6 +5,7 @@ export * from "./browser";
 export * from "./validation";
 export * from "./shipping-address";
 export * from "./billing-address";
+export * from "./payment-terms-columns";
 export * from "./admin/list";
 export * from "./admin/detail";
 export * from "./admin/quote";

@@ -30,8 +30,11 @@ import {
     presentCheckoutRateOptions,
     priceStorefrontCheckout,
     quoteStorefrontGiftCardTender,
+    NO_DEFERRED_ELIGIBILITY,
+    offeredDeferredMethods,
     resolveAppPaymentMethods,
     resolveCartPaymentMethods,
+    resolveDeferredPaymentEligibility,
     storefrontLinePropertiesHashes,
     validateStorefrontDeliveryPreflight,
     validateStorefrontCartItems,
@@ -355,6 +358,16 @@ app.openapi(taxQuoteRoute, async (c) => {
       .map((item) => buildStorefrontTaxAllocationLineId(item.index, item.variantId))),
   });
   const coveredByGiftCards = giftCardTender.appliedTotalMinor > 0 && giftCardTender.amountDueMinor === 0;
+  // Paying later (an invoice) reaches only a signed-in buyer it names: read
+  // only when such a method is enabled and the buyer is signed in.
+  const deferred = coveredByGiftCards
+    ? NO_DEFERRED_ELIGIBILITY
+    : await resolveDeferredPaymentEligibility(db, {
+      enabledMethods: paymentMethods.enabledMethods,
+      netTerms: paymentMethods.netTerms,
+      customerId: sessionCustomer?.customerId ?? null,
+      providers: paymentProviders,
+    });
   // Apps narrow and present the methods checkout allows; gift-card cover is tender, not a method.
   const payment = coveredByGiftCards
     ? { methods: [], changed: false }
@@ -366,7 +379,8 @@ app.openapi(taxQuoteRoute, async (c) => {
       paymentProviders,
       // A gateway that can't charge the order's currency is not offered.
       quote.currencyCode,
-    ), paymentProviders);
+      offeredDeferredMethods(deferred),
+    ), paymentProviders, deferred.gated);
   const toAmount = (minor: number) => fromMinor(minor, quote.decimalPlaces);
   return ok(c, {
     buyerUi: await apps.buyerUi?.({ language: c.req.header("x-storefront-language"), locale: c.req.header("x-storefront-locale"), targets: ["purchase.checkout.contact.render-after", "purchase.checkout.shipping-option-list.render-after", "purchase.checkout.cart-line-list.render-after", "purchase.checkout.payment-method-list.render-after", "purchase.checkout.actions.render-before"], currency: quote.currencyCode, cart: pricing.appCart, attributes, customer: sessionCustomer?.customerId ? { id: sessionCustomer.customerId } : null }) ?? [],

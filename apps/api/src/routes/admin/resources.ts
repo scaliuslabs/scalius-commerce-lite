@@ -16,7 +16,9 @@ import { encodeListCursorOrNull, type ListCursorShape } from "@scalius/shared/pa
 import { fromMinor } from "@scalius/shared/money";
 import { keysetCondition, keysetOrderBy, readListCursor, type KeysetOrder } from "@scalius/core/utils/keyset";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
-import { createOrderSchema } from "@scalius/core/modules/orders";
+import { createOrderSchema, manualOrderPaymentMethodSchema, overdueOrderCondition, recordOrderEvent } from "@scalius/core/modules/orders";
+import { recordOrderPayment } from "@scalius/core/modules/payments";
+import { paymentTermsSchema, RECORDED_PAYMENT_VIAS } from "@scalius/shared/payment-terms";
 import { placeManualOrder } from "./orders/create";
 import { created, ok } from "../../utils/api-response";
 import { errorResponses, conflictResponse, namedSharedSchema, serviceUnavailableResponse, successEnvelope } from "../../schemas/responses";
@@ -26,6 +28,7 @@ import {
   readOrderPaymentRepresentations,
   readOrderRepresentations,
   readOrderShipmentRepresentations,
+  readPaymentRepresentation,
   readProductRepresentations,
   readShipmentRepresentation,
   readVariantRepresentation,
@@ -144,6 +147,9 @@ const ordersQuery = z.object({
   phone: z.string().trim().regex(/^\+[1-9]\d{6,14}$/u, "Use the E.164 number, such as +8801712345678.").optional()
     .openapi({ description: "The buyer's phone in E.164, matched whole. Needs read_customer_phones." }),
   trashed: z.enum(["true", "false"]).optional().openapi({ description: "true lists trashed orders instead." }),
+  overdue: z.enum(["true"]).optional().openapi({
+    description: "true lists only overdue invoices: deferred (net terms) orders whose `paymentTerms.dueAt` has passed with money still due.",
+  }),
 });
 
 app.openapi(createRoute({
@@ -172,6 +178,7 @@ app.openapi(createRoute({
   if (query.orderNumber) where.push(eq(orders.orderNumber, query.orderNumber));
   if (query.email) where.push(sql`lower(trim(${orders.customerEmail})) = ${query.email.toLowerCase()}`);
   if (query.phone) where.push(eq(orders.customerPhone, query.phone));
+  if (query.overdue === "true") where.push(overdueOrderCondition());
   const order = UPDATED_ORDER(orders.updatedAt, orders.id);
   const page = await resourcePage({
     order,
@@ -247,7 +254,12 @@ const orderCreateBody = z.object({
     .nullable().optional().openapi({ description: "Omit or null when the shipping address bills." }),
   shippingMinor: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).openapi({ description: "The delivery charge, in minor units of the store currency." }),
   discountMinor: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional().openapi({ description: "An order discount set by hand, in minor units of the store currency." }),
-  paymentMethod: z.enum(["cod"]).default("cod").openapi({ description: "How the buyer pays: cash on delivery (more methods join this list)." }),
+  paymentMethod: manualOrderPaymentMethodSchema.default("cod").openapi({
+    description: "How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with dashboard.resources.payments.create).",
+  }),
+  paymentTerms: paymentTermsSchema.optional().openapi({
+    description: "An invoice's terms, `{ kind: \"net\", days }` (1 to 365): the order is due that many days after it is placed. Only with `net_terms`; omitted, the store's net days (Settings → Payments).",
+  }),
   attributes: z.record(z.string().max(120), z.string().max(500)).optional().openapi({ description: "Checkout attributes the store's apps declare (`<app id>.<key>`); unknown keys are dropped." }),
   notes: optionalText(500),
   channelSource: z.string().trim().max(64).nullable().optional().openapi({ description: "Where it came in; an app's order defaults to the app's id." }),
@@ -255,6 +267,9 @@ const orderCreateBody = z.object({
 }).strict().refine((value) => Boolean(value.customerId) !== Boolean(value.contact), {
   message: "Send customerId or contact, not both.",
   path: ["customerId"],
+}).refine((value) => !value.paymentTerms || value.paymentMethod === "net_terms", {
+  message: "paymentTerms goes with paymentMethod net_terms.",
+  path: ["paymentTerms"],
 });
 
 /** A UUID the order-create attempt table takes, derived from the caller's Idempotency-Key (random without one). */
@@ -294,7 +309,9 @@ app.openapi(createRoute({
     ? { name: customer.name, email: customer.email ?? null, phone: (customer.phone as string | null) || null }
     : { name: body.contact!.name, email: body.contact!.email ?? null, phone: body.contact!.phone ?? null };
   if (!contact.phone) {
-    throw new ValidationError("A cash-on-delivery order needs the buyer's phone.", { issues: [{ field: body.customerId ? "customerId" : "contact.phone", code: "phone_required" }] });
+    throw new ValidationError(body.paymentMethod === "net_terms"
+      ? "An invoice order needs the buyer's phone."
+      : "A cash-on-delivery order needs the buyer's phone.", { issues: [{ field: body.customerId ? "customerId" : "contact.phone", code: "phone_required" }] });
   }
   const places = getDecimalPlaces((await readStoreCurrency(db)).code);
   const ship = body.shippingAddress ?? null;
@@ -344,6 +361,8 @@ app.openapi(createRoute({
     salesChannelId: body.salesChannelId ?? null,
     ...(body.attributes ? { attributes: body.attributes } : {}),
     channel: appPrincipal ? "app" : "admin",
+    paymentMethod: body.paymentMethod,
+    ...(body.paymentTerms ? { paymentTermsDays: body.paymentTerms.days } : {}),
   });
   if (!parsed.success) {
     throw new ValidationError(parsed.error.issues[0]?.message ?? "Check the order.", { issues: parsed.error.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message })) });
@@ -352,6 +371,69 @@ app.openapi(createRoute({
   const [order] = await readOrderRepresentations(db, [response.id]);
   if (!order) throw new NotFoundError("Order not found");
   return created(c, { order });
+});
+
+const recordPaymentHeaders = z.object({
+  "idempotency-key": idempotencyKeyHeaderSchema.shape["idempotency-key"].unwrap().openapi({
+    description: "Required: one key records one payment; a repeat returns the first result.",
+  }),
+});
+
+const recordPaymentBody = z.object({
+  amountMinor: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER).openapi({
+    description: "What was received, in minor units of the order's `currency`; at most its `balanceDueMinor`.",
+  }),
+  via: z.enum(RECORDED_PAYMENT_VIAS).openapi({ description: "How it was received." }),
+  reference: z.string().trim().max(120).nullable().optional().openapi({ description: "The bank, cheque or transfer reference." }),
+  note: z.string().trim().max(500).nullable().optional(),
+  expectedVersion: z.number().int().min(1).optional().openapi({ description: "The order `version` you read; a different one is refused with 409." }),
+}).strict();
+
+app.openapi(createRoute({
+  operationId: "dashboard.resources.payments.create",
+  method: "post",
+  path: "/orders/{id}/payments",
+  tags: ["App API - Orders"],
+  summary: "Record a payment against an invoice order",
+  description: "Records money received for a deferred (net terms) order: a bank transfer, cheque or cash against its invoice. No provider is called. The order's paid amount and payment status advance in the same write, `payment.updated` (and `order.paid` once nothing is due) follow, and a refund of it is a manual settlement. Send an Idempotency-Key: a repeat returns the first payment.",
+  request: {
+    params: idParam,
+    headers: recordPaymentHeaders,
+    body: { required: true, content: { "application/json": { schema: recordPaymentBody } } },
+  },
+  responses: {
+    201: { description: "The recorded payment", content: { "application/json": { schema: successEnvelope(z.object({ payment: PaymentResource })) } } },
+    ...errorResponses,
+    409: conflictResponse,
+  },
+}), async (c) => {
+  const db = c.get("db");
+  const orderId = c.req.valid("param").id;
+  const body = c.req.valid("json");
+  const appPrincipal = c.get("pluginPrincipal");
+  const user = c.get("user") as { id?: string } | undefined;
+  const recordedBy = appPrincipal ? `app:${appPrincipal.pluginId}` : `staff:${user?.id ?? "unknown"}`;
+  const result = await recordOrderPayment(db, {
+    orderId,
+    amountMinor: body.amountMinor,
+    via: body.via,
+    reference: body.reference ?? null,
+    note: body.note ?? null,
+    recordedBy,
+    requestKey: await scopedRequestKey(c, "dashboard.resources.payments.create", c.req.valid("header")["idempotency-key"]),
+    ...(body.expectedVersion !== undefined ? { expectedVersion: body.expectedVersion } : {}),
+  });
+  if (!result.replayed) {
+    await recordOrderEvent(db, {
+      orderId,
+      kind: "payment_recorded",
+      actorId: user?.id ?? null,
+      data: { amountMinor: body.amountMinor, via: body.via, reference: body.reference ?? null, ...(appPrincipal ? { appId: appPrincipal.pluginId } : {}) },
+    });
+  }
+  const payment = await readPaymentRepresentation(db, result.paymentId);
+  if (!payment) throw new NotFoundError("Payment not found");
+  return created(c, { payment });
 });
 
 async function requireOrderCurrency(c: Context, orderId: string): Promise<string> {

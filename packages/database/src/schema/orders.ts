@@ -160,6 +160,13 @@ export const orders = sqliteTable("orders", {
     paymentIntentId: text("payment_intent_id"),
     paidAmountMinor: integer("paid_amount_minor").notNull().default(0),
     balanceDueMinor: integer("balance_due_minor").notNull().default(0),
+    /**
+     * A deferred (net terms) order's terms in days (`@scalius/shared/payment-terms`,
+     * migration 0161), set once at placement; null for every other order.
+     */
+    paymentTermsDays: integer("payment_terms_days"),
+    /** When a deferred order's payment is due: placement + its terms. Null when not deferred. */
+    paymentDueAt: integer("payment_due_at", { mode: "timestamp" }),
     /** Valid: pending | partial | complete (see FulfillmentStatus enum) */
     fulfillmentStatus: text("fulfillment_status").notNull().default(FulfillmentStatus.PENDING),
     /** Valid: regular | preorder | backorder (see InventoryPool enum) */
@@ -302,6 +309,10 @@ export const orders = sqliteTable("orders", {
         table.paymentStatus,
         table.updatedAt,
     ),
+    // Deferred orders with money due, by due date: the overdue list and to-do.
+    index("orders_payment_due_idx")
+        .on(table.paymentDueAt, table.id)
+        .where(sql`${table.paymentDueAt} IS NOT NULL AND ${table.deletedAt} IS NULL AND ${table.balanceDueMinor} > 0`),
     index("orders_fulfillment_queue_idx").on(
         table.deletedAt,
         table.fulfillmentStatus,

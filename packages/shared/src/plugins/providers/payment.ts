@@ -41,9 +41,11 @@ export type PaymentType = z.infer<typeof paymentTypeSchema>;
 /**
  * How the buyer pays: `card` confirms in the storefront with a client
  * secret (built-in card gateways); `hosted` redirects to the provider's page
- * (wallets, hosted card pages).
+ * (wallets, hosted card pages); `deferred` charges nothing at checkout: the
+ * order commits unpaid with a due date (`dueInDays`) and is paid later
+ * (`@scalius/shared/payment-terms`), its payments arriving as provider events.
  */
-export const PAYMENT_FLOWS = ["card", "hosted"] as const;
+export const PAYMENT_FLOWS = ["card", "hosted", "deferred"] as const;
 export type PaymentFlow = (typeof PAYMENT_FLOWS)[number];
 
 /** A provider's charge limits, in minor units of `currency`. */

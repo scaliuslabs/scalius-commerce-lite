@@ -70,7 +70,7 @@ import {
 import { buildAppDiscountFactInserts } from "../order-kernel";
 import { appObjectCommitStatements, isAppObjectCommitConflict } from "../objects";
 import { orderMarketIdSql } from "../markets";
-import { orderBillingAddressInsertColumns, orderShippingAddressInsertColumns, orderShippingCountry } from "../orders";
+import { deferredOrderColumns, orderBillingAddressInsertColumns, orderShippingAddressInsertColumns, orderShippingCountry } from "../orders";
 import { readCheckoutCopy } from "./store-copy";
 import type { StorefrontOrderCommitReads, SQLiteBatchItem } from "./reads";
 import {
@@ -454,6 +454,9 @@ function buildOrderWriteBatch(
             paymentStatus: od.paymentStatus,
             paidAmountMinor: od.paidAmountMinor,
             balanceDueMinor: od.balanceDueMinor,
+            // A deferred order's terms and due date, as SQL literals (a checked
+            // whole number of days): every other order binds nothing more.
+            ...deferredOrderColumns(od.paymentTermsDays),
             fulfillmentStatus: od.fulfillmentStatus,
             inventoryPool: od.inventoryPool,
             inventoryAction: od.inventoryAction,
