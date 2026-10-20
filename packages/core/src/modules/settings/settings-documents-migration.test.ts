@@ -13,6 +13,7 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { parseSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import { parseSeoReturnPolicySettings } from "@scalius/shared/seo-return-policy";
 import { DEFAULT_CUSTOMER_IDENTITY } from "@scalius/shared/customer-auth-policy";
+import { DEFAULT_NET_TERMS_SETTINGS } from "@scalius/shared/payment-terms";
 
 import { encodeEncryptedCredential, encryptCredentials } from "../../utils/credential-encryption";
 import { getEmailRuntimeSettings } from "../../integrations/email/settings";
@@ -248,6 +249,8 @@ describe.each(["d1", "turso"] as const)("0065 settings documents migration (%s)"
       enabledMethods: ["cod", "stripe"],
       defaultMethod: "stripe",
       hasExplicitEnabledMethods: true,
+      // Net terms (later than 0065) read as their defaults on a store that never saved them.
+      netTerms: DEFAULT_NET_TERMS_SETTINGS,
     });
     expect(await getCapiSettings(db, KEY)).toEqual({
       pixelId: "123456789012345",
@@ -291,6 +294,7 @@ describe.each(["d1", "turso"] as const)("0065 settings documents migration (%s)"
       enabledMethods: ["cod"],
       defaultMethod: "cod",
       hasExplicitEnabledMethods: false,
+      netTerms: DEFAULT_NET_TERMS_SETTINGS,
     });
     expect(await getCapiSettings(db, KEY)).toBeNull();
     await expectCommonSettings(db);
