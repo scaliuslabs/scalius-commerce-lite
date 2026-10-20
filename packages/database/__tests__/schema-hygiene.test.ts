@@ -17,8 +17,10 @@ describe("canonical schema hygiene", () => {
         RETIRED_PRE_CONSOLIDATION_TABLES.has(table));
 
       expect(d1Tables).toEqual(tursoTables);
-      expect(d1Tables).toHaveLength(210);
+      expect(d1Tables).toHaveLength(211);
       expect(d1Tables).toContain("system_kv");
+      // 0165: the app that created a catalogue row, for app-content deletes.
+      expect(d1Tables).toContain("app_resource_owners");
       expect(d1Tables).toContain("conversation_inbox_counts");
       // 0146: the analytics projection keeps facts, sealed day buckets and their seals.
       for (const table of ["product_buyer_public_counts", "conversation_search_state", "analytics_customer_first_sale", "analytics_customer_currency_summary"]) expect(d1Tables).not.toContain(table);

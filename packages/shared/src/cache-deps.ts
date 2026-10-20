@@ -1146,6 +1146,9 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   plugin_cron_runs: PRIVATE,
   // The data-update ledger (0125): platform bookkeeping.
   plugin_migrations: PRIVATE,
+  // App content ownership (0165): which app created a catalogue row, read only
+  // by the admin app-content delete; no public read touches it.
+  app_resource_owners: PRIVATE,
   user: PRIVATE,
   session: PRIVATE,
   account: PRIVATE,
