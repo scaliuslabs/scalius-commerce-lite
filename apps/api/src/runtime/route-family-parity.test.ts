@@ -77,7 +77,8 @@ describe("runtime API route families", () => {
 
   it("uses boundary-safe paths and loads no family for unknown routes", () => {
     expect(classifyRuntimeApiPath("/api/v1/health/")).toBe("probe");
-    expect(classifyRuntimeApiPath("/api/v1/docs/")).toBe("docs");
+    expect(classifyRuntimeApiPath("/api/v1/openapi.json")).toBe("docs");
+    expect(classifyRuntimeApiPath("/api/v1/docs")).toBeNull();
     expect(classifyRuntimeApiPath("/api/v1/")).toBe("public");
     expect(classifyRuntimeApiPath("/api/v1/administer")).toBeNull();
     expect(classifyRuntimeApiPath("/api/v1/authentic")).toBeNull();

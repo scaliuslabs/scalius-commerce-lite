@@ -37,7 +37,7 @@ import {
 } from "@scalius/core/modules/plugins";
 import { pluginDefinitionOf } from "@scalius/shared/plugins/handlers";
 import { BUNDLED_PLUGINS } from "./bundled.gen";
-import type { BundledPluginEntry } from "./loaders/bundled";
+import { loadBundledPlugin, type BundledPluginEntry } from "./loaders/bundled";
 
 export type BundledPluginRegistry = Readonly<Record<string, BundledPluginEntry>>;
 
@@ -52,8 +52,8 @@ export interface BundledSyncResult {
   fxApps: boolean;
 }
 
-async function bundledManifest(entry: BundledPluginEntry): Promise<unknown> {
-  const definition = pluginDefinitionOf(await entry.load());
+async function bundledManifest(pluginId: string, entry: BundledPluginEntry): Promise<unknown> {
+  const definition = pluginDefinitionOf(await loadBundledPlugin(pluginId, entry));
   return definition?.manifest;
 }
 
@@ -78,7 +78,7 @@ async function syncOne(
 ): Promise<void> {
   const installation = stored?.installation;
   try {
-    const manifest = await bundledManifest(entry);
+    const manifest = await bundledManifest(pluginId, entry);
     if (!installation) {
       try {
         await installPlugin(db, { manifest, source: "bundled", bundleSha256: entry.sha256 });

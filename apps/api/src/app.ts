@@ -285,7 +285,7 @@ app.route("/setup", authSetupRoutes);
 // Payment routes — session/intent creation is public (storefront)
 app.route("/payment", paymentRoutes);
 
-// Swagger UI and the generated OpenAPI contract
+// The generated OpenAPI contract
 registerDocRoutes(app);
 
 // Register the security scheme for the OpenAPI spec

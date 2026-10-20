@@ -156,7 +156,7 @@ that contract; they do not prove equivalent isolation, deployment behavior or
 performance. Bundled code is trusted code in the host Worker; the Dynamic Worker
 has a separate execution boundary. Verify loader-specific behavior separately.
 
-- **Bundled** runs in the API Worker on any plan, from `scalius.plugins.json`. Values crossing the bridge are structured-cloned.
+- **Bundled** runs in the API Worker on any plan, from `scalius.plugins.json`. Values crossing the bridge are structured-cloned. A plain `fetch` from app code is refused as in the sandbox, so `ctx.http.fetch` is the only egress on both loaders.
 - **Sandbox** needs Workers Paid. Each app version runs in its own Dynamic Worker (binding `LOADER`), cached by id, version and SHA-256. It has no network (`globalOutbound: null`), and the CPU limit `limits.cpuMs` within the plan's ceiling.
 
 An installation with `source` `bundled` uses the bundled loader. `registry` and `upload` use the sandbox; they install from the dashboard (see "Install, update and trust"). A Free deploy has no `LOADER` binding, so sandbox calls fail as `unavailable` (provider calls as `misconfigured`). `pnpm plugin sandbox on` and `pnpm run deploy --plugin-sandbox` bind the loader. [docs/FREE-PLAN.md](../../docs/FREE-PLAN.md) owns the plan rules (the sandbox implies `--plan paid`).

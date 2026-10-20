@@ -1,8 +1,9 @@
-import { swaggerUI } from "@hono/swagger-ui";
 import type { RuntimeApiApp } from "./base-app";
 
+// Only the contract is served: the CLI, agents and ops checks read it, and a
+// person opens its URL in any OpenAPI viewer. No documentation page runs
+// script on the dashboard's origin.
 export function registerDocRoutes(app: RuntimeApiApp): void {
-  app.get("/docs", swaggerUI({ url: "/api/v1/openapi.json" }));
   // The contract (3 MB) loads with the first request for it, never with the app.
   app.get("/openapi.json", async (c) => {
     const { OPENAPI_CONTRACT_ETAG, OPENAPI_CONTRACT_JSON } = await import("../generated/openapi-contract.gen");

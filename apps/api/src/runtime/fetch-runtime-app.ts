@@ -51,10 +51,7 @@ export function classifyRuntimeApiPath(pathname: string): RuntimeAppName | null 
     pathname === "/api/v1/readyz" || pathname === "/api/v1/readyz/" ||
     pathname === "/api/v1/meta" || pathname === "/api/v1/meta/"
   ) return "probe";
-  if (
-    pathname === "/api/v1/docs" || pathname === "/api/v1/docs/" ||
-    pathname === "/api/v1/openapi.json"
-  ) return "docs";
+  if (pathname === "/api/v1/openapi.json") return "docs";
   if (matchesPathPrefix(pathname, "/api/v1/admin")) return "admin";
   if (matchesPathPrefix(pathname, "/api/v1/plugins")) return "plugins";
   if (SYSTEM_PREFIXES.some((prefix) => matchesPathPrefix(pathname, prefix))) {

@@ -40,7 +40,7 @@ describe("plugin storefront HTML", () => {
 
   it("lets an app page's forms post only to the app's own routes", () => {
     expect(clean('<form action="/apps/acme.wishlist/toggle" method="post"><input type="hidden" name="productId" value="p1"><button type="submit">Save</button></form>'))
-      .toBe('<form action="/apps/acme.wishlist/toggle" method="post"><input type="hidden" name="productId" value="p1"><button type="submit">Save</button></form>');
+      .toBe('<form action="/apps/acme.wishlist/toggle" method="post" data-sx-form-app="acme.wishlist"><input type="hidden" name="productId" value="p1"><button type="submit">Save</button></form>');
     expect(clean('<form action="/apps/other.app/x" method="post"><button>Go</button></form>')).toBe('<button type="button">Go</button>');
     expect(clean('<form action="/cart/add" method="post"><button>Go</button></form>')).toBe('<button type="button">Go</button>');
     expect(clean('<form action="https://evil.com/steal"><input name="a"></form>')).toBe('<input name="a">');
@@ -119,7 +119,10 @@ describe("app component HTML", () => {
   });
 
   it("lets forms post to store paths only", () => {
-    expect(shown('<form action="/newsletter" method="post"><input type="email" name="email"></form>')).toBe('<form action="/newsletter" method="post"><input type="email" name="email"></form>');
+    expect(shown('<form action="/newsletter" method="post"><input type="email" name="email"></form>')).toBe('<form action="/newsletter" method="post" data-sx-form-app="acme.theme"><input type="email" name="email"></form>');
+    // The owner stamp is the sanitizer's: an app cannot name another app as the drawer of its form.
+    expect(shown('<form action="/apps/b.loyalty/redeem" method="post" data-sx-form-app="b.loyalty"><button type="submit">Go</button></form>'))
+      .toBe('<form action="/apps/b.loyalty/redeem" method="post" data-sx-form-app="acme.theme"><button type="submit">Go</button></form>');
     expect(shown('<form action="https://evil.test/"><input name="q"></form>')).toBe('<input name="q">');
     expect(shown('<form action="//evil.test/"><b>x</b></form>')).toBe("<b>x</b>");
   });
