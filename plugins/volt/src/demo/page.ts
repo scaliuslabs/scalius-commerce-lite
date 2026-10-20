@@ -65,10 +65,10 @@ export async function demoPage(ctx: PluginContext, pack: DemoPack, locale: Plugi
   if (job.kept > 0 && job.mode !== "import") nodes.push(ui.banner("info", w.kept(job.kept)));
   const actions = [
     job.mode === "remove"
-      ? ui.button(w.continue, { route: "demo-remove" }, { tone: "primary" })
-      : ui.button(job.mode === "import" ? w.continue : w.import, { route: "demo-import" }, { tone: "primary", disabled: !busy && records.size >= total }),
+      ? ui.button(w.continue, ui.route("demo-remove"), { tone: "primary" })
+      : ui.button(job.mode === "import" ? w.continue : w.import, ui.route("demo-import"), { tone: "primary", disabled: !busy && records.size >= total }),
     ...(records.size > 0 && job.mode !== "remove"
-      ? [ui.button(w.remove, { route: "demo-remove" }, { tone: "critical", confirm: { title: w.removeTitle, text: w.removeText, confirmLabel: w.remove, destructive: true } })]
+      ? [ui.button(w.remove, ui.route("demo-remove"), { tone: "critical", confirm: { title: w.removeTitle, text: w.removeText, confirmLabel: w.remove, destructive: true } })]
       : []),
   ];
   nodes.push(ui.stack(actions));
