@@ -1,3 +1,4 @@
+import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
 import type { CartRuleError, CartValidationIssue } from "../api/orders";
 import { parseQuotedShippingRate, type QuotedShippingRate } from "./tax-quote-contract";
 
@@ -67,7 +68,7 @@ export function parseTaxQuoteCartIssues(payload: unknown): CartValidationIssue[]
       || typeof requestedQuantity !== "number"
       || !Number.isSafeInteger(requestedQuantity)
       || requestedQuantity < 1
-      || requestedQuantity > 99
+      || requestedQuantity > MAX_LINE_QUANTITY
     ) {
       return [];
     }
