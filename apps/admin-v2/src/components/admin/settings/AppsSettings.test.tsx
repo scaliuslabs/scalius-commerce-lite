@@ -165,7 +165,7 @@ describe("Settings → Apps cards", () => {
   it("offers an installed app's fraud check with its readiness and test", async () => {
     const radar = {
       id: "acme.notify:radar",
-      kind: "fraud",
+      kind: "courier_history",
       pluginId: "acme.notify",
       appName: "Acme Notify",
       name: "Acme Radar",
@@ -181,7 +181,7 @@ describe("Settings → Apps cards", () => {
       ok({ id: "row_radar", name: "Acme Radar", isActive: true, providerType: radar.id }));
     await render(["settings.fraud_checker.view", "settings.fraud_checker.edit"]);
     await vi.waitFor(() => expect(document.body.textContent).toContain("Acme Radar"));
-    expect(sdk.getApiV1AdminSettingsProviders).toHaveBeenCalledWith({ query: { kind: "fraud" } });
+    expect(sdk.getApiV1AdminSettingsProviders).toHaveBeenCalledWith({ query: { kind: "courier_history" } });
 
     await click(button("Acme Radar"));
     const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;

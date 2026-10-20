@@ -17,7 +17,8 @@ export type ServiceItem =
   | { kind: "provider"; id: string; provider: Provider };
 
 function groupOf(kind: string | undefined): ServiceGroup {
-  return kind === "payment" || kind === "courier" || kind === "sms" || kind === "fraud" ? kind : "other";
+  if (kind === "courier_history") return "fraud";
+  return kind === "payment" || kind === "courier" || kind === "sms" ? kind : "other";
 }
 
 /** The group a feature belongs to: the kind of its first provider. */

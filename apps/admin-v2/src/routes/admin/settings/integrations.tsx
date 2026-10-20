@@ -23,7 +23,7 @@ export const Route = createFileRoute("/admin/settings/integrations")({
       queryClient.ensureQueryData(trackingQuery),
       queryClient.ensureQueryData(metaQuery),
       queryClient.ensureQueryData(fraudCheckerProvidersQueryOptions()),
-      queryClient.ensureQueryData(appProvidersQuery("fraud")),
+      queryClient.ensureQueryData(appProvidersQuery("courier_history")),
       queryClient.ensureQueryData(aiAccessQuery),
       queryClient.ensureQueryData(appProvidersQuery("ai")),
       queryClient.ensureQueryData(appProvidersQuery("search")),

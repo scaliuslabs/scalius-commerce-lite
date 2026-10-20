@@ -763,7 +763,7 @@ function FraudCardBody() {
   const appT = useMessages(appProvidersMessages);
   const { data, isError, refetch } = useQuery(fraudCheckerProvidersQueryOptions());
   // Installed apps' fraud providers sit beside the built-in checkers.
-  const apps = useQuery({ ...appProvidersQuery("fraud"), enabled: useProviderPortAccess("fraud").canView }).data ?? [];
+  const apps = useQuery({ ...appProvidersQuery("courier_history"), enabled: useProviderPortAccess("courier_history").canView }).data ?? [];
   if (isError) return <SettingsLoadFailure title={t("fraudTitle")} onRetry={refetch} />;
   if (!data) return <SettingsCardLoading />;
   // Each installed app provider, saved or not, and saved checkers whose app is gone.

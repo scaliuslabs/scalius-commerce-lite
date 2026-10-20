@@ -6,7 +6,7 @@
 import type { SettingsNavKey } from "../settings/settings-nav";
 
 export const APP_PROVIDER_KINDS = [
-  "payment", "courier", "sms", "email", "fraud", "tax", "translation", "ai",
+  "payment", "courier", "sms", "email", "courier_history", "tax", "translation", "ai",
   "messaging", "push", "search", "address", "fx", "identity",
 ] as const;
 export type AppProviderKind = (typeof APP_PROVIDER_KINDS)[number];
@@ -17,7 +17,7 @@ export const PROVIDER_CAPABILITY: Readonly<Record<AppProviderKind, { page: Setti
   courier: { page: "shipping", to: "/admin/settings/shipping", card: "couriers" },
   sms: { page: "notifications", to: "/admin/settings/notifications", card: "sending" },
   email: { page: "notifications", to: "/admin/settings/notifications", card: "sending" },
-  fraud: { page: "integrations", to: "/admin/settings/integrations", card: "fraudCheck" },
+  courier_history: { page: "integrations", to: "/admin/settings/integrations", card: "fraudCheck" },
   tax: { page: "taxes", to: "/admin/settings/taxes", card: "taxCollection" },
   translation: { page: "languages", to: "/admin/settings/languages", card: "machineTranslation" },
   ai: { page: "integrations", to: "/admin/settings/integrations", card: "aiDrafting" },
