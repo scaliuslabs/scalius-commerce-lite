@@ -110,6 +110,10 @@ language with the merchant's edits).
   merchant's policy and readiness already allow; apps never add or enable
   one. The quote returns `paymentMethods`; placement refuses a hidden method
   (`payment_method_unavailable`). Gift-card cover is tender, never hidden.
+  A `gated` method (the invoice, when the merchant lets apps decide who pays
+  later) is offered only when an app answers `{ op: "allow" }`; without an
+  answer it stays hidden, and a hide wins over an allow
+  (`payment-terms.ts`, payments README "Deferred payment").
 - **Order risk is an event, not a function** (a decision inside a request is
   a function, a provider of a capability is a port, a reaction after commit
   is an event). An app handles `order.created` and calls the host actions

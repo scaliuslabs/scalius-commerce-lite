@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
+import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
 import { translate } from "~/i18n";
 import { orderFormMessages, type OrderFormMessageKey } from "~/i18n/order-form";
 import type { BuyerPriceRange } from "~/lib/price-range";
@@ -166,7 +167,7 @@ export const orderFormSchema = z.object({
           .number()
           .int()
           .min(1, msg("quantityMin"))
-          .max(99, msg("quantityMax")),
+          .max(MAX_LINE_QUANTITY, msg("quantityMax")),
         price: z.number().min(0),
         name: z.string().optional(),
         variantLabel: z.string().nullable().optional(),
@@ -205,6 +206,10 @@ export const orderFormSchema = z.object({
   sourceChoice: z.enum(ORDER_SOURCE_CHOICES).nullable().optional(),
   /** The name typed for an "Other" source. */
   sourceName: z.string().optional(),
+  /** New orders: cash on delivery (the default) or an invoice paid later (Payment card). */
+  paymentMethod: z.enum(["cod", "net_terms"]).optional(),
+  /** An invoice's days; null: the store's net days. */
+  paymentTermsDays: z.number().int().min(1).max(365).nullable().optional(),
 }).superRefine((values, context) => {
   if (values.sourceChoice === "other") {
     const name = values.sourceName?.trim() ?? "";

@@ -71,8 +71,28 @@ describe("net terms through storefront checkout", () => {
   });
   afterEach(() => sqlite.close());
 
+  /** Statements of the last request's commit batch (the one that inserts the order). */
+  let batchSizes: number[] = [];
   async function call(path: string, body: unknown, session?: string) {
-    const env = { ...ENV, DB: binding } as unknown as Env;
+    batchSizes = [];
+    const metered = new Proxy(binding, {
+      get(target, property, receiver) {
+        if (property === "batch") {
+          return (statements: D1PreparedStatement[]) => {
+            const sql = statements.map((statement) => {
+              const prepared = statement as unknown as { statement?: string; query?: string };
+              return String(prepared.statement ?? prepared.query ?? "");
+            });
+            // The commit: the batch that inserts the order.
+            if (sql.some((text) => text.startsWith('insert into "orders"'))) batchSizes.push(statements.length);
+            return target.batch(statements);
+          };
+        }
+        const value = Reflect.get(target, property, receiver);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const env = { ...ENV, DB: metered } as unknown as Env;
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
     app.onError((error, c) => {
       const { body: errorBody, status } = errorResponseFromError(error);
@@ -184,6 +204,22 @@ describe("net terms through storefront checkout", () => {
     const events = sqlite.prepare("SELECT topic, data FROM event_outbox WHERE topic IN ('payment.updated', 'order.paid') ORDER BY rowid").all() as Array<{ topic: string; data: string }>;
     expect(events.map((event) => event.topic)).toEqual(["payment.updated", "payment.updated", "order.paid"]);
     expect(JSON.parse(events[0]!.data)).toMatchObject({ orderId: id, provider: "manual", status: "succeeded" });
+  });
+
+  it("commits an invoice in no more statements and rows than cash on delivery", async () => {
+    const changes = () => (sqlite.prepare("SELECT total_changes() AS n").get() as { n: number }).n;
+    const measure = async (method: string) => {
+      const before = changes();
+      const placed = await place(TAGGED, method);
+      expect(placed.status, JSON.stringify(placed.json)).toBe(201);
+      return { commitStatements: batchSizes[0] ?? 0, rowsWritten: changes() - before };
+    };
+    const cod = await measure("cod");
+    const invoice = await measure("net_terms");
+    // The invoice adds two SQL-literal columns to the order insert and writes no COD tracking row
+    // (measured: cash on delivery 14 statements / 49 rows changed, the invoice 13 / 44).
+    expect(invoice.commitStatements).toBe(cod.commitStatements - 1);
+    expect(invoice.rowsWritten).toBeLessThan(cod.rowsWritten);
   });
 
   it("refuses a recorded payment on an order that is not an invoice", async () => {

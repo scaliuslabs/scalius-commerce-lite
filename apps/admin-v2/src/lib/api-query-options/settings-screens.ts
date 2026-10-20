@@ -32,6 +32,7 @@ import type {
 } from "@scalius/core/modules/notifications/browser";
 import type { getCountries } from "@scalius/shared/customer-utils";
 import { parseMerchantCspSources } from "@scalius/shared/security-csp";
+import type { NetTermsSettings } from "@scalius/shared/payment-terms";
 import { countClearableAgentConnections, listAgentConnections } from "~/components/admin/agent-access/api";
 import type { GatewayStatus } from "~/components/admin/settings/payment-method-outcome";
 import type { PolicyKind } from "~/components/admin/settings/policy-templates";
@@ -88,6 +89,8 @@ export type PaymentMethods = {
   activeDefaultMethod?: string;
   gateways: ApiResult<typeof getApiV1AdminSettingsPaymentMethods>["gateways"];
   gatewayStatus: Partial<Record<string, GatewayStatus>>;
+  /** The invoice's net days and who may pay by it (used while `net_terms` is on). */
+  netTerms: NetTermsSettings;
 };
 
 export const checkoutFlowQuery = {

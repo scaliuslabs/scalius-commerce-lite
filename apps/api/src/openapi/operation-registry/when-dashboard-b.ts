@@ -89,7 +89,7 @@ export const DASHBOARD_WHEN_B: Readonly<Record<string, string>> = {
   "dashboard.orders.invoice_issue": "Use when issuing a numbered invoice for an order.",
   "dashboard.orders.invoice_print": "Use when producing a printable invoice for an order.",
   "dashboard.orders.items": "Use when reading an order's line items with product details.",
-  "dashboard.orders.list": "Use when finding orders: by number, status, unfulfilled/unshipped, unpaid, date or customer.",
+  "dashboard.orders.list": "Use when finding orders: by number, status, unfulfilled/unshipped, unpaid, overdue invoices (view=overdue), date or customer.",
   "dashboard.orders.mark_delivered": "Use when a paid order your own rider delivered should be marked delivered.",
   "dashboard.orders.notification_resend": "Use when resending an order message the customer says they did not get.",
   "dashboard.orders.notification_retry": "Use when retrying a failed order notification.",

@@ -5,6 +5,8 @@ import { deliveryShipments, orderDiscountAllocations, orders, orderItems } from 
 import { type OrderAppFactRow, resolveOrderAppFacts, selectOrderAppFactRows } from "../order-kernel";
 import { formatMoney, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
+import { dateLocale, formatDateTime } from "@scalius/shared/locale-format";
+import { currentStoreTimeZone } from "../../utils/store-time-zone";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { formatBdMobile } from "@scalius/shared/phone-input";
 import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
@@ -103,6 +105,8 @@ async function readOrderFacts(db: Database, orderId: string) {
     paymentMethod: orders.paymentMethod,
     paymentStatus: orders.paymentStatus,
     balanceDueMinor: orders.balanceDueMinor,
+    paymentTermsDays: orders.paymentTermsDays,
+    paymentDueAt: orders.paymentDueAt,
     currencyCode: orders.currencyCode,
     currencyDecimalPlaces: orders.currencyDecimalPlaces,
     subtotalAmountMinor: orders.subtotalAmountMinor,
@@ -312,6 +316,15 @@ export async function readOrderMessageContext(input: OrderMessageInput, db: Data
   else if (order.paymentStatus === "paid") payment = { state: "paid" };
   else if (order.paymentMethod === "cod") {
     payment = { state: "cod", due: money ? money(Math.max(0, order.balanceDueMinor)) : null, partiallyPaid: order.paymentStatus === "partial" };
+  } else if (order.paymentTermsDays !== null && order.paymentDueAt) {
+    // An invoice: what is left and the day it is due, in the store's language and time zone.
+    payment = {
+      state: "invoice",
+      due: money ? money(Math.max(0, order.balanceDueMinor)) : null,
+      dueDate: formatDateTime(order.paymentDueAt, dateLocale(language), { dateStyle: "long", timeZone: currentStoreTimeZone() }),
+      days: order.paymentTermsDays,
+      partiallyPaid: order.paymentStatus === "partial",
+    };
   } else payment = { state: order.paymentStatus === "partial" ? "partially_paid" : "not_completed" };
 
   // Account orders open in the account; guests verify on the public order page.

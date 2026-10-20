@@ -72,6 +72,8 @@ export function formatOrderSuccessPaymentMethod(
       return copy.cashOnDeliveryText;
     case "stripe":
       return copy.orderReceiptPaymentMethodCardText;
+    case "net_terms":
+      return copy.invoicePaymentText;
     // SSLCommerz, the Bangladesh pack's (stored as `sslcommerz` before it moved there).
     case "sslcommerz":
     case SSLCOMMERZ_GATEWAY_ID:

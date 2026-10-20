@@ -437,7 +437,7 @@ describe("/buy/[slug]", () => {
 
     const response = await GET({
       params: { slug: "cotton-panjabi" },
-      url: new URL("https://storefront.example.test/buy/cotton-panjabi?qty=1000"),
+      url: new URL("https://storefront.example.test/buy/cotton-panjabi?qty=1000001"),
     } as never);
 
     expect(response.status).toBe(307);

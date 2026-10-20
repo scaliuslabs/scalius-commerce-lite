@@ -215,6 +215,13 @@ const customerOrderDetailSchema = z.object({
     pricesIncludeTax: z.boolean(),
     paymentStatus: z.string(),
     paymentMethod: z.string(),
+    /** An invoice's terms (pay later by its due date); null when the order is not paid by invoice. */
+    paymentTerms: z.object({
+      kind: z.literal("net"),
+      days: z.number().int(),
+      dueAt: z.string(),
+      overdue: z.boolean(),
+    }).nullable(),
     fulfillmentStatus: z.string(),
     expectedDelivery: z.string().nullable(),
     /** The shipping-address snapshot; null fields when nothing ships (pickup, service-only or digital orders). */

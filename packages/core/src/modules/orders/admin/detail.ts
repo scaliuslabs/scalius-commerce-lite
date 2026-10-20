@@ -2,6 +2,7 @@ import { readCheckoutAttributes } from "@scalius/shared/plugins/buyer-ui";
 // The dashboard order detail read.
 import { orderShippingAddressSelection } from "../shipping-address";
 import { orderBillingAddressSelection } from "../billing-address";
+import { presentBuyerPaymentTerms } from "../payment-terms-columns";
 import type { Database } from "@scalius/database/client";
 import {
     orders,
@@ -115,6 +116,8 @@ async function getOrderDetailsOnce(
             ...orderBillingAddressSelection(orders),
             pickupAddress: orders.pickupAddress,
             pickupHours: orders.pickupHours,
+            paymentTermsDays: orders.paymentTermsDays,
+            paymentDueAt: orders.paymentDueAt,
             version: orders.version,
             createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`,
@@ -300,12 +303,16 @@ async function getOrderDetailsOnce(
         codDeliveryAttempts: _codDeliveryAttempts,
         returnedValueMinor: _returnedValueMinor,
         refundedMinor: _refundedMinor,
+        paymentTermsDays: _paymentTermsDays,
+        paymentDueAt: _paymentDueAt,
         ...publicOrder
     } = omitOrderEditEvidence(order);
     const shopAmount = (minor: number) => fromMinor(minor, getDecimalPlaces(shopCurrency));
 
     return {
         ...publicOrder,
+        // An invoice's terms, due date and whether it is overdue (null when not paid by invoice).
+        paymentTerms: presentBuyerPaymentTerms(order),
         attributes: readCheckoutAttributes(order.attributes),
         ...orderMoneyAmounts(order),
         moneyChain: order.currencyCode && shopCurrency && order.currencyCode !== shopCurrency

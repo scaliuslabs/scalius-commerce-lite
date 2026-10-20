@@ -116,6 +116,26 @@ describe("customer order email composition and delivery", () => {
     expect(reads.some((query) => query.includes('from "products"'))).toBe(false);
   });
 
+  const invoiceOrder = () => sqlite.exec(`UPDATE orders SET payment_method = 'net_terms', payment_terms_days = 30,
+    payment_due_at = CAST(strftime('%s', '2026-10-31 06:00:00') AS INTEGER)`);
+
+  it("tells an invoice buyer what is due and by when", async () => {
+    // Placed on net 30, due 31 October 2026 (Dhaka).
+    invoiceOrder();
+    await send("order_created");
+    expect(message().visible).toContain("Invoice, net 30. ৳258 due by October 31, 2026.");
+  });
+
+  it("tells an invoice buyer what is due and by when in Bangla", async () => {
+    invoiceOrder();
+    activateLanguage("bn-BD");
+    await send("order_created");
+    const bangla = message().visible;
+    expect(bangla).toContain("ইনভয়েস, ৩০ দিনের মধ্যে পরিশোধ।");
+    expect(bangla).toContain("-এর মধ্যে ৳258 পরিশোধ করুন।");
+    expect(bangla).not.toMatch(/Cash on delivery|ক্যাশ অন ডেলিভারি/);
+  });
+
   it("sends guests to the public order page and never to an account they do not have", async () => {
     await send("order_created");
     const email = message();

@@ -53,6 +53,7 @@ import { assertContactFilterAllowed } from "./contact-access";
 import { handOverOrderLines } from "./orders/fulfilments";
 import { bookOrderShipment, createShipmentBodySchema } from "./orders-status";
 import { idempotencyKeyHeaderSchema, scopedRequestKey } from "./idempotency";
+import { autoFulfilAfterResponse } from "../../background/auto-fulfil";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -423,16 +424,24 @@ app.openapi(createRoute({
     requestKey: await scopedRequestKey(c, "dashboard.resources.payments.create", c.req.valid("header")["idempotency-key"]),
     ...(body.expectedVersion !== undefined ? { expectedVersion: body.expectedVersion } : {}),
   });
+  const payment = await readPaymentRepresentation(db, result.paymentId);
+  if (!payment) throw new NotFoundError("Payment not found");
   if (!result.replayed) {
+    // The timeline shows it in the order's currency (the dashboard words it, like a cash collection).
     await recordOrderEvent(db, {
       orderId,
       kind: "payment_recorded",
       actorId: user?.id ?? null,
-      data: { amountMinor: body.amountMinor, via: body.via, reference: body.reference ?? null, ...(appPrincipal ? { appId: appPrincipal.pluginId } : {}) },
+      data: {
+        amount: fromMinor(body.amountMinor, getDecimalPlaces(payment.currency)),
+        via: body.via,
+        reference: body.reference ?? null,
+        ...(appPrincipal ? { appId: appPrincipal.pluginId } : {}),
+      },
     });
+    // Paid in full settles the order: hand over its automatic lines (downloads, gift cards).
+    if (result.paymentStatus === "paid") await autoFulfilAfterResponse(c, db, orderId, "recorded-payment");
   }
-  const payment = await readPaymentRepresentation(db, result.paymentId);
-  if (!payment) throw new NotFoundError("Payment not found");
   return created(c, { payment });
 });
 

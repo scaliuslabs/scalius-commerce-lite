@@ -10872,6 +10872,12 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 pricesIncludeTax: boolean;
                 paymentStatus: string;
                 paymentMethod: string;
+                paymentTerms: {
+                    kind: 'net';
+                    days: number;
+                    dueAt: string;
+                    overdue: boolean;
+                } | null;
                 fulfillmentStatus: string;
                 expectedDelivery: string | null;
                 shippingAddress: string | null;
@@ -18365,6 +18371,12 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                 paymentStatus: string;
                 paidAmount: number;
                 balanceDue: number;
+                paymentTerms: {
+                    kind: 'net';
+                    days: number;
+                    dueAt: string;
+                    overdue: boolean;
+                } | null;
                 giftCardTenders: Array<OrderGiftCardTender>;
                 createdAt: string | null;
                 updatedAt: string | null;
@@ -42161,6 +42173,12 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
         data: {
             enabledMethods: Array<string>;
             defaultMethod: string;
+            netTerms: {
+                dueInDays: 7 | 15 | 30 | 60;
+                customerTags: Array<string>;
+                segmentIds: Array<string>;
+                appsDecide: boolean;
+            };
             revision: number;
             activeMethods?: Array<string>;
             activeDefaultMethod?: string;
@@ -42204,7 +42222,30 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
                     checkoutVisible?: boolean;
                     environment?: 'test' | 'live' | 'mixed' | 'unknown' | 'not_applicable';
                 };
+                net_terms: {
+                    configured: boolean;
+                    enabled: boolean;
+                    usable?: boolean;
+                    missingFields?: Array<string>;
+                    credentialErrors?: Array<string>;
+                    blockedReason?: string;
+                    providerEnabled?: boolean;
+                    checkoutSelected?: boolean;
+                    checkoutVisible?: boolean;
+                    environment?: 'test' | 'live' | 'mixed' | 'unknown' | 'not_applicable';
+                };
                 [key: string]: {
+                    configured: boolean;
+                    enabled: boolean;
+                    usable?: boolean;
+                    missingFields?: Array<string>;
+                    credentialErrors?: Array<string>;
+                    blockedReason?: string;
+                    providerEnabled?: boolean;
+                    checkoutSelected?: boolean;
+                    checkoutVisible?: boolean;
+                    environment?: 'test' | 'live' | 'mixed' | 'unknown' | 'not_applicable';
+                } | {
                     configured: boolean;
                     enabled: boolean;
                     usable?: boolean;
@@ -42251,6 +42292,12 @@ export type PostApiV1AdminSettingsPaymentMethodsData = {
         enabledMethods: Array<string>;
         defaultMethod: string;
         expectedRevision: number;
+        netTerms?: {
+            dueInDays: 7 | 15 | 30 | 60;
+            customerTags: Array<string>;
+            segmentIds: Array<string>;
+            appsDecide: boolean;
+        };
     };
     path?: never;
     query?: never;
@@ -49904,9 +49951,9 @@ export type GetApiV1AdminOrdersData = {
          */
         status?: string;
         /**
-         * Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).
+         * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).
          */
-        view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup';
+        view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue';
         /**
          * Only orders with an open customer request
          */
@@ -50299,9 +50346,9 @@ export type GetApiV1AdminOrdersExportData = {
          */
         status?: string;
         /**
-         * Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).
+         * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).
          */
-        view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup';
+        view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue';
         openRequest?: 'true' | 'false';
         /**
          * Comma-separated order ids (at most 100): export exactly these orders, e.g. the current page or a selection.
@@ -51084,9 +51131,9 @@ export type PostApiV1AdminOrdersArchiveData = {
                 search?: string;
                 status?: string;
                 /**
-                 * Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).
+                 * Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).
                  */
-                view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup';
+                view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned' | 'ready_for_pickup' | 'overdue';
                 openRequest?: boolean;
                 paymentStatus?: 'unpaid' | 'partial' | 'paid' | 'partially_refunded' | 'refunded' | 'failed';
                 paymentMethod?: string;
@@ -51661,6 +51708,12 @@ export type GetApiV1AdminOrdersByIdResponses = {
             discountAmount: number;
             currencyCode: string | null;
             currencyDecimalPlaces: number | null;
+            paymentTerms: {
+                kind: 'net';
+                days: number;
+                dueAt: string;
+                overdue: boolean;
+            } | null;
             moneyChain?: {
                 shopCurrencyCode: string;
                 /**

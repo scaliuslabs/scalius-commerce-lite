@@ -120,6 +120,50 @@ describe("the stable app API's resources", () => {
     expect((await call("POST", "/resources/orders", { body: { ...body, items: [{ ...body.items[0], unitPriceMinor: 45_050 }] } })).status).toBe(400);
   });
 
+  it("places an app's invoice order on net terms, records its payments once per key, and lists it while overdue", async () => {
+    sqlite.exec(`INSERT INTO customers (id, name, phone, email, origin) VALUES ('cust_b2b', 'Trader Ltd', '+8801744444444', 'buyer@trader.test', 'merchant')`);
+    principal = { pluginId: "acme.b2b", protectedData: new Set() };
+    const placed = await call("POST", "/resources/orders", {
+      body: {
+        customerId: "cust_b2b",
+        items: [{ productId: "p_tea", variantId: "v_tea", quantity: 2 }],
+        shippingAddress: { countryCode: "IN", line1: "12 MG Road", locality: "Bengaluru", adminArea: "KA", postalCode: "560001" },
+        shippingMinor: 0,
+        paymentMethod: "net_terms",
+        paymentTerms: { kind: "net", days: 45 },
+      },
+      headers: { "Idempotency-Key": "po-7781 invoice" },
+    });
+    expect({ status: placed.status, error: placed.body.error }).toEqual({ status: 201, error: undefined });
+    const order = placed.body.data.order;
+    expect(order).toMatchObject({ paymentMethod: "net_terms", paymentStatus: "unpaid", balanceDueMinor: 100_000, paymentTerms: { kind: "net", days: 45 } });
+    expect(Date.parse(order.paymentTerms.dueAt) - Date.parse(order.createdAt)).toBe(45 * 86_400_000);
+    // Terms go with an invoice only.
+    expect((await call("POST", "/resources/orders", { body: { customerId: "cust_b2b", items: [{ productId: "p_tea", variantId: "v_tea", quantity: 1 }], shippingAddress: { countryCode: "IN", line1: "1", locality: "B", adminArea: "KA", postalCode: "560001" }, shippingMinor: 0, paymentTerms: { kind: "net", days: 30 } } })).status).toBe(400);
+
+    const overdue = async () => (await call("GET", "/resources/orders?overdue=true")).body.data.orders.map((row: { id: string }) => row.id);
+    expect(await overdue()).toEqual([]);
+    sqlite.prepare("UPDATE orders SET payment_due_at = unixepoch() - 60 WHERE id = ?").run(order.id);
+    expect(await overdue()).toEqual([order.id]);
+
+    // The key is required, and one key records one payment.
+    expect((await call("POST", `/resources/orders/${order.id}/payments`, { body: { amountMinor: 40_000, via: "bank_transfer" } })).status).toBe(400);
+    const record = (amountMinor: number, key: string) => call("POST", `/resources/orders/${order.id}/payments`, {
+      body: { amountMinor, via: "bank_transfer", reference: "TRX-77" },
+      headers: { "Idempotency-Key": key },
+    });
+    const first = await record(40_000, "payment po-7781 #1");
+    expect({ status: first.status, error: first.body.error }).toEqual({ status: 201, error: undefined });
+    expect(first.body.data.payment).toMatchObject({ orderId: order.id, method: "manual", status: "succeeded", amountMinor: 40_000, currency: "BDT" });
+    expect((await record(40_000, "payment po-7781 #1")).body.data.payment.id).toBe(first.body.data.payment.id);
+    expect((await record(70_000, "payment po-7781 #2")).status).toBe(400);
+    expect((await record(60_000, "payment po-7781 #3")).status).toBe(201);
+    const paid = await call("GET", `/resources/orders/${order.id}`);
+    expect(paid.body.data).toMatchObject({ paymentStatus: "paid", paidMinor: 100_000, balanceDueMinor: 0 });
+    expect(await overdue()).toEqual([]);
+    expect(sqlite.prepare("SELECT kind FROM order_events WHERE order_id = ? AND kind = 'payment_recorded'").all(order.id)).toHaveLength(2);
+  });
+
   it("refuses a status change made on a stale order version, changing nothing", async () => {
     const stale = await call("PUT", "/orders/ord_a/status", { body: { status: "cancelled", expectedVersion: 7 } });
     expect(stale.status).toBe(409);

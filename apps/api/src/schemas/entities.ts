@@ -542,6 +542,13 @@ export const orderDetailSchema = z.object({
   discountAmount: z.number(),
   currencyCode: z.string().nullable(),
   currencyDecimalPlaces: z.number().int().nullable(),
+  /** An invoice's terms (pay later): due `dueAt`, `overdue` once it passes with money due. Null when not paid by invoice. */
+  paymentTerms: z.object({
+    kind: z.literal("net"),
+    days: z.number().int(),
+    dueAt: z.string().openapi({ format: "date-time" }),
+    overdue: z.boolean(),
+  }).nullable(),
   /**
    * The order's money chain when the buyer paid in a market's own currency
    * (MARKETS-DESIGN D3, step 6): its shop-currency amounts at the locked

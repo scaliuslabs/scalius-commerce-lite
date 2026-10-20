@@ -74,6 +74,14 @@ export function describeTimelineEvent(
       };
     case "cod_returned":
       return { text: t("timeline.codReturned"), detail: null };
+    case "payment_recorded":
+      return {
+        text: t("timeline.paymentRecorded", {
+          amount: money(count(data.amount)),
+          via: orderDetailLabel(t, "netTerms.via.", text(data.via) ?? "other"),
+        }),
+        detail: text(data.reference) ? t("timeline.paymentReference", { reference: text(data.reference)! }) : null,
+      };
     case "refund_recorded":
       return {
         text: t("timeline.refunded", { amount: money(count(data.amount)) }),

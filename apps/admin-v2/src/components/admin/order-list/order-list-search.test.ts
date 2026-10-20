@@ -84,7 +84,7 @@ describe("order list search", () => {
   });
 
   it("accepts every server-side tab and the partially refunded payment filter", () => {
-    for (const view of ["unfulfilled", "ready_for_pickup", "unpaid", "cod_to_collect", "delivery_failed", "returned"]) {
+    for (const view of ["unfulfilled", "ready_for_pickup", "unpaid", "overdue", "cod_to_collect", "delivery_failed", "returned"]) {
       expect(validateOrderSearch({ view }).view).toBe(view);
     }
     expect(validateOrderSearch({ paymentStatus: "partially_refunded" }).paymentStatus).toBe("partially_refunded");

@@ -49,6 +49,8 @@ import {
 import { OrderFormProvider } from "./order-form/OrderFormContext";
 import { CustomerInfoSection, ORDER_ADDRESS_IDS } from "./order-form/CustomerInfoSection";
 import { SalesChannelSection } from "./order-form/SalesChannelSection";
+import { PaymentSection } from "./order-form/PaymentSection";
+import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
 import { OrderItemsSection } from "./order-form/OrderItemsSection";
 import { SummarySection } from "./order-form/SummarySection";
 import { PRODUCT_SEARCH_INPUT_ID } from "./order-form/ProductSearch";
@@ -209,6 +211,10 @@ function toCreateOrderInput(values: OrderFormValues, requestKey: string, billing
     ...(values.shippingMethodId ? { shippingMethodId: values.shippingMethodId } : {}),
     // Where a staff-created order came in (Facebook, walk-in, …); the server stores it as a slug.
     ...(channelSource ? { channelSource } : {}),
+    // An invoice paid later: its days, or the store's net days when none is picked.
+    ...(values.paymentMethod === "net_terms"
+      ? { paymentMethod: "net_terms" as const, ...(values.paymentTermsDays ? { paymentTermsDays: values.paymentTermsDays } : {}) }
+      : {}),
     items: values.items.map((item) => ({
       productId: item.productId,
       variantId: item.variantId,
@@ -323,6 +329,8 @@ function OrderEditor({
       shippingMethodKind: null,
       sourceChoice: null,
       sourceName: "",
+      paymentMethod: "cod",
+      paymentTermsDays: null,
       ...defaultValues,
       customerPhone: normalizeAdminPhone(defaultValues?.customerPhone ?? ""),
     },
@@ -341,6 +349,7 @@ function OrderEditor({
     quoteMethodId,
     quoteMethodKind,
     quoteCountry,
+    quotePaymentMethod,
   ] = useWatch({
     control: form.control,
     name: [
@@ -353,6 +362,7 @@ function OrderEditor({
       "shippingMethodId",
       "shippingMethodKind",
       "shippingCountryCode",
+      "paymentMethod",
     ],
   });
   // Bangladesh is taxed by City/Thana/Area; another country by its country (until tax regions).
@@ -382,6 +392,8 @@ function OrderEditor({
       shippingCharge: Number(quoteShipping) || 0,
       discountAmount: quoteDiscount == null ? null : Number(quoteDiscount),
       ...(quoteMethodId ? { shippingMethodId: quoteMethodId } : {}),
+      // An invoice need not be a cash amount (cash on delivery collects whole taka).
+      ...(!isEdit && quotePaymentMethod === "net_terms" ? { paymentMethod: "net_terms" as const } : {}),
       // A new order that ships nothing is taxed in the billing country staff entered.
       ...(!isEdit && !needsAddress && billing.touched && billing.draft.countryCode
         ? {
@@ -391,7 +403,7 @@ function OrderEditor({
         }
         : {}),
     }),
-    [abroad, billing, isEdit, needsAddress, quoteArea, quoteCity, quoteCountry, quoteDiscount, quoteItems, quoteMethodId, quoteShipping, quoteZone],
+    [abroad, billing, isEdit, needsAddress, quoteArea, quoteCity, quoteCountry, quoteDiscount, quoteItems, quoteMethodId, quotePaymentMethod, quoteShipping, quoteZone],
   );
   const currencyDecimalPlaces = getDecimalPlaces(currencyCode);
   const localDiscountLimit = React.useMemo(
@@ -403,7 +415,7 @@ function OrderEditor({
     JSON.stringify(quoteInput) === JSON.stringify(debouncedQuoteInput);
   const hasQuotePrerequisites = (!needsAddress || abroad || Boolean(quoteInput.city && quoteInput.zone))
     && quoteInput.items.length > 0
-    && quoteInput.items.every((item) => Boolean(item.variantId) && item.quantity >= 1 && item.quantity <= 99)
+    && quoteInput.items.every((item) => Boolean(item.variantId) && item.quantity >= 1 && item.quantity <= MAX_LINE_QUANTITY)
     && quoteInput.shippingCharge >= 0
     && (quoteInput.discountAmount ?? 0) >= 0;
   const canRequestQuote = hasQuotePrerequisites && quoteInputIsCurrent;
@@ -750,6 +762,7 @@ function OrderEditor({
                     disabled={isInteractionLocked}
                   />
                 )}
+                {isEdit ? null : <PaymentSection />}
                 {isEdit ? null : <SalesChannelSection />}
               </div>
             </div>

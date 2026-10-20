@@ -98,7 +98,7 @@ describe("OrderItemQuantityInput", () => {
     expect(onQuantityChange).not.toHaveBeenCalled();
   });
 
-  it("keeps a quantity above 99 as typed and explains the limit", async () => {
+  it("keeps a quantity above the one order-line limit as typed and explains the limit", async () => {
     const onQuantityChange = vi.fn();
     await act(async () => root.render(
       <OrderItemQuantityInput
@@ -112,13 +112,13 @@ describe("OrderItemQuantityInput", () => {
     if (!input) throw new Error("Expected quantity input");
 
     await act(async () => input.focus());
-    await act(async () => setInputValue(input, "100"));
-    expect(onQuantityChange).toHaveBeenLastCalledWith(100);
+    await act(async () => setInputValue(input, "1000001"));
+    expect(onQuantityChange).toHaveBeenLastCalledWith(1_000_001);
 
     await act(async () => input.blur());
-    expect(input.value).toBe("100");
+    expect(input.value).toBe("1000001");
     expect(input.getAttribute("aria-invalid")).toBe("true");
-    expect(host.textContent).toContain("Quantity can't be more than 99");
+    expect(host.textContent).toContain("That quantity is more than one line can hold");
   });
 
   it("keeps a quantity above the stock snapshot and its message until it is fixed", async () => {
@@ -160,26 +160,28 @@ describe("OrderItemQuantityInput", () => {
     expect(onQuantityChange).toHaveBeenLastCalledWith(5);
     expect(onValidityChange).toHaveBeenLastCalledWith(true);
 
-    // Past 99, stock is still the tighter limit, so it is the one named.
+    // Stock is the tighter limit, so it is the one named.
     await act(async () => setInputValue(input, "150"));
     expect(host.textContent).toContain("Only 5 units are available for this order.");
-    expect(host.textContent).not.toContain("Quantity can't be more than 99");
+    expect(host.textContent).not.toContain("more than one line can hold");
   });
 
-  it("names the 99 limit when stock allows more", async () => {
+  it("takes a wholesale quantity the stock allows, and names the line limit only above it", async () => {
     await act(async () => root.render(
       <OrderItemQuantityInput
         quantity={3}
         itemName="Studio Lamp"
         onQuantityChange={vi.fn()}
-        maxQuantity={500}
-        maximumExceededMessage="Only 500 available."
+        maxQuantity={5_000_000}
+        maximumExceededMessage="Only 5000000 available."
       />,
     ));
     const input = host.querySelector<HTMLInputElement>("input")!;
     await act(async () => input.focus());
     await act(async () => setInputValue(input, "150"));
-    expect(host.textContent).toContain("Quantity can't be more than 99");
+    expect(input.getAttribute("aria-invalid")).not.toBe("true");
+    await act(async () => setInputValue(input, "1000001"));
+    expect(host.textContent).toContain("That quantity is more than one line can hold");
   });
 
   it("keeps a typed 0 or 21 as typed with its reason instead of jumping to the maximum", async () => {

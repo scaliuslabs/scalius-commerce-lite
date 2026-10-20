@@ -40075,6 +40075,33 @@
                             "paymentMethod": {
                               "type": "string"
                             },
+                            "paymentTerms": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "net"
+                                  ]
+                                },
+                                "days": {
+                                  "type": "integer"
+                                },
+                                "dueAt": {
+                                  "type": "string"
+                                },
+                                "overdue": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "days",
+                                "dueAt",
+                                "overdue"
+                              ]
+                            },
                             "fulfillmentStatus": {
                               "type": "string"
                             },
@@ -40240,6 +40267,7 @@
                             "pricesIncludeTax",
                             "paymentStatus",
                             "paymentMethod",
+                            "paymentTerms",
                             "fulfillmentStatus",
                             "expectedDelivery",
                             "shippingAddress",
@@ -65968,6 +65996,33 @@
                             "balanceDue": {
                               "type": "number"
                             },
+                            "paymentTerms": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "net"
+                                  ]
+                                },
+                                "days": {
+                                  "type": "integer"
+                                },
+                                "dueAt": {
+                                  "type": "string"
+                                },
+                                "overdue": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "days",
+                                "dueAt",
+                                "overdue"
+                              ]
+                            },
                             "giftCardTenders": {
                               "type": "array",
                               "items": {
@@ -66305,6 +66360,7 @@
                             "paymentStatus",
                             "paidAmount",
                             "balanceDue",
+                            "paymentTerms",
                             "giftCardTenders",
                             "createdAt",
                             "updatedAt",
@@ -146250,6 +146306,67 @@
                         "defaultMethod": {
                           "type": "string"
                         },
+                        "netTerms": {
+                          "type": "object",
+                          "properties": {
+                            "dueInDays": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    7
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    15
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    30
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    60
+                                  ]
+                                }
+                              ]
+                            },
+                            "customerTags": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 40
+                              },
+                              "maxItems": 20
+                            },
+                            "segmentIds": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 128
+                              },
+                              "maxItems": 10
+                            },
+                            "appsDecide": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "dueInDays",
+                            "customerTags",
+                            "segmentIds",
+                            "appsDecide"
+                          ],
+                          "additionalProperties": false
+                        },
                         "revision": {
                           "type": "integer",
                           "minimum": 0
@@ -146462,11 +146579,64 @@
                                 "configured",
                                 "enabled"
                               ]
+                            },
+                            "net_terms": {
+                              "type": "object",
+                              "properties": {
+                                "configured": {
+                                  "type": "boolean"
+                                },
+                                "enabled": {
+                                  "type": "boolean"
+                                },
+                                "usable": {
+                                  "type": "boolean"
+                                },
+                                "missingFields": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "credentialErrors": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "blockedReason": {
+                                  "type": "string"
+                                },
+                                "providerEnabled": {
+                                  "type": "boolean"
+                                },
+                                "checkoutSelected": {
+                                  "type": "boolean"
+                                },
+                                "checkoutVisible": {
+                                  "type": "boolean"
+                                },
+                                "environment": {
+                                  "type": "string",
+                                  "enum": [
+                                    "test",
+                                    "live",
+                                    "mixed",
+                                    "unknown",
+                                    "not_applicable"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "configured",
+                                "enabled"
+                              ]
                             }
                           },
                           "required": [
                             "stripe",
-                            "cod"
+                            "cod",
+                            "net_terms"
                           ],
                           "additionalProperties": {
                             "type": "object",
@@ -146525,6 +146695,7 @@
                       "required": [
                         "enabledMethods",
                         "defaultMethod",
+                        "netTerms",
                         "revision",
                         "gateways",
                         "gatewayStatus"
@@ -146664,6 +146835,67 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 0
+                  },
+                  "netTerms": {
+                    "type": "object",
+                    "properties": {
+                      "dueInDays": {
+                        "anyOf": [
+                          {
+                            "type": "number",
+                            "enum": [
+                              7
+                            ]
+                          },
+                          {
+                            "type": "number",
+                            "enum": [
+                              15
+                            ]
+                          },
+                          {
+                            "type": "number",
+                            "enum": [
+                              30
+                            ]
+                          },
+                          {
+                            "type": "number",
+                            "enum": [
+                              60
+                            ]
+                          }
+                        ]
+                      },
+                      "customerTags": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 40
+                        },
+                        "maxItems": 20
+                      },
+                      "segmentIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        },
+                        "maxItems": 10
+                      },
+                      "appsDecide": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "dueInDays",
+                      "customerTags",
+                      "segmentIds",
+                      "appsDecide"
+                    ],
+                    "additionalProperties": false
                   }
                 },
                 "required": [
@@ -173266,12 +173498,13 @@
                 "cod_to_collect",
                 "delivery_failed",
                 "returned",
-                "ready_for_pickup"
+                "ready_for_pickup",
+                "overdue"
               ],
-              "description": "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet)."
+              "description": "Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet)."
             },
             "required": false,
-            "description": "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).",
+            "description": "Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).",
             "name": "view",
             "in": "query"
           },
@@ -174231,7 +174464,7 @@
           "maxRequestBytes": 1048576,
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
-          "when": "Use when finding orders: by number, status, unfulfilled/unshipped, unpaid, date or customer.",
+          "when": "Use when finding orders: by number, status, unfulfilled/unshipped, unpaid, overdue invoices (view=overdue), date or customer.",
           "dryRun": "none",
           "confirmation": "none"
         },
@@ -174674,12 +174907,13 @@
                 "cod_to_collect",
                 "delivery_failed",
                 "returned",
-                "ready_for_pickup"
+                "ready_for_pickup",
+                "overdue"
               ],
-              "description": "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet)."
+              "description": "Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet)."
             },
             "required": false,
-            "description": "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).",
+            "description": "Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).",
             "name": "view",
             "in": "query"
           },
@@ -177566,9 +177800,10 @@
                               "cod_to_collect",
                               "delivery_failed",
                               "returned",
-                              "ready_for_pickup"
+                              "ready_for_pickup",
+                              "overdue"
                             ],
-                            "description": "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet)."
+                            "description": "Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet)."
                           },
                           "openRequest": {
                             "type": "boolean"
@@ -179443,6 +179678,34 @@
                           "type": "integer",
                           "nullable": true
                         },
+                        "paymentTerms": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "net"
+                              ]
+                            },
+                            "days": {
+                              "type": "integer"
+                            },
+                            "dueAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "overdue": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "days",
+                            "dueAt",
+                            "overdue"
+                          ]
+                        },
                         "moneyChain": {
                           "type": "object",
                           "nullable": true,
@@ -180939,6 +181202,7 @@
                         "discountAmount",
                         "currencyCode",
                         "currencyDecimalPlaces",
+                        "paymentTerms",
                         "subtotalAmountMinor",
                         "shippingAmountMinor",
                         "shippingMethodId",

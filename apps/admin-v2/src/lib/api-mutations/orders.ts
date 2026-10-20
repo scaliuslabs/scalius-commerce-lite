@@ -31,6 +31,7 @@ import {
   postApiV1AdminOrdersByIdShipmentsByShipmentIdReconcile,
   postApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknown,
   postApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookup,
+  postApiV1AdminResourcesOrdersByIdPayments,
   postApiV1AdminOrdersByIdTimeline,
   putApiV1AdminOrdersByIdDetails,
   putApiV1AdminOrdersByIdFulfillmentLocation,
@@ -536,6 +537,24 @@ export function useUpdateOrderCod() {
       void onOrderError(queryClient, variables.orderId, err, { banner: false, explainConflict: true });
       if (variables.action === "collected") invalidateOrderInventoryQueries(queryClient);
     },
+  });
+}
+
+/**
+ * Money received against an invoice (net terms): one request key per dialog
+ * opening, so a retry after a lost answer records nothing twice.
+ */
+export function useRecordOrderPayment() {
+  const queryClient = useQueryClient();
+  return useSingleFlightMutation({
+    mutationFn: ({ orderId, requestKey, ...body }: { orderId: string; requestKey: string } &
+      ApiBody<typeof postApiV1AdminResourcesOrdersByIdPayments>) =>
+      apiData(postApiV1AdminResourcesOrdersByIdPayments({ path: { id: orderId }, headers: { "idempotency-key": requestKey }, body })),
+    onSuccess: (_data, variables) => {
+      invalidateOrder(queryClient, variables.orderId);
+      toast.success(msg("toast.paymentRecorded"));
+    },
+    onError: (err, variables) => void onOrderError(queryClient, variables.orderId, err, { banner: false, explainConflict: true }),
   });
 }
 

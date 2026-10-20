@@ -129,13 +129,20 @@ function normalize(value: string | null | undefined): string {
 }
 
 /**
- * Every payment method except cash on delivery and a gift-card-paid order is
- * an online gateway (a gift card settles at commit: nothing to confirm or
- * retry): a built-in id or an app provider's `<plugin id>:<provider id>`.
+ * Every payment method except cash on delivery, the store's invoice and a
+ * gift-card-paid order is an online gateway (a gift card settles at commit:
+ * nothing to confirm or retry): a built-in id or an app provider's
+ * `<plugin id>:<provider id>`. An app's own invoice is told apart by the
+ * order's `paymentTerms` (`isPaidLater`).
  */
 function isOnlinePaymentMethod(paymentMethod: string | null | undefined): boolean {
   const method = normalize(paymentMethod);
-  return isPaymentMethodIdShape(method) && method !== "cod" && method !== GIFT_CARD_PAYMENT_METHOD;
+  return isPaymentMethodIdShape(method) && method !== "cod" && method !== GIFT_CARD_PAYMENT_METHOD && method !== "net_terms";
+}
+
+/** Paid later by invoice: placed now, nothing to confirm or retry online. */
+function isPaidLater(order: { paymentMethod?: string | null; paymentTerms?: OrderReceipt["paymentTerms"] }): boolean {
+  return normalize(order.paymentMethod) === "net_terms" || Boolean(order.paymentTerms);
 }
 
 /** Paid before anything is handed over: online, or entirely by gift card. */
@@ -153,7 +160,7 @@ export function getOrderSuccessStateKind(
   order: Pick<
     OrderReceipt,
     "status" | "paymentMethod" | "paymentStatus" | "paidAmount"
-  >,
+  > & Pick<Partial<OrderReceipt>, "paymentTerms">,
 ): OrderSuccessStateKind {
   const orderStatus = normalize(order.status);
   const paymentStatus = normalize(order.paymentStatus);
@@ -169,7 +176,7 @@ export function getOrderSuccessStateKind(
     return "payment_issue";
   }
 
-  if (!isOnlinePaymentMethod(order.paymentMethod)) {
+  if (!isOnlinePaymentMethod(order.paymentMethod) || isPaidLater(order)) {
     if (NON_FINAL_ORDER_STATUSES.has(orderStatus)) return "payment_pending";
     return ACTIVE_UPDATED_ORDER_STATUSES.has(orderStatus) ? "order_updated" : "order_placed";
   }
@@ -457,7 +464,7 @@ export function getOrderSuccessNextSteps(
 }
 
 export function shouldClearCheckoutCartForOrder(
-  order: Pick<OrderReceipt, "status" | "paymentMethod" | "paymentStatus" | "paidAmount">,
+  order: Pick<OrderReceipt, "status" | "paymentMethod" | "paymentStatus" | "paidAmount"> & Pick<Partial<OrderReceipt>, "paymentTerms">,
 ): boolean {
   const orderStatus = normalize(order.status);
   const paymentStatus = normalize(order.paymentStatus);
@@ -471,7 +478,7 @@ export function shouldClearCheckoutCartForOrder(
   ) {
     return false;
   }
-  if (!isOnlinePaymentMethod(order.paymentMethod)) return true;
+  if (!isOnlinePaymentMethod(order.paymentMethod) || isPaidLater(order)) return true;
   return ACCEPTED_PAYMENT_STATUSES.has(paymentStatus) || Number(order.paidAmount ?? 0) > 0;
 }
 

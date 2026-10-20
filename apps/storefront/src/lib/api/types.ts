@@ -832,6 +832,8 @@ export interface OrderReceipt extends OrderFulfilmentFacts {
   status: string;
   paymentMethod: string | null;
   paymentStatus: string;
+  /** An invoice's terms: paid later by `dueAt`; null or absent when the order is not paid by invoice. */
+  paymentTerms?: { kind: "net"; days: number; dueAt: string; overdue: boolean } | null;
   paidAmount: number;
   balanceDue: number;
   createdAt: string | null;

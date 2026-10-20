@@ -40,6 +40,8 @@ interface MessageCopy {
   partiallyPaid: string;
   /** Cash on delivery: what is left to pay at the door (`due` null when amounts are unavailable). */
   cod: (due: string | null, partiallyPaid: boolean) => string;
+  /** An invoice (net terms): what is left to pay and the date it is due by. */
+  invoice: (due: string | null, dueDate: string, days: number, partiallyPaid: boolean) => string;
   paymentNotCompleted: string;
   deliveryAddress: string;
   deliveryMethod: string;
@@ -136,6 +138,8 @@ const EN: MessageCopy = {
   partiallyPaid: "Partially paid",
   cod: (due, partiallyPaid) =>
     `${partiallyPaid ? "Partially paid." : "Cash on delivery."} ${due ? `${due} due on delivery.` : "Payment is due on delivery."}`,
+  invoice: (due, dueDate, days, partiallyPaid) =>
+    `${partiallyPaid ? "Partially paid." : `Invoice, net ${formatNumber(days, "en")}.`} ${due ? `${due} due by ${dueDate}.` : `Payment is due by ${dueDate}.`}`,
   paymentNotCompleted: "Payment not completed",
   deliveryAddress: "Delivery address",
   deliveryMethod: "Delivery method",
@@ -238,6 +242,8 @@ const BN: MessageCopy = {
   partiallyPaid: "আংশিক পরিশোধিত",
   cod: (due, partiallyPaid) =>
     `${partiallyPaid ? "আংশিক পরিশোধিত।" : "ক্যাশ অন ডেলিভারি।"} ${due ? `ডেলিভারির সময় ${due} দিতে হবে।` : "ডেলিভারির সময় টাকা দিতে হবে।"}`,
+  invoice: (due, dueDate, days, partiallyPaid) =>
+    `${partiallyPaid ? "আংশিক পরিশোধিত।" : `ইনভয়েস, ${formatNumber(days, "bn-BD")} দিনের মধ্যে পরিশোধ।`} ${due ? `${dueDate}-এর মধ্যে ${due} পরিশোধ করুন।` : `${dueDate}-এর মধ্যে পরিশোধ করুন।`}`,
   paymentNotCompleted: "পেমেন্ট সম্পন্ন হয়নি",
   deliveryAddress: "ডেলিভারি ঠিকানা",
   deliveryMethod: "ডেলিভারি পদ্ধতি",

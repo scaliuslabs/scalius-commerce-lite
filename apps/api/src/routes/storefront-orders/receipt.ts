@@ -11,7 +11,7 @@ import {
 } from "@scalius/core/modules/customers";
 import { buyerOrderShippingAddress, issueAccountOwnerReceipt, orderShippingAddressSelection } from "@scalius/core/modules/orders";
 import { buyerOrderShippingAddressShape } from "../../schemas/entities";
-import { getBuyerOrderTracking, getCustomerVisibleBalanceDueMinor } from "@scalius/core/modules/orders";
+import { getBuyerOrderTracking, getCustomerVisibleBalanceDueMinor, presentBuyerPaymentTerms } from "@scalius/core/modules/orders";
 import { buyerOrderTrackingSchema } from "../../schemas/order-tracking";
 import {
   findOrderByReference,
@@ -132,6 +132,13 @@ const orderReceiptSchema = z.object({
   paymentStatus: z.string(),
   paidAmount: z.number(),
   balanceDue: z.number(),
+  /** An invoice's terms (pay later by its due date); null when the order is not paid by invoice. */
+  paymentTerms: z.object({
+    kind: z.literal("net"),
+    days: z.number().int(),
+    dueAt: z.string(),
+    overdue: z.boolean(),
+  }).nullable(),
   /** Gift cards still paying for the order, in commit order (released or refunded ones are left out). */
   giftCardTenders: z.array(orderGiftCardTenderSchema),
   createdAt: z.string().nullable(),
@@ -500,6 +507,8 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       status: orders.status,
       paymentMethod: orders.paymentMethod,
       paymentStatus: orders.paymentStatus,
+      paymentTermsDays: orders.paymentTermsDays,
+      paymentDueAt: orders.paymentDueAt,
       fulfillmentStatus: orders.fulfillmentStatus,
       createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
       updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`
@@ -624,6 +633,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       paymentStatus: order.paymentStatus,
       paidAmount: money.paidAmount,
       balanceDue: fromMinor(getCustomerVisibleBalanceDueMinor(order), order.currencyDecimalPlaces),
+      paymentTerms: presentBuyerPaymentTerms(order),
       giftCardTenders,
       createdAt: unixToDate(order.createdAt)?.toISOString() || null,
       updatedAt: unixToDate(order.updatedAt)?.toISOString() || null,

@@ -53,7 +53,7 @@ const paymentStatusQuerySchema = z.enum([
 ]);
 
 const orderListViewQuerySchema = z.enum(ORDER_LIST_VIEWS).openapi({
-    description: "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).",
+    description: "Order tab: unfulfilled, unpaid (money still expected), overdue (invoices past their due date with money due), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).",
 });
 
 const ORDER_LIST_SORTS = ["relevance", "customerName", "totalAmount", "createdAt", "updatedAt"] as const;

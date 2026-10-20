@@ -125,3 +125,36 @@ the presentment currency. No built-in adapter reports settlement yet.
 
 COD is not a gateway: collection is recorded in `cod.ts` and COD refunds are
 confirmed manual settlements.
+
+## Deferred payment (net terms)
+
+`@scalius/shared/payment-terms` is the vocabulary; migration 0161 adds
+`orders.payment_terms_days` and `orders.payment_due_at` (placement + days)
+and a partial index of deferred orders with money due.
+
+- The built-in invoice (`net_terms`, not a gateway) is enabled like cash on
+  delivery in the `payment_methods` document, whose `netTerms` holds the
+  merchant's net days (7/15/30/60) and who may use it: customer tags,
+  segments, or an app's decision. An app's own deferred method is a payment
+  provider declared `flow: "deferred"` with `dueInDays`
+  (`PaymentProviders.isDeferred()` / `declaredTermsDays()`).
+- Eligibility (`checkout/payment-terms.ts`): never a guest; the invoice for a
+  signed-in customer the settings name; with "apps decide" it is `gated` in
+  `checkout.payment_methods` until an app answers `{ op: "allow" }` (fail
+  closed). The tax quote offers it; placement re-checks it and passes the
+  terms in the trusted policy snapshot (a deferred order without them is
+  refused).
+- A deferred order commits `pending`, payment `unpaid`, stock reserved as
+  for cash on delivery, no COD tracking, no advance deposit, no rider cash
+  (`codAmountMinor` 0); it may be marked delivered before it is paid, and
+  completes once paid.
+- `recordOrderPayment()` (`recorded-payment.ts`) records money received
+  against an invoice: an `order_payments` row with `payment_method`
+  `manual` (`RECORDED_PAYMENT_METHOD`) and the order's new paid amount in one
+  guarded batch, idempotent by the caller's key. Its insert emits
+  `payment.updated`, a full payment `order.paid`; a refund of it is a manual
+  settlement (`isManualSettlementMethod`). An app deferred method's own
+  provider events still credit the order through the kernel as for any
+  gateway.
+- Overdue: `overdueOrderCondition()` (orders), the orders list view
+  `overdue`, the stable list's `overdue=true` and Home's to-do.

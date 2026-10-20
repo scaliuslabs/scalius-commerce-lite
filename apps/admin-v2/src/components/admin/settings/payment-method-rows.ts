@@ -8,6 +8,8 @@ import { appPaymentMethodFallbackName } from "~/lib/app-payment-method";
 import type { ChargeCurrencies, GatewayStatus } from "./payment-method-outcome";
 
 export const COD_METHOD = "cod";
+/** The store's invoice: pay later, by its net days (`@scalius/shared/payment-terms`). */
+export const NET_TERMS_METHOD = "net_terms";
 
 /** A gateway as `GET /admin/settings/payment-methods` lists it. */
 export interface PaymentGatewayInfo {
@@ -44,7 +46,7 @@ export interface AppPaymentProvider {
 
 export interface PaymentMethodRow {
   id: string;
-  kind: "cod" | "built_in" | "app";
+  kind: "cod" | "invoice" | "built_in" | "app";
   /** The gateway's or app provider's own name (built-in names also have catalog copy). */
   name: string;
   /** The app's plugin id, for its page under Apps. */
@@ -93,6 +95,7 @@ export function paymentMethodRows(input: {
   const providers = new Map(input.appProviders.map((provider) => [provider.id, provider]));
   const catalog = [
     COD_METHOD,
+    NET_TERMS_METHOD,
     ...input.gateways.map((gateway) => gateway.id),
     ...input.appProviders.map((provider) => provider.id),
   ];
@@ -103,6 +106,19 @@ export function paymentMethodRows(input: {
       return [{
         id,
         kind: "cod",
+        name: id,
+        pluginId: null,
+        appName: null,
+        appIcon: null,
+        canTestConnection: false,
+        chargeCurrencies: "any",
+        status: input.gatewayStatus[id],
+      }];
+    }
+    if (id === NET_TERMS_METHOD) {
+      return [{
+        id,
+        kind: "invoice",
         name: id,
         pluginId: null,
         appName: null,

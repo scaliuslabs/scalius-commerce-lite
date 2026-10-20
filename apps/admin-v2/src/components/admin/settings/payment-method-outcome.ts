@@ -107,6 +107,8 @@ export function getPaymentMethodFlowEligibility(
   method: MethodKey,
   flow: SavedCheckoutFlowProjection,
 ): boolean {
+  // The invoice takes no advance and is never part of the guest cash-only checkout.
+  if (method === "net_terms") return flow.checkoutMode !== "guest_cod_only";
   if (flow.partialPaymentEnabled) {
     if (!Number.isFinite(flow.partialPaymentAmount) || flow.partialPaymentAmount <= 0) return false;
     if (flow.checkoutMode === "guest_cod_only") return false;

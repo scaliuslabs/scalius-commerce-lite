@@ -2,7 +2,7 @@
 // commit and staff/app orders (`@scalius/shared/payment-terms`, migration 0161).
 import { sql, type SQL } from "drizzle-orm";
 import { orders } from "@scalius/database/schema";
-import { isPaymentTermsDays } from "@scalius/shared/payment-terms";
+import { isPaymentOverdue, isPaymentTermsDays } from "@scalius/shared/payment-terms";
 import { ValidationError } from "../../errors";
 
 /**
@@ -33,4 +33,28 @@ export function overdueOrderCondition(nowSeconds?: number): SQL {
     return sql`(${orders.paymentDueAt} IS NOT NULL AND ${orders.deletedAt} IS NULL AND ${orders.balanceDueMinor} > 0
         AND ${orders.paymentDueAt} <= ${now}
         AND ${orders.status} NOT IN (${sql.join(CLOSED_ORDER_STATUSES.map((status) => sql`${status}`), sql`, `)}))`;
+}
+
+/** An invoice's terms as the buyer sees them (receipt, account, emails); null when the order is not deferred. */
+export interface BuyerPaymentTerms {
+    kind: "net";
+    days: number;
+    /** ISO 8601. */
+    dueAt: string;
+    /** Past its due date with money still due. */
+    overdue: boolean;
+}
+
+export function presentBuyerPaymentTerms(order: {
+    paymentTermsDays: number | null;
+    paymentDueAt: Date | null;
+    balanceDueMinor: number;
+}, now: Date = new Date()): BuyerPaymentTerms | null {
+    if (order.paymentTermsDays === null || !order.paymentDueAt) return null;
+    return {
+        kind: "net",
+        days: order.paymentTermsDays,
+        dueAt: order.paymentDueAt.toISOString(),
+        overdue: isPaymentOverdue({ paymentDueAt: order.paymentDueAt, balanceDueMinor: order.balanceDueMinor }, now),
+    };
 }

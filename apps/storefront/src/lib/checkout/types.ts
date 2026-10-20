@@ -50,7 +50,9 @@ export interface GatewayHandler {
 export interface CheckoutConfig {
   gateways: Array<{
     id: string;
-    flow?: "card" | "hosted" | "cod";
+    flow?: "card" | "hosted" | "cod" | "deferred";
+    /** A deferred method's terms (days). */
+    dueInDays?: number;
     testMode?: boolean;
     amountLimits?: {
       currency: string;

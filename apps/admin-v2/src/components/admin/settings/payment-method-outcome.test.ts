@@ -81,6 +81,12 @@ describe("payment method merchant outcome matrix", () => {
     expect(getPaymentMethodFlowEligibility(method, { checkoutMode, partialPaymentEnabled, partialPaymentAmount })).toBe(expected);
   });
 
+  it("offers the invoice everywhere but the guest cash-only checkout, advance or not", () => {
+    expect(getPaymentMethodFlowEligibility("net_terms", { checkoutMode: "all", partialPaymentEnabled: false, partialPaymentAmount: 0 })).toBe(true);
+    expect(getPaymentMethodFlowEligibility("net_terms", { checkoutMode: "gateways_only", partialPaymentEnabled: true, partialPaymentAmount: 200 })).toBe(true);
+    expect(getPaymentMethodFlowEligibility("net_terms", { checkoutMode: "guest_cod_only", partialPaymentEnabled: false, partialPaymentAmount: 0 })).toBe(false);
+  });
+
   it("explains invalid and flow-hidden methods", () => {
     expect(getPaymentMethodFlowExclusionReason("stripe", { checkoutMode: "all", partialPaymentEnabled: true, partialPaymentAmount: 0 }))
       .toBe("advanceInvalid");
