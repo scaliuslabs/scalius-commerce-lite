@@ -478,6 +478,22 @@ describe("MCP surface v2 execution", () => {
       ]);
     });
 
+    it("reports the currency's decimal places for the store resource", async () => {
+      const { loadStoreContext } = await import("./context");
+      const principalOf = (currencyCode: string) => {
+        mocks.dispatchAgentOperation.mockImplementation(async ({ operation }) => result(operation.operationId, 200, {
+          success: true,
+          data: operation.operationId === "dashboard.settings.store_setup_get"
+            ? { needed: false, current: { storeName: "Shop", currencyCode } }
+            : { items: [] },
+        }));
+        return loadStoreContext({ surface: "dashboard", principal: {} as AgentPrincipal, env, ctx: {} as ExecutionContext });
+      };
+      expect(await principalOf("BDT")).toMatchObject({ currency: "BDT", decimals: 2 });
+      expect(await principalOf("JPY")).toMatchObject({ currency: "JPY", decimals: 0 });
+      expect(await principalOf("KWD")).toMatchObject({ currency: "KWD", decimals: 3 });
+    });
+
     it("leaves out facts the grant cannot read and reads nothing for other methods", async () => {
       mocks.authorizeOperation.mockResolvedValue(false);
       expect(await initialize("initialize")).toBe((await initialize("tools/call")));

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { ConfigStore } from "../src/config.js";
 import { runProgram } from "../src/program.js";
-import { startLocalApi, type LocalApi } from "./fixtures/local-api.js";
+import { DEFAULT_STORE, startLocalApi, type LocalApi } from "./fixtures/local-api.js";
 import { createTestRuntime, type TestRuntime } from "./helpers.js";
 
 let api: LocalApi;
@@ -27,6 +27,7 @@ beforeEach(() => {
   api.state.bulkDryRuns.length = 0;
   api.state.bulkRunReads = 0;
   api.state.batchWrites = 0;
+  api.state.store = { ...DEFAULT_STORE };
 });
 
 async function pairedRuntime(options: { tty?: boolean } = {}): Promise<TestRuntime> {
@@ -212,7 +213,7 @@ describe("scalius bulk", () => {
   it("builds the prices body from friendly flags: --set, --percent and --amount, by ids or filter", async () => {
     const set = await pairedRuntime();
     expect(await runProgram(set, ["bulk", "prices", "--ids", "var_1, var_2", "--set", "1500", "--yes"])).toBe(0);
-    expect(bulkBody()).toEqual({ variants: [{ id: "var_1" }, { id: "var_2" }], change: { mode: "set", amountMinor: 1500 } });
+    expect(bulkBody()).toEqual({ variants: [{ id: "var_1" }, { id: "var_2" }], change: { mode: "set", amountMinor: 150000 } });
 
     const percent = await pairedRuntime();
     expect(await runProgram(percent, ["bulk", "prices", "--filter", "category=Shoes", "--percent", "5", "--yes"])).toBe(0);
@@ -220,11 +221,73 @@ describe("scalius bulk", () => {
 
     const amount = await pairedRuntime();
     expect(await runProgram(amount, ["bulk", "prices", "--ids", "var_1", "--amount", "-100", "--yes"])).toBe(0);
-    expect(bulkBody()).toEqual({ variants: [{ id: "var_1" }], change: { mode: "amount", amountMinor: -100 } });
+    expect(bulkBody()).toEqual({ variants: [{ id: "var_1" }], change: { mode: "amount", amountMinor: -10000 } });
 
     const fraction = await pairedRuntime();
     expect(await runProgram(fraction, ["bulk", "prices", "--ids", "var_1", "--percent=-12.5", "--yes"])).toBe(0);
     expect(bulkBody()).toMatchObject({ change: { mode: "percent", percent: -12.5 } });
+  });
+
+  it("takes --set and --amount in the store currency and converts them with its decimal places", async () => {
+    const taka = await pairedRuntime();
+    expect(await runProgram(taka, ["bulk", "prices", "--ids", "var_1", "--set", "1500.5", "--yes"])).toBe(0);
+    expect(bulkBody()).toMatchObject({ change: { mode: "set", amountMinor: 150050 } });
+
+    const cents = await pairedRuntime();
+    expect(await runProgram(cents, ["bulk", "prices", "--ids", "var_1", "--amount", "19.99", "--yes"])).toBe(0);
+    expect(bulkBody()).toMatchObject({ change: { mode: "amount", amountMinor: 1999 } });
+
+    api.state.store = { name: "Tokyo", currency: "JPY", decimals: 0, timeZone: "Asia/Tokyo" };
+    const yen = await pairedRuntime();
+    expect(await runProgram(yen, ["bulk", "prices", "--ids", "var_1", "--set", "1500", "--yes"])).toBe(0);
+    expect(bulkBody()).toMatchObject({ change: { mode: "set", amountMinor: 1500 } });
+
+    api.state.store = { name: "Kuwait", currency: "KWD", decimals: 3, timeZone: "Asia/Kuwait" };
+    const dinar = await pairedRuntime();
+    expect(await runProgram(dinar, ["bulk", "prices", "--ids", "var_1", "--set", "2.5", "--yes"])).toBe(0);
+    expect(bulkBody()).toMatchObject({ change: { mode: "set", amountMinor: 2500 } });
+  });
+
+  it("falls back to the currency's own decimals when the store does not report them", async () => {
+    api.state.store = { name: "Old API", currency: "JPY", timeZone: "Asia/Tokyo" };
+    const runtime = await pairedRuntime();
+    expect(await runProgram(runtime, ["bulk", "prices", "--ids", "var_1", "--set", "800", "--yes"])).toBe(0);
+    expect(bulkBody()).toMatchObject({ change: { mode: "set", amountMinor: 800 } });
+  });
+
+  it("--minor keeps minor units as the amount, and --percent needs neither", async () => {
+    const minor = await pairedRuntime();
+    expect(await runProgram(minor, ["bulk", "prices", "--ids", "var_1", "--set", "150000", "--minor", "--yes"])).toBe(0);
+    expect(bulkBody()).toMatchObject({ change: { mode: "set", amountMinor: 150000 } });
+    expect(api.requests.filter((request) => request.rpcMethod === "resources/read")).toEqual([]);
+
+    const percent = await pairedRuntime();
+    expect(await runProgram(percent, ["bulk", "prices", "--ids", "var_1", "--percent", "5", "--yes"])).toBe(0);
+    expect(api.requests.filter((request) => request.rpcMethod === "resources/read")).toEqual([]);
+  });
+
+  it("refuses an amount the currency cannot hold, or --minor where it means nothing, before writing", async () => {
+    const cases: Array<{ argv: string[]; message: RegExp }> = [
+      { argv: ["bulk", "prices", "--ids", "var_1", "--set", "10.555"], message: /BDT has 2 decimal places/ },
+      { argv: ["bulk", "prices", "--ids", "var_1", "--set", "1,500"], message: /amount in BDT/ },
+      { argv: ["bulk", "prices", "--ids", "var_1", "--set", "-5"], message: /must not be negative/ },
+      { argv: ["bulk", "prices", "--ids", "var_1", "--percent", "5", "--minor"], message: /--minor goes with/ },
+      { argv: ["bulk", "tags", "--ids", "cus_1", "--add", "VIP", "--minor"], message: /--minor goes with/ },
+    ];
+    for (const { argv, message } of cases) {
+      const runtime = await pairedRuntime();
+      expect(await runProgram(runtime, argv)).toBe(2);
+      expect(JSON.parse(runtime.stderrText()).error.message).toMatch(message);
+    }
+    expect(api.state.bulkWrites).toEqual([]);
+  });
+
+  it("says --minor is needed when the store does not report a currency", async () => {
+    api.state.store = { name: "Odd", currency: "", timeZone: "UTC" };
+    const runtime = await pairedRuntime();
+    expect(await runProgram(runtime, ["bulk", "prices", "--ids", "var_1", "--set", "10", "--yes"])).toBe(5);
+    expect(JSON.parse(runtime.stderrText())).toMatchObject({ error: { code: "store_currency_unknown", hint: expect.stringContaining("--minor") } });
+    expect(api.state.bulkWrites).toEqual([]);
   });
 
   it("builds the stock, tags and the other bodies", async () => {
@@ -288,7 +351,18 @@ describe("scalius bulk", () => {
       input: { variants: [{ id: "var_1" }, { id: "var_2" }], change: { mode: "percent", percent: 5 }, dryRun: true },
     }]);
     expect(api.state.bulkWrites).toEqual([]);
-    expect(JSON.parse(runtime.stdoutText())).toMatchObject({ ok: true, dryRun: true, written: false });
+    expect(JSON.parse(runtime.stdoutText())).toMatchObject({ ok: true, dryRun: true, written: false, currency: { code: "BDT", decimals: 2 } });
+  });
+
+  it("a prices dry run names the currency and the change in it, in text and JSON", async () => {
+    const terminal = await pairedRuntime({ tty: true });
+    expect(await runProgram(terminal, ["bulk", "prices", "--ids", "var_1", "--set", "1500", "--dry-run"])).toBe(11);
+    expect(terminal.stdoutText()).toContain("Currency: BDT (2 decimal places); set every price to 1500.00 BDT.");
+    expect(api.state.bulkDryRuns.at(-1)!.input).toMatchObject({ change: { mode: "set", amountMinor: 150000 }, dryRun: true });
+
+    const percent = await pairedRuntime({ tty: true });
+    expect(await runProgram(percent, ["bulk", "prices", "--ids", "var_1", "--percent", "5", "--dry-run"])).toBe(11);
+    expect(percent.stdoutText()).toContain("Currency: BDT (2 decimal places); change every price by 5%.");
   });
 
   it("a gated bulk change: 428 with the server's summary, then the identical request with the token and the same Idempotency-Key", async () => {

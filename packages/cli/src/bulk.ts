@@ -1,5 +1,6 @@
 import { emit, profileFor, readPage, write, type OutputOptions } from "./agent.js";
 import { CliError } from "./errors.js";
+import { amountToMinor, formatMinor, readStoreMoney, type StoreMoney } from "./money.js";
 import { getIndexedOperations } from "./openapi.js";
 import { writeDiagnostic } from "./output.js";
 import type { IndexedOperation, Runtime, StructuredInput } from "./types.js";
@@ -40,12 +41,14 @@ export interface BulkOptions {
   input?: StructuredInput;
   ids?: string;
   filter?: string;
-  /** prices: set every price to this amount (minor units). */
+  /** prices: set every price to this amount (store currency; minor units with `minor`). */
   set?: string;
   /** prices: change every price by this percent. */
   percent?: string;
-  /** prices: add (negative: take off) this many minor units. */
+  /** prices: add (negative: take off) this amount (store currency; minor units with `minor`). */
   amount?: string;
+  /** prices: --set and --amount are minor units, not the store currency. */
+  minor?: boolean;
   /** stock: `variantId=quantity,...` */
   items?: string;
   /** stock: the quantity for every --ids SKU. */
@@ -118,16 +121,37 @@ function selection(options: BulkOptions, filterKeys: Record<string, "string" | "
   return { ids, ...(options.filter === undefined ? {} : { filter: parseFilter(options.filter, filterKeys) }) };
 }
 
-function priceChange(options: BulkOptions): Record<string, unknown> {
+/** True when the price change says an amount of money that the store's currency must convert (not --minor). */
+function convertsMoney(options: BulkOptions): boolean {
+  return !options.minor && (options.set !== undefined || options.amount !== undefined);
+}
+
+/** `--set` and `--amount` are amounts in the store currency (1500 = 1,500.00 BDT); `--minor` says they are already minor units. */
+function priceChange(options: BulkOptions, money: StoreMoney | undefined): Record<string, unknown> {
   const chosen = [options.set, options.percent, options.amount].filter((value) => value !== undefined);
-  if (chosen.length !== 1) throw invalid("Say how to change the prices with exactly one of --set <minor units>, --percent <n> or --amount <minor units>.");
-  if (options.set !== undefined) {
-    const amountMinor = numberFlag("set", options.set, true);
+  if (chosen.length !== 1) throw invalid("Say how to change the prices with exactly one of --set <amount>, --percent <n> or --amount <amount>.");
+  if (options.percent !== undefined) return { mode: "percent", percent: numberFlag("percent", options.percent, false) };
+  const flag = options.set !== undefined ? "set" : "amount";
+  const text = (options.set ?? options.amount)!;
+  let amountMinor: number;
+  if (options.minor) {
+    amountMinor = numberFlag(flag, text, true);
+  } else {
+    if (!money) {
+      throw new CliError(5, "store_currency_unknown", "The store did not report its currency, so the CLI cannot convert the amount.", undefined, {
+        hint: `Give the amount in minor units with --minor (150000 is 1,500.00 in a 2-decimal currency).`,
+      });
+    }
+    try {
+      amountMinor = amountToMinor(text, money, flag, { signed: flag === "amount" });
+    } catch (error) {
+      throw invalid(error instanceof Error ? error.message : String(error));
+    }
+  }
+  if (flag === "set") {
     if (amountMinor < 1) throw invalid("--set must be a price above 0.");
     return { mode: "set", amountMinor };
   }
-  if (options.percent !== undefined) return { mode: "percent", percent: numberFlag("percent", options.percent, false) };
-  const amountMinor = numberFlag("amount", options.amount!, true);
   if (amountMinor === 0) throw invalid("--amount must not be 0.");
   return { mode: "amount", amountMinor };
 }
@@ -153,11 +177,11 @@ function choice<T extends string>(flag: string, value: string | undefined, allow
   return value as T;
 }
 
-function bodyFor(kind: BulkKind, options: BulkOptions): Record<string, unknown> {
+function bodyFor(kind: BulkKind, options: BulkOptions, money: StoreMoney | undefined): Record<string, unknown> {
   switch (kind) {
     case "prices": {
       const { ids, filter } = selection(options, PRODUCT_FILTER_KEYS, "SKU ids");
-      return { ...(filter ? { filter } : { variants: ids.map((id) => ({ id })) }), change: priceChange(options) };
+      return { ...(filter ? { filter } : { variants: ids.map((id) => ({ id })) }), change: priceChange(options, money) };
     }
     case "stock": {
       const items = stockItems(options);
@@ -183,19 +207,38 @@ function bodyFor(kind: BulkKind, options: BulkOptions): Record<string, unknown> 
   }
 }
 
-const FRIENDLY_FLAGS = ["ids", "filter", "set", "percent", "amount", "items", "quantity", "location", "reason", "add", "remove", "status", "channels", "action"] as const;
+const FRIENDLY_FLAGS = ["ids", "filter", "set", "percent", "amount", "items", "quantity", "location", "reason", "add", "remove", "status", "channels", "action", "minor"] as const;
 
 /** The exact `{body}` the kind's operation takes: from the flags, or the raw --input. */
-export function bulkBody(kind: BulkKind, options: BulkOptions): StructuredInput {
+export function bulkBody(kind: BulkKind, options: BulkOptions, money?: StoreMoney): StructuredInput {
   if (options.input) {
-    const used = FRIENDLY_FLAGS.filter((flag) => options[flag] !== undefined);
+    const used = FRIENDLY_FLAGS.filter((flag) => options[flag] !== undefined && options[flag] !== false);
     if (used.length > 0) throw invalid(`Pass either --input or the friendly flags, not both (got --${used.join(", --")}).`);
     if (options.input.body === undefined || options.input.path || options.input.query) throw invalid("--input for a bulk change is {\"body\": {...}} only.");
     if (options.dryRun && isRecord(options.input.body)) return { body: { ...options.input.body, dryRun: true } };
     return options.input;
   }
-  const body = bodyFor(kind, options);
+  if (options.minor && (kind !== "prices" || (options.set === undefined && options.amount === undefined))) {
+    throw invalid("--minor goes with bulk prices --set or --amount: it says the amount is in minor units.");
+  }
+  const body = bodyFor(kind, options, money);
   return { body: options.dryRun ? { ...body, dryRun: true } : body };
+}
+
+/** The dry run's currency line: the code, and what the change means in it (the server's before and after are minor units). */
+function pricePreview(input: StructuredInput, money: StoreMoney | undefined): { note?: string; fields?: Record<string, unknown> } {
+  if (!money) return {};
+  const body = isRecord(input.body) ? input.body : {};
+  const change = isRecord(body.change) ? body.change : {};
+  const amount = typeof change.amountMinor === "number" ? formatMinor(change.amountMinor, money) : undefined;
+  const what = change.mode === "set" && amount ? `set every price to ${amount}`
+    : change.mode === "amount" && amount ? `change every price by ${amount}`
+      : change.mode === "percent" && typeof change.percent === "number" ? `change every price by ${change.percent}%`
+        : undefined;
+  return {
+    note: `Currency: ${money.code} (${money.decimals} decimal places)${what ? `; ${what}` : ""}. Before and after amounts below are minor units (${10 ** money.decimals} = 1 ${money.code}).`,
+    fields: { currency: { code: money.code, decimals: money.decimals } },
+  };
 }
 
 function runIdOf(data: unknown): string | undefined {
@@ -211,13 +254,17 @@ export async function bulk(runtime: Runtime, output: OutputOptions, kind: BulkKi
       hint: `Update the store's API, or run the change per record: scalius search "${kind}" and scalius write with --dry-run first.`,
     });
   }
-  const input = bulkBody(kind, options);
+  // Prices are said in the store's currency: read it once to convert --set and
+  // --amount, and to name it in the dry run (a failed read only costs the label).
+  const money = kind === "prices" && !options.input && (convertsMoney(options) || options.dryRun) ? await readStoreMoney(runtime, profile) : undefined;
+  const input = bulkBody(kind, options, money);
   const outcome = await write(runtime, output, operation.id, {
     input,
     dryRun: options.dryRun,
     yes: options.yes,
     confirmToken: options.confirmToken,
     print: !options.wait || options.dryRun,
+    ...(options.dryRun && kind === "prices" ? { preview: pricePreview(input, money) } : {}),
   });
   if (options.dryRun) return outcome.code;
 
