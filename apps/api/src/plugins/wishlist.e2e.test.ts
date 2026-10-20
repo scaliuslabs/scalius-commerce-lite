@@ -17,6 +17,8 @@ import { activatePlugin, installPlugin, requirePluginInstallation } from "@scali
 import { hashCustomerSessionToken } from "@scalius/core/modules/customers";
 import { parsePluginUiDocument } from "@scalius/shared/plugins";
 import { sanitizePluginHtml } from "@scalius/shared/plugins/html";
+import { APP_FORM_TOKEN_PURPOSE, appFormToken } from "@scalius/shared/plugins/app-form";
+import { deriveRuntimeSecret } from "@scalius/shared/runtime-secrets";
 import { createRuntimeApiApp } from "../runtime/base-app";
 import { BUNDLED_PLUGINS } from "./bundled.gen";
 import { PluginHost } from "./host";
@@ -25,6 +27,7 @@ import { pluginTestCtx, pluginTestEnv } from "./testing/fixtures";
 import { manifest as wishlistManifest } from "./testing/apps/wishlist/src/index";
 
 const SESSION_KEY = "wishlist-e2e-session-hash-key-0123456789";
+const MASTER = "wishlist-e2e-master-secret-0123456789abcdef0123456789";
 
 describe("acme.wishlist end to end", { timeout: 30_000 }, () => {
   let sqlite: DatabaseSync;
@@ -51,7 +54,7 @@ describe("acme.wishlist end to end", { timeout: 30_000 }, () => {
   beforeEach(async () => {
     let binding: D1Database;
     ({ sqlite, db, binding } = createSqliteD1Database());
-    env = pluginTestEnv(binding, { CUSTOMER_SESSION_HASH_KEY: SESSION_KEY });
+    env = pluginTestEnv(binding, { CUSTOMER_SESSION_HASH_KEY: SESSION_KEY, SCALIUS_SECRET: MASTER });
     sqlite.exec(`
       INSERT INTO user (id, name, email, email_verified, role, is_super_admin) VALUES ('owner', 'Owner', 'owner@shop.test', 1, 'admin', 1);
       INSERT INTO session (id, user_id, token, expires_at, two_factor_verified) VALUES ('ses_owner', 'owner', 'tok_owner', unixepoch() + 3600, 1);
@@ -77,11 +80,34 @@ describe("acme.wishlist end to end", { timeout: 30_000 }, () => {
       body: "productId=p_linen",
     })).toMatchObject({ status: 401, json: { navigate: "/account" } });
 
+    // A signed-in form post without the platform's form token (a cross-site
+    // page) is refused before the app runs: nothing is stored.
+    const token = await appFormToken(await deriveRuntimeSecret(MASTER, APP_FORM_TOKEN_PURPOSE), "acme.wishlist", "buyer-session");
+    expect(await call("/api/v1/plugins/acme.wishlist/public/toggle", {
+      method: "POST",
+      headers: { ...proxied("application/json"), "content-type": "application/x-www-form-urlencoded" },
+      body: "productId=p_linen",
+    })).toMatchObject({ status: 403, json: { error: { code: "FORM_EXPIRED" } } });
+    // The same without JavaScript: a page in the store layout.
+    expect((await call("/api/v1/plugins/acme.wishlist/public/toggle", {
+      method: "POST",
+      headers: { ...proxied("text/html"), "content-type": "application/x-www-form-urlencoded" },
+      body: `productId=p_linen&_scalius_form=${"0".repeat(64)}`,
+    }))).toMatchObject({ status: 403, json: { page: { title: "Reload the page" } } });
+    // Another app's token is not this app's.
+    const otherApp = await appFormToken(await deriveRuntimeSecret(MASTER, APP_FORM_TOKEN_PURPOSE), "acme.other", "buyer-session");
+    expect((await call("/api/v1/plugins/acme.wishlist/public/toggle", {
+      method: "POST",
+      headers: { ...proxied("application/json"), "content-type": "application/x-www-form-urlencoded" },
+      body: `productId=p_linen&_scalius_form=${otherApp}`,
+    })).status).toBe(403);
+    expect(await getObjectRecord(db, "acme.wishlist", "wishes", "cust_buyer:p_linen")).toBeNull();
+
     // The buyer saves it (the app's form, enhanced: JSON back).
     const saved = await call("/api/v1/plugins/acme.wishlist/public/toggle", {
       method: "POST",
       headers: { ...proxied("application/json"), "content-type": "application/x-www-form-urlencoded" },
-      body: "productId=p_linen&returnTo=%2Fproducts%2Flinen-panjabi",
+      body: `productId=p_linen&returnTo=%2Fproducts%2Flinen-panjabi&_scalius_form=${token}`,
     });
     expect(saved).toEqual({ status: 200, json: { pressed: true, message: "Saved to your wishlist." } });
     expect(await getObjectRecord(db, "acme.wishlist", "wishes", "cust_buyer:p_linen")).toMatchObject({ customer_id: "cust_buyer", product_id: "p_linen" });
@@ -121,7 +147,7 @@ describe("acme.wishlist end to end", { timeout: 30_000 }, () => {
     const removed = await call("/api/v1/plugins/acme.wishlist/public/toggle", {
       method: "POST",
       headers: { ...proxied("text/html"), "content-type": "application/x-www-form-urlencoded" },
-      body: "productId=p_linen&returnTo=%2Fproducts%2Flinen-panjabi",
+      body: `productId=p_linen&returnTo=%2Fproducts%2Flinen-panjabi&_scalius_form=${token}`,
     });
     expect(removed.json).toEqual({ redirect: "/products/linen-panjabi" });
     expect(await getObjectRecord(db, "acme.wishlist", "products", "p_linen")).toBeNull();

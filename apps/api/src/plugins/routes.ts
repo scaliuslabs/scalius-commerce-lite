@@ -23,6 +23,14 @@ import { Hono, type Context } from "hono";
 import type { Database } from "@scalius/database/client";
 import { getActivePluginInstallation, maskPluginLogText, type PluginInstallation } from "@scalius/core/modules/plugins";
 import { PLUGIN_ID_PATTERN, PLUGIN_SCOPES, PLUGIN_URL_NAME_PATTERN } from "@scalius/shared/plugins";
+import {
+  APP_FORM_TOKEN_FIELD,
+  APP_FORM_TOKEN_PURPOSE,
+  appFormSessionOfCookie,
+  isCrossSiteSendableEncoding,
+  verifyAppFormToken,
+} from "@scalius/shared/plugins/app-form";
+import { deriveRuntimeSecret, readMasterSecret } from "@scalius/shared/runtime-secrets";
 import type { PluginRouteRequest } from "@scalius/plugin-sdk";
 import { adminAuthMiddleware } from "../middleware/admin-auth";
 import { dashboardOriginGuardMiddleware } from "../middleware/cookie-origin-guard";
@@ -222,6 +230,39 @@ async function proxiedCustomer(c: Context<{ Bindings: Env }>, db: Database): Pro
   }
 }
 
+/**
+ * The platform's form check (`@scalius/shared/plugins/app-form`): an unsafe
+ * proxied request that carries the buyer's session in an encoding a
+ * cross-site page could send must carry this app's form token, which the
+ * storefront put in the page's form. False refuses it before the app runs.
+ */
+export async function appFormVerified(
+  env: Record<string, unknown>,
+  pluginId: string,
+  method: string,
+  cookie: string | null | undefined,
+  contentType: string | null | undefined,
+  body: unknown,
+): Promise<boolean> {
+  if (method === "GET" || method === "HEAD" || method === "OPTIONS") return true;
+  const session = appFormSessionOfCookie(cookie);
+  if (!session || !isCrossSiteSendableEncoding(contentType)) return true;
+  const master = readMasterSecret(env);
+  const token = typeof body === "object" && body !== null ? (body as Record<string, unknown>)[APP_FORM_TOKEN_FIELD] : undefined;
+  if (!master || typeof token !== "string") return false;
+  return verifyAppFormToken(await deriveRuntimeSecret(master, APP_FORM_TOKEN_PURPOSE), pluginId, session, token);
+}
+
+/** The body without the platform's form token (the app never sees it). */
+function withoutFormToken(body: unknown): unknown {
+  if (typeof body !== "object" || body === null || Array.isArray(body) || !(APP_FORM_TOKEN_FIELD in body)) return body;
+  const rest = { ...(body as Record<string, unknown>) };
+  delete rest[APP_FORM_TOKEN_FIELD];
+  return rest;
+}
+
+const FORM_EXPIRED_MESSAGE = "This form has expired. Reload the page and try again.";
+
 export interface PluginRouteDependencies {
   /** Test seam (the host's loader choice). */
   loaderFor?: PluginHostOptions["loaderFor"];
@@ -275,12 +316,22 @@ export async function handlePluginRoute(c: Context<{ Bindings: Env }>, deps: Plu
   if (!parsed.ok) return jsonError(400, "INVALID_JSON", "The request body is not valid JSON.");
   const user = target.surface === "admin" ? (c.get("user") as { id?: string } | undefined) : undefined;
   const proxied = target.surface === "public" && Boolean(c.req.header(PLUGIN_APP_PROXY_HEADER)) && installation.manifest.storefront.proxy;
+  if (proxied && !(await appFormVerified(c.env as unknown as Record<string, unknown>, target.pluginId, method, c.req.header("cookie"), c.req.header("content-type"), parsed.body))) {
+    // A plain form post (a navigation) reads a page in the store layout; the forms enhancer reads the message.
+    if (!(c.req.header("accept") ?? "").toLowerCase().includes("application/json")) {
+      return new Response(JSON.stringify({ page: { title: "Reload the page", html: `<p>${FORM_EXPIRED_MESSAGE}</p>` } }), {
+        status: 403,
+        headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'" },
+      });
+    }
+    return jsonError(403, "FORM_EXPIRED", FORM_EXPIRED_MESSAGE);
+  }
   const request: PluginRouteRequest = {
     method,
     subpath: target.subpath,
     query: queryOf(url),
     headers: filterPluginRequestHeaders(c.req.raw.headers, target.surface),
-    body: parsed.body,
+    body: proxied ? withoutFormToken(parsed.body) : parsed.body,
     rawBody: target.surface === "webhooks" ? raw ?? "" : null,
     staffId: user?.id ?? null,
     customer: proxied ? await proxiedCustomer(c, db) : null,

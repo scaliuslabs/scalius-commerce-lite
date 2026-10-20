@@ -323,6 +323,13 @@ export interface PluginRouteRequest {
    * direct API requests and on every other surface. Use it to key the
    * buyer's own records; read more with `ctx.api` if the app has
    * `customers.view`.
+   *
+   * Forms: a signed-in buyer's form post (`POST`, `PUT`, `PATCH`, `DELETE`
+   * as a form, multipart or text body) reaches the handler only with the
+   * platform's form token verified. The storefront adds the token to every
+   * `<form method="post">` on your proxy, so plain HTML forms work without
+   * JavaScript and need nothing from you; the field is removed from `body`.
+   * JSON requests need no token (a cross-site page cannot send them).
    */
   customer?: { id: string } | null;
 }
