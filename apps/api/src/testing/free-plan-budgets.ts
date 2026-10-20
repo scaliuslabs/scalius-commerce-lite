@@ -57,7 +57,8 @@ export interface Budget {
 export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
   free: {
     "staff-sign-in": { d1Calls: 6, d1Statements: 6, externalFetches: 0, rowsWritten: 4, rowsRead: 8, fullScans: 0 },
-    "staff-sign-up": { d1Calls: 5, d1Statements: 5, externalFetches: 0, rowsWritten: 5, rowsRead: 6, fullScans: 17 },
+    // rowsRead counts the two bundled app rows every real store has (Noor, Bangladesh pack).
+    "staff-sign-up": { d1Calls: 5, d1Statements: 5, externalFetches: 0, rowsWritten: 5, rowsRead: 8, fullScans: 17 },
     "customer-otp-request": { d1Calls: 16, d1Statements: 17, externalFetches: 0, rowsWritten: 9, rowsRead: 20, fullScans: 2 },
     "customer-otp-verify": { d1Calls: 27, d1Statements: 39, externalFetches: 0, rowsWritten: 18, rowsRead: 30, fullScans: 5 },
     "page-home-miss": { d1Calls: 12, d1Statements: 26, externalFetches: 0, rowsWritten: 1, rowsRead: 130, fullScans: 16 },
@@ -86,7 +87,8 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
   },
   paid: {
     "staff-sign-in": { d1Calls: 6, d1Statements: 6, externalFetches: 0, rowsWritten: 4, rowsRead: 8, fullScans: 0 },
-    "staff-sign-up": { d1Calls: 5, d1Statements: 5, externalFetches: 0, rowsWritten: 5, rowsRead: 6, fullScans: 17 },
+    // rowsRead counts the two bundled app rows every real store has (Noor, Bangladesh pack).
+    "staff-sign-up": { d1Calls: 5, d1Statements: 5, externalFetches: 0, rowsWritten: 5, rowsRead: 8, fullScans: 17 },
     "customer-otp-request": { d1Calls: 16, d1Statements: 17, externalFetches: 0, rowsWritten: 9, rowsRead: 20, fullScans: 2 },
     "customer-otp-verify": { d1Calls: 27, d1Statements: 39, externalFetches: 0, rowsWritten: 18, rowsRead: 30, fullScans: 5 },
     "page-home-miss": { d1Calls: 12, d1Statements: 26, externalFetches: 0, rowsWritten: 1, rowsRead: 130, fullScans: 16 },
@@ -107,8 +109,7 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "order-status-change": { d1Calls: 50, d1Statements: 42, externalFetches: 0, rowsWritten: 35, rowsRead: 1286, fullScans: 5 },
     "order-refund": { d1Calls: 50, d1Statements: 53, externalFetches: 0, rowsWritten: 73, rowsRead: 1292, fullScans: 6 },
     "sku-stock-change": { d1Calls: 13, d1Statements: 17, externalFetches: 0, rowsWritten: 53, rowsRead: 21, fullScans: 7 },
-    // +2 calls once per deploy: the first tick claims the version and syncs bundled apps (plugins/scheduled.ts); later ticks read a per-colo hint.
-    "cron-idle": { d1Calls: 65, d1Statements: 71, externalFetches: 0, rowsWritten: 175, rowsRead: 7976, fullScans: 21, meanRowsWritten: 0, meanRowsRead: 28.77 },
+    "cron-idle": { d1Calls: 63, d1Statements: 69, externalFetches: 0, rowsWritten: 175, rowsRead: 7976, fullScans: 21, meanRowsWritten: 0, meanRowsRead: 28.77 },
     "cron-nightly": { d1Calls: 210, d1Statements: 311, externalFetches: 0, rowsWritten: 432, rowsRead: 27538, fullScans: 430 },
     "drain-busy": { d1Calls: 13, d1Statements: 25, externalFetches: 0, rowsWritten: 118, rowsRead: 236, fullScans: 17 },
     "order-3-line-commit": { d1Calls: 34, d1Statements: 80, externalFetches: 0, rowsWritten: 106, rowsRead: 73, fullScans: 26 },

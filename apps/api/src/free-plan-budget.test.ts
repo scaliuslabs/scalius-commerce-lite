@@ -16,6 +16,7 @@ import { STORE, createFreePlanStore, type FreePlanStore } from "./testing/free-p
 import { seedCatalog, seedOrders } from "./testing/free-plan-seed";
 import { jsonRequest, placeOrder as checkoutOrder, taxQuote as checkoutQuote } from "./testing/free-plan-checkout";
 import { BUDGETS, type Budget } from "./testing/free-plan-budgets";
+import { syncBundledPluginsOncePerDeploy } from "./plugins/scheduled";
 
 /**
  * The Workers plan budget of the operations a store depends on, measured through
@@ -181,6 +182,10 @@ describe.each(PLANS)("Workers %s plan budget", (plan) => {
     store = await createFreePlanStore();
     seedCatalog(store.sqlite);
     seedOrders(store.sqlite, 1000);
+    // A deployed store: its bundled apps already match this version (the
+    // first tick after a deploy does this once, plugins/scheduled.ts), so the
+    // idle hour measures steady state, not the one-time catch-up.
+    await syncBundledPluginsOncePerDeploy(store.db, store.env);
     await store.ownerCookie();
   }, 120_000);
 
