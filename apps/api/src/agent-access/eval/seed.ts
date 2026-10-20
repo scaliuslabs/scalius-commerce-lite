@@ -147,7 +147,13 @@ export async function seedEvalStore(store: EvalStore): Promise<EvalFixtures> {
     const karimFirst = (sqlite.prepare("SELECT id FROM orders WHERE customer_id = ? ORDER BY created_at, id LIMIT 1").get(customers.karim) as { id: string }).id;
     for (const orderId of [o1040.id, salmaFirst, karimFirst]) {
       sqlite.prepare("UPDATE orders SET status = 'delivered', fulfillment_status = 'complete' WHERE id = ?").run(orderId);
-      sqlite.prepare("UPDATE order_items SET fulfilled_quantity = quantity, fulfillment_type = 'ship' WHERE order_id = ?").run(orderId);
+      // Fulfilled through the ledger: its triggers project fulfilled_quantity.
+      sqlite.prepare("UPDATE order_items SET fulfillment_type = 'ship' WHERE order_id = ?").run(orderId);
+      sqlite.prepare("INSERT INTO order_fulfillments (id, order_id, kind, status, request_key, actor_type) VALUES (?, ?, 'ship', 'active', 'eval-seed', 'system')")
+        .run(`ful_seed_${orderId}`, orderId);
+      sqlite.prepare(`INSERT INTO order_fulfillment_lines (id, fulfillment_id, order_id, order_item_id, quantity)
+        SELECT 'fl_seed_' || id, ?, order_id, id, quantity - fulfilled_quantity FROM order_items WHERE order_id = ? AND quantity > fulfilled_quantity`)
+        .run(`ful_seed_${orderId}`, orderId);
     }
     const review = sqlite.prepare(`INSERT INTO product_reviews (id, product_id, variant_id, order_id, order_item_id, reviewer_key, customer_id,
       author_type, author_display_name, rating, title, body, status, created_at, updated_at)
