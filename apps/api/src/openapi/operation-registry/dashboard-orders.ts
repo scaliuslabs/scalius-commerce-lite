@@ -169,12 +169,6 @@ export const DASHBOARD_ORDER_OPERATIONS = {
     openWorld: true,
     batch: "forbidden",
   },
-  "dashboard.orders.shipment_status_sync": {
-    exposure: "excluded",
-    openWorld: true,
-    reason:
-      "Legacy duplicate with no active merchant caller; use dashboard.orders.shipment_refresh.",
-  },
   "dashboard.orders.shipment_unknown_lookup": {
     openWorld: true,
     idempotency: "required",
@@ -207,20 +201,5 @@ export const DASHBOARD_ORDER_OPERATIONS = {
     revision: "optional",
     openWorld: true,
     batch: "forbidden",
-  },
-  "dashboard.shipments.delete": {
-    exposure: "excluded",
-    risk: "destructive",
-    openWorld: true,
-    reason: "Legacy duplicate; use dashboard.orders.shipment_delete.",
-  },
-  "dashboard.shipments.get": {
-    exposure: "excluded",
-    reason: "Legacy duplicate; use dashboard.orders.shipment_get.",
-  },
-  "dashboard.shipments.status_sync": {
-    exposure: "excluded",
-    openWorld: true,
-    reason: "Legacy duplicate; use dashboard.orders.shipment_refresh.",
   },
 } satisfies Record<string, OperationRegistryEntry>;

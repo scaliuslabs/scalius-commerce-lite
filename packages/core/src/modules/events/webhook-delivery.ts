@@ -297,14 +297,26 @@ export const webhookFanOutTarget: EventFanOutTarget = {
 
 // ── Delivery processing ───────────────────────────────────────────────────
 
+/** The due states of event deliveries, each one index range. */
+function deliveryClaimableBranches() {
+  return [
+    and(inArray(webhookDeliveries.status, ["pending", "failed"]), lte(webhookDeliveries.nextAttemptAt, sql`unixepoch()`))!,
+    and(eq(webhookDeliveries.status, "processing"), lte(webhookDeliveries.claimExpiresAt, sql`unixepoch()`))!,
+  ];
+}
+
 function deliveryClaimableCondition() {
-  return and(
-    eq(webhookDeliveries.kind, "event"),
-    or(
-      and(inArray(webhookDeliveries.status, ["pending", "failed"]), lte(webhookDeliveries.nextAttemptAt, sql`unixepoch()`)),
-      and(eq(webhookDeliveries.status, "processing"), lte(webhookDeliveries.claimExpiresAt, sql`unixepoch()`)),
-    ),
-  );
+  return and(eq(webhookDeliveries.kind, "event"), or(...deliveryClaimableBranches()));
+}
+
+/**
+ * Whether `listDueWebhookDeliveries` would find a row: one bounded index
+ * probe per due state (the scheduled drain runs only when one finds a row).
+ */
+export function webhookDeliveryDueProbes(db: Database) {
+  return deliveryClaimableBranches().map((branch) =>
+    db.select({ id: webhookDeliveries.id }).from(webhookDeliveries)
+      .where(and(eq(webhookDeliveries.kind, "event"), branch)).limit(1));
 }
 
 export type WebhookDeliveryOutcome =

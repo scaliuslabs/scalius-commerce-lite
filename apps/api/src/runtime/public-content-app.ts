@@ -1,12 +1,11 @@
-import { createRuntimeApiApp } from "./base-app";
+import { buildRouteGroupApp, type RouteGroupParts } from "./route-groups";
 import { articleRoutes } from "../routes/articles";
 import { pagesRoutes } from "../routes/pages";
-
 import { publicObjectRoutes } from "../routes/objects";
 
-const app = createRuntimeApiApp();
-app.route("/pages", pagesRoutes);
-app.route("/articles", articleRoutes);
-app.route("/objects", publicObjectRoutes);
+export const publicContentParts: RouteGroupParts<"public-content"> = {
+  routers: { publicObjectRoutes, pagesRoutes, articleRoutes },
+  middleware: {},
+};
 
-export default app;
+export default buildRouteGroupApp("public-content", publicContentParts);

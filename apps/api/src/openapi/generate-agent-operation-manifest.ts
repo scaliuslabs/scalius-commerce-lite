@@ -5,9 +5,11 @@ import { fileURLToPath } from "node:url";
 
 import {
   AGENT_OPERATION_MANIFEST_LOADER_SOURCE,
+  AGENT_OPERATION_POLICY_LOADER_SOURCE,
   buildAgentComponentSchemas,
   buildAgentOperationManifest,
   renderAgentOperationManifestModule,
+  renderAgentOperationPolicyModule,
   type AgentOperationManifestEntry,
   type AgentOperationOpenApiDocument,
 } from "./agent-operation-manifest";
@@ -27,6 +29,14 @@ export const AGENT_OPERATION_MANIFEST_PATH = resolve(
 export const AGENT_OPERATION_MANIFEST_LOADER_PATH = resolve(
   apiSourceDirectory,
   "generated/agent-operations.gen.ts",
+);
+export const AGENT_OPERATION_POLICY_PATH = resolve(
+  apiSourceDirectory,
+  "generated/agent-operation-policies.gen.txt",
+);
+export const AGENT_OPERATION_POLICY_LOADER_PATH = resolve(
+  apiSourceDirectory,
+  "generated/agent-operation-policies.gen.ts",
 );
 export const OPENAPI_CONTRACT_TEXT_PATH = resolve(
   apiSourceDirectory,
@@ -86,9 +96,10 @@ export function assertNoGenericPendingAgentOperations(
   }
 }
 
-export function generateAgentOperationManifestSource(
+/** The full manifest (schemas, prose, workflows) and its small policy index. */
+export function generateAgentOperationSources(
   document: AgentOperationOpenApiDocument,
-): string {
+): { manifest: string; policies: string } {
   const manifest = buildAgentOperationManifest(document);
   assertNoGenericPendingAgentOperations(manifest);
   const componentSchemas = buildAgentComponentSchemas(document, manifest);
@@ -100,17 +111,28 @@ export function generateAgentOperationManifestSource(
     document["x-scalius-workflows"],
     workflowCatalog,
   );
-  return renderAgentOperationManifestModule(manifest, workflowCatalog, componentSchemas);
+  return {
+    manifest: renderAgentOperationManifestModule(manifest, workflowCatalog, componentSchemas),
+    policies: renderAgentOperationPolicyModule(manifest),
+  };
+}
+
+export function generateAgentOperationManifestSource(
+  document: AgentOperationOpenApiDocument,
+): string {
+  return generateAgentOperationSources(document).manifest;
 }
 
 export function writeAgentOperationManifest(
   document: AgentOperationOpenApiDocument,
 ): string {
-  const source = generateAgentOperationManifestSource(document);
+  const { manifest, policies } = generateAgentOperationSources(document);
   mkdirSync(dirname(AGENT_OPERATION_MANIFEST_PATH), { recursive: true });
-  writeFileSync(AGENT_OPERATION_MANIFEST_PATH, source);
+  writeFileSync(AGENT_OPERATION_MANIFEST_PATH, manifest);
   writeFileSync(AGENT_OPERATION_MANIFEST_LOADER_PATH, AGENT_OPERATION_MANIFEST_LOADER_SOURCE);
-  return source;
+  writeFileSync(AGENT_OPERATION_POLICY_PATH, policies);
+  writeFileSync(AGENT_OPERATION_POLICY_LOADER_PATH, AGENT_OPERATION_POLICY_LOADER_SOURCE);
+  return manifest;
 }
 
 export function generateCliWorkflowResolverCoreSource(): string {
@@ -182,6 +204,7 @@ export function assertOpenApiContractModuleFresh(
 
 export function assertAgentOperationManifestLoaderFresh(): void {
   assertFileContent(AGENT_OPERATION_MANIFEST_LOADER_PATH, AGENT_OPERATION_MANIFEST_LOADER_SOURCE, "agent operation manifest loader");
+  assertFileContent(AGENT_OPERATION_POLICY_LOADER_PATH, AGENT_OPERATION_POLICY_LOADER_SOURCE, "agent operation policy loader");
 }
 
 export function assertCliWorkflowResolverCoreFresh(): void {

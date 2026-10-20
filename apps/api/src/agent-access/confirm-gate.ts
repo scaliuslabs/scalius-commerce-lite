@@ -18,9 +18,9 @@
 import type { Context } from "hono";
 import { AppError } from "@scalius/core/errors";
 import { getDb } from "@scalius/database/client";
-import type { AgentOperationManifestEntry } from "../openapi/agent-operation-manifest";
+import type { AgentOperationPolicy } from "../openapi/agent-operation-manifest";
 import type { OperationDispatchClearance } from "./dispatch-context";
-import { AgentDispatchError, type AgentOperationInput } from "./dispatch";
+import { AgentDispatchError, type AgentOperationInput } from "./dispatch-error";
 import type { AgentPrincipal } from "./types";
 
 function pathParams(template: string, pathname: string): Record<string, string> {
@@ -35,7 +35,7 @@ function pathParams(template: string, pathname: string): Record<string, string> 
 }
 
 /** The request as the operation input an approval binds (path, query, JSON body). */
-async function requestInput(c: Context, operation: AgentOperationManifestEntry, pathname: string): Promise<AgentOperationInput> {
+async function requestInput(c: Context, operation: AgentOperationPolicy, pathname: string): Promise<AgentOperationInput> {
   const url = new URL(c.req.url);
   const query = Object.fromEntries(url.searchParams.entries());
   let body: unknown;
@@ -53,7 +53,7 @@ async function requestInput(c: Context, operation: AgentOperationManifestEntry, 
   } as AgentOperationInput;
 }
 
-function isNativeDryRun(operation: AgentOperationManifestEntry, input: AgentOperationInput): boolean {
+function isNativeDryRun(operation: AgentOperationPolicy, input: AgentOperationInput): boolean {
   if (operation.dryRun !== "native") return false;
   const body = input.body;
   if (typeof body === "object" && body !== null && !Array.isArray(body) && (body as Record<string, unknown>).dryRun === true) return true;
@@ -67,7 +67,7 @@ function isNativeDryRun(operation: AgentOperationManifestEntry, input: AgentOper
 export async function enforceAgentConfirmation(
   c: Context,
   principal: AgentPrincipal,
-  operation: AgentOperationManifestEntry,
+  operation: AgentOperationPolicy,
   pathname: string,
   clearance: OperationDispatchClearance | null,
 ): Promise<void> {

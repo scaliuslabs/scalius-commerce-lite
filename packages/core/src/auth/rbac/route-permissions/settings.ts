@@ -368,10 +368,4 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
     PATCH: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
     DELETE: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
-  "/api/v1/admin/settings/abandoned-checkouts": {
-    POST: { permission: PERMISSIONS.ORDERS_EDIT },
-  },
-  "/api/v1/admin/settings/abandoned-checkouts/cleanup": {
-    POST: { permission: PERMISSIONS.ORDERS_DELETE },
-  },
 };

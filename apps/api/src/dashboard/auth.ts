@@ -18,6 +18,7 @@ import { getAdminSessionFromCookieHeader, getAdminSessionTokenFromCookieHeader }
 import { isForeignDashboardRequest } from "../middleware/cookie-origin-guard";
 import { detachedAppProviders } from "../plugins/providers/app-providers";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
+import { withEnvFields } from "../runtime/runtime-env";
 
 const AUTH_RETRY_DELAYS_MS = [200, 500, 1000] as const;
 const NO_STORE = "private, no-store, max-age=0, must-revalidate";
@@ -512,10 +513,9 @@ export async function handleDashboardAuthRequest(
 
   // Fresh stores have no Dashboard URL yet: the first admin signs in on the
   // origin they reached, then configures it under Settings -> Platform.
-  const authEnv: Env = {
-    ...env,
+  const authEnv = withEnvFields(env, {
     BETTER_AUTH_URL: env.BETTER_AUTH_URL || new URL(request.url).origin,
-  };
+  });
   // Staff email (reset links, sign-in codes) may go through an app sender the
   // merchant chose; this handler has no Hono request, so on a detached context.
   const auth = createAuth(authEnv, {

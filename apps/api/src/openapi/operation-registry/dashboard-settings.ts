@@ -208,19 +208,6 @@ export const DASHBOARD_SETTINGS_OPERATIONS = {
   },
   "dashboard.seo.settings_get": { limits: { request: 16_384 } },
   "dashboard.seo.settings_update": { revision: "required", limits: { request: 65_536, response: 16_384 } },
-  "dashboard.settings_abandoned_checkouts_cleanup.cleanup": {
-    exposure: "excluded",
-    risk: "destructive",
-    limits: { response: 8_192 },
-    reason:
-      "Legacy dashboard-prefix mount of the service-authenticated post-order housekeeping callback; use explicit merchant deletion or scheduled retention cleanup.",
-  },
-  "dashboard.settings_abandoned_checkouts.abandoned_checkouts": {
-    exposure: "excluded",
-    limits: { response: 8_192 },
-    reason:
-      "Legacy dashboard-prefix mount of storefront abandoned-checkout snapshot persistence; no merchant UI invokes it, and agents must use protected context and cart operations rather than manufacture browser recovery snapshots.",
-  },
   "dashboard.settings_providers.list": { limits: { request: 16_384, response: 65_536 } },
   "dashboard.settings_providers.test": {
     risk: "security",

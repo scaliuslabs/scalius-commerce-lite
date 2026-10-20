@@ -8,7 +8,8 @@
  * first-admin setup, trusted front proxies, and identity handoff) are derived
  * from it with HKDF-SHA256 and a fixed purpose label. Operators derive the
  * automation secrets with the same parameters (`scripts/derive-runtime-secret.mjs`). Derived values are never installed,
- * logged, or stored; they are recomputed at Worker entry for each invocation.
+ * logged, or stored; they are recomputed per invocation (the API Worker
+ * derives each one on its first read: apps/api/src/runtime/runtime-env.ts).
  *
  * Rotation: changing `SCALIUS_SECRET` rotates every derived secret at once.
  * Admin sessions, service JWTs, and agent credential hashes become invalid;
@@ -19,8 +20,8 @@
 export const MASTER_SECRET_NAME = "SCALIUS_SECRET";
 export const MASTER_SECRET_MIN_LENGTH = 32;
 
-const HKDF_SALT = "scalius-commerce/runtime-secrets/v1";
-const DERIVED_SECRET_BYTES = 32;
+export const RUNTIME_SECRET_HKDF_SALT = "scalius-commerce/runtime-secrets/v1";
+export const RUNTIME_SECRET_BYTES = 32;
 
 export const RUNTIME_SECRET_PURPOSES = {
   BETTER_AUTH_SECRET: "better-auth-session",
@@ -45,7 +46,8 @@ export interface MasterSecretEnvironment {
 
 const encoder = new TextEncoder();
 
-function encodeBase64Url(bytes: Uint8Array): string {
+/** A derived secret's text form: base64url without padding (43 characters). */
+export function encodeBase64Url(bytes: Uint8Array): string {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
@@ -85,11 +87,11 @@ export async function deriveRuntimeSecret(
     {
       name: "HKDF",
       hash: "SHA-256",
-      salt: encoder.encode(HKDF_SALT),
+      salt: encoder.encode(RUNTIME_SECRET_HKDF_SALT),
       info: encoder.encode(purpose),
     },
     key,
-    DERIVED_SECRET_BYTES * 8,
+    RUNTIME_SECRET_BYTES * 8,
   );
   return encodeBase64Url(new Uint8Array(bits));
 }

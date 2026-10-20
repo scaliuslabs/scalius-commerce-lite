@@ -215,14 +215,26 @@ export async function markPaymentEventAttemptFailed(
 }
 
 /** Payment events due again, or whose attempt died with its invocation (lease expired). */
+/** The due states, each one index range: a retry past its time, or an attempt whose invocation died. */
+function duePaymentEventBranches(leaseSeconds = DEFAULT_WEBHOOK_PROCESSING_LEASE_SECONDS) {
+  return [
+    and(eq(webhookEvents.status, "retrying"), lte(webhookEvents.nextAttemptAt, sql`unixepoch()`))!,
+    and(eq(webhookEvents.status, "processing"), lte(webhookEvents.processedAt, sql`unixepoch() - ${leaseSeconds}`))!,
+  ];
+}
+
 function duePaymentEventCondition(leaseSeconds = DEFAULT_WEBHOOK_PROCESSING_LEASE_SECONDS) {
-  return and(
-    isNotNull(webhookEvents.payload),
-    or(
-      and(eq(webhookEvents.status, "retrying"), lte(webhookEvents.nextAttemptAt, sql`unixepoch()`)),
-      and(eq(webhookEvents.status, "processing"), lte(webhookEvents.processedAt, sql`unixepoch() - ${leaseSeconds}`)),
-    ),
-  );
+  return and(isNotNull(webhookEvents.payload), or(...duePaymentEventBranches(leaseSeconds)));
+}
+
+/**
+ * Whether `listDuePaymentEvents` would find a row: one bounded index probe
+ * per due state (the scheduled drain runs only when one finds a row).
+ */
+export function duePaymentEventProbes(db: Database) {
+  return duePaymentEventBranches().map((branch) =>
+    db.select({ id: webhookEvents.id }).from(webhookEvents)
+      .where(and(isNotNull(webhookEvents.payload), branch)).limit(1));
 }
 
 export async function listDuePaymentEvents(db: Database, limit: number): Promise<string[]> {

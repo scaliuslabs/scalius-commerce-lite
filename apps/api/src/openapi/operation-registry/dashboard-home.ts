@@ -30,19 +30,9 @@ export const DASHBOARD_HOME_OPERATIONS = {
     exposure: "excluded",
     reason: "Showing the setup guide again is the signed-in staff member's own Home preference.",
   },
-  "dashboard.search_reindex.reindex": {
-    exposure: "excluded",
-    reason:
-      "Placeholder returns ‘Reindex initiated’ without scheduling or performing reindex work; execution would report a false side effect.",
-  },
   // The command palette's bounded, permission-filtered cross-resource find: an
   // agent resolves "order 1042" or "Rahim" in one read, then reads the record.
   "dashboard.search.global": { limits: { request: 16_384 } },
   // Store-wide launch steps (Home's guide without the staff dismissal).
   "dashboard.setup.checklist": { limits: { request: 16_384 } },
-  "dashboard.search.get_search": {
-    exposure: "excluded",
-    reason:
-      "Legacy cross-resource search is unused by the dashboard; authoritative bounded product, category, and page list operations provide merchant search and filtering.",
-  },
 } satisfies Record<string, OperationRegistryEntry>;

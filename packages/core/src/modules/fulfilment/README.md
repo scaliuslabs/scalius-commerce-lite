@@ -37,7 +37,7 @@ Routes mount under `/api/v1/admin/orders` (`apps/api/src/routes/admin/orders/ful
 | COD collected, failed or returned | `processCodAction()` | `POST /{id}/cod` |
 | Delete a parcel | `assertShipmentDeletable()` guards it | `DELETE /{id}/shipments/{shipmentId}` |
 
-Courier status checks (`POST /{id}/shipments/{shipmentId}/status`, `/refresh`) and `/api/v1/admin/shipments/*` live in the API layer. They call `syncCourierFulfilmentFromShipment()`.
+Courier status checks (`POST /{id}/shipments/{shipmentId}/refresh`) live in the API layer. They call `syncCourierFulfilmentFromShipment()`.
 
 ### Hand over (`recordOrderFulfilment`)
 

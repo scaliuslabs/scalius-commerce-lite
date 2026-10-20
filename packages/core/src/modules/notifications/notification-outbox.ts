@@ -228,6 +228,15 @@ export async function listDueNotificationOutbox(db: Database, limit: number): Pr
     return rows.map((row) => row.id);
 }
 
+/**
+ * Whether `listDueNotificationOutbox` would find a row: one bounded index
+ * probe per due state (the scheduled drain runs only when one finds a row).
+ */
+export function notificationOutboxDueProbes(db: Database) {
+    return claimableBranches().map((where) =>
+        db.select({ id: notificationOutbox.id }).from(notificationOutbox).where(where).limit(1));
+}
+
 /** A drain's lease on one row; returns what the sender needs to resolve recipients. */
 export async function claimNotificationOutboxForProcessing(
     db: Database,
@@ -396,17 +405,22 @@ export async function recordNotificationOutbox(
 }
 
 /** A row a drain may claim: due pending/failed, or an expired lease. */
-function claimableCondition() {
-    return or(
+/** The due states, each one index range: pending or failed past its time, or a lapsed lease. */
+function claimableBranches() {
+    return [
         and(
             inArray(notificationOutbox.status, ["pending", "failed"]),
             lte(notificationOutbox.nextAttemptAt, sql`unixepoch()`),
-        ),
+        )!,
         and(
             eq(notificationOutbox.status, "processing"),
             lte(notificationOutbox.claimExpiresAt, sql`unixepoch()`),
-        ),
-    );
+        )!,
+    ];
+}
+
+function claimableCondition() {
+    return or(...claimableBranches());
 }
 
 export async function markNotificationOutboxFailed(

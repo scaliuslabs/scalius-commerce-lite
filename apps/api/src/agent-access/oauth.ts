@@ -25,6 +25,7 @@ import {
 export { getOAuthCompletionUrl } from "./paths";
 import { DashboardMcpHandler } from "./mcp/dashboard";
 import { StorefrontMcpHandler } from "./mcp/storefront";
+import { withEnvFields } from "../runtime/runtime-env";
 import type {
   AgentOAuthProps,
   AgentResource,
@@ -285,7 +286,7 @@ export function withOAuthKv(env: Env): Env {
         : { keys, list_complete: true };
     },
   };
-  return { ...env, OAUTH_KV } as Env;
+  return withEnvFields(env, { OAUTH_KV } as unknown as Partial<Env>);
 }
 
 export function handleOAuthRequest(

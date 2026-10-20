@@ -1,4 +1,5 @@
-import { createRuntimeApiApp } from "./base-app";
+import { Hono } from "hono";
+import { buildRouteGroupApp, type RouteGroupParts } from "./route-groups";
 import { checkoutRoutes } from "../routes/checkout";
 import { checkoutGiftCardRoutes } from "../routes/checkout-gift-cards";
 import { publicCheckoutLanguageRoutes } from "../routes/checkout-languages";
@@ -11,26 +12,30 @@ import { shippingMethodRoutes } from "../routes/shipping-methods";
 import { storefrontRoutes } from "../routes/storefront";
 import { platformRoutes } from "../routes/platform";
 
-const app = createRuntimeApiApp();
-app.get("/", (c) => c.json({
+/** GET /api/v1/: the API's greeting. */
+const welcomeRoutes = new Hono<{ Bindings: Env }>().get("/", (c) => c.json({
   success: true,
   message: "Welcome to Scalius Commerce API",
   version: process.env.npm_package_version || "1.0.0",
   environment: process.env.NODE_ENV || "development",
 }));
-app.route("/navigation", navigationRoutes);
-app.route("/storefront", storefrontRoutes);
-app.route("/platform", platformRoutes);
-// Checkout settings are a public read every storefront render batches with
-// the layout; serving them here keeps the buyer graph (orders, customer
-// auth, agent contexts) out of page renders.
-app.route("/checkout", checkoutRoutes);
-app.route("/checkout/gift-cards", checkoutGiftCardRoutes);
-app.route("/checkout-languages", publicCheckoutLanguageRoutes);
-app.route("/locations", locationRoutes);
-app.route("/address-rules/autocomplete", addressAutocompleteRoutes);
-app.route("/address-rules", addressRuleRoutes);
-app.route("/shipping-methods", shippingMethodRoutes);
-app.route("/seo", seoRoutes);
 
-export default app;
+export const publicConfigParts: RouteGroupParts<"public-config"> = {
+  routers: {
+    welcomeRoutes,
+    navigationRoutes,
+    storefrontRoutes,
+    platformRoutes,
+    checkoutRoutes,
+    checkoutGiftCardRoutes,
+    publicCheckoutLanguageRoutes,
+    locationRoutes,
+    addressAutocompleteRoutes,
+    addressRuleRoutes,
+    shippingMethodRoutes,
+    seoRoutes,
+  },
+  middleware: {},
+};
+
+export default buildRouteGroupApp("public-config", publicConfigParts);

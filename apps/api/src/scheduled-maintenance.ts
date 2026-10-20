@@ -11,7 +11,7 @@ import {
   cleanupExpiredOrderPaymentRecoveryChallenges,
   archiveStaleIncompleteOrders,
 } from "@scalius/core/modules/orders";
-import { pruneStaffAlerts } from "@scalius/core/modules/notifications";
+import { notificationOutboxDueProbes, pruneStaffAlerts } from "@scalius/core/modules/notifications";
 import { sealAnalyticsDays } from "@scalius/core/modules/analytics";
 import { sweepAutoFulfilment } from "@scalius/core/modules/fulfilment";
 import { sweepOrphanConversationAttachments } from "@scalius/core/modules/conversations";
@@ -37,7 +37,11 @@ import {
   requestPostDeployProjectionRebuild,
   runNightlyCatalogMaintenance,
 } from "./scheduled/catalog-projections";
-import { drainCatalogProjectionRebuild, rotateRecommendations } from "./background/catalog";
+import { drainCatalogProjectionRebuild, projectionRebuildDueProbe, rotateRecommendations } from "./background/catalog";
+import { readDueDrains, type DueProbedDrain } from "./scheduled/due-work";
+import { dueBulkRunProbes } from "./bulk-runs/due";
+import { duePaymentEventProbes } from "./utils/webhook-idempotency";
+import { eventOutboxDueProbes, webhookDeliveryDueProbes } from "@scalius/core/modules/events";
 import { readMaintenanceCursor } from "./scheduled/cursor";
 import { maintainDerivedProjections } from "./scheduled/derived-projections";
 import { storeTimeZoneOf } from "./utils/store-time-zone";
@@ -665,11 +669,14 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
  * bounded share of due rows (notifications, events and their deliveries,
  * payment-event retries, a requested projection rebuild) and leaves the rest
  * for the next tick. The first attempt of each happened right after the
- * write that created it; these are the retries and the backstop.
+ * write that created it; these are the retries and the backstop. One
+ * statement first asks every drain's probes whether it has due work
+ * (scheduled/due-work.ts); a drain without any is skipped, module and all.
  */
-export const BACKGROUND_DRAINS: ReadonlyArray<{ name: string; run(context: SweepContext): Promise<unknown> }> = [
+export const BACKGROUND_DRAINS: ReadonlyArray<DueProbedDrain & { run(context: SweepContext): Promise<unknown> }> = [
   {
     name: "notification_drain",
+    due: (db) => notificationOutboxDueProbes(db),
     async run({ db, env }) {
       const { drainNotificationOutbox } = await import("./background/notifications");
       return drainNotificationOutbox(db, env);
@@ -677,6 +684,12 @@ export const BACKGROUND_DRAINS: ReadonlyArray<{ name: string; run(context: Sweep
   },
   {
     name: "event_drain",
+    // Due events, webhook deliveries and app event deliveries.
+    due: async (db) => [
+      ...eventOutboxDueProbes(),
+      ...webhookDeliveryDueProbes(db),
+      ...(await import("@scalius/core/modules/plugins")).pluginEventDeliveryDueProbes(db),
+    ],
     async run({ db, env, executionCtx }) {
       const { runScheduledEventMaintenance } = await import("./events/dispatch");
       return runScheduledEventMaintenance(db, env, executionCtx);
@@ -684,6 +697,7 @@ export const BACKGROUND_DRAINS: ReadonlyArray<{ name: string; run(context: Sweep
   },
   {
     name: "payment_event_drain",
+    due: (db) => duePaymentEventProbes(db),
     async run({ db, env, executionCtx }) {
       const { drainPaymentEvents } = await import("./background/payment-events");
       return drainPaymentEvents(db, env, executionCtx);
@@ -691,10 +705,12 @@ export const BACKGROUND_DRAINS: ReadonlyArray<{ name: string; run(context: Sweep
   },
   {
     name: "projection_rebuild_drain",
+    due: (db) => [projectionRebuildDueProbe(db)],
     run: ({ db }) => drainCatalogProjectionRebuild(db),
   },
   {
     // A new deployment's bundled apps, in step on its first tick (plugins/scheduled.ts).
+    // No probe: after that tick a per-colo hint answers without a query.
     name: "bundled_plugin_sync_after_deploy",
     async run({ db, env }) {
       const { syncBundledPluginsOncePerDeploy } = await import("./plugins/scheduled");
@@ -708,6 +724,7 @@ export const BACKGROUND_DRAINS: ReadonlyArray<{ name: string; run(context: Sweep
   {
     // Bulk runs larger than one request (routes/admin/resources-bulk.ts).
     name: "bulk_run_drain",
+    due: (db) => dueBulkRunProbes(db),
     async run({ db }) {
       const { drainBulkRuns } = await import("./bulk-runs/engine");
       return drainBulkRuns(db, planLimits().background.bulkRunChunksPerDrain);
@@ -749,8 +766,10 @@ async function runScheduledMaintenanceInner(
     return;
   }
 
-  // Every tick: the background drains, each isolated.
+  // Every tick: the background drains with due work, each isolated.
+  const due = await timed("due_work_probe", () => readDueDrains(db, BACKGROUND_DRAINS));
   for (const drain of BACKGROUND_DRAINS) {
+    if (drain.due && due && !due.has(drain.name)) continue;
     await isolated(() => timed(drain.name, () => drain.run(context)));
   }
 

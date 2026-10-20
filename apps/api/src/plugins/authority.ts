@@ -29,8 +29,8 @@ import { grantedProtectedData } from "@scalius/shared/plugins/protected-data";
 import { PLUGIN_MESSAGE_ANY_SCOPE } from "@scalius/shared/plugins/messaging";
 import { pluginMessageRecipientKey } from "@scalius/shared/plugins/manifest";
 import { eq } from "drizzle-orm";
-import { AGENT_OPERATIONS } from "../generated/agent-operations.gen";
-import type { AgentOperationManifestEntry, AgentOperationRbac, AgentOperationStability } from "../openapi/agent-operation-manifest";
+import { AGENT_OPERATION_POLICIES } from "../generated/agent-operation-policies.gen";
+import type { AgentOperationPolicy, AgentOperationRbac, AgentOperationStability } from "../openapi/agent-operation-manifest";
 import { isAgentRiskAllowed, type AgentRisk, type PluginPrincipal } from "../agent-access/types";
 import { isWithinRateLimit } from "../utils/rate-limit";
 
@@ -57,7 +57,7 @@ function rbacPermissions(rbac: AgentOperationRbac): string[] | null {
  * Whether some app may ever call this operation, whatever its grant and tier
  * (a third-party app further needs it `stable`: `isOperationAvailableToPlugin`).
  */
-export function isOperationAvailableToPlugins(operation: AgentOperationManifestEntry): boolean {
+export function isOperationAvailableToPlugins(operation: AgentOperationPolicy): boolean {
   if (operation.stability === "internal") return false;
   if (operation.surface !== "dashboard" || operation.exposure !== "execute") return false;
   if (!operation.pathTemplate.startsWith("/api/v1/admin/")) return false;
@@ -69,7 +69,7 @@ export function isOperationAvailableToPlugins(operation: AgentOperationManifestE
 }
 
 /** Whether an app of this tier may ever call this operation, whatever its grant. */
-export function isOperationAvailableToPlugin(operation: AgentOperationManifestEntry, firstParty: boolean): boolean {
+export function isOperationAvailableToPlugin(operation: AgentOperationPolicy, firstParty: boolean): boolean {
   return pluginTierAllows(firstParty, operation.stability) && isOperationAvailableToPlugins(operation);
 }
 
@@ -93,7 +93,7 @@ export function pluginRbacSatisfied(rbac: AgentOperationRbac, permissions: Reado
 export function derivePluginRiskCeiling(
   permissions: ReadonlySet<string>,
   firstParty: boolean,
-  operations: readonly AgentOperationManifestEntry[] = AGENT_OPERATIONS,
+  operations: readonly AgentOperationPolicy[] = AGENT_OPERATION_POLICIES,
 ): AgentRisk {
   let ceiling = 0;
   for (const operation of operations) {
@@ -104,7 +104,7 @@ export function derivePluginRiskCeiling(
 }
 
 /** Tier and availability, risk ceiling and grant, in that order. */
-export function authorizePluginOperation(principal: PluginPrincipal, operation: AgentOperationManifestEntry): boolean {
+export function authorizePluginOperation(principal: PluginPrincipal, operation: AgentOperationPolicy): boolean {
   return isOperationAvailableToPlugin(operation, principal.firstParty)
     && isAgentRiskAllowed(principal.riskCeiling, operation.risk)
     && pluginRbacSatisfied(operation.rbac, principal.permissions);

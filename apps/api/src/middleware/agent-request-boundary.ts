@@ -1,5 +1,5 @@
 import type { Context, Next } from "hono";
-import type { AgentOperationManifestEntry } from "../openapi/agent-operation-manifest";
+import type { AgentOperationPolicy } from "../openapi/agent-operation-manifest";
 import type { AgentPrincipal } from "../agent-access/types";
 import { writeAgentAuditEvent } from "../agent-access/audit";
 import { RateLimitError } from "../utils/api-error";
@@ -17,7 +17,7 @@ export async function enforceAgentRateLimit(
 export async function writeDeniedAgentRequestAudit(
   c: Context,
   principal: AgentPrincipal,
-  operation: AgentOperationManifestEntry | null,
+  operation: AgentOperationPolicy | null,
   startedAt: number,
   error: unknown,
 ): Promise<void> {
@@ -44,7 +44,7 @@ export async function writeDeniedAgentRequestAudit(
 export async function enforceAgentRequestBoundary(
   c: Context,
   principal: AgentPrincipal,
-  operation: AgentOperationManifestEntry,
+  operation: AgentOperationPolicy,
   next: Next,
   rateLimitAlreadyEnforced = false,
 ): Promise<void> {

@@ -13,8 +13,8 @@
 import { and, eq, gt, isNull, lte, or, sql } from "drizzle-orm";
 import { systemKv } from "@scalius/database/schema";
 import { getDb } from "@scalius/database/client";
-import type { AgentOperationManifestEntry } from "../../openapi/agent-operation-manifest";
-import { AgentDispatchError, type AgentOperationInput } from "../dispatch";
+import type { AgentOperationPolicy } from "../../openapi/agent-operation-manifest";
+import { AgentDispatchError, type AgentOperationInput } from "../dispatch-error";
 import type { AgentPrincipal } from "../types";
 
 export type AgentConfirmPolicy = "none" | "destructive_financial";
@@ -34,7 +34,7 @@ const encoder = new TextEncoder();
  * its tag, which a grant's risk ceiling must allow, but changes nothing, so
  * it needs no approval.
  */
-export function isConfirmGated(operation: Pick<AgentOperationManifestEntry, "risk" | "method">): boolean {
+export function isConfirmGated(operation: Pick<AgentOperationPolicy, "risk" | "method">): boolean {
   if ((operation as { confirmation?: unknown }).confirmation === "required") return true;
   if (operation.risk === "security") return operation.method !== "GET";
   return operation.risk === "destructive" || operation.risk === "financial";
@@ -68,7 +68,7 @@ export async function writeAgentConfirmPolicy(env: Env, grantId: string, policy:
 }
 
 export interface ConfirmStep {
-  operation: AgentOperationManifestEntry;
+  operation: AgentOperationPolicy;
   input: AgentOperationInput;
 }
 

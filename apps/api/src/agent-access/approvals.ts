@@ -26,7 +26,7 @@ import {
   grantAuthorityGuard,
   requireEncryptionKey,
 } from "./browser-handoffs";
-import { AgentDispatchError } from "./dispatch";
+import { AgentDispatchError } from "./dispatch-error";
 import type { AgentPrincipal } from "./types";
 
 /** The REST lane's retry header: `Scalius-Approval: abh_...`. */

@@ -79,11 +79,6 @@ export const ORDER_ROUTE_PERMISSIONS: RoutePermissionMap = {
     PUT: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
     DELETE: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
   },
-  "/api/v1/admin/orders/*/shipments/*/status": {
-    PUT: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
-    PATCH: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
-    POST: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
-  },
   "/api/v1/admin/orders/*/shipments/*/refresh": {
     POST: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
   },
@@ -166,18 +161,6 @@ export const ORDER_ROUTE_PERMISSIONS: RoutePermissionMap = {
   },
   "/api/v1/admin/orders/*/refund-attempts/*/reconcile": {
     POST: { permission: PERMISSIONS.ORDERS_REFUND },
-  },
-  // =============================================
-  // Shipments API
-  // =============================================
-  "/api/v1/admin/shipments/*": {
-    GET: { permission: PERMISSIONS.ORDERS_VIEW },
-    PUT: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
-    DELETE: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
-  },
-  "/api/v1/admin/shipments/*/check-status": {
-    GET: { permission: PERMISSIONS.ORDERS_VIEW },
-    POST: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
   },
   // =============================================
   // Admin Abandoned Checkouts

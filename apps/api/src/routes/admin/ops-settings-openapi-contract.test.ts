@@ -65,11 +65,10 @@ describe("ops/settings OpenAPI mutation responses", () => {
     expectResponses(spec, "/api/v1/admin/fraud-checker/{id}/test", "post", ["200", "400", "401", "403", "404"]);
     expectResponses(spec, "/api/v1/admin/fraud-checker/lookup", "post", ["200", "400", "401", "403", "404", "503"]);
 
-    expectResponses(spec, "/api/v1/admin/search", "get", ["200", "400", "401", "403", "503"]);
-    expect(operation(spec, "/api/v1/admin/search", "get").operationId)
-      .toBe("dashboard.search.get_search");
-    expect(operation(spec, "/api/v1/admin/search/reindex", "post").operationId)
-      .toBe("dashboard.search_reindex.reindex");
+    // The legacy cross-resource search and the placeholder reindex are gone; ⌘K is the one search.
+    expect(operation(spec, "/api/v1/admin/search/global", "get").operationId).toBe("dashboard.search.global");
+    expect(spec.paths?.["/api/v1/admin/search"]).toBeUndefined();
+    expect(spec.paths?.["/api/v1/admin/search/reindex"]).toBeUndefined();
 
   });
 });

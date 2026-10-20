@@ -17,11 +17,12 @@
 //     the run advance; a chunk repeated after a crash changes nothing more.
 //
 // A dry run reads the same selection and plans every item without a write.
-import { and, asc, eq, gt, isNull, lt, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, sql, type SQL } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { buildBatchGuard, isBatchGuardError, safeBatch, withCoarseCacheClock, type Database } from "@scalius/database/client";
 import { bulkRuns, customerTagLinks, customers, inventoryLevels, productVariants, products, type BulkRunKind } from "@scalius/database/schema";
 import { roundToIncrementMinor } from "@scalius/shared/money";
+import { dueBulkRunCondition } from "./due";
 import { AppError, ConflictError, ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { catalogBuyerStateRefreshStatementsForSkus, isDigitalKind } from "@scalius/core/modules/products";
@@ -759,15 +760,14 @@ export async function advanceBulkRun(db: Database, id: string, maxChunks: number
 /** Claims the oldest due run nobody holds. */
 async function claimDueRun(db: Database): Promise<string | null> {
   const now = nowSeconds();
-  const free = or(isNull(bulkRuns.leaseUntil), lt(bulkRuns.leaseUntil, now));
   const due = await db.select({ id: bulkRuns.id }).from(bulkRuns)
-    .where(and(eq(bulkRuns.status, "running"), free))
+    .where(dueBulkRunCondition(now))
     .orderBy(asc(bulkRuns.createdAt), asc(bulkRuns.id))
     .limit(1)
     .get();
   if (!due) return null;
   const claimed = await db.update(bulkRuns).set({ leaseUntil: now + LEASE_SECONDS })
-    .where(and(eq(bulkRuns.id, due.id), eq(bulkRuns.status, "running"), free))
+    .where(and(eq(bulkRuns.id, due.id), dueBulkRunCondition(now)))
     .returning({ id: bulkRuns.id });
   return claimed[0]?.id ?? null;
 }

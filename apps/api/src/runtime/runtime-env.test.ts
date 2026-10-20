@@ -15,7 +15,19 @@ vi.mock("@scalius/database/client", () => ({
   getDb: mocks.getDb,
 }));
 
-import { composeApiRuntimeEnv, hasMasterSecret } from "./runtime-env";
+const derivations = vi.hoisted(() => ({ purposes: [] as string[] }));
+vi.mock("node:crypto", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:crypto")>();
+  return {
+    ...actual,
+    hkdfSync: (...args: Parameters<typeof actual.hkdfSync>) => {
+      derivations.purposes.push(String(args[3]));
+      return actual.hkdfSync(...args);
+    },
+  };
+});
+
+import { composeApiRuntimeEnv, hasMasterSecret, withEnvFields } from "./runtime-env";
 
 const MASTER_SECRET = "runtime-env-test-master-secret-with-more-than-32-chars";
 
@@ -106,6 +118,30 @@ describe("composeApiRuntimeEnv", () => {
     // The input env is never mutated.
     expect(env.JWT_SECRET).toBeUndefined();
     expect(env.PLATFORM_CONFIG).toBeUndefined();
+  });
+
+  it("derives each secret on its first read, once, and none for a request that reads none", async () => {
+    derivations.purposes.length = 0;
+    const composed = await composeApiRuntimeEnv(createEnv({}, JSON.stringify(PRODUCTION_CONFIG)));
+    expect(derivations.purposes).toEqual([]);
+
+    const session = composed.BETTER_AUTH_SECRET;
+    expect(composed.BETTER_AUTH_SECRET).toBe(session);
+    expect(derivations.purposes).toEqual([RUNTIME_SECRET_PURPOSES.BETTER_AUTH_SECRET]);
+
+    // A copy with replaced fields keeps the rest lazy and shares what was derived.
+    const copy = withEnvFields(composed, { STOREFRONT_URL: "https://other.example.com" });
+    expect(copy.STOREFRONT_URL).toBe("https://other.example.com");
+    expect(composed.STOREFRONT_URL).toBe("https://shop.example.com");
+    expect(copy.BETTER_AUTH_SECRET).toBe(session);
+    expect(derivations.purposes).toEqual([RUNTIME_SECRET_PURPOSES.BETTER_AUTH_SECRET]);
+    expect(copy.AGENT_TOKEN_PEPPER).toBe(await deriveRuntimeSecret(MASTER_SECRET, RUNTIME_SECRET_PURPOSES.AGENT_TOKEN_PEPPER));
+    expect(derivations.purposes).toHaveLength(2);
+
+    // An assignment (a test or an override) replaces the derived value.
+    composed.JWT_SECRET = "assigned";
+    expect(composed.JWT_SECRET).toBe("assigned");
+    expect(derivations.purposes).toHaveLength(2);
   });
 
   it("does not synthesize secrets when the master secret is missing", async () => {

@@ -19,7 +19,7 @@ import {
     enforceAgentRequestBoundary,
     writeDeniedAgentRequestAudit,
 } from "./agent-request-boundary";
-import type { AgentOperationManifestEntry } from "../openapi/agent-operation-manifest";
+import type { AgentOperationPolicy } from "../openapi/agent-operation-manifest";
 import { enforceDirectAgentRequestBodyLimit } from "./direct-agent-request-body";
 import {
     SCANNER_COOKIE_NAME,
@@ -322,7 +322,7 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
 
     if (agentPrincipal) {
         const startedAt = Date.now();
-        let operation: AgentOperationManifestEntry | null = null;
+        let operation: AgentOperationPolicy | null = null;
         if (!dispatchPrincipal) await enforceAgentRateLimit(c, agentPrincipal);
         try {
             if (agentPrincipal.resource !== "dashboard") {

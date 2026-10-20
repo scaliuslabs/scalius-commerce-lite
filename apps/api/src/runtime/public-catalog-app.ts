@@ -1,4 +1,4 @@
-import { createRuntimeApiApp } from "./base-app";
+import { buildRouteGroupApp, type RouteGroupParts } from "./route-groups";
 import { attributeRoutes } from "../routes/attributes";
 import { categoryRoutes } from "../routes/categories";
 import { brandRoutes } from "../routes/brands";
@@ -8,14 +8,18 @@ import { productRoutes } from "../routes/products";
 import { productReviewRoutes } from "../routes/product-reviews";
 import { searchRoutes } from "../routes/search";
 
-const app = createRuntimeApiApp();
-app.route("/attributes", attributeRoutes);
-app.route("/collections", collectionRoutes);
-app.route("/search", searchRoutes);
-app.route("/products", productRoutes);
-app.route("/products", productReviewRoutes);
-app.route("/categories", categoryRoutes);
-app.route("/brands", brandRoutes);
-app.route("/media", serveMediaRoute);
+export const publicCatalogParts: RouteGroupParts<"public-catalog"> = {
+  routers: {
+    attributeRoutes,
+    collectionRoutes,
+    brandRoutes,
+    searchRoutes,
+    serveMediaRoute,
+    productRoutes,
+    productReviewRoutes,
+    categoryRoutes,
+  },
+  middleware: {},
+};
 
-export default app;
+export default buildRouteGroupApp("public-catalog", publicCatalogParts);

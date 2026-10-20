@@ -56,19 +56,6 @@ export const SYSTEM_OPERATIONS = {
     reason:
       "Public Firebase browser and worker bootstrap configuration; not a semantic merchant or storefront action.",
   },
-  "system.auth_me.get_me": {
-    exposure: "excluded",
-    principals: ["internal"],
-    reason:
-      "Legacy service-JWT claim introspection; agent identity comes from the live agent grant and principal.",
-  },
-  "system.auth_token_stats.get_token_stats": {
-    exposure: "excluded",
-    principals: ["internal"],
-    risk: "security",
-    reason:
-      "Legacy JWT secret diagnostics; not merchant-visible functionality or agent authentication state.",
-  },
   "system.auth_token.get_token": {
     exposure: "excluded",
     principals: ["internal"],

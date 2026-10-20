@@ -116,8 +116,7 @@ Permissions are in `packages/core/src/auth/rbac/route-permissions/settings.ts` a
 | Same path: `POST /import` (adds and updates, never deletes) | `settings.delivery_locations.edit` or `settings.delivery_locations.import` (what an app that loads a dataset asks for) |
 | `/api/v1/admin/settings/shipping-methods`: `GET /`, `POST /` (create zone), `PUT /{id}`, `DELETE /{id}`, `PUT /pickup`, `PUT /template` | `settings.shipping_methods.view` (`GET`), `.edit` (writes) |
 | `GET /api/v1/locations/cities`, `/zones`, `/areas` (and `/summaries`), `GET /api/v1/shipping-methods` (Bangladesh `cityId`/`zoneId`/`areaId`, or `countryCode`/`adminArea`/`postalCode`) | public |
-| `GET`, `DELETE /api/v1/admin/shipments/{id}`; `POST /api/v1/admin/shipments/{id}/check-status` | `orders.view` / `orders.manage_shipments` |
-| `/api/v1/admin/orders/{id}/shipments`, `.../{shipmentId}`, `/status`, `/refresh`, `/reconcile`, `/resolve-unknown` | see [fulfilment](../fulfilment/README.md) |
+| `/api/v1/admin/orders/{id}/shipments`, `.../{shipmentId}`, `/refresh`, `/reconcile`, `/resolve-unknown` | see [fulfilment](../fulfilment/README.md) |
 
 ## Rules
 

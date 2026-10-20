@@ -150,14 +150,19 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
     if (getPublicApiCachePolicy(request)) {
       // Dependency-validated: a Workers Cache hit runs no code, so it could
       // not be validated; direct reads use the batch's reader instead.
-      const env = await composeApiRuntimeEnv(this.env, { requestUrl: request.url });
+      // Validating a cached entry needs only the bindings and the Worker
+      // version, so the Platform settings are read (and secrets derived) only
+      // when a part has to render.
+      const requestUrl = request.url;
+      let composed: Promise<Env> | undefined;
+      const runtimeEnv = () => (composed ??= composeApiRuntimeEnv(this.env, { requestUrl }));
       const { getDb } = await import("@scalius/database/client");
       const reader = createPublicPartReader({
         mode: "strict",
-        env,
+        env: this.env,
         cache: typeof caches === "undefined" ? null : caches.default,
-        db: () => getDb(env),
-        render: (part) => renderPublicRead(part, env, this.ctx),
+        db: () => getDb(this.env),
+        render: async (part) => renderPublicRead(part, await runtimeEnv(), this.ctx),
         waitUntil: (promise) => this.ctx.waitUntil(promise),
         maxConcurrentRenders: 1,
       });

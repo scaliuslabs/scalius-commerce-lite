@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import type { AgentOperationManifestEntry } from "../openapi/agent-operation-manifest";
+import type { AgentOperationPolicy } from "../openapi/agent-operation-manifest";
 import {
   AgentPayloadTooLargeError,
   AgentRequestLengthMismatchError,
@@ -15,7 +15,7 @@ import { AppError } from "../utils/api-error";
  */
 export async function enforceDirectAgentRequestBodyLimit(
   c: Context,
-  operation: AgentOperationManifestEntry,
+  operation: AgentOperationPolicy,
 ): Promise<void> {
   if (c.req.raw.body === null) return;
   try {

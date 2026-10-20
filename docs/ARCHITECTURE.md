@@ -41,11 +41,11 @@ Related docs:
 - The API Worker serves the dashboard SPA (`apps/admin-v2/dist`) through its `ASSETS` binding. `apps/admin-v2` has no Wrangler config. On the dashboard host the API Worker serves the SPA shell, Better Auth (`<base>/api/auth/*`) and the API (`<base>/api/v1/*`): `apps/api/src/dashboard/surface.ts`.
 - The storefront Worker reads everything through `BACKEND_API` and has no KV binding.
 - Local ports: API 8787, storefront 4322, dashboard dev server 4323 (`scripts/dev-ports.mjs`).
-- `apps/api/src/runtime/fetch-runtime-app.ts` sorts a request path into one family (`probe`, `public`, `admin`, `system`, `docs`, `plugins`) and loads only that family's app. `runtime/admin-app.ts` and `runtime/public-app.ts` split their families into lazy groups.
-- `apps/api/src/app.ts` is the full contract app that produces the OpenAPI contract. `runtime/route-family-parity.test.ts` checks that each of its routes belongs to exactly one runtime app.
+- `apps/api/src/runtime/route-table.ts` is the one mount table of `/api/v1`: every router mount and path-scoped middleware, in order, each tagged with its lazy route group. `runtime/fetch-runtime-app.ts` (families `probe`, `public`, `admin`, `system`, `docs`, `plugins`), `runtime/public-app.ts` and `runtime/admin-app.ts` (their groups) classify a request from its paths and load only that group's app.
+- Each group's app (`runtime/<group>-app.ts`) supplies the routers and middleware its table steps name; `apps/api/src/app.ts`, the full contract app behind the OpenAPI contract, applies every step with the same builder (`runtime/route-groups.ts`). `runtime/route-family-parity.test.ts` checks each route belongs to one group and both apps run the same middleware on the same paths.
 - A store has no queue. Background work is a durable row first: a notification, a domain event, a webhook or app delivery, a payment event, an OTP delivery receipt, or a `system_kv` cursor. The request that commits the row starts the work after the response (`apps/api/src/background/`); the cron retries and finishes it. The table of work, retries and terminal states is in [FREE-PLAN.md](./FREE-PLAN.md#background-work).
 - The API Worker also exports the realtime hub, one Durable Object per store (see [Realtime hub](#realtime-hub)).
-- The cron runs `runScheduledMaintenance` (`apps/api/src/scheduled-maintenance.ts`) every minute. Every tick runs the background drains (`BACKGROUND_DRAINS`) and the tick's maintenance jobs (`MAINTENANCE_SWEEPS`). Workers Free runs one job a minute, so each job runs every 23 minutes and a tick fits 50 D1 queries. Paid runs every job every 15 minutes. The 02:00 store-time minute runs only the nightly pass.
+- The cron runs `runScheduledMaintenance` (`apps/api/src/scheduled-maintenance.ts`) every minute. Every tick runs the background drains with due rows (`BACKGROUND_DRAINS`, asked in one statement by `scheduled/due-work.ts`) and the tick's maintenance jobs (`MAINTENANCE_SWEEPS`). Workers Free runs one job a minute, so each job runs every 23 minutes and a tick fits 50 D1 queries. Paid runs every job every 15 minutes. The 02:00 store-time minute runs only the nightly pass.
 
 ## Layer rules
 
@@ -399,7 +399,7 @@ Lists that can grow large use keyset (cursor) paging: the admin orders, products
 1. Create `packages/core/src/modules/<domain>/index.ts`, and `browser.ts` if other code needs pure types or policies.
 2. Add `./modules/<domain>` (and `/browser`) to the `packages/core/package.json` exports. `scripts/core-boundaries.mjs` fails until the map and the directories agree.
 3. Add its route permission file and registry files.
-4. Mount its routers in `apps/api/src/app.ts` and in the matching `apps/api/src/runtime/<family>-app.ts`.
+4. Add its mounts to `apps/api/src/runtime/route-table.ts` and its routers to the matching `apps/api/src/runtime/<group>-app.ts` (the contract app reads both).
 5. Record its domain edges in the allowlist.
 
 ### Add a built-in payment gateway
