@@ -121,9 +121,7 @@ export const productMessages = defineMessages({
 
     // Validation
     titleRequired: "Title can't be blank.",
-    titleMin: "Use at least 3 characters.",
-    titleMax: "Use 100 characters or fewer.",
-    descriptionMin: "Write at least 10 characters.",
+    titleMax: "Use 255 characters or fewer.",
     priceNegative: "Price can't be negative.",
     discountNegative: "Discount can't be negative.",
     webAddressInvalid: "Use 3–100 lowercase letters, numbers and dashes.",
@@ -548,9 +546,7 @@ export const productMessages = defineMessages({
 
     // Validation
     titleRequired: "টাইটেল খালি রাখা যাবে না।",
-    titleMin: "অন্তত ৩টি অক্ষর দিন।",
-    titleMax: "১০০ অক্ষরের মধ্যে রাখুন।",
-    descriptionMin: "অন্তত ১০টি অক্ষর লিখুন।",
+    titleMax: "২৫৫ অক্ষরের মধ্যে রাখুন।",
     priceNegative: "দাম শূন্যের কম হতে পারে না।",
     discountNegative: "ছাড় শূন্যের কম হতে পারে না।",
     webAddressInvalid: "৩–১০০টি ছোট হাতের অক্ষর, সংখ্যা ও ড্যাশ ব্যবহার করুন।",

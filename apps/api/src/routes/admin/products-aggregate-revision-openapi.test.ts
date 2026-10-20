@@ -1,6 +1,6 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { describe, expect, it } from "vitest";
-import { inlineComponentSchemaRefs } from "../../openapi/component-schema-refs";
+import { inlineComponentSchemaRefs } from "@scalius/shared/openapi-schema-refs";
 import { adminProductsRoutes } from "./products";
 
 type OpenApiDocument = {

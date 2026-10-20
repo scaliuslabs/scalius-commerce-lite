@@ -83,10 +83,16 @@ export function Field({ label, id, help, error, optional, hideLabel, labelAction
  * carry `id`. A switch for a setting that applies at once may sit at the end
  * of the row instead (`controlAt="end"`), as in Shopify's settings.
  */
-export function ChoiceField({ id, label, help, control, controlAt = "start", className }: {
+export function ChoiceField({ id, label, help, error, control, controlAt = "start", className }: {
   id: string;
   label: React.ReactNode;
   help?: React.ReactNode;
+  /**
+   * Why this choice can't be saved as it is, in place of the help
+   * (`${id}-error`). The control sets its own `aria-invalid` and points
+   * `aria-describedby` at it.
+   */
+  error?: React.ReactNode;
   control: React.ReactNode;
   controlAt?: "start" | "end";
   className?: string;
@@ -97,7 +103,11 @@ export function ChoiceField({ id, label, help, control, controlAt = "start", cla
       <div data-slot="field-control" className={cn("flex h-lh shrink-0 items-center text-body", controlAt === "end" && "order-last")}>{control}</div>
       <div className="flex min-w-0 flex-col gap-1">
         <Label data-slot="field-label" htmlFor={id}>{label}</Label>
-        {help ? <p data-slot="choice-help" id={`${id}-help`} className="text-body text-muted-foreground">{help}</p> : null}
+        {error ? (
+          <p data-slot="field-error" id={`${id}-error`} className="text-body text-destructive">{error}</p>
+        ) : help ? (
+          <p data-slot="choice-help" id={`${id}-help`} className="text-body text-muted-foreground">{help}</p>
+        ) : null}
       </div>
     </div>
   );

@@ -194,7 +194,7 @@ app.openapi(createRoute({
     const provider = await getActiveSmsProvider(db, encryptionKey, requestAppProviders(c));
     if (!provider) throw new ValidationError("Set up SMS under Sending before sending a test.");
     const message = renderSmsTemplate(input.event, store.language, input.body, sampleVariables(store.name ?? "", store.language));
-    const result = await provider.send({ to: phone!, message }, {})
+    const result = await provider.send({ to: phone!, text: message }, {})
         .catch(() => ({ success: false as const, rawStatus: "provider_error" }));
     if (!result.success) {
         // Masked: the provider status only, never the number or the message.

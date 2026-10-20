@@ -7,8 +7,10 @@ import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const sdk = vi.hoisted(() => ({ postApiV1AdminDashboardSetupGuideDismiss: vi.fn() }));
+const sdk = vi.hoisted(() => ({ postApiV1AdminDashboardSetupGuideDismiss: vi.fn(), postApiV1AdminDashboardSetupGuideShow: vi.fn() }));
 vi.mock("@scalius/api-client/sdk", () => sdk);
+const toasts = vi.hoisted(() => ({ toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }) }));
+vi.mock("~/lib/toast", () => toasts);
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ to, params, children, ...props }: { to: string; params?: Record<string, string>; children: ReactNode }) => (
     <a href={Object.entries(params ?? {}).reduce((href, [key, value]) => href.replace(`$${key}`, value), to)} {...props}>{children}</a>
@@ -31,6 +33,8 @@ const NOTHING_DONE: SetupGuideData = {
   steps: { product: false, details: false, theme: false, payments: false, shipping: false, domain: false, order: false },
   bangladeshPack: null,
   onlinePayment: { ready: null, blockedProducts: 0 },
+  drafts: { count: 0, newestId: null },
+  testOrderUrl: null,
 };
 const guide = (patch: Partial<Omit<SetupGuideData, "steps">> & { steps?: Partial<SetupGuideData["steps"]> } = {}): SetupGuideData => ({
   ...NOTHING_DONE,
@@ -68,6 +72,24 @@ describe("setup guide steps", () => {
   it("opens the new-store setup while it still applies, and Settings after", () => {
     expect(setupGuideSteps(guide({ setupNeeded: true }), everything)[0]?.to).toBe("/admin/welcome");
     expect(setupGuideSteps(guide(), everything)[0]?.to).toBe("/admin/settings/store");
+  });
+
+  it("counts only live products, and opens the drafts to make them active", () => {
+    const one = setupGuideSteps(guide({ drafts: { count: 1, newestId: "prod_1" } }), everything).find((step) => step.key === "product");
+    expect(one).toMatchObject({ done: false, draftCount: 1, action: "draftsAction", to: "/admin/products/$productId/edit", params: { productId: "prod_1" } });
+    const many = setupGuideSteps(guide({ drafts: { count: 3, newestId: "prod_3" } }), everything).find((step) => step.key === "product");
+    expect(many).toMatchObject({ draftCount: 3, to: "/admin/products", search: { status: "draft" } });
+    // A live product finishes the step, drafts or not.
+    const live = setupGuideSteps(guide({ steps: { product: true }, drafts: { count: 3, newestId: "prod_3" } }), everything).find((step) => step.key === "product");
+    expect(live).toMatchObject({ done: true, to: "/admin/products/new" });
+    expect(live?.draftCount).toBeUndefined();
+  });
+
+  it("tests an order through the storefront once it can, and the order form until then", () => {
+    const manual = setupGuideSteps(guide(), everything).find((step) => step.key === "order");
+    expect(manual).toMatchObject({ to: "/admin/orders/new", body: "orderBodyManual", action: "orderManualAction" });
+    const storefront = setupGuideSteps(guide({ testOrderUrl: "https://shop.example.com/buy/panjabi" }), everything).find((step) => step.key === "order");
+    expect(storefront).toMatchObject({ href: "https://shop.example.com/buy/panjabi", body: "orderBody" });
   });
 
   it("drops the steps a role cannot open", () => {
@@ -152,5 +174,22 @@ describe("setup guide card", () => {
     await act(async () => dismiss.click());
     await vi.waitFor(() => expect(sdk.postApiV1AdminDashboardSetupGuideDismiss).toHaveBeenCalledOnce());
     await vi.waitFor(() => expect(queryClient.getQueryData<SetupGuideData>(queryKeys.dashboard.setupGuide())?.dismissed).toBe(true));
+    // The toast's Undo brings it back.
+    expect(toasts.toast).toHaveBeenCalledWith(t("dismissed"), expect.objectContaining({ duration: 10_000, action: expect.objectContaining({ label: t("undo") }) }));
+    sdk.postApiV1AdminDashboardSetupGuideShow.mockResolvedValue({ data: { success: true, data: { dismissed: false } }, response: { status: 200 } });
+    const options = toasts.toast.mock.calls[0]![1] as { action: { onClick: () => void } };
+    await act(async () => options.action.onClick());
+    await vi.waitFor(() => expect(sdk.postApiV1AdminDashboardSetupGuideShow).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(queryClient.getQueryData<SetupGuideData>(queryKeys.dashboard.setupGuide())?.dismissed).toBe(false));
+  });
+
+  it("names the drafts on the product step and opens the storefront for a test order in a new tab", () => {
+    show(guide({ steps: { details: true }, drafts: { count: 2, newestId: "prod_2" }, testOrderUrl: "https://shop.example.com/buy/panjabi" }));
+    expect(container.textContent).toContain(t("draftsNote", { count: 2 }));
+    expect(container.querySelector("#setup-step-product a")?.textContent).toBe(t("draftsAction"));
+    act(() => (container.querySelector("button[aria-controls=setup-step-order]") as HTMLButtonElement).click());
+    const link = container.querySelector("#setup-step-order a")!;
+    expect(link.getAttribute("href")).toBe("https://shop.example.com/buy/panjabi");
+    expect(link.getAttribute("target")).toBe("_blank");
   });
 });

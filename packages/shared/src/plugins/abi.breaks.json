@@ -1,0 +1,158 @@
+[
+ {
+  "snapshot": "./abi.manifest.snapshot.json",
+  "from": "ba0e15b70cec8aa4",
+  "change": "manifest providers[variant 0].fraud: the field is no longer accepted.",
+  "reason": "Pre-lock rename (audit R2 item 8): the stable fraud port reports courier history for a phone, so it is courier_history; stored manifests and grants naming fraud read as courier_history (RENAMED_PROVIDER_KINDS)."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "9c8cbfd88bfd3cbc",
+  "change": "providers.fraud: the stable port was removed.",
+  "reason": "Pre-lock rename (audit R2 item 8): the stable fraud port reports courier history for a phone, so it is courier_history; stored manifests and grants naming fraud read as courier_history (RENAMED_PROVIDER_KINDS)."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "9c8cbfd88bfd3cbc",
+  "change": "providers.courier.createShipment input recipient.address: the field was removed.",
+  "reason": "Pre-lock (audit R2 item 9): the recipient is the webhook representation's postal address (company, line1, line2, dependentLocality, locality, adminArea, postalCode, countryCode) with the store's placeIds and placeNames."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "9c8cbfd88bfd3cbc",
+  "change": "providers.courier.createShipment input recipient.cityId: the field was removed.",
+  "reason": "Pre-lock (audit R2 item 9): the recipient is the webhook representation's postal address (company, line1, line2, dependentLocality, locality, adminArea, postalCode, countryCode) with the store's placeIds and placeNames."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "9c8cbfd88bfd3cbc",
+  "change": "providers.courier.createShipment input recipient.zoneId: the field was removed.",
+  "reason": "Pre-lock (audit R2 item 9): the recipient is the webhook representation's postal address (company, line1, line2, dependentLocality, locality, adminArea, postalCode, countryCode) with the store's placeIds and placeNames."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "9c8cbfd88bfd3cbc",
+  "change": "providers.courier.createShipment input recipient.areaId: the field was removed.",
+  "reason": "Pre-lock (audit R2 item 9): the recipient is the webhook representation's postal address (company, line1, line2, dependentLocality, locality, adminArea, postalCode, countryCode) with the store's placeIds and placeNames."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "9c8cbfd88bfd3cbc",
+  "change": "providers.courier.createShipment input recipient.cityName: the field was removed.",
+  "reason": "Pre-lock (audit R2 item 9): the recipient is the webhook representation's postal address (company, line1, line2, dependentLocality, locality, adminArea, postalCode, countryCode) with the store's placeIds and placeNames."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "9c8cbfd88bfd3cbc",
+  "change": "providers.courier.createShipment input recipient.zoneName: the field was removed.",
+  "reason": "Pre-lock (audit R2 item 9): the recipient is the webhook representation's postal address (company, line1, line2, dependentLocality, locality, adminArea, postalCode, countryCode) with the store's placeIds and placeNames."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "9c8cbfd88bfd3cbc",
+  "change": "providers.courier.createShipment input recipient.areaName: the field was removed.",
+  "reason": "Pre-lock (audit R2 item 9): the recipient is the webhook representation's postal address (company, line1, line2, dependentLocality, locality, adminArea, postalCode, countryCode) with the store's placeIds and placeNames."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "9c8cbfd88bfd3cbc",
+  "change": "providers.courier.createShipment input recipient.country: the field was removed.",
+  "reason": "Pre-lock (audit R2 item 9): the recipient is the webhook representation's postal address (company, line1, line2, dependentLocality, locality, adminArea, postalCode, countryCode) with the store's placeIds and placeNames."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "9c8cbfd88bfd3cbc",
+  "change": "providers.courier.createShipment input options.deliveryType: the field was removed.",
+  "reason": "Pre-lock (audit R2 item 9): Pathao's numeric deliveryType/itemType moved to the courier-declared bookingOptions bag (options by key); the weight is parcel.weightGrams, beside parcel.dimensionsCm."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "9c8cbfd88bfd3cbc",
+  "change": "providers.courier.createShipment input options.itemType: the field was removed.",
+  "reason": "Pre-lock (audit R2 item 9): Pathao's numeric deliveryType/itemType moved to the courier-declared bookingOptions bag (options by key); the weight is parcel.weightGrams, beside parcel.dimensionsCm."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "9c8cbfd88bfd3cbc",
+  "change": "providers.courier.createShipment input options.itemWeightKg: the field was removed.",
+  "reason": "Pre-lock (audit R2 item 9): Pathao's numeric deliveryType/itemType moved to the courier-declared bookingOptions bag (options by key); the weight is parcel.weightGrams, beside parcel.dimensionsCm."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "9c8cbfd88bfd3cbc",
+  "change": "providers.courier.quote input recipient.address: the field was removed.",
+  "reason": "Pre-lock (audit R2 item 9): the recipient is the webhook representation's postal address (company, line1, line2, dependentLocality, locality, adminArea, postalCode, countryCode) with the store's placeIds and placeNames."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "9c8cbfd88bfd3cbc",
+  "change": "providers.courier.quote input recipient.cityId: the field was removed.",
+  "reason": "Pre-lock (audit R2 item 9): the recipient is the webhook representation's postal address (company, line1, line2, dependentLocality, locality, adminArea, postalCode, countryCode) with the store's placeIds and placeNames."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "9c8cbfd88bfd3cbc",
+  "change": "providers.courier.quote input recipient.zoneId: the field was removed.",
+  "reason": "Pre-lock (audit R2 item 9): the recipient is the webhook representation's postal address (company, line1, line2, dependentLocality, locality, adminArea, postalCode, countryCode) with the store's placeIds and placeNames."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "9c8cbfd88bfd3cbc",
+  "change": "providers.courier.quote input recipient.areaId: the field was removed.",
+  "reason": "Pre-lock (audit R2 item 9): the recipient is the webhook representation's postal address (company, line1, line2, dependentLocality, locality, adminArea, postalCode, countryCode) with the store's placeIds and placeNames."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "9c8cbfd88bfd3cbc",
+  "change": "providers.courier.quote input recipient.cityName: the field was removed.",
+  "reason": "Pre-lock (audit R2 item 9): the recipient is the webhook representation's postal address (company, line1, line2, dependentLocality, locality, adminArea, postalCode, countryCode) with the store's placeIds and placeNames."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "9c8cbfd88bfd3cbc",
+  "change": "providers.courier.quote input recipient.zoneName: the field was removed.",
+  "reason": "Pre-lock (audit R2 item 9): the recipient is the webhook representation's postal address (company, line1, line2, dependentLocality, locality, adminArea, postalCode, countryCode) with the store's placeIds and placeNames."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "9c8cbfd88bfd3cbc",
+  "change": "providers.courier.quote input recipient.areaName: the field was removed.",
+  "reason": "Pre-lock (audit R2 item 9): the recipient is the webhook representation's postal address (company, line1, line2, dependentLocality, locality, adminArea, postalCode, countryCode) with the store's placeIds and placeNames."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "9c8cbfd88bfd3cbc",
+  "change": "providers.courier.quote input recipient.country: the field was removed.",
+  "reason": "Pre-lock (audit R2 item 9): the recipient is the webhook representation's postal address (company, line1, line2, dependentLocality, locality, adminArea, postalCode, countryCode) with the store's placeIds and placeNames."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "9c8cbfd88bfd3cbc",
+  "change": "providers.courier.quote input options.deliveryType: the field was removed.",
+  "reason": "Pre-lock (audit R2 item 9): Pathao's numeric deliveryType/itemType moved to the courier-declared bookingOptions bag (options by key); the weight is parcel.weightGrams, beside parcel.dimensionsCm."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "9c8cbfd88bfd3cbc",
+  "change": "providers.courier.quote input options.itemType: the field was removed.",
+  "reason": "Pre-lock (audit R2 item 9): Pathao's numeric deliveryType/itemType moved to the courier-declared bookingOptions bag (options by key); the weight is parcel.weightGrams, beside parcel.dimensionsCm."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "9c8cbfd88bfd3cbc",
+  "change": "providers.courier.quote input options.itemWeightKg: the field was removed.",
+  "reason": "Pre-lock (audit R2 item 9): Pathao's numeric deliveryType/itemType moved to the courier-declared bookingOptions bag (options by key); the weight is parcel.weightGrams, beside parcel.dimensionsCm."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "9c8cbfd88bfd3cbc",
+  "change": "providers.sms.send input message: the field was removed.",
+  "reason": "Pre-lock (audit R2 item 10): every send port (sms, email, messaging, push) names its fields to, text and idempotencyKey."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "9c8cbfd88bfd3cbc",
+  "change": "providers.sms.send input clientReference: the field was removed.",
+  "reason": "Pre-lock (audit R2 item 10): every send port (sms, email, messaging, push) names its fields to, text and idempotencyKey."
+ }
+]

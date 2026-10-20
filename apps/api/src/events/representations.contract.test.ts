@@ -20,7 +20,7 @@ import {
   eventDataTruncationSchema,
   eventRepresentationProtectedPaths,
 } from "@scalius/shared/events";
-import { schemaBreakingChanges } from "../openapi/schema-compat";
+import { schemaBreakingChanges } from "@scalius/shared/schema-compat";
 
 const SNAPSHOT_FILE = new URL("../../../../packages/shared/src/events.representations.snapshot.json", import.meta.url);
 

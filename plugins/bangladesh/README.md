@@ -9,7 +9,7 @@ Every service is a **feature** (`manifest.features`, `docs/platform/PLUGINS.md`)
 | Payments | bKash (Tokenized Checkout: execute on return, status query, refunds), Nagad (unverified: no refunds) and SSLCommerz (sessions, IPN and return validation, transaction query, refunds) as hosted payment providers | `bkash`, `nagad`, `sslcommerz` | `src/bkash/`, `src/nagad/`, `src/sslcommerz.ts` |
 | Couriers | Pathao and Steadfast as courier providers: booking, tracking, Steadfast's lookup by order number, tracking pushes | `pathao`, `steadfast` | `src/couriers.ts` |
 | SMS | SMS.net.bd, BDBulkSMS (GreenWeb), MIM SMS and GenNet iSMS as SMS providers | `smsnetbd`, `bdbulksms`, `mimsms`, `gennet` | `src/sms.ts` |
-| Fraud checks | FraudBD, FraudGuard, eCourier Fraud Alert and the custom fraudchecker.link API as fraud providers, for Bangladesh buyers only | `fraudbd`, `fraudguard`, `ecourier`, `fraudchecker` | `src/fraud.ts` |
+| Fraud checks | FraudBD, FraudGuard, eCourier Fraud Alert and the custom fraudchecker.link API as courier-history providers (`courier_history`), for Bangladesh buyers only | `fraudbd`, `fraudguard`, `ecourier`, `fraudchecker` | `src/fraud.ts` |
 | Places | The City, Thana and Area list: 66 cities, 1,258 thanas, 10,226 areas from Pathao's delivery places (recommended during setup); Refresh from Pathao is part of the `pathao` feature | `places` | `src/places.ts`, `src/pathao-places.ts`, `places/` |
 
 RedX joins when RedX publishes API documentation that can be read (its developer page renders no documentation).

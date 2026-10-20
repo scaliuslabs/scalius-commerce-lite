@@ -183,6 +183,7 @@ function renderCartDom() {
           <input id="cartItemsInput" name="cartItems" type="hidden" />
           <input id="discountCodesInput" name="discountCodes" type="hidden" />
           <button id="submitButton" type="submit" disabled>Place Order</button>
+          <p id="submitButtonReason" hidden></p>
         </form>
       </div>
       <div id="cartSummary" class="hidden">
@@ -1098,6 +1099,22 @@ describe("initCartFunctionality", () => {
     expect(cartStore.get().items[CART_LINE_KEY]?.quantity).toBe(1);
   });
 
+  it("clears the cart from the cart page's Clear cart, with Undo", async () => {
+    document.getElementById("cartItems")!.insertAdjacentHTML(
+      "afterend",
+      `<button id="clearCartButton" type="button">Clear cart</button><p id="cartUndo" hidden></p>`,
+    );
+    await initCartFunctionality();
+
+    document.getElementById("clearCartButton")!.click();
+    expect(Object.keys(cartStore.get().items)).toEqual([]);
+    const undo = document.getElementById("cartUndo")!;
+    expect(undo.hidden).toBe(false);
+    expect(undo.textContent).toContain(ENGLISH_CHECKOUT_LANGUAGE_DATA.cartClearedText);
+    undo.querySelector("button")!.click();
+    expect(cartStore.get().items[CART_LINE_KEY]?.quantity).toBe(1);
+  });
+
   const withAddress = () =>
     document.getElementById("checkoutForm")?.insertAdjacentHTML(
       "beforeend",
@@ -1340,7 +1357,10 @@ describe("initCartFunctionality", () => {
       // Said once: the summary's availability box stays quiet for rules alone.
       expect(document.getElementById("cartValidationMessage")?.classList).toContain("hidden");
       expect(submit().disabled).toBe(true);
-      expect(submit().title).toBe("This order can't be placed yet.");
+      // The reason is a visible line the button names, not a tooltip.
+      expect(document.getElementById("submitButtonReason")?.textContent).toBe("This order can't be placed yet.");
+      expect(document.getElementById("submitButtonReason")?.hidden).toBe(false);
+      expect(submit().getAttribute("aria-describedby")).toBe("submitButtonReason");
       expect(window.hasCartRuleErrors?.()).toBe(true);
       expect((window as typeof window & { __rulePwned?: boolean }).__rulePwned).toBeUndefined();
 

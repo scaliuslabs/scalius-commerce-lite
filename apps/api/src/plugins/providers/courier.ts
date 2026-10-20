@@ -16,6 +16,8 @@
 // entry) gets them here: the platform reads them from the store's places
 // (`externalIds.<key>`), refuses a booking missing a required one before the
 // shipment row is written (`preflight`), and passes them in the recipient.
+// Staff booking choices reach the app only as the options it declares
+// (`bookingOptions`).
 
 import type { Database } from "@scalius/database/client";
 import {
@@ -31,6 +33,7 @@ import {
 } from "@scalius/core/modules/delivery";
 import { listActiveProviderPlugins, type PluginInstallation } from "@scalius/core/modules/plugins";
 import {
+  declaredCourierBookingOptions,
   declaredProviderOperations,
   ProviderError,
   providerOperationSchemas,
@@ -55,12 +58,20 @@ type CourierDeclaration = { kind: "courier" } & CourierProviderDescriptor;
 const clip = (value: string, max: number) => value.slice(0, max);
 const clipOrNull = (value: string | null, max: number) => (value === null ? null : value.slice(0, max));
 
+type Places = CourierShipmentInput["recipient"]["placeIds"];
+const clipPlaces = (places: Places, max: number): Places => ({
+  city: clipOrNull(places.city, max),
+  zone: clipOrNull(places.zone, max),
+  area: clipOrNull(places.area, max),
+});
+
 /**
- * A booking within the port's text bounds: order data the store accepts can
- * be longer than a courier needs (a long item list), and the app receives no
- * more than the port promises.
+ * A booking within the port's text bounds, with only the booking options the
+ * courier declares: order data the store accepts can be longer than a courier
+ * needs (a long item list), and the app receives no more than the port
+ * promises.
  */
-function fitShipmentInput(input: CourierShipmentInput): CourierShipmentInput {
+function fitShipmentInput<T extends Omit<CourierShipmentInput, "idempotencyKey" | "orderId">>(input: T, declaration: CourierDeclaration): T {
   const { recipient } = input;
   return {
     ...input,
@@ -68,17 +79,19 @@ function fitShipmentInput(input: CourierShipmentInput): CourierShipmentInput {
       ...recipient,
       name: clip(recipient.name, 200),
       phone: clip(recipient.phone, 40),
-      address: clip(recipient.address, 2000),
-      cityId: clipOrNull(recipient.cityId, 128),
-      zoneId: clipOrNull(recipient.zoneId, 128),
-      areaId: clipOrNull(recipient.areaId, 128),
-      cityName: clipOrNull(recipient.cityName, 200),
-      zoneName: clipOrNull(recipient.zoneName, 200),
-      areaName: clipOrNull(recipient.areaName, 200),
+      company: clipOrNull(recipient.company, 200),
+      line1: clipOrNull(recipient.line1, 1000),
+      line2: clipOrNull(recipient.line2, 1000),
+      dependentLocality: clipOrNull(recipient.dependentLocality, 200),
+      locality: clipOrNull(recipient.locality, 200),
+      adminArea: clipOrNull(recipient.adminArea, 200),
       postalCode: clipOrNull(recipient.postalCode, 40),
+      placeIds: clipPlaces(recipient.placeIds, 128),
+      placeNames: clipPlaces(recipient.placeNames, 200),
     },
     note: clipOrNull(input.note, 1000),
     itemDescription: clipOrNull(input.itemDescription, 500),
+    options: declaredCourierBookingOptions(declaration.bookingOptions, input.options),
   };
 }
 
@@ -108,7 +121,6 @@ function appSetupBlockers(appName: string, settings: AppProviderSettings): Deliv
 
 type CourierLocations = NonNullable<CourierDeclaration["locations"]>;
 type LocationLevel = "city" | "zone" | "area";
-const LEVEL_IDS: Record<LocationLevel, "cityId" | "zoneId" | "areaId"> = { city: "cityId", zone: "zoneId", area: "areaId" };
 
 /**
  * The courier's ids of the recipient's places, or why a booking cannot be
@@ -121,12 +133,13 @@ async function courierLocationIds(
   locations: CourierLocations,
   recipient: CourierShipmentInput["recipient"],
 ): Promise<{ ids: NonNullable<CourierShipmentInput["recipient"]["locationIds"]> } | { refusal: string }> {
-  const absent = locations.required.filter((level) => !recipient[LEVEL_IDS[level]]);
+  const places = recipient.placeIds;
+  const absent = locations.required.filter((level) => !places[level]);
   if (absent.length > 0) return { refusal: `Missing required location information: ${absent.join(", ")}` };
   const found = await getExternalLocationIds(db, {
-    ...(recipient.cityId ? { city: recipient.cityId } : {}),
-    ...(recipient.zoneId ? { zone: recipient.zoneId } : {}),
-    area: recipient.areaId,
+    ...(places.city ? { city: places.city } : {}),
+    ...(places.zone ? { zone: places.zone } : {}),
+    area: places.area,
   }, locations.key);
   const usable = (value: string | number | null | undefined) => (locations.numeric
     ? isPositiveIntegerExternalLocationId(value)
@@ -196,10 +209,10 @@ export function appCourier(
 
     async createShipment(input, { signal, db }) {
       const locations = declaration.locations;
-      if (!locations) return invoke("createShipment", fitShipmentInput(input), signal);
+      if (!locations) return invoke("createShipment", fitShipmentInput(input, declaration), signal);
       const read = await courierLocationIds(db, declaration.name, locations, input.recipient);
       if ("refusal" in read) throw new ProviderError("declined", read.refusal, { code: "courier.locations" });
-      return invoke("createShipment", fitShipmentInput({ ...input, recipient: { ...input.recipient, locationIds: read.ids } }), signal);
+      return invoke("createShipment", fitShipmentInput({ ...input, recipient: { ...input.recipient, locationIds: read.ids } }, declaration), signal);
     },
     trackShipment: (input, { signal }) => invoke("trackShipment", input, signal),
   };
@@ -215,7 +228,7 @@ export function appCourier(
 
   if (operations.has("findShipment")) courier.findShipment = (input, { signal }) => invoke("findShipment", input, signal);
   if (operations.has("cancelShipment")) courier.cancelShipment = (input, { signal }) => invoke("cancelShipment", input, signal);
-  if (operations.has("quote")) courier.quote = (input, { signal }) => invoke("quote", input, signal);
+  if (operations.has("quote")) courier.quote = (input, { signal }) => invoke("quote", fitShipmentInput(input, declaration), signal);
   if (operations.has("rates")) courier.rates = async (input, { signal, locationExternalIds }) => {
     const settings = await readSettings(runtime.env.CREDENTIAL_ENCRYPTION_KEY);
     if (!settings.enabled || settings.credentialErrors.length || settings.missingFields.length) {

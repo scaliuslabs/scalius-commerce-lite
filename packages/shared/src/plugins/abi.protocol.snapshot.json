@@ -3825,7 +3825,7 @@
   "payment": "stable",
   "courier": "stable",
   "sms": "stable",
-  "fraud": "stable",
+  "courier_history": "stable",
   "email": "beta",
   "tax": "beta",
   "translation": "beta",
@@ -5367,44 +5367,7 @@
          "type": "string",
          "maxLength": 40
         },
-        "address": {
-         "type": "string",
-         "maxLength": 2000
-        },
-        "cityId": {
-         "anyOf": [
-          {
-           "type": "string",
-           "maxLength": 128
-          },
-          {
-           "type": "null"
-          }
-         ]
-        },
-        "zoneId": {
-         "anyOf": [
-          {
-           "type": "string",
-           "maxLength": 128
-          },
-          {
-           "type": "null"
-          }
-         ]
-        },
-        "areaId": {
-         "anyOf": [
-          {
-           "type": "string",
-           "maxLength": 128
-          },
-          {
-           "type": "null"
-          }
-         ]
-        },
-        "cityName": {
+        "company": {
          "anyOf": [
           {
            "type": "string",
@@ -5415,7 +5378,29 @@
           }
          ]
         },
-        "zoneName": {
+        "line1": {
+         "anyOf": [
+          {
+           "type": "string",
+           "maxLength": 1000
+          },
+          {
+           "type": "null"
+          }
+         ]
+        },
+        "line2": {
+         "anyOf": [
+          {
+           "type": "string",
+           "maxLength": 1000
+          },
+          {
+           "type": "null"
+          }
+         ]
+        },
+        "dependentLocality": {
          "anyOf": [
           {
            "type": "string",
@@ -5426,7 +5411,18 @@
           }
          ]
         },
-        "areaName": {
+        "locality": {
+         "anyOf": [
+          {
+           "type": "string",
+           "maxLength": 200
+          },
+          {
+           "type": "null"
+          }
+         ]
+        },
+        "adminArea": {
          "anyOf": [
           {
            "type": "string",
@@ -5448,7 +5444,7 @@
           }
          ]
         },
-        "country": {
+        "countryCode": {
          "anyOf": [
           {
            "type": "string",
@@ -5458,6 +5454,94 @@
            "type": "null"
           }
          ]
+        },
+        "placeIds": {
+         "type": "object",
+         "properties": {
+          "city": {
+           "anyOf": [
+            {
+             "type": "string",
+             "maxLength": 128
+            },
+            {
+             "type": "null"
+            }
+           ]
+          },
+          "zone": {
+           "anyOf": [
+            {
+             "type": "string",
+             "maxLength": 128
+            },
+            {
+             "type": "null"
+            }
+           ]
+          },
+          "area": {
+           "anyOf": [
+            {
+             "type": "string",
+             "maxLength": 128
+            },
+            {
+             "type": "null"
+            }
+           ]
+          }
+         },
+         "required": [
+          "city",
+          "zone",
+          "area"
+         ],
+         "additionalProperties": false
+        },
+        "placeNames": {
+         "type": "object",
+         "properties": {
+          "city": {
+           "anyOf": [
+            {
+             "type": "string",
+             "maxLength": 200
+            },
+            {
+             "type": "null"
+            }
+           ]
+          },
+          "zone": {
+           "anyOf": [
+            {
+             "type": "string",
+             "maxLength": 200
+            },
+            {
+             "type": "null"
+            }
+           ]
+          },
+          "area": {
+           "anyOf": [
+            {
+             "type": "string",
+             "maxLength": 200
+            },
+            {
+             "type": "null"
+            }
+           ]
+          }
+         },
+         "required": [
+          "city",
+          "zone",
+          "area"
+         ],
+         "additionalProperties": false
         },
         "locationIds": {
          "type": "object",
@@ -5507,15 +5591,16 @@
        "required": [
         "name",
         "phone",
-        "address",
-        "cityId",
-        "zoneId",
-        "areaId",
-        "cityName",
-        "zoneName",
-        "areaName",
+        "company",
+        "line1",
+        "line2",
+        "dependentLocality",
+        "locality",
+        "adminArea",
         "postalCode",
-        "country"
+        "countryCode",
+        "placeIds",
+        "placeNames"
        ],
        "additionalProperties": false
       },
@@ -5567,39 +5652,48 @@
         }
        ]
       },
-      "options": {
+      "parcel": {
        "type": "object",
        "properties": {
-        "deliveryType": {
-         "anyOf": [
-          {
-           "type": "integer",
-           "minimum": 0,
-           "maximum": 1000000
-          },
-          {
-           "type": "null"
-          }
-         ]
-        },
-        "itemType": {
-         "anyOf": [
-          {
-           "type": "integer",
-           "minimum": 0,
-           "maximum": 1000000
-          },
-          {
-           "type": "null"
-          }
-         ]
-        },
-        "itemWeightKg": {
+        "weightGrams": {
          "anyOf": [
           {
            "type": "number",
            "minimum": 0,
-           "maximum": 10000
+           "maximum": 1000000000
+          },
+          {
+           "type": "null"
+          }
+         ]
+        },
+        "dimensionsCm": {
+         "anyOf": [
+          {
+           "type": "object",
+           "properties": {
+            "length": {
+             "type": "number",
+             "minimum": 0,
+             "maximum": 10000
+            },
+            "width": {
+             "type": "number",
+             "minimum": 0,
+             "maximum": 10000
+            },
+            "height": {
+             "type": "number",
+             "minimum": 0,
+             "maximum": 10000
+            }
+           },
+           "required": [
+            "length",
+            "width",
+            "height"
+           ],
+           "additionalProperties": false
           },
           {
            "type": "null"
@@ -5608,11 +5702,31 @@
         }
        },
        "required": [
-        "deliveryType",
-        "itemType",
-        "itemWeightKg"
+        "weightGrams",
+        "dimensionsCm"
        ],
        "additionalProperties": false
+      },
+      "options": {
+       "type": "object",
+       "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-zA-Z0-9]{0,31}$"
+       },
+       "additionalProperties": {
+        "anyOf": [
+         {
+          "type": "string",
+          "maxLength": 200
+         },
+         {
+          "type": "number"
+         },
+         {
+          "type": "boolean"
+         }
+        ]
+       }
       }
      },
      "required": [
@@ -5625,6 +5739,7 @@
       "note",
       "itemCount",
       "itemDescription",
+      "parcel",
       "options"
      ],
      "additionalProperties": false
@@ -6042,44 +6157,7 @@
          "type": "string",
          "maxLength": 40
         },
-        "address": {
-         "type": "string",
-         "maxLength": 2000
-        },
-        "cityId": {
-         "anyOf": [
-          {
-           "type": "string",
-           "maxLength": 128
-          },
-          {
-           "type": "null"
-          }
-         ]
-        },
-        "zoneId": {
-         "anyOf": [
-          {
-           "type": "string",
-           "maxLength": 128
-          },
-          {
-           "type": "null"
-          }
-         ]
-        },
-        "areaId": {
-         "anyOf": [
-          {
-           "type": "string",
-           "maxLength": 128
-          },
-          {
-           "type": "null"
-          }
-         ]
-        },
-        "cityName": {
+        "company": {
          "anyOf": [
           {
            "type": "string",
@@ -6090,7 +6168,29 @@
           }
          ]
         },
-        "zoneName": {
+        "line1": {
+         "anyOf": [
+          {
+           "type": "string",
+           "maxLength": 1000
+          },
+          {
+           "type": "null"
+          }
+         ]
+        },
+        "line2": {
+         "anyOf": [
+          {
+           "type": "string",
+           "maxLength": 1000
+          },
+          {
+           "type": "null"
+          }
+         ]
+        },
+        "dependentLocality": {
          "anyOf": [
           {
            "type": "string",
@@ -6101,7 +6201,18 @@
           }
          ]
         },
-        "areaName": {
+        "locality": {
+         "anyOf": [
+          {
+           "type": "string",
+           "maxLength": 200
+          },
+          {
+           "type": "null"
+          }
+         ]
+        },
+        "adminArea": {
          "anyOf": [
           {
            "type": "string",
@@ -6123,7 +6234,7 @@
           }
          ]
         },
-        "country": {
+        "countryCode": {
          "anyOf": [
           {
            "type": "string",
@@ -6133,6 +6244,94 @@
            "type": "null"
           }
          ]
+        },
+        "placeIds": {
+         "type": "object",
+         "properties": {
+          "city": {
+           "anyOf": [
+            {
+             "type": "string",
+             "maxLength": 128
+            },
+            {
+             "type": "null"
+            }
+           ]
+          },
+          "zone": {
+           "anyOf": [
+            {
+             "type": "string",
+             "maxLength": 128
+            },
+            {
+             "type": "null"
+            }
+           ]
+          },
+          "area": {
+           "anyOf": [
+            {
+             "type": "string",
+             "maxLength": 128
+            },
+            {
+             "type": "null"
+            }
+           ]
+          }
+         },
+         "required": [
+          "city",
+          "zone",
+          "area"
+         ],
+         "additionalProperties": false
+        },
+        "placeNames": {
+         "type": "object",
+         "properties": {
+          "city": {
+           "anyOf": [
+            {
+             "type": "string",
+             "maxLength": 200
+            },
+            {
+             "type": "null"
+            }
+           ]
+          },
+          "zone": {
+           "anyOf": [
+            {
+             "type": "string",
+             "maxLength": 200
+            },
+            {
+             "type": "null"
+            }
+           ]
+          },
+          "area": {
+           "anyOf": [
+            {
+             "type": "string",
+             "maxLength": 200
+            },
+            {
+             "type": "null"
+            }
+           ]
+          }
+         },
+         "required": [
+          "city",
+          "zone",
+          "area"
+         ],
+         "additionalProperties": false
         },
         "locationIds": {
          "type": "object",
@@ -6182,15 +6381,16 @@
        "required": [
         "name",
         "phone",
-        "address",
-        "cityId",
-        "zoneId",
-        "areaId",
-        "cityName",
-        "zoneName",
-        "areaName",
+        "company",
+        "line1",
+        "line2",
+        "dependentLocality",
+        "locality",
+        "adminArea",
         "postalCode",
-        "country"
+        "countryCode",
+        "placeIds",
+        "placeNames"
        ],
        "additionalProperties": false
       },
@@ -6242,39 +6442,48 @@
         }
        ]
       },
-      "options": {
+      "parcel": {
        "type": "object",
        "properties": {
-        "deliveryType": {
-         "anyOf": [
-          {
-           "type": "integer",
-           "minimum": 0,
-           "maximum": 1000000
-          },
-          {
-           "type": "null"
-          }
-         ]
-        },
-        "itemType": {
-         "anyOf": [
-          {
-           "type": "integer",
-           "minimum": 0,
-           "maximum": 1000000
-          },
-          {
-           "type": "null"
-          }
-         ]
-        },
-        "itemWeightKg": {
+        "weightGrams": {
          "anyOf": [
           {
            "type": "number",
            "minimum": 0,
-           "maximum": 10000
+           "maximum": 1000000000
+          },
+          {
+           "type": "null"
+          }
+         ]
+        },
+        "dimensionsCm": {
+         "anyOf": [
+          {
+           "type": "object",
+           "properties": {
+            "length": {
+             "type": "number",
+             "minimum": 0,
+             "maximum": 10000
+            },
+            "width": {
+             "type": "number",
+             "minimum": 0,
+             "maximum": 10000
+            },
+            "height": {
+             "type": "number",
+             "minimum": 0,
+             "maximum": 10000
+            }
+           },
+           "required": [
+            "length",
+            "width",
+            "height"
+           ],
+           "additionalProperties": false
           },
           {
            "type": "null"
@@ -6283,11 +6492,31 @@
         }
        },
        "required": [
-        "deliveryType",
-        "itemType",
-        "itemWeightKg"
+        "weightGrams",
+        "dimensionsCm"
        ],
        "additionalProperties": false
+      },
+      "options": {
+       "type": "object",
+       "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-zA-Z0-9]{0,31}$"
+       },
+       "additionalProperties": {
+        "anyOf": [
+         {
+          "type": "string",
+          "maxLength": 200
+         },
+         {
+          "type": "number"
+         },
+         {
+          "type": "boolean"
+         }
+        ]
+       }
       }
      },
      "required": [
@@ -6298,6 +6527,7 @@
       "note",
       "itemCount",
       "itemDescription",
+      "parcel",
       "options"
      ],
      "additionalProperties": false
@@ -6820,12 +7050,12 @@
        "minLength": 4,
        "maxLength": 20
       },
-      "message": {
+      "text": {
        "type": "string",
        "minLength": 1,
        "maxLength": 2000
       },
-      "clientReference": {
+      "idempotencyKey": {
        "type": "string",
        "minLength": 1,
        "maxLength": 256
@@ -6833,7 +7063,7 @@
      },
      "required": [
       "to",
-      "message"
+      "text"
      ],
      "additionalProperties": false
     },
@@ -6931,7 +7161,7 @@
     }
    }
   },
-  "fraud": {
+  "courier_history": {
    "check": {
     "input": {
      "$schema": "https://json-schema.org/draft/2020-12/schema",

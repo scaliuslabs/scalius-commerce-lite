@@ -3650,7 +3650,7 @@ export type AppProviderEntry = {
      */
     id: string;
     providerId: string;
-    kind: 'payment' | 'courier' | 'sms' | 'email' | 'fraud' | 'tax' | 'translation' | 'ai' | 'messaging' | 'push' | 'search' | 'address' | 'fx' | 'identity';
+    kind: 'payment' | 'courier' | 'sms' | 'email' | 'courier_history' | 'tax' | 'translation' | 'ai' | 'messaging' | 'push' | 'search' | 'address' | 'fx' | 'identity';
     name: string;
     /**
      * Same-origin address of the provider's own mark, else the app's icon.
@@ -4018,7 +4018,7 @@ export type AppFeature = {
         allowedHosts: Array<string>;
         providers: Array<{
             id: string;
-            kind: 'payment' | 'courier' | 'sms' | 'email' | 'fraud' | 'tax' | 'translation' | 'ai' | 'messaging' | 'push' | 'search' | 'address' | 'fx' | 'identity';
+            kind: 'payment' | 'courier' | 'sms' | 'email' | 'courier_history' | 'tax' | 'translation' | 'ai' | 'messaging' | 'push' | 'search' | 'address' | 'fx' | 'identity';
             name: string;
             icon: string | null;
         }>;
@@ -39341,7 +39341,7 @@ export type GetApiV1AdminDashboardSetupGuideResponses = {
             setupNeeded: boolean;
             steps: {
                 /**
-                 * A product exists outside the trash.
+                 * A live product exists: active and outside the trash.
                  */
                 product: boolean;
                 /**
@@ -39365,10 +39365,27 @@ export type GetApiV1AdminDashboardSetupGuideResponses = {
                  */
                 domain: boolean;
                 /**
-                 * An order exists.
+                 * A buyer placed an order through the storefront's checkout.
                  */
                 order: boolean;
             };
+            /**
+             * Drafts, which the product step asks the merchant to make active.
+             */
+            drafts: {
+                /**
+                 * Draft products outside the trash (counted up to 1,000).
+                 */
+                count: number;
+                /**
+                 * The newest draft product, or null when there is none.
+                 */
+                newestId: string | null;
+            };
+            /**
+             * A storefront link that puts a live product in the cart and opens checkout; null until the store has a web address and a live product.
+             */
+            testOrderUrl: string | null;
             /**
              * The Bangladesh pack, for a Bangladesh store whose deployment includes it; null otherwise.
              */
@@ -39465,6 +39482,27 @@ export type PostApiV1AdminDashboardSetupGuideDismissResponses = {
 };
 
 export type PostApiV1AdminDashboardSetupGuideDismissResponse = PostApiV1AdminDashboardSetupGuideDismissResponses[keyof PostApiV1AdminDashboardSetupGuideDismissResponses];
+
+export type PostApiV1AdminDashboardSetupGuideShowData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/dashboard/setup-guide/show';
+};
+
+export type PostApiV1AdminDashboardSetupGuideShowResponses = {
+    /**
+     * Setup guide shown
+     */
+    200: {
+        success: true;
+        data: {
+            dismissed: false;
+        };
+    };
+};
+
+export type PostApiV1AdminDashboardSetupGuideShowResponse = PostApiV1AdminDashboardSetupGuideShowResponses[keyof PostApiV1AdminDashboardSetupGuideShowResponses];
 
 export type GetApiV1AdminReportsOverviewData = {
     body?: never;
@@ -43430,6 +43468,10 @@ export type PostApiV1AdminSettingsStripeData = {
         publishableKey?: string;
         webhookSecret?: string;
         enabled?: boolean;
+        /**
+         * With enabled: also offers Stripe at checkout, written in the same batch as the keys (the dashboard switch's Turn on is one save).
+         */
+        showAtCheckout?: true;
     };
     path?: never;
     query?: never;
@@ -48575,7 +48617,7 @@ export type GetApiV1AdminSettingsProvidersData = {
     body?: never;
     path?: never;
     query: {
-        kind: 'payment' | 'courier' | 'sms' | 'email' | 'fraud' | 'tax' | 'translation' | 'ai' | 'messaging' | 'push' | 'search' | 'address' | 'fx' | 'identity';
+        kind: 'payment' | 'courier' | 'sms' | 'email' | 'courier_history' | 'tax' | 'translation' | 'ai' | 'messaging' | 'push' | 'search' | 'address' | 'fx' | 'identity';
     };
     url: '/api/v1/admin/settings/providers';
 };
@@ -48618,7 +48660,7 @@ export type GetApiV1AdminSettingsProvidersResponses = {
         data: {
             providers: Array<{
                 id: string;
-                kind: 'payment' | 'courier' | 'sms' | 'email' | 'fraud' | 'tax' | 'translation' | 'ai' | 'messaging' | 'push' | 'search' | 'address' | 'fx' | 'identity';
+                kind: 'payment' | 'courier' | 'sms' | 'email' | 'courier_history' | 'tax' | 'translation' | 'ai' | 'messaging' | 'push' | 'search' | 'address' | 'fx' | 'identity';
                 pluginId: string;
                 appName: string;
                 appIcon: string | null;

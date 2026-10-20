@@ -18,6 +18,7 @@ import {
 import { and, sql, eq, isNull, or } from "drizzle-orm";
 import {
     createProductSchema,
+    PRODUCT_NAME_MAX_LENGTH,
     type CreateProductInput,
     type UpdateProductInput,
 } from "./validation";
@@ -1429,7 +1430,7 @@ export async function duplicateProduct(
     const soldValueIds = new Set(optionVariants.flatMap((variant) =>
         variant.selectedOptions.map((option) => option.optionValueId)));
     const parsed = createProductSchema.safeParse({
-        name: name.trim().slice(0, 100),
+        name: name.trim().slice(0, PRODUCT_NAME_MAX_LENGTH),
         description: source.description,
         price: source.price,
         categoryId: source.categoryId,

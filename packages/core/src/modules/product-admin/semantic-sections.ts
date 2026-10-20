@@ -49,6 +49,7 @@ import {
 import { executeProductAggregateMutationBatch } from "./aggregate-revision";
 import { updateProductMediaSection } from "./write";
 import {
+    PRODUCT_NAME_MAX_LENGTH,
     productBrandIdSchema,
     productMediaAssociationIdSchema,
     productMediaInputSchema,
@@ -95,7 +96,7 @@ const canonicalPathPatchSchema = z
     .optional();
 
 const productBasePatchSchema = z.object({
-    name: z.string().min(3).max(100).optional(),
+    name: z.string().trim().min(1).max(PRODUCT_NAME_MAX_LENGTH).optional(),
     price: z.number().min(0).max(MAX_PRODUCT_PRICE).optional(),
     categoryId: z.string().min(1).nullable().optional(),
     brandId: productBrandIdSchema.optional(),
@@ -744,9 +745,6 @@ async function updateTextSection(
     const row = await db.select({ value: column }).from(products).where(eq(products.id, productId)).get();
     if (!row) return null;
     const value = applyTextRange(row.value, patch.offset, patch.deleteCount, patch.value, patch.field);
-    if (patch.field === "description" && value !== null && value.length < 10) {
-        throw new ValidationError("Description must contain at least 10 characters.");
-    }
     const values = patch.field === "description"
         ? { description: value }
         : patch.field === "metaTitle"

@@ -10,7 +10,7 @@
 //   message can pass later. A request that could not complete (timeout,
 //   network) throws a retryable `ProviderError`, `uncertain` because the
 //   gateway may already have sent it; the platform retries it only with the
-//   message's idempotency key (`clientReference`).
+//   message's idempotency key (`idempotencyKey`).
 // - Answers keep no phone number, e-mail address or credential
 //   (sms-diagnostics.ts), and nothing here logs a request or a response.
 
@@ -78,7 +78,7 @@ const withoutPlus = (to: string) => to.replace(/^\+/, "");
 export async function sendSmsNetBd(input: SmsSendInput, ctx: PluginContext): Promise<SmsSend> {
   const apiKey = requireText(ctx, "smsnetbd_api_key", "SMS.net.bd API key");
   const senderId = optionalText(ctx, "smsnetbd_sender_id");
-  const fields: Array<[string, string]> = [["api_key", apiKey], ["msg", input.message], ["to", withoutPlus(input.to)]];
+  const fields: Array<[string, string]> = [["api_key", apiKey], ["msg", input.text], ["to", withoutPlus(input.to)]];
   if (senderId) fields.push(["sender_id", senderId]);
   const form = multipartForm(fields);
   const response = await post(ctx, "SMS.net.bd", "https://api.sms.net.bd/sendsms", {
@@ -101,13 +101,13 @@ export async function sendBdBulkSms(input: SmsSendInput, ctx: PluginContext): Pr
   // BDBulkSMS takes +8801XXXXXXXXX as it is.
   const response = await post(ctx, "BDBulkSMS", "https://api.bdbulksms.net/api.php?json", {
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token, smsdata: [{ to: input.to, message: input.message }] }),
+    body: JSON.stringify({ token, smsdata: [{ to: input.to, message: input.text }] }),
   });
   const json = await readJson<Array<{ to: string; status: string; statusmsg: string }>>(response);
   if (!json) return unreadable(response);
   const first = Array.isArray(json) ? json[0] : undefined;
   // The gateway gives no message id: the platform's reference is the receipt's, never the phone.
-  if (response.ok && first?.status === "SENT") return sent(input.clientReference, first.statusmsg);
+  if (response.ok && first?.status === "SENT") return sent(input.idempotencyKey, first.statusmsg);
   return refused(first?.statusmsg ?? "Unknown error", response);
 }
 
@@ -126,7 +126,7 @@ export async function sendMimSms(input: SmsSendInput, ctx: PluginContext): Promi
       CampaignId: "null",
       SenderName: senderName,
       TransactionType: "T", // Transactional: required for OTP.
-      Message: input.message,
+      Message: input.text,
     }),
   });
   const json = await readJson<{ statusCode: string; status: string; trxnId: string; responseResult: string }>(response);
@@ -154,8 +154,8 @@ export function gennetBaseUrlIssue(baseUrl: string): string | null {
 }
 
 /** csms_id is unique per day: the caller's deterministic reference, so a retry dedupes at GenNet. */
-export function normalizeCsmsId(clientReference?: string): string {
-  const cleaned = (clientReference ?? "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 20);
+export function normalizeCsmsId(idempotencyKey?: string): string {
+  const cleaned = (idempotencyKey ?? "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 20);
   return cleaned.length > 0 ? cleaned : crypto.randomUUID().replace(/-/g, "").slice(0, 20);
 }
 
@@ -165,10 +165,10 @@ export async function sendGennet(input: SmsSendInput, ctx: PluginContext): Promi
   const sid = requireText(ctx, "gennet_sid", "Gennet SID (sender ID)");
   const issue = gennetBaseUrlIssue(baseUrl);
   if (issue) throw new ProviderError("misconfigured", `${issue}.`, { code: "bangladesh.gennet_base_url" });
-  const csmsId = normalizeCsmsId(input.clientReference);
+  const csmsId = normalizeCsmsId(input.idempotencyKey);
   const response = await post(ctx, "GenNet", `${baseUrl.replace(/\/$/, "")}/api/v3/send-sms`, {
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ api_token: apiToken, sid, msisdn: withoutPlus(input.to), sms: input.message, csms_id: csmsId }),
+    body: JSON.stringify({ api_token: apiToken, sid, msisdn: withoutPlus(input.to), sms: input.text, csms_id: csmsId }),
   });
   const json = await readJson<{ status: string; status_code: number; error_message: string; smsinfo?: Array<{ reference_id?: string }> }>(response);
   if (!json) return unreadable(response);

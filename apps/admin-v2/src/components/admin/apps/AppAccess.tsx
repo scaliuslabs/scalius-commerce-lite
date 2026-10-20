@@ -13,7 +13,7 @@ import { topicLabel } from "../settings/webhooks/webhook-format";
 import { RISK_VARIANT } from "./app-status";
 
 const PROVIDER_KINDS = [
-  "payment", "courier", "sms", "email", "fraud", "tax", "translation", "ai",
+  "payment", "courier", "sms", "email", "courier_history", "tax", "translation", "ai",
   "messaging", "push", "search", "address", "fx", "identity",
 ] as const;
 

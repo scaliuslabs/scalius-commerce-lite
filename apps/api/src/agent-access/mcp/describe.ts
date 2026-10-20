@@ -5,7 +5,7 @@
 
 import { AGENT_COMPONENT_SCHEMAS, AGENT_OPERATIONS_BY_ID } from "../../generated/agent-operations.gen";
 import type { AgentOperationManifestEntry } from "../../openapi/agent-operation-manifest";
-import { resolveComponentSchemaRef } from "../../openapi/component-schema-refs";
+import { resolveComponentSchemaRef } from "@scalius/shared/openapi-schema-refs";
 import { utf8ByteLength } from "../limits";
 import { isConfirmGated } from "./confirm";
 import { describeOperation } from "./operations";

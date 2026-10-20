@@ -722,6 +722,127 @@
             "key"
            ],
            "additionalProperties": false
+          },
+          "bookingOptions": {
+           "maxItems": 10,
+           "type": "array",
+           "items": {
+            "oneOf": [
+             {
+              "type": "object",
+              "properties": {
+               "key": {
+                "type": "string",
+                "pattern": "^[a-z][a-zA-Z0-9]{0,31}$"
+               },
+               "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+               },
+               "type": {
+                "type": "string",
+                "const": "select"
+               },
+               "choices": {
+                "minItems": 1,
+                "maxItems": 20,
+                "type": "array",
+                "items": {
+                 "type": "object",
+                 "properties": {
+                  "value": {
+                   "anyOf": [
+                    {
+                     "type": "string",
+                     "minLength": 1,
+                     "maxLength": 64
+                    },
+                    {
+                     "type": "integer",
+                     "minimum": -1000000,
+                     "maximum": 1000000
+                    }
+                   ]
+                  },
+                  "label": {
+                   "type": "string",
+                   "minLength": 1,
+                   "maxLength": 80
+                  }
+                 },
+                 "required": [
+                  "value",
+                  "label"
+                 ],
+                 "additionalProperties": false
+                }
+               }
+              },
+              "required": [
+               "key",
+               "label",
+               "type",
+               "choices"
+              ],
+              "additionalProperties": false
+             },
+             {
+              "type": "object",
+              "properties": {
+               "key": {
+                "type": "string",
+                "pattern": "^[a-z][a-zA-Z0-9]{0,31}$"
+               },
+               "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+               },
+               "type": {
+                "type": "string",
+                "const": "number"
+               },
+               "min": {
+                "type": "number"
+               },
+               "max": {
+                "type": "number"
+               }
+              },
+              "required": [
+               "key",
+               "label",
+               "type"
+              ],
+              "additionalProperties": false
+             },
+             {
+              "type": "object",
+              "properties": {
+               "key": {
+                "type": "string",
+                "pattern": "^[a-z][a-zA-Z0-9]{0,31}$"
+               },
+               "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+               },
+               "type": {
+                "type": "string",
+                "const": "boolean"
+               }
+              },
+              "required": [
+               "key",
+               "label",
+               "type"
+              ],
+              "additionalProperties": false
+             }
+            ]
+           }
           }
          },
          "required": [
@@ -827,7 +948,7 @@
          "additionalProperties": false
         }
        },
-       "fraud": {
+       "courier_history": {
         "maxItems": 24,
         "type": "array",
         "items": {
@@ -1375,7 +1496,7 @@
           "courier",
           "sms",
           "email",
-          "fraud",
+          "courier_history",
           "tax",
           "translation",
           "ai",
@@ -1385,7 +1506,8 @@
           "address",
           "fx",
           "identity",
-          "shipping"
+          "shipping",
+          "fraud"
          ]
         }
        },

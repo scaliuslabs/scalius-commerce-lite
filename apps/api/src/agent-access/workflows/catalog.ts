@@ -1,5 +1,5 @@
 import type { AgentOperationManifestEntry } from "../../openapi/agent-operation-manifest";
-import { inlineComponentSchemaRefs, type ComponentSchemas } from "../../openapi/component-schema-refs";
+import { inlineComponentSchemaRefs, type ComponentSchemas } from "@scalius/shared/openapi-schema-refs";
 import { CURATED_AGENT_WORKFLOW_CARDS } from "./cards";
 import { AGENT_WORKFLOW_CONTROLS } from "./controls";
 import { DASHBOARD_AGENT_WORKFLOW_ROUTES } from "./routes-dashboard";

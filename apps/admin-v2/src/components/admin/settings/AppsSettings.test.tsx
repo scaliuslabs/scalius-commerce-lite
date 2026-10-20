@@ -9,11 +9,10 @@ import { translate } from "~/i18n";
 import { settingsMessages } from "~/i18n/settings";
 import { appsMessages } from "~/i18n/settings-apps";
 
-import { FacebookCard, FraudCheckCard, ScannerCard, TrackingCard } from "./AppsSettings";
+import { FraudCheckCard, ScannerCard, TrackingCard } from "./AppsSettings";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const MASK = "••••••••••••";
 const ok = (data: unknown) => Promise.resolve({ data: { success: true, data }, response: { status: 200 } });
 
 const sdk = vi.hoisted(() => ({
@@ -46,7 +45,6 @@ async function render(permissions: string[]) {
       <QueryClientProvider client={queryClient}>
         <PermissionProvider permissions={permissions}>
           <TrackingCard />
-          <FacebookCard />
           <FraudCheckCard />
           <ScannerCard />
         </PermissionProvider>
@@ -65,14 +63,6 @@ function button(text: string): HTMLButtonElement {
 async function click(element: HTMLElement) {
   await act(async () => element.click());
   await flush();
-}
-
-async function openConnection() {
-  await vi.waitFor(() => expect(document.body.textContent).toContain(apps("connection")));
-  await click(button(apps("connection")));
-  // The form loads the latest saved connection (and its revision) first.
-  await vi.waitFor(() => expect(document.querySelector('[role="dialog"] [role="switch"]')).not.toBeNull());
-  await click(document.querySelector<HTMLButtonElement>('[role="dialog"] [role="switch"]')!);
 }
 
 beforeEach(() => {
@@ -96,76 +86,38 @@ afterEach(() => {
 
 describe("Settings → Apps cards", () => {
   it("hides the cards a role can't view and locks what it can't change", async () => {
-    sdk.getApiV1AdminSettingsMetaConversions.mockImplementation(() => ok({ settings: null }));
     await render(["analytics.view"]);
-    await vi.waitFor(() => expect(document.body.textContent).toContain(apps("recentEvents")));
+    await vi.waitFor(() => expect(document.body.textContent).toContain(apps("noOtherTracking")));
 
     expect(document.body.textContent).toContain(apps("trackingTitle"));
     expect(document.body.textContent).not.toContain(apps("fraudTitle"));
     expect(document.body.textContent).not.toContain(apps("scannerTitle"));
     expect(button(apps("addTracking")).disabled).toBe(true);
-    expect(button(apps("connection")).disabled).toBe(true);
     expect(sdk.getApiV1AdminFraudChecker).not.toHaveBeenCalled();
   });
 
-  it("keeps the saved Meta access token by never sending its mask back", async () => {
-    sdk.getApiV1AdminSettingsMetaConversions.mockImplementation(() =>
-      ok({
-        settings: { pixelId: "123456789012", accessToken: MASK, testEventCode: MASK, isEnabled: false, logRetentionDays: 30 },
-        revision: 4,
-      }));
-    await render(["analytics.view", "analytics.edit"]);
-    await openConnection();
-
-    expect(document.querySelector<HTMLInputElement>("#meta-token")!.value).toBe(MASK);
-    await click(button(translate(settingsMessages, "save")));
-
-    expect(sdk.postApiV1AdminSettingsMetaConversions).toHaveBeenCalledWith({
-      body: { pixelId: "123456789012", isEnabled: true, expectedRevision: 4 },
+  it("keeps only your own code and Cloudflare in Other tracking", async () => {
+    const summary = (id: string, type: string) => ({
+      id, name: id, type, isActive: true, usePartytown: true, location: "head", revision: 1, identifier: null,
+      readiness: "ready", configIssue: null, createdAt: null, updatedAt: null, deletedAt: null,
     });
-  });
-
-  it("won't turn Meta on without a pixel ID and access token", async () => {
-    sdk.getApiV1AdminSettingsMetaConversions.mockImplementation(() => ok({ settings: null }));
-    await render(["analytics.view", "analytics.edit"]);
-    await openConnection();
-
-    expect(document.body.textContent).toContain(apps("needsPixelAndToken"));
-    // Save shows what's missing instead of saving.
-    await click(button(translate(settingsMessages, "save")));
-    expect(sdk.postApiV1AdminSettingsMetaConversions).not.toHaveBeenCalled();
-    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
-  });
-
-  it("refuses a stale Meta save and offers to reload it, keeping the edit", async () => {
-    sdk.getApiV1AdminSettingsMetaConversions.mockImplementation(() =>
-      ok({ settings: { pixelId: "123456789012", accessToken: MASK, testEventCode: null, isEnabled: false, logRetentionDays: 30 }, revision: 4 }));
-    // Every save meets a newer revision (the merged retry too): the conflict is shown, never a silent overwrite.
-    sdk.postApiV1AdminSettingsMetaConversions.mockImplementation(() => Promise.resolve({
-      error: {
-        error: {
-          code: "SETTINGS_REVISION_CONFLICT",
-          message: "These settings changed in another session.",
-          details: { document: "meta_conversions", expectedRevision: 4, currentRevision: 5 },
-        },
-      },
-      response: { status: 409 },
+    sdk.getApiV1AdminAnalytics.mockImplementation(() => ok({
+      scripts: [summary("Chat widget", "custom"), summary("Meta pixel", "facebook_pixel"), summary("Beacon", "cloudflare_web_analytics")],
+      pagination: { page: 1, limit: 100, total: 3, totalPages: 1 },
     }));
-    await render(["analytics.view", "analytics.edit"]);
-    await openConnection();
-    await click(button(translate(settingsMessages, "save")));
-
-    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
-    // The merge is tried first (it loads on demand); its retry meets the newer revision too.
-    await vi.waitFor(() => expect(dialog.textContent).toContain("Someone else changed these settings since you opened them."));
-    expect(button("Reload and keep my edits")).toBeTruthy();
-    expect(dialog.querySelector('[role="switch"]')!.getAttribute("aria-checked")).toBe("true");
+    await render(["analytics.view", "analytics.toggle"]);
+    await vi.waitFor(() => expect(document.body.textContent).toContain("Chat widget"));
+    expect(document.body.textContent).toContain("Beacon");
+    expect(document.body.textContent).not.toContain("Meta pixel");
+    // A tag's on/off is saved with the page: a checkbox (F9).
+    expect(document.querySelectorAll('[role="checkbox"]')).toHaveLength(2);
+    expect(document.querySelector('[role="switch"]')).toBeNull();
   });
 
   it("offers an installed app's fraud check with its readiness and test", async () => {
     const radar = {
       id: "acme.notify:radar",
-      kind: "fraud",
+      kind: "courier_history",
       pluginId: "acme.notify",
       appName: "Acme Notify",
       name: "Acme Radar",
@@ -181,17 +133,17 @@ describe("Settings → Apps cards", () => {
       ok({ id: "row_radar", name: "Acme Radar", isActive: true, providerType: radar.id }));
     await render(["settings.fraud_checker.view", "settings.fraud_checker.edit"]);
     await vi.waitFor(() => expect(document.body.textContent).toContain("Acme Radar"));
-    expect(sdk.getApiV1AdminSettingsProviders).toHaveBeenCalledWith({ query: { kind: "fraud" } });
+    expect(sdk.getApiV1AdminSettingsProviders).toHaveBeenCalledWith({ query: { kind: "courier_history" } });
 
     await click(button("Acme Radar"));
     const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
     // An app not chosen yet is off; its keys live in the app.
-    expect(dialog.querySelector('[role="switch"]')!.getAttribute("aria-checked")).toBe("false");
+    expect(dialog.querySelector('[role="checkbox"]')!.getAttribute("aria-checked")).toBe("false");
     await click(button("Test connection"));
     await vi.waitFor(() => expect(dialog.textContent).toContain("Radar reachable."));
     expect(sdk.postApiV1AdminSettingsProvidersByIdTest).toHaveBeenCalledWith({ path: { id: radar.id } });
 
-    await click(dialog.querySelector<HTMLButtonElement>('[role="switch"]')!);
+    await click(dialog.querySelector<HTMLButtonElement>('[role="checkbox"]')!);
     await click(button(translate(settingsMessages, "save")));
     expect(sdk.postApiV1AdminFraudChecker).toHaveBeenCalledWith({
       body: { name: "Acme Radar", providerType: radar.id, isActive: true },

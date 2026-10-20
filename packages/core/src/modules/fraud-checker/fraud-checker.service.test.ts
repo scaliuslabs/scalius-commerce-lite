@@ -53,7 +53,7 @@ describe("app fraud checkers", () => {
     const resolve = vi.fn(async () => ({ provider: { id: APP_ID, label: "Acme Radar", check }, issue: null }));
 
     await expect(fraudLookup(appRow, "+8801700000000", { resolve } as never)).resolves.toEqual({ status: "checked", check: answer });
-    expect(resolve).toHaveBeenCalledWith("fraud", APP_ID);
+    expect(resolve).toHaveBeenCalledWith("courier_history", APP_ID);
     expect(check).toHaveBeenCalledWith({ phone: "+8801700000000" }, {});
   });
 

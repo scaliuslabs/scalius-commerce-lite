@@ -23,7 +23,7 @@ export const NOTIFY_FIXTURE_MANIFEST = {
   providers: {
     sms: [{ id: "texts", name: "Acme Texts", operations: ["testConnection"] }],
     email: [{ id: "mail", name: "Acme Mail" }],
-    fraud: [{ id: "radar", name: "Acme Radar", operations: ["testConnection"] }],
+    courier_history: [{ id: "radar", name: "Acme Radar", operations: ["testConnection"] }],
   },
 } as const;
 
@@ -60,8 +60,8 @@ export default {
     texts: {
       kind: "sms",
       async send(input, ctx) {
-        failure(input.message, ctx);
-        return sendOnce(ctx, input.clientReference, "T", input.to);
+        failure(input.text, ctx);
+        return sendOnce(ctx, input.idempotencyKey, "T", input.to);
       },
       async testConnection(_input, ctx) {
         return { ok: ctx.settings.api_key.length > 8, message: "API key saved." };
@@ -75,7 +75,7 @@ export default {
       },
     },
     radar: {
-      kind: "fraud",
+      kind: "courier_history",
       async check(input) {
         if (input.phone === "+8801999999999") throw providerError("declined", "Acme Radar has no history for this number.");
         return { riskLevel: "medium", phone: input.phone, totalParcels: 5, delivered: 3, cancelled: 2, couriers: { Pathao: { totalParcels: 5, delivered: 3, cancelled: 2 } } };

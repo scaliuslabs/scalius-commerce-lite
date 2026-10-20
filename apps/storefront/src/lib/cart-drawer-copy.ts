@@ -42,8 +42,6 @@ export interface CartDrawerCopy {
   viewCart: string;
   checkout: string;
   continueShopping: string;
-  clearCart: string;
-  cleared: string;
 }
 
 const EN: CartDrawerCopy = {
@@ -77,10 +75,8 @@ const EN: CartDrawerCopy = {
   estimatedTotal: "Estimated total (excl. shipping)",
   subtotal: "Subtotal (excl. shipping)",
   viewCart: "View cart",
-  checkout: "Checkout",
+  checkout: "Check out",
   continueShopping: "Continue shopping",
-  clearCart: "Clear cart",
-  cleared: "Cart cleared",
 };
 
 const BN: CartDrawerCopy = {
@@ -116,8 +112,6 @@ const BN: CartDrawerCopy = {
   viewCart: "কার্ট দেখুন",
   checkout: "চেকআউট",
   continueShopping: "কেনাকাটা চালিয়ে যান",
-  clearCart: "কার্ট খালি করুন",
-  cleared: "কার্ট খালি করা হয়েছে",
 };
 
 const COPY = { en: EN, bn: BN } as const;

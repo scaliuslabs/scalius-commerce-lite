@@ -37,3 +37,8 @@ export async function readSetupGuideDismissed(db: Database, userId: string): Pro
 export async function dismissSetupGuide(db: Database, userId: string): Promise<void> {
   await staffSetupGuideDocument(userId).write(db, { dismissed: true });
 }
+
+/** Brings the guide back for this staff member (the dismiss toast's Undo, or Home's "Show setup guide"). */
+export async function showSetupGuide(db: Database, userId: string): Promise<void> {
+  await staffSetupGuideDocument(userId).write(db, { dismissed: false });
+}

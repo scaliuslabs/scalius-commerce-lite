@@ -29,6 +29,7 @@ import {
   type PluginInstallationStatus,
 } from "@scalius/database/schema";
 import { looksLikePlaceholderCredential } from "@scalius/shared/plugins/placeholder-credentials";
+import { currentProviderKind } from "@scalius/shared/plugins/providers/kinds";
 import {
   FIRST_PARTY_PLUGIN_VENDOR,
   isPluginScope,
@@ -135,6 +136,8 @@ export function parseStoredPluginGrant(value: string | null): PluginGrantRequest
     parsed[key] = list;
   }
   if (!parsed.scopes!.every(isPluginScope)) return null;
+  // A provider kind approved under an earlier name (`fraud`) stays approved under its current one.
+  parsed.providers = [...new Set(parsed.providers!.map(currentProviderKind))];
   if (typeof raw.publicRoutes !== "boolean" || typeof raw.storefrontSurfaces !== "boolean") return null;
   // Dimensions added later read as their default when a stored grant predates them.
   if (raw.storefrontCode !== undefined && typeof raw.storefrontCode !== "boolean") return null;

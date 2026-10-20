@@ -71,6 +71,8 @@ const HomeAnalytics = lazy(() => import("~/components/admin/analytics/HomeAnalyt
 // The setup guide's code loads after Home's first render; its read starts in
 // the loader, and Home mounts it only while this staff member keeps it.
 const SetupGuide = lazy(() => import("~/components/admin/onboarding/SetupGuide"));
+// Its "Show setup guide" item is the way back once the guide is dismissed.
+const HomeMoreActions = lazy(() => import("~/components/admin/onboarding/HomeMoreActions"));
 
 /** The strip's own loading shape: the range buttons, then four tiles. */
 function HomeAnalyticsSkeleton() {
@@ -136,7 +138,10 @@ function HomePage() {
 
   return (
     <div className="space-y-4 pb-8">
-      <PageHeader title={t("home")} />
+      <PageHeader
+        title={t("home")}
+        actions={setupGuide.data?.dismissed ? <Suspense fallback={null}><HomeMoreActions /></Suspense> : null}
+      />
       {setupGuide.data && !setupGuide.data.dismissed ? (
         <Suspense fallback={null}>
           <SetupGuide guide={setupGuide.data} canOpen={canOpen} />

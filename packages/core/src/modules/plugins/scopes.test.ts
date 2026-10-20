@@ -29,7 +29,7 @@ describe("PLUGIN_SCOPES", () => {
         expect(isPluginGrantablePermission(permission), `${scope}: ${permission}`).toBe(true);
       }
       expect((rbac as readonly string[]).includes(staff), `${scope} staff gate`).toBe(true);
-      expect(scope).toMatch(/^(read|write)_[a-z]+$/);
+      expect(scope).toMatch(/^(read|write)_[a-z]+(_[a-z]+)*$/);
     }
   });
 
@@ -126,5 +126,10 @@ describe("rows stored before scopes", () => {
     expect(parseStoredPluginGrant(JSON.stringify({ ...flags, permissions: [] }))).toMatchObject({ scopes: [] });
     expect(parseStoredPluginGrant(JSON.stringify({ ...flags, scopes: ["read_orders"] }))).toMatchObject({ scopes: ["read_orders"] });
     expect(parseStoredPluginGrant(JSON.stringify({ ...flags, scopes: ["orders.view"] }))).toBeNull();
+  });
+
+  it("reads a provider kind approved under its earlier name as the current kind, so the app stays approved", () => {
+    const flags = { scopes: [], allowedHosts: [], events: [], functions: [], blockingFunctions: [], publicRoutes: false, storefrontScripts: [], storefrontSurfaces: false, customFieldOwners: [] };
+    expect(parseStoredPluginGrant(JSON.stringify({ ...flags, providers: ["sms", "fraud", "courier_history"] }))?.providers).toEqual(["sms", "courier_history"]);
   });
 });

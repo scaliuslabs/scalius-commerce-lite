@@ -142,10 +142,14 @@ const productAdditionalInfoSchema = z.array(
     }),
 ).optional();
 
+/** A product title is 1 to 255 characters, as Shopify's: "TV" is a title, and long Bangladesh listing titles fit. */
+export const PRODUCT_NAME_MAX_LENGTH = 255;
+
 /** Base product fields shared between create and update */
 const productBaseSchema = z.object({
-    name: z.string().min(3).max(100),
-    description: z.string().min(10).nullable(),
+    name: z.string().trim().min(1).max(PRODUCT_NAME_MAX_LENGTH),
+    /** Any length, empty included: the editor imposes no minimum. */
+    description: z.string().nullable(),
     price: catalogMoneySchema,
     categoryId: z.string().min(1).nullable(),
     /** Omit to keep the product's brand; null removes it. */

@@ -539,7 +539,8 @@ describe("updateCheckoutButtonState", () => {
         data-checkout-unavailable="true"
         data-checkout-unavailable-message="Checkout setup is incomplete."
       ></div>
-      <button id="submitButton">Place Order</button>
+      <button id="submitButton" aria-describedby="checkoutTerms">Place Order</button>
+      <p id="submitButtonReason" hidden></p>
     `;
   });
 
@@ -547,30 +548,49 @@ describe("updateCheckoutButtonState", () => {
     const submitButton = document.getElementById(
       "submitButton",
     ) as HTMLButtonElement;
+    const reason = document.getElementById("submitButtonReason")!;
     applyCheckoutButtonState(submitButton, {
       checkoutUnavailable: true,
       unavailableMessage: "Checkout setup is incomplete.",
       isEmpty: false,
+      emptyMessage: "Add items to your cart before placing an order.",
+      reasonElement: reason,
     });
 
     expect(submitButton.disabled).toBe(true);
     expect(submitButton.classList.contains("opacity-50")).toBe(true);
     expect(submitButton.classList.contains("cursor-not-allowed")).toBe(true);
-    expect(submitButton.title).toBe("Checkout setup is incomplete.");
+    // The reason is a visible line the button names, never only a tooltip.
+    expect(submitButton.hasAttribute("title")).toBe(false);
+    expect(reason.hidden).toBe(false);
+    expect(reason.textContent).toBe("Checkout setup is incomplete.");
+    expect(submitButton.getAttribute("aria-describedby")).toBe("checkoutTerms submitButtonReason");
   });
 
   it("keeps Place order enabled while the buyer is still filling the form", () => {
     const submitButton = document.getElementById(
       "submitButton",
     ) as HTMLButtonElement;
+    const reason = document.getElementById("submitButtonReason")!;
+    applyCheckoutButtonState(submitButton, {
+      checkoutUnavailable: true,
+      unavailableMessage: "Checkout setup is incomplete.",
+      isEmpty: false,
+      emptyMessage: "",
+      reasonElement: reason,
+    });
     applyCheckoutButtonState(submitButton, {
       checkoutUnavailable: false,
       unavailableMessage: "",
       isEmpty: false,
+      emptyMessage: "Add items to your cart before placing an order.",
+      reasonElement: reason,
     });
 
     expect(submitButton.disabled).toBe(false);
-    expect(submitButton.title).toBe("");
+    expect(reason.hidden).toBe(true);
+    expect(reason.textContent).toBe("");
+    expect(submitButton.getAttribute("aria-describedby")).toBe("checkoutTerms");
   });
 
   it("keeps checkout disabled while a discount validation is pending", () => {
@@ -581,11 +601,13 @@ describe("updateCheckoutButtonState", () => {
       checkoutUnavailable: false,
       unavailableMessage: "",
       isEmpty: false,
+      emptyMessage: "Add items to your cart before placing an order.",
       discountValidationPending: true,
       discountValidationPendingMessage: "Processing…",
+      reasonElement: document.getElementById("submitButtonReason"),
     });
 
     expect(submitButton.disabled).toBe(true);
-    expect(submitButton.title).toBe("Processing…");
+    expect(document.getElementById("submitButtonReason")?.textContent).toBe("Processing…");
   });
 });

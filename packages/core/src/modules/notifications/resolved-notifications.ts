@@ -272,8 +272,8 @@ async function sendResolvedSms(
         }
         const result = await provider.send({
           to: phone,
-          message,
-          clientReference: createProviderClientReference(delivery),
+          text: message,
+          idempotencyKey: createProviderClientReference(delivery),
         }, {});
         return {
           success: result.success,

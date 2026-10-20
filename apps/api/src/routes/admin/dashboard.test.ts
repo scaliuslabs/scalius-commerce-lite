@@ -142,7 +142,20 @@ describe("Home setup guide", () => {
             setupNeeded: false,
             steps: { product: false, details: false, theme: false, payments: true, shipping: false, domain: false, order: true },
             bangladeshPack: { active: false },
+            drafts: { count: 0, newestId: null },
+            testOrderUrl: null,
         });
+    });
+
+    it("counts drafts apart from live products and links a test order to the storefront", async () => {
+        database.sqlite.exec("INSERT INTO products (id, name, slug, is_active) VALUES ('p_draft', 'Panjabi', 'panjabi', 0)");
+        expect((await guide()).data).toMatchObject({ steps: { product: false }, drafts: { count: 1, newestId: "p_draft" }, testOrderUrl: null });
+        database.sqlite.exec("UPDATE products SET is_active = 1");
+        expect((await guide()).data).toMatchObject({ steps: { product: true }, drafts: { count: 0, newestId: null }, testOrderUrl: null });
+        // With a web address, the step's link puts the product in the storefront's cart.
+        database.sqlite.prepare("INSERT INTO settings (id, key, value, type, category) VALUES ('s_platform', 'document', ?, 'json', 'platform')")
+            .run(JSON.stringify({ storefrontUrl: "https://shop.example.com" }));
+        expect((await guide()).data.testOrderUrl).toBe("https://shop.example.com/buy/panjabi");
     });
 
     it("counts the digital products and gift cards a cash-only checkout can't take", async () => {
@@ -177,5 +190,9 @@ describe("Home setup guide", () => {
         expect(response.status).toBe(200);
         expect((await guide()).data.dismissed).toBe(true);
         expect((await guide("user_2")).data.dismissed).toBe(false);
+        // Undo, or Home's "Show setup guide".
+        const shown = await app(HOME).request("/api/v1/admin/dashboard/setup-guide/show", { method: "POST" }, {});
+        expect(shown.status).toBe(200);
+        expect((await guide()).data.dismissed).toBe(false);
     });
 });

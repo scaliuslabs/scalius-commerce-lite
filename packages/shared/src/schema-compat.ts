@@ -1,6 +1,8 @@
 /**
- * Breaking-change check between two versions of an operation's OpenAPI 3.0
- * schemas, for the stable app API (`stable-operations.test.ts`).
+ * Breaking-change check between two versions of a sealed schema: the stable
+ * app API's operations (`apps/api/src/openapi/stable-operations.test.ts`),
+ * the webhook representations, and the plugin ABI (`plugins/abi-compat.ts`,
+ * through `openApiDialect`, which reads zod's JSON Schema 2020-12).
  *
  * A request schema may only accept more: a new required field or parameter,
  * a removed field, a narrower type, enum, bound or pattern, or a lost
@@ -11,12 +13,13 @@
  * tolerate unknown values, as with Shopify's Admin API).
  *
  * The check covers the keywords Scalius routes emit (type, nullable, enum,
- * properties, required, additionalProperties, items, oneOf/anyOf/allOf,
- * string/number/array bounds, pattern, format). Anything else that changes is
- * still caught by the exact snapshot, which an additive change updates.
+ * properties, required, additionalProperties, propertyNames, items,
+ * oneOf/anyOf/allOf, string/number/array bounds, pattern, format). Anything
+ * else that changes is still caught by the exact snapshot, which an additive
+ * change updates.
  */
 
-import { resolveComponentSchemaRef, type ComponentSchemas } from "./component-schema-refs";
+import { resolveComponentSchemaRef, type ComponentSchemas } from "./openapi-schema-refs";
 
 export type SchemaDirection = "request" | "response";
 
@@ -92,22 +95,38 @@ function matchVariants(before: Side[], after: Side[]): Array<[number, number | n
   });
 }
 
+/** Whether every value of type `narrow` is a value of type `wide` (an integer is a number). */
+function typeWithin(narrow: string, wide: readonly string[]): boolean {
+  return wide.includes(narrow) || (narrow === "integer" && wide.includes("number"));
+}
+
 function typeCompatible(before: unknown, after: unknown, direction: SchemaDirection): boolean {
-  if (before === after || before === undefined) return true;
+  if (before === undefined) return true;
   if (after === undefined) return direction === "request";
-  // An integer is a number: a request may widen to number, a response narrow to integer.
-  if (direction === "request") return before === "integer" && after === "number";
-  return before === "number" && after === "integer";
+  const was = (Array.isArray(before) ? before : [before]).map(String);
+  const now = (Array.isArray(after) ? after : [after]).map(String);
+  // A request may accept more types; a response may promise fewer.
+  return direction === "request"
+    ? was.every((type) => typeWithin(type, now))
+    : now.every((type) => typeWithin(type, was));
 }
 
 function compare(before: Side, after: Side, direction: SchemaDirection, path: string, out: string[], seen: Set<string>): void {
-  // A recursive component (a tree) would nest forever: compare the first 24 levels.
+  // A recursive component (a tree) would nest forever: each pair of
+  // references is compared once, at the first place it appears.
   if (path.split(/[.[{]/).length > 24) return;
-  if (seen.has(path)) return;
-  seen.add(path);
+  const refs = [before.schema, after.schema].map((schema) => (isRecord(schema) && typeof schema.$ref === "string" ? schema.$ref : null));
+  if (refs[0] !== null && refs[1] !== null) {
+    const pair = `${direction} ${refs[0]} ${refs[1]}`;
+    if (seen.has(pair)) return;
+    seen.add(pair);
+  }
   const b = normalize(before);
   const a = normalize(after);
   const at = path || "(root)";
+
+  if (direction === "request" && b.nullable === true && a.nullable !== true) out.push(`${at}: null is no longer accepted.`);
+  if (direction === "response" && b.nullable !== true && a.nullable === true) out.push(`${at}: the response may now be null.`);
 
   const bVariants = variants(b);
   const aVariants = variants(a);
@@ -125,8 +144,6 @@ function compare(before: Side, after: Side, direction: SchemaDirection, path: st
     return;
   }
 
-  if (direction === "request" && b.nullable === true && a.nullable !== true) out.push(`${at}: null is no longer accepted.`);
-  if (direction === "response" && b.nullable !== true && a.nullable === true) out.push(`${at}: the response may now be null.`);
   if (!typeCompatible(b.type, a.type, direction)) out.push(`${at}: type changed from ${String(b.type)} to ${String(a.type)}.`);
 
   const bEnum = enumValues(b);
@@ -177,6 +194,9 @@ function compare(before: Side, after: Side, direction: SchemaDirection, path: st
   }
   if (isRecord(b.additionalProperties) && isRecord(a.additionalProperties)) {
     compare({ schema: b.additionalProperties, components: before.components }, { schema: a.additionalProperties, components: after.components }, direction, `${path}{*}`, out, seen);
+  }
+  if (isRecord(b.propertyNames) || isRecord(a.propertyNames)) {
+    compare({ schema: b.propertyNames ?? {}, components: before.components }, { schema: a.propertyNames ?? {}, components: after.components }, direction, `${path}{key}`, out, seen);
   }
   if (b.items !== undefined && a.items !== undefined) {
     compare({ schema: b.items, components: before.components }, { schema: a.items, components: after.components }, direction, `${path}[]`, out, seen);
@@ -236,4 +256,59 @@ export function inputBreakingChanges(
   if (afterBody?.required && !beforeBody?.required) out.push("body: newly required.");
   if (beforeBody && afterBody) out.push(...schemaBreakingChanges(beforeBody.schema, afterBody.schema, "request", components, "body"));
   return out;
+}
+
+const JSON_SCHEMA_DEFS_PREFIX = "#/$defs/";
+
+/**
+ * A JSON Schema 2020-12 document (`z.toJSONSchema`) in the OpenAPI 3.0
+ * dialect the checker reads: `$defs` become components, `const` a one-value
+ * `enum`, a `null` type or union member `nullable`, and a numeric exclusive
+ * bound a bound with the boolean flag. Nested `$schema` keys are dropped.
+ */
+export function openApiDialect(document: unknown): { schema: unknown; components: ComponentSchemas } {
+  const components: Record<string, unknown> = {};
+  const convert = (node: unknown): unknown => {
+    if (Array.isArray(node)) return node.map(convert);
+    if (!isRecord(node)) return node;
+    const { $schema: _schema, $defs, const: constant, type, anyOf, oneOf, exclusiveMinimum, exclusiveMaximum, $ref, ...rest } = node;
+    if (isRecord($defs)) for (const [name, value] of Object.entries($defs)) components[name] = convert(value);
+    const out: Schema = Object.fromEntries(Object.entries(rest).map(([key, value]) => [key, convert(value)]));
+    if (typeof $ref === "string") out.$ref = $ref.startsWith(JSON_SCHEMA_DEFS_PREFIX) ? `#/components/schemas/${$ref.slice(JSON_SCHEMA_DEFS_PREFIX.length)}` : $ref;
+    if (constant !== undefined) out.enum = [constant];
+    if (Array.isArray(type)) {
+      const types = type.filter((entry) => entry !== "null");
+      if (types.length < type.length) out.nullable = true;
+      if (types.length === 1) out.type = types[0];
+      else if (types.length > 1) out.type = types;
+    } else if (type !== undefined) {
+      out.type = type;
+    }
+    for (const [keyword, bound, value] of [["exclusiveMinimum", "minimum", exclusiveMinimum], ["exclusiveMaximum", "maximum", exclusiveMaximum]] as const) {
+      if (typeof value === "number") {
+        out[bound] = value;
+        out[keyword] = true;
+      } else if (value !== undefined) {
+        out[keyword] = value;
+      }
+    }
+    for (const [keyword, members] of [["anyOf", anyOf], ["oneOf", oneOf]] as const) {
+      if (!Array.isArray(members)) continue;
+      const converted = members.map(convert);
+      const present = converted.filter((member) => !(isRecord(member) && member.type === "null" && Object.keys(member).length === 1));
+      if (present.length < converted.length) out.nullable = true;
+      if (present.length === 1 && isRecord(present[0])) Object.assign(out, present[0], out.nullable ? { nullable: true } : {});
+      else out[keyword] = present;
+    }
+    return out;
+  };
+  const schema = convert(document);
+  return { schema, components };
+}
+
+/** The breaking differences between two zod JSON Schema documents (see `openApiDialect`). */
+export function jsonSchemaBreakingChanges(before: unknown, after: unknown, direction: SchemaDirection, path = ""): string[] {
+  const was = openApiDialect(before);
+  const now = openApiDialect(after);
+  return schemaBreakingChanges(was.schema, now.schema, direction, { before: was.components, after: now.components }, path);
 }

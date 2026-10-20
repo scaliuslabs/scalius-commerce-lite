@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { PrivacySettingsCards, TrackingHealthCard, trackingHealthQuery, trackingSettingsQuery } from "~/components/admin/settings/PrivacySettings";
+import { CookieBannerCard, CustomerDataCard, trackingHealthQuery, trackingSettingsQuery } from "~/components/admin/settings/PrivacySettings";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
 import { settingsHead } from "~/components/admin/settings/settings-nav";
 import { useHasPermission } from "~/contexts/PermissionContext";
@@ -24,8 +24,8 @@ function PrivacyPage() {
   const canEdit = useHasPermission(ADMIN_PERMISSIONS.ANALYTICS_EDIT);
   return (
     <SettingsPage page="privacy" readOnly={!canEdit}>
-      <PrivacySettingsCards />
-      <TrackingHealthCard />
+      <CookieBannerCard />
+      <CustomerDataCard />
     </SettingsPage>
   );
 }

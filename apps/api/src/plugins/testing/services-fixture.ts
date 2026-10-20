@@ -60,7 +60,7 @@ export default {
     push: {
       kind: "push",
       async send(input) {
-        return { success: true, delivered: input.recipients.length, providerRef: "push-" + input.recipients[0] };
+        return { success: true, delivered: input.to.length, providerRef: "push-" + input.to[0] };
       },
     },
     chat: {

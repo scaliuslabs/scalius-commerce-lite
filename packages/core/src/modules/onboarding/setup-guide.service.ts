@@ -19,13 +19,19 @@ import {
 import type { Database } from "@scalius/database/client";
 
 export interface SetupGuideFacts {
-    /** A product that is not in the trash. */
+    /** A live product: active and not in the trash. A draft is not for sale. */
     hasProducts: boolean;
+    /** Drafts outside the trash, counted up to {@link DRAFT_PRODUCT_COUNT_CAP}. */
+    draftProducts: number;
+    /** The newest draft, so the guide can open it when it is the only one. */
+    newestDraftProductId: string | null;
+    /** A live product a test buyer can add to the cart from the storefront (not a gift card); the newest. */
+    testOrderProductSlug: string | null;
     /** The theme was published from the editor at least once (a restore counts, the first seed does not). */
     themePublished: boolean;
     /** A live delivery rate whose zone serves somewhere, or a live local pickup rate. */
     shippingReady: boolean;
-    /** Any order exists, whatever its source. */
+    /** An order placed through the storefront's checkout (the online store channel). */
     hasOrders: boolean;
     /**
      * Active products a buyer can pay for only online: gift cards, and
@@ -37,12 +43,24 @@ export interface SetupGuideFacts {
 
 /** Home says "1,000+": the count stops there so the statement stays bounded. */
 export const ONLINE_PAID_PRODUCT_COUNT_CAP = 1000;
+/** Drafts are counted up to here, for the same reason. */
+export const DRAFT_PRODUCT_COUNT_CAP = 1000;
 
 /** The setup facts the database answers, in one round trip. */
 export async function getSetupGuideFacts(db: Database): Promise<SetupGuideFacts> {
     const row = await db
         .select({
-            hasProducts: sql<number>`EXISTS (SELECT 1 FROM ${products} WHERE ${products.deletedAt} IS NULL)`,
+            hasProducts: sql<number>`EXISTS (SELECT 1 FROM ${products} WHERE ${products.isActive} = 1 AND ${products.deletedAt} IS NULL)`,
+            draftProducts: sql<number>`(SELECT COUNT(*) FROM (
+                SELECT 1 FROM ${products} WHERE ${products.isActive} = 0 AND ${products.deletedAt} IS NULL
+                LIMIT ${DRAFT_PRODUCT_COUNT_CAP}
+            ))`,
+            newestDraftProductId: sql<string | null>`(SELECT ${products.id} FROM ${products}
+                WHERE ${products.isActive} = 0 AND ${products.deletedAt} IS NULL
+                ORDER BY ${products.createdAt} DESC, ${products.id} DESC LIMIT 1)`,
+            testOrderProductSlug: sql<string | null>`(SELECT ${products.slug} FROM ${products}
+                WHERE ${products.isActive} = 1 AND ${products.deletedAt} IS NULL AND ${products.isGiftCard} = 0
+                ORDER BY ${products.createdAt} DESC, ${products.id} DESC LIMIT 1)`,
             themePublished: sql<number>`EXISTS (SELECT 1 FROM ${themeSettingsVersions} WHERE ${themeSettingsVersions.source} IN ('publish', 'rollback'))`,
             shippingReady: sql<number>`EXISTS (
                 SELECT 1 FROM ${shippingMethods}
@@ -56,7 +74,7 @@ export async function getSetupGuideFacts(db: Database): Promise<SetupGuideFacts>
                     )
                   ))
             )`,
-            hasOrders: sql<number>`EXISTS (SELECT 1 FROM ${orders})`,
+            hasOrders: sql<number>`EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.channel} = 'online_store')`,
             onlinePaidProducts: sql<number>`(SELECT COUNT(*) FROM (
                 SELECT 1 FROM ${products} AS online_paid
                 WHERE online_paid.deleted_at IS NULL AND online_paid.is_active = 1
@@ -82,6 +100,9 @@ export async function getSetupGuideFacts(db: Database): Promise<SetupGuideFacts>
         .get();
     return {
         hasProducts: Boolean(Number(row?.hasProducts ?? 0)),
+        draftProducts: Number(row?.draftProducts ?? 0),
+        newestDraftProductId: row?.newestDraftProductId ?? null,
+        testOrderProductSlug: row?.testOrderProductSlug ?? null,
         themePublished: Boolean(Number(row?.themePublished ?? 0)),
         shippingReady: Boolean(Number(row?.shippingReady ?? 0)),
         hasOrders: Boolean(Number(row?.hasOrders ?? 0)),

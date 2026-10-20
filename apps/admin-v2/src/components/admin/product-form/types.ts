@@ -13,7 +13,6 @@ import { CUSTOMIZATION_LIMITS } from "@scalius/shared/line-properties";
 import { formatNumber, translate } from "~/i18n";
 import type { BuyerInputDraft } from "./buyer-inputs";
 import { productMessages, type ProductMessageKey } from "~/i18n/products";
-import { isEmptyRichText } from "~/lib/rich-text-value";
 
 /** Validation messages are read when validation runs, in the current language. */
 const msg = (key: ProductMessageKey) => ({ error: () => translate(productMessages, key) });
@@ -44,9 +43,10 @@ export interface Category {
 
 export const productFormSchema = z.object({
   id: z.string().optional(),
-  name: z.string().min(1, msg("titleRequired")).min(3, msg("titleMin")).max(100, msg("titleMax")),
-  /** Empty is valid (a new product has none); text must be at least 10 characters. */
-  description: z.string().nullable().refine((value) => isEmptyRichText(value) || value!.length >= 10, msg("descriptionMin")),
+  /** 1 to 255 characters, as Shopify's: "TV" is a title. */
+  name: z.string().trim().min(1, msg("titleRequired")).max(255, msg("titleMax")),
+  /** Any length, empty included. */
+  description: z.string().nullable(),
   /** Empty until the merchant types one; a draft may be saved without it. */
   price: z.number(msg("issueNotANumber"))
     .min(0, msg("priceNegative"))

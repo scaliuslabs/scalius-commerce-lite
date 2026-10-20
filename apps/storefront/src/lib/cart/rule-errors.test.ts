@@ -90,23 +90,31 @@ describe("store app rules on the cart page", () => {
 
   it("blocks the checkout action while a rule holds", () => {
     const button = document.createElement("button");
+    const reason = document.createElement("p");
+    reason.id = "submitButtonReason";
     applyCheckoutButtonState(button, {
       checkoutUnavailable: false,
       unavailableMessage: "",
       isEmpty: false,
+      emptyMessage: ENGLISH_CHECKOUT_LANGUAGE_DATA.cartEmptyErrorText,
       cartRulesBlocked: true,
       cartRulesBlockedMessage: ENGLISH_CHECKOUT_LANGUAGE_DATA.cartRulesBlockedText,
+      reasonElement: reason,
     });
     expect(button.disabled).toBe(true);
-    expect(button.title).toBe("This order can't be placed yet.");
+    expect(reason.textContent).toBe("This order can't be placed yet.");
+    expect(button.getAttribute("aria-describedby")).toBe("submitButtonReason");
 
     applyCheckoutButtonState(button, {
       checkoutUnavailable: false,
       unavailableMessage: "",
       isEmpty: false,
+      emptyMessage: ENGLISH_CHECKOUT_LANGUAGE_DATA.cartEmptyErrorText,
       cartRulesBlocked: false,
+      reasonElement: reason,
     });
     expect(button.disabled).toBe(false);
+    expect(reason.hidden).toBe(true);
   });
 
   it("hands the checkout's rules to the cart in session storage, bounded on the way back", () => {

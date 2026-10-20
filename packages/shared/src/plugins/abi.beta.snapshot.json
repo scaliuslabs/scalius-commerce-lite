@@ -939,7 +939,7 @@
        ],
        "additionalProperties": false
       },
-      "clientReference": {
+      "idempotencyKey": {
        "type": "string",
        "minLength": 1,
        "maxLength": 256
@@ -1058,7 +1058,7 @@
         "customer"
        ]
       },
-      "recipients": {
+      "to": {
        "minItems": 1,
        "maxItems": 100,
        "type": "array",
@@ -1096,7 +1096,7 @@
        ],
        "additionalProperties": false
       },
-      "clientReference": {
+      "idempotencyKey": {
        "type": "string",
        "minLength": 1,
        "maxLength": 256
@@ -1104,7 +1104,7 @@
      },
      "required": [
       "audience",
-      "recipients",
+      "to",
       "notification"
      ],
      "additionalProperties": false

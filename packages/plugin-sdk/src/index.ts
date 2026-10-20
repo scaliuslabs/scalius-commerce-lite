@@ -59,8 +59,8 @@ export type {
   CourierWebhookReply,
   EmailSend,
   EmailSendInput,
-  FraudCheck,
-  FraudCheckInput,
+  CourierHistory,
+  CourierHistoryInput,
   MessageStatus,
   PaymentEvent,
   PaymentQuery,
@@ -215,8 +215,8 @@ export const definePaymentProvider = provider("payment");
 export const defineCourierProvider = provider("courier");
 export const defineSmsProvider = provider("sms");
 export const defineEmailProvider = provider("email");
-/** A phone lookup the merchant runs from the order page. */
-export const defineFraudProvider = provider("fraud");
+/** Courier history for a buyer's phone (parcels booked, delivered, cancelled), which the merchant reads on the order page. */
+export const defineCourierHistoryProvider = provider("courier_history");
 /**
  * Tax calculation: the same port as the built-in `system` provider. A
  * merchant selects it store-wide or for one country (Settings → Taxes);

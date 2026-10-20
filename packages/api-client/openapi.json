@@ -15998,7 +15998,7 @@
               "courier",
               "sms",
               "email",
-              "fraud",
+              "courier_history",
               "tax",
               "translation",
               "ai",
@@ -17383,7 +17383,7 @@
                         "courier",
                         "sms",
                         "email",
-                        "fraud",
+                        "courier_history",
                         "tax",
                         "translation",
                         "ai",
@@ -135807,7 +135807,7 @@
                           "properties": {
                             "product": {
                               "type": "boolean",
-                              "description": "A product exists outside the trash."
+                              "description": "A live product exists: active and outside the trash."
                             },
                             "details": {
                               "type": "boolean",
@@ -135831,7 +135831,7 @@
                             },
                             "order": {
                               "type": "boolean",
-                              "description": "An order exists."
+                              "description": "A buyer placed an order through the storefront's checkout."
                             }
                           },
                           "required": [
@@ -135843,6 +135843,31 @@
                             "domain",
                             "order"
                           ]
+                        },
+                        "drafts": {
+                          "type": "object",
+                          "properties": {
+                            "count": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Draft products outside the trash (counted up to 1,000)."
+                            },
+                            "newestId": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "The newest draft product, or null when there is none."
+                            }
+                          },
+                          "required": [
+                            "count",
+                            "newestId"
+                          ],
+                          "description": "Drafts, which the product step asks the merchant to make active."
+                        },
+                        "testOrderUrl": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "A storefront link that puts a live product in the cart and opens checkout; null until the store has a web address and a live product."
                         },
                         "bangladeshPack": {
                           "type": "object",
@@ -135883,6 +135908,8 @@
                         "countryCode",
                         "setupNeeded",
                         "steps",
+                        "drafts",
+                        "testOrderUrl",
                         "bangladeshPack",
                         "onlinePayment"
                       ]
@@ -136151,6 +136178,83 @@
         "x-scalius-rbac": {
           "type": "permission",
           "permission": "dashboard.view"
+        }
+      }
+    },
+    "/api/v1/admin/dashboard/setup-guide/show": {
+      "post": {
+        "tags": [
+          "Admin - Dashboard"
+        ],
+        "summary": "Show Home's setup guide again",
+        "description": "Brings the setup guide back for the signed-in staff member only (Undo after a dismiss, or Home's menu). Saying it again changes nothing.",
+        "operationId": "dashboard.home.setup_guide_show",
+        "responses": {
+          "200": {
+            "description": "Setup guide shown",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "dismissed": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        }
+                      },
+                      "required": [
+                        "dismissed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "excluded",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Showing the setup guide again is the signed-in staff member's own Home preference.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "unmapped"
         }
       }
     },
@@ -150147,6 +150251,13 @@
                   },
                   "enabled": {
                     "type": "boolean"
+                  },
+                  "showAtCheckout": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ],
+                    "description": "With enabled: also offers Stripe at checkout, written in the same batch as the keys (the dashboard switch's Turn on is one save)."
                   }
                 },
                 "required": [
@@ -168125,7 +168236,7 @@
                 "courier",
                 "sms",
                 "email",
-                "fraud",
+                "courier_history",
                 "tax",
                 "translation",
                 "ai",
@@ -168174,7 +168285,7 @@
                                   "courier",
                                   "sms",
                                   "email",
-                                  "fraud",
+                                  "courier_history",
                                   "tax",
                                   "translation",
                                   "ai",
@@ -195202,13 +195313,12 @@
                 "properties": {
                   "name": {
                     "type": "string",
-                    "minLength": 3,
-                    "maxLength": 100
+                    "minLength": 1,
+                    "maxLength": 255
                   },
                   "description": {
                     "type": "string",
-                    "nullable": true,
-                    "minLength": 10
+                    "nullable": true
                   },
                   "price": {
                     "type": "number",
@@ -196043,7 +196153,7 @@
                               },
                               "name": {
                                 "type": "string",
-                                "maxLength": 100
+                                "maxLength": 255
                               },
                               "slug": {
                                 "type": "string",
@@ -197941,8 +198051,8 @@
                 "properties": {
                   "name": {
                     "type": "string",
-                    "minLength": 3,
-                    "maxLength": 100,
+                    "minLength": 1,
+                    "maxLength": 255,
                     "description": "Title of the copy"
                   }
                 },
@@ -199474,8 +199584,8 @@
                         "properties": {
                           "name": {
                             "type": "string",
-                            "minLength": 3,
-                            "maxLength": 100
+                            "minLength": 1,
+                            "maxLength": 255
                           },
                           "price": {
                             "type": "number",
@@ -200979,13 +201089,12 @@
                 "properties": {
                   "name": {
                     "type": "string",
-                    "minLength": 3,
-                    "maxLength": 100
+                    "minLength": 1,
+                    "maxLength": 255
                   },
                   "description": {
                     "type": "string",
-                    "nullable": true,
-                    "minLength": 10
+                    "nullable": true
                   },
                   "price": {
                     "type": "number",
@@ -238403,8 +238512,8 @@
                         },
                         "title": {
                           "type": "string",
-                          "minLength": 3,
-                          "maxLength": 100
+                          "minLength": 1,
+                          "maxLength": 255
                         },
                         "descriptionHtml": {
                           "type": "string",

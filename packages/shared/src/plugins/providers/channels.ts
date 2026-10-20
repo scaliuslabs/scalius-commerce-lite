@@ -42,8 +42,8 @@ export const messagingSendInputSchema = z.object({
   /** Free text (inside the channel's reply window). Send `text` or `template`. */
   text: z.string().min(1).max(4096).optional(),
   template: messagingTemplateSchema.optional(),
-  /** Deterministic per message, for providers that support idempotency. */
-  clientReference: providerIdempotencyKeySchema.optional(),
+  /** Deterministic per message: never send twice for one key. */
+  idempotencyKey: providerIdempotencyKeySchema.optional(),
 }).strict().refine((input) => (input.text === undefined) !== (input.template === undefined), "Send text or a template, not both.");
 export type MessagingSendInput = z.infer<typeof messagingSendInputSchema>;
 
@@ -79,9 +79,10 @@ export type PushNotification = z.infer<typeof pushNotificationSchema>;
 export const pushSendInputSchema = z.object({
   audience: z.enum(PUSH_AUDIENCES),
   /** Scalius ids (staff user ids or customer ids); the provider maps them to its subscribers. */
-  recipients: z.array(z.string().min(1).max(128)).min(1).max(100),
+  to: z.array(z.string().min(1).max(128)).min(1).max(100),
   notification: pushNotificationSchema,
-  clientReference: providerIdempotencyKeySchema.optional(),
+  /** Deterministic per message: never send twice for one key. */
+  idempotencyKey: providerIdempotencyKeySchema.optional(),
 }).strict();
 export type PushSendInput = z.infer<typeof pushSendInputSchema>;
 

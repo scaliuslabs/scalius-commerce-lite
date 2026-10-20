@@ -24,5 +24,7 @@ describe("the listing, product page and cart words", () => {
     expect(shopCopy("bn-BD").description.readMore).toBe(shopCopy("bn").description.readMore);
     expect(shopCopy(undefined).description.about("Women")).toBe("about Women");
     expect(shopCopy("fr").product.zoomPhoto).toBe("Zoom photo");
+    expect(shopCopy("bn").product.contact.call).not.toBe(shopCopy("en").product.contact.call);
+    expect(shopCopy("en").product.contact.callNumber("01711-000000")).toBe("Call 01711-000000");
   });
 });

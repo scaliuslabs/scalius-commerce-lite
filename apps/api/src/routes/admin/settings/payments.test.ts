@@ -298,6 +298,30 @@ describe("payment settings", () => {
 
         });
 
+        it("turns Stripe on and offers it at checkout in one save", async () => {
+            const { request, sqlite } = await createTestApp({ payment_methods: { enabledMethods: ["cod"], defaultMethod: "cod" } });
+            const response = await request("/stripe", {
+                secretKey: "sk_test_replacement",
+                publishableKey: "pk_test_replacement",
+                webhookSecret: "whsec_replacement",
+                enabled: true,
+                showAtCheckout: true,
+            });
+            expect(response.status, await response.clone().text()).toBe(200);
+            expect(storedRows(sqlite, "payment_methods")).toEqual({ enabledMethods: ["cod", "stripe"], defaultMethod: "cod" });
+            // Saying it again changes nothing; it is refused while Stripe would stay off.
+            expect((await request("/stripe", { enabled: true, showAtCheckout: true })).status).toBe(200);
+            expect(storedRows(sqlite, "payment_methods")).toEqual({ enabledMethods: ["cod", "stripe"], defaultMethod: "cod" });
+            await expectValidationError(await request("/stripe", { showAtCheckout: true }));
+        });
+
+        it("offers Stripe at checkout only once its keys are complete", async () => {
+            const { request, sqlite } = await createTestApp({ payment_methods: { enabledMethods: ["cod"], defaultMethod: "cod" } });
+            await expectValidationError(await request("/stripe", { secretKey: "sk_test_replacement", enabled: true, showAtCheckout: true }));
+            expect(storedRows(sqlite, "payment_methods")).toEqual({ enabledMethods: ["cod"], defaultMethod: "cod" });
+            expect(storedRows(sqlite, "stripe")).toEqual({});
+        });
+
         it.each([
             ["/stripe", { secretKey: "sk_live_missing_key" }],
         ])("fails closed before saving %s secrets when CREDENTIAL_ENCRYPTION_KEY is missing", async (path, body) => {

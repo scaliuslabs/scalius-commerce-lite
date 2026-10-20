@@ -31,7 +31,9 @@ export type MerchantOrderShipmentLookup =
 
 /**
  * Staff choices on the booking form. Money, item count and contents always
- * come from the saved order, never from the caller.
+ * come from the saved order, never from the caller. `itemWeight` (kg) is the
+ * parcel weight; the rest are booking options a courier may declare
+ * (`bookingOptions`: Pathao's `deliveryType` and `itemType`).
  */
 export interface ShipmentOptions {
   deliveryType?: number;

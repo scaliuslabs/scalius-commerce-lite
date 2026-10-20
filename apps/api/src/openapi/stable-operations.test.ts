@@ -24,8 +24,8 @@ import { eventDataTruncation } from "@scalius/shared/events";
 import { AGENT_COMPONENT_SCHEMAS, AGENT_OPERATIONS } from "../generated/agent-operations.gen";
 import { isOperationAvailableToPlugin, pluginRbacSatisfied } from "../plugins/authority";
 import type { AgentOperationManifestEntry } from "./agent-operation-manifest";
-import { referencedComponentSchemas } from "./component-schema-refs";
-import { inputBreakingChanges, schemaBreakingChanges } from "./schema-compat";
+import { referencedComponentSchemas } from "@scalius/shared/openapi-schema-refs";
+import { inputBreakingChanges, schemaBreakingChanges } from "@scalius/shared/schema-compat";
 
 const SNAPSHOT_FILE = new URL("./stable-operations.snapshot.json", import.meta.url);
 

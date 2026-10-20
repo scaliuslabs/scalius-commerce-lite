@@ -265,7 +265,7 @@ describe("catalog actions on D1 storage", () => {
       .toEqual([{ sku: "PANJABI-M-COPY" }]);
 
     // A copy the product form could not save is a 400, not a 500.
-    const refused = await duplicateProduct(db, source.id, "ab").catch((error: unknown) => error);
+    const refused = await duplicateProduct(db, source.id, "   ").catch((error: unknown) => error);
     expect(refused).toBeInstanceOf(ValidationError);
     expect(refused).toMatchObject({ status: 400, details: { field: "name" } });
   });

@@ -12,6 +12,7 @@ import {
   removeCartItemByKey,
   removeDiscountCode,
   restoreCart,
+  clearCart,
   updateCartItemByKey,
   getEffectiveCartShippingFee,
   cartItemsSubtotal,
@@ -1508,6 +1509,21 @@ export function refreshCartBlockingState() {
   updateCheckoutButtonState();
 }
 
+/** A cart item that needs attention unfolds the phone order summary once, so the buyer sees which. */
+let summaryOpenedForCartIssues = false;
+function revealOrderSummaryForCartIssues(blocked: boolean): void {
+  if (!blocked) {
+    summaryOpenedForCartIssues = false;
+    return;
+  }
+  if (summaryOpenedForCartIssues) return;
+  summaryOpenedForCartIssues = true;
+  const root = document.getElementById("cartPageRoot");
+  if (root?.dataset.summary !== "closed") return;
+  root.dataset.summary = "open";
+  document.getElementById("orderSummaryToggle")?.setAttribute("aria-expanded", "true");
+}
+
 export function updateCheckoutButtonState() {
   const submitButton = document.getElementById(
     "submitButton",
@@ -1521,17 +1537,24 @@ export function updateCheckoutButtonState() {
   const cartReady =
     document.getElementById("cartPageRoot")?.dataset.cartReady !== "false";
   const isEmpty = Object.keys(cartStore.get().items).length === 0;
+  const copy = activeCheckoutCopy();
+  const cartBlocked = hasBlockingCartIssues();
+  revealOrderSummaryForCartIssues(cartBlocked && cartReady && !isEmpty);
   applyCheckoutButtonState(submitButton, {
     checkoutUnavailable,
     unavailableMessage,
     isEmpty: isEmpty || !cartReady,
-    cartBlocked: hasBlockingCartIssues(),
+    emptyMessage: copy.cartEmptyErrorText,
+    cartBlocked,
     cartBlockedMessage: cartBlockedMessage(),
+    cartAttentionMessage: copy.cartAttentionText,
     cartRulesBlocked: hasCartRuleErrors(),
-    cartRulesBlockedMessage: activeCheckoutCopy().cartRulesBlockedText,
+    cartRulesBlockedMessage: copy.cartRulesBlockedText,
     checkoutPending: pendingCheckoutForThisTab() !== null,
+    checkoutPendingMessage: copy.existingCheckoutTitle,
     discountValidationPending: isDiscountValidationPending(),
-    discountValidationPendingMessage: activeCheckoutCopy().processingText,
+    discountValidationPendingMessage: copy.processingText,
+    reasonElement: document.getElementById("submitButtonReason"),
   });
 }
 
@@ -1885,6 +1908,18 @@ export async function initCartFunctionality() {
   document.getElementById("discountCodeInput")?.addEventListener(
     "input",
     clearDiscountMessage,
+    { signal: runtimeSignal },
+  );
+  // Clear cart lives on the cart page (the drawer keeps one action), with Undo.
+  document.getElementById("clearCartButton")?.addEventListener(
+    "click",
+    () => {
+      const snapshot = cartStore.get();
+      if (Object.keys(snapshot.items).length === 0) return;
+      clearCartValidationSummary();
+      clearCart();
+      offerUndo(activeCheckoutCopy().cartClearedText, snapshot);
+    },
     { signal: runtimeSignal },
   );
 

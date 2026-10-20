@@ -1,14 +1,15 @@
+import { lazy, Suspense } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { AiAccessCard } from "~/components/admin/agent-access/AiAccessCard";
 import { AppKindCard } from "~/components/admin/settings/AppKindCard";
 import { AiDraftingCard } from "~/components/admin/agent-access/AiDraftingCard";
 import {
-  FacebookCard,
   FraudCheckCard,
   ScannerCard,
   TrackingCard,
 } from "~/components/admin/settings/AppsSettings";
-import { SettingsPage } from "~/components/admin/settings/SettingsPage";
+import { SettingsCardLoading, SettingsPage } from "~/components/admin/settings/SettingsPage";
+import { trackingHealthQuery, trackingSettingsQuery } from "~/components/admin/settings/tracking-settings";
 import { settingsHead } from "~/components/admin/settings/settings-nav";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
@@ -22,8 +23,10 @@ export const Route = createFileRoute("/admin/settings/integrations")({
     Promise.allSettled([
       queryClient.ensureQueryData(trackingQuery),
       queryClient.ensureQueryData(metaQuery),
+      queryClient.ensureQueryData(trackingSettingsQuery),
+      queryClient.ensureQueryData(trackingHealthQuery),
       queryClient.ensureQueryData(fraudCheckerProvidersQueryOptions()),
-      queryClient.ensureQueryData(appProvidersQuery("fraud")),
+      queryClient.ensureQueryData(appProvidersQuery("courier_history")),
       queryClient.ensureQueryData(aiAccessQuery),
       queryClient.ensureQueryData(appProvidersQuery("ai")),
       queryClient.ensureQueryData(appProvidersQuery("search")),
@@ -32,6 +35,9 @@ export const Route = createFileRoute("/admin/settings/integrations")({
   errorComponent: RouteErrorComponent,
   component: IntegrationsPage,
 });
+
+// Google, Facebook & Instagram and TikTok: each one's tag, sales and health. Loaded after the page's own code.
+const TrackingDestinationCards = lazy(() => import("~/components/admin/settings/TrackingDestinations"));
 
 const EDIT_PERMISSIONS = [
   ADMIN_PERMISSIONS.ANALYTICS_CREATE,
@@ -46,8 +52,10 @@ function IntegrationsPage() {
   const { hasPermission } = usePermissions();
   return (
     <SettingsPage page="integrations" readOnly={!EDIT_PERMISSIONS.some(hasPermission)}>
+      <Suspense fallback={<SettingsCardLoading />}>
+        <TrackingDestinationCards />
+      </Suspense>
       <TrackingCard />
-      <FacebookCard />
       <FraudCheckCard />
       <ScannerCard />
       <AiAccessCard />

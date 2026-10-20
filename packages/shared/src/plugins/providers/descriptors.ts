@@ -20,8 +20,9 @@
 import { z } from "zod";
 import { providerAmountCodecsSchema } from "./amount";
 import { providerCountriesSchema, providerCurrencySchema } from "./common";
-import { PROVIDER_KINDS, PROVIDER_OPERATIONS, type ProviderKind } from "./kinds";
+import { PROVIDER_KINDS, PROVIDER_OPERATIONS, RENAMED_PROVIDER_KINDS, currentProviderKind, type ProviderKind } from "./kinds";
 import { paymentAmountLimitsSchema } from "./payment";
+import { courierBookingOptionKeySchema, type CourierBookingOptionValue } from "./courier";
 import { MESSAGING_CHANNELS } from "./channels";
 import { pluginKeySchema, pluginUrlNameSchema } from "../manifest-patterns";
 import { PAYMENT_TERMS_MAX_DAYS } from "../../payment-terms";
@@ -40,8 +41,8 @@ const providerIcon = z.string().max(128)
 
 /**
  * The most providers one app declares. A regional pack bundles a country's
- * integrations in one app (the Bangladesh pack: 4 SMS gateways, 4 fraud
- * checkers, its couriers and a payment gateway), so the limit is sized for
+ * integrations in one app (the Bangladesh pack: 4 SMS gateways, 4
+ * courier-history checkers, its couriers and a payment gateway), so the limit is sized for
  * that, not for a single-provider app.
  */
 export const PLUGIN_PROVIDERS_MAX = 24;
@@ -131,6 +132,49 @@ export const paymentProviderDescriptorSchema = z.object({
   }
 });
 
+const choiceValue = z.union([z.string().min(1).max(64), z.number().int().min(-1_000_000).max(1_000_000)]);
+
+/**
+ * One of a courier's own booking choices (Pathao's delivery type), shown on
+ * the booking form: a `select` of fixed choices, a `number` within bounds or
+ * a `boolean`. The chosen value reaches `createShipment` and `quote` in
+ * `options.<key>`; an option left unset is absent (the courier's default).
+ */
+export const courierBookingOptionSchema = z.discriminatedUnion("type", [
+  z.object({
+    key: courierBookingOptionKeySchema, label: title, type: z.literal("select"),
+    choices: z.array(z.object({ value: choiceValue, label: title }).strict()).min(1).max(20)
+      .refine((choices) => new Set(choices.map((choice) => choice.value)).size === choices.length, "List each value once."),
+  }).strict(),
+  z.object({
+    key: courierBookingOptionKeySchema, label: title, type: z.literal("number"),
+    min: z.number().finite().optional(), max: z.number().finite().optional(),
+  }).strict(),
+  z.object({ key: courierBookingOptionKeySchema, label: title, type: z.literal("boolean") }).strict(),
+]);
+export type CourierBookingOption = z.output<typeof courierBookingOptionSchema>;
+
+/**
+ * Staff choices kept to the options a courier declares: unknown keys, and
+ * values that are not one of a select's choices, a number within bounds or a
+ * boolean, are dropped (the courier then uses its own default).
+ */
+export function declaredCourierBookingOptions(
+  declared: readonly CourierBookingOption[] | undefined,
+  chosen: Readonly<Record<string, unknown>> | undefined,
+): Record<string, CourierBookingOptionValue> {
+  const options: Record<string, CourierBookingOptionValue> = {};
+  for (const option of declared ?? []) {
+    const value = chosen?.[option.key];
+    if (value === undefined || value === null) continue;
+    if (option.type === "select" && option.choices.some((choice) => choice.value === value)) options[option.key] = value as string | number;
+    if (option.type === "number" && typeof value === "number" && Number.isFinite(value)
+      && (option.min === undefined || value >= option.min) && (option.max === undefined || value <= option.max)) options[option.key] = value;
+    if (option.type === "boolean" && typeof value === "boolean") options[option.key] = value;
+  }
+  return options;
+}
+
 export const courierProviderDescriptorSchema = z.object({
   ...base("courier"),
   /** The countries it delivers to (default `any`); it is never offered for an order shipping elsewhere. */
@@ -151,13 +195,17 @@ export const courierProviderDescriptorSchema = z.object({
       .default([]),
     numeric: z.boolean().default(false),
   }).strict().optional(),
+  /** The courier's own booking choices (`courierBookingOptionSchema`), each key once. */
+  bookingOptions: z.array(courierBookingOptionSchema).max(10)
+    .refine((options) => new Set(options.map((option) => option.key)).size === options.length, "List each option key once.")
+    .optional(),
 }).strict();
 
 const plain = <K extends ProviderKind>(kind: K) => z.object(base(kind)).strict();
 
-/** A fraud checker looks up buyers of some countries (a courier-history service: its couriers' country). */
-export const fraudProviderDescriptorSchema = z.object({
-  ...base("fraud"),
+/** A courier-history checker looks up buyers of some countries (its couriers' country). */
+export const courierHistoryProviderDescriptorSchema = z.object({
+  ...base("courier_history"),
   /** The countries it knows buyers in (default `any`); it is never asked about an order shipping elsewhere. */
   countries: providerCountriesSchema.default("any"),
 }).strict();
@@ -180,7 +228,7 @@ const PROVIDER_DESCRIPTOR_SCHEMAS = {
   courier: courierProviderDescriptorSchema,
   sms: plain("sms"),
   email: plain("email"),
-  fraud: fraudProviderDescriptorSchema,
+  courier_history: courierHistoryProviderDescriptorSchema,
   tax: plain("tax"),
   translation: plain("translation"),
   ai: plain("ai"),
@@ -194,7 +242,7 @@ const PROVIDER_DESCRIPTOR_SCHEMAS = {
 
 export type PaymentProviderDescriptor = z.output<typeof paymentProviderDescriptorSchema>;
 export type CourierProviderDescriptor = z.output<typeof courierProviderDescriptorSchema>;
-export type FraudProviderDescriptor = z.output<typeof fraudProviderDescriptorSchema>;
+export type CourierHistoryProviderDescriptor = z.output<typeof courierHistoryProviderDescriptorSchema>;
 export type MessagingProviderDescriptor = z.output<typeof messagingProviderDescriptorSchema>;
 export type AddressProviderDescriptor = z.output<typeof addressProviderDescriptorSchema>;
 type PlainProviderDescriptor = z.output<ReturnType<typeof plain>>;
@@ -203,7 +251,7 @@ type PlainProviderDescriptor = z.output<ReturnType<typeof plain>>;
 export type PluginProviderDeclaration =
   | ({ kind: "payment" } & PaymentProviderDescriptor)
   | ({ kind: "courier" } & CourierProviderDescriptor)
-  | ({ kind: "fraud" } & FraudProviderDescriptor)
+  | ({ kind: "courier_history" } & CourierHistoryProviderDescriptor)
   | ({ kind: "messaging" } & MessagingProviderDescriptor)
   | ({ kind: "address" } & AddressProviderDescriptor)
   | ({ kind: "sms" | "email" | "tax" | "translation" | "ai" | "push" | "search" | "fx" | "identity" } & PlainProviderDescriptor);
@@ -211,20 +259,21 @@ export type PluginProviderDeclaration =
 /**
  * The manifest's `providers`: grouped by port, as authors write it. The flat
  * list (`[{ kind, ...descriptor }]`) is what a parsed manifest stores and
- * re-parses; it also accepts the first manifest shape, whose kinds were
- * named `shipping` (now `courier`) and `messaging` (now `sms`). Since the
- * chat `messaging` kind, a flat entry named `messaging` is a chat provider
- * only when it lists `channels`; without them it is the old SMS name.
+ * re-parses; it also reads kinds stored under an earlier name
+ * (`RENAMED_PROVIDER_KINDS`: `shipping`, `fraud`) and the first manifest's
+ * `messaging` (now `sms`). Since the chat `messaging` kind, a flat entry named
+ * `messaging` is a chat provider only when it lists `channels`; without them
+ * it is the old SMS name.
  */
 export const pluginProvidersSchema = z.union([
   z.object(Object.fromEntries(PROVIDER_KINDS.map((kind) => [kind, z.array(PROVIDER_DESCRIPTOR_SCHEMAS[kind]).max(PLUGIN_PROVIDERS_MAX).optional()])) as {
     [K in ProviderKind]: z.ZodOptional<z.ZodArray<(typeof PROVIDER_DESCRIPTOR_SCHEMAS)[K]>>;
   }).strict().transform((groups) => PROVIDER_KINDS.flatMap((kind) =>
     (groups[kind] ?? []).map((descriptor) => ({ kind, ...descriptor }) as PluginProviderDeclaration))),
-  z.array(z.looseObject({ kind: z.enum([...PROVIDER_KINDS, "shipping"]) })).max(PLUGIN_PROVIDERS_MAX)
+  z.array(z.looseObject({ kind: z.enum([...PROVIDER_KINDS, ...Object.keys(RENAMED_PROVIDER_KINDS) as (keyof typeof RENAMED_PROVIDER_KINDS)[]]) })).max(PLUGIN_PROVIDERS_MAX)
     .transform((entries, context) => entries.map((entry, index) => {
       const { kind: named, ...descriptor } = entry;
-      const kind: ProviderKind = named === "shipping" ? "courier" : named === "messaging" && !("channels" in descriptor) ? "sms" : named;
+      const kind = (named === "messaging" && !("channels" in descriptor) ? "sms" : currentProviderKind(named)) as ProviderKind;
       const parsed = PROVIDER_DESCRIPTOR_SCHEMAS[kind].safeParse(descriptor);
       if (!parsed.success) {
         for (const issue of parsed.error.issues) {

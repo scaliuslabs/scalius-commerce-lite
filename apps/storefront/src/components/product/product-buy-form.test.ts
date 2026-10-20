@@ -79,6 +79,9 @@ describe("product page purchase aids", () => {
     const buyBox = read("./ProductBuyBox.astro");
     expect(buyBox).toMatch(/contactLinks\.length > 0 && \(\s*<nav slot="after-actions" data-product-contact/);
     expect(buyBox).toContain('data-product-contact-link={link.kind}');
+    // Their words are the store's language (shop copy), never hard-coded English.
+    expect(page).toContain("contactCopy: shop.product.contact,");
+    expect(buyBox).not.toMatch(/"(Call|WhatsApp|Contact the store|Contact on WhatsApp)"/);
   });
 });
 });

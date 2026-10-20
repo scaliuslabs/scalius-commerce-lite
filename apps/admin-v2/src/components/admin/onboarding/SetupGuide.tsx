@@ -2,11 +2,13 @@
 // of the steps that matter for a new store, and one action per step. Each
 // step is checked from the store's own data (GET /admin/dashboard/setup-guide),
 // never because it was clicked. Dismissing hides the card for this staff
-// member only. Code-split: Home loads it after its first render.
+// member only, with Undo in the toast and "Show setup guide" in Home's menu.
+// Code-split: Home loads it after its first render.
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { postApiV1AdminDashboardSetupGuideDismiss } from "@scalius/api-client/sdk";
+import { useShowSetupGuide } from "./use-show-setup-guide";
 import { Button } from "~/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { useMediaQuery } from "~/hooks/use-media-query";
@@ -32,6 +34,9 @@ function Glyph({ children, className }: { children: ReactNode; className?: strin
   );
 }
 
+/** The API counts drafts up to here ("1,000+"). */
+const DRAFT_COUNT_CAP = 1000;
+
 export type SetupGuideData = ApiResult<typeof getApiV1AdminDashboardSetupGuide>;
 
 type StepKey = "details" | "product" | "theme" | "payments" | "shipping" | "pack" | "domain" | "order";
@@ -40,18 +45,41 @@ interface Step {
   key: StepKey;
   done: boolean;
   to: string;
+  /** A storefront page the step opens in a new tab instead (the test order). */
+  href?: string;
+  search?: Record<string, string>;
+  /** A line under the step's text: what is still in the way (drafts, counted up to 1,000). */
+  draftCount?: number;
+  /** The step's action, when it is not the step's usual one. */
+  action?: "draftsAction" | "orderManualAction";
   params?: Record<string, string>;
   /** The page the step opens, for the role check (a step the person can't open isn't shown). */
   access: string;
-  body: "detailsBody" | "productBody" | "themeBody" | "paymentsBody" | "paymentsBodyBd" | "shippingBody" | "packBody" | "domainBody" | "orderBody";
+  body: "detailsBody" | "productBody" | "themeBody" | "paymentsBody" | "paymentsBodyBd" | "shippingBody" | "packBody" | "domainBody" | "orderBody" | "orderBodyManual";
 }
 
 /** The guide's steps for this store, in the order a new store needs them. */
 export function setupGuideSteps(guide: SetupGuideData, canOpen: (to: string) => boolean): Step[] {
-  const { steps, bangladeshPack, countryCode, setupNeeded } = guide;
+  const { steps, bangladeshPack, countryCode, setupNeeded, drafts, testOrderUrl } = guide;
+  // Only drafts so far: the step says so and opens them (the one draft, or the Draft view) to make them active.
+  const draftsOnly = !steps.product && drafts.count > 0;
+  const productStep: Step = draftsOnly
+    ? {
+      key: "product", done: false, access: "/admin/products", body: "productBody",
+      draftCount: drafts.count, action: "draftsAction",
+      ...(drafts.count === 1 && drafts.newestId
+        ? { to: "/admin/products/$productId/edit", params: { productId: drafts.newestId } }
+        : { to: "/admin/products", search: { status: "draft" } }),
+    }
+    : { key: "product", done: steps.product, to: "/admin/products/new", access: "/admin/products/new", body: "productBody" };
+  // A test order is a buyer's: the storefront with a product in the cart. Until the
+  // store has a web address and a live product, the order form is the way to try it.
+  const orderStep: Step = testOrderUrl
+    ? { key: "order", done: steps.order, to: "/admin/orders", href: testOrderUrl, access: "/admin", body: "orderBody" }
+    : { key: "order", done: steps.order, to: "/admin/orders/new", access: "/admin/orders/new", body: "orderBodyManual", action: "orderManualAction" };
   const all: Step[] = [
     { key: "details", done: steps.details, to: setupNeeded ? "/admin/welcome" : "/admin/settings/store", access: "/admin/settings/store", body: "detailsBody" },
-    { key: "product", done: steps.product, to: "/admin/products/new", access: "/admin/products/new", body: "productBody" },
+    productStep,
     { key: "theme", done: steps.theme, to: "/admin/online-store/theme", access: "/admin/online-store/theme", body: "themeBody" },
     {
       key: "payments", done: steps.payments, to: "/admin/settings/payments", access: "/admin/settings/payments",
@@ -63,7 +91,7 @@ export function setupGuideSteps(guide: SetupGuideData, canOpen: (to: string) => 
       ? [{ key: "pack" as const, done: bangladeshPack.active, to: "/admin/apps/$pluginId", params: { pluginId: BANGLADESH_PACK_ID }, access: "/admin/apps", body: "packBody" as const }]
       : []),
     { key: "domain", done: steps.domain, to: "/admin/settings/store", access: "/admin/settings/store", body: "domainBody" },
-    { key: "order", done: steps.order, to: "/admin/orders/new", access: "/admin/orders/new", body: "orderBody" },
+    orderStep,
   ];
   return all.filter((step) => canOpen(step.access));
 }
@@ -80,10 +108,12 @@ export default function SetupGuide({ guide, canOpen }: { guide: SetupGuideData; 
   const [showAll, setShowAll] = useState(false);
   const [open, setOpen] = useState(() => steps.find((step) => !step.done)?.key ?? "");
 
+  const show = useShowSetupGuide();
   const dismiss = useMutation({
     mutationFn: () => apiData(postApiV1AdminDashboardSetupGuideDismiss()),
     onSuccess: () => {
       queryClient.setQueryData<SetupGuideData>(queryKeys.dashboard.setupGuide(), (current) => current && { ...current, dismissed: true });
+      toast(t("dismissed"), { duration: 10_000, action: { label: t("undo"), onClick: () => show.mutate() } });
     },
     onError: () => toast.error(t("dismissFailed")),
   });
@@ -157,9 +187,22 @@ export default function SetupGuide({ guide, canOpen }: { guide: SetupGuideData; 
                 </button>
                 {isOpen ? (
                   <div id={`setup-step-${step.key}`} className="flex flex-col items-start gap-3 pb-4 ps-7">
-                    <p className="text-body text-muted-foreground">{t(step.body)}</p>
+                    <div className="flex flex-col gap-1">
+                      <p className="text-body text-muted-foreground">{t(step.body)}</p>
+                      {step.draftCount ? (
+                        <p className="text-body font-medium">
+                          {step.draftCount >= DRAFT_COUNT_CAP
+                            ? t("draftsNoteMany", { count: `${formatNumber(DRAFT_COUNT_CAP)}+` })
+                            : t("draftsNote", { count: step.draftCount })}
+                        </p>
+                      ) : null}
+                    </div>
                     <Button variant={step.done ? "outline" : "default"} size="sm" asChild>
-                      <Link to={step.to} params={step.params as never}>{t(`${step.key}Action`)}</Link>
+                      {step.href ? (
+                        <a href={step.href} target="_blank" rel="noopener">{t(step.action ?? `${step.key}Action`)}</a>
+                      ) : (
+                        <Link to={step.to} params={step.params as never} search={step.search as never}>{t(step.action ?? `${step.key}Action`)}</Link>
+                      )}
                     </Button>
                   </div>
                 ) : null}

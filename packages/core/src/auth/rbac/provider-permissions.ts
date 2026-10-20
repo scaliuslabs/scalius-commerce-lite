@@ -23,8 +23,8 @@ export const PROVIDER_PORT_PERMISSIONS: Readonly<Record<ProviderKind, ProviderPo
   sms: { view: [PERMISSIONS.SETTINGS_GENERAL_VIEW], manage: [PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT] },
   // Settings → Shipping, couriers: /settings/delivery-providers.
   courier: { view: [PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_VIEW], manage: [PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_EDIT] },
-  // Settings → Integrations, fraud check: /fraud-checker (its test is a read).
-  fraud: { view: [PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW], manage: [PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW] },
+  // Settings → Integrations, fraud check (courier history): /fraud-checker (its test is a read).
+  courier_history: { view: [PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW], manage: [PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW] },
   // Settings → Taxes: /taxes.
   tax: { view: [PERMISSIONS.TAXES_VIEW], manage: [PERMISSIONS.TAXES_MANAGE] },
   // Settings → Languages, machine translation: /settings/languages.

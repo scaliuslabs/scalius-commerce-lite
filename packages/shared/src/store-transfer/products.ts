@@ -34,9 +34,8 @@ export const PRODUCT_IMPORT_BATCH_MAX = 50;
 export const PRODUCT_IMPORT_BATCH_DEFAULT = 10;
 export const PRODUCT_IMPORT_MAX_IMAGES = 250;
 /** Product text limits the editor enforces. */
-export const PRODUCT_TITLE_MIN = 3;
-export const PRODUCT_TITLE_MAX = 100;
-export const PRODUCT_DESCRIPTION_MIN = 10;
+export const PRODUCT_TITLE_MIN = 1;
+export const PRODUCT_TITLE_MAX = 255;
 export const CATEGORY_NAME_MIN = 3;
 export const CATEGORY_NAME_MAX = 100;
 /** Levels in the category tree (root plus three below it). */

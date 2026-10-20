@@ -466,7 +466,7 @@ async function sendAuthOtpWhatsApp(
     templateName: sender.authTemplateName,
     languageCode: "en_US",
     bodyParameters: [code],
-    clientReference: createAuthOtpProviderClientReference(target),
+    idempotencyKey: createAuthOtpProviderClientReference(target),
   });
 
   const receiptResult: AuthOtpDeliveryReceiptResult = {
@@ -544,8 +544,8 @@ async function sendAuthOtpSms(
 
   const result = await smsProvider.send({
     to: payload.identifier,  // Already E.164 from customers.phone
-    message: message.sms,
-    clientReference: createAuthOtpProviderClientReference(target),
+    text: message.sms,
+    idempotencyKey: createAuthOtpProviderClientReference(target),
   }, {});
 
   const receiptResult: AuthOtpDeliveryReceiptResult = {

@@ -44,7 +44,7 @@ The `delivery` domain owns the courier port, saved courier accounts (delivery pr
 `createShipment(db, orderId, providerId, options, key, { shipmentId, couriers })` inserts first:
 
 1. Check that the provider is `active`, run the courier `preflight()` (a courier's declared place ids) and run `assertOrderStockCoverable()`.
-2. Build the `CourierShipmentInput` from the saved order. The caller supplies only staff options (`deliveryType`, `itemType`, `itemWeight`, `note`). `codAmountMinor` is the balance due. `idempotencyKey` is the shipment id.
+2. Build the `CourierShipmentInput` from the saved order: the recipient is the shipping address in the webhook representation's shape (`line1`, `line2`, `locality`, `adminArea`, `postalCode`, `countryCode`, ...) with the store's `placeIds` and `placeNames`. The caller supplies only staff options: `itemWeight` (kg, sent as `parcel.weightGrams`), `note`, and the courier's own booking options (`deliveryType`, `itemType`), which the adapter keeps only when the courier declares them (`bookingOptions`). `codAmountMinor` is the balance due. `idempotencyKey` is the shipment id.
 3. Insert a `creating` shipment row (with the courier's name), then call the courier.
 4. Success: save `external_id`, `tracking_id` (the booking id when the courier has none), `tracking_url`, `status`, `raw_status` and the courier's details in `metadata`.
 5. Certain refusal: `status = failed`, `raw_status = provider_rejected`.
