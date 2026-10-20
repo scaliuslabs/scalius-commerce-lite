@@ -49,7 +49,7 @@ export async function previewPlugin(directory, output = join(directory, "dist/pr
   const product = contract.fixtureProductPage(fixture.product ?? {});
   const views = new Set([
     ...storefront.sections.map((section) => `section:${section.type}`),
-    ...storefront.productBlocks.map((block) => `block:${block.type}`),
+    ...storefront.components.map((component) => `component:${component.type}`),
     ...storefront.skins.map((skin) => `skin:${skin.id}`),
   ]);
   for (const key of ["settings", "objects"]) {
@@ -61,7 +61,11 @@ export async function previewPlugin(directory, output = join(directory, "dist/pr
       id: `section:${section.type}`, kind: "section", type: section.type, instanceId: `preview-${section.type}`, settings: settingsFor(`section:${section.type}`, section.settings),
       ...(fixture.objects?.[`section:${section.type}`] ? { objects: fixture.objects[`section:${section.type}`] } : {}),
     })),
-    ...componentJobs(contract, storefront.components, "preview"),
+    ...componentJobs(contract, storefront.components, "preview").map((job) => ({
+      ...job,
+      settings: { ...job.settings, ...(fixture.settings?.[`component:${job.type}`] ?? {}) },
+      ...(job.target.startsWith("product.") ? { data: product } : {}),
+    })),
     ...storefront.skins.map((skin) => ({
       id: `skin:${skin.id}`, kind: "skin", target: skin.target, component: skin.id, settings: settingsFor(`skin:${skin.id}`, skin.settings),
       data: skin.target === "product-main" ? product : contract.fixtureSkinData(skin.target), ...(skin.target.startsWith("section:") ? { instanceId: "preview" } : {}),

@@ -122,10 +122,10 @@ export async function validatePlugin(directory) {
   // its defaults (a skin that breaks its target's embed rule fails here, not at pack).
   try {
     const files = await packStorefront(contract, manifest, directory);
-    const { sections, productBlocks, skins, islands } = manifest.storefront;
+    const { sections, components, skins, islands } = manifest.storefront;
     const parts = [
       ["section", sections.length],
-      ["product block", productBlocks.length],
+      ["component", components.length],
       ["skin", skins.length],
       ["island", islands.length],
     ].filter(([, count]) => count > 0).map(([noun, count]) => `${count} ${noun}${count === 1 ? "" : "s"}`);

@@ -375,7 +375,7 @@ export { defineManifest, type DefinedManifest, type ObjectFieldValue, type Objec
 export { PLUGIN_API_VERSION } from "@scalius/shared/plugins/api-version";
 export { ProviderError, type ProviderErrorCategory } from "@scalius/shared/plugins/providers/kinds";
 export type { CourierFind, CourierRecipient, CourierShipment, CourierShipmentInput, CourierRatesInput, CourierRates, CourierShipmentStatus, CourierTracking, CourierWebhook, CourierWebhookReply, EmailSend, EmailSendInput, CourierHistory, CourierHistoryInput, MessageStatus, PaymentEvent, PaymentQuery, PaymentQueryInput, PaymentRefund, PaymentRefundInput, PaymentRefundProbe, PaymentRefundProbeInput, PaymentSession, PaymentSessionInput, PaymentSettlement, PaymentVerification, ProviderConnection, ProviderHttpRequest, ProviderImplementation, ProviderKind, ProviderOperationInput, ProviderOperationOutput, ProviderWireAmount, SmsSend, SmsSendInput, TaxAddress, TaxCalculateInput, TaxCalculation, TaxCalculationLine, } from "@scalius/shared/plugins/providers";
-export type { PluginFeature, PluginFeatureInput, PluginManifest, PluginManifestInput, PluginUiActionResult, PluginUiDocument, PluginUiNode, PluginUiTarget, } from "@scalius/shared/plugins";
+export type { PluginFeature, PluginFeatureInput, PluginManifest, PluginManifestInput, PluginUiAction, PluginUiActionResult, PluginUiDocument, PluginUiNode, PluginUiSurface, PluginUiTarget, } from "@scalius/shared/plugins";
 export { adminContext, adminLocale, ui, wantsPage, type PluginAdminContext, type PluginAdminLocale } from "./ui";
 export type PluginEventHandler<T extends EventTopic = EventTopic, Ctx = PluginContext> = (event: PluginEvent<T>, ctx: Ctx) => Promise<void> | void;
 export type PluginFunctionHandler<P extends PluginFunctionPoint, Settings = Readonly<Record<string, PluginSettingValue>>> = (input: PluginFunctionInput<P>, settings: Settings) => PluginFunctionAnswer<P> | Promise<PluginFunctionAnswer<P>>;
@@ -595,10 +595,10 @@ type Declared<List, Id extends string, Key extends string> = Values<List> extend
 type SettingsOfEntry<E> = (E extends {
     settings?: infer S;
 } ? SettingsOf<NonNullable<S>> : unknown) extends infer R ? (unknown extends R ? StorefrontResolvedSettings : R) : never;
-export type StorefrontSettingsOf<M, Kind extends "section" | "block" | "skin", Key extends string> = Kind extends "section" ? SettingsOfEntry<Declared<StorefrontOf<M> extends {
+export type StorefrontSettingsOf<M, Kind extends "section" | "component" | "skin", Key extends string> = Kind extends "section" ? SettingsOfEntry<Declared<StorefrontOf<M> extends {
     sections?: infer L;
-} ? NonNullable<L> : never, "type", Key>> : Kind extends "block" ? SettingsOfEntry<Declared<StorefrontOf<M> extends {
-    productBlocks?: infer L;
+} ? NonNullable<L> : never, "type", Key>> : Kind extends "component" ? SettingsOfEntry<Declared<StorefrontOf<M> extends {
+    components?: infer L;
 } ? NonNullable<L> : never, "type", Key>> : SettingsOfEntry<Declared<StorefrontOf<M> extends {
     skins?: infer L;
 } ? NonNullable<L> : never, "id", Key>>;
@@ -725,7 +725,7 @@ export declare class PluginPlatformError extends Error {
 export declare function invokePluginDefinition(module: unknown, invocation: PluginInvocation, seed: PluginContextSeed, bridge: PluginRuntimeBridge | null): Promise<PluginInvocationResult>;
 
 // packages/plugin-sdk/src/storefront/components.d.ts
-import type { StorefrontImage, StorefrontIslandHydration, StorefrontMoney, StorefrontProductCard, StorefrontRenderContext } from "@scalius/shared/plugins/storefront-protocol";
+import type { StorefrontComponentSlot, StorefrontImage, StorefrontIslandHydration, StorefrontMoney, StorefrontProductCard, StorefrontRenderContext } from "@scalius/shared/plugins/storefront-protocol";
 import { type Html, type Renderable } from "./html";
 type Attributes = Record<string, string | number | boolean | null | undefined>;
 export interface ImageProps {
@@ -780,10 +780,14 @@ export interface OrderFormProps {
     submitLabel?: string;
 }
 export declare function OrderForm(props: OrderFormProps): Html;
+export interface SlotProps {
+    name: StorefrontComponentSlot;
+}
+export declare function Slot(props: SlotProps): Html;
 export {};
 
 // packages/plugin-sdk/src/storefront/define.d.ts
-import { type StorefrontBlockTarget, type StorefrontFooterData, type StorefrontHeaderData, type StorefrontListingPage, type StorefrontModule, type StorefrontProductCardData, type StorefrontProductPage, type StorefrontRenderContext, type StorefrontRenderJob, type StorefrontResolvedSettings, type StorefrontSectionSkinData, type StorefrontSectionSkinSettings, type StorefrontSkinnableSection } from "@scalius/shared/plugins/storefront-protocol";
+import { type StorefrontComponentSlot, type StorefrontFooterData, type StorefrontHeaderData, type StorefrontListingPage, type StorefrontModule, type StorefrontProductCardData, type StorefrontProductPage, type StorefrontProductSlot, type StorefrontRenderContext, type StorefrontRenderJob, type StorefrontResolvedSettings, type StorefrontSectionSkinData, type StorefrontSectionSkinSettings, type StorefrontSkinnableSection } from "@scalius/shared/plugins/storefront-protocol";
 import { type Renderable } from "./html";
 export interface SectionProps<Settings = StorefrontResolvedSettings> {
     objects: NonNullable<Extract<StorefrontRenderJob, {
@@ -806,13 +810,22 @@ export type ListingMainProps<Settings = StorefrontResolvedSettings> = SkinProps<
 export type SectionSkinProps<Type extends StorefrontSkinnableSection = StorefrontSkinnableSection, Settings = StorefrontResolvedSettings> = SkinProps<StorefrontSectionSkinData<StorefrontSectionSkinSettings[Type]>, Settings> & {
     instanceId: string;
 };
-export interface BlockProps<Settings = StorefrontResolvedSettings> {
+export type ComponentProps<Settings = StorefrontResolvedSettings, Props = Record<string, unknown>> = {
+    target: StorefrontProductSlot;
     settings: Settings;
     data: StorefrontProductPage;
-    target: StorefrontBlockTarget;
     instanceId: string;
     context: StorefrontRenderContext;
-}
+} | {
+    target: Exclude<StorefrontComponentSlot, StorefrontProductSlot>;
+    settings: Settings;
+    context: StorefrontRenderContext;
+} | {
+    target: "page";
+    settings: Settings;
+    props: Props;
+    context: StorefrontRenderContext;
+};
 export type SectionComponent = (props: SectionProps<any>) => Renderable;
 export type HeaderComponent = (props: HeaderProps<any>) => Renderable;
 export type FooterComponent = (props: FooterProps<any>) => Renderable;
@@ -821,11 +834,11 @@ export type ProductMainComponent = (props: ProductMainProps<any>) => Renderable;
 export type ListingMainComponent = (props: ListingMainProps<any>) => Renderable;
 export type SectionSkinComponent = (props: SectionSkinProps<any, any>) => Renderable;
 export type SkinComponent = (props: any) => Renderable;
-export type BlockComponent = (props: BlockProps<any>) => Renderable;
+export type AppComponent = (props: ComponentProps<any, any>) => Renderable;
 export interface StorefrontDefinition {
     sections?: Record<string, SectionComponent>;
     skins?: Record<string, SkinComponent>;
-    blocks?: Record<string, BlockComponent>;
+    components?: Record<string, AppComponent>;
 }
 export interface StorefrontModuleDefinition extends StorefrontModule {
     definition: StorefrontDefinition;
@@ -852,13 +865,13 @@ export {};
 
 // packages/plugin-sdk/src/storefront/index.d.ts
 export { defineStorefront, storefrontDefinitionOf } from "./define";
-export type { BlockComponent, BlockProps, FooterComponent, FooterProps, HeaderComponent, HeaderProps, ListingMainComponent, ListingMainProps, ProductCardComponent, ProductCardProps, ProductMainComponent, ProductMainProps, SectionComponent, SectionProps, SectionSkinComponent, SectionSkinProps, SkinComponent, SkinProps, StorefrontDefinition, StorefrontModuleDefinition, } from "./define";
+export type { AppComponent, ComponentProps, FooterComponent, FooterProps, HeaderComponent, HeaderProps, ListingMainComponent, ListingMainProps, ProductCardComponent, ProductCardProps, ProductMainComponent, ProductMainProps, SectionComponent, SectionProps, SectionSkinComponent, SectionSkinProps, SkinComponent, SkinProps, StorefrontDefinition, StorefrontModuleDefinition, } from "./define";
 export { EMPTY_HTML, escapeHtml, html, isHtml, raw, toHtml, type Html, type Renderable } from "./html";
 export { Fragment, jsx, jsxs, type Component, type JSX } from "./jsx-runtime";
-export { BuyForm, CartCount, Filters, Gallery, Image, Island, OrderForm, Pagination, Price, Recommendations, Reviews, Toolbar, accountLink, asset, editable, menuDrawer, openCart, quickAdd, searchOpener, stickyHeader, } from "./components";
+export { BuyForm, CartCount, Filters, Gallery, Image, Island, OrderForm, Pagination, Price, Recommendations, Reviews, Slot, Toolbar, accountLink, asset, editable, menuDrawer, openCart, quickAdd, searchOpener, stickyHeader, } from "./components";
 export { formatDate, formatMoney, formatNumber, plural, storeTime, t, type Words } from "./locale";
-export type { BuyFormProps, ImageProps, IslandProps, OrderFormProps, PriceProps } from "./components";
-export type { StorefrontBannerMosaicSkinSettings, StorefrontBannerSkinSettings, StorefrontBlockTarget, StorefrontBrandWallSkinSettings, StorefrontCategoryTilesSkinSettings, StorefrontCollectionsSkinSettings, StorefrontDealBlockSkinSettings, StorefrontDeliveryFacts, StorefrontEditorialSkinSettings, StorefrontFaqSkinSettings, StorefrontFocalPoint, StorefrontFooterData, StorefrontHeaderData, StorefrontHeroSkinSettings, StorefrontImage, StorefrontLink, StorefrontListingPage, StorefrontLookbookSkinSettings, StorefrontMenuItem, StorefrontMoney, StorefrontNewsletterSkinSettings, StorefrontObjectFieldView, StorefrontProductCard, StorefrontProductCardData, StorefrontProductGridSkinSettings, StorefrontProductList, StorefrontProductPage, StorefrontProductRailSkinSettings, StorefrontProductTabsSkinSettings, StorefrontPromotionEnd, StorefrontRenderContext, StorefrontResolvedSettings, StorefrontSectionSkinData, StorefrontSectionSkinSettings, StorefrontSeoTextSkinSettings, StorefrontShopBySkinSettings, StorefrontSkinnableSection, StorefrontSkinTarget, StorefrontSpecificationsSkinSettings, StorefrontStoreInfo, StorefrontTile, StorefrontUspStripSkinSettings, StorefrontUtilityCardsSkinSettings, } from "@scalius/shared/plugins/storefront-protocol";
+export type { BuyFormProps, ImageProps, IslandProps, OrderFormProps, PriceProps, SlotProps } from "./components";
+export type { StorefrontBannerMosaicSkinSettings, StorefrontBannerSkinSettings, StorefrontComponentSlot, StorefrontComponentTarget, StorefrontBrandWallSkinSettings, StorefrontCategoryTilesSkinSettings, StorefrontCollectionsSkinSettings, StorefrontDealBlockSkinSettings, StorefrontDeliveryFacts, StorefrontEditorialSkinSettings, StorefrontFaqSkinSettings, StorefrontFocalPoint, StorefrontFooterData, StorefrontHeaderData, StorefrontHeroSkinSettings, StorefrontImage, StorefrontLink, StorefrontListingPage, StorefrontLookbookSkinSettings, StorefrontMenuItem, StorefrontMoney, StorefrontNewsletterSkinSettings, StorefrontObjectFieldView, StorefrontProductCard, StorefrontProductCardData, StorefrontProductGridSkinSettings, StorefrontProductList, StorefrontProductPage, StorefrontProductSlot, StorefrontProductRailSkinSettings, StorefrontProductTabsSkinSettings, StorefrontPromotionEnd, StorefrontRenderContext, StorefrontResolvedSettings, StorefrontSectionSkinData, StorefrontSectionSkinSettings, StorefrontSeoTextSkinSettings, StorefrontShopBySkinSettings, StorefrontSkinnableSection, StorefrontSkinTarget, StorefrontSpecificationsSkinSettings, StorefrontStoreInfo, StorefrontTile, StorefrontUspStripSkinSettings, StorefrontUtilityCardsSkinSettings, } from "@scalius/shared/plugins/storefront-protocol";
 
 // packages/plugin-sdk/src/storefront/island.d.ts
 import { type StorefrontIslandContext, type StorefrontIslandModule } from "@scalius/shared/plugins/storefront-protocol";
@@ -926,7 +939,7 @@ export declare function storeTime(context: {
 export {};
 
 // packages/plugin-sdk/src/storefront/testing.d.ts
-import { type StorefrontBlockTarget, type StorefrontFooterData, type StorefrontHeaderData, type StorefrontListingPage, type StorefrontModule, type StorefrontProductCard, type StorefrontProductPage, type StorefrontRenderContext, type StorefrontResolvedSettings, type StorefrontSectionSkinData, type StorefrontSkinJob, type StorefrontSkinTarget, type StorefrontSkinUnit } from "@scalius/shared/plugins/storefront-protocol";
+import { type StorefrontComponentTarget, type StorefrontFooterData, type StorefrontHeaderData, type StorefrontListingPage, type StorefrontModule, type StorefrontProductCard, type StorefrontProductPage, type StorefrontRenderContext, type StorefrontResolvedSettings, type StorefrontSectionSkinData, type StorefrontSkinJob, type StorefrontSkinTarget, type StorefrontSkinUnit } from "@scalius/shared/plugins/storefront-protocol";
 import { type StorefrontHeaderCheckOptions } from "@scalius/shared/plugins/storefront-html-check";
 export { checkStorefrontHeaderHtml } from "@scalius/shared/plugins/storefront-html-check";
 export declare function storefrontShown(html: string, pluginId: string): {
@@ -950,8 +963,9 @@ export interface RenderOptions extends StorefrontHeaderCheckOptions {
     context?: Partial<StorefrontRenderContext>;
 }
 export declare function renderSection(module: StorefrontModule, type: string, settings?: StorefrontResolvedSettings, options?: RenderOptions): string;
-export declare function renderBlock(module: StorefrontModule, type: string, settings?: StorefrontResolvedSettings, data?: StorefrontProductPage, options?: RenderOptions & {
-    target?: StorefrontBlockTarget;
+export declare function renderComponent(module: StorefrontModule, type: string, target: StorefrontComponentTarget, settings?: StorefrontResolvedSettings, options?: RenderOptions & {
+    data?: StorefrontProductPage;
+    props?: Record<string, unknown>;
 }): string;
 export declare function renderSkin<Target extends StorefrontSkinTarget>(module: StorefrontModule, component: string, target: Target, settings?: StorefrontResolvedSettings, data?: SkinData<Target>, options?: RenderOptions): string;
 export declare function renderHeader(module: StorefrontModule, component: string, settings?: StorefrontResolvedSettings, data?: Partial<StorefrontHeaderData>, options?: RenderOptions): string;
@@ -1035,8 +1049,7 @@ import { type PluginFunctionInputDraft, type PluginFunctionOutput, type PluginFu
 import type { EventTopic } from "@scalius/shared/events";
 import type { PluginApiCallInput, PluginApiResult, PluginEvent, PluginRouteRequest, PluginStoreInfo } from "./context";
 import { type PluginInvocationResult, type PluginLogRecord } from "./runtime";
-export { parsePluginUiActionResult, parsePluginUiDocument, pluginUiRouteActions, sanitizePluginHead, } from "@scalius/shared/plugins";
-export { sanitizePluginHtml } from "@scalius/shared/plugins/html";
+export { parsePluginUiActionResult, parsePluginUiDocument, pluginUiActions, pluginUiRouteActions, sanitizePluginHead, } from "@scalius/shared/plugins";
 export { fixtures } from "./fixtures";
 export { contractSchemaIssue, createContractApi, stableContract, type ContractApi, type ContractApiOptions, type ContractCall, type ContractHandler, type StableContract, type StableContractOperation, } from "./testing-contract";
 export interface PluginTestHarnessOptions {
@@ -1077,7 +1090,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
             url?: string | undefined;
             email?: string | undefined;
         };
-        categories: ("shipping" | "payments" | "orders" | "inventory" | "returns" | "checkout" | "pricing" | "marketing" | "loyalty" | "store-design" | "content" | "notifications" | "analytics" | "finances" | "support" | "operations" | "compliance")[];
+        categories: ("checkout" | "shipping" | "payments" | "orders" | "inventory" | "returns" | "pricing" | "marketing" | "loyalty" | "store-design" | "content" | "notifications" | "analytics" | "finances" | "support" | "operations" | "compliance")[];
         screenshots: string[];
         scopes: ("read_products" | "write_products" | "read_inventory" | "write_inventory" | "read_orders" | "write_orders" | "write_fulfillments" | "read_customers" | "write_customers" | "write_marketing" | "send_messages_any" | "read_customer_names" | "read_customer_emails" | "read_customer_phones" | "read_customer_addresses" | "read_discounts" | "write_discounts" | "read_content" | "write_content" | "read_objects" | "write_objects" | "read_files" | "write_files" | "read_gift_cards" | "write_gift_cards" | "write_webhooks" | "read_settings" | "write_places")[];
         allowedHosts: string[];
@@ -1101,7 +1114,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
                 } | undefined;
                 max?: number | undefined;
             })[];
-            targets?: ("purchase.checkout.contact.render-after" | "purchase.checkout.shipping-option-list.render-after" | "purchase.checkout.cart-line-list.render-after" | "purchase.checkout.payment-method-list.render-after" | "purchase.checkout.actions.render-before" | "purchase.thank-you.customer-information.render-after" | "customer-account.order-status.block.render" | "customer-account.order-index.block.render" | "customer-account.profile.block.render")[] | undefined;
+            targets?: ("checkout.contact.after" | "checkout.delivery.after" | "cart.page.summary" | "checkout.payment.after" | "checkout.actions.before" | "order.confirmation" | "account.order" | "account.overview" | "account.profile")[] | undefined;
         }[];
         providers: import("@scalius/shared/plugins/providers").PluginProviderDeclaration[];
         routes: {
@@ -1152,7 +1165,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
             admin?: "none" | "read" | "edit" | undefined;
         }>;
         customFields: {
-            ownerType: "page" | "product" | "order" | "customer" | "category" | "collection" | "brand" | "variant";
+            ownerType: "page" | "order" | "product" | "customer" | "category" | "collection" | "brand" | "variant";
             key: string;
             name: string;
             type: "boolean" | "date" | "url" | "integer" | "decimal" | "single_line_text" | "multi_line_text" | "date_time" | "color" | "json" | "money" | "product_reference" | "variant_reference" | "collection_reference" | "media_reference" | "object_reference" | "list.date" | "list.url" | "list.integer" | "list.decimal" | "list.single_line_text" | "list.multi_line_text" | "list.date_time" | "list.color" | "list.money" | "list.product_reference" | "list.variant_reference" | "list.collection_reference" | "list.media_reference" | "list.object_reference";
@@ -1409,7 +1422,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
             admin: string[];
             storefront: {
                 sections: string[];
-                productBlocks: string[];
+                components: string[];
                 skins: string[];
             };
         }[];
@@ -1433,13 +1446,13 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
             }[];
             cards: {
                 id: string;
-                target: "page" | "product" | "order" | "customer" | "category" | "collection" | "brand" | "return" | "variant";
+                target: "page" | "order" | "product" | "customer" | "category" | "collection" | "brand" | "return" | "variant";
                 title: string;
                 route: string;
             }[];
             actions: {
                 id: string;
-                target: "page" | "product" | "order" | "customer" | "category" | "collection" | "brand" | "return" | "variant";
+                target: "page" | "order" | "product" | "customer" | "category" | "collection" | "brand" | "return" | "variant";
                 label: string;
                 route: string;
                 bulk: boolean;
@@ -1452,7 +1465,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
             }[];
             listColumns: {
                 id: string;
-                resource: "product" | "order" | "customer";
+                resource: "order" | "product" | "customer";
                 title: string;
                 type: "number" | "boolean" | "text" | "date" | "money";
                 source: {
@@ -1471,6 +1484,227 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
             title: string;
         }[];
         storefront: {
+            components: {
+                type: string;
+                name: string;
+                targets: ("header.actions" | "product.buy_box.before" | "product.buy_box.after" | "product.below" | "footer.columns" | "page")[];
+                settings: ({
+                    type: "text";
+                    maxLength: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "textarea";
+                    maxLength: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "number";
+                    integer: boolean;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: number | undefined;
+                    min?: number | undefined;
+                    max?: number | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "boolean";
+                    default: boolean;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "select";
+                    options: {
+                        value: string;
+                        label: string;
+                    }[];
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "multiselect";
+                    options: {
+                        value: string;
+                        label: string;
+                    }[];
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string[] | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "secret";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "url";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "email";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "color";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "image";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "products";
+                    limit: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "product";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "link";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "list";
+                    fields: ({
+                        type: "text";
+                        maxLength: number;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "textarea";
+                        maxLength: number;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "number";
+                        integer: boolean;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: number | undefined;
+                        min?: number | undefined;
+                        max?: number | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "boolean";
+                        default: boolean;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "select";
+                        options: {
+                            value: string;
+                            label: string;
+                        }[];
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "url";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "color";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "image";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "link";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    })[];
+                    min: number;
+                    max: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    itemLabel?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                })[];
+                description?: string | undefined;
+            }[];
             skins: {
                 id: string;
                 target: "header" | "footer" | "product-card" | "product-main" | "listing-main" | `section:${string}`;
@@ -1939,226 +2173,6 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
                 }[];
                 description?: string | undefined;
             }[];
-            productBlocks: {
-                type: string;
-                name: string;
-                placement: "product.buy-box" | "product.below";
-                settings: ({
-                    type: "text";
-                    maxLength: number;
-                    key: string;
-                    label: string;
-                    required: boolean;
-                    default?: string | undefined;
-                    help?: string | undefined;
-                    group?: string | undefined;
-                } | {
-                    type: "textarea";
-                    maxLength: number;
-                    key: string;
-                    label: string;
-                    required: boolean;
-                    default?: string | undefined;
-                    help?: string | undefined;
-                    group?: string | undefined;
-                } | {
-                    type: "number";
-                    integer: boolean;
-                    key: string;
-                    label: string;
-                    required: boolean;
-                    default?: number | undefined;
-                    min?: number | undefined;
-                    max?: number | undefined;
-                    help?: string | undefined;
-                    group?: string | undefined;
-                } | {
-                    type: "boolean";
-                    default: boolean;
-                    key: string;
-                    label: string;
-                    required: boolean;
-                    help?: string | undefined;
-                    group?: string | undefined;
-                } | {
-                    type: "select";
-                    options: {
-                        value: string;
-                        label: string;
-                    }[];
-                    key: string;
-                    label: string;
-                    required: boolean;
-                    default?: string | undefined;
-                    help?: string | undefined;
-                    group?: string | undefined;
-                } | {
-                    type: "multiselect";
-                    options: {
-                        value: string;
-                        label: string;
-                    }[];
-                    key: string;
-                    label: string;
-                    required: boolean;
-                    default?: string[] | undefined;
-                    help?: string | undefined;
-                    group?: string | undefined;
-                } | {
-                    type: "secret";
-                    key: string;
-                    label: string;
-                    required: boolean;
-                    help?: string | undefined;
-                    group?: string | undefined;
-                } | {
-                    type: "url";
-                    key: string;
-                    label: string;
-                    required: boolean;
-                    default?: string | undefined;
-                    help?: string | undefined;
-                    group?: string | undefined;
-                } | {
-                    type: "email";
-                    key: string;
-                    label: string;
-                    required: boolean;
-                    default?: string | undefined;
-                    help?: string | undefined;
-                    group?: string | undefined;
-                } | {
-                    type: "color";
-                    key: string;
-                    label: string;
-                    required: boolean;
-                    default?: string | undefined;
-                    help?: string | undefined;
-                    group?: string | undefined;
-                } | {
-                    type: "image";
-                    key: string;
-                    label: string;
-                    required: boolean;
-                    help?: string | undefined;
-                    group?: string | undefined;
-                } | {
-                    type: "products";
-                    limit: number;
-                    key: string;
-                    label: string;
-                    required: boolean;
-                    default?: string | undefined;
-                    help?: string | undefined;
-                    group?: string | undefined;
-                } | {
-                    type: "product";
-                    key: string;
-                    label: string;
-                    required: boolean;
-                    help?: string | undefined;
-                    group?: string | undefined;
-                } | {
-                    type: "link";
-                    key: string;
-                    label: string;
-                    required: boolean;
-                    default?: string | undefined;
-                    help?: string | undefined;
-                    group?: string | undefined;
-                } | {
-                    type: "list";
-                    fields: ({
-                        type: "text";
-                        maxLength: number;
-                        key: string;
-                        label: string;
-                        required: boolean;
-                        default?: string | undefined;
-                        help?: string | undefined;
-                        group?: string | undefined;
-                    } | {
-                        type: "textarea";
-                        maxLength: number;
-                        key: string;
-                        label: string;
-                        required: boolean;
-                        default?: string | undefined;
-                        help?: string | undefined;
-                        group?: string | undefined;
-                    } | {
-                        type: "number";
-                        integer: boolean;
-                        key: string;
-                        label: string;
-                        required: boolean;
-                        default?: number | undefined;
-                        min?: number | undefined;
-                        max?: number | undefined;
-                        help?: string | undefined;
-                        group?: string | undefined;
-                    } | {
-                        type: "boolean";
-                        default: boolean;
-                        key: string;
-                        label: string;
-                        required: boolean;
-                        help?: string | undefined;
-                        group?: string | undefined;
-                    } | {
-                        type: "select";
-                        options: {
-                            value: string;
-                            label: string;
-                        }[];
-                        key: string;
-                        label: string;
-                        required: boolean;
-                        default?: string | undefined;
-                        help?: string | undefined;
-                        group?: string | undefined;
-                    } | {
-                        type: "url";
-                        key: string;
-                        label: string;
-                        required: boolean;
-                        default?: string | undefined;
-                        help?: string | undefined;
-                        group?: string | undefined;
-                    } | {
-                        type: "color";
-                        key: string;
-                        label: string;
-                        required: boolean;
-                        default?: string | undefined;
-                        help?: string | undefined;
-                        group?: string | undefined;
-                    } | {
-                        type: "image";
-                        key: string;
-                        label: string;
-                        required: boolean;
-                        help?: string | undefined;
-                        group?: string | undefined;
-                    } | {
-                        type: "link";
-                        key: string;
-                        label: string;
-                        required: boolean;
-                        default?: string | undefined;
-                        help?: string | undefined;
-                        group?: string | undefined;
-                    })[];
-                    min: number;
-                    max: number;
-                    key: string;
-                    label: string;
-                    required: boolean;
-                    itemLabel?: string | undefined;
-                    help?: string | undefined;
-                    group?: string | undefined;
-                })[];
-            }[];
             head: boolean;
             scripts: {
                 src: string;
@@ -2267,7 +2281,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
 };
 
 // packages/plugin-sdk/src/ui.d.ts
-import type { PluginUiActionResult, PluginUiButton, PluginUiDocument, PluginUiNode, PluginUiTarget, PluginUiTone } from "@scalius/shared/plugins";
+import type { PluginUiAction, PluginUiActionResult, PluginUiButton, PluginUiDocument, PluginUiImageSource, PluginUiNode, PluginUiRouteAction, PluginUiTarget, PluginUiTone } from "@scalius/shared/plugins";
 import type { PluginRouteRequest } from "./context";
 type NodeOf<T extends PluginUiNode["type"]> = Extract<PluginUiNode, {
     type: T;
@@ -2288,24 +2302,32 @@ export declare const ui: {
     stat: (label: string, value: string | number, help?: string) => PluginUiNode;
     table: (options: Options<"table">) => PluginUiNode;
     empty: (title: string, options?: Options<"empty-state", "title">) => PluginUiNode;
-    image: (src: string, alt: string, options?: Options<"image", "src" | "alt">) => PluginUiNode;
+    image: (src: PluginUiImageSource, alt: string, options?: Options<"image", "src" | "alt">) => PluginUiNode;
     link: (text: string, to: PluginUiTarget) => PluginUiNode;
     divider: () => PluginUiNode;
-    button: (label: string, action: NonNullable<PluginUiButton["action"]>, options?: Omit<PluginUiButton, "type" | "label" | "action" | "to">) => PluginUiButton;
-    linkButton: (label: string, to: PluginUiTarget, options?: Omit<PluginUiButton, "type" | "label" | "action" | "to">) => PluginUiButton;
-    form: (action: NodeOf<"form">["action"], submitLabel: string, children: PluginUiNode[], options?: Options<"form", "action" | "submitLabel" | "children">) => PluginUiNode;
+    button: (label: string, action: PluginUiAction, options?: Omit<PluginUiButton, "type" | "label" | "action">) => PluginUiButton;
+    form: (action: PluginUiRouteAction, submitLabel: string, children: PluginUiNode[], options?: Options<"form", "action" | "submitLabel" | "children">) => PluginUiNode;
     textField: (name: string, label: string, options?: Options<"text-field", "name" | "label">) => PluginUiNode;
     textarea: (name: string, label: string, options?: Options<"textarea", "name" | "label">) => PluginUiNode;
     numberField: (name: string, label: string, options?: Options<"number-field", "name" | "label">) => PluginUiNode;
     select: (name: string, label: string, options: NodeOf<"select">["options"], rest?: Options<"select", "name" | "label" | "options">) => PluginUiNode;
     checkbox: (name: string, label: string, options?: Options<"checkbox", "name" | "label">) => PluginUiNode;
     dateField: (name: string, label: string, options?: Options<"date-field", "name" | "label">) => PluginUiNode;
+    field: (attribute: string) => PluginUiNode;
+    route: (route: string, options?: Omit<PluginUiRouteAction, "kind" | "route">) => PluginUiRouteAction;
+    navigate: (to: PluginUiTarget) => PluginUiAction;
+    cart: {
+        addLine: (variantId: string, quantity?: number) => PluginUiAction;
+        applyCode: (code: string) => PluginUiAction;
+        setAttribute: (key: string, value: string) => PluginUiAction;
+    };
     to: {
         resource: (resource: Extract<PluginUiTarget, {
             kind: "resource";
         }>["resource"], id: string) => PluginUiTarget;
         page: (page: string, query?: Record<string, string>) => PluginUiTarget;
         external: (href: string) => PluginUiTarget;
+        store: (path: string) => PluginUiTarget;
     };
     result: (result: Omit<PluginUiActionResult, "toast"> & {
         toast?: string | PluginUiActionResult["toast"];
@@ -2333,17 +2355,38 @@ export declare const STOREFRONT_SKIN_UNITS: readonly ["header", "footer", "produ
 export type StorefrontSkinUnit = (typeof STOREFRONT_SKIN_UNITS)[number];
 export declare const STOREFRONT_SECTION_SKIN_PREFIX = "section:";
 export type StorefrontSkinTarget = StorefrontSkinUnit | `section:${string}`;
-export declare const STOREFRONT_BLOCK_TARGETS: readonly ["product.buy-box", "product.below"];
-export type StorefrontBlockTarget = (typeof STOREFRONT_BLOCK_TARGETS)[number];
-export declare const STOREFRONT_EMBED_KINDS: readonly ["buy-form", "reviews", "recommendations", "filters", "toolbar", "pagination", "order-form", "gallery"];
+export declare const STOREFRONT_COMPONENT_SLOTS: readonly ["header.actions", "product.buy_box.before", "product.buy_box.after", "product.below", "footer.columns"];
+export type StorefrontComponentSlot = (typeof STOREFRONT_COMPONENT_SLOTS)[number];
+export declare const STOREFRONT_PRODUCT_SLOTS: readonly ["product.buy_box.before", "product.buy_box.after", "product.below"];
+export type StorefrontProductSlot = (typeof STOREFRONT_PRODUCT_SLOTS)[number];
+export declare function storefrontComponentProductSlot(targets: readonly string[]): StorefrontProductSlot | null;
+export declare const STOREFRONT_COMPONENT_TARGETS: readonly ["header.actions", "product.buy_box.before", "product.buy_box.after", "product.below", "footer.columns", "page"];
+export type StorefrontComponentTarget = (typeof STOREFRONT_COMPONENT_TARGETS)[number];
+export declare const STOREFRONT_UI_SLOT_PAGES: {
+    readonly "checkout.contact.after": "checkout";
+    readonly "checkout.delivery.after": "checkout";
+    readonly "cart.page.summary": "checkout";
+    readonly "checkout.payment.after": "checkout";
+    readonly "checkout.actions.before": "checkout";
+    readonly "order.confirmation": "order";
+    readonly "account.order": "order";
+    readonly "account.overview": "account";
+    readonly "account.profile": "account";
+};
+export type StorefrontUiSlot = keyof typeof STOREFRONT_UI_SLOT_PAGES;
+export type StorefrontUiSlotPage = (typeof STOREFRONT_UI_SLOT_PAGES)[StorefrontUiSlot];
+export declare const STOREFRONT_UI_SLOTS: [StorefrontUiSlot, ...StorefrontUiSlot[]];
+export declare function storefrontUiSlotsOn(page: StorefrontUiSlotPage): StorefrontUiSlot[];
+export declare const STOREFRONT_EMBED_KINDS: readonly ["buy-form", "reviews", "recommendations", "filters", "toolbar", "pagination", "order-form", "gallery", "slot"];
 export type StorefrontEmbedKind = (typeof STOREFRONT_EMBED_KINDS)[number];
 export declare const STOREFRONT_EMBED_TAG = "scalius-embed";
 export interface StorefrontEmbedRule {
     allowed: Partial<Record<StorefrontEmbedKind, number>>;
     required: readonly StorefrontEmbedKind[];
     appended: readonly StorefrontEmbedKind[];
+    slots?: readonly StorefrontComponentSlot[];
 }
-export declare function storefrontEmbedRule(unit: "section" | "block" | StorefrontSkinTarget): StorefrontEmbedRule;
+export declare function storefrontEmbedRule(unit: "section" | "component" | StorefrontSkinTarget): StorefrontEmbedRule;
 export declare const STOREFRONT_ISLAND_HYDRATION: readonly ["load", "idle", "visible", "interaction"];
 export type StorefrontIslandHydration = (typeof STOREFRONT_ISLAND_HYDRATION)[number];
 export declare const STOREFRONT_COMPONENT_LIMITS: {
@@ -2519,7 +2562,24 @@ export interface StorefrontProductPage {
         }>;
         fields: StorefrontFieldValues;
         breadcrumbs: StorefrontLink[];
+        buyerInputs?: StorefrontBuyerInput[];
     };
+}
+export interface StorefrontBuyerInput {
+    key: string;
+    type: "text" | "textarea" | "select" | "checkbox";
+    label: string;
+    required: boolean;
+    maxLength: number | null;
+    options: Array<{
+        value: string;
+        label: string;
+    }>;
+}
+export interface StorefrontProductState {
+    variantId: string | null;
+    quantity: number;
+    inputs: Record<string, string>;
 }
 export interface StorefrontListingPage {
     kind: "category" | "collection" | "brand" | "search";
@@ -2854,15 +2914,23 @@ export type StorefrontRenderJob = {
     type: string;
     instanceId: string;
     settings: StorefrontResolvedSettings;
-} | StorefrontSkinJob | {
+} | StorefrontSkinJob | StorefrontComponentJob;
+interface ComponentJobBase {
     id: string;
-    kind: "block";
-    target: StorefrontBlockTarget;
+    kind: "component";
     type: string;
-    instanceId: string;
     settings: StorefrontResolvedSettings;
+}
+export type StorefrontComponentJob = (ComponentJobBase & {
+    target: StorefrontProductSlot;
+    instanceId: string;
     data: StorefrontProductPage;
-};
+}) | (ComponentJobBase & {
+    target: Exclude<StorefrontComponentSlot, StorefrontProductSlot>;
+}) | (ComponentJobBase & {
+    target: "page";
+    props: Record<string, unknown>;
+});
 export interface StorefrontRenderBatch {
     abi: typeof STOREFRONT_COMPONENT_ABI;
     context: StorefrontRenderContext;
@@ -2896,6 +2964,10 @@ export interface StorefrontIslandContext {
         total: number;
     }) => void): () => void;
     fetchApp(path: string, init?: RequestInit): Promise<Response>;
+    product?: {
+        state(): StorefrontProductState;
+        onChange(listener: (state: StorefrontProductState) => void): () => void;
+    };
 }
 export interface StorefrontIslandModule<Props = unknown> {
     abi: typeof STOREFRONT_COMPONENT_ABI;

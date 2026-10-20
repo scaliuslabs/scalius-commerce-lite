@@ -24,8 +24,8 @@ ops: dashboard.resources.variants.bulk_set_prices -> dashboard.resources.bulk_ru
 - Send dryRun: true first and show the before/after sample and totals; apply only after the merchant confirms.
 
 ### Set delivery charges (`dashboard.delivery-fees`)
-ops: dashboard.shipping_methods.list -> dashboard.shipping_zones.apply_template -> dashboard.shipping_zones.update -> dashboard.shipping_zones.create
-- Read the zones first: without zones, the Dhaka template creates inside/outside zones; then set each zone's rate.
+ops: dashboard.shipping_methods.list -> dashboard.shipping_zones.apply_template -> dashboard.shipping_zones.rate_update -> dashboard.shipping_zones.update -> dashboard.shipping_zones.create
+- Read the zones first: without zones, the Dhaka template creates inside/outside zones; then set each zone's rate fee with rate_update (zone id, revi...
 
 ### Issue a gift card (`dashboard.gift-card-issue`)
 ops: dashboard.customers.list -> dashboard.gift_cards.create[approval] -> dashboard.gift_cards.list
