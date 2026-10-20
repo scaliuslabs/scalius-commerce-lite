@@ -12969,6 +12969,153 @@
     ]
    }
   },
+  "dashboard.resources.app_content.delete": {
+   "method": "POST",
+   "path": "/api/v1/admin/resources/app-content/delete",
+   "risk": "destructive",
+   "idempotency": "supported",
+   "revision": "none",
+   "scopes": [
+    "write_products",
+    "write_files"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "items": {
+          "type": "array",
+          "items": {
+           "type": "object",
+           "properties": {
+            "type": {
+             "type": "string",
+             "enum": [
+              "product",
+              "category",
+              "brand",
+              "collection",
+              "media"
+             ]
+            },
+            "id": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 160
+            },
+            "expectedRevision": {
+             "type": "integer",
+             "minimum": 1,
+             "description": "The revision you read: a product's `aggregateRevision`, a category's or brand's `revision`, a file's `version`; a collection may leave it out. Required for every type but collections."
+            }
+           },
+           "required": [
+            "type",
+            "id"
+           ],
+           "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 50
+         }
+        },
+        "required": [
+         "items"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "items": {
+        "type": "array",
+        "items": {
+         "type": "object",
+         "properties": {
+          "type": {
+           "type": "string",
+           "enum": [
+            "product",
+            "category",
+            "brand",
+            "collection",
+            "media"
+           ]
+          },
+          "id": {
+           "type": "string"
+          },
+          "outcome": {
+           "type": "string",
+           "enum": [
+            "deleted",
+            "not_found",
+            "not_owned",
+            "not_in_trash",
+            "conflict",
+            "blocked",
+            "forbidden"
+           ],
+           "description": "`deleted`; `not_found` (already gone); `not_owned` (the app did not create it); `not_in_trash` (trash it first); `conflict` (it changed since `expectedRevision`); `blocked` (inventory history, orders or a place still shows it: it stays in the trash); `forbidden` (the grant does not cover the type)."
+          },
+          "message": {
+           "type": "string",
+           "nullable": true
+          }
+         },
+         "required": [
+          "type",
+          "id",
+          "outcome",
+          "message"
+         ],
+         "additionalProperties": false
+        },
+        "maxItems": 50
+       }
+      },
+      "required": [
+       "items"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
   "dashboard.resources.bulk_runs.get": {
    "method": "GET",
    "path": "/api/v1/admin/resources/bulk-runs/{id}",
