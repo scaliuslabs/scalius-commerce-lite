@@ -4784,6 +4784,7 @@
    "scopes": [
     "read_orders",
     "write_orders",
+    "write_payments",
     "write_fulfillments"
    ],
    "input": {
@@ -11583,6 +11584,7 @@
    "scopes": [
     "read_orders",
     "write_orders",
+    "write_payments",
     "write_fulfillments"
    ],
    "input": {
@@ -11899,6 +11901,7 @@
    "scopes": [
     "read_orders",
     "write_orders",
+    "write_payments",
     "write_fulfillments"
    ],
    "input": {
@@ -12210,6 +12213,7 @@
    "scopes": [
     "read_orders",
     "write_orders",
+    "write_payments",
     "write_fulfillments"
    ],
    "input": {
@@ -13690,6 +13694,7 @@
    "scopes": [
     "read_orders",
     "write_orders",
+    "write_payments",
     "write_fulfillments"
    ],
    "input": {
@@ -13917,7 +13922,7 @@
          "notify": {
           "type": "boolean",
           "default": false,
-          "description": "Send the code to the recipient (else the owning customer) now."
+          "description": "Send the code to the recipient (else the owning customer) now. From an app: to the owning customer's own contact only."
          }
         },
         "required": [
@@ -14606,6 +14611,7 @@
    "scopes": [
     "read_orders",
     "write_orders",
+    "write_payments",
     "write_fulfillments"
    ],
    "input": {
@@ -14650,6 +14656,7 @@
    "scopes": [
     "read_orders",
     "write_orders",
+    "write_payments",
     "write_fulfillments"
    ],
    "input": {
@@ -14834,7 +14841,7 @@
    "idempotency": "required",
    "revision": "optional",
    "scopes": [
-    "write_orders"
+    "write_payments"
    ],
    "input": {
     "parameters": [
@@ -14949,6 +14956,7 @@
    "scopes": [
     "read_orders",
     "write_orders",
+    "write_payments",
     "write_fulfillments"
    ],
    "input": {
@@ -16641,6 +16649,7 @@
    "scopes": [
     "read_orders",
     "write_orders",
+    "write_payments",
     "write_fulfillments"
    ],
    "input": {
@@ -16685,6 +16694,7 @@
    "scopes": [
     "read_orders",
     "write_orders",
+    "write_payments",
     "write_fulfillments"
    ],
    "input": {

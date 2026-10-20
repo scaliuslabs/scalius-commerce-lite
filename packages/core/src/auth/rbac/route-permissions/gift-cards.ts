@@ -12,6 +12,11 @@ export const GIFT_CARD_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/gift-cards/summary": {
     GET: { permission: PERMISSIONS.GIFT_CARDS_VIEW },
   },
+  // What apps may add a day: never callable by an app (internal operation).
+  "/api/v1/admin/gift-cards/settings": {
+    GET: { permission: PERMISSIONS.GIFT_CARDS_VIEW },
+    PUT: { permission: PERMISSIONS.GIFT_CARDS_MANAGE },
+  },
   "/api/v1/admin/gift-cards/*": {
     GET: { permission: PERMISSIONS.GIFT_CARDS_VIEW },
     PATCH: { permission: PERMISSIONS.GIFT_CARDS_MANAGE },

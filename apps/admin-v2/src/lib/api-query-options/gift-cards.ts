@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 import {
   getApiV1AdminGiftCards,
   getApiV1AdminGiftCardsByGiftCardId,
+  getApiV1AdminGiftCardsSettings,
   getApiV1AdminGiftCardsSummary,
 } from "@scalius/api-client/sdk";
 
@@ -26,6 +27,7 @@ export const giftCardKeys = {
   lists: () => ["gift-cards", "list"] as const,
   list: (query: GiftCardListQuery) => ["gift-cards", "list", query] as const,
   summary: () => ["gift-cards", "summary"] as const,
+  settings: () => ["gift-cards", "settings"] as const,
   detail: (id: string) => ["gift-cards", "detail", id] as const,
 };
 
@@ -43,6 +45,16 @@ export const giftCardSummaryQueryOptions = () =>
     queryKey: giftCardKeys.summary(),
     queryFn: () => apiData(getApiV1AdminGiftCardsSummary()),
     staleTime: 30_000,
+  });
+
+export type GiftCardSettings = ApiResult<typeof getApiV1AdminGiftCardsSettings>;
+
+/** What one app may add to gift cards a day (the store currency). */
+export const giftCardSettingsQueryOptions = () =>
+  queryOptions({
+    queryKey: giftCardKeys.settings(),
+    queryFn: () => apiData(getApiV1AdminGiftCardsSettings()),
+    staleTime: 0,
   });
 
 export const giftCardQueryOptions = (id: string) =>

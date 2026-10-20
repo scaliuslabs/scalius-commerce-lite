@@ -8,17 +8,29 @@
 // card (last four characters only), and `notify` has the store deliver the
 // code to the recipient, else the owning customer. Recipient contacts are
 // protected customer data.
+//
+// An app (security audit S2) is held to more, since whoever owns a card or
+// receives its notification can spend it:
+//   - its `notify` reaches only the owning customer's stored contact, never an
+//     address the app supplies (a recipient contact is for staff to send to);
+//   - it never changes the owner of a card that still has a balance;
+//   - what it adds in a day (issues and top-ups) stays within the merchant's
+//     `gift_cards.appDailyLimitMinor` (core `buildAppGiftCardValueStatements`).
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import {
   adjustGiftCardBalance,
+  appGiftCardLimitError,
+  buildAppGiftCardValueStatements,
   getGiftCardForStaff,
   getStaffGiftCardSummary,
   giftCardExpiryFromMonths,
+  isAppGiftCardLimitError,
   issueManualGiftCard,
   listGiftCardsForStaff,
   normalizeGiftCardMessage,
   parseGiftCardRecipientStrict,
+  readAppGiftCardValueToday,
   updateGiftCardForStaff,
   type StaffGiftCardSummary,
 } from "@scalius/core/modules/gift-cards";
@@ -31,7 +43,7 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { isWholeUnitIncrement } from "@scalius/shared/currency-policy";
 import { isIncrementMultipleMinor, priceIncrementMessage } from "@scalius/shared/money";
 import { created, ok } from "../../utils/api-response";
-import { ServiceUnavailableError, UnauthorizedError, ValidationError } from "../../utils/api-error";
+import { ForbiddenError, ServiceUnavailableError, UnauthorizedError, ValidationError } from "../../utils/api-error";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { conflictResponse, errorResponses, serviceUnavailableResponse, successEnvelope } from "../../schemas/responses";
 import { protectedField } from "../../schemas/protected";
@@ -155,6 +167,24 @@ function assertIncrement(amountMinor: number, currencyCode: string, priceIncreme
     : `${field}: ${priceIncrementMessage(currencyCode, priceIncrementMinor)}`, { field });
 }
 
+/**
+ * An app's daily value guard for `amountMinor` more. It commits with a new
+ * card or adjustment only: a replay returns before any batch, so it counts once.
+ */
+function appValueStatements(c: Context, pluginId: string, amountMinor: number, limitMinor: number): BatchItem<"sqlite">[] {
+  return buildAppGiftCardValueStatements(c.get("db"), { pluginId, amountMinor, limitMinor });
+}
+
+/** Maps a batch the daily limit refused to the app's refusal (403 `app_gift_card_limit`). */
+function appLimitRefusal(c: Context, pluginId: string | undefined, limitMinor: number, currencyCode: string) {
+  return async (error: unknown): Promise<never> => {
+    if (pluginId && isAppGiftCardLimitError(error)) {
+      throw appGiftCardLimitError({ limitMinor, usedMinor: await readAppGiftCardValueToday(c.get("db"), pluginId), currencyCode });
+    }
+    throw error;
+  };
+}
+
 const giftCardId = z.object({ id: z.string().min(4).max(80) });
 const expectedVersion = z.number().int().positive().openapi({ description: "The card's `version` you read; a card changed since is refused with 409." });
 const giftCardEnvelope = successEnvelope(z.object({ giftCard: GiftCardResource }));
@@ -215,7 +245,7 @@ app.openapi(createRoute({
   path: "/gift-cards",
   tags: ["App API - Gift cards"],
   summary: "Issue a gift card",
-  description: "Issues a gift card in the store currency, in minor units at its price increment. The code is never returned: with `notify` the store sends it to the recipient, else the owning customer. Send an Idempotency-Key: a repeat returns the first card.",
+  description: "Issues a gift card in the store currency, in minor units at its price increment. The code is never returned: with `notify` the store sends it to the recipient, else the owning customer. An app's `notify` reaches only the owning customer's own contact (set `customerId`, no recipient email or phone), and what one app issues and tops up per UTC date stays within the store's limit (403 `app_gift_card_limit`, Gift cards > Settings). Send an Idempotency-Key: a repeat returns the first card.",
   request: {
     headers: idempotencyKeyHeaderSchema,
     body: {
@@ -228,7 +258,7 @@ app.openapi(createRoute({
         recipient: recipientInput.nullable().optional(),
         message: z.string().max(400).nullable().optional(),
         note: z.string().max(500).nullable().optional(),
-        notify: z.boolean().default(false).openapi({ description: "Send the code to the recipient (else the owning customer) now." }),
+        notify: z.boolean().default(false).openapi({ description: "Send the code to the recipient (else the owning customer) now. From an app: to the owning customer's own contact only." }),
       }).strict() } },
     },
   },
@@ -253,7 +283,17 @@ app.openapi(createRoute({
     if (!customer) throw new ValidationError("That customer doesn't exist.", { field: "customerId" });
   }
   const recipient = parseGiftCardRecipientStrict(body.recipient ?? null);
+  const appPrincipal = c.get("pluginPrincipal");
+  if (appPrincipal && body.notify) {
+    if (recipient?.email || recipient?.phone) {
+      throw new ForbiddenError("An app's notify sends the code to the owning customer's own contact only. Leave out the recipient's email and phone, or don't notify.");
+    }
+    if (!body.customerId) throw new ValidationError("notify sends the code to the owning customer: set customerId.", { field: "customerId" });
+  }
   const notify = body.notify && Boolean(recipient?.email || recipient?.phone || body.customerId);
+  const appValue = appPrincipal
+    ? appValueStatements(c, appPrincipal.pluginId, body.amountMinor, settings.value.appDailyLimitMinor)
+    : [];
   let outboxId: string | null = null;
   const result = await issueManualGiftCard(db, getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>), {
     requestKey: await scopedRequestKey(c, "dashboard.resources.gift_cards.create", c.req.valid("header")["idempotency-key"]),
@@ -266,7 +306,7 @@ app.openapi(createRoute({
     note: body.note?.trim() || null,
     actorUserId,
   }, (id) => {
-    if (!notify) return [];
+    if (!notify) return appValue;
     const insert = buildNotificationOutboxInsert(db, {
       subjectType: "gift_card",
       subjectId: id,
@@ -276,8 +316,8 @@ app.openapi(createRoute({
       source: "app-api-gift-card-issue",
     });
     outboxId = insert.outboxId;
-    return [insert.statement as unknown as BatchItem<"sqlite">];
-  });
+    return [...appValue, insert.statement as unknown as BatchItem<"sqlite">];
+  }).catch(appLimitRefusal(c, appPrincipal?.pluginId, settings.value.appDailyLimitMinor, currency.code));
   if (result.created && outboxId) await notificationSender(c)([outboxId]);
   return created(c, { giftCard: await readGiftCardResource(c, result.giftCardId) });
 });
@@ -288,7 +328,7 @@ app.openapi(createRoute({
   path: "/gift-cards/{id}/adjust",
   tags: ["App API - Gift cards"],
   summary: "Add to or take from a gift card balance",
-  description: "One ledger movement with a reason: a positive `amountMinor` adds value, a negative one removes it (never below zero), in minor units of the card's currency. Send an Idempotency-Key: a repeat moves the balance once.",
+  description: "One ledger movement with a reason: a positive `amountMinor` adds value, a negative one removes it (never below zero), in minor units of the card's currency. An app adds value only to cards in the store currency, within its limit per UTC date (403 `app_gift_card_limit`). Send an Idempotency-Key: a repeat moves the balance once.",
   request: {
     params: giftCardId,
     headers: idempotencyKeyHeaderSchema,
@@ -311,6 +351,17 @@ app.openapi(createRoute({
   const body = c.req.valid("json");
   const [card, store] = await Promise.all([getStaffGiftCardSummary(db, id), readStoreCurrency(db)]);
   assertIncrement(body.amountMinor, card.currencyCode, priceIncrementForCurrency(store, card.currencyCode), "amountMinor");
+  // An app's top-up counts toward its daily limit, kept in the store currency.
+  const appPrincipal = c.get("pluginPrincipal");
+  let limit: { pluginId: string; limitMinor: number } | null = null;
+  if (appPrincipal && body.amountMinor > 0) {
+    if (card.currencyCode !== store.code) {
+      throw new ForbiddenError(`An app adds value only to cards in the store currency (${store.code}).`);
+    }
+    const settings = await readGiftCardSettings(db);
+    if (!settings.ok) throw new ServiceUnavailableError("Gift-card settings can't be read right now. Try again.");
+    limit = { pluginId: appPrincipal.pluginId, limitMinor: settings.value.appDailyLimitMinor };
+  }
   await adjustGiftCardBalance(db, {
     giftCardId: id,
     amountMinor: body.amountMinor,
@@ -318,7 +369,8 @@ app.openapi(createRoute({
     requestKey: await scopedRequestKey(c, "dashboard.resources.gift_cards.adjust", c.req.valid("header")["idempotency-key"]),
     actorUserId: actorId(c),
     expectedVersion: body.expectedVersion,
-  });
+    ...(limit ? { extraStatements: appValueStatements(c, limit.pluginId, body.amountMinor, limit.limitMinor) } : {}),
+  }).catch(appLimitRefusal(c, limit?.pluginId, limit?.limitMinor ?? 0, store.code));
   return ok(c, { giftCard: await readGiftCardResource(c, id) });
 });
 
@@ -328,7 +380,7 @@ app.openapi(createRoute({
   path: "/gift-cards/{id}",
   tags: ["App API - Gift cards"],
   summary: "Disable, enable or re-date a gift card",
-  description: "`status: disabled` stops a card being spent (its balance stays); `active` turns it back on. Also changes the expiry, the owning customer or the store's note. Fields left out keep their value.",
+  description: "`status: disabled` stops a card being spent (its balance stays); `active` turns it back on. Also changes the expiry, the owning customer or the store's note. An app cannot change the owner of a card with a balance (403). Fields left out keep their value.",
   request: {
     params: giftCardId,
     body: {
@@ -356,6 +408,8 @@ app.openapi(createRoute({
     expiresAt: parseExpiry(body.expiresAt),
     customerId: body.customerId,
     note: body.note,
+    // An app never moves a card with a balance to another owner (who could reveal its code).
+    ownerFixedWhileFunded: Boolean(c.get("pluginPrincipal")),
   });
   return ok(c, { giftCard: await readGiftCardResource(c, id) });
 });

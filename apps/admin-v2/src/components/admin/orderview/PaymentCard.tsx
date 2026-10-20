@@ -105,6 +105,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
   const canIssueRecoveryLink = orderActions.canEditOrders;
   const canRefund = orderActions.canRefundOrders;
   const canUpdateCod = orderActions.canUpdateOrderCod;
+  const canRecordPayment = orderActions.canRecordPayments;
   const savedSummary = resolveSavedOrderMoneySummary(order);
   const money = (major: number) => (savedSummary ? formatSavedMajorAmount(major, savedSummary) : fmt(major));
   const isCOD = order.paymentMethod === "cod";
@@ -355,7 +356,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
                 </dd>
               </div>
             </dl>
-            {canUpdateCod && !presentation.collectionClosed && presentation.amountDue > 0 ? (
+            {canRecordPayment && !presentation.collectionClosed && presentation.amountDue > 0 ? (
               <Button
                 size="sm"
                 variant="outline"

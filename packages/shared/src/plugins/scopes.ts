@@ -87,6 +87,13 @@ export const PLUGIN_SCOPES = {
   read_orders: { rbac: ["orders.view"], staff: "orders.view" },
   /** Create orders, change their status and details, add timeline notes, set order custom fields. */
   write_orders: { rbac: ["orders.view", "orders.create", "orders.edit", "orders.change_status"], staff: "orders.edit" },
+  /**
+   * Record money received against an invoice (pay-later) order: a bank
+   * transfer, cheque or cash. Sensitive: a recorded payment settles the order
+   * with no money passing through the store. Gift cards and downloads on an
+   * order an app marked paid wait for staff to release a review hold.
+   */
+  write_payments: { rbac: ["orders.view", "orders.record_payment"], staff: "orders.record_payment", sensitive: true },
   /** Hand over order lines, create and void fulfilments and courier shipments. */
   write_fulfillments: { rbac: ["orders.view", "orders.manage_shipments"], staff: "orders.manage_shipments" },
   /** Customers, their tags and marketing consent; email, text or push a customer by id (`ctx.messaging`). Contact fields need the protected data scopes. */
@@ -133,8 +140,10 @@ export const PLUGIN_SCOPES = {
   read_gift_cards: { rbac: ["gift_cards.view"], staff: "gift_cards.view" },
   /**
    * Issue gift cards, adjust their balances, disable, enable and change
-   * expiry. Sensitive: it creates and moves stored value the store owes. The
-   * app never sees a card's code; the store delivers it to the recipient.
+   * expiry. Sensitive: it creates and moves stored value the store owes, so
+   * what one app adds a day stays within the merchant's limit. The app never
+   * sees a card's code; the store delivers it to the owning customer only,
+   * and an app never moves a card with a balance to another owner.
    */
   write_gift_cards: { rbac: ["gift_cards.view", "gift_cards.manage"], staff: "gift_cards.manage", sensitive: true },
   /**

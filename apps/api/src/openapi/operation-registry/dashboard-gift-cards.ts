@@ -19,6 +19,9 @@ export const DASHBOARD_GIFT_CARD_OPERATIONS = {
   "dashboard.gift_cards.get": {},
   "dashboard.gift_cards.list": {},
   "dashboard.gift_cards.resend": storedValue(),
+  // The daily cap on what apps add (security audit S2): no app may raise its own.
+  "dashboard.gift_cards.settings_get": { stability: "internal" },
+  "dashboard.gift_cards.settings_update": storedValue({ stability: "internal" }),
   "dashboard.gift_cards.summary": {},
   "dashboard.gift_cards.update": storedValue(),
 } satisfies Record<string, OperationRegistryEntry>;

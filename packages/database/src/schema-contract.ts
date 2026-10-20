@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 165,
-  name: "0165_app_resource_owners",
+  version: 166,
+  name: "0166_record_payment_permission",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -606,6 +606,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 165,
     name: "0165_app_resource_owners",
     sourceSha256: "edb157b0afaef9bf112a064ee0cad556e4c6207149fa2f98a0bc25d9bacbc15c",
+  },
+  {
+    version: 166,
+    name: "0166_record_payment_permission",
+    sourceSha256: "c6fd2017f48946b361b564269611359aa5f1b15d152bedf45d78350ed7e26ddd",
   },
 ] as const;
 

@@ -3,11 +3,14 @@
 // nothing). While any hold is open the order cannot be shipped or moved on;
 // staff may still cancel it. Staff release a hold, which is kept with who
 // released it and when. Holds are never placed or released by buyers, and
-// nothing is cancelled automatically.
+// nothing is cancelled automatically. The platform also holds an order, in
+// the app's name, when an app records an invoice payment while gift cards or
+// downloads are still owed (`buildAppPaymentReviewHoldInsert`).
 
 import { and, asc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
-import { orderHolds, orders } from "@scalius/database/schema";
+import { orderHolds, orderItems, orders } from "@scalius/database/schema";
+import { AUTO_FULFILLMENT_TYPES } from "@scalius/shared/fulfilment";
 import { sha256Hex } from "@scalius/shared/hash";
 import { NotFoundError, ValidationError } from "../../errors";
 
@@ -23,8 +26,48 @@ export interface OrderHoldView {
 
 const REASON_MAX = 1_200;
 
-async function holdId(orderId: string, pluginId: string): Promise<string> {
+/** The id of the hold an app's own `ctx.orders.hold` places: the only hold that app may release. */
+export async function appOrderHoldId(orderId: string, pluginId: string): Promise<string> {
   return `ohd_${(await sha256Hex(`order-hold\0${orderId}\0${pluginId}`)).slice(0, 32)}`;
+}
+const holdId = appOrderHoldId;
+
+/** Why the platform holds an order whose payment an app recorded (security audit S3). */
+export const APP_PAYMENT_REVIEW_REASON =
+  "This app recorded an invoice payment. Check the money arrived before the order's gift cards and downloads are handed over.";
+
+/**
+ * The platform's review hold for one payment an app recorded on an order
+ * with gift cards or downloads still owed (a recorded payment moves no money,
+ * so stored value waits for staff to confirm it arrived). One hold per
+ * payment, written in the payment's own batch and only when `landed` holds;
+ * an order with nothing automatic to hand over gets none. The app cannot
+ * release it: it is not the hold its `ctx.orders.hold` placed. The statement
+ * comes back wrapped: a query builder is a thenable, so a promise resolved
+ * with it bare would run it on its own.
+ */
+export async function buildAppPaymentReviewHoldInsert(
+  db: Database,
+  input: { orderId: string; paymentId: string; pluginId: string; appName: string; landed: SQL },
+) {
+  const id = `ohd_${(await sha256Hex(`order-hold\0payment-review\0${input.orderId}\0${input.paymentId}`)).slice(0, 32)}`;
+  const appName = (input.appName || input.pluginId).slice(0, 80);
+  return { statement: db.insert(orderHolds).select(db.select({
+    id: sql<string>`${id}`.as("id"),
+    orderId: orders.id,
+    pluginId: sql<string>`${input.pluginId}`.as("plugin_id"),
+    appName: sql<string>`${appName}`.as("app_name"),
+    reason: sql<string>`${APP_PAYMENT_REVIEW_REASON}`.as("reason"),
+    createdAt: sql<number>`unixepoch()`.as("created_at"),
+    releasedAt: sql<null>`NULL`.as("released_at"),
+    releasedBy: sql<null>`NULL`.as("released_by"),
+  }).from(orders).where(and(
+    eq(orders.id, input.orderId),
+    input.landed,
+    sql`EXISTS (SELECT 1 FROM ${orderItems} WHERE ${orderItems.orderId} = ${input.orderId}
+      AND ${inArray(orderItems.fulfillmentType, [...AUTO_FULFILLMENT_TYPES])}
+      AND ${orderItems.fulfilledQuantity} < ${orderItems.quantity})`,
+  ))).onConflictDoNothing({ target: orderHolds.id }) };
 }
 
 /** Places the apps' holds (idempotent per order and app; a released hold is not placed again). */
