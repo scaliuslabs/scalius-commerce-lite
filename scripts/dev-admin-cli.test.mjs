@@ -79,4 +79,18 @@ describe("local admin CLI", () => {
     expect(result.stdout).not.toContain(password);
     expect(result.stdout).toContain("LOCAL_ADMIN_PASSWORD");
   });
+
+  it("takes the stack's ports from flags: the API default follows --api-port, and ports must differ", () => {
+    const help = runAdminCli(["help", "--api-port", "8931", "--storefront-port", "4531", "--admin-port", "4532"]);
+    expect(help.status).toBe(0);
+    expect(help.stdout).toContain("http://localhost:8931");
+
+    const clash = runAdminCli(["status", "--api-port", "4531", "--storefront-port", "4531"]);
+    expect(clash.status).toBe(1);
+    expect(clash.stderr).toContain("Local dev ports must differ");
+
+    const valueless = runAdminCli(["status", "--admin-port"]);
+    expect(valueless.status).toBe(1);
+    expect(valueless.stderr).toContain("Option --admin-port requires a value");
+  });
 });

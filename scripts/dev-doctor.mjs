@@ -12,6 +12,7 @@
 import { execFileSync } from "child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 import net from "net";
+import { tmpdir } from "os";
 import { dirname, join, resolve } from "path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "url";
@@ -170,7 +171,7 @@ function checkTooling(checks) {
   }
 
   const pnpmExecutable = resolvePnpmExecutable();
-  const pnpmVersion = getCommandVersion(pnpmExecutable, ["--version"]);
+  const pnpmVersion = getPnpmVersion(pnpmExecutable);
   if (pnpmVersion) {
     pass(checks, "pnpm", `pnpm ${pnpmVersion} is available (${pnpmExecutable}).`);
   } else {
@@ -602,17 +603,33 @@ function readText(path) {
   }
 }
 
-function getCommandVersion(command, args) {
+function getCommandVersion(command, args, { cwd = root, timeout = 5000, env = process.env } = {}) {
   try {
     return execFileSync(command, args, {
-      cwd: root,
+      cwd,
+      env,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
-      timeout: 5000,
+      timeout,
     }).trim();
   } catch {
     return null;
   }
+}
+
+/**
+ * Run from the repo, pnpm first switches to the `packageManager` version the
+ * repo pins, which can download it (slow, or impossible offline) and so fail
+ * a short check while `pnpm -v` elsewhere works. Give that a generous
+ * timeout, then ask the resolved binary itself without the switch: it is
+ * installed and runnable, which is all this check promises.
+ */
+function getPnpmVersion(executable) {
+  return getCommandVersion(executable, ["--version"], { timeout: 30_000 })
+    ?? getCommandVersion(executable, ["--version"], {
+      cwd: tmpdir(),
+      env: { ...process.env, npm_config_manage_package_manager_versions: "false", COREPACK_ENABLE_STRICT: "0" },
+    });
 }
 
 function addCheck(checks, status, title, detail, action) {
