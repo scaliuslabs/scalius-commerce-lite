@@ -5,6 +5,7 @@
 
 import {
   checkAttachmentFiles,
+  conversationCopy,
   conversationStatusMessage,
   newClientMessageKey,
 } from "@/lib/account-inbox";
@@ -193,7 +194,7 @@ export function bindConversationForms(): void {
         form.reset();
         form.querySelectorAll<HTMLTextAreaElement>("textarea[name=body]").forEach((body) => { body.value = ""; });
         form.querySelectorAll<HTMLButtonElement>("button[type=submit]").forEach((button) => { button.disabled = true; });
-        setStatus(form.querySelector("[data-conversation-status]"), "Your account changed. Reload before sending a message.", "error");
+        setStatus(form.querySelector("[data-conversation-status]"), conversationCopy().accountChangedSend, "error");
       });
     };
     window.addEventListener("customer-login", changed);

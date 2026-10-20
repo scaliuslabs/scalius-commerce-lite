@@ -9,6 +9,7 @@
 // and nothing here logs message text.
 
 import { resolveBackendTarget } from "@/lib/api/transport";
+import { seedRuntimeStoreLanguage } from "@/lib/api/runtime";
 import { readOrderReceiptCookie } from "@/lib/order-receipt-cookie";
 import {
   normalizeConversationBody,
@@ -327,7 +328,10 @@ export async function readConversationForm(
     return { ok: false, flag: "invalid" };
   }
   try {
-    return { ok: true, form: await request.formData() };
+    const form = await request.formData();
+    // The rows and messages answered to the page's script are in the page's language.
+    seedRuntimeStoreLanguage(form.get("language"));
+    return { ok: true, form };
   } catch {
     return { ok: false, flag: "invalid" };
   }
@@ -516,6 +520,7 @@ export async function handleConversationPoll(request: Request, target: Conversat
     return conversationJson({ success: false }, 403);
   }
   const url = new URL(request.url);
+  seedRuntimeStoreLanguage(url.searchParams.get("lang"));
   const after = url.searchParams.get("afterSeq");
   const before = url.searchParams.get("beforeSeq");
   if (!target) return conversationJson({ success: false }, 404);

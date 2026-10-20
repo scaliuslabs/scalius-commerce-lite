@@ -1,5 +1,5 @@
 import { pagePath } from "@/lib/presence-url";
-import { conversationRequest } from "./conversation-live";
+import { conversationRequest, withPageLanguage } from "./conversation-live";
 let stop: (() => void) | undefined;
 /** Refresh only the latest visible inbox window. The compose disclosure is never replaced. */
 export function bindBuyerInbox(): void {
@@ -22,7 +22,7 @@ export function bindBuyerInbox(): void {
     const current = new AbortController(); reading = current;
     const pending = conversationRequest(10_000, lifetime.signal, current.signal);
     try {
-      const response = await fetch(pagePath("/api/conversations"), { headers: { Accept: "application/json" }, credentials: "same-origin", cache: "no-store", signal: pending.signal });
+      const response = await fetch(withPageLanguage(new URL(pagePath("/api/conversations"), window.location.origin)), { headers: { Accept: "application/json" }, credentials: "same-origin", cache: "no-store", signal: pending.signal });
       if ([401, 403, 404].includes(response.status)) { stop?.(); return; }
       if (response.status === 429) {
         const retry = response.headers.get("Retry-After");

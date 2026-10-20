@@ -12,7 +12,9 @@ import type { LocationData } from "@/lib/api/types";
 import { LOCATION_COUNTRY } from "@/lib/checkout/shipping-country";
 import type { AddressDraft, AddressDraftField } from "@/lib/account-profile";
 import { accountUi as ui } from "@/lib/account-ui";
-import { ENGLISH_CHECKOUT_LANGUAGE_DATA as copy } from "@scalius/shared/checkout-language";
+import { getCheckoutLanguagePreset } from "@scalius/shared/checkout-language";
+import { accountCopy } from "@/lib/account-copy";
+import { pageLanguage } from "@/lib/store-time-zone";
 
 interface Props {
   dialogId: string;
@@ -37,6 +39,10 @@ const firstError = (["address", "city", "zone", "area", "shippingAddressLine2", 
   .find((key) => errors[key]) ?? null;
 const locationError = errors.city ?? errors.zone ?? errors.area ?? null;
 const fieldClass = ui.field;
+// The store's language: the checkout's field words and the account's own.
+const language = pageLanguage();
+const copy = getCheckoutLanguagePreset(language);
+const words = accountCopy(language).profile;
 ---
 
 <AccountDialog id={dialogId} title={title} inline={failed}>
@@ -48,11 +54,12 @@ const fieldClass = ui.field;
       countries={countries}
       selected={draft.countryCode}
       label={copy.shippingCountryLabel}
+      language={language}
       labelClass={ui.label}
       fieldClass={fieldClass}
     />
     <div>
-      <label for={`${prefix}-address`} class={ui.label}>Address</label>
+      <label for={`${prefix}-address`} class={ui.label}>{words.addressLabel}</label>
       <input
         id={`${prefix}-address`}
         name="address"
@@ -60,7 +67,7 @@ const fieldClass = ui.field;
         autocomplete="address-line1"
         required
         maxlength="300"
-        placeholder={shipsAbroad ? undefined : "House, road, area"}
+        placeholder={shipsAbroad ? undefined : words.addressPlaceholder}
         value={draft.address}
         aria-invalid={errors.address ? "true" : undefined}
         aria-describedby={errors.address ? `${prefix}-address-error` : undefined}
@@ -110,15 +117,15 @@ const fieldClass = ui.field;
     {offerDefault && (
       <label class="flex min-h-11 cursor-pointer items-center gap-3">
         <input type="checkbox" name="makeDefault" checked={draft.isDefault} class="size-5 shrink-0 accent-primary" />
-        <span class="text-sm text-foreground">Make this my default address</span>
+        <span class="text-sm text-foreground">{words.makeDefaultAddress}</span>
       </label>
     )}
     {failed && message && <p role="alert" class="text-sm text-destructive">{message}</p>}
     <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
       {failed
-        ? <a href="/account/profile" data-astro-prefetch="false" class={ui.secondaryButton}>Cancel</a>
-        : <button type="button" popovertarget={dialogId} popovertargetaction="hide" class={ui.secondaryButton}>Cancel</button>}
-      <button type="submit" class={ui.primaryButton} data-address-save>Save address</button>
+        ? <a href="/account/profile" data-astro-prefetch="false" class={ui.secondaryButton}>{words.cancel}</a>
+        : <button type="button" popovertarget={dialogId} popovertargetaction="hide" class={ui.secondaryButton}>{words.cancel}</button>}
+      <button type="submit" class={ui.primaryButton} data-address-save>{words.saveAddress}</button>
     </div>
   </form>
 </AccountDialog>

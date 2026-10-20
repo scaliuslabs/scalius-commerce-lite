@@ -2,9 +2,15 @@
 // token storage, client message rendering, or read acknowledgment on arrival.
 import { pagePath } from "@/lib/presence-url";
 import { groupConversationMessages } from "@scalius/shared/conversation-grouping";
-import { conversationStatusLabel } from "@/lib/account-inbox";
-import { formatNumber } from "@scalius/shared/locale-format";
+import { conversationCopy, conversationStatusLabel } from "@/lib/account-inbox";
+import { formatCount, pageLanguage } from "@/lib/store-time-zone";
 import { pluralCategory } from "@scalius/shared/locale-words";
+
+/** The page's language goes with every read, so the rows the server renders match the page. */
+export function withPageLanguage(url: URL): URL {
+  url.searchParams.set("lang", pageLanguage());
+  return url;
+}
 
 export interface ConversationItem { id: string; seq: number; html: string }
 interface Update { conversationId: string | null; items: ConversationItem[]; hasNewer?: boolean; hasOlder?: boolean; readSeq?: number; status?: "open" | "pending" | "closed" }
@@ -111,12 +117,14 @@ function bindLive(list: HTMLElement): void {
   let messageNotice = "";
   const active = () => !stopped && !lifetime.signal.aborted && list.isConnected && document.visibilityState !== "hidden" && navigator.onLine !== false;
   const displayStatus = (text: string) => { if (status && status.textContent !== text) status.textContent = text; };
+  const copy = conversationCopy();
   const updateJump = () => {
     if (jump) jump.hidden = unseen.size === 0;
     if (unseen.size) {
-      const label = `${formatNumber(unseen.size, "en")} new ${pluralCategory(unseen.size, "en") === "one" ? "message" : "messages"}`;
+      const template = pluralCategory(unseen.size, pageLanguage()) === "one" ? copy.newMessageCount.one : copy.newMessageCount.other;
+      const label = template.replace("{count}", formatCount(unseen.size));
       if (jump && jump.textContent !== label) jump.textContent = label;
-      messageNotice = `${label} from the store`;
+      messageNotice = copy.newFromStore.replace("{count}", label);
       displayStatus(messageNotice);
     } else if (status?.textContent === messageNotice) displayStatus("");
   };
@@ -175,7 +183,7 @@ function bindLive(list: HTMLElement): void {
 
   const merge = (update: Update, sent = false) => {
     if (threadId && update.conversationId && threadId !== update.conversationId) {
-      notice("This conversation changed. Reload to continue.");
+      notice(copy.changedReload);
       return;
     }
     threadId ??= update.conversationId;
@@ -221,12 +229,12 @@ function bindLive(list: HTMLElement): void {
     const pending = conversationRequest(10_000, current.signal, lifetime.signal);
     let delay: number | undefined;
     try {
-      const url = new URL(pagePath(source), window.location.origin);
+      const url = withPageLanguage(new URL(pagePath(source), window.location.origin));
       url.searchParams.set("afterSeq", String(startedAt));
       const response = await fetch(url, { credentials: "same-origin", cache: "no-store", headers: { Accept: "application/json" }, signal: pending.signal });
       if (!active() || current.signal.aborted) return;
       if ([401, 403, 404].includes(response.status)) {
-        notice(response.status === 401 ? "Sign in again to receive messages." : "This conversation is no longer available here.");
+        notice(response.status === 401 ? copy.signInToReceive : copy.noLongerHere);
         return;
       }
       if (response.status === 429) {
@@ -245,7 +253,7 @@ function bindLive(list: HTMLElement): void {
       failures = 0;
       if (answer.data.hasNewer) {
         catchupPages += 1;
-        if (catchupPages >= 4 || cursor <= startedAt) notice("More messages are available. Reload to see the latest.");
+        if (catchupPages >= 4 || cursor <= startedAt) notice(copy.moreAvailable);
         else delay = 0;
       } else catchupPages = 0;
     } catch {
@@ -277,13 +285,13 @@ function bindLive(list: HTMLElement): void {
     earlier.setAttribute("aria-busy", "true");
     const pending = conversationRequest(10_000, lifetime.signal);
     try {
-      const url = new URL(pagePath(source), window.location.origin);
+      const url = withPageLanguage(new URL(pagePath(source), window.location.origin));
       url.searchParams.set("beforeSeq", earlier.dataset.before ?? "");
       const response = await fetch(url, { credentials: "same-origin", cache: "no-store", headers: { Accept: "application/json" }, signal: pending.signal });
       const answer = await response.json() as { success: boolean; data: Update };
       if (!active()) return;
       if (!response.ok || !answer.success || !Array.isArray(answer.data.items)) throw new Error("unavailable");
-      if (threadId && answer.data.conversationId !== threadId) { notice("This conversation changed. Reload to continue."); return; }
+      if (threadId && answer.data.conversationId !== threadId) { notice(copy.changedReload); return; }
       const first = rowsOf(list)[0];
       const before = first?.getBoundingClientRect().top ?? 0;
       const held = document.createElement("ol");
@@ -300,8 +308,8 @@ function bindLive(list: HTMLElement): void {
       earlier.hidden = answer.data.hasOlder !== true;
       if (first) shift(first.getBoundingClientRect().top - before);
       following = pinned();
-      displayStatus("Earlier messages loaded.");
-    } catch { if (!lifetime.signal.aborted) displayStatus("Couldn't load earlier messages. Try again."); }
+      displayStatus(copy.earlierLoaded);
+    } catch { if (!lifetime.signal.aborted) displayStatus(copy.earlierFailed); }
     finally { pending.done(); historyLoading = false; earlier.removeAttribute("aria-busy"); }
   }, { signal: lifetime.signal });
   list.addEventListener("click", (event) => {
@@ -310,7 +318,7 @@ function bindLive(list: HTMLElement): void {
     if (!button || !(body instanceof HTMLElement)) return;
     const before = button.getBoundingClientRect().top;
     const collapsed = body.classList.toggle("line-clamp-[14]");
-    button.textContent = collapsed ? "Show more" : "Show less";
+    button.textContent = collapsed ? button.dataset.showMore ?? copy.showMore : button.dataset.showLess ?? copy.showLess;
     if (collapsed) shift(button.getBoundingClientRect().top - before);
     following = pinned();
   }, { signal: lifetime.signal });
@@ -347,7 +355,7 @@ function bindLive(list: HTMLElement): void {
     messageObserver?.disconnect(); panelObserver?.disconnect(); resize?.disconnect(); controllers.delete(list);
   };
   on(window, "customer-logout", () => { stop(); list.replaceChildren(); });
-  on(window, "customer-login", () => { stop(); list.replaceChildren(); displayStatus("Your account changed. Reload to see your messages."); });
+  on(window, "customer-login", () => { stop(); list.replaceChildren(); displayStatus(copy.accountChangedRead); });
   controllers.set(list, {
     stop,
     sent: (update) => {

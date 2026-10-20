@@ -2,7 +2,7 @@
 // checked the same way checkout checks an address. Pure, so the page (a plain
 // POST that works without JavaScript) and its tests share it. Nothing here
 // reaches a URL except an outcome flag.
-import { getShippingAddressError } from "@/lib/checkout/shipping-address";
+import { MIN_SHIPPING_ADDRESS_LENGTH } from "@/lib/checkout/shipping-address";
 import {
   FOREIGN_ADDRESS_FIELDS,
   isLocationCountry,
@@ -11,7 +11,9 @@ import {
   type ForeignAddressField,
 } from "@/lib/checkout/shipping-country";
 import type { CustomerAddress } from "@/lib/api/customer-auth";
-import { ENGLISH_CHECKOUT_LANGUAGE_DATA as copy } from "@scalius/shared/checkout-language";
+import { getCheckoutLanguagePreset } from "@scalius/shared/checkout-language";
+import { accountCopy } from "@/lib/account-copy";
+import { formatCount, pageLanguage } from "@/lib/store-time-zone";
 
 export type ProfileIntent = "name" | "address" | "remove-address" | "default-address" | "default-billing-address";
 export type ProfileSavedFlag = "name" | "address" | "removed" | "default" | "billing";
@@ -110,7 +112,7 @@ export function readProfileForm(form: FormData): ProfileForm {
 }
 
 export function nameError(name: string): string | null {
-  return name.trim() ? null : "Enter your full name.";
+  return name.trim() ? null : accountCopy().profile.enterName;
 }
 
 /**
@@ -125,16 +127,19 @@ export function addressErrors(
   draft: Pick<AddressDraft, "address" | "city" | "zone" | "area"> & { countryCode?: string },
   locations: { cities: readonly Location[]; zones: readonly Location[]; areas: readonly Location[] },
 ): Partial<Record<AddressDraftField, string>> {
+  // The page's language: the errors read where the buyer typed.
+  const words = accountCopy().profile;
   const errors: Partial<Record<AddressDraftField, string>> = {};
   if (!isLocationCountry(draft.countryCode)) {
-    if (!draft.address.trim()) errors.address = "Enter your address.";
+    if (!draft.address.trim()) errors.address = words.enterAddress;
     return errors;
   }
-  const address = getShippingAddressError(draft.address);
-  if (address) errors.address = address;
-  if (!draft.city || !locations.cities.some((city) => city.id === draft.city)) errors.city = "Choose a city.";
-  else if (!draft.zone || !locations.zones.some((zone) => zone.id === draft.zone)) errors.zone = copy.zoneRequiredText;
-  else if (draft.area && !locations.areas.some((area) => area.id === draft.area)) errors.area = "Choose an area in this thana, or leave it empty.";
+  const address = draft.address.trim();
+  if (!address) errors.address = words.enterDeliveryAddress;
+  else if (address.length < MIN_SHIPPING_ADDRESS_LENGTH) errors.address = words.completeAddress(formatCount(MIN_SHIPPING_ADDRESS_LENGTH));
+  if (!draft.city || !locations.cities.some((city) => city.id === draft.city)) errors.city = words.chooseCity;
+  else if (!draft.zone || !locations.zones.some((zone) => zone.id === draft.zone)) errors.zone = getCheckoutLanguagePreset(pageLanguage()).zoneRequiredText;
+  else if (draft.area && !locations.areas.some((area) => area.id === draft.area)) errors.area = words.chooseArea;
   return errors;
 }
 
@@ -157,19 +162,20 @@ export function addressBookInput(draft: AddressDraft) {
   };
 }
 
-const SAVED_TEXT: Record<ProfileSavedFlag, string> = {
-  name: "Name saved.",
-  address: "Address saved.",
-  removed: "Address removed.",
-  default: "Default address changed.",
-  billing: "Billing address changed.",
-};
+const SAVED_FLAGS: readonly ProfileSavedFlag[] = ["name", "address", "removed", "default", "billing"];
 
 export function readProfileSavedFlag(search: URLSearchParams): ProfileSavedFlag | null {
   const flag = search.get("saved");
-  return flag && flag in SAVED_TEXT ? flag as ProfileSavedFlag : null;
+  return flag && (SAVED_FLAGS as readonly string[]).includes(flag) ? flag as ProfileSavedFlag : null;
 }
 
 export function profileSavedText(flag: ProfileSavedFlag): string {
-  return SAVED_TEXT[flag];
+  const words = accountCopy().profile;
+  return {
+    name: words.savedName,
+    address: words.savedAddress,
+    removed: words.removed,
+    default: words.defaultChanged,
+    billing: words.billingChanged,
+  }[flag];
 }

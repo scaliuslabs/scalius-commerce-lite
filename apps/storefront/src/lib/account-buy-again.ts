@@ -7,6 +7,7 @@ import type { CustomerOrderItem } from "@/lib/api/customer-auth";
 import type { OrderLineFulfilmentFacts } from "@/lib/api/types";
 import type { CartValidationResult } from "@/lib/api/orders";
 import { currentPresence } from "@/lib/presence-url";
+import { accountCopy } from "@/lib/account-copy";
 
 /** Lines the store no longer sells as ordered; a short stock line still goes in, capped. */
 const GONE = new Set(["PRODUCT_UNAVAILABLE", "VARIANT_REQUIRED", "VARIANT_UNAVAILABLE", "VARIANT_MISMATCH"]);
@@ -60,7 +61,7 @@ export async function addOrderToCart(items: Array<CustomerOrderItem & OrderLineF
       slug: lines[line.index]?.productSlug ?? undefined,
       image: line.productImage ?? undefined,
       imageMediaId: line.productImageMediaId ?? undefined,
-      options: line.variantLabel ? [{ name: "Variant", label: line.variantLabel }] : undefined,
+      options: line.variantLabel ? [{ name: accountCopy().format.variant, label: line.variantLabel }] : undefined,
       freeDelivery: line.freeDelivery,
       ...(line.fulfillmentKind ? { fulfillmentKind: line.fulfillmentKind } : {}),
       ...(line.properties?.length

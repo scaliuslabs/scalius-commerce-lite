@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  DOWNLOAD_COPY,
+  downloadCopy,
   downloadFileMarkup,
   downloadFileState,
   downloadFlagForApi,
@@ -113,7 +113,7 @@ describe("file state and wording", () => {
 
   it("words usage and sizes", () => {
     expect(downloadUsageText(file())).toBe("1 of 5 downloads used");
-    expect(downloadUsageText(file({ downloadLimit: null }))).toBe(DOWNLOAD_COPY.unlimited);
+    expect(downloadUsageText(file({ downloadLimit: null }))).toBe(downloadCopy().unlimited);
     expect(formatFileSize(1536)).toBe("1.5 KB");
     expect(formatFileSize(1024 * 1024 * 250)).toBe("250 MB");
     expect(formatFileSize(null)).toBe("");
@@ -140,10 +140,10 @@ describe("markup", () => {
   it("replaces the button with the reason when a file is off", () => {
     const used = downloadFileMarkup(file({ downloadCount: 5 }), accountContext);
     expect(used).not.toContain("<form");
-    expect(used).toContain(DOWNLOAD_COPY.askForMore);
+    expect(used).toContain(downloadCopy().askForMore);
     expect(used).toContain('href="/account/orders/ord_1#conversation"');
-    expect(downloadFileMarkup(file({ revoked: true }), accountContext)).toContain(DOWNLOAD_COPY.revoked);
-    expect(downloadFileMarkup(file({ expiresAt: "2026-09-01T00:00:00Z" }), accountContext)).toContain(DOWNLOAD_COPY.expired);
+    expect(downloadFileMarkup(file({ revoked: true }), accountContext)).toContain(downloadCopy().revoked);
+    expect(downloadFileMarkup(file({ expiresAt: "2026-09-01T00:00:00Z" }), accountContext)).toContain(downloadCopy().expired);
   });
 
   it("shows a refused download's message on its row only", () => {

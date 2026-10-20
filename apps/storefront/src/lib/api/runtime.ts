@@ -295,6 +295,19 @@ export function applyPlatformOrigins(
   store.STORE_LANGUAGE = typeof language === "string" && language ? baseLanguage(language) : undefined;
 }
 
+/**
+ * A same-origin endpoint that renders markup for a page's script (a
+ * conversation's new rows) writes it in that page's language, which the
+ * script sends (`lang`), instead of reading the layout again. Only the
+ * storefront's own languages; a layout read already seeded wins.
+ */
+export function seedRuntimeStoreLanguage(code: unknown): void {
+  const store = getRuntime();
+  if (!store || store.STORE_LANGUAGE || typeof code !== "string") return;
+  const language = baseLanguage(code);
+  if (language === "bn" || language === "en") store.STORE_LANGUAGE = language;
+}
+
 /** The language of this page's store words, seeded from this request's layout payload, if any. */
 export function getRuntimeStoreLanguage(): string | undefined {
   return getRuntime()?.STORE_LANGUAGE;

@@ -6,7 +6,7 @@
 import Icon from "@/components/icons/Icon.astro";
 import type { Product } from "@/lib/api";
 import type { ProductFulfilment } from "@/lib/delivery-facts";
-import { DOWNLOAD_COPY as copy } from "@/lib/account-downloads";
+import { downloadCopy } from "@/lib/account-downloads";
 
 export interface Props {
   product: Product;
@@ -16,6 +16,7 @@ export interface Props {
 
 const { product, fulfilment } = Astro.props;
 const shows = fulfilment === "digital" && product.isGiftCard !== true;
+const copy = downloadCopy();
 const promises = [
   { icon: "send" as const, title: copy.promiseDeliveryTitle, detail: copy.promiseDeliveryDetail },
   { icon: "download" as const, title: copy.promiseAccessTitle, detail: copy.promiseAccessDetail },

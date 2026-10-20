@@ -25,6 +25,7 @@ import {
 import { readAccountWarranties } from "@/lib/account-warranties-server";
 import { readAccountSummaryForRequest } from "@/lib/account-server";
 import { accountPill, accountUi as ui } from "@/lib/account-ui";
+import { accountCopy } from "@/lib/account-copy";
 import { PRIVATE_NO_STORE_CACHE_CONTROL } from "@/lib/cache-policy";
 import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
 
@@ -66,7 +67,7 @@ const sections: Array<{ id: string; title: string; items: BuyerWarranty[] }> = [
       list.length === 0 ? (
         <div class={ui.empty}>
           <p class={ui.emptyBody}>{copy.warrantiesNoneText}</p>
-          <a href="/account" data-astro-prefetch="false" class={`${ui.secondaryButton} mt-6`}>Go to your orders</a>
+          <a href="/account" data-astro-prefetch="false" class={`${ui.secondaryButton} mt-6`}>{accountCopy().shell.goToOrders}</a>
         </div>
       ) : (
         <div class="space-y-8">

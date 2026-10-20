@@ -13,8 +13,10 @@ import type {
   GiftCardBalanceStatus,
   GiftCardFailureReason,
 } from "@/lib/api/gift-cards";
+import { storefrontLanguage } from "@/lib/storefront-copy";
+import { pageLanguage } from "@/lib/store-time-zone";
 
-export const GIFT_CARD_PAGE_COPY = {
+const GIFT_CARD_PAGE_COPY_EN = {
   balanceTitle: "Check a gift card balance",
   balanceIntro: "Enter the 16-character code from your gift card to see what's left on it.",
   codeLabel: "Gift card code",
@@ -43,17 +45,67 @@ export const GIFT_CARD_PAGE_COPY = {
   history: "History",
   signInTitle: "Sign in to see your gift cards",
   signInBody: "Gift cards saved to your account appear here after you sign in.",
-} as const;
-
-const STATUS_TEXT: Record<GiftCardBalanceStatus, string> = {
-  active: "Active",
-  disabled: "Disabled",
-  expired: "Expired",
+  status: { active: "Active", disabled: "Disabled", expired: "Expired" } as Record<GiftCardBalanceStatus, string>,
+  issued: "Issued",
+  usedOn: "Used on order {order}",
+  usedOnAnOrder: "Used on an order",
+  returnedFrom: "Returned from order {order}",
+  returnedFromAnOrder: "Returned from an order",
+  refundFrom: "Refund from order {order}",
+  refund: "Refund",
+  adjusted: "Adjusted by the store",
 };
+
+export type GiftCardPageCopy = typeof GIFT_CARD_PAGE_COPY_EN;
+
+const GIFT_CARD_PAGE_COPY_BN: GiftCardPageCopy = {
+  balanceTitle: "গিফট কার্ডের ব্যালেন্স দেখুন",
+  balanceIntro: "কার্ডে কত টাকা বাকি আছে দেখতে আপনার গিফট কার্ডের ১৬ অক্ষরের কোডটি লিখুন।",
+  codeLabel: "গিফট কার্ডের কোড",
+  checkBalance: "ব্যালেন্স দেখুন",
+  cardTitle: "গিফট কার্ড {card}",
+  balanceLabel: "ব্যালেন্স",
+  valueLabel: "মূল্য",
+  expiresLabel: "মেয়াদ শেষ",
+  noExpiry: "মেয়াদ শেষ হয় না",
+  statusLabel: "অবস্থা",
+  useAtCheckout: "ব্যবহার করতে চেকআউটের পেমেন্ট ধাপে কোডটি লিখুন।",
+  notFound: "এই কোডের কোনো গিফট কার্ড পাওয়া যায়নি। কোডটি দেখে আবার চেষ্টা করুন।",
+  rateLimited: "অনেকবার চেষ্টা করা হয়েছে। এক মিনিট পরে আবার চেষ্টা করুন।",
+  unavailable: "এখন গিফট কার্ড দেখা যাচ্ছে না। একটু পরে আবার চেষ্টা করুন।",
+  accountTitle: "গিফট কার্ড",
+  accountEmpty: "আপনার অ্যাকাউন্টে এখনো কোনো গিফট কার্ড নেই।",
+  saveTitle: "অ্যাকাউন্টে গিফট কার্ড সেভ করুন",
+  saveIntro: "পাওয়া কার্ড যোগ করুন, তার ব্যালেন্স ও লেনদেন এখানে দেখা যাবে।",
+  save: "কার্ড সেভ করুন",
+  saved: "গিফট কার্ড {card} আপনার অ্যাকাউন্টে সেভ হয়েছে।",
+  saveFailed: "গিফট কার্ডটি সেভ করা যায়নি। কোডটি দেখে আবার চেষ্টা করুন।",
+  showCode: "কোড দেখুন",
+  codeTitle: "গিফট কার্ড {card}-এর কোড",
+  codeHint: "এই কোড গোপন রাখুন: যার কাছে এটি থাকবে সে-ই ব্যালেন্স খরচ করতে পারবে।",
+  revealFailed: "এখন কোডটি দেখানো যাচ্ছে না। একটু পরে আবার চেষ্টা করুন।",
+  history: "লেনদেন",
+  signInTitle: "আপনার গিফট কার্ড দেখতে সাইন ইন করুন",
+  signInBody: "সাইন ইন করলে আপনার অ্যাকাউন্টে সেভ করা গিফট কার্ড এখানে দেখা যাবে।",
+  status: { active: "চালু", disabled: "বন্ধ", expired: "মেয়াদ শেষ" },
+  issued: "দেওয়া হয়েছে",
+  usedOn: "অর্ডার {order}-এ ব্যবহার হয়েছে",
+  usedOnAnOrder: "একটি অর্ডারে ব্যবহার হয়েছে",
+  returnedFrom: "অর্ডার {order} থেকে ফেরত এসেছে",
+  returnedFromAnOrder: "একটি অর্ডার থেকে ফেরত এসেছে",
+  refundFrom: "অর্ডার {order}-এর রিফান্ড",
+  refund: "রিফান্ড",
+  adjusted: "স্টোর বদলেছে",
+};
+
+/** The gift-card pages' words in the page's language (Bangla on a Bangla page). */
+export function giftCardPageCopy(language: string = pageLanguage()): GiftCardPageCopy {
+  return storefrontLanguage(language) === "bn" ? GIFT_CARD_PAGE_COPY_BN : GIFT_CARD_PAGE_COPY_EN;
+}
 
 /** The status a buyer sees; an expired card keeps its balance but can't be used. */
 export function giftCardStatusText(status: GiftCardBalanceStatus): string {
-  return STATUS_TEXT[status];
+  return giftCardPageCopy().status[status];
 }
 
 export function accountGiftCardStatus(card: Pick<AccountGiftCard, "status" | "expired">): GiftCardBalanceStatus {
@@ -71,11 +123,12 @@ export function maskedGiftCard(last4: string): string {
 }
 
 export function giftCardTitle(last4: string): string {
-  return GIFT_CARD_PAGE_COPY.cardTitle.replace("{card}", maskedGiftCard(last4));
+  return giftCardPageCopy().cardTitle.replace("{card}", maskedGiftCard(last4));
 }
 
 export function giftCardExpiryText(expiresAt: string | null): string {
-  return expiresAt ? formatAccountDate(expiresAt, { time: false }) || GIFT_CARD_PAGE_COPY.noExpiry : GIFT_CARD_PAGE_COPY.noExpiry;
+  const copy = giftCardPageCopy();
+  return expiresAt ? formatAccountDate(expiresAt, { time: false }) || copy.noExpiry : copy.noExpiry;
 }
 
 export function giftCardMoney(amount: number, currencyCode: string): string {
@@ -84,35 +137,39 @@ export function giftCardMoney(amount: number, currencyCode: string): string {
 
 /** One uniform sentence per failure: never says whether a code exists. */
 export function giftCardBalanceFailureText(reason: GiftCardFailureReason): string {
-  if (reason === "rate_limited") return GIFT_CARD_PAGE_COPY.rateLimited;
-  if (reason === "unavailable") return GIFT_CARD_PAGE_COPY.unavailable;
-  return GIFT_CARD_PAGE_COPY.notFound;
+  const copy = giftCardPageCopy();
+  if (reason === "rate_limited") return copy.rateLimited;
+  if (reason === "unavailable") return copy.unavailable;
+  return copy.notFound;
 }
 
 export function giftCardSaveFailureText(reason: GiftCardFailureReason): string {
-  if (reason === "rate_limited") return GIFT_CARD_PAGE_COPY.rateLimited;
-  if (reason === "unavailable") return GIFT_CARD_PAGE_COPY.unavailable;
-  return GIFT_CARD_PAGE_COPY.saveFailed;
+  const copy = giftCardPageCopy();
+  if (reason === "rate_limited") return copy.rateLimited;
+  if (reason === "unavailable") return copy.unavailable;
+  return copy.saveFailed;
 }
 
 export function giftCardRevealFailureText(reason: GiftCardFailureReason): string {
-  return reason === "rate_limited" ? GIFT_CARD_PAGE_COPY.rateLimited : GIFT_CARD_PAGE_COPY.revealFailed;
+  return reason === "rate_limited" ? giftCardPageCopy().rateLimited : giftCardPageCopy().revealFailed;
 }
 
 /** "Used on order #1042", "Issued", … */
 export function giftCardTransactionText(transaction: Pick<AccountGiftCardTransaction, "kind" | "orderNumber">): string {
-  const order = transaction.orderNumber ? ` ${transaction.orderNumber.startsWith("#") ? "" : "#"}${transaction.orderNumber}` : "";
+  const order = transaction.orderNumber ? `${transaction.orderNumber.startsWith("#") ? "" : "#"}${transaction.orderNumber}` : "";
+  const copy = giftCardPageCopy();
+  const withOrder = (template: string) => template.replace("{order}", order);
   switch (transaction.kind) {
     case "issue":
-      return "Issued";
+      return copy.issued;
     case "redeem":
-      return order ? `Used on order${order}` : "Used on an order";
+      return order ? withOrder(copy.usedOn) : copy.usedOnAnOrder;
     case "release":
-      return order ? `Returned from order${order}` : "Returned from an order";
+      return order ? withOrder(copy.returnedFrom) : copy.returnedFromAnOrder;
     case "refund":
-      return order ? `Refund from order${order}` : "Refund";
+      return order ? withOrder(copy.refundFrom) : copy.refund;
     case "adjust":
-      return "Adjusted by the store";
+      return copy.adjusted;
   }
 }
 

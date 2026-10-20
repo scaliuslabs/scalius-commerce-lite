@@ -8,7 +8,17 @@ import AccountShell from "@/components/account/AccountShell.astro";
 import StoreContact from "@/components/StoreContact.astro";
 import { getLayoutData } from "@/lib/api";
 import { readAccountOrders, readAccountSummaryForRequest } from "@/lib/account-server";
-import { accountMoney, formatAccountDate, openRequestLabel, orderPaymentLine } from "@/lib/account-format";
+import {
+  accountMoney,
+  accountOrderStatusText,
+  accountShipmentStatusText,
+  formatAccountDate,
+  openRequestLabel,
+  orderPaymentLine,
+} from "@/lib/account-format";
+import { accountCopy } from "@/lib/account-copy";
+import { formatCount } from "@/lib/store-time-zone";
+import { getCheckoutLanguagePreset } from "@scalius/shared/checkout-language";
 import { accountPill, accountUi as ui, orderStatusTone } from "@/lib/account-ui";
 import { getProductImageUrl } from "@/lib/product-media";
 import { PRIVATE_NO_STORE_CACHE_CONTROL } from "@/lib/cache-policy";
@@ -31,31 +41,33 @@ const orders = page?.orders ?? [];
 const nextCursor = page?.pagination?.hasMore ? page.pagination.nextCursor : null;
 const olderHref = nextCursor ? `/account?${new URLSearchParams({ cursor: nextCursor })}` : null;
 const phoneVerified = Astro.url.searchParams.get("phone") === "verified";
-const countText = page
-  ? `${page.totalOrders} order${page.totalOrders === 1 ? "" : "s"}`
-  : null;
+// The store's language (the layout read set it): words, digits, dates and payment wording.
+const copy = accountCopy();
+const words = copy.orders;
+const checkoutCopy = getCheckoutLanguagePreset(layoutData?.storefrontCopy?.languageCode);
+const countText = page ? words.count(formatCount(page.totalOrders), page.totalOrders === 1) : null;
 
 const cards = orders.map((order) => {
   const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
-  const payment = orderPaymentLine(order);
+  const payment = orderPaymentLine(order, checkoutCopy);
   const shipment = order.latestShipment;
   const courier = shipment ? shipment.providerName || shipment.courierName : null;
   const request = openRequestLabel(order.openSupportRequestType);
-  const needsPayment = payment.state === "Payment needs attention";
+  const needsPayment = payment.state === copy.format.paymentNeedsAttention;
   return {
     id: order.id,
     href: `/account/orders/${encodeURIComponent(order.id)}`,
     number: formatOrderNumber(order.orderNumber, order.id),
-    status: order.statusLabel ?? order.status,
+    status: accountOrderStatusText(order.status),
     tone: orderStatusTone(order.status),
     request,
     date: formatAccountDate(order.createdAt, { time: false }),
-    items: `${itemCount} item${itemCount === 1 ? "" : "s"}`,
+    items: words.items(formatCount(itemCount), itemCount === 1),
     total: accountMoney(order.totalAmount, order.currencyCode),
     detail: needsPayment
       ? { text: payment.state, warn: true }
       : shipment
-        ? { text: [courier, shipment.statusLabel].filter(Boolean).join(" · "), warn: false }
+        ? { text: [courier, accountShipmentStatusText(shipment.status)].filter(Boolean).join(" · "), warn: false }
         : { text: `${payment.method} · ${payment.state}`, warn: false },
     thumbs: order.items.slice(0, 4).map((item) => ({ src: getProductImageUrl(item.productImage, 160), alt: item.productName ?? "" })),
     more: Math.max(0, order.items.length - 4),
@@ -73,18 +85,18 @@ const cards = orders.map((order) => {
 });
 ---
 
-<Layout title="Orders" layoutData={layoutData}>
+<Layout title={words.title} layoutData={layoutData}>
   <meta slot="head" name="robots" content="noindex,nofollow" />
   <AccountShell
     current="orders"
     summary={summary}
     state={read.ok ? "ok" : read.reason}
-    title="Orders"
+    title={words.title}
     intro={countText}
-    signedOut={{ title: "Sign in to see your orders", body: "Track orders and save your delivery details for faster checkout." }}
-    unavailable={{ text: "We couldn't reach the store. Check your connection and try again.", retryHref: "/account" }}
+    signedOut={{ title: words.signInTitle, body: words.signInBody }}
+    unavailable={{ text: copy.shell.unavailable, retryHref: "/account" }}
   >
-    {phoneVerified && <p role="status" class={`${ui.notice} mb-6`}>Phone verified. Orders placed with it are now in your account.</p>}
+    {phoneVerified && <p role="status" class={`${ui.notice} mb-6`}>{words.phoneVerified}</p>}
     {page?.phoneVerification && (
       <div class="mb-6">
         <div id="phoneVerification" data-phone={page.phoneVerification.phone} class={`${ui.card} ${ui.cardBody}`}></div>
@@ -95,15 +107,15 @@ const cards = orders.map((order) => {
     {cards.length === 0 ? (
       <div class={ui.empty}>
         <svg aria-hidden="true" class="mx-auto mb-3 h-10 w-10 text-muted-foreground" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"></path></svg>
-        <h2 class={ui.emptyTitle}>{cursor ? "No older orders" : "No orders yet"}</h2>
-        <p class={ui.emptyBody}>When you place an order, it shows here with its status and delivery updates.</p>
+        <h2 class={ui.emptyTitle}>{cursor ? words.noOlder : words.none}</h2>
+        <p class={ui.emptyBody}>{words.noneBody}</p>
         <div class="mt-6 flex flex-col items-center justify-center gap-2 sm:flex-row">
-          <a href="/" class={ui.primaryButton}>Start shopping</a>
-          <a href="/track-order" data-astro-prefetch="false" class={ui.secondaryButton}>Track an order placed without signing in</a>
+          <a href="/" class={ui.primaryButton}>{words.startShopping}</a>
+          <a href="/track-order" data-astro-prefetch="false" class={ui.secondaryButton}>{words.trackGuest}</a>
         </div>
       </div>
     ) : (
-      <ul class="grid gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3" aria-label="Orders">
+      <ul class="grid gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3" aria-label={words.title}>
         {cards.map((card) => (
           <li>
             <article class={`${ui.card} group relative flex h-full gap-3 p-3 transition-colors hover:border-foreground/25 sm:flex-col sm:p-4`}>
@@ -112,11 +124,11 @@ const cards = orders.map((order) => {
                   <span class:list={["relative block h-16 w-16 overflow-hidden rounded-lg border border-border bg-muted sm:h-14 sm:w-14", index > 0 && "hidden sm:block"]}>
                     <img src={thumb.src} alt="" width="64" height="64" loading="lazy" decoding="async" class="h-full w-full object-contain" />
                     {index === 0 && card.thumbs.length + card.more > 1 && (
-                      <span class="absolute bottom-0.5 inset-e-0.5 rounded-md bg-background/90 px-1 text-[0.6875rem] font-semibold tabular-nums text-foreground sm:hidden">+{card.thumbs.length + card.more - 1}</span>
+                      <span class="absolute bottom-0.5 inset-e-0.5 rounded-md bg-background/90 px-1 text-[0.6875rem] font-semibold tabular-nums text-foreground sm:hidden">+{formatCount(card.thumbs.length + card.more - 1)}</span>
                     )}
                   </span>
                 ))}
-                {card.more > 0 && <span class="hidden h-14 w-14 items-center justify-center rounded-lg border border-border bg-muted text-xs font-semibold text-muted-foreground sm:flex">+{card.more}</span>}
+                {card.more > 0 && <span class="hidden h-14 w-14 items-center justify-center rounded-lg border border-border bg-muted text-xs font-semibold text-muted-foreground sm:flex">+{formatCount(card.more)}</span>}
               </div>
 
               <div class="flex min-w-0 flex-1 flex-col sm:order-1 sm:flex-none">
@@ -125,7 +137,7 @@ const cards = orders.map((order) => {
                   {card.request && <span class={accountPill("warning")}>{card.request}</span>}
                 </div>
                 <h2 class="mt-1.5 text-sm font-semibold text-foreground sm:text-base">
-                  <a href={card.href} data-astro-prefetch="false" class="after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring">Order {card.number}</a>
+                  <a href={card.href} data-astro-prefetch="false" class="after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring">{words.order(card.number)}</a>
                 </h2>
                 <p class="text-xs text-muted-foreground sm:text-sm">{card.date} · {card.items}</p>
                 <p class:list={["mt-1 truncate text-xs sm:text-sm", card.detail.warn ? "font-medium text-destructive" : "text-muted-foreground"]}>{card.detail.text}</p>
@@ -138,7 +150,7 @@ const cards = orders.map((order) => {
                   data-astro-prefetch="false"
                   data-buy-again={card.buyAgain}
                   class="relative z-10 inline-flex min-h-9 items-center rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted sm:min-h-10 sm:text-sm"
-                >Buy again</a>
+                >{words.buyAgain}</a>
               </div>
               <p class="relative z-10 hidden w-full text-xs text-muted-foreground empty:hidden sm:order-4" role="status" data-buy-again-status></p>
             </article>
@@ -149,8 +161,8 @@ const cards = orders.map((order) => {
 
     {(olderHref || cursor) && (
       <div class="mt-8 flex flex-wrap justify-center gap-3">
-        {cursor && <a href="/account" data-astro-prefetch="false" class={ui.secondaryButton}>Newest orders</a>}
-        {olderHref && <a href={olderHref} data-astro-prefetch="false" class={ui.secondaryButton}>Older orders</a>}
+        {cursor && <a href="/account" data-astro-prefetch="false" class={ui.secondaryButton}>{words.newest}</a>}
+        {olderHref && <a href={olderHref} data-astro-prefetch="false" class={ui.secondaryButton}>{words.older}</a>}
       </div>
     )}
     <div data-buyer-ui-target="customer-account.order-index.block.render" data-buyer-ui={JSON.stringify(summary?.buyerUi ?? [])} class="mt-8 empty:hidden"></div>
@@ -161,7 +173,8 @@ const cards = orders.map((order) => {
   import { addOrderToCart } from "@/lib/account-buy-again";
   import { pagePath } from "@/lib/presence-url";
   import { renderPhoneVerification } from "@/lib/account-phone-verification";
-  import { ACCOUNT_OFFLINE_MESSAGE } from "@/lib/account-format";
+  import { accountOfflineMessage } from "@/lib/account-format";
+  import { accountCopy } from "@/lib/account-copy";
   import { enhanceBuyerUi } from "@/lib/buyer-ui";
 
   enhanceBuyerUi();
@@ -180,10 +193,10 @@ const cards = orders.map((order) => {
         link.removeAttribute("aria-disabled");
         if (!status) return;
         status.textContent = !result
-          ? ACCOUNT_OFFLINE_MESSAGE
+          ? accountOfflineMessage()
           : result.added === 0
-            ? "These items are no longer available."
-            : result.missing > 0 ? "Some items are no longer available, so they weren't added." : "";
+            ? accountCopy().orders.allGone
+            : result.missing > 0 ? accountCopy().orders.someGone : "";
         status.classList.toggle("hidden", !status.textContent);
       });
     });

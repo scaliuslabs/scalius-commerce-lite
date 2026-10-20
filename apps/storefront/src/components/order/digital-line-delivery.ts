@@ -6,7 +6,7 @@
 // order's receipt cookie. Nothing when the line has no downloads or keys.
 import type { LineExtrasContext, OrderLine } from "@/lib/order-line-extras";
 import {
-  DOWNLOAD_COPY,
+  downloadCopy,
   digitalDeliveryListsMarkup,
   readDownloadFiles,
   readDownloadNotice,
@@ -60,5 +60,5 @@ export function digitalLineDeliveryMarkup(
     notice: options.notice === undefined ? browserNotice() : options.notice,
     nowMs: options.nowMs,
   });
-  return `<div class="mt-3 space-y-3 rounded-lg border border-border bg-background p-3" aria-label="${escapeHtml(DOWNLOAD_COPY.pageTitle)}" role="group">${lists}</div>`;
+  return `<div class="mt-3 space-y-3 rounded-lg border border-border bg-background p-3" aria-label="${escapeHtml(downloadCopy().pageTitle)}" role="group">${lists}</div>`;
 }

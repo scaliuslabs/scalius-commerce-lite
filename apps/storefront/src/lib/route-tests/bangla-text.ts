@@ -35,7 +35,8 @@ export const KNOWN_ENGLISH = new Set([
   "Addresses", "Name", "Email", "Phone", "Downloads", "Gift", "cards", "Warranties", "Messages", "Send", "Reply",
   "Status", "Items", "Payment", "Total", "Placed", "Retry", "Try", "again", "Store", "You", "New",
 ]);
-export const ALLOWED = new Set<string>([]);
+/** A gift-card code is Latin letters in every language: its field shows that shape. */
+export const ALLOWED = new Set<string>(["XXXX"]);
 const LATIN_WORD = /(?<![\p{L}\p{N}])([A-Za-z]{2,})(?![\p{L}\p{N}])/gu;
 
 /** Each English text with its words: `"Sort by:" (known: Sort)`. */
