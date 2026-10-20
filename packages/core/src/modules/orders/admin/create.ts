@@ -106,13 +106,29 @@ export async function createManualOrder(
      * `createManualOrderAppFunctions`), and the request's app providers (an
      * app tax provider).
      */
-    options: { apps?: ManualOrderAppFunctions; appProviders?: AppProviders } = {},
+    options: {
+        apps?: ManualOrderAppFunctions;
+        appProviders?: AppProviders;
+        /**
+         * An app or an agent places the order: an invoice (net terms) only
+         * while the store offers invoices (Settings → Payments). Staff may
+         * invoice any customer whether or not buyers are offered it.
+         */
+        automated?: boolean;
+    } = {},
 ): Promise<CreateManualOrderResult> {
     const replayed = (response: { id: string }): CreateManualOrderResult => ({ response, committed: null });
     const attemptIdentity = await buildAdminOrderCreateAttemptIdentity(data, actorId);
     const existingReplay = await resolveAdminOrderCreateAttempt<{ id: string }>(db, attemptIdentity);
     if (existingReplay) return replayed(existingReplay.response);
     await validateCustomerPhoneCountry(db, data.customerPhone);
+    const paymentMethods = data.paymentMethod === PaymentMethod.NET_TERMS ? await paymentMethodsDocument.read(db) : null;
+    if (paymentMethods && options.automated && !(paymentMethods.enabledMethods ?? []).includes(PaymentMethod.NET_TERMS)) {
+        throw new ValidationError(
+            "This store does not offer invoices. Turn on Invoice / net terms in Settings → Payments, or ask staff to place it.",
+            { reason: "payment_method_unavailable" },
+        );
+    }
     const claim = await claimAdminOrderCreateAttempt<{ id: string }>(db, attemptIdentity);
     if (claim.status === "replay") return replayed(claim.response);
     if (claim.status === "processing") {
@@ -169,7 +185,7 @@ export async function createManualOrder(
         // An invoice (net terms): unpaid now, due in the days staff or the
         // app chose, else the store's net days (Settings → Payments).
         const paymentTermsDays = data.paymentMethod === PaymentMethod.NET_TERMS
-            ? data.paymentTermsDays ?? (await paymentMethodsDocument.read(db)).netTerms.dueInDays
+            ? data.paymentTermsDays ?? paymentMethods!.netTerms.dueInDays
             : null;
         // A named customer files the order under that record (an app's
         // renewal, a B2B buyer); otherwise the guest record of its phone.

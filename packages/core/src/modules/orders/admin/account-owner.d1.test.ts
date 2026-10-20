@@ -8,7 +8,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import type { CreateOrderInput } from "../validation";
-import { createOrder } from "./create";
+import { paymentMethodsDocument } from "../../settings";
+import { createManualOrder, createOrder } from "./create";
 
 describe("manual orders for a named customer", () => {
     let sqlite: DatabaseSync;
@@ -87,5 +88,30 @@ describe("manual orders for a named customer", () => {
         const row = owner(id) as { customer_id: string; account_owner_customer_id: string | null };
         expect(row.account_owner_customer_id).toBeNull();
         expect(row.customer_id).not.toBe("cust_account");
+    });
+
+    it("lets an app or agent invoice only while the store offers invoices; staff always may", async () => {
+        const invoice = () => input({ customerId: "cust_account", paymentMethod: "net_terms" });
+        const count = () => (sqlite.prepare("SELECT COUNT(*) AS n FROM orders").get() as { n: number }).n;
+        // Invoices are off (the default methods): an app or an agent is refused and nothing is written.
+        await expect(createManualOrder(db, invoice(), null, { automated: true })).rejects.toMatchObject({
+            details: { reason: "payment_method_unavailable" },
+        });
+        expect(count()).toBe(0);
+        expect(sqlite.prepare("SELECT reserved_stock FROM product_variants WHERE id = 'variant_1'").get()).toEqual({ reserved_stock: 0 });
+        // Staff invoice a customer whether or not buyers are offered it.
+        const staff = await createManualOrder(db, invoice(), "user_staff");
+        expect(staff.response.id).toBeTruthy();
+        // Once the store offers invoices, an app or agent may place one too.
+        await paymentMethodsDocument.write(db, {
+            enabledMethods: ["cod", "net_terms"],
+            defaultMethod: "cod",
+            netTerms: { dueInDays: 15, customerTags: [], segmentIds: [], appsDecide: false },
+        });
+        const app = await createManualOrder(db, invoice(), null, { automated: true });
+        expect(sqlite.prepare("SELECT payment_method, payment_terms_days FROM orders WHERE id = ?").get(app.response.id))
+            .toEqual({ payment_method: "net_terms", payment_terms_days: 15 });
+        // Cash on delivery never reads the invoice setting.
+        await expect(createManualOrder(db, input({ customerId: "cust_account" }), null, { automated: true })).resolves.toBeTruthy();
     });
 });

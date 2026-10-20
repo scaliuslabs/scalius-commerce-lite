@@ -251,6 +251,8 @@ export async function placeManualOrder(c: Context<{ Bindings: Env }>, data: Crea
     const { response, committed } = await createManualOrder(db, { ...data, ...(attributes ? { attributes } : {}) }, user?.id ?? null, {
         apps: createManualOrderAppFunctions(db, apps),
         appProviders: requestAppProviders(c),
+        // Apps and agents invoice only while the store offers invoices; staff always may.
+        automated: Boolean(c.get("pluginPrincipal") || c.get("agentPrincipal")),
     });
     // Apps' risk checks run from the order.created event (ctx.orders), never on this request.
     return { response, committed };
