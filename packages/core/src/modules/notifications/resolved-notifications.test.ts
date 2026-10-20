@@ -92,9 +92,9 @@ describe("resolved notifications", () => {
     expect(email.text).toContain(`Gift card code: ${CODE}`);
     expect(email.text).toContain("Hi Nadia,");
     expect(email.text).not.toContain("Expires:");
-    const sms = mocks.sendSms.mock.calls[0]![0] as { to: string; message: string };
+    const sms = mocks.sendSms.mock.calls[0]![0] as { to: string; text: string };
     expect(sms.to).toBe("+8801722222222");
-    expect(sms.message).toContain(`Code: ${CODE}`);
+    expect(sms.text).toContain(`Code: ${CODE}`);
 
     expect(result.hasRetryableFailure).toBe(true);
     const rows = receipts();

@@ -131,8 +131,8 @@ describe("conversation notifications at send time", () => {
       }, { env })).toMatchObject({ kind: "dispatched" });
     }
     expect(mocks.sendSms).toHaveBeenCalledTimes(1);
-    expect(mocks.sendSms.mock.calls[0]![0].message).toContain("replied to your message");
-    expect(mocks.sendSms.mock.calls[0]![0].message).not.toContain("Private product title");
+    expect(mocks.sendSms.mock.calls[0]![0].text).toContain("replied to your message");
+    expect(mocks.sendSms.mock.calls[0]![0].text).not.toContain("Private product title");
     expect(mocks.sendEmail).not.toHaveBeenCalled();
   });
 
@@ -144,7 +144,7 @@ describe("conversation notifications at send time", () => {
     await sendConversationNotification(db, { outboxId: second.outbox.id, conversationId: second.conversationId, notificationType: "conversation_reply", seq: second.seq }, { env });
 
     expect(mocks.sendSms).toHaveBeenCalledTimes(1);
-    expect(mocks.sendSms.mock.calls[0]![0].message).not.toContain("Secret");
+    expect(mocks.sendSms.mock.calls[0]![0].text).not.toContain("Secret");
     expect(mocks.sendEmail).not.toHaveBeenCalled();
     expect(sqlite.prepare("SELECT status, last_error FROM notification_delivery_receipts WHERE channel = 'sms' ORDER BY created_at, rowid").all())
       .toEqual([

@@ -308,17 +308,44 @@ describe("payment settings", () => {
                 showAtCheckout: true,
             });
             expect(response.status, await response.clone().text()).toBe(200);
-            expect(storedRows(sqlite, "payment_methods")).toEqual({ enabledMethods: ["cod", "stripe"], defaultMethod: "cod" });
+            expect(storedRows(sqlite, "payment_methods")).toEqual({ enabledMethods: ["cod", "stripe"], defaultMethod: "cod", netTerms: DEFAULT_NET_TERMS_SETTINGS });
             // Saying it again changes nothing; it is refused while Stripe would stay off.
             expect((await request("/stripe", { enabled: true, showAtCheckout: true })).status).toBe(200);
-            expect(storedRows(sqlite, "payment_methods")).toEqual({ enabledMethods: ["cod", "stripe"], defaultMethod: "cod" });
+            expect(storedRows(sqlite, "payment_methods")).toEqual({ enabledMethods: ["cod", "stripe"], defaultMethod: "cod", netTerms: DEFAULT_NET_TERMS_SETTINGS });
             await expectValidationError(await request("/stripe", { showAtCheckout: true }));
         });
 
         it("offers Stripe at checkout only once its keys are complete", async () => {
             const { request, sqlite } = await createTestApp({ payment_methods: { enabledMethods: ["cod"], defaultMethod: "cod" } });
             await expectValidationError(await request("/stripe", { secretKey: "sk_test_replacement", enabled: true, showAtCheckout: true }));
-            expect(storedRows(sqlite, "payment_methods")).toEqual({ enabledMethods: ["cod"], defaultMethod: "cod" });
+            expect(storedRows(sqlite, "payment_methods")).toEqual({ enabledMethods: ["cod"], defaultMethod: "cod", netTerms: DEFAULT_NET_TERMS_SETTINGS });
+            expect(storedRows(sqlite, "stripe")).toEqual({});
+        });
+
+        it("keeps the implied cash on delivery when Stripe is offered before methods were ever saved", async () => {
+            const { request, sqlite } = await createTestApp();
+            const response = await request("/stripe", {
+                secretKey: "sk_test_replacement",
+                publishableKey: "pk_test_replacement",
+                webhookSecret: "whsec_replacement",
+                enabled: true,
+                showAtCheckout: true,
+            });
+            expect(response.status, await response.clone().text()).toBe(200);
+            expect(storedRows(sqlite, "payment_methods")).toEqual({ enabledMethods: ["cod", "stripe"], defaultMethod: "cod", netTerms: DEFAULT_NET_TERMS_SETTINGS });
+        });
+
+        it("refuses to offer Stripe over an unreadable payment methods document, and leaves it for the merchant", async () => {
+            const { request, sqlite } = await createTestApp({ payment_methods: { enabledMethods: ["cod"], defaultMethod: "cod" } });
+            sqlite.prepare("UPDATE settings SET value = 'not json' WHERE category = 'payment_methods' AND key = 'document'").run();
+            await expectValidationError(await request("/stripe", {
+                secretKey: "sk_test_replacement",
+                publishableKey: "pk_test_replacement",
+                webhookSecret: "whsec_replacement",
+                enabled: true,
+                showAtCheckout: true,
+            }), "The checkout payment methods could not be read. Choose them again in Payments, then offer Stripe.");
+            expect((sqlite.prepare("SELECT value FROM settings WHERE category = 'payment_methods' AND key = 'document'").get() as { value: string }).value).toBe("not json");
             expect(storedRows(sqlite, "stripe")).toEqual({});
         });
 

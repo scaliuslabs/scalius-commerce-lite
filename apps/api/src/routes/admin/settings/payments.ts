@@ -520,8 +520,13 @@ app.openapi(saveStripeRoute, async (c) => {
         if (body.showAtCheckout && body.enabled !== true) {
             throw new ValidationError("Stripe can be offered at checkout only while it is turned on.");
         }
-        const methods = body.showAtCheckout ? await paymentMethodsDocument.readDetailed(db) : null;
-        const enabledMethods = methods?.value.enabledMethods ?? [];
+        const methods = body.showAtCheckout ? await paymentMethodsDocument.readDetailed(db, undefined, { skipCache: true }) : null;
+        // An unreadable selection offers nothing at checkout; the merchant fixes it in Payments, never this save.
+        if (methods?.invalid) {
+            throw new ValidationError("The checkout payment methods could not be read. Choose them again in Payments, then offer Stripe.");
+        }
+        // Never saved: cash on delivery is the implied method, and stays beside Stripe.
+        const enabledMethods = methods?.value.enabledMethods ?? ["cod"];
         if (methods && !enabledMethods.includes("stripe")) {
             const currencyIssue = (await requestPaymentProviders(c)).currencyIssue("stripe", (await getCurrencySettings(db)).currencyCode);
             if (currencyIssue) throw new ValidationError(currencyIssue);

@@ -377,7 +377,7 @@ describe("customer order email composition and delivery", () => {
     vi.spyOn(sms, "getSmsProviderReadiness").mockResolvedValue({ status: "ready", issues: [], activeProvider: "test" } as never);
     vi.spyOn(sms, "getActiveSmsProvider").mockResolvedValue({ id: "test", label: "Test", send: sendSms } as never);
     await sendOrderNotificationEmail(null, "Queue name", "order_email", "order_confirmed", undefined, db, {});
-    expect(sendSms).toHaveBeenCalledWith(expect.objectContaining({ message: "River & Loom: #order_email confirmed, pay ৳258" }), {});
+    expect(sendSms).toHaveBeenCalledWith(expect.objectContaining({ text: "River & Loom: #order_email confirmed, pay ৳258" }), {});
     vi.restoreAllMocks();
   });
 

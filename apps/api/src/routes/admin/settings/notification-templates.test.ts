@@ -236,7 +236,7 @@ describe("notification template routes", () => {
         expect(body.data).toEqual({ sentTo: "01712345678" });
         expect(transport.sendSms).toHaveBeenCalledWith({
             to: "+8801712345678",
-            message: "Rahim Uddin, অর্ডার #1001 পেয়েছি।",
+            text: "Rahim Uddin, অর্ডার #1001 পেয়েছি।",
         }, {});
     });
 
