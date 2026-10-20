@@ -226,5 +226,29 @@
   "from": "0c9f010f9d2e46fa",
   "change": "storefront.STOREFRONT_EMBED_KINDS: \"order-form\" was removed.",
   "reason": "Contract seal (beta criterion 1.8, audit R2 item 12): core storefront names follow the manifest identifier rule, snake_case: skin units product_card, product_main, listing_main; embed kinds buy_form, order_form; core section types and section:<type> targets. Theme document v12 (step 11 -> 12) renames stored section types and apps.skins units."
+ },
+ {
+  "snapshot": "./abi.manifest.snapshot.json",
+  "from": "f098dc8f6761a1f2",
+  "change": "manifest functions: maxItems tightened to 6.",
+  "reason": "Contract seal (beta criterion 1, plugins F5): buyer UI is a render extension, not a checkout decision. It moves to storefront.extensions ([{ target, reads }], one per UI slot, handlers under the module's extensions[target]); functions keeps the six checkout decision points."
+ },
+ {
+  "snapshot": "./abi.manifest.snapshot.json",
+  "from": "f098dc8f6761a1f2",
+  "change": "manifest functions[].point: no longer accepts \"buyer.ui\".",
+  "reason": "Contract seal (beta criterion 1, plugins F5): buyer UI is a render extension, not a checkout decision. It moves to storefront.extensions ([{ target, reads }], one per UI slot, handlers under the module's extensions[target]); functions keeps the six checkout decision points."
+ },
+ {
+  "snapshot": "./abi.manifest.snapshot.json",
+  "from": "f098dc8f6761a1f2",
+  "change": "manifest functions[].targets: the field is no longer accepted.",
+  "reason": "Contract seal (beta criterion 1, plugins F5): buyer UI is a render extension, not a checkout decision. It moves to storefront.extensions ([{ target, reads }], one per UI slot, handlers under the module's extensions[target]); functions keeps the six checkout decision points."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "3a808dd2ec4a9e74",
+  "change": "functions.buyer.ui: the function point was removed.",
+  "reason": "Contract seal (beta criterion 1, plugins F5): buyer UI is a render extension, not a checkout function point; its input and output are sealed under extensions (PLUGIN_EXTENSION_SCHEMAS)."
  }
 ]

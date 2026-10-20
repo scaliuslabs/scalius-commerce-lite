@@ -1,4 +1,4 @@
-import { buyerUiBlockSchema, checkoutAttributesSchema, type FunctionCart } from "@scalius/shared/plugins";
+import { buyerUiBlockSchema, checkoutAttributesSchema, PLUGIN_EXTENSION_RUN, type FunctionCart } from "@scalius/shared/plugins";
 import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
 // Authoritative cart validation preflight.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
@@ -277,7 +277,7 @@ app.openapi(cartValidationRoute, async (c) => {
     valid: boolean,
     delivery: Parameters<typeof checkStorefrontCartRules>[1]["delivery"],
   ) => {
-    if (!valid || (!apps.points.has("cart.validate") && !apps.points.has("buyer.ui"))) return [];
+    if (!valid || (!apps.points.has("cart.validate") && !apps.points.has(PLUGIN_EXTENSION_RUN))) return [];
     const token = getCustomerSessionTokenFromRequest(c);
     const session = token
       ? await getCustomerBySession(db, token, getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>)).catch(() => null)

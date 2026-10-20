@@ -12,6 +12,8 @@ import { customFieldWireValue, isCustomFieldMoney, parseCustomFieldValidations, 
 import {
   checkPluginFunctionOutput,
   isPluginHostAllowed,
+  PLUGIN_EXTENSION_RUN,
+  PLUGIN_EXTENSION_SCHEMAS,
   PLUGIN_FUNCTION_SCHEMAS,
   PLUGIN_MESSAGE_ANY_SCOPE,
   PLUGIN_MESSAGE_LIMITS,
@@ -25,8 +27,10 @@ import {
   type PluginFunctionInputDraft,
   type PluginFunctionOutput,
   type PluginFunctionPoint,
+  type PluginRunPoint,
   type PluginManifest,
   type PluginSettingValue,
+  type StorefrontUiSlot,
 } from "@scalius/shared/plugins";
 import { providerOperationSchemas } from "@scalius/shared/plugins/providers";
 import { STOREFRONT_CORE_ROUTES } from "@scalius/shared/storefront-routes";
@@ -41,8 +45,8 @@ import {
 } from "./runtime";
 
 /**
- * The host's own checks, for tests: whether a route's or `buyer.ui`
- * function's answer is a valid UI document of its surface
+ * The host's own checks, for tests: whether a route's or a storefront
+ * extension's answer is a valid UI document of its surface
  * (`parsePluginUiDocument(value, "buyer")`), which routes its buttons and
  * forms call, and how an admin action's answer is read.
  */
@@ -94,7 +98,7 @@ export interface PluginTestHarnessOptions {
 }
 
 /** `harness.fn`'s result: the checked answer, or the host's refusal (`function_invalid_output`). */
-export type PluginFunctionTestResult<P extends PluginFunctionPoint> = Omit<PluginInvocationResult, "value"> & { value: PluginFunctionOutput<P> | null };
+export type PluginFunctionTestResult<P extends PluginRunPoint> = Omit<PluginInvocationResult, "value"> & { value: PluginFunctionOutput<P> | null };
 
 type Scalar = string | number | boolean | null;
 
@@ -494,6 +498,27 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       const result = await run({ kind: "function", point, input: checked.data });
       if (!result.ok) return { ...result, value: null };
       const answer = checkPluginFunctionOutput(point, result.value);
+      if (answer.ok) return { ...result, value: answer.value };
+      return { ...result, ok: false, value: null, error: { code: answer.code, message: answer.message } };
+    },
+    /**
+     * Renders one storefront extension the way the host does for its UI slot
+     * (`input.target`): the input is parsed with the extension schema, and
+     * the answer is checked like the host checks it (`{ ui }`, a buyer
+     * surface document, or `{ ui: null }`). Pass `reads` as the host
+     * resolves that slot's declared reads.
+     */
+    extension: async (input: PluginFunctionInputDraft<typeof PLUGIN_EXTENSION_RUN>): Promise<PluginFunctionTestResult<typeof PLUGIN_EXTENSION_RUN>> => {
+      const target: StorefrontUiSlot = input.target;
+      if (!manifest.storefront.extensions.some((extension) => extension.target === target)) throw new Error(`The manifest declares no ${target} extension.`);
+      const checked = PLUGIN_EXTENSION_SCHEMAS.input.safeParse(input);
+      if (!checked.success) {
+        const issue = checked.error.issues[0];
+        throw new TypeError(`Invalid ${target} extension input at ${issue?.path.join(".") || "(root)"}: ${issue?.message ?? "invalid"}.`);
+      }
+      const result = await run({ kind: "function", point: PLUGIN_EXTENSION_RUN, input: checked.data });
+      if (!result.ok) return { ...result, value: null };
+      const answer = checkPluginFunctionOutput(PLUGIN_EXTENSION_RUN, result.value);
       if (answer.ok) return { ...result, value: answer.value };
       return { ...result, ok: false, value: null, error: { code: answer.code, message: answer.message } };
     },

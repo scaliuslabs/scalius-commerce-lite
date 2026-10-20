@@ -31,6 +31,7 @@ import {
 import { looksLikePlaceholderCredential } from "@scalius/shared/plugins/placeholder-credentials";
 import { currentProviderKind } from "@scalius/shared/plugins/providers/kinds";
 import {
+  PLUGIN_EXTENSION_RUN,
   FIRST_PARTY_PLUGIN_VENDOR,
   isPluginScope,
   knownPluginFeatures,
@@ -147,6 +148,8 @@ export function parseStoredPluginGrant(value: string | null): PluginGrantRequest
   if (features === null) return null;
   const messageRecipients = raw.messageRecipients === undefined ? [] : stringList(raw.messageRecipients);
   if (messageRecipients === null) return null;
+  const extensions = raw.extensions === undefined ? [] : stringList(raw.extensions);
+  if (extensions === null) return null;
   return {
     ...(parsed as Record<(typeof lists)[number], string[]>),
     publicRoutes: raw.publicRoutes,
@@ -155,6 +158,7 @@ export function parseStoredPluginGrant(value: string | null): PluginGrantRequest
     storefrontConnect: connect,
     features,
     messageRecipients,
+    extensions,
   } as PluginGrantRequest;
 }
 
@@ -353,6 +357,8 @@ function registrationRows(pluginId: string, manifest: PluginManifest) {
   return [
     ...manifest.events.map((filter) => ({ kind: "event" as const, name: filter, pluginId, priority: 100 })),
     ...manifest.functions.map((fn) => ({ kind: "function" as const, name: fn.point, pluginId, priority: fn.priority })),
+    // Storefront extensions render through the function pipeline under one run name.
+    ...(manifest.storefront.extensions.length > 0 ? [{ kind: "function" as const, name: PLUGIN_EXTENSION_RUN, pluginId, priority: 100 }] : []),
     ...manifest.cron.map((job) => ({ kind: "cron" as const, name: job.name, pluginId, priority: 100 })),
     // One row per port the app provides: "who provides payment" is one index read.
     ...[...new Set(manifest.providers.map((provider) => provider.kind))]

@@ -5,7 +5,7 @@
 
 import type { Database } from "@scalius/database/client";
 import { pluginInstallations, pluginRegistrations } from "@scalius/database/schema";
-import type { PluginFunctionPoint } from "@scalius/shared/plugins";
+import type { PluginRunPoint } from "@scalius/shared/plugins";
 import type { ProviderKind } from "@scalius/shared/plugins/providers/kinds";
 import { and, asc, eq, inArray, or } from "drizzle-orm";
 import { toPluginInstallation, type PluginInstallation } from "./installations";
@@ -40,7 +40,7 @@ async function activeRegistrations(db: Database, kind: "event" | "function" | "c
 }
 
 /** Active plugins implementing a function point, by priority then plugin id. */
-export function listActiveFunctionPlugins(db: Database, point: PluginFunctionPoint): Promise<RegisteredPlugin[]> {
+export function listActiveFunctionPlugins(db: Database, point: PluginRunPoint): Promise<RegisteredPlugin[]> {
   return activeRegistrations(db, "function", [point]);
 }
 

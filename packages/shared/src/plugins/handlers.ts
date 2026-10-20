@@ -13,6 +13,8 @@ export interface PluginHandlerInventory {
   /** Topic filters (`order.paid`, `order.*`, `*`); each needs a handler under the same key. */
   events: string[];
   functions: string[];
+  /** Storefront extensions by UI slot (`extensions: { "checkout.actions.before": render }`); absent in seeds from before they existed. */
+  extensions?: string[];
   routes: { admin: string[]; public: string[]; webhooks: string[] };
   cron: string[];
   /** Each provider's port and the operations its implementation must have. */
@@ -31,6 +33,7 @@ export interface PluginHandlerInventory {
 export interface PluginDormantInventory {
   events: string[];
   functions: string[];
+  extensions?: string[];
   routes: { admin: string[]; public: string[]; webhooks: string[] };
   cron: string[];
   providers: PluginProviderInventory[];
@@ -55,6 +58,7 @@ export type PluginLifecycleHook = (typeof PLUGIN_LIFECYCLE_HOOKS)[number];
 export interface PluginHandlerManifest {
   events: readonly string[];
   functions: ReadonlyArray<{ point: string }>;
+  storefront?: { extensions?: ReadonlyArray<{ target: string }> };
   routes: {
     admin: ReadonlyArray<{ name: string }>;
     public: ReadonlyArray<{ name: string }>;
@@ -78,6 +82,7 @@ export function pluginHandlerInventory(manifest: PluginHandlerManifest, declared
   const dormant: PluginDormantInventory = {
     events: minus(all.events, live.events),
     functions: minus(all.functions, live.functions),
+    extensions: minus(all.extensions ?? [], live.extensions ?? []),
     routes: {
       admin: minus(all.routes.admin, live.routes.admin),
       public: minus(all.routes.public, live.routes.public),
@@ -86,7 +91,7 @@ export function pluginHandlerInventory(manifest: PluginHandlerManifest, declared
     cron: minus(all.cron, live.cron),
     providers: all.providers.filter((provider) => !live.providers.some((entry) => entry.id === provider.id)),
   };
-  const empty = dormant.events.length + dormant.functions.length + dormant.routes.admin.length + dormant.routes.public.length
+  const empty = dormant.events.length + dormant.functions.length + (dormant.extensions?.length ?? 0) + dormant.routes.admin.length + dormant.routes.public.length
     + dormant.routes.webhooks.length + dormant.cron.length + dormant.providers.length === 0;
   return empty ? live : { ...live, dormant };
 }
@@ -95,6 +100,7 @@ function liveInventory(manifest: PluginHandlerManifest): PluginHandlerInventory 
   return {
     events: [...manifest.events],
     functions: manifest.functions.map((fn) => fn.point),
+    extensions: (manifest.storefront?.extensions ?? []).map((extension) => extension.target),
     routes: {
       admin: manifest.routes.admin.map((route) => route.name),
       public: manifest.routes.public.map((route) => route.name),
@@ -133,6 +139,7 @@ export function checkPluginHandlers(live: PluginHandlerInventory, definition: un
     ? {
       events: [...live.events, ...dormant.events],
       functions: [...live.functions, ...dormant.functions],
+      extensions: [...(live.extensions ?? []), ...(dormant.extensions ?? [])],
       routes: {
         admin: [...live.routes.admin, ...dormant.routes.admin],
         public: [...live.routes.public, ...dormant.routes.public],
@@ -147,7 +154,7 @@ export function checkPluginHandlers(live: PluginHandlerInventory, definition: un
   const plugin = pluginDefinitionOf(definition);
   if (!plugin) return ["The plugin module must export a plugin definition (definePlugin) as its default export."];
 
-  const known = new Set(["manifest", "events", "functions", "routes", "cron", "providers", "lifecycle", "migrations"]);
+  const known = new Set(["manifest", "events", "functions", "extensions", "routes", "cron", "providers", "lifecycle", "migrations"]);
   for (const key of Object.keys(plugin)) {
     if (!known.has(key)) issues.push(`Unknown plugin definition key "${key}".`);
   }
@@ -178,6 +185,7 @@ export function checkPluginHandlers(live: PluginHandlerInventory, definition: un
 
   compare("Event", inventory.events, plugin.events, "function");
   compare("Function", inventory.functions, plugin.functions, "function");
+  compare("Extension", inventory.extensions ?? [], plugin.extensions, "function");
   compare("Cron job", inventory.cron, plugin.cron, "function");
   compare("Migration", inventory.migrations ?? [], plugin.migrations, "function");
   compare("Provider", inventory.providers.map((provider) => provider.id), plugin.providers, "object");

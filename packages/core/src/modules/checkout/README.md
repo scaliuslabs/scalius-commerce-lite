@@ -64,7 +64,7 @@ language with the merchant's edits).
   the signed-in customer's order count and spend (no tags exist yet: always
   empty); the delivery region (city and thana names) when something ships;
   the typed codes. One extra read batch, only when an app implements a point.
-- **Buyer UI and checkout attributes** (`attributes.ts`, shared `plugins/buyer-ui.ts`): private cart/quote/receipt/account responses carry declarative `buyer.ui` blocks. Active declarations validate values; unknown keys are dropped, invalid values return `attribute_invalid`, and required fields are checked only on placement so the initial quote can draw them. The accepted map (at most 8 KiB) joins quote/replay identity and the existing order insert. Attributes never enter events or URLs. Buyer UI sees only its app's attributes; object snapshots are shared within the request.
+- **Buyer UI and checkout attributes** (`attributes.ts`, shared `plugins/buyer-ui.ts`): private cart/quote/receipt/account responses carry declarative storefront-extension blocks (manifest `storefront.extensions`). Active declarations validate values; unknown keys are dropped, invalid values return `attribute_invalid`, and required fields are checked only on placement so the initial quote can draw them. The accepted map (at most 8 KiB) joins quote/replay identity and the existing order insert. Attributes never enter events or URLs. Buyer UI sees only its app's attributes; object snapshots are shared within the request.
 - **`cart.validate`**: on the cart page (catalog totals, no codes), the quote
   and the order. Errors land on their line (`index`, `cartKey`) or the whole
   cart; any error blocks: `400 details.reason = "cart_rules"` with

@@ -116,10 +116,15 @@ export function AppAccess({ app, consent }: { app: AppDetail; consent?: ReactNod
     );
   }
   const connect = request.storefrontConnect ?? [];
-  if (request.storefrontSurfaces || request.publicRoutes || request.storefrontScripts.length > 0 || request.storefrontCode || connect.length > 0) {
+  const extensions = request.extensions ?? [];
+  if (request.storefrontSurfaces || extensions.length > 0 || request.publicRoutes || request.storefrontScripts.length > 0 || request.storefrontCode || connect.length > 0) {
     sections.push(
       <Section key="storefront" title={t("access_storefront")}>
         {request.storefrontSurfaces ? row("surfaces", t("storefrontSurfaces"), added?.storefrontSurfaces === true) : null}
+        {extensions.length > 0 ? row("extensions", t("storefrontExtensions"), (added?.extensions?.length ?? 0) > 0) : null}
+        {[...new Map((app.extensions ?? []).flatMap((extension) => extension.reads).map((read) => [read.as, read])).values()].map((read) => (read.object
+          ? row(`extension-reads:${read.as}`, t("extensionReads", { collection: read.object }), false)
+          : row(`extension-reads:${read.as}`, t("extensionReadsFields", { fields: read.customFields.join(", ") }), false)))}
         {request.storefrontCode ? row("code", t("storefrontCode"), added?.storefrontCode === true) : null}
         {request.publicRoutes ? row("public", t("publicRoutes"), added?.publicRoutes === true) : null}
         {request.storefrontScripts.map((host) => {

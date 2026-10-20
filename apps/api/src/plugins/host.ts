@@ -31,10 +31,11 @@ import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { storeTimeZoneOf } from "../utils/store-time-zone";
 import {
   checkPluginFunctionOutput,
+  pluginRunSource,
   pluginHandlerInventory,
   validatePluginSettingValues,
   type PluginFunctionOutput,
-  type PluginFunctionPoint,
+  type PluginRunPoint,
   type PluginLifecycleHook,
 } from "@scalius/shared/plugins";
 import {
@@ -187,17 +188,18 @@ export class PluginHost {
       installation.source === "bundled" ? bundled : sandbox);
   }
 
-  async invokeFunction<P extends PluginFunctionPoint>(
+  async invokeFunction<P extends PluginRunPoint>(
     installation: PluginInstallation,
     point: P,
     input: unknown,
   ): Promise<PluginInvocationOutcome<PluginFunctionOutput<P>>> {
     const wallMs = Math.min(installation.manifest.limits.wallMs, PLUGIN_FUNCTION_WALL_MS);
-    const outcome = await this.run(installation, { kind: "function", point, input }, `function:${point}`, wallMs);
+    const source = pluginRunSource(point, input);
+    const outcome = await this.run(installation, { kind: "function", point, input }, source, wallMs);
     if (!outcome.ok) return failed(outcome);
     const checked = checkPluginFunctionOutput(point, outcome.value);
     if (!checked.ok) {
-      await this.incident(installation, `function:${point}`, checked.message);
+      await this.incident(installation, source, checked.message);
       return { ok: false, value: null, error: checked.message, failure: "invalid" };
     }
     return { ok: true, value: checked.value, error: null };

@@ -1,4 +1,4 @@
-// Buyer UI: the `ui` tree (ui.ts, buyer surface) a `buyer.ui` function
+// Buyer UI: the `ui` tree (ui.ts, buyer surface) a storefront extension
 // answers for a UI slot of the buyer's own pages, and the checkout attributes
 // its `field` nodes draw. App output is data; text, fields and actions stay in core.
 import { z } from "zod";
@@ -27,7 +27,7 @@ export const checkoutAttributesSchema = z.record(z.string().max(160), z.string()
   "Checkout attributes exceed 8 KiB.",
 );
 
-/** What a `buyer.ui` function answers: a buyer-surface document, or null to show nothing. */
+/** What a storefront extension answers: a buyer-surface document, or null to show nothing. */
 export const buyerUiOutputSchema = z.object({ ui: pluginUiDocumentSchema("buyer").nullable() }).strict();
 export type BuyerUiOutput = z.infer<typeof buyerUiOutputSchema>;
 

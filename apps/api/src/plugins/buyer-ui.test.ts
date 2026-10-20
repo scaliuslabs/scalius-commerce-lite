@@ -9,9 +9,9 @@ import { prepareBuyerUiBlocks } from "./buyer-ui";
 const target = "checkout.actions.before" as const;
 const registration = {
   name: "buyer.ui", priority: 100,
-  installation: { pluginId: "test.notes", grant: { functions: ["buyer.ui"] }, manifest: {
-    functions: [{ point: "buyer.ui", targets: [target], onError: "skip" }],
-    storefront: { proxy: true }, routes: { public: [{ name: "redeem", methods: ["POST"] }] },
+  installation: { pluginId: "test.notes", grant: { functions: [], extensions: [target] }, manifest: {
+    functions: [],
+    storefront: { proxy: true, extensions: [{ target, reads: [] }] }, routes: { public: [{ name: "redeem", methods: ["POST"] }] },
   } },
 } as unknown as RegisteredPlugin;
 const input = { target, language: "bn", locale: "bn-BD", currency: "BDT", cart: null, order: null, customer: { id: "cus_1" }, attributes: { "test.notes.gift": "hello", "other.app.secret": "private" } };
@@ -25,6 +25,27 @@ describe("buyer UI runtime", () => {
     expect(JSON.stringify(invokeFunction.mock.calls[0]![2])).not.toContain("private");
     expect(await runPluginFunctions("buyer.ui", { ...input, target: "account.profile" }, {} as Env, {} as ExecutionContext, options)).toEqual([]);
     expect(invokeFunction).toHaveBeenCalledTimes(1);
+  });
+  it("passes an extension only the reads its own slot declares", async () => {
+    const note = { as: "note", object: "notes", key: "customer" };
+    const tier = { as: "tier", object: "tiers", key: "customer" };
+    const app = {
+      name: "buyer.ui", priority: 100,
+      installation: { pluginId: "test.notes", grant: { functions: [], extensions: [target, "account.overview"] }, manifest: {
+        objects: {}, functions: [],
+        storefront: { extensions: [{ target, reads: [note] }, { target: "account.overview", reads: [note, tier] }] },
+      } },
+    } as unknown as RegisteredPlugin;
+    const invokeFunction = vi.fn().mockResolvedValue({ ok: true, value: { ui: null } });
+    const cache = {
+      remember: vi.fn(),
+      get: vi.fn(async () => ({ ok: true, reads: { note: { revision: 1, data: {} }, tier: { revision: 1, data: {} } }, targets: {} })),
+    };
+    const options = { db: {} as Database, registered: [app], host: { invokeFunction } as unknown as PluginHost, reads: cache as unknown as AppReadsCache };
+    await runPluginFunctions("buyer.ui", input, {} as Env, {} as ExecutionContext, options);
+    await runPluginFunctions("buyer.ui", { ...input, target: "account.overview" }, {} as Env, {} as ExecutionContext, options);
+    expect(Object.keys(invokeFunction.mock.calls[0]![2].reads)).toEqual(["note"]);
+    expect(Object.keys(invokeFunction.mock.calls[1]![2].reads)).toEqual(["note", "tier"]);
   });
   it("passes each app only its own declared reads, and treats reads over their bounds as a failed answer", async () => {
     const reads = [{ as: "note", object: "notes", key: "customer" }];

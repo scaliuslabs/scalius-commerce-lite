@@ -60,6 +60,7 @@ const grant = (overrides: Record<string, unknown> = {}) => ({
   allowedHosts: ["api.acme.example"],
   events: ["order.created"],
   functions: ["checkout.discounts"],
+  extensions: [],
   blockingFunctions: [],
   providers: [],
   publicRoutes: true,
@@ -93,6 +94,7 @@ function summary(overrides: Record<string, unknown> = {}) {
     updatedAt: "2026-10-01T08:00:00.000Z",
     featureCount: { on: 0, total: 0 },
     functions: [],
+    extensions: [],
     ...overrides,
   };
 }
@@ -562,13 +564,17 @@ describe("App page", () => {
     expect(text()).toContain("Reads its \"balances\" records at checkout and may update them with the order");
   });
 
-  it("explains buyer UI access in the consent list and function list", async () => {
+  it("explains storefront extensions and their reads in the consent list, not among checkout functions", async () => {
     await renderApp(detail({
-      request: grant({ functions: ["buyer.ui"] }),
-      functions: [{ point: "buyer.ui", priority: 10, onError: "skip", reads: [] }],
+      request: grant({ extensions: ["checkout.actions.before", "account.overview"] }),
+      extensions: [
+        { target: "checkout.actions.before", reads: [{ as: "balance", object: "balances", customFields: [], key: "customer" }] },
+        { target: "account.overview", reads: [{ as: "balance", object: "balances", customFields: [], key: "customer" }] },
+      ],
     }), VIEWER);
-    expect(text()).toContain("Shows content and asks buyers questions in the cart, checkout and account");
-    expect(text()).toContain("Shows content and questions to buyers");
+    expect(text()).toContain("Shows content and asks buyers questions in the cart, checkout, order and account pages");
+    expect(text().split("Reads its \"balances\" records to show buyers its content")).toHaveLength(2);
+    expect(text()).not.toContain("Checkout functions");
   });
 
   it("lists its checkout functions in plain words with their priority, in checkout order", async () => {

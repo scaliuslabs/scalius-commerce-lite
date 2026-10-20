@@ -5,4 +5,4 @@
 import contract from "./openapi-contract.gen.txt";
 
 export const OPENAPI_CONTRACT_JSON: string = contract;
-export const OPENAPI_CONTRACT_ETAG = "\"290c04dbb471345a4c5864260b02101aa0c7129ce2eb64f83517f0dab6294c32\"";
+export const OPENAPI_CONTRACT_ETAG = "\"5eedd8c3c565847a2ca9161051c8458e579933cc562e6ffa4f58a7a1dcf4ba9f\"";

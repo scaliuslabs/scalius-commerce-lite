@@ -4390,10 +4390,10 @@ export type AppSummary = {
         total: number;
     };
     /**
-     * The checkout function points the app implements (cart rules, prices, discounts, delivery options, payment methods, buyer UI).
+     * The checkout function points the app implements (cart rules, prices, discounts, delivery options, payment methods).
      */
     functions: Array<{
-        point: 'cart.transform' | 'cart.line_prices' | 'cart.validate' | 'checkout.discounts' | 'checkout.shipping_rates' | 'checkout.payment_methods' | 'buyer.ui';
+        point: 'cart.transform' | 'cart.line_prices' | 'cart.validate' | 'checkout.discounts' | 'checkout.shipping_rates' | 'checkout.payment_methods';
         /**
          * Lower runs first among apps at the same point.
          */
@@ -4404,6 +4404,30 @@ export type AppSummary = {
         onError: 'skip' | 'block';
         /**
          * The app's data the function reads at checkout (checkout.discounts may also update those records with the order).
+         */
+        reads: Array<{
+            as: string;
+            /**
+             * The app's object type read; null for a custom-field read.
+             */
+            object: string | null;
+            /**
+             * The app's own custom fields read (`<owner>:<key>`); empty for an object read.
+             */
+            customFields: Array<string>;
+            /**
+             * What the read is keyed by: customer, line.variantId, line.productId, attribute.<key>, or from:<read>.<field>.
+             */
+            key: string;
+        }>;
+    }>;
+    /**
+     * Where the app shows content on the buyer's cart, checkout, receipt and account pages (storefront extensions).
+     */
+    extensions: Array<{
+        target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'checkout.payment.after' | 'checkout.actions.before' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
+        /**
+         * The app's data the extension reads to draw its content.
          */
         reads: Array<{
             as: string;
@@ -4892,6 +4916,10 @@ export type AppGrant = {
     allowedHosts: Array<string>;
     events: Array<string>;
     functions: Array<string>;
+    /**
+     * UI slots of the buyer's cart, checkout, receipt and account pages the app shows content in.
+     */
+    extensions: Array<string>;
     /**
      * Function points where the app may pause checkout when it cannot answer.
      */

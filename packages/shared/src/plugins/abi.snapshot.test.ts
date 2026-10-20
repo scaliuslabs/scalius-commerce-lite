@@ -18,7 +18,7 @@ import {
 } from "./abi-compat";
 import acknowledgements from "./abi.breaks.json";
 import { pluginManifestSchema, PLUGIN_API_VERSION } from "./manifest";
-import { PLUGIN_FUNCTION_SCHEMAS } from "./functions";
+import { PLUGIN_EXTENSION_SCHEMAS, PLUGIN_FUNCTION_SCHEMAS } from "./functions";
 import { PROVIDER_PORTS } from "./providers";
 import { PROVIDER_PORT_TIERS, type ProviderKind } from "./providers/kinds";
 import { PLUGIN_SCOPES } from "./scopes";
@@ -105,6 +105,7 @@ describe("the versioned plugin ABI", () => {
     await sealCompatibly("./abi.protocol.snapshot.json", {
       apiVersion: PLUGIN_API_VERSION,
       functions: Object.fromEntries(Object.entries(PLUGIN_FUNCTION_SCHEMAS).map(([name, value]) => [name, port(value)])),
+      extensions: port(PLUGIN_EXTENSION_SCHEMAS),
       providerTiers: PROVIDER_PORT_TIERS,
       providers: portsOfTier("stable"),
       ui: { document: schema(pluginUiDocumentSchema("admin")), surfaces: PLUGIN_UI_SURFACES }, scopes: PLUGIN_SCOPES,

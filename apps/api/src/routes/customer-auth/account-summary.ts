@@ -10,7 +10,7 @@ import { countReviewableLinesForCustomer, countWrittenReviewsForCustomer } from 
 import { countActiveBuyerWarranties } from "@scalius/core/modules/warranty";
 import { listActiveCheckoutRegistrations } from "@scalius/core/modules/plugins";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
-import { buyerUiBlockSchema } from "@scalius/shared/plugins";
+import { buyerUiBlockSchema, PLUGIN_EXTENSION_RUN } from "@scalius/shared/plugins";
 import { createCheckoutAppFunctions } from "../../plugins/checkout-functions";
 import { getOptionalExecutionContext } from "../../utils/execution-context";
 import { ok } from "../../utils/api-response";
@@ -68,7 +68,7 @@ app.openapi(createRoute({
     db,
     registrations: await listActiveCheckoutRegistrations(db),
   });
-  const buyerUi = apps.points.has("buyer.ui")
+  const buyerUi = apps.points.has(PLUGIN_EXTENSION_RUN)
     ? await apps.buyerUi?.({
       targets: ["account.overview", "account.profile"],
       language: c.req.header("x-storefront-language"),

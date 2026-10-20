@@ -36,7 +36,7 @@ describe("acme.loyalty", () => {
 
   it("shows the read balance and redeems through the existing checkout discount code", async () => {
     const harness = createPluginTestHarness(loyalty);
-    expect((await harness.fn("buyer.ui", buyer)).value).toEqual({ ui: { version: 1, root: { type: "stack", children: [
+    expect((await harness.extension(buyer)).value).toEqual({ ui: { version: 1, root: { type: "stack", children: [
       { type: "key-value", items: [{ label: "Loyalty points", value: "300" }] },
       { type: "button", label: "Redeem points", action: { kind: "cart", op: "apply_code", code: "POINTS" } },
     ] } } });
@@ -47,14 +47,14 @@ describe("acme.loyalty", () => {
 
   it("omits redemption for guests, account pages, missing balances, and an already-applied code", async () => {
     const harness = createPluginTestHarness(loyalty);
-    expect((await harness.fn("buyer.ui", { ...buyer, customer: null, reads: noBalance })).value).toEqual({ ui: null });
+    expect((await harness.extension({ ...buyer, customer: null, reads: noBalance })).value).toEqual({ ui: null });
     for (const input of [
       { ...buyer, target: "account.overview" as const, cart: null },
       { ...buyer, reads: noBalance },
       { ...buyer, reads: balance(49) },
       { ...buyer, cart: cart({ codes: ["points"] }) },
     ]) {
-      const result = await harness.fn("buyer.ui", input);
+      const result = await harness.extension(input);
       expect(result.ok).toBe(true);
       expect(result.value).toMatchObject({ ui: { root: { type: "stack", children: [{ type: "key-value" }] } } });
       expect((result.value as { ui: { root: { children: unknown[] } } }).ui.root.children).toHaveLength(1);

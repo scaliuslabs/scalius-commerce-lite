@@ -1,6 +1,6 @@
 // One builder for an app's `ui` trees (`@scalius/shared/plugins/ui`): the
 // dashboard's pages, cards and widgets (admin surface) and the UI slots of
-// the buyer's own pages (buyer surface, a `buyer.ui` function's answer).
+// the buyer's own pages (buyer surface, a storefront extension's answer).
 // Plain functions that build the documented shapes (types only from
 // `@scalius/shared`, so a packed plugin carries no schema code); the host
 // validates what arrives against its surface.
@@ -12,7 +12,7 @@
 //     },
 //   },
 //   functions: {
-//     "buyer.ui": () => ({ ui: ui.view([ui.text("120 points"), ui.button("Redeem", ui.cart.applyCode("POINTS"))]) }),
+//     "checkout.actions.before": () => ({ ui: ui.view([ui.text("120 points"), ui.button("Redeem", ui.cart.applyCode("POINTS"))]) }),
 //   }
 
 import type {
@@ -32,7 +32,7 @@ import type { PluginRouteRequest } from "./context";
 type NodeOf<T extends PluginUiNode["type"]> = Extract<PluginUiNode, { type: T }>;
 type Options<T extends PluginUiNode["type"], Omitted extends string = never> = Omit<NodeOf<T>, "type" | Omitted>;
 
-/** A UI document: what admin routes and `buyer.ui` functions answer. */
+/** A UI document: what admin routes and storefront extensions answer. */
 function document(root: PluginUiNode): PluginUiDocument {
   return { version: 1, root };
 }

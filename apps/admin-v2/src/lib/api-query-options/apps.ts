@@ -46,7 +46,6 @@ export const APP_FUNCTION_POINTS = [
   "checkout.discounts",
   "checkout.shipping_rates",
   "checkout.payment_methods",
-  "buyer.ui",
 ] as const;
 export type AppFunctionPoint = (typeof APP_FUNCTION_POINTS)[number];
 

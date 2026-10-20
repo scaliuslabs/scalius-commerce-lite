@@ -37,7 +37,7 @@ export type StorefrontSkinTarget = StorefrontSkinUnit | `section:${string}`;
 //   component with its default values. `page` is an app page that a proxy
 //   route answers.
 // - **UI slots** are on the buyer's own pages (cart, checkout, the receipt,
-//   the account), where no app code runs: a `buyer.ui` function answers a
+//   the account), where no app code runs: a storefront extension answers a
 //   `ui` tree (ui.ts, buyer surface) and the store draws it.
 //
 // A slot nobody fills renders nothing and costs no read.
@@ -69,7 +69,7 @@ export function storefrontComponentProductSlot(targets: readonly string[]): Stor
 export const STOREFRONT_COMPONENT_TARGETS = [...STOREFRONT_COMPONENT_SLOTS, "page"] as const;
 export type StorefrontComponentTarget = (typeof STOREFRONT_COMPONENT_TARGETS)[number];
 
-/** Slots on the buyer's own pages that `buyer.ui` trees fill, with the page group that draws each. */
+/** Slots on the buyer's own pages that storefront extensions (`storefront.extensions`) fill, with the page group that draws each. */
 export const STOREFRONT_UI_SLOT_PAGES = {
   // The cart page (checkout's information step).
   "checkout.contact.after": "checkout",

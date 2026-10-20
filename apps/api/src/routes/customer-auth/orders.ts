@@ -48,7 +48,7 @@ import {
 import { notificationSender } from "../../background/notification-sender";
 import { listActiveCheckoutRegistrations } from "@scalius/core/modules/plugins";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
-import { buyerUiBlockSchema, readCheckoutAttributes } from "@scalius/shared/plugins";
+import { buyerUiBlockSchema, PLUGIN_EXTENSION_RUN, readCheckoutAttributes } from "@scalius/shared/plugins";
 import { createCheckoutAppFunctions } from "../../plugins/checkout-functions";
 import { getOptionalExecutionContext } from "../../utils/execution-context";
 
@@ -382,7 +382,7 @@ app.openapi(getCustomerOrderDetailRoute, async (c) => {
     db,
     registrations: await listActiveCheckoutRegistrations(db),
   });
-  const buyerUi = apps.points.has("buyer.ui")
+  const buyerUi = apps.points.has(PLUGIN_EXTENSION_RUN)
     ? await apps.buyerUi?.({
       targets: ["account.order"],
       language: c.req.header("x-storefront-language"),

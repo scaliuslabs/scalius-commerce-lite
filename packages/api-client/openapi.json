@@ -20964,8 +20964,7 @@
                     "cart.validate",
                     "checkout.discounts",
                     "checkout.shipping_rates",
-                    "checkout.payment_methods",
-                    "buyer.ui"
+                    "checkout.payment_methods"
                   ]
                 },
                 "priority": {
@@ -21022,7 +21021,68 @@
                 "reads"
               ]
             },
-            "description": "The checkout function points the app implements (cart rules, prices, discounts, delivery options, payment methods, buyer UI)."
+            "description": "The checkout function points the app implements (cart rules, prices, discounts, delivery options, payment methods)."
+          },
+          "extensions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "target": {
+                  "type": "string",
+                  "enum": [
+                    "checkout.contact.after",
+                    "checkout.delivery.after",
+                    "cart.page.summary",
+                    "checkout.payment.after",
+                    "checkout.actions.before",
+                    "order.confirmation",
+                    "account.order",
+                    "account.overview",
+                    "account.profile"
+                  ]
+                },
+                "reads": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "as": {
+                        "type": "string"
+                      },
+                      "object": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "The app's object type read; null for a custom-field read."
+                      },
+                      "customFields": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "The app's own custom fields read (`<owner>:<key>`); empty for an object read."
+                      },
+                      "key": {
+                        "type": "string",
+                        "description": "What the read is keyed by: customer, line.variantId, line.productId, attribute.<key>, or from:<read>.<field>."
+                      }
+                    },
+                    "required": [
+                      "as",
+                      "object",
+                      "customFields",
+                      "key"
+                    ]
+                  },
+                  "description": "The app's data the extension reads to draw its content."
+                }
+              },
+              "required": [
+                "target",
+                "reads"
+              ]
+            },
+            "description": "Where the app shows content on the buyer's cart, checkout, receipt and account pages (storefront extensions)."
           }
         },
         "required": [
@@ -21047,7 +21107,8 @@
           "activatedAt",
           "updatedAt",
           "featureCount",
-          "functions"
+          "functions",
+          "extensions"
         ]
       },
       "AppTranslations": {
@@ -22810,6 +22871,13 @@
               "type": "string"
             }
           },
+          "extensions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "UI slots of the buyer's cart, checkout, receipt and account pages the app shows content in."
+          },
           "blockingFunctions": {
             "type": "array",
             "items": {
@@ -22872,6 +22940,7 @@
           "allowedHosts",
           "events",
           "functions",
+          "extensions",
           "blockingFunctions",
           "providers",
           "publicRoutes",

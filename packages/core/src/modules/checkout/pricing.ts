@@ -6,7 +6,7 @@
 // With no active app implementing a point, this is exactly the platform
 // pricing: no extra read and no app call.
 import type { Database } from "@scalius/database/client";
-import type { FunctionCart } from "@scalius/shared/plugins";
+import { PLUGIN_EXTENSION_RUN, type FunctionCart } from "@scalius/shared/plugins";
 import type { AppProviders } from "../../integrations/provider-port";
 import { fromMinor } from "@scalius/shared/money";
 import type { PricingCurrency } from "@scalius/shared/currency-policy";
@@ -259,7 +259,7 @@ export async function priceStorefrontCheckout(
   let shippingRates: CheckoutRateOption[] | null = delivery.rateRows ? await listRateOptions(db, input) : null;
   let appCart: FunctionCart | null = null;
 
-  if (apps && wantsAppCart(apps, ["cart.validate", "checkout.discounts", "checkout.shipping_rates", "checkout.payment_methods", "buyer.ui"])) {
+  if (apps && wantsAppCart(apps, ["cart.validate", "checkout.discounts", "checkout.shipping_rates", "checkout.payment_methods", PLUGIN_EXTENSION_RUN])) {
     const wantsRates = apps.points.has("checkout.shipping_rates") && delivery.kind !== null && shippingMethod !== null;
     const appDestination = delivery.fulfilment.requiresShipping
       ? { country: delivery.address?.countryCode ?? null, city: delivery.cityName, zone: delivery.zoneName }
@@ -273,7 +273,7 @@ export async function priceStorefrontCheckout(
         marketCountry: appCartMarketCountry(appDestination, input.billing?.countryCode),
         // The apps' declared reads for every point this cart is asked at ride the same batch.
         apps,
-        points: ["cart.validate", "checkout.discounts", "checkout.shipping_rates", "checkout.payment_methods", "buyer.ui"],
+        points: ["cart.validate", "checkout.discounts", "checkout.shipping_rates", "checkout.payment_methods", PLUGIN_EXTENSION_RUN],
         attributes: input.attributes,
       }),
       wantsRates ? listRateOptions(db, input) : Promise.resolve([] as CheckoutRateOption[]),
@@ -471,7 +471,7 @@ export async function checkStorefrontCartRules(
   },
 ): Promise<CheckoutRuleError[]> {
   const { apps, cartValidation } = input;
-  if ((!apps?.points.has("cart.validate") && !apps?.points.has("buyer.ui")) || cartValidation.items.length === 0) return [];
+  if ((!apps?.points.has("cart.validate") && !apps?.points.has(PLUGIN_EXTENSION_RUN)) || cartValidation.items.length === 0) return [];
   const lineIds = cartValidation.items.map((item) => buildStorefrontTaxAllocationLineId(item.index, item.variantId));
   const destination = input.delivery?.fulfilment.requiresShipping
     ? { country: input.delivery.address?.countryCode ?? null, city: input.delivery.cityName, zone: input.delivery.zoneName }
@@ -482,7 +482,7 @@ export async function checkStorefrontCartRules(
     customerId: input.customerId,
     marketCountry: appCartMarketCountry(destination),
     apps,
-    points: ["cart.validate", "buyer.ui"],
+    points: ["cart.validate", PLUGIN_EXTENSION_RUN],
     attributes: input.attributes,
   });
   const cart = safeAppCart(() => buildAppFunctionCart({

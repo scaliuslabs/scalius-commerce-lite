@@ -356,8 +356,14 @@ export async function invokePluginDefinition(
         return result(true, await handler(invocation.input, createContext(seed, requireBridge(bridge), logs)), null);
       }
       case "function": {
-        // Only a live point runs: a feature that is off runs nothing.
-        const handler = seed.inventory.functions.includes(invocation.point) ? handlerIn(definition.functions, invocation.point) : null;
+        // Only a live point runs: a feature that is off runs nothing. The host
+        // renders a storefront extension through the function pipeline under
+        // the run name "buyer.ui" (PLUGIN_EXTENSION_RUN); the handler is the
+        // module's `extensions[target]`.
+        const target = invocation.point === "buyer.ui" ? (invocation.input as { target?: unknown } | null)?.target : undefined;
+        const handler = invocation.point === "buyer.ui"
+          ? (typeof target === "string" && (seed.inventory.extensions ?? []).includes(target) ? handlerIn(definition.extensions, target) : null)
+          : seed.inventory.functions.includes(invocation.point) ? handlerIn(definition.functions, invocation.point) : null;
         if (!handler) return result(false, null, { code: "plugin_no_handler", message: `No function handler for ${invocation.point}.` });
         return result(true, await handler(invocation.input, Object.freeze({ ...seed.settings })), null);
       }

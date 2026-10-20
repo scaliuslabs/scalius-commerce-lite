@@ -33,6 +33,7 @@ describe("plugin handler inventory", () => {
     expect(inventory).toEqual({
       events: ["order.*", "customer.created"],
       functions: ["checkout.discounts"],
+      extensions: [],
       routes: { admin: ["dashboard"], public: [], webhooks: ["acme-callback"] },
       cron: ["expire"],
       providers: [],
@@ -53,6 +54,18 @@ describe("plugin handler inventory", () => {
     expect(checkPluginHandlers(inventory, { ...complete, lifecycle: { upgrade: handler } })).toEqual(['Unknown lifecycle hook "upgrade".']);
     expect(checkPluginHandlers(inventory, { ...complete, extra: true })).toEqual(['Unknown plugin definition key "extra".']);
     expect(checkPluginHandlers(inventory, null)).toHaveLength(1);
+  });
+
+  it("needs a render for each declared storefront extension, by UI slot, and none for undeclared ones", () => {
+    const withExtensions = { ...inventory, extensions: ["checkout.actions.before"] };
+    expect(checkPluginHandlers(withExtensions, { ...complete, extensions: { "checkout.actions.before": handler } })).toEqual([]);
+    expect(checkPluginHandlers(withExtensions, complete))
+      .toEqual(['Extension "checkout.actions.before" is declared in the manifest but has no handler.']);
+    expect(checkPluginHandlers(inventory, { ...complete, extensions: { "account.overview": handler } }))
+      .toEqual(['Extension "account.overview" has a handler but is not declared in the manifest.']);
+    // A render is not a function: the old buyer.ui function key is undeclared.
+    expect(checkPluginHandlers(inventory, { ...complete, functions: { ...complete.functions, "buyer.ui": handler } }))
+      .toEqual(['Function "buyer.ui" has a handler but is not declared in the manifest.']);
   });
 
   it("needs a handler for each declared data update, and none for undeclared ones", () => {

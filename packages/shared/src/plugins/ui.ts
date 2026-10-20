@@ -5,8 +5,8 @@
 // - `admin`: the app's dashboard pages, resource cards and widgets (its admin
 //   routes answer a tree);
 // - `buyer`: the UI slots of the buyer's own pages (cart, checkout, the
-//   receipt, the account; storefront-protocol.ts), where a `buyer.ui`
-//   function answers a tree and no app code runs.
+//   receipt, the account; storefront-protocol.ts), where a storefront extension's
+//   render answers a tree and no app code runs.
 //
 // A node means the same on both surfaces; each surface allows a subset of the
 // nodes, actions and link targets (`PLUGIN_UI_SURFACES`). Text is always plain

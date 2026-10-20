@@ -495,6 +495,25 @@ describe("plugin functions", () => {
     ])).toHaveLength(1);
   });
 
+  it("declares buyer UI as storefront extensions, one per UI slot, never as a function point", () => {
+    const parse = (input: Partial<PluginManifestInput>) => {
+      const parsed = parsePluginManifest({ ...FULL, ...input });
+      return parsed.ok ? { ok: true as const, manifest: parsed.manifest } : { ok: false as const, issues: parsed.issues.map((issue) => `${issue.path} ${issue.message}`) };
+    };
+    const balance = { as: "balance", object: "ledger", key: "customer" as const };
+    const ok = parse({ storefront: { extensions: [{ target: "checkout.actions.before", reads: [balance] }, { target: "account.overview", reads: [balance] }] } });
+    expect(ok.ok && ok.manifest.storefront.extensions.map((extension) => extension.target)).toEqual(["checkout.actions.before", "account.overview"]);
+    expect(ok.ok && pluginGrantRequest(ok.manifest).extensions).toEqual(["account.overview", "checkout.actions.before"]);
+    expect(parse({ functions: [{ point: "buyer.ui" } as never] }).ok).toBe(false);
+    expect(parse({ storefront: { extensions: [{ target: "account.overview" }, { target: "account.overview" }] } })).toMatchObject({ ok: false, issues: ["storefront.extensions Extension targets must be unique."] });
+    expect(parse({ storefront: { extensions: [{ target: "header.actions" as never }] } }).ok).toBe(false);
+    // One name, one read across the app's extensions; reads are checked like a function's.
+    expect(parse({ storefront: { extensions: [{ target: "account.overview", reads: [balance] }, { target: "account.order", reads: [{ ...balance, key: "line.productId" }] }] } }))
+      .toMatchObject({ ok: false, issues: ["storefront.extensions.1.reads.0.as Read balance is declared differently by another extension: one name, one read."] });
+    expect(parse({ storefront: { extensions: [{ target: "account.overview", reads: [{ as: "a", object: "nope", key: "customer" }] }] } }))
+      .toMatchObject({ ok: false, issues: ["storefront.extensions.0.reads.0.object Object type nope is not declared."] });
+  });
+
   it("commits only named single-key reads, at most four", () => {
     const output = PLUGIN_FUNCTION_SCHEMAS["checkout.discounts"].output;
     expect(output.safeParse({ discounts: [], commit: [{ as: "balance", record: { points: 1 } }] }).success).toBe(true);

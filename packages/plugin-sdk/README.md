@@ -60,7 +60,7 @@ Worked examples that no store bundles are test fixtures in `apps/api/src/plugins
 | Order timeline entries | `timeline` | `ctx.timeline.add(…)` |
 | Order risk and holds (after commit) | `events: ["order.created"]`, `write_orders` | `ctx.orders.assessRisk(…)`, `ctx.orders.hold(…)` |
 | Objects and custom fields | `objects`, `customFields` | `ctx.objects`, `ctx.customFields` |
-| Buyer UI | `functions: [{ point: "buyer.ui", targets }]`, `checkout.attributes` | a pure function returning `{ ui }` |
+| Buyer UI | `storefront.extensions: [{ target, reads }]`, `checkout.attributes` | `extensions[target]`, a pure render returning `{ ui }` |
 | Storefront components: sections, components in slots and app pages, skins (header, footer, product card, product page, listing, core sections), templates | `storefront.sections`, `components`, `skins`, `templates` | `defineStorefront` in `src/storefront.tsx` (`@scalius/plugin-sdk/storefront`) |
 | Client islands, stylesheet, public files | `storefront.islands`, `stylesheet`, `connect` | `src/islands/<name>.ts` (`defineIsland`), `src/storefront.css`, `public/` |
 | Scripts, head, proxy | `storefront.scripts`, `head`, `proxy` | |
@@ -172,7 +172,7 @@ An installation with `source` `bundled` uses the bundled loader. `registry` and 
 - Buyer contact data is its own tier: `read_customer_names`, `read_customer_emails`, `read_customer_phones` and `read_customer_addresses` (street lines, company, neighbourhood; the city, area and country are always visible). Without one, the matching fields of `ctx.api` responses read `null` (they are marked `x-scalius-protected` in the contract) and provider inputs leave them out. Ask only for what you use: a courier provider must declare names, phones and addresses, an SMS gateway or courier-history checker phones, an email provider emails, a chat provider phones, an address provider addresses (the manifest is refused otherwise); a payment provider receives in `buyer` only the fields its scopes reveal.
 - `allowedHosts` (20): hosts `ctx.http` may reach, exact or `*.example.com`. `host:port` names one non-default port. No IP literals or localhost. Empty means no network.
 - `events` (40): topics, `<resource>.*` or `*`.
-- `functions`: one per declared point, `{ point, priority, onError, reads }`; `buyer.ui` also declares `targets`.
+- `functions`: one per declared checkout decision, `{ point, priority, onError, reads }`. Content for buyers is not a function: it is a storefront extension (`storefront.extensions`, Buyer UI below).
 - `timeline` (10): `{ kind, title }`, the kinds of order timeline entries the app writes.
 - `objects` (20): named typed entities in the app's namespace (`<plugin id>.<type>`). Each declares fields, optional indexes/uniqueness, display/handle, staff access, public visibility and events. An index (4) or unique set (2) is one field (`"order_id"`) or a list of one to four (`["order_id"]`, `["customer_id", "created_at"]`). Types sync on activation and update.
 - `messaging.recipients` (4): `{ object, field }`, `single_line_text` fields of your own objects whose values `ctx.messaging` may email or text by `to`. The field must lead an index or be unique on its own. The consent screen lists them.
@@ -314,7 +314,7 @@ Which seam: a decision inside a request is a function; a provider of a capabilit
 - **`cart.line_prices`** answers `{ prices: [{ lineId, unitPriceMinor }], adjustments: [{ lineId, amountMinor, title }] }` (both optional).
   - `prices` are B2B, tiered or member prices. A price applies only when no price list does: sale > segment > market list > your price > FX > base. The first app by priority wins a line.
   - `adjustments` are add-ons to each unit (an engraving's letters, a gift wrap), applied after that whole precedence, so discounted, sale and price-listed lines take them too. Every app's add-ons apply, at most five per line, each in the cart currency and rounded half-up to the market's price increment. Gift cards and bundle lines take none. The buyer sees each as "Add-on: <title> (+price)" in the cart, checkout, receipt and emails. Tax, discounts, totals and refunds include it.
-- **Declared reads** (every point, `buyer.ui` too). A function reads the app's own data through the manifest, never through I/O. Up to four reads per function:
+- **Declared reads** (every point, and every storefront extension). A function reads the app's own data through the manifest, never through I/O. Up to four reads per function (and four across an app's extensions):
 
   ```ts
   { point: "cart.validate", onError: "block", reads: [
@@ -347,16 +347,16 @@ Which seam: a decision inside a request is a function; a provider of a capabilit
 - Only active apps answer, and only declared routes and methods. Cookies never reach a handler. Admin and public handlers see only `accept`, `accept-language`, `content-type`, `if-none-match`, `user-agent` and `x-requested-with`. Webhook handlers see every header except credentials and network headers.
 - Responses are JSON. An app cannot set cookies, CSP, CORS, `content-type` or redirect headers. A public or webhook response is `no-store` unless it sets exactly `cache-control: public, max-age=N` with N at most 300.
 - Admin pages, cards and widgets answer with `ui.page(...)` or `ui.view(...)`, and buttons and forms with `ui.result(...)`. `adminContext(request)` reads the request, including the dashboard language.
-- Private buyer pages use `buyer.ui` (below); public routes never draw cached static checkout/account HTML.
+- Private buyer pages use storefront extensions (below); public routes never draw cached static checkout/account HTML.
 - With `storefront.proxy`, `/apps/<id>/*` on the storefront reaches the public routes. `request.customer` holds the signed-in customer's id, never a cookie. Answer `{ page }` or `{ redirect }` for a page navigation.
 
 ## Buyer UI
 
-Declare `functions: [{ point: "buyer.ui", targets: ["checkout.contact.after"] }]` and implement `functions["buyer.ui"]` as a pure function returning `{ ui: ui.view([...]) }`: the same `ui` tree and `ui.*` builder as admin pages, held to the buyer surface (`stack`, `columns`, `heading`, `text`, `badge`, `banner`, `divider`, `key-value`, `image`, `link`, `field` and `button`). Targets are UI slots: `checkout.contact.after`, `checkout.delivery.after`, `cart.page.summary`, `checkout.payment.after`, `checkout.actions.before`, `order.confirmation`, `account.order`, `account.overview`, `account.profile`. A failed function is omitted; it cannot block checkout.
+Declare one storefront extension per UI slot, `storefront: { extensions: [{ target: "checkout.contact.after", reads }] }`, and implement `extensions["checkout.contact.after"]` as a pure render returning `{ ui: ui.view([...]) }` (or `{ ui: null }`): the same `ui` tree and `ui.*` builder as admin pages, held to the buyer surface (`stack`, `columns`, `heading`, `text`, `badge`, `banner`, `divider`, `key-value`, `image`, `link`, `field` and `button`). Targets are UI slots: `checkout.contact.after`, `checkout.delivery.after`, `cart.page.summary`, `checkout.payment.after`, `checkout.actions.before`, `order.confirmation`, `account.order`, `account.overview`, `account.profile`. A failed render is omitted; it cannot block checkout. Extensions are not functions: they have no priority or `onError`, and the consent screen lists them under the storefront. Test one with `harness.extension(input)`.
 
 A field (`ui.field(key)`) names a key in `checkout.attributes`; core owns the input, validation and storage. Buttons take one action union: `ui.cart.addLine`, `ui.cart.setAttribute`, `ui.cart.applyCode` (cart and checkout slots), `ui.route(name)` (a declared public route) or `ui.navigate(ui.to.store(path))`. Images use store media or this app's sealed public files; links use same-store paths. No app HTML or JavaScript reaches private buyer pages.
 
-The input includes the target, language, locale, currency, relevant cart/order/customer ids, accepted attributes, and the function's declared reads (keyed by the buyer, the cart's or order's lines, or an attribute). UI travels with cart validation, tax quote, receipt and account responses. Attributes enter the quote fingerprint and existing order insert, never URLs or events. See the `notes` and `loyalty` fixtures for working examples.
+The input includes the target, language, locale, currency, relevant cart/order/customer ids, accepted attributes, and the reads that slot's extension declares (keyed by the buyer, the cart's or order's lines, or an attribute). UI travels with cart validation, tax quote, receipt and account responses. Attributes enter the quote fingerprint and existing order insert, never URLs or events. See the `notes` and `loyalty` fixtures for working examples.
 
 ## Storefront components
 

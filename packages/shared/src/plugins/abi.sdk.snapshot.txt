@@ -366,7 +366,7 @@ export {};
 
 // packages/plugin-sdk/src/index.d.ts
 import type { EventTopic, EventTopicFilter } from "@scalius/shared/events";
-import type { FunctionReadRecord, FunctionReads, PluginFunctionAnswer, PluginFunctionInput, PluginFunctionPoint, PluginManifestInput, PluginSettingValue } from "@scalius/shared/plugins";
+import type { FunctionReadRecord, FunctionReads, PluginFunctionAnswer, PluginFunctionInput, PluginFunctionPoint, PluginManifestInput, PluginSettingValue, StorefrontUiSlot } from "@scalius/shared/plugins";
 import type { ProviderImplementation, ProviderKind } from "@scalius/shared/plugins/providers";
 import type { PluginContext, PluginEvent, PluginRouteRequest, PluginRouteResponse } from "./context";
 import type { PluginContextOf, PluginSettingsOf } from "./manifest-types";
@@ -379,6 +379,7 @@ export type { PluginFeature, PluginFeatureInput, PluginManifest, PluginManifestI
 export { adminContext, adminLocale, ui, wantsPage, type PluginAdminContext, type PluginAdminLocale } from "./ui";
 export type PluginEventHandler<T extends EventTopic = EventTopic, Ctx = PluginContext> = (event: PluginEvent<T>, ctx: Ctx) => Promise<void> | void;
 export type PluginFunctionHandler<P extends PluginFunctionPoint, Settings = Readonly<Record<string, PluginSettingValue>>> = (input: PluginFunctionInput<P>, settings: Settings) => PluginFunctionAnswer<P> | Promise<PluginFunctionAnswer<P>>;
+export type PluginExtensionHandler<Settings = Readonly<Record<string, PluginSettingValue>>> = (input: PluginFunctionInput<"buyer.ui">, settings: Settings) => PluginFunctionAnswer<"buyer.ui"> | Promise<PluginFunctionAnswer<"buyer.ui">>;
 export type { FunctionReadRecord, FunctionReads };
 export declare function readOne<T extends Record<string, unknown> = Record<string, unknown>>(reads: FunctionReads | undefined, as: string): {
     revision: number;
@@ -403,6 +404,9 @@ export interface PluginDefinition<M extends PluginManifestInput = PluginManifest
     };
     functions?: {
         [P in PluginFunctionPoint]?: PluginFunctionHandler<P, PluginSettingsOf<M>>;
+    };
+    extensions?: {
+        [T in StorefrontUiSlot]?: PluginExtensionHandler<PluginSettingsOf<M>>;
     };
     routes?: {
         admin?: Record<string, PluginRouteHandler<Ctx>>;
@@ -1049,7 +1053,7 @@ export declare const STABLE_CONTRACT: StableContract;
 export declare const NON_STABLE_OPERATION_NAMES: readonly string[];
 
 // packages/plugin-sdk/src/testing.d.ts
-import { type PluginFunctionInputDraft, type PluginFunctionOutput, type PluginFunctionPoint, type PluginSettingValue } from "@scalius/shared/plugins";
+import { PLUGIN_EXTENSION_RUN, type PluginFunctionInputDraft, type PluginFunctionOutput, type PluginFunctionPoint, type PluginRunPoint, type PluginSettingValue } from "@scalius/shared/plugins";
 import type { EventTopic } from "@scalius/shared/events";
 import type { PluginApiCallInput, PluginApiResult, PluginEvent, PluginRouteRequest, PluginStoreInfo } from "./context";
 import { type PluginInvocationResult, type PluginLogRecord } from "./runtime";
@@ -1079,7 +1083,7 @@ export interface PluginTestHarnessOptions {
         body: string;
     }>;
 }
-export type PluginFunctionTestResult<P extends PluginFunctionPoint> = Omit<PluginInvocationResult, "value"> & {
+export type PluginFunctionTestResult<P extends PluginRunPoint> = Omit<PluginInvocationResult, "value"> & {
     value: PluginFunctionOutput<P> | null;
 };
 export declare function createPluginTestHarness(module: unknown, options?: PluginTestHarnessOptions): {
@@ -1100,7 +1104,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
         allowedHosts: string[];
         events: import("@scalius/shared/events").EventTopicFilter[];
         functions: {
-            point: "cart.transform" | "cart.line_prices" | "cart.validate" | "checkout.discounts" | "checkout.shipping_rates" | "checkout.payment_methods" | "buyer.ui";
+            point: "cart.transform" | "cart.line_prices" | "cart.validate" | "checkout.discounts" | "checkout.shipping_rates" | "checkout.payment_methods";
             priority: number;
             onError: "skip" | "block";
             reads: ({
@@ -1118,7 +1122,6 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
                 } | undefined;
                 max?: number | undefined;
             })[];
-            targets?: ("checkout.contact.after" | "checkout.delivery.after" | "cart.page.summary" | "checkout.payment.after" | "checkout.actions.before" | "order.confirmation" | "account.order" | "account.overview" | "account.profile")[] | undefined;
         }[];
         providers: import("@scalius/shared/plugins/providers").PluginProviderDeclaration[];
         routes: {
@@ -1428,6 +1431,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
                 sections: string[];
                 components: string[];
                 skins: string[];
+                extensions: ("checkout.contact.after" | "checkout.delivery.after" | "cart.page.summary" | "checkout.payment.after" | "checkout.actions.before" | "order.confirmation" | "account.order" | "account.overview" | "account.profile")[];
             };
         }[];
         settingsGroups: {
@@ -2184,6 +2188,24 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
                 pages: ("product" | "all" | "home" | "listing")[];
             }[];
             proxy: boolean;
+            extensions: {
+                target: "checkout.contact.after" | "checkout.delivery.after" | "cart.page.summary" | "checkout.payment.after" | "checkout.actions.before" | "order.confirmation" | "account.order" | "account.overview" | "account.profile";
+                reads: ({
+                    as: string;
+                    object: string;
+                    key: string | {
+                        from: string;
+                    };
+                    max?: number | undefined;
+                } | {
+                    as: string;
+                    customFields: string[];
+                    key?: string | {
+                        from: string;
+                    } | undefined;
+                    max?: number | undefined;
+                })[];
+            }[];
         };
         limits: {
             cpuMs: number;
@@ -2267,6 +2289,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
     }) => Promise<PluginInvocationResult>;
     deliver: (event: PluginEvent) => Promise<PluginInvocationResult>;
     fn: <P extends PluginFunctionPoint>(point: P, input: PluginFunctionInputDraft<P>) => Promise<PluginFunctionTestResult<P>>;
+    extension: (input: PluginFunctionInputDraft<typeof PLUGIN_EXTENSION_RUN>) => Promise<PluginFunctionTestResult<typeof PLUGIN_EXTENSION_RUN>>;
     runMigration: (version: number) => Promise<PluginInvocationResult>;
     runMigrations: (options?: {
         from?: number;
