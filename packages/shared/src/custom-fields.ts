@@ -15,11 +15,15 @@
 // The HTTP edge carries typed JSON (`customFieldWireValue`): strings for text,
 // dates, URLs, colours and references; numbers for integers; a decimal
 // string for decimals (no float rounding); booleans; any JSON for `json`;
-// decimal major units for money (converted exactly once, here); arrays of
-// those for lists. `null`, an empty string or an empty list clears a value.
+// money as `{ amountMinor, currency }` (integer minor units and the ISO 4217
+// code, the one money format of the app API, webhooks, functions and ports);
+// arrays of those for lists. `null`, an empty string or an empty list clears
+// a value. Money bounds (`min`/`max`) are integer minor units of the store
+// currency. Only the storefront contract shows money in major units
+// (`customFieldStorefrontValue`).
 
 import { toHandle } from "./handle";
-import { fromMinor, isIncrementMultipleMinor, priceIncrementMessage, toMinor } from "./money";
+import { fromMinor, isIncrementMultipleMinor, MAX_MINOR_AMOUNT, priceIncrementMessage, toMinor } from "./money";
 import { PLUGIN_ID_PATTERN } from "./plugins/ids";
 
 // ---------------------------------------------------------------------------
@@ -267,6 +271,49 @@ export type CustomFieldJson =
 /** A value as the HTTP contract carries it. */
 export type CustomFieldWireValue = CustomFieldJson;
 
+/**
+ * Money as every app boundary carries it: integer minor units of `currency`
+ * (ISO 4217). A custom field or object field holds the store currency.
+ */
+export interface CustomFieldMoney {
+  amountMinor: number;
+  currency: string;
+}
+
+/** Whether a value has the money wire shape (exactly `amountMinor` and `currency`). */
+export function isCustomFieldMoney(value: unknown): value is CustomFieldMoney {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const keys = Object.keys(value);
+  const money = value as Record<string, unknown>;
+  return keys.length === 2 && typeof money.amountMinor === "number" && typeof money.currency === "string";
+}
+
+/** Stored minor units as wire money. */
+export function customFieldMoney(amountMinor: number, context: Pick<CustomFieldCodecContext, "currencyCode">): CustomFieldMoney {
+  return { amountMinor, currency: context.currencyCode };
+}
+
+/**
+ * Major-unit text a person typed ("12.50") as wire money, or null when it is
+ * not an amount of the currency (never rounded: more decimals than the
+ * currency has is a typo). Forms convert here, once.
+ */
+export function customFieldMoneyFromMajor(text: string, context: CustomFieldCodecContext): CustomFieldMoney | null {
+  const decimal = canonicalDecimal(text);
+  if (decimal === null || decimal.startsWith("-") || (decimal.split(".")[1] ?? "").length > context.decimalPlaces) return null;
+  try {
+    return customFieldMoney(toMinor(Number(decimal), context.decimalPlaces), context);
+  } catch {
+    return null;
+  }
+}
+
+/** Wire money as major-unit text for a form ("12.5"), or "" when it is not money. */
+export function customFieldMoneyMajorText(value: unknown, context: CustomFieldCodecContext): string {
+  if (!isCustomFieldMoney(value) || !Number.isSafeInteger(value.amountMinor)) return "";
+  return String(fromMinor(value.amountMinor, context.decimalPlaces));
+}
+
 // ---------------------------------------------------------------------------
 // Scalars
 // ---------------------------------------------------------------------------
@@ -475,17 +522,10 @@ function canonicalItem(type: CustomFieldScalarType, input: unknown, context: Cus
       return ok(JSON.stringify(input));
     }
     case "money": {
-      const decimal = canonicalDecimal(input);
-      // Never rounded: more decimals than the currency has is a typo, not an amount.
-      if (decimal === null || decimal.startsWith("-") || (decimal.split(".")[1] ?? "").length > context.decimalPlaces) {
-        return invalid();
-      }
-      let minor: number;
-      try {
-        minor = toMinor(Number(decimal), context.decimalPlaces);
-      } catch {
-        return invalid();
-      }
+      if (!isCustomFieldMoney(input)) return fail("invalid", `Enter an amount of money as { amountMinor, currency: "${context.currencyCode}" }.`);
+      const minor = input.amountMinor;
+      if (!Number.isSafeInteger(minor) || minor < 0 || minor > MAX_MINOR_AMOUNT) return fail("invalid", "Enter a whole number of minor units, 0 or more.");
+      if (input.currency !== context.currencyCode) return fail("invalid", `Enter an amount in ${context.currencyCode}, the store currency.`);
       const increment = context.priceIncrementMinor;
       if (increment !== undefined && !isIncrementMultipleMinor(minor, increment)) {
         return fail("whole_amount", priceIncrementMessage(context.currencyCode, increment));
@@ -536,7 +576,7 @@ export interface CustomFieldValidations {
   readonly choices?: readonly string[];
 }
 
-/** Validations as the HTTP contract carries them (money bounds in major units). */
+/** Validations as the HTTP contract carries them (money bounds in integer minor units of the store currency). */
 export interface CustomFieldWireValidations {
   to?: string | null;
   min?: string | number | null;
@@ -622,6 +662,12 @@ export function parseCustomFieldValidations(
         return invalid(`The ${side === "min" ? "minimum" : "maximum"} length is a whole number from 0 to ${max}.`);
       }
       result[side] = count;
+    } else if (item === "money") {
+      const minor = canonicalInteger(raw[side]);
+      if (minor === null || minor.startsWith("-") || Number(minor) > MAX_MINOR_AMOUNT) {
+        return invalid(`The ${side === "min" ? "minimum" : "maximum"} is a whole number of minor units of the store currency.`);
+      }
+      result[side] = minor;
     } else {
       const bound = canonicalItem(item, raw[side], context);
       if (!bound.ok) return invalid(`The ${side === "min" ? "minimum" : "maximum"} must be ${TYPE_LABEL[item]}.`);
@@ -667,7 +713,7 @@ export function customFieldValidationsToWire(
   const item = customFieldItemType(type);
   const bound = (value: string | undefined): string | number | null => {
     if (value === undefined) return null;
-    if (customFieldBoundKind(type) === "length") return Number(value);
+    if (customFieldBoundKind(type) === "length" || item === "money") return Number(value);
     // Bounds exist only on number, money, date and time types, whose wire form is a number or text.
     const wire = scalarWire(item, value, context);
     return typeof wire === "number" || typeof wire === "string" ? wire : null;
@@ -723,13 +769,14 @@ function validateItem(
 ): CustomFieldResult<string> {
   const at = index === undefined ? {} : { index };
   const boundKind = customFieldBoundKind(type);
-  const wire = (bound: string) => (boundKind === "length" ? Number(bound) : scalarWire(item, bound, context) as string | number);
+  const wire = (bound: string) => (boundKind === "length" || item === "money" ? Number(bound) : scalarWire(item, bound, context) as string | number);
+  const shown = (bound: string) => (item === "money" ? `${fromMinor(Number(bound), context.decimalPlaces)} ${context.currencyCode}` : String(wire(bound)));
   if (validations.min !== undefined) {
     const below = boundKind === "length" ? value.length < Number(validations.min) : compareItems(item, value, validations.min) < 0;
     if (below) {
       return boundKind === "length"
         ? fail("too_short", `Use at least ${validations.min} characters.`, { ...at, limit: wire(validations.min) })
-        : fail("too_small", `The minimum is ${String(wire(validations.min))}.`, { ...at, limit: wire(validations.min) });
+        : fail("too_small", `The minimum is ${shown(validations.min)}.`, { ...at, limit: wire(validations.min) });
     }
   }
   if (validations.max !== undefined) {
@@ -737,7 +784,7 @@ function validateItem(
     if (above) {
       return boundKind === "length"
         ? fail("too_long", `Use at most ${validations.max} characters.`, { ...at, limit: wire(validations.max) })
-        : fail("too_large", `The maximum is ${String(wire(validations.max))}.`, { ...at, limit: wire(validations.max) });
+        : fail("too_large", `The maximum is ${shown(validations.max)}.`, { ...at, limit: wire(validations.max) });
     }
   }
   if (validations.regex !== undefined && customFieldSupportsRegex(type)) {
@@ -811,7 +858,7 @@ export function parseCustomFieldValue(
   return ok(stored);
 }
 
-function scalarWire(type: CustomFieldScalarType, stored: string, context: CustomFieldCodecContext): CustomFieldWireValue {
+function scalarWire(type: CustomFieldScalarType, stored: string, context: CustomFieldCodecContext, majorMoney = false): CustomFieldWireValue {
   switch (type) {
     case "integer":
       return Number(stored);
@@ -820,7 +867,7 @@ function scalarWire(type: CustomFieldScalarType, stored: string, context: Custom
     case "json":
       return JSON.parse(stored) as CustomFieldJson;
     case "money":
-      return fromMinor(Number(stored), context.decimalPlaces);
+      return majorMoney ? fromMinor(Number(stored), context.decimalPlaces) : { ...customFieldMoney(Number(stored), context) };
     default:
       return stored;
   }
@@ -844,15 +891,32 @@ function isStoredItem(type: CustomFieldScalarType, stored: unknown, context: Cus
 
 /**
  * A stored value to the HTTP contract, or null when the stored text is not a
- * canonical value of the type (never guessed at).
+ * canonical value of the type (never guessed at). Money is `{ amountMinor, currency }`.
  */
 export function customFieldWireValue(
   type: CustomFieldType,
   stored: string,
   context: CustomFieldCodecContext,
 ): CustomFieldWireValue | null {
+  return wireValue(type, stored, context, false);
+}
+
+/**
+ * A stored value as the storefront contract shows it: the HTTP form, except
+ * money is a decimal major-unit number of the store currency (the page
+ * formats it). Never used for an app boundary.
+ */
+export function customFieldStorefrontValue(
+  type: CustomFieldType,
+  stored: string,
+  context: CustomFieldCodecContext,
+): CustomFieldWireValue | null {
+  return wireValue(type, stored, context, true);
+}
+
+function wireValue(type: CustomFieldType, stored: string, context: CustomFieldCodecContext, majorMoney: boolean): CustomFieldWireValue | null {
   const item = customFieldItemType(type);
-  if (!isCustomFieldListType(type)) return isStoredItem(item, stored, context) ? scalarWire(item, stored, context) : null;
+  if (!isCustomFieldListType(type)) return isStoredItem(item, stored, context) ? scalarWire(item, stored, context, majorMoney) : null;
   let items: unknown;
   try {
     items = JSON.parse(stored);
@@ -860,7 +924,7 @@ export function customFieldWireValue(
     return null;
   }
   if (!Array.isArray(items) || !items.every((value) => isStoredItem(item, value, context))) return null;
-  return (items as string[]).map((value) => scalarWire(item, value, context));
+  return (items as string[]).map((value) => scalarWire(item, value, context, majorMoney));
 }
 
 /** The record ids a stored reference value names (empty for other types). */
