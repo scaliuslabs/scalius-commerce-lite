@@ -136,7 +136,7 @@ describe("purchase orders", () => {
   it("edits a draft, locks its lines once ordered, and receives in parts into the destination", async () => {
     // Outbox facts are emitted only for subscribed topics.
     sqlite.exec(`INSERT INTO webhook_subscriptions (id, url, topics, api_version, secret_ciphertext, secret_hint)
-      VALUES ('whs_inventory', 'https://hooks.example.test/inventory', '["inventory.*"]', '2026-10', 'enc:test', 'test')`);
+      VALUES ('whs_inventory', 'https://hooks.example.test/inventory', '["variant.*", "purchase_order.*", "inventory_transfer.*"]', '2026-10', 'enc:test', 'test')`);
     const draft = await createPurchaseOrder(db, {
       destinationLocationId: "loc_shop",
       expectedOn: "2026-10-20",
@@ -208,8 +208,8 @@ describe("purchase orders", () => {
     expect((await listPurchaseOrders(db, { q: "PO1001" })).purchaseOrders.map((row) => row.status)).toEqual(["received"]);
     expectInvariants();
     // Every receipt emitted its document event and a level event per SKU.
-    expect(all<{ topic: string }>("SELECT topic FROM event_outbox WHERE topic LIKE 'inventory.%' ORDER BY rowid").map((row) => row.topic))
-      .toEqual(expect.arrayContaining(["inventory.purchase_order_updated", "inventory.level_changed"]));
+    expect(all<{ topic: string }>("SELECT topic FROM event_outbox WHERE topic IN ('purchase_order.updated', 'variant.inventory_changed') ORDER BY rowid").map((row) => row.topic))
+      .toEqual(expect.arrayContaining(["purchase_order.updated", "variant.inventory_changed"]));
   });
 
   it("cancels the rest of a partially received order, deletes only drafts, and exports CSV", async () => {

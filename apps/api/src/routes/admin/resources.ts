@@ -697,7 +697,7 @@ app.openapi(createRoute({
   path: "/variants/{id}",
   tags: ["App API - Products"],
   summary: "Get a SKU's stock",
-  description: "The SKU's on-hand units in total and per location, as `inventory.level_changed` carries it.",
+  description: "The SKU's on-hand units in total and per location, as `variant.inventory_changed` carries it.",
   request: { params: idParam },
   responses: {
     200: { description: "The SKU", content: { "application/json": { schema: successEnvelope(VariantResource) } } },

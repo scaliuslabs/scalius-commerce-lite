@@ -81,7 +81,7 @@ describe("admin webhook routes", () => {
     expect(listed.status).toBe(200);
     expect(JSON.stringify(listed.json)).not.toContain(secret);
     expect(listed.json.data).toMatchObject({ maxSubscriptions: 20, apiVersion: "2026-10" });
-    expect(listed.json.data.topicFilters).toContain("inventory.level_changed");
+    expect(listed.json.data.topicFilters).toContain("variant.inventory_changed");
     expect(listed.json.data.subscriptions).toHaveLength(1);
   });
 

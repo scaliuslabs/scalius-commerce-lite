@@ -57,12 +57,12 @@ export function changesForEvent(event: Pick<OutboxEvent, "topic" | "resourceId" 
     case "product.deleted":
     case "product.publication_changed":
       return [{ topic: "products", kind: event.topic, id: event.resourceId, ...(rev !== undefined ? { rev } : {}) }];
-    case "inventory.level_changed": {
+    case "variant.inventory_changed": {
       const productId = typeof facts.productId === "string" ? facts.productId : undefined;
       return [{ topic: "inventory", kind: event.topic, id: productId ?? event.resourceId }];
     }
-    case "inventory.purchase_order_updated":
-    case "inventory.transfer_updated":
+    case "purchase_order.updated":
+    case "inventory_transfer.updated":
       return [{ topic: "inventory", kind: event.topic, id: event.resourceId, ...(rev !== undefined ? { rev } : {}) }];
     case "customer.created":
     case "customer.updated":

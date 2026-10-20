@@ -72,7 +72,7 @@ describe("sealed event representations", () => {
       VALUES (?, 'gc_event0001', 'adjust', 1, ?, ?, 'system', 'test adjustment', ?)`);
     for (let index = 1; index <= 201; index += 1) insert.run(`gct_event_${index.toString().padStart(4, "0")}`, index, `event-${index}`, index);
     const resolve = createWebhookRepresentationResolver(db);
-    const transaction = await resolve(event({ topic: "gift_card.transaction", resourceType: "transaction", resourceId: "gct_event_0001",
+    const transaction = await resolve(event({ topic: "gift_card_transaction.created", resourceType: "gift_card_transaction", resourceId: "gct_event_0001",
       facts: { giftCardId: "gc_event0001", transactionId: "gct_event_0001", kind: "adjust", orderId: null } }));
     expect(transaction).toMatchObject({ id: "gct_event_0001", amountMinor: 1, balanceAfterMinor: 1, currency: "BDT", actorType: "system" });
     const card = await resolve(event({ topic: "gift_card.created", resourceType: "gift_card", resourceId: "gc_event0001",

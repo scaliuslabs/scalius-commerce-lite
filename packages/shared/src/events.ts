@@ -31,9 +31,9 @@ export const EVENT_TOPICS = [
   "product.updated",
   "product.deleted",
   "product.publication_changed",
-  "inventory.level_changed",
-  "inventory.purchase_order_updated",
-  "inventory.transfer_updated",
+  "variant.inventory_changed",
+  "purchase_order.updated",
+  "inventory_transfer.updated",
   "customer.created",
   "customer.updated",
   "customer.consent_changed",
@@ -50,7 +50,7 @@ export const EVENT_TOPICS = [
   "review.updated",
   "gift_card.created",
   "gift_card.updated",
-  "gift_card.transaction",
+  "gift_card_transaction.created",
   "object.created",
   "object.updated",
   "object.deleted",
@@ -75,12 +75,12 @@ export const EVENT_RESOURCE_TYPES = [
   "discount",
   "review",
   "gift_card",
-  "transaction",
+  "gift_card_transaction",
   "object",
 ] as const;
 export type EventResourceType = (typeof EVENT_RESOURCE_TYPES)[number];
 
-/** Each topic's resource type (inventory levels are reported per variant). */
+/** Each topic's resource type: a topic's prefix names its resource. */
 export const EVENT_TOPIC_RESOURCE: Readonly<Record<EventTopic, EventResourceType>> = {
   "order.created": "order",
   "order.updated": "order",
@@ -93,9 +93,9 @@ export const EVENT_TOPIC_RESOURCE: Readonly<Record<EventTopic, EventResourceType
   "product.updated": "product",
   "product.deleted": "product",
   "product.publication_changed": "product",
-  "inventory.level_changed": "variant",
-  "inventory.purchase_order_updated": "purchase_order",
-  "inventory.transfer_updated": "inventory_transfer",
+  "variant.inventory_changed": "variant",
+  "purchase_order.updated": "purchase_order",
+  "inventory_transfer.updated": "inventory_transfer",
   "customer.created": "customer",
   "customer.updated": "customer",
   "customer.consent_changed": "customer",
@@ -112,7 +112,7 @@ export const EVENT_TOPIC_RESOURCE: Readonly<Record<EventTopic, EventResourceType
   "review.updated": "review",
   "gift_card.created": "gift_card",
   "gift_card.updated": "gift_card",
-  "gift_card.transaction": "transaction",
+  "gift_card_transaction.created": "gift_card_transaction",
   "object.created": "object",
   "object.updated": "object",
   "object.deleted": "object",
@@ -195,7 +195,7 @@ export const EVENT_FACT_SCHEMAS = {
     channelId: id,
     state: z.enum(["published", "unpublished"]),
   }),
-  "inventory.level_changed": z.object({
+  "variant.inventory_changed": z.object({
     variantId: id,
     productId: nullableId,
     locationId: nullableId,
@@ -208,9 +208,9 @@ export const EVENT_FACT_SCHEMAS = {
    * A purchase order was created, changed (any write advances its revision:
    * edits, ordering, each receipt, cancelling) or a draft was deleted
    * (`status` "deleted"). `previousStatus` is null when it was created.
-   * Receipts also emit `inventory.level_changed` per SKU.
+   * Receipts also emit `variant.inventory_changed` per SKU.
    */
-  "inventory.purchase_order_updated": z.object({
+  "purchase_order.updated": z.object({
     purchaseOrderId: id,
     previousStatus: nullableState,
     status: state,
@@ -219,9 +219,9 @@ export const EVENT_FACT_SCHEMAS = {
   /**
    * A transfer between locations was created, changed (edits, shipping, each
    * receipt, cancelling) or a draft was deleted (`status` "deleted").
-   * Shipping and receiving also emit `inventory.level_changed` per SKU.
+   * Shipping and receiving also emit `variant.inventory_changed` per SKU.
    */
-  "inventory.transfer_updated": z.object({
+  "inventory_transfer.updated": z.object({
     transferId: id,
     previousStatus: nullableState,
     status: state,
@@ -319,7 +319,7 @@ export const EVENT_FACT_SCHEMAS = {
     previousStatus: nullableState,
     status: state,
   }),
-  "gift_card.transaction": z.object({
+  "gift_card_transaction.created": z.object({
     giftCardId: id,
     transactionId: id,
     kind: state,
@@ -387,8 +387,9 @@ export function parseEventFacts<T extends EventTopic>(topic: T, raw: unknown): E
  * so a typo never subscribes to nothing silently.
  */
 export const EVENT_TOPIC_PREFIXES = [
-  "order", "return", "product", "inventory", "customer", "fulfillment",
-  "shipment", "payment", "checkout", "discount", "review", "gift_card", "object",
+  "order", "return", "product", "variant", "purchase_order", "inventory_transfer", "customer",
+  "fulfillment", "shipment", "payment", "checkout", "discount", "review", "gift_card",
+  "gift_card_transaction", "object",
 ] as const;
 export type EventTopicPrefix = (typeof EVENT_TOPIC_PREFIXES)[number];
 export type EventTopicFilter = EventTopic | `${EventTopicPrefix}.*` | "*";

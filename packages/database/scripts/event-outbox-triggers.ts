@@ -28,7 +28,6 @@ import * as schema from "../src/schema";
 import { CUSTOMER_ADDRESS_ID_PREFIX } from "../src/schema/customers";
 import {
   EVENT_TOPIC_RESOURCE,
-  type EventResourceType,
   type EventTopic,
 } from "../../shared/src/events";
 
@@ -208,7 +207,7 @@ const INCOMPLETE = "incomplete";
  */
 function documentRevisionEvents(
   table: "purchase_orders" | "inventory_transfers",
-  topic: Extract<EventTopic, "inventory.purchase_order_updated" | "inventory.transfer_updated">,
+  topic: Extract<EventTopic, "purchase_order.updated" | "inventory_transfer.updated">,
   idFact: string,
 ): EventTriggerSpec[] {
   return [
@@ -519,7 +518,7 @@ const LEGACY_EVENT_TRIGGER_SPECS: readonly EventTriggerSpec[] = [
     table: "inventory_movements",
     event: "insert",
     when: ne(NEW("stock_delta"), int(0)),
-    topic: "inventory.level_changed",
+    topic: "variant.inventory_changed",
     resourceId: NEW("variant_id"),
     facts: [
       ["variantId", NEW("variant_id")],
@@ -536,7 +535,7 @@ const LEGACY_EVENT_TRIGGER_SPECS: readonly EventTriggerSpec[] = [
     table: "inventory_movements",
     event: "delete",
     when: ne(OLD("stock_delta"), int(0)),
-    topic: "inventory.level_changed",
+    topic: "variant.inventory_changed",
     resourceId: OLD("variant_id"),
     facts: [
       ["variantId", OLD("variant_id")],
@@ -549,8 +548,8 @@ const LEGACY_EVENT_TRIGGER_SPECS: readonly EventTriggerSpec[] = [
   },
   // ── purchase orders and transfers (0109) ──────────────────────────────
   // Every write advances `revision` exactly once, so one event per write.
-  ...documentRevisionEvents("purchase_orders", "inventory.purchase_order_updated", "purchaseOrderId"),
-  ...documentRevisionEvents("inventory_transfers", "inventory.transfer_updated", "transferId"),
+  ...documentRevisionEvents("purchase_orders", "purchase_order.updated", "purchaseOrderId"),
+  ...documentRevisionEvents("inventory_transfers", "inventory_transfer.updated", "transferId"),
   // ── customers ─────────────────────────────────────────────────────────
   {
     name: "customers_created",
@@ -696,7 +695,7 @@ const BETA_EVENT_TRIGGER_SPECS: EventTriggerSpec[] = [
   })),
   {
     name: "gift_card_transactions_created", table: "gift_card_transactions", event: "insert",
-    topic: "gift_card.transaction", resourceId: NEW("id"),
+    topic: "gift_card_transaction.created", resourceId: NEW("id"),
     facts: [["giftCardId", NEW("gift_card_id")], ["transactionId", NEW("id")], ["kind", NEW("kind")], ["orderId", NEW("order_id")]],
   },
   ...(["insert", "update", "delete"] as const).map((event): EventTriggerSpec => {
@@ -798,13 +797,40 @@ export const SUPERSEDED_EVENT_TRIGGER_SPECS: ReadonlyArray<{ migration: string; 
 ];
 
 export const EVENT_DEMAND_MIGRATION = "0155_v2_beta_contract";
+
+/**
+ * 0164 renamed four topics so each prefix names its resource; it re-creates
+ * their triggers and rewrites the stored names. Each renamed topic's earlier
+ * name and resource type, as the migrations before it installed them.
+ */
+export const EVENT_TOPIC_RENAME_MIGRATION = "0164_event_topic_names";
+export const EVENT_TOPICS_BEFORE_0164: Readonly<Partial<Record<EventTopic, { topic: string; resourceType: string }>>> = {
+  "variant.inventory_changed": { topic: "inventory.level_changed", resourceType: "variant" },
+  "purchase_order.updated": { topic: "inventory.purchase_order_updated", resourceType: "purchase_order" },
+  "inventory_transfer.updated": { topic: "inventory.transfer_updated", resourceType: "inventory_transfer" },
+  "gift_card_transaction.created": { topic: "gift_card.transaction", resourceType: "transaction" },
+};
+
+/** A spec as rendered: its topic and resource type may be ones a later migration renamed. */
+interface RenderedSpec extends Omit<EventTriggerSpec, "topic"> {
+  topic: string;
+  resourceType: string;
+}
+
+const current = (spec: EventTriggerSpec): RenderedSpec => ({ ...spec, resourceType: EVENT_TOPIC_RESOURCE[spec.topic] });
+const before0164 = (spec: EventTriggerSpec): RenderedSpec => ({ ...current(spec), ...EVENT_TOPICS_BEFORE_0164[spec.topic] });
+const renamedIn0164 = (name: string) => {
+  const spec = EVENT_TRIGGER_SPECS.find((candidate) => candidate.name === name);
+  return spec !== undefined && EVENT_TOPICS_BEFORE_0164[spec.topic] !== undefined;
+};
+
 export const EVENT_TRIGGER_MIGRATIONS: Readonly<Record<string, string>> = Object.fromEntries(
-  EVENT_TRIGGER_SPECS.map((spec) => [spec.name, EVENT_DEMAND_MIGRATION]),
+  EVENT_TRIGGER_SPECS.map((spec) => [spec.name, eventTriggerMigration(spec)]),
 );
 
 /** The migration file name (without `.sql`) that installs the current trigger. */
-export function eventTriggerMigration(_spec: Pick<EventTriggerSpec, "name">): string {
-  return EVENT_DEMAND_MIGRATION;
+export function eventTriggerMigration(spec: Pick<EventTriggerSpec, "name">): string {
+  return renamedIn0164(spec.name) ? EVENT_TOPIC_RENAME_MIGRATION : EVENT_DEMAND_MIGRATION;
 }
 
 // ---------------------------------------------------------------------------
@@ -869,8 +895,8 @@ function factsSql(dialect: Dialect, facts: EventTriggerSpec["facts"]): string {
   return dialect === "sqlite" ? `json_object(${pairs})` : `jsonb_build_object(${pairs})::text`;
 }
 
-function insertSql(dialect: Dialect, spec: EventTriggerSpec): string {
-  const resourceType: EventResourceType = EVENT_TOPIC_RESOURCE[spec.topic];
+function insertSql(dialect: Dialect, spec: RenderedSpec): string {
+  const resourceType = spec.resourceType;
   const columns = ["id", "topic", "resource_type", "resource_id", "data"].map((column) => id(dialect, column)).join(", ");
   return `INSERT INTO ${id(dialect, "event_outbox")} (${columns}) VALUES (${[
     eventIdSql(dialect),
@@ -885,11 +911,11 @@ export function eventTriggerName(spec: Pick<EventTriggerSpec, "name">): string {
   return `${EVENT_OUTBOX_TRIGGER_PREFIX}${spec.name}`;
 }
 
-function demandGuard(spec: EventTriggerSpec): string {
+function demandGuard(spec: RenderedSpec): string {
   return `EXISTS (SELECT 1 FROM event_demand WHERE filter IN ('*', ${literal(`${spec.topic.split(".")[0]}.*`)}, ${literal(spec.topic)}))`;
 }
 
-function sqliteTrigger(spec: EventTriggerSpec, demandGated = false): string {
+function sqliteTrigger(spec: RenderedSpec, demandGated = false): string {
   return [
     `CREATE TRIGGER ${id("sqlite", eventTriggerName(spec))} AFTER ${spec.event.toUpperCase()} ON ${id("sqlite", spec.table)}`,
     ...((spec.when || demandGated) ? [`WHEN ${[spec.when && renderCondition("sqlite", spec.when), demandGated && demandGuard(spec)].filter(Boolean).join(" AND ")}`] : []),
@@ -916,7 +942,7 @@ function conditionHasLookup(condition: EventCondition): boolean {
   }
 }
 
-function postgresTrigger(spec: EventTriggerSpec, demandGated = false): string {
+function postgresTrigger(spec: RenderedSpec, demandGated = false): string {
   const name = eventTriggerName(spec);
   const fn = `scalius_compat.${id("postgres", `${name}_fn`)}`;
   // A guard that reads another table runs inside the function instead.
@@ -1018,7 +1044,7 @@ export function generateEventOutboxTriggers(): GeneratedEventTrigger[] {
     exprColumns(spec.table, spec.resourceId, name, spec.event);
     for (const [, value] of spec.facts) exprColumns(spec.table, value, name, spec.event);
     if (spec.when) conditionColumns(spec.table, spec.when, name, spec.event);
-    return { name, table: spec.table, topic: spec.topic, sqlite: sqliteTrigger(spec, true), postgres: postgresTrigger(spec, true) };
+    return { name, table: spec.table, topic: spec.topic, sqlite: sqliteTrigger(current(spec), true), postgres: postgresTrigger(current(spec), true) };
   });
 }
 
@@ -1026,16 +1052,23 @@ const generated = generateEventOutboxTriggers();
 const postgresByName = new Map(generated.map((trigger) => [trigger.name, trigger.postgres]));
 const normalizeTriggerSql = (sql: string) => sql.trim().replace(/;$/, "").replace(/\s+/g, " ");
 const superseded = [
-  ...SUPERSEDED_EVENT_TRIGGER_SPECS,
+  ...SUPERSEDED_EVENT_TRIGGER_SPECS.map(({ migration, spec }) => ({ migration, spec: before0164(spec), demandGated: false })),
   ...LEGACY_EVENT_TRIGGER_SPECS.map((spec) => ({
     migration: HISTORICAL_EVENT_TRIGGER_MIGRATIONS[spec.name] ?? "0103_order_channel_event_outbox",
-    spec,
+    spec: before0164(spec),
+    demandGated: false,
   })),
-].map(({ migration, spec }) => ({
+  // The demand-gated forms 0155 installed for the topics 0164 renamed.
+  ...EVENT_TRIGGER_SPECS.filter((spec) => renamedIn0164(spec.name)).map((spec) => ({
+    migration: EVENT_DEMAND_MIGRATION,
+    spec: before0164(spec),
+    demandGated: true,
+  })),
+].map(({ migration, spec, demandGated }) => ({
   migration,
   name: eventTriggerName(spec),
-  sqlite: sqliteTrigger(spec),
-  postgres: postgresTrigger(spec),
+  sqlite: sqliteTrigger(spec, demandGated),
+  postgres: postgresTrigger(spec, demandGated),
 }));
 
 /** The superseded SQLite statements (each ends with `;`) a migration installed. */
