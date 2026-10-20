@@ -20,7 +20,12 @@ import {
 } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
 import { ConflictError } from "@scalius/core/errors";
-import { applyInventoryForStatusChange, isOrderInventoryReserveFailure, isStockReservableStatus } from "../inventory";
+import {
+  isInventoryReservationConflictError,
+  isStockReservableStatus,
+  ORDER_RERESERVE_CONFLICT,
+  prepareOrderReReservation,
+} from "../inventory";
 import type { PaymentType, ProcessPaymentParams } from "./types";
 import { GIFT_CARD_TENDER_METHOD, isOnlinePaymentMethod } from "./gateways/registry";
 import {
@@ -471,25 +476,7 @@ export async function processPaymentConfirmed(
     if (initialPaymentStateError) {
       return { success: false, error: initialPaymentStateError, retryable: false };
     }
-    // An open order whose stock was released (before payment events were tied
-    // to the current attempt, a provider cancel released it) holds nothing:
-    // reserve it again before the money lands, so shipping deducts it. The
-    // transition is idempotent on `inventory_action`, so a retried event
-    // reserves once. Units another buyer took cannot be invented: the payment
-    // is still recorded (the money is real) and staff resolve the shortfall.
     let inventoryShortfall = false;
-    if (initialOrder.inventoryAction === "restored" && isStockReservableStatus(initialOrder.status)) {
-      try {
-        await applyInventoryForStatusChange(
-          db,
-          params.orderId,
-          initialOrder.status === OrderStatus.INCOMPLETE ? OrderStatus.PENDING : initialOrder.status,
-        );
-      } catch (error) {
-        if (!isOrderInventoryReserveFailure(error)) throw error;
-        inventoryShortfall = true;
-      }
-    }
     // A balance with no plan is a gift-card remainder (validated above): it
     // has no plan to complete, and the CAS re-proves there is still none.
     const balancePlanExists = paymentType === "balance"
@@ -548,6 +535,7 @@ export async function processPaymentConfirmed(
             paymentStatus: orders.paymentStatus,
             status: orders.status,
             inventoryPool: orders.inventoryPool,
+            inventoryAction: orders.inventoryAction,
             version: orders.version,
             deletedAt: orders.deletedAt,
             currencyCode: orders.currencyCode,
@@ -735,7 +723,41 @@ export async function processPaymentConfirmed(
         }));
       }
 
-      const batchResult = await safeBatch(db, batchStatements) as unknown[];
+      // An open order whose stock was released (before payment events were
+      // tied to the current attempt, a provider cancel released it) holds
+      // nothing: reserve it again in this batch, so the stock and the money
+      // land together and shipping deducts it. The statements are guarded on
+      // `inventory_action = 'restored'`, so a retried event reserves once.
+      // Units another buyer took cannot be invented: the payment is still
+      // recorded (the money is real) and staff resolve the shortfall.
+      inventoryShortfall = false;
+      let reReservation: SQLiteBatchItem[] = [];
+      if (order.inventoryAction === "restored" && isStockReservableStatus(order.status)) {
+        const prepared = await prepareOrderReReservation(db, params.orderId);
+        if (prepared.status === "shortfall") inventoryShortfall = true;
+        else if (prepared.status === "ready") reReservation = prepared.statements;
+      }
+      if (reReservation.length > 0) {
+        // Only with the money: a lost order CAS fails the batch instead of reserving alone.
+        batchStatements.push(buildBatchGuard(db, sql`EXISTS (
+          SELECT 1 FROM orders
+          WHERE id = ${params.orderId}
+            AND version = ${nextVersion}
+            AND paid_amount_minor = ${newPaidAmountMinor}
+            AND payment_status = ${newPaymentStatus}
+        )`, ORDER_RERESERVE_CONFLICT), ...reReservation);
+      }
+
+      let batchResult: unknown[];
+      try {
+        batchResult = await safeBatch(db, batchStatements) as unknown[];
+      } catch (error) {
+        // The stock moved (or another event reserved it) since this attempt read it: read again.
+        if (reReservation.length > 0 && (
+          isBatchGuardError(error, ORDER_RERESERVE_CONFLICT) || isInventoryReservationConflictError(error)
+        )) continue;
+        throw error;
+      }
       const orderUpdate = batchResult[0] as Array<{ id: string }> | undefined;
       const paymentUpdate = batchResult[1] as Array<{ id: string }> | undefined;
       const planUpdate = batchResult[2] as Array<{ id: string }> | undefined;

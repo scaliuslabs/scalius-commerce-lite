@@ -8,9 +8,10 @@
 import { catalogBuyerStateRefreshStatementsForSkus, effectiveLowStockThresholdSql } from "../products";
 import { and, eq, gte, inArray, sql, type SQL } from "drizzle-orm";
 import { inventoryMovements, orders, orderItems, orderReturns, InventoryPool, productVariants } from "@scalius/database/schema";
-import { safeBatch, type Database } from "@scalius/database/client";
+import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
-import { reserveStockBatch, type ReservationBatchItem } from "./reserve";
+import type { BatchItem } from "drizzle-orm/batch";
+import { prepareStockReservationBatch, reserveStockBatch, type ReservationBatchItem } from "./reserve";
 import { checkAndAlertLowStock } from "./alerts";
 import type { ReservationEntry, StockOperationResult } from "./types";
 import { validatePositiveQuantity } from "./validation";
@@ -94,6 +95,8 @@ interface InventoryTransitionResult {
     results: StockOperationResult[];
     error?: string;
 }
+
+type SQLiteBatchItem = BatchItem<"sqlite">;
 
 type InventoryTransitionOrder = {
     id: string;
@@ -498,6 +501,64 @@ async function reserveOrderItems(
         return [...new Set(entries.map((entry) => entry.variantId))];
     }
     return [];
+}
+
+export const ORDER_RERESERVE_CONFLICT = "ORDER_RERESERVE_CONFLICT";
+
+/** The re-reservation of a restored open order, prepared for the caller's own write batch. */
+export type PreparedOrderReReservation =
+    | { status: "ready"; statements: SQLiteBatchItem[] }
+    | { status: "shortfall"; error: string }
+    /** The order holds its stock (or is gone): nothing to reserve. */
+    | { status: "none" };
+
+/**
+ * Reserves a restored open order's stock again and marks it `reserved`, as
+ * statements the caller commits in its own batch (a confirmed payment's CAS
+ * batch): a guard proving the order is still `restored`, the ledger-v2
+ * reservation edges with their stockVersion CAS, then the action flip. So the
+ * stock and the money land together or not at all. Reads only; `shortfall`
+ * when the order's channel no longer has the units. A lost race fails the
+ * batch (the guard or a counter CAS); the caller re-prepares.
+ */
+export async function prepareOrderReReservation(
+    db: Database,
+    orderId: string,
+): Promise<PreparedOrderReReservation> {
+    const order = await db
+        .select({
+            id: orders.id,
+            status: orders.status,
+            inventoryAction: orders.inventoryAction,
+            inventoryPool: orders.inventoryPool,
+            version: orders.version,
+            fulfillmentLocationId: orders.fulfillmentLocationId,
+            salesChannelId: orders.salesChannelId,
+        })
+        .from(orders)
+        .where(eq(orders.id, orderId))
+        .get() as InventoryTransitionOrder | undefined;
+    if (!order || order.inventoryAction !== "restored") return { status: "none" };
+    const statements: SQLiteBatchItem[] = [buildBatchGuard(
+        db,
+        sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.id} = ${order.id} AND ${orders.inventoryAction} = 'restored')`,
+        ORDER_RERESERVE_CONFLICT,
+    )];
+    const entries = await getOrderInventoryEntries(db, order);
+    if (entries.length > 0) {
+        const plan = await prepareStockReservationBatch(
+            db,
+            await buildTransitionReservationBatchItems(db, order, entries),
+            normalizeInventoryPool(order.inventoryPool),
+            { salesChannelId: order.salesChannelId },
+        );
+        if (!plan.success) {
+            return { status: "shortfall", error: plan.error ?? "Insufficient stock" };
+        }
+        statements.push(...plan.statements);
+    }
+    statements.push(buildInventoryActionUpdate(db, order, "reserved"));
+    return { status: "ready", statements };
 }
 
 /**
