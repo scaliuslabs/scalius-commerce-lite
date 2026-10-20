@@ -270,6 +270,14 @@ export const manifest = {
   icon: "assets/icon.svg",
   categories: ["store-design", "content"],
   support: { url: "https://github.com/scaliuslabs/scalius-commerce-lite/issues" },
+  changelogUrl: "https://github.com/scaliuslabs/scalius-commerce-lite/commits/mono-repo/plugins/bazaar",
+  translations: {
+    bn: {
+      name: "বাজার থিম",
+      tagline: "বাই বক্স ও ডিল সারিসহ একটি মার্কেটপ্লেস থিম",
+      description: "একটি মার্কেটপ্লেস স্টোরফ্রন্ট থিম: বিভাগ বাছাইসহ সার্চ-প্রধান হেডার, সব বিভাগের ড্রয়ার ও প্যানেল, হিরো ক্যারোসেল, চার-কার্ডের সারি, ডিল ও বেস্টসেলার সারি, মার্কেটপ্লেস প্রোডাক্ট কার্ড, ফিল্টারসহ ফলাফল পেজ, বাই বক্সসহ প্রোডাক্ট পেজ এবং চার কলামের ফুটার। সেলারস অ্যাপ থাকলে প্রতিটি পণ্যের বিক্রেতা দেখায়। এক ক্লিকে ইমপোর্ট ও মুছে ফেলার মতো ডেমো কনটেন্টও আছে।",
+    },
+  },
   objects: {
     demo_items: {
       name: "Bazaar demo items",

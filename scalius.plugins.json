@@ -10,10 +10,28 @@
       "sha256": "5500113562b7e5d5e817c2d0c24df456ba9be12281b0c3743bd3ec6529365c29"
     },
     {
+      "id": "scalius.bazaar",
+      "version": "1.0.0",
+      "source": "plugins/bazaar",
+      "sha256": "fa39712e0238b7561841c4329b9f08ad282ed55289db7029fb3665fb8bb35229"
+    },
+    {
       "id": "scalius.noor",
       "version": "2.0.0",
       "source": "plugins/noor",
       "sha256": "26446c221d3e1b3530932c7346ccbf4f8601a36601f3073f842950a174c5041d"
+    },
+    {
+      "id": "scalius.sellers",
+      "version": "1.0.0",
+      "source": "plugins/sellers",
+      "sha256": "c0dd0dc5adcbf99df83650d9508f0ed5084d0ee0a195324f6f5de673dfd68f99"
+    },
+    {
+      "id": "scalius.volt",
+      "version": "1.0.0",
+      "source": "plugins/volt",
+      "sha256": "80f75ad5b861ad2e798e0793efad22163266c56d833f17b82ab75ac6afdc250c"
     }
   ]
 }

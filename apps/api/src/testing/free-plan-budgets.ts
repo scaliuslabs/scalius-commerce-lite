@@ -70,8 +70,9 @@ export interface Budget {
 export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
   free: {
     "staff-sign-in": { d1Calls: 6, d1Statements: 6, externalFetches: 0, rowsWritten: 4, rowsRead: 8, fullScans: 0 },
-    // rowsRead counts the two bundled app rows every real store has (Noor, Bangladesh pack).
-    "staff-sign-up": { d1Calls: 5, d1Statements: 5, externalFetches: 0, rowsWritten: 5, rowsRead: 8, fullScans: 17 },
+    // rowsRead grows with the bundled apps a deployment ships (two rows each;
+    // five today: Noor, the Bangladesh pack, Volt, Bazaar, Sellers).
+    "staff-sign-up": { d1Calls: 5, d1Statements: 5, externalFetches: 0, rowsWritten: 5, rowsRead: 14, fullScans: 17 },
     "customer-otp-request": { d1Calls: 16, d1Statements: 17, externalFetches: 0, rowsWritten: 9, rowsRead: 20, fullScans: 2 },
     "customer-otp-verify": { d1Calls: 27, d1Statements: 39, externalFetches: 0, rowsWritten: 18, rowsRead: 30, fullScans: 5 },
     "page-home-miss": { d1Calls: 12, d1Statements: 26, externalFetches: 0, rowsWritten: 1, rowsRead: 130, fullScans: 16 },
@@ -103,8 +104,9 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
   },
   paid: {
     "staff-sign-in": { d1Calls: 6, d1Statements: 6, externalFetches: 0, rowsWritten: 4, rowsRead: 8, fullScans: 0 },
-    // rowsRead counts the two bundled app rows every real store has (Noor, Bangladesh pack).
-    "staff-sign-up": { d1Calls: 5, d1Statements: 5, externalFetches: 0, rowsWritten: 5, rowsRead: 8, fullScans: 17 },
+    // rowsRead grows with the bundled apps a deployment ships (two rows each;
+    // five today: Noor, the Bangladesh pack, Volt, Bazaar, Sellers).
+    "staff-sign-up": { d1Calls: 5, d1Statements: 5, externalFetches: 0, rowsWritten: 5, rowsRead: 14, fullScans: 17 },
     "customer-otp-request": { d1Calls: 16, d1Statements: 17, externalFetches: 0, rowsWritten: 9, rowsRead: 20, fullScans: 2 },
     "customer-otp-verify": { d1Calls: 27, d1Statements: 39, externalFetches: 0, rowsWritten: 18, rowsRead: 30, fullScans: 5 },
     "page-home-miss": { d1Calls: 12, d1Statements: 26, externalFetches: 0, rowsWritten: 1, rowsRead: 130, fullScans: 16 },

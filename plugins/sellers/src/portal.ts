@@ -16,7 +16,7 @@
 import type { PluginContext, PluginRouteRequest, PluginRouteResponse } from "@scalius/plugin-sdk";
 import { createSeller, sellerOfCustomer } from "./accounts";
 import { HANDLE_PATTERN, plain, productSellers, profiles, sellers, splits, payouts, type OrderSplit, type Seller } from "./model";
-import type { PageMoney, PageSeller, PageSplit, SellerPortalProps, SellerShopProps } from "./pages";
+import type { PageMoney, PageSeller, PageSplit, SellerPortalProps, SellerShopProps } from "./page-props";
 
 const BASE = "/apps/scalius.sellers";
 

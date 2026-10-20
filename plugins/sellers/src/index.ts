@@ -60,6 +60,14 @@ export const manifest = {
   icon: "assets/icon.svg",
   categories: ["operations", "finances", "orders"],
   support: { url: "https://github.com/scaliuslabs/scalius-commerce-lite/issues" },
+  changelogUrl: "https://github.com/scaliuslabs/scalius-commerce-lite/commits/mono-repo/plugins/sellers",
+  translations: {
+    bn: {
+      name: "সেলারস",
+      tagline: "বিক্রেতা, অর্ডার ভাগ, কমিশন ও পেআউট",
+      description: "স্টোরকে মার্কেটপ্লেসে বদলে দিন: বিক্রেতার আবেদন ও অনুমোদন, অর্ডার, শিপিং ও পেআউটসহ বিক্রেতা পোর্টাল, প্রোডাক্ট পেজে \"বিক্রেতা\" দেখানো, প্রতিটি অর্ডার বিক্রেতা অনুযায়ী ভাগ, কমিশন এবং অনুমোদনসহ সাপ্তাহিক পেআউট।",
+    },
+  },
   scopes: ["write_orders", "write_fulfillments", "write_products"],
   events: ["order.created", "order.paid", "order.fulfilled", "order.cancelled", "order.refunded"],
   timeline: [{ kind: "split", title: "Marketplace split" }],
