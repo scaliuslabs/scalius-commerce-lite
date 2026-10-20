@@ -19,7 +19,7 @@ import { formatMargin } from "@/components/admin/inventory/cost-fields";
 import { costMargin, costProblem } from "@/lib/api-query-options/inventory-costs";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { formatNumber, useMessages } from "~/i18n";
-import { productMessages } from "~/i18n/products";
+import { productVariantMessages } from "~/i18n/product-variants";
 import type { ProductSkuImageChoice } from "~/lib/api-query-options/products";
 import { isDigitalSku, useProductKindRules } from "../product-kind-rules";
 import type { DraftIssueField, DraftVariant } from "./option-matrix-editor-model";
@@ -63,7 +63,7 @@ export function InventoryQuantityInput({ readOnly = false, value, committed, onC
   /** Units on their way, shown under the quantity ("5 incoming") when there are any. */
   incoming?: IncomingUnits;
 }) {
-  const t = useMessages(productMessages);
+  const t = useMessages(productVariantMessages);
   // Orders reserve from the SKU as a whole, wherever its units are.
   const available = Math.max(0, value + (elsewhere?.units ?? 0) - committed);
   const incomingUnits = (incoming?.purchaseOrders ?? 0) + (incoming?.transfers ?? 0);
@@ -108,7 +108,7 @@ export function VariantImagePicker({ readOnly = false, value, images, onChange, 
   allowNoChange?: boolean;
   invalid?: boolean;
 }) {
-  const t = useMessages(productMessages);
+  const t = useMessages(productVariantMessages);
   const selectedIndex = images.findIndex((image) => image.id === value);
   const selected = images[selectedIndex];
   // Every photo is named by its position and description, so similar photos can be told apart.
@@ -211,7 +211,7 @@ function DiscountInput({ variant, name, onChange }: {
   name: string;
   onChange: (patch: Partial<DraftVariant>) => void;
 }) {
-  const t = useMessages(productMessages);
+  const t = useMessages(productVariantMessages);
   const { code: currencyCode } = useCurrency();
   const amount = variant.discountType === "flat" ? variant.discountAmount ?? 0 : variant.discountPercentage ?? 0;
   const [mode, setMode] = React.useState<"none" | "percentage" | "flat">(
@@ -269,7 +269,7 @@ export interface SkuCostField {
 
 /** Cost per item, with the profit and margin it gives underneath. */
 function CostField({ cost, name, readOnly = false }: { cost: SkuCostField; name: string; readOnly?: boolean }) {
-  const t = useMessages(productMessages);
+  const t = useMessages(productVariantMessages);
   const { code, fmt } = useCurrency();
   const problem = costProblem(cost.value);
   const result = costMargin(cost.customerPays, cost.value, getDecimalPlaces(code));
@@ -299,7 +299,7 @@ export function AdvancedSkuFields({ readOnly = false, variant, name, issueFor, o
   /** Cost per item, where the page edits costs (not for gift cards). */
   cost?: SkuCostField | null;
 }) {
-  const t = useMessages(productMessages);
+  const t = useMessages(productVariantMessages);
   const weightUnit = useWeightUnit();
   const { fmt } = useCurrency();
   const isUnsavedSku = variant.id.startsWith("draft_");

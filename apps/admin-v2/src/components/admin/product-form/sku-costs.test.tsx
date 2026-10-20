@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { translate } from "~/i18n";
-import { productMessages } from "~/i18n/products";
+import { productVariantMessages } from "~/i18n/product-variants";
 
 const mocks = vi.hoisted(() => ({
   putCosts: vi.fn(),
@@ -154,7 +154,7 @@ describe("useSkuCostDraft", () => {
     await act(async () => {
       await store.save("prod_1").catch((error: unknown) => { failure = error; });
     });
-    expect((failure as Error).message).toBe(translate(productMessages, "costChanged"));
+    expect((failure as Error).message).toBe(translate(productVariantMessages, "costChanged"));
     // The cost a receipt averaged meanwhile is shown; the other typed cost stays to save again.
     expect(store.costOf("var_a")).toBe(111);
     expect(store.isDirty(["var_a"])).toBe(false);
@@ -171,7 +171,7 @@ describe("useSkuCostDraft", () => {
     await act(async () => {
       await store.save("prod_1").catch((error: unknown) => { failure = error; });
     });
-    expect((failure as Error).message).toContain(translate(productMessages, "costPerItem"));
+    expect((failure as Error).message).toContain(translate(productVariantMessages, "costPerItem"));
     expect(store.isDirty(["var_a"])).toBe(true);
   });
 

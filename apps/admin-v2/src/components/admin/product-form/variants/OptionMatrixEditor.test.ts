@@ -1,5 +1,5 @@
 import { translate } from "~/i18n";
-import { productMessages, type ProductMessageKey } from "~/i18n/products";
+import { productVariantMessages, type ProductVariantMessageKey } from "~/i18n/product-variants";
 import { describe, expect, it } from "vitest";
 import {
   combinationKey,
@@ -54,7 +54,7 @@ const variant = (
   discountAmount: 0,
 });
 
-const issue = (key: ProductMessageKey, vars?: Record<string, number>) => translate(productMessages, key, vars);
+const issue = (key: ProductVariantMessageKey, vars?: Record<string, number>) => translate(productVariantMessages, key, vars);
 
 describe("option matrix editor model", () => {
   it("accepts the persisted internal Code 128 barcode type", () => {

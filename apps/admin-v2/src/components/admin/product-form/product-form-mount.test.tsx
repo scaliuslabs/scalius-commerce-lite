@@ -35,7 +35,7 @@ vi.mock("@tanstack/react-router", () => ({
 import { PermissionProvider } from "~/contexts/PermissionContext";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { translate } from "~/i18n";
-import { productMessages } from "~/i18n/products";
+import { productVariantMessages } from "~/i18n/product-variants";
 import { resourceMessages } from "~/i18n/resource";
 import { ProductForm } from "~/components/admin/ProductForm";
 import { useSaveScope } from "~/components/admin/shared/SaveBar";
@@ -306,7 +306,7 @@ describe("the product form's ids", () => {
 });
 
 describe("variant prices on a new product", () => {
-  const p = (key: string, values?: Record<string, string | number>) => translate(productMessages, key as never, values as never);
+  const p = (key: string, values?: Record<string, string | number>) => translate(productVariantMessages, key as never, values as never);
   const input = (label: string) => container.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
   const settle = async () => {
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });

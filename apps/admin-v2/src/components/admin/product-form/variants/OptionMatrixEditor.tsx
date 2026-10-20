@@ -31,7 +31,7 @@ import { SaveNotCompleted } from "../../shared/SaveBar";
 import { ConfirmDialog } from "../../shared/ConfirmDialog";
 import { readSkuTaken } from "../hooks/useProductSubmit";
 import { formatNumber, useMessages } from "~/i18n";
-import { productMessages } from "~/i18n/products";
+import { productVariantMessages } from "~/i18n/product-variants";
 import { digitalMessages } from "~/i18n/digital";
 import type {
   ProductSkuImageChoice,
@@ -157,7 +157,7 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
   onRevisionConflict,
   fulfilmentMode = "physical",
 }, ref) {
-  const t = useMessages(productMessages);
+  const t = useMessages(productVariantMessages);
   const weightUnit = useWeightUnit();
   const d = useMessages(digitalMessages);
   const queryClient = useQueryClient();
@@ -970,7 +970,7 @@ function OptionRow({ readOnly, option, index, canMoveUp, canMoveDown, onMove, on
   onRemove: () => void;
   onRemoveValue: (value: DraftOption["values"][number]) => void;
 }) {
-  const t = useMessages(productMessages);
+  const t = useMessages(productVariantMessages);
   const [valueInput, setValueInput] = React.useState("");
   const [duplicate, setDuplicate] = React.useState<string | null>(null);
   const optionLabel = option.name.trim() || t("optionNumber", { number: index + 1 });

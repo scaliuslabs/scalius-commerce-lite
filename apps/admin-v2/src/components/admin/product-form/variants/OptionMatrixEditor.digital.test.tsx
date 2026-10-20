@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProductVariant } from "@/lib/api-query-options/products";
 import { translate } from "~/i18n";
 import { digitalMessages } from "~/i18n/digital";
-import { productMessages } from "~/i18n/products";
+import { productVariantMessages } from "~/i18n/product-variants";
 import { ProductEditorSlotsContext } from "../editor-slots";
 import { ProductKindRulesContext, productKindRules } from "../product-kind-rules";
 import type { ProductFulfilmentMode } from "../fulfilment-mode";
@@ -42,7 +42,7 @@ vi.mock("@tanstack/react-router", () => ({
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const d = (key: keyof (typeof digitalMessages)["en"], vars?: Record<string, string | number>) => translate(digitalMessages, key, vars);
-const p = (key: keyof (typeof productMessages)["en"], vars?: Record<string, string | number>) => translate(productMessages, key, vars);
+const p = (key: keyof (typeof productVariantMessages)["en"], vars?: Record<string, string | number>) => translate(productVariantMessages, key, vars);
 
 const defaultSku = {
   id: "var_default",

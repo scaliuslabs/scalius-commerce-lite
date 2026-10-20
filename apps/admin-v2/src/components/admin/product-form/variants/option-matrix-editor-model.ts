@@ -19,14 +19,14 @@ import type {
   ProductVariant,
 } from "../../../../lib/api-query-options/products";
 import { formatNumber, translate } from "../../../../i18n";
-import { productMessages, type ProductMessageKey } from "../../../../i18n/products";
+import { productVariantMessages, type ProductVariantMessageKey } from "../../../../i18n/product-variants";
 import type { WeightUnit } from "@scalius/shared/store-defaults";
 import { formatWeight } from "./weight-format";
 import type { ProductFulfilmentMode } from "../fulfilment-mode";
 
 /** Merchant-facing reason the draft can't be saved yet; limits read in the dashboard's digits. */
-const issue = (key: ProductMessageKey, vars?: Record<string, string | number>) =>
-  translate(productMessages, key, vars?.max === undefined ? vars : { ...vars, max: formatNumber(Number(vars.max)) });
+const issue = (key: ProductVariantMessageKey, vars?: Record<string, string | number>) =>
+  translate(productVariantMessages, key, vars?.max === undefined ? vars : { ...vars, max: formatNumber(Number(vars.max)) });
 
 export type DraftOption = {
   id: string;
@@ -70,7 +70,7 @@ export interface DraftIssue {
 /** Fields shown only after a row is expanded ("More fields"). */
 export const ADVANCED_FIELDS: ReadonlySet<DraftIssueField> = new Set(["sku", "discount", "barcode", "weight", "cost"]);
 
-function checkNumber(value: number | null, max: number, integer: boolean): ProductMessageKey | null {
+function checkNumber(value: number | null, max: number, integer: boolean): ProductVariantMessageKey | null {
   if (value === null) return null;
   if (!Number.isFinite(value)) return "issueNotANumber";
   if (value < 0 || (integer && !Number.isInteger(value))) return integer ? "issueQuantityWhole" : "issuePriceNegative";
@@ -89,7 +89,7 @@ function skuFieldIssue(sku: SimpleSkuDraft & Partial<DraftVariant>, requirePosit
   if (sku.sku.trim().length < 3) return { message: issue("issueSkuShort"), field: "sku" };
   const weightProblem = checkNumber(sku.weight, MAX_SKU_WEIGHT_GRAMS, false);
   // The field shows the store's unit, so the limit is said in it ("1,000 kg").
-  if (weightProblem) return { message: translate(productMessages, weightProblem, { max: formatWeight(MAX_SKU_WEIGHT_GRAMS, weightUnit) }), field: "weight" };
+  if (weightProblem) return { message: translate(productVariantMessages, weightProblem, { max: formatWeight(MAX_SKU_WEIGHT_GRAMS, weightUnit) }), field: "weight" };
   const barcodeProblem = sku.barcode ? getBarcodeValidationError(sku.barcode, sku.barcodeType) : null;
   if (barcodeProblem) return { message: issue("issueBarcodeInvalid"), field: "barcode" };
   return null;
@@ -476,7 +476,7 @@ export function getOptionMatrixIssue(
   combinationsPending: boolean,
   context: MatrixIssueContext = {},
 ): DraftIssue | null {
-  const at = (key: ProductMessageKey, vars?: Record<string, string | number>, variantId?: string, field?: DraftIssueField): DraftIssue =>
+  const at = (key: ProductVariantMessageKey, vars?: Record<string, string | number>, variantId?: string, field?: DraftIssueField): DraftIssue =>
     ({ message: issue(key, vars), ...(variantId ? { variantId } : {}), ...(field ? { field } : {}) });
   if (options.length === 0) {
     return variants.length > 0 || combinationsPending ? at("issueKeepOneOption") : null;

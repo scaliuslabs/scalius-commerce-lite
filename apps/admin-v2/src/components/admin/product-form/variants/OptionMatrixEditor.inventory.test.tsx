@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProductVariant } from "@/lib/api-query-options/products";
 import { translate } from "~/i18n";
-import { productMessages } from "~/i18n/products";
+import { productVariantMessages } from "~/i18n/product-variants";
 import { OptionMatrixEditor } from "./OptionMatrixEditor";
 import { PermissionProvider } from "~/contexts/PermissionContext";
 import type { OptionMatrixEditorHandle, ProductCreateComposition } from "./option-matrix-editor-model";
@@ -85,7 +85,7 @@ describe("OptionMatrixEditor inventory for products without options", () => {
   }
 
   const trackCheckbox = () => host.querySelector<HTMLButtonElement>('button[role="checkbox"]')!;
-  const quantityLabel = translate(productMessages, "quantity");
+  const quantityLabel = translate(productVariantMessages, "quantity");
   const quantityInput = () => host.querySelector<HTMLInputElement>(`input[aria-label="${quantityLabel}"]`);
 
   it("shows a simple viewer's saved quantity, SKU, barcode and weight as facts", async () => {
@@ -114,7 +114,7 @@ describe("OptionMatrixEditor inventory for products without options", () => {
       />,
     );
 
-    expect(host.textContent).toContain(translate(productMessages, "inventory"));
+    expect(host.textContent).toContain(translate(productVariantMessages, "inventory"));
     expect(trackCheckbox().getAttribute("aria-checked")).toBe("true");
     expect(onDraftChange).toHaveBeenLastCalledWith({ defaultSku: { trackInventory: true, stock: 0 } });
 
@@ -130,7 +130,7 @@ describe("OptionMatrixEditor inventory for products without options", () => {
   });
 
   it("says quietly that an active product with 0 in stock shows as Sold out", async () => {
-    const note = translate(productMessages, "soldOutWhenActive");
+    const note = translate(productVariantMessages, "soldOutWhenActive");
     await render(<OptionMatrixEditor requirePositivePrice productName="Mug" productPrice={250} images={[]} />);
     expect(host.textContent).toContain(note);
     await act(async () => {
@@ -146,7 +146,7 @@ describe("OptionMatrixEditor inventory for products without options", () => {
     expect(host.textContent).not.toContain(note);
 
     // With variants: only when every one of them has nothing in stock.
-    const allNote = translate(productMessages, "soldOutWhenActiveVariants");
+    const allNote = translate(productVariantMessages, "soldOutWhenActiveVariants");
     const sizeOption = {
       id: "popt_size", name: "Size", position: 0, standardMapping: "size" as const,
       values: [{ id: "pval_s", value: "S", position: 0 }, { id: "pval_m", value: "M", position: 1 }],
@@ -238,10 +238,10 @@ describe("OptionMatrixEditor inventory for products without options", () => {
         aggregateRevision={3}
       />,
     );
-    expect(host.textContent).not.toContain(translate(productMessages, "trackQuantity"));
+    expect(host.textContent).not.toContain(translate(productVariantMessages, "trackQuantity"));
 
     const labelFor = (key: "priceFor" | "quantityFor") =>
-      `input[aria-label="${translate(productMessages, key, { name: "S" })}"]`;
+      `input[aria-label="${translate(productVariantMessages, key, { name: "S" })}"]`;
     const priceInput = host.querySelector<HTMLInputElement>(labelFor("priceFor"))!;
     await act(async () => {
       setInput(priceInput, "300");
@@ -299,16 +299,16 @@ describe("OptionMatrixEditor inventory for products without options", () => {
       />,
     );
 
-    const removeM = host.querySelector<HTMLButtonElement>(`button[aria-label="${translate(productMessages, "removeValue", { value: "M" })}"]`)!;
+    const removeM = host.querySelector<HTMLButtonElement>(`button[aria-label="${translate(productVariantMessages, "removeValue", { value: "M" })}"]`)!;
     await act(async () => removeM.click());
     const dialog = document.querySelector('[role="alertdialog"]');
-    expect(dialog?.textContent).toContain(translate(productMessages, "removeValueTitle", { value: "M" }));
+    expect(dialog?.textContent).toContain(translate(productVariantMessages, "removeValueTitle", { value: "M" }));
     expect(dialog?.textContent).toContain("M (5)");
     // Nothing changes until the merchant confirms.
     expect(host.textContent).toContain("MUG-M");
 
     const confirm = Array.from(document.querySelectorAll("button"))
-      .find((button) => button.textContent?.trim() === translate(productMessages, "removeAnyway"))!;
+      .find((button) => button.textContent?.trim() === translate(productVariantMessages, "removeAnyway"))!;
     await act(async () => confirm.click());
     await act(async () => ref.current!.save());
     const rows = (mocks.putApiV1AdminProductsByIdOptionsMatrix.mock.lastCall?.[0] as {
@@ -319,7 +319,7 @@ describe("OptionMatrixEditor inventory for products without options", () => {
 
   describe("with several locations", () => {
     const settle = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
-    const atMain = translate(productMessages, "quantityAt", { location: "Main location" });
+    const atMain = translate(productVariantMessages, "quantityAt", { location: "Main location" });
 
     beforeEach(() => {
       mocks.getApiV1AdminInventoryLocations.mockResolvedValue({
@@ -406,7 +406,7 @@ describe("OptionMatrixEditor inventory for products without options", () => {
       await settle();
 
       expect(host.textContent).toContain(atMain);
-      const input = host.querySelector<HTMLInputElement>(`input[aria-label="${translate(productMessages, "quantityFor", { name: "S" })}"]`)!;
+      const input = host.querySelector<HTMLInputElement>(`input[aria-label="${translate(productVariantMessages, "quantityFor", { name: "S" })}"]`)!;
       expect(input.value).toBe("3");
       await act(async () => {
         setInput(input, "1");
@@ -446,8 +446,8 @@ describe("OptionMatrixEditor inventory for products without options", () => {
       expect(host.querySelector(`input[aria-label="${atMain}"]`)).toBeNull();
       // One read for the units on their way (open purchase orders, transfers in transit).
       expect(mocks.getApiV1AdminInventoryLevels).toHaveBeenCalledWith({ query: { productId: "prod_1" } });
-      const incoming = Array.from(host.querySelectorAll("p")).find((line) => line.textContent === translate(productMessages, "incomingCount", { count: 5 }));
-      expect(incoming?.getAttribute("title")).toBe(translate(productMessages, "incomingDetail", { orders: 3, transfers: 2 }));
+      const incoming = Array.from(host.querySelectorAll("p")).find((line) => line.textContent === translate(productVariantMessages, "incomingCount", { count: 5 }));
+      expect(incoming?.getAttribute("title")).toBe(translate(productVariantMessages, "incomingDetail", { orders: 3, transfers: 2 }));
     });
   });
 });

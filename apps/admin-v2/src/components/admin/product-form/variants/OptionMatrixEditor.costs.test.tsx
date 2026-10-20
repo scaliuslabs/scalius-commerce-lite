@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProductVariant } from "@/lib/api-query-options/products";
 import { translate } from "~/i18n";
-import { productMessages } from "~/i18n/products";
+import { productVariantMessages } from "~/i18n/product-variants";
 import { OptionMatrixEditor } from "./OptionMatrixEditor";
 import type { OptionMatrixEditorHandle } from "./option-matrix-editor-model";
 import { SkuCostProvider, useSkuCostDraft, type SkuCostStore } from "../sku-costs";
@@ -148,7 +148,7 @@ describe("OptionMatrixEditor cost per item", () => {
     const variants = [sized("var_s", "pval_s", "S", 10), sized("var_m", "pval_m", "M", 80)];
     const page = (readOnly: boolean) => <Page readOnly={readOnly} variants={variants} options={[sizeOption]} editorRef={ref} onDirtyChange={onDirtyChange} onNavigationDirtyChange={onNavigationDirtyChange} />;
     await render(page(false));
-    const price = host.querySelector<HTMLInputElement>(`input[aria-label="${translate(productMessages, "priceFor", { name: "S" })}"]`)!;
+    const price = host.querySelector<HTMLInputElement>(`input[aria-label="${translate(productVariantMessages, "priceFor", { name: "S" })}"]`)!;
     await act(async () => {
       setInput(price, "999");
       price.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
@@ -160,9 +160,9 @@ describe("OptionMatrixEditor cost per item", () => {
     expect(row.textContent).toContain("৳250");
     expect(row.textContent).not.toContain("৳999");
     expect(host.querySelector("input:not([type=search]), [role=checkbox]")).toBeNull();
-    const expand = row.querySelector<HTMLButtonElement>(`button[aria-label="${translate(productMessages, "moreFieldsFor", { name: "S" })}"]`)!;
+    const expand = row.querySelector<HTMLButtonElement>(`button[aria-label="${translate(productVariantMessages, "moreFieldsFor", { name: "S" })}"]`)!;
     await act(async () => expand.click());
-    const cost = [...row.querySelectorAll('[data-slot="field"]')].find((field) => field.querySelector('[data-slot="field-label"]')?.textContent === translate(productMessages, "costPerItem"))!;
+    const cost = [...row.querySelectorAll('[data-slot="field"]')].find((field) => field.querySelector('[data-slot="field-label"]')?.textContent === translate(productVariantMessages, "costPerItem"))!;
     expect(cost.querySelector('[data-slot="field-control"]')?.textContent).toBe("৳10");
     expect(store.costOf("var_s")).toBe(777); // The route store survived the matrix remount.
     expect(store.costOf("var_s", true)).toBe(10);
@@ -177,7 +177,7 @@ describe("OptionMatrixEditor cost per item", () => {
     expect(onNavigationDirtyChange).toHaveBeenLastCalledWith(true);
     expect(ref.current!.composition()).not.toBeNull();
     await render(page(true), false);
-    expect(host.textContent).not.toContain(translate(productMessages, "costPerItem"));
+    expect(host.textContent).not.toContain(translate(productVariantMessages, "costPerItem"));
     expect(host.textContent).not.toContain("96.0%");
   });
 
@@ -208,16 +208,16 @@ describe("OptionMatrixEditor cost per item", () => {
       <Page variants={[sized("var_s", "pval_s", "S", null), sized("var_m", "pval_m", "M", 80)]} options={[sizeOption]} editorRef={ref} onSaved={onSaved} />,
     );
     // M already has a cost: its margin shows under its price (250 − 80 = 68% of 250).
-    expect(host.textContent).toContain(translate(productMessages, "marginShort", { margin: "68.0%" }));
+    expect(host.textContent).toContain(translate(productVariantMessages, "marginShort", { margin: "68.0%" }));
 
-    const expand = host.querySelector<HTMLButtonElement>(`button[aria-label="${translate(productMessages, "moreFieldsFor", { name: "S" })}"]`)!;
+    const expand = host.querySelector<HTMLButtonElement>(`button[aria-label="${translate(productVariantMessages, "moreFieldsFor", { name: "S" })}"]`)!;
     await act(async () => expand.click());
-    const cost = host.querySelector<HTMLInputElement>(`input[aria-label="${translate(productMessages, "costFor", { name: "S" })}"]`)!;
+    const cost = host.querySelector<HTMLInputElement>(`input[aria-label="${translate(productVariantMessages, "costFor", { name: "S" })}"]`)!;
     expect(cost.value).toBe("");
     await act(async () => setInput(cost, "55"));
-    expect(host.textContent).toContain(translate(productMessages, "profitAndMargin", { profit: "৳195", margin: "78.0%" }));
+    expect(host.textContent).toContain(translate(productVariantMessages, "profitAndMargin", { profit: "৳195", margin: "78.0%" }));
 
-    const price = host.querySelector<HTMLInputElement>(`input[aria-label="${translate(productMessages, "priceFor", { name: "M" })}"]`)!;
+    const price = host.querySelector<HTMLInputElement>(`input[aria-label="${translate(productVariantMessages, "priceFor", { name: "M" })}"]`)!;
     await act(async () => {
       setInput(price, "300");
       price.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
@@ -244,11 +244,11 @@ describe("OptionMatrixEditor cost per item", () => {
     await act(async () => {
       await ref.current!.save().catch((error: unknown) => { failure = error; });
     });
-    expect((failure as Error).message).toBe(`S: ${translate(productMessages, "issueCostInvalid")}`);
+    expect((failure as Error).message).toBe(`S: ${translate(productVariantMessages, "issueCostInvalid")}`);
     expect(mocks.putApiV1AdminProductsByIdOptionsMatrix).not.toHaveBeenCalled();
     expect(mocks.putApiV1AdminInventoryCosts).not.toHaveBeenCalled();
     // The row opens on the field that needs the change.
-    expect(host.querySelector(`input[aria-label="${translate(productMessages, "costFor", { name: "S" })}"]`)).not.toBeNull();
+    expect(host.querySelector(`input[aria-label="${translate(productVariantMessages, "costFor", { name: "S" })}"]`)).not.toBeNull();
   });
 
   it("offers one cost for the selected variants", async () => {
@@ -262,7 +262,7 @@ describe("OptionMatrixEditor cost per item", () => {
       more.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 }));
       more.click();
     });
-    const item = Array.from(document.querySelectorAll('[role="menuitem"]')).find((element) => element.textContent === translate(productMessages, "editCosts"));
+    const item = Array.from(document.querySelectorAll('[role="menuitem"]')).find((element) => element.textContent === translate(productVariantMessages, "editCosts"));
     expect(item).toBeDefined();
   });
 });

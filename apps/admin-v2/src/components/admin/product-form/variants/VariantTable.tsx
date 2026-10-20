@@ -27,7 +27,7 @@ import { cn } from "@scalius/shared/utils";
 import { isWholeUnitIncrement, resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { useCurrency } from "@/hooks/use-currency";
 import { formatNumber, useMessages } from "~/i18n";
-import { productMessages } from "~/i18n/products";
+import { productVariantMessages } from "~/i18n/product-variants";
 import { customFieldMessages } from "~/i18n/custom-fields";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { usePermissions } from "~/contexts/PermissionContext";
@@ -178,7 +178,7 @@ function moveBetweenRows(event: React.KeyboardEvent<HTMLElement>, onEdge?: (cell
 
 export function VariantTable(props: VariantTableProps) {
   const { options, variants, missingCombinations, readOnly = false } = props;
-  const t = useMessages(productMessages);
+  const t = useMessages(productVariantMessages);
   const r = useMessages(resourceMessages);
   const navigate = useNavigate();
   const currency = useCurrency();
@@ -625,7 +625,7 @@ const VariantRow = React.memo(function VariantRow({
   printable, customData, layout, onChange, onCostChange, onSelect, onToggleExpand, onRemove, onPrint, onCustomData, appActions, onAppAction,
 }: VariantRowProps) {
   const kindColumn = layout.kind;
-  const t = useMessages(productMessages);
+  const t = useMessages(productVariantMessages);
   const r = useMessages(resourceMessages);
   const cf = useMessages(customFieldMessages);
   const errorOf = (field: DraftIssue["field"]) => (issue && issue.field === field ? issue.message : undefined);
@@ -795,7 +795,7 @@ function sameGroupRow(previous: GroupRowProps, next: GroupRowProps): boolean {
 
 const GroupRow = React.memo(function GroupRow({ readOnly, group, open, repeated, images, money, selectedCount, layout, onToggle, onSelect, onChangeMany }: GroupRowProps) {
   const kindColumn = layout.kind;
-  const t = useMessages(productMessages);
+  const t = useMessages(productVariantMessages);
   const ids = group.variants.map((variant) => variant.id);
   const kindRules = useProductKindRules();
   // Digital rows' stock is their keys or files: a group quantity never writes it.
@@ -886,7 +886,7 @@ function KindSelect({ value, label, onChange, readOnly = false }: {
   label: string;
   onChange: (kind: EditableKind) => void;
 }) {
-  const t = useMessages(productMessages);
+  const t = useMessages(productVariantMessages);
   if (readOnly) return <p className="py-2 text-body"><span className="sr-only">{label}: </span>{t(value === undefined ? "mixedValues" : value === "service" ? "fulfilmentServiceShort" : "fulfilmentPhysicalShort")}</p>;
   return (
     <SearchableSelect
@@ -920,7 +920,7 @@ function BulkBar({ count, allSelected, printableIds, printingDisabled, canEditCo
   onPrint: (ids: readonly string[]) => void;
   onRemove: () => void;
 }) {
-  const t = useMessages(productMessages);
+  const t = useMessages(productVariantMessages);
   const r = useMessages(resourceMessages);
   const { fulfilmentMode } = useProductKindRules();
   const canAdjustStock = usePermissions().hasPermission(PERMISSIONS.PRODUCTS_ADJUST_STOCK);
@@ -978,7 +978,7 @@ function BulkPanelRow({ panel, options, images, money, productName, selectedVari
   onCostApply: (cost: number) => void;
   onCancel: () => void;
 }) {
-  const t = useMessages(productMessages);
+  const t = useMessages(productVariantMessages);
   const r = useMessages(resourceMessages);
   const [price, setPrice] = React.useState<number | null>(null);
   const [cost, setCost] = React.useState<number | null>(null);
@@ -1076,7 +1076,7 @@ function NotForSaleList({ readOnly, combinations, valueLabel, onRestore, onResto
   onRestore: (valueIds: string[]) => void;
   onRestoreAll: () => void;
 }) {
-  const t = useMessages(productMessages);
+  const t = useMessages(productVariantMessages);
   return (
     <div className="border-y">
       {!readOnly ? <div className="flex items-center justify-between gap-2 border-b bg-muted/50 px-2 py-2">

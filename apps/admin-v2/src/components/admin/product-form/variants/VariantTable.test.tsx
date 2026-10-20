@@ -5,7 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { formatNumber, setLocale, translate } from "~/i18n";
-import { productMessages, type ProductMessageKey } from "~/i18n/products";
+import { productVariantMessages, type ProductVariantMessageKey } from "~/i18n/product-variants";
 import { resourceMessages } from "~/i18n/resource";
 import type { DraftIssue, DraftOption, DraftVariant } from "./option-matrix-editor-model";
 
@@ -34,7 +34,7 @@ const variant = (id: string, size: string, color: string, price: number, extra: 
   trackInventory: true, weight: null, barcode: null, barcodeType: null, discountType: "percentage",
   discountPercentage: null, discountAmount: null, ...extra,
 });
-const label = (key: ProductMessageKey, vars?: Record<string, string | number>) => translate(productMessages, key, vars);
+const label = (key: ProductVariantMessageKey, vars?: Record<string, string | number>) => translate(productVariantMessages, key, vars);
 
 let latest: DraftVariant[] = [];
 function Harness({ readOnly = false, initial, missing = [], reveal = null, issue = null, fulfilmentColumn = false, opts = options }: {
