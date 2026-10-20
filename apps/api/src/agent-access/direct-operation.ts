@@ -1,5 +1,8 @@
-import { AGENT_OPERATIONS } from "../generated/agent-operations.gen";
-import type { AgentOperationManifestEntry } from "../openapi/agent-operation-manifest";
+// Route-to-operation lookups on the hot admin and plugin paths. They read the
+// small policy index only; the full manifest (schemas, prose) loads when an
+// agent describes or calls an operation.
+import { AGENT_OPERATION_POLICIES, AGENT_OPERATION_POLICIES_BY_ID } from "../generated/agent-operation-policies.gen";
+import type { AgentOperationPolicy } from "../openapi/agent-operation-manifest";
 
 function matchPathTemplate(template: string, pathname: string): boolean {
   const templateSegments = template.split("/").filter(Boolean);
@@ -20,9 +23,9 @@ function pathTemplateSpecificity(template: string): number {
 export function resolveDirectAgentOperation(
   method: string,
   pathname: string,
-): AgentOperationManifestEntry | null {
+): AgentOperationPolicy | null {
   const normalizedMethod = method.toUpperCase();
-  const matches = AGENT_OPERATIONS.filter((operation) =>
+  const matches = AGENT_OPERATION_POLICIES.filter((operation) =>
     operation.method === normalizedMethod && matchPathTemplate(operation.pathTemplate, pathname),
   );
   if (matches.length === 0) return null;
@@ -37,9 +40,8 @@ export function resolveDirectAgentOperation(
 
 export function resolveAgentOperationById(
   operationId: string,
-): AgentOperationManifestEntry | null {
-  const matches = AGENT_OPERATIONS.filter((operation) =>
-    operation.operationId === operationId,
-  );
-  return matches.length === 1 ? (matches[0] ?? null) : null;
+): AgentOperationPolicy | null {
+  return Object.hasOwn(AGENT_OPERATION_POLICIES_BY_ID, operationId)
+    ? AGENT_OPERATION_POLICIES_BY_ID[operationId] ?? null
+    : null;
 }

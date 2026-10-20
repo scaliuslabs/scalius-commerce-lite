@@ -1170,3 +1170,98 @@ export const AGENT_OPERATIONS_BY_ID: Readonly<Record<string, AgentOperationManif
 
 export const AGENT_WORKFLOW_CATALOG = data.workflowCatalog;
 `;
+
+/**
+ * What only describes an operation to an agent (its prose and schemas), never
+ * how it is authorized, gated or bounded. The policy index leaves it out but
+ * keeps the one-line `summary`, which names a gated change in its approval.
+ */
+export const AGENT_OPERATION_CONTENT_FIELDS = [
+  "description",
+  "tags",
+  "when",
+  "exclusionReason",
+  "inputSchema",
+  "outputSchema",
+] as const;
+
+/**
+ * An operation's policy: identity, route, summary, risk, scopes, stability,
+ * confirmation and bounds. Hot paths (plugin authority, admin agent checks,
+ * idempotent replay) read only this, from the small generated policy index
+ * (`generated/agent-operation-policies.gen.ts`); the full manifest with its
+ * schemas loads when an agent describes or calls an operation.
+ */
+export type AgentOperationPolicy = Omit<
+  AgentOperationManifestEntry,
+  (typeof AGENT_OPERATION_CONTENT_FIELDS)[number]
+>;
+
+/** The value most operations have, left out of their policy row. Fixed, so regeneration is stable. */
+export const AGENT_OPERATION_POLICY_DEFAULTS = {
+  surface: "dashboard",
+  exposure: "execute",
+  stability: "beta",
+  principals: ["admin"],
+  openWorld: false,
+  idempotency: "none",
+  revision: "none",
+  batch: "forbidden",
+  transport: "json",
+  maxResponseBytes: 65536,
+  maxRequestBytes: 1048576,
+  sensitiveOutput: false,
+  oneTimeSecretOutput: false,
+  requiredClientAction: null,
+  artifactOutput: null,
+  continuationOutput: null,
+  dryRun: "none",
+  confirmation: "none",
+  grantScope: null,
+} as const;
+
+/** The policy index's data, as its generated Text module holds it. */
+export type AgentOperationPolicyData = {
+  defaults: typeof AGENT_OPERATION_POLICY_DEFAULTS;
+  operations: readonly Partial<AgentOperationPolicy>[];
+};
+
+/** An entry without its content fields. */
+export function agentOperationPolicyOf(entry: AgentOperationManifestEntry): AgentOperationPolicy {
+  const policy: Record<string, unknown> = { ...entry };
+  for (const field of AGENT_OPERATION_CONTENT_FIELDS) delete policy[field];
+  return policy as AgentOperationPolicy;
+}
+
+/**
+ * The generated policy index (`generated/agent-operation-policies.gen.txt`):
+ * one row per operation, each field equal to its default left out.
+ */
+export function renderAgentOperationPolicyModule(entries: readonly AgentOperationManifestEntry[]): string {
+  const defaults: Readonly<Record<string, unknown>> = AGENT_OPERATION_POLICY_DEFAULTS;
+  const operations = entries.map((entry) => Object.fromEntries(
+    Object.entries(agentOperationPolicyOf(entry)).filter(([field, value]) =>
+      !(field in defaults) || JSON.stringify(value) !== JSON.stringify(defaults[field])),
+  ));
+  return `${JSON.stringify({ defaults, operations })}\n`;
+}
+
+/** The generated loader (`generated/agent-operation-policies.gen.ts`) of the policy index. */
+export const AGENT_OPERATION_POLICY_LOADER_SOURCE = `// This file is generated from the finalized /api/v1 OpenAPI contract.
+// Do not edit by hand.
+
+import type { AgentOperationPolicy, AgentOperationPolicyData } from "../openapi/agent-operation-manifest";
+import index from "./agent-operation-policies.gen.txt";
+
+// The policy index (no prose, no schemas): a small Text module that plugin
+// authority and admin agent checks parse instead of the full manifest.
+const data = JSON.parse(index) as AgentOperationPolicyData;
+
+export const AGENT_OPERATION_POLICIES: readonly AgentOperationPolicy[] = Object.freeze(
+  data.operations.map((row) => Object.freeze({ ...data.defaults, ...row }) as AgentOperationPolicy),
+);
+
+export const AGENT_OPERATION_POLICIES_BY_ID: Readonly<Record<string, AgentOperationPolicy>> = Object.freeze(
+  Object.fromEntries(AGENT_OPERATION_POLICIES.map((operation) => [operation.operationId, operation])),
+);
+`;

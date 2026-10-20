@@ -10,11 +10,12 @@ import {
 } from "./agent-operation-manifest";
 import {
   AGENT_OPERATION_MANIFEST_PATH,
+  AGENT_OPERATION_POLICY_PATH,
   assertCliMediaVariantsFresh,
   assertCliWorkflowResolverCoreFresh,
   assertAgentOperationManifestLoaderFresh,
   assertOpenApiContractModuleFresh,
-  generateAgentOperationManifestSource,
+  generateAgentOperationSources,
 } from "./generate-agent-operation-manifest";
 import {
     OPERATION_GROUPS,
@@ -634,10 +635,11 @@ describe("agent operation contract", () => {
   });
 
   it("keeps the checked-in manifest byte-for-byte fresh and timestamp-free", () => {
-    const expected = generateAgentOperationManifestSource(document);
+    const expected = generateAgentOperationSources(document);
     const checkedIn = readFileSync(AGENT_OPERATION_MANIFEST_PATH, "utf8");
-    expect(checkedIn).toBe(expected);
+    expect(checkedIn).toBe(expected.manifest);
     expect(checkedIn).not.toMatch(/generatedAt|new Date\(|20\d\d-\d\d-\d\dT/);
+    expect(readFileSync(AGENT_OPERATION_POLICY_PATH, "utf8")).toBe(expected.policies);
     expect(() => assertAgentOperationManifestLoaderFresh()).not.toThrow();
   });
 

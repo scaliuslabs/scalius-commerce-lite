@@ -19,7 +19,7 @@ import {
   type OperationDispatchAuthority,
 } from "../agent-access/dispatch";
 import { writeAgentAuditEvent } from "../agent-access/audit";
-import { resolveAgentOperationById } from "../agent-access/direct-operation";
+import { AGENT_OPERATIONS_BY_ID } from "../generated/agent-operations.gen";
 import type { PluginPrincipal } from "../agent-access/types";
 import { authorizePluginOperation, pluginTierAllows, pluginWithinRateLimit, resolvePluginPrincipal } from "./authority";
 import { redactOperationResponse } from "./protected-response";
@@ -176,7 +176,8 @@ export async function callPluginOperation(options: {
   if (typeof options.operationId !== "string" || !OPERATION_ID.test(options.operationId)) {
     return refusal(404, "api.unknown_operation", "Plugins call dashboard or objects operations by their reviewed id.");
   }
-  const operation = resolveAgentOperationById(options.operationId);
+  // A call needs the operation's schemas (body properties, protected output): the full manifest.
+  const operation = Object.hasOwn(AGENT_OPERATIONS_BY_ID, options.operationId) ? AGENT_OPERATIONS_BY_ID[options.operationId] : undefined;
   if (!operation) return refusal(404, "api.unknown_operation", `Unknown operation ${options.operationId}.`);
   const input = normalizePluginApiInput(options.input);
   if (typeof input === "string") return refusal(400, "api.invalid_input", input);

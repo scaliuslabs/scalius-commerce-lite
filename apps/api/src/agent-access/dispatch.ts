@@ -16,14 +16,10 @@ import {
   type AgentArtifactResult,
 } from "./artifact-delivery";
 
-export type AgentInputPrimitive = string | number | boolean | null;
+import { AgentDispatchError, type AgentInputPrimitive, type AgentOperationInput } from "./dispatch-error";
 
-export interface AgentOperationInput {
-  path?: Record<string, string | number | boolean>;
-  query?: Record<string, AgentInputPrimitive | AgentInputPrimitive[]>;
-  body?: unknown;
-  idempotencyKey?: string;
-}
+export { AgentDispatchError };
+export type { AgentInputPrimitive, AgentOperationInput } from "./dispatch-error";
 
 export interface AgentOperationResult {
   operationId: string;
@@ -76,18 +72,6 @@ export interface DispatchAgentOperationOptions {
    * native dry-run support.
    */
   dryRun?: "native";
-}
-
-export class AgentDispatchError extends Error {
-  readonly code: string;
-  readonly status: number;
-
-  constructor(code: string, message: string, status = 400) {
-    super(message);
-    this.name = "AgentDispatchError";
-    this.code = code;
-    this.status = status;
-  }
 }
 
 function manifestAuthorizationInput(operation: AgentOperationManifestEntry) {
