@@ -14,6 +14,13 @@ import {
 import { getStorefrontProductBySlug } from "./product-page";
 import { rebuildCatalogProjections } from "../products/catalog-projections";
 import { refreshProductRecommendations, refreshProductSalesStats } from "./recommendation-refresh";
+import {
+    collectRecommendationRefreshRequests,
+    dequeueRecommendationRefresh,
+    enqueueRecommendationRefresh,
+    queuedRecommendationRefresh,
+    RECOMMENDATION_QUEUE_LIMIT,
+} from "./recommendation-queue";
 
 import { withDependencyScope } from "../../cache-deps";
 
@@ -91,8 +98,12 @@ function attribute(productId: string, attributeId: string, value: string): void 
 }
 
 async function recommend(productIds: string[], limit = 12) {
-    // Seeded with raw SQL: fill the stored buyer state as a release does.
+    // Seeded with raw SQL: fill the stored buyer state as a release does, then
+    // the steady state the jobs keep: sales stats and every source's stored
+    // list (a request never ranks live).
     await rebuildCatalogProjections(db);
+    await refreshProductSalesStats(db);
+    if (productIds.length > 0) await refreshProductRecommendations(db, productIds.slice(0, MAX_RECOMMENDATION_SOURCE_IDS));
     statements = [];
     statementParams = [];
     return getStorefrontProductRecommendations(db, { productIds, limit });
@@ -170,26 +181,105 @@ describe("product recommendations", () => {
     it("caches quiet empty fallback without an age limit or private dependency values", async () => {
         const { value, dependencies } = await recordedRecommendations([]);
         expect(value.products).toEqual([]);
-        expect(dependencies.keys).toContain("recommendation-signals");
+        expect(dependencies.keys).toEqual(expect.arrayContaining(["popular", "lm:all"]));
+        expect(dependencies.keys).not.toContain("recommendation-signals");
         expect(dependencies.validUntil).toBeNull();
         expect(dependencies.softMaxAgeSeconds).toBeNull();
         expect(dependencies.uncacheable).toEqual([]);
     });
 
-    it.each([30, 365])("expires live ranking exactly when an included %i-day order ages out", async (days) => {
+    it.each([30, 365])("expires the stored refresh's ranking exactly when an included %i-day order ages out", async (days) => {
         product({ id: "source", categoryId: "cat_shirts" });
         product({ id: "peer", categoryId: "cat_shirts" });
         const createdAt = NOW - days * 86400 + 100;
         order("01711000001", ["source", "peer"], "completed", createdAt);
         await rebuildCatalogProjections(db);
-        const { dependencies } = await recordedRecommendations(["source"]);
+        const { dependencies } = await rankStrict(["source"], 8);
         expect(dependencies.validUntil).toBe((createdAt + days * 86400 + 1) * 1000);
-        expect(dependencies.keys).toContain("rec:source"); // missing stored rows must invalidate when filled
-        expect(dependencies.keys).toContain("recommendation-signals");
-        expect(dependencies.keys).toContain("lo:price:all");
-        expect(dependencies.keys).toContain("lo:band:all");
         expect(dependencies.keys.join(" ")).not.toMatch(/01711000001|ord_1/);
         expect(dependencies.softMaxAgeSeconds).toBeNull();
+    });
+
+    it("never ranks live for a product page: serves the bounded fallback and queues the product", async () => {
+        product({ id: "source", categoryId: "cat_shirts", createdAt: NOW - 500 });
+        product({ id: "peer", categoryId: "cat_shirts", createdAt: NOW - 400 });
+        product({ id: "best_seller", categoryId: "cat_trousers", createdAt: NOW - 300 });
+        product({ id: "newest", categoryId: "cat_trousers", createdAt: NOW - 10 });
+        product({ id: "hidden", categoryId: "cat_shirts", isActive: false });
+        for (const buyer of ["a", "b"]) order(buyer, ["best_seller", "source"]);
+        await rebuildCatalogProjections(db);
+        await refreshProductSalesStats(db);
+        statements = [];
+        statementParams = [];
+        const { value: { value, productIds }, dependencies } = await withDependencyScope(
+            () => collectRecommendationRefreshRequests(() => getStorefrontProductRecommendations(db, { productIds: ["source"], limit: 3 })),
+            { strict: true, log: () => {} },
+        );
+        // Same category, then units sold, then newest.
+        expect(ids(value)).toEqual(["peer", "best_seller", "newest"]);
+        expect(value.reason).toBe("similar");
+        expect(productIds).toEqual(["source"]);
+        expect(statements.some((query) => query.includes("rec_pool"))).toBe(false);
+        expect(dependencies.coarseTables).toEqual([]);
+        expect(dependencies.uncacheable).toEqual([]);
+        // The stored list replaces the fallback when it lands; no order signal is read.
+        expect(dependencies.keys).toEqual(expect.arrayContaining(["rec:source", "lm:cat:cat_shirts", "lm:all", "popular", "p:source"]));
+        expect(dependencies.keys).not.toContain("recommendation-signals");
+        expect(dependencies.keys.some((key) => key.startsWith("t:"))).toBe(false);
+        expect(dependencies.validUntil).toBeNull();
+        const fallback = statements.findIndex((query) => query.includes("fb_window"));
+        const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${statements[fallback]}`).all(...statementParams[fallback]!)
+            .map((step) => String(step.detail)).join("\n");
+        expect(plan).toMatch(/SEARCH peer USING (COVERING )?INDEX product_buyer_state_category_newest_idx \(is_public=\? AND category_id=\?\)/);
+        expect(plan).toMatch(/SEARCH newest USING (COVERING )?INDEX product_buyer_state_newest_idx \(is_public=\?\)/);
+        expect(plan).toMatch(/SEARCH stats USING (COVERING )?INDEX product_sales_stats_popular_idx \(sold_30d>\?\)/);
+        expect(plan).not.toMatch(/\b(orders|order_items|recommendation_order_products)\b/);
+        expect(plan).not.toMatch(/SCAN (product_buyer_state|candidate|peer|newest|source_state)\b/);
+
+        // A source that is not a public product is not queued.
+        const hidden = await collectRecommendationRefreshRequests(() => getStorefrontProductRecommendations(db, { productIds: ["hidden"], limit: 3 }));
+        expect(hidden.productIds).toEqual([]);
+        const cart = await collectRecommendationRefreshRequests(() => getStorefrontProductRecommendations(db, { productIds: ["nope", "source"], limit: 3 }));
+        expect(cart.productIds).toEqual(["source"]);
+
+        // Queued once (public products only), refreshed by the rotation, then read stored.
+        await enqueueRecommendationRefresh(db, [...productIds, "hidden", "nope"]);
+        await enqueueRecommendationRefresh(db, productIds);
+        expect(await queuedRecommendationRefresh(db, 10)).toEqual(["source"]);
+        await refreshProductRecommendations(db, ["source"]);
+        await dequeueRecommendationRefresh(db, ["source"]);
+        expect(await queuedRecommendationRefresh(db, 10)).toEqual([]);
+        const stored = await withDependencyScope(
+            () => collectRecommendationRefreshRequests(() => getStorefrontProductRecommendations(db, { productIds: ["source"], limit: 3 })),
+            { strict: true, log: () => {} },
+        );
+        expect(stored.value.productIds).toEqual([]);
+        expect(stored.dependencies.keys).not.toContain("popular");
+    });
+
+    it("bounds the refresh queue", async () => {
+        const many = Array.from({ length: RECOMMENDATION_QUEUE_LIMIT + 5 }, (_, index) => `q_${String(index).padStart(3, "0")}`);
+        for (const id of many) product({ id, photos: 0 });
+        await rebuildCatalogProjections(db);
+        for (let start = 0; start < many.length; start += 20) await enqueueRecommendationRefresh(db, many.slice(start, start + 20));
+        const queued = sqlite.prepare("SELECT count(*) AS n FROM system_kv WHERE key LIKE 'catalog:recommendations:queue:%'").get() as { n: number };
+        // One statement may overshoot by its own rows at most; then nothing more is written.
+        expect(queued.n).toBeGreaterThanOrEqual(RECOMMENDATION_QUEUE_LIMIT);
+        expect(queued.n).toBeLessThan(RECOMMENDATION_QUEUE_LIMIT + 20);
+    });
+
+    it("keeps a cart's list when an order is placed", async () => {
+        product({ id: "shirt", categoryId: "cat_shirts" });
+        product({ id: "trouser", categoryId: "cat_trousers" });
+        product({ id: "other_shirt", categoryId: "cat_shirts", createdAt: NOW - 10 });
+        product({ id: "other_trouser", categoryId: "cat_trousers", createdAt: NOW - 20 });
+        await recommend(["shirt", "trouser"]);
+        for (const productIds of [["shirt", "trouser"], []]) {
+            const { dependencies } = await recordedRecommendations(productIds);
+            const before = dependencies.keys.map(sequence);
+            order(`buyer_${productIds.length}`, ["shirt", "other_trouser"]);
+            expect(dependencies.keys.map(sequence)).toEqual(before);
+        }
     });
 
     it.each([30, 365])("keeps the %i-day deadline when the ranking has no rows", async (days) => {
@@ -213,7 +303,7 @@ describe("product recommendations", () => {
         order("01711000001", ["source", "peer"], "completed", NOW - 366 * 86400);
         order("01711000002", ["source", "peer"], "cancelled", NOW - 29 * 86400);
         await rebuildCatalogProjections(db);
-        const { dependencies } = await recordedRecommendations(["source"]);
+        const { dependencies } = await rankStrict(["source"], 8);
         expect(dependencies.validUntil).toBeNull();
         expect(dependencies.softMaxAgeSeconds).toBeNull();
     });
@@ -337,7 +427,9 @@ describe("product recommendations", () => {
             imageAlt: "Photo 0",
             secondaryImageUrl: null,
         });
-        // The ranking reads ids and signals only; cards come afterwards.
+        // The ranking (the refresh's statement) reads ids and signals only; cards come afterwards.
+        statements = [];
+        await rankProductRecommendations(db, { productIds: ["source"] });
         const ranking = statements.find((query) => query.includes("rec_pool"))!;
         expect(ranking).not.toContain('"products"."name"');
         expect(ranking).not.toContain("buyer_state_card_sku");
@@ -616,7 +708,10 @@ describe("product recommendations", () => {
         // Only the first 20 ids are sources; the rest stay recommendable.
         expect(result.products).toHaveLength(12);
         expect(ids(result).every((id) => many.indexOf(id) >= MAX_RECOMMENDATION_SOURCE_IDS)).toBe(true);
-        expect(statements).toHaveLength(3); // ranking, then cards and media
+        // The sources' stored ids (each list is mostly other cart items), the
+        // fallback for the shortfall, then cards and media.
+        expect(statements).toHaveLength(4);
+        expect(statements.some((query) => query.includes("rec_pool"))).toBe(false);
         expect(maxBoundParameters).toBeLessThanOrEqual(90);
     });
 
@@ -654,7 +749,7 @@ describe("product recommendations", () => {
         expect(plan).not.toMatch(/SCAN /);
     });
 
-    it("clears a hidden product's stored list and leaves a trashed source to the live fallback", async () => {
+    it("clears a hidden product's stored list and leaves a trashed source to the fallback", async () => {
         product({ id: "source", categoryId: "cat_shirts" });
         product({ id: "peer", categoryId: "cat_shirts" });
         await rebuildCatalogProjections(db);

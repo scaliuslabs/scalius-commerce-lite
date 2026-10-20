@@ -53,7 +53,7 @@ import { publicCategoryConditions } from "../categories";
 import {
     MAX_RECOMMENDATION_LIMIT,
     getStorefrontProductRecommendations,
-    rankProductRecommendations,
+    recommendedProductIds,
     type ProductRecommendationItem,
 } from "./recommendations";
 import { unixToDate } from "@scalius/shared/utils";
@@ -452,8 +452,8 @@ async function readSummary(
             variants: sql<number>`(SELECT count(*) FROM product_variants WHERE product_id = ${identity.id} AND deleted_at IS NULL)`,
         }).from(products).where(eq(products.id, identity.id)).get(),
         selectCheckoutProductMediaProjectionRows(db, [identity.id], []),
-        rankProductRecommendations(db, { productIds: [identity.id], limit: MAX_RECOMMENDATION_LIMIT })
-            .then((ranked) => ranked.rows),
+        recommendedProductIds(db, { productIds: [identity.id], limit: MAX_RECOMMENDATION_LIMIT })
+            .then((picked) => picked.ids),
     ]);
     const mediaProjection = resolveProductMediaProjectionRows(
         primaryProjectionRows as unknown as ProductMediaProjectionRow[],
