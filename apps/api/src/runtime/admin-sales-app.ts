@@ -1,4 +1,5 @@
-import { createAdminRuntimeApiApp } from "./admin-base-app";
+import { ADMIN_MIDDLEWARE } from "./admin-base-app";
+import { buildRouteGroupApp, type RouteGroupParts } from "./route-groups";
 import { adminCustomerRoutes } from "../routes/admin/customers";
 import { adminCustomerMarketingRoutes } from "../routes/admin/customer-marketing";
 import { adminDiscountRoutes } from "../routes/admin/discounts";
@@ -13,22 +14,23 @@ import { adminResourceGiftCardRoutes } from "../routes/admin/resources-gift-card
 import { adminResourceProductRoutes } from "../routes/admin/resources-products";
 import { adminResourceWebhookRoutes } from "../routes/admin/resources-webhooks";
 
-const app = createAdminRuntimeApiApp();
-app.route("/admin/customers", adminCustomerMarketingRoutes);
-app.route("/admin/customers", adminCustomerRoutes);
-app.route("/admin/discounts", adminDiscountRoutes);
-app.route("/admin/orders", adminOrdersRoutes);
-app.route("/admin/conversations", adminConversationRoutes);
-app.route("/admin/taxes", adminTaxRoutes);
-app.route("/admin/gift-cards", adminGiftCardRoutes);
-app.route("/admin/warranty-claims", adminWarrantyClaimRoutes);
-// The stable app API's resources (orders, products, customers and their parts).
-app.route("/admin/resources", adminResourceRoutes);
-// Bulk runs of prices, stock, tags, status and publishing (routes/admin/resources-bulk.ts).
-app.route("/admin/resources", adminResourceBulkRoutes);
-// Gift cards, PIM product writes and an app's own webhook subscriptions.
-app.route("/admin/resources", adminResourceGiftCardRoutes);
-app.route("/admin/resources", adminResourceProductRoutes);
-app.route("/admin/resources", adminResourceWebhookRoutes);
+export const adminSalesParts: RouteGroupParts<"admin-sales"> = {
+  routers: {
+    adminResourceRoutes,
+    adminResourceBulkRoutes,
+    adminResourceGiftCardRoutes,
+    adminResourceProductRoutes,
+    adminResourceWebhookRoutes,
+    adminCustomerMarketingRoutes,
+    adminCustomerRoutes,
+    adminDiscountRoutes,
+    adminOrdersRoutes,
+    adminConversationRoutes,
+    adminTaxRoutes,
+    adminGiftCardRoutes,
+    adminWarrantyClaimRoutes,
+  },
+  middleware: ADMIN_MIDDLEWARE,
+};
 
-export default app;
+export default buildRouteGroupApp("admin-sales", adminSalesParts);

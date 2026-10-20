@@ -56,13 +56,9 @@ describe("generated runtime payload boundaries", () => {
       return { OPENAPI_CONTRACT_ETAG: '"test"', OPENAPI_CONTRACT_JSON: "{}" };
     });
 
-    await import("./docs-app");
+    const { docRoutes } = await import("./docs-app");
     expect(openApiLoaded).toBe(false);
-    const { Hono } = await import("hono");
-    const { registerDocRoutes } = await import("./register-doc-routes");
-    const routes = new Hono();
-    registerDocRoutes(routes as never);
-    const response = await routes.request("/openapi.json");
+    const response = await docRoutes.request("/openapi.json");
 
     expect(await response.text()).toBe("{}");
     expect(response.headers.get("ETag")).toBe('"test"');

@@ -1,31 +1,11 @@
+import { classifyRouteGroup } from "./route-table";
+
 export type PublicRuntimeGroup = "config" | "catalog" | "content" | "buyer";
 
-function matchesPrefix(pathname: string, prefix: string): boolean {
-  return pathname === prefix || pathname.startsWith(`${prefix}/`);
-}
-
+/** The public group serving a path, from the mount table. */
 export function classifyPublicRuntimePath(pathname: string): PublicRuntimeGroup | null {
-  if (
-    matchesPrefix(pathname, "/api/v1/storefront/agent-contexts") ||
-    matchesPrefix(pathname, "/api/v1/storefront/agent-continuations")
-  ) return "buyer";
-  if (
-    pathname === "/api/v1" || pathname === "/api/v1/" ||
-    ["navigation", "storefront", "platform", "checkout", "checkout-languages", "locations", "address-rules", "shipping-methods", "seo"]
-      .some((segment) => matchesPrefix(pathname, `/api/v1/${segment}`))
-  ) return "config";
-  if (
-    ["attributes", "collections", "search", "products", "categories", "brands", "media"]
-      .some((segment) => matchesPrefix(pathname, `/api/v1/${segment}`))
-  ) return "catalog";
-  if (["pages", "articles", "objects"].some((segment) =>
-    matchesPrefix(pathname, `/api/v1/${segment}`)
-  )) return "content";
-  if (
-    ["discounts", "analytics", "meta", "customer-auth", "abandoned-checkouts", "orders", "marketing"]
-      .some((segment) => matchesPrefix(pathname, `/api/v1/${segment}`))
-  ) return "buyer";
-  return null;
+  const group = classifyRouteGroup(pathname);
+  return group?.startsWith("public-") ? group.slice("public-".length) as PublicRuntimeGroup : null;
 }
 
 export async function fetchPublicApiApp(

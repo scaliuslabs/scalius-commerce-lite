@@ -1,4 +1,5 @@
-import { createAdminRuntimeApiApp } from "./admin-base-app";
+import { ADMIN_MIDDLEWARE } from "./admin-base-app";
+import { buildRouteGroupApp, type RouteGroupParts } from "./route-groups";
 import { checkoutLanguageRoutes } from "../routes/checkout-languages";
 import { adminNavigationRoutes } from "../routes/admin/navigation";
 import { adminPageRoutes } from "../routes/admin/pages";
@@ -8,15 +9,19 @@ import { adminObjectRoutes } from "../routes/admin/objects";
 import { adminSettingsRoutes } from "../routes/admin/settings";
 import { adminLocationRoutes } from "../routes/admin/settings/delivery-locations";
 
-const app = createAdminRuntimeApiApp();
-app.route("/admin/pages", adminPageRoutes);
-app.route("/admin/navigation", adminNavigationRoutes);
-app.route("/admin/translations", adminTranslationRoutes);
-app.route("/admin/custom-field-definitions", customFieldDefinitionRoutes);
-app.route("/admin/custom-fields", customFieldValueRoutes);
-app.route("/admin/objects", adminObjectRoutes);
-app.route("/admin/settings", adminSettingsRoutes);
-app.route("/admin/settings/delivery-locations", adminLocationRoutes);
-app.route("/admin/settings/checkout-languages", checkoutLanguageRoutes);
+export const adminContentParts: RouteGroupParts<"admin-content"> = {
+  routers: {
+    adminObjectRoutes,
+    adminPageRoutes,
+    adminNavigationRoutes,
+    adminTranslationRoutes,
+    adminSettingsRoutes,
+    customFieldDefinitionRoutes,
+    customFieldValueRoutes,
+    adminLocationRoutes,
+    checkoutLanguageRoutes,
+  },
+  middleware: ADMIN_MIDDLEWARE,
+};
 
-export default app;
+export default buildRouteGroupApp("admin-content", adminContentParts);

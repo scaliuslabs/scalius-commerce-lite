@@ -1,66 +1,11 @@
-export type RuntimeAppName = "probe" | "public" | "admin" | "system" | "docs" | "plugins";
+import { classifyRouteGroup, ROUTE_GROUP_FAMILIES, type RuntimeAppName } from "./route-table";
 
-const PUBLIC_PREFIXES = [
-  "/api/v1/abandoned-checkouts",
-  "/api/v1/address-rules",
-  "/api/v1/analytics",
-  "/api/v1/articles",
-  "/api/v1/attributes",
-  "/api/v1/brands",
-  "/api/v1/categories",
-  "/api/v1/checkout",
-  "/api/v1/checkout-languages",
-  "/api/v1/collections",
-  "/api/v1/customer-auth",
-  "/api/v1/discounts",
-  "/api/v1/locations",
-  "/api/v1/marketing",
-  "/api/v1/media",
-  "/api/v1/meta",
-  "/api/v1/navigation",
-  "/api/v1/orders",
-  "/api/v1/objects",
-  "/api/v1/pages",
-  "/api/v1/platform",
-  "/api/v1/products",
-  "/api/v1/search",
-  "/api/v1/seo",
-  "/api/v1/shipping-methods",
-  "/api/v1/storefront",
-] as const;
+export type { RuntimeAppName } from "./route-table";
 
-const SYSTEM_PREFIXES = [
-  "/api/v1/agent-artifacts",
-  "/api/v1/agent-auth",
-  "/api/v1/auth",
-  "/api/v1/cache",
-  "/api/v1/payment",
-  "/api/v1/setup",
-  "/api/v1/webhooks",
-] as const;
-
-function matchesPathPrefix(pathname: string, prefix: string): boolean {
-  return pathname === prefix || pathname.startsWith(`${prefix}/`);
-}
-
-/** Classifies only real API route families; unknown paths load no route graph. */
+/** The family serving a path, from the mount table; unknown paths load no route graph. */
 export function classifyRuntimeApiPath(pathname: string): RuntimeAppName | null {
-  if (pathname === "/api/v1" || pathname === "/api/v1/") return "public";
-  if (
-    pathname === "/api/v1/health" || pathname === "/api/v1/health/" ||
-    pathname === "/api/v1/readyz" || pathname === "/api/v1/readyz/" ||
-    pathname === "/api/v1/meta" || pathname === "/api/v1/meta/"
-  ) return "probe";
-  if (pathname === "/api/v1/openapi.json") return "docs";
-  if (matchesPathPrefix(pathname, "/api/v1/admin")) return "admin";
-  if (matchesPathPrefix(pathname, "/api/v1/plugins")) return "plugins";
-  if (SYSTEM_PREFIXES.some((prefix) => matchesPathPrefix(pathname, prefix))) {
-    return "system";
-  }
-  if (PUBLIC_PREFIXES.some((prefix) => matchesPathPrefix(pathname, prefix))) {
-    return "public";
-  }
-  return null;
+  const group = classifyRouteGroup(pathname);
+  return group ? ROUTE_GROUP_FAMILIES[group] : null;
 }
 
 export async function fetchRuntimeApiApp(

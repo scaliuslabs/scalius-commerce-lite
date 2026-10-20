@@ -1,4 +1,5 @@
-import { createAdminRuntimeApiApp } from "./admin-base-app";
+import { ADMIN_MIDDLEWARE } from "./admin-base-app";
+import { buildRouteGroupApp, type RouteGroupParts } from "./route-groups";
 import { adminAnalyticsRoutes } from "../routes/admin/analytics";
 import { adminDashboardRoutes } from "../routes/admin/dashboard";
 import { adminReportRoutes } from "../routes/admin/reports";
@@ -8,14 +9,18 @@ import { adminSystemUtilsRoutes } from "../routes/admin/system-utils";
 import { adminWebPushRoutes } from "../routes/admin/web-push";
 import { adminStaffAlertRoutes } from "../routes/admin/staff-alerts";
 
-const app = createAdminRuntimeApiApp();
-app.route("/admin/analytics", adminAnalyticsRoutes);
-app.route("/admin/dashboard", adminDashboardRoutes);
-app.route("/admin/reports", adminReportRoutes);
-app.route("/admin/fraud-checker", adminFraudCheckerRoutes);
-app.route("/admin/search", adminSearchRoutes);
-app.route("/admin/web-push", adminWebPushRoutes);
-app.route("/admin/notifications", adminStaffAlertRoutes);
-app.route("/admin", adminSystemUtilsRoutes);
+export const adminDashboardParts: RouteGroupParts<"admin-dashboard"> = {
+  routers: {
+    adminSearchRoutes,
+    adminAnalyticsRoutes,
+    adminDashboardRoutes,
+    adminReportRoutes,
+    adminFraudCheckerRoutes,
+    adminWebPushRoutes,
+    adminStaffAlertRoutes,
+    adminSystemUtilsRoutes,
+  },
+  middleware: ADMIN_MIDDLEWARE,
+};
 
-export default app;
+export default buildRouteGroupApp("admin-dashboard", adminDashboardParts);

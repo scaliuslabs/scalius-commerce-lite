@@ -1,22 +1,11 @@
+import { classifyRouteGroup } from "./route-table";
+
 export type AdminRuntimeGroup = "dashboard" | "catalog" | "sales" | "content" | "access";
 
+/** The admin group serving a path, from the mount table. */
 export function classifyAdminRuntimePath(pathname: string): AdminRuntimeGroup | null {
-  if (pathname === "/api/v1/admin" || pathname === "/api/v1/admin/") {
-    return "dashboard";
-  }
-  const segment = pathname.slice("/api/v1/admin/".length).split("/", 1)[0] ?? "";
-  if (["dashboard", "analytics", "reports", "search", "fraud-checker", "abandoned-checkouts", "fcm-token", "fcm-token-cleanup", "web-push", "notifications"].includes(segment)) {
-    return "dashboard";
-  }
-  if (["categories", "brands", "price-lists", "collections", "media", "inventory", "products", "attributes", "catalog", "reviews", "digital-assets", "digital-entitlements", "warranty-policies", "import", "export"].includes(segment)) {
-    return "catalog";
-  }
-  if (["customers", "discounts", "orders", "conversations", "taxes", "gift-cards", "warranty-claims", "resources"].includes(segment)) {
-    return "sales";
-  }
-  if (["pages", "navigation", "translations", "settings", "custom-field-definitions", "custom-fields", "objects"].includes(segment)) return "content";
-  if (["rbac", "auth", "agent-access", "webhooks", "events", "apps"].includes(segment)) return "access";
-  return null;
+  const group = classifyRouteGroup(pathname);
+  return group?.startsWith("admin-") ? group.slice("admin-".length) as AdminRuntimeGroup : null;
 }
 
 export async function fetchAdminApiApp(

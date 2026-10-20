@@ -1,4 +1,4 @@
-import { createRuntimeApiApp } from "./base-app";
+import { buildRouteGroupApp, type RouteGroupParts } from "./route-groups";
 import { agentPrincipalMiddleware } from "../middleware/agent-principal";
 import { cookieOriginGuardMiddleware } from "../middleware/cookie-origin-guard";
 import { abandonedCheckoutsRoutes } from "../routes/abandoned-checkouts";
@@ -11,18 +11,22 @@ import { orderRoutes } from "../routes/storefront-orders";
 import { storefrontAgentContextRoutes } from "../routes/storefront-agent-contexts";
 import { storefrontAgentContinuationRoutes } from "../routes/storefront-agent-continuations";
 
-const app = createRuntimeApiApp();
-app.route("/discounts", discountRoutes);
-app.route("/analytics", analyticsRoutes);
-app.route("/meta", metaConversionsRoutes);
-app.use("/storefront/agent-contexts/*", agentPrincipalMiddleware);
-app.route("/storefront/agent-contexts", storefrontAgentContextRoutes);
-app.route("/storefront/agent-continuations", storefrontAgentContinuationRoutes);
-app.use("/customer-auth/*", cookieOriginGuardMiddleware);
-app.route("/customer-auth", customerAuthRoutes);
-app.route("/abandoned-checkouts", abandonedCheckoutsRoutes);
-app.route("/marketing", marketingRoutes);
-app.use("/orders/*", cookieOriginGuardMiddleware);
-app.route("/orders", orderRoutes);
+export const publicBuyerParts: RouteGroupParts<"public-buyer"> = {
+  routers: {
+    discountRoutes,
+    analyticsRoutes,
+    metaConversionsRoutes,
+    storefrontAgentContextRoutes,
+    storefrontAgentContinuationRoutes,
+    customerAuthRoutes,
+    abandonedCheckoutsRoutes,
+    marketingRoutes,
+    orderRoutes,
+  },
+  middleware: {
+    agentPrincipal: agentPrincipalMiddleware,
+    cookieOriginGuard: cookieOriginGuardMiddleware,
+  },
+};
 
-export default app;
+export default buildRouteGroupApp("public-buyer", publicBuyerParts);
