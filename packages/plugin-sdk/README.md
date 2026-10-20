@@ -17,7 +17,7 @@ Real apps in `plugins/`: `bangladesh` (bKash, Nagad and SSLCommerz payments, SMS
 | Order risk and holds (after commit) | `events: ["order.created"]`, `write_orders` | `ctx.orders.assessRisk(…)`, `ctx.orders.hold(…)` |
 | Objects and custom fields | `objects`, `customFields` | `ctx.objects`, `ctx.customFields` |
 | Buyer UI | `functions: [{ point: "buyer.ui", targets }]`, `checkout.attributes` | a pure function returning `{ ui }` |
-| Storefront components: sections, product blocks, skins (header, footer, product card, product page, listing, core sections), templates | `storefront.sections`, `productBlocks`, `skins`, `templates` | `defineStorefront` in `src/storefront.tsx` (`@scalius/plugin-sdk/storefront`) |
+| Storefront components: sections, components in slots and app pages, skins (header, footer, product card, product page, listing, core sections), templates | `storefront.sections`, `components`, `skins`, `templates` | `defineStorefront` in `src/storefront.tsx` (`@scalius/plugin-sdk/storefront`) |
 | Client islands, stylesheet, public files | `storefront.islands`, `stylesheet`, `connect` | `src/islands/<name>.ts` (`defineIsland`), `src/storefront.css`, `public/` |
 | Scripts, head, proxy | `storefront.scripts`, `head`, `proxy` | |
 | Public routes, webhooks | `routes.public`, `routes.webhooks` | `routes.public[name]`, `routes.webhooks[name]` |
@@ -284,9 +284,9 @@ Which seam: a decision inside a request is a function; a provider of a capabilit
 
 ## Buyer UI
 
-Declare `functions: [{ point: "buyer.ui", targets: ["checkout.contact.after"] }]` and implement `functions["buyer.ui"]` as a pure function returning `{ ui }`. Core renders a bounded tree of `stack`, `columns`, `heading`, `text`, `badge`, `banner`, `divider`, `key-value`, `image`, `link`, `field` and `button` nodes. A failed function is omitted; it cannot block checkout.
+Declare `functions: [{ point: "buyer.ui", targets: ["checkout.contact.after"] }]` and implement `functions["buyer.ui"]` as a pure function returning `{ ui: ui.view([...]) }`: the same `ui` tree and `ui.*` builder as admin pages, held to the buyer surface (`stack`, `columns`, `heading`, `text`, `badge`, `banner`, `divider`, `key-value`, `image`, `link`, `field` and `button`). Targets are UI slots: `checkout.contact.after`, `checkout.delivery.after`, `cart.page.summary`, `checkout.payment.after`, `checkout.actions.before`, `order.confirmation`, `account.order`, `account.overview`, `account.profile`. A failed function is omitted; it cannot block checkout.
 
-A field names a key in `checkout.attributes`; core owns the input, validation and storage. Buttons may add a line, set an attribute, apply a code or call a declared app route. Images use store media or this app's sealed public files; links use same-store paths. No app HTML or JavaScript reaches private buyer pages.
+A field (`ui.field(key)`) names a key in `checkout.attributes`; core owns the input, validation and storage. Buttons take one action union: `ui.cart.addLine`, `ui.cart.setAttribute`, `ui.cart.applyCode` (cart and checkout slots), `ui.route(name)` (a declared public route) or `ui.navigate(ui.to.store(path))`. Images use store media or this app's sealed public files; links use same-store paths. No app HTML or JavaScript reaches private buyer pages.
 
 The input includes the target, language, locale, currency, relevant cart/order/customer ids, accepted attributes, and the function's declared reads (keyed by the buyer, the cart's or order's lines, or an attribute). UI travels with cart validation, tax quote, receipt and account responses. Attributes enter the quote fingerprint and existing order insert, never URLs or events. See the `notes` and `loyalty` fixtures for working examples.
 
