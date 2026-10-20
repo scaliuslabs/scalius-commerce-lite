@@ -39,7 +39,7 @@ import { DASHBOARD_REVIEW_OPERATIONS } from "./dashboard-reviews";
 import { DASHBOARD_GIFT_CARD_OPERATIONS } from "./dashboard-gift-cards";
 import { DASHBOARD_DIGITAL_OPERATIONS } from "./dashboard-digital";
 import { DASHBOARD_WARRANTY_OPERATIONS } from "./dashboard-warranty";
-import { DASHBOARD_WEBHOOK_OPERATIONS } from "./dashboard-webhooks";
+import { DASHBOARD_WEBHOOK_OPERATIONS as WEBHOOK_ROWS } from "./dashboard-webhooks";
 import { DASHBOARD_CUSTOM_FIELD_OPERATIONS } from "./dashboard-custom-fields";
 import { DASHBOARD_OBJECT_OPERATIONS } from "./dashboard-objects";
 import { DASHBOARD_APP_OPERATIONS as APP_ROWS } from "./dashboard-apps";
@@ -69,7 +69,8 @@ const DEFAULT_PRINCIPALS: Readonly<
 
 /**
  * Areas no app ever calls, whatever its grant: staff accounts, team, agent
- * access and security (people and credentials), and app management itself.
+ * access and security (people and credentials), the store's webhook
+ * endpoints, and app management itself.
  */
 function internalArea<T extends Record<string, OperationRegistryEntry>>(
   rows: T,
@@ -81,6 +82,9 @@ function internalArea<T extends Record<string, OperationRegistryEntry>>(
 
 const DASHBOARD_STAFF_OPERATIONS = internalArea(STAFF_ROWS);
 const DASHBOARD_APP_OPERATIONS = internalArea(APP_ROWS);
+// The store's webhook endpoints: an app manages only its own subscriptions,
+// through dashboard.resources.webhook_subscriptions.* (stable).
+const DASHBOARD_WEBHOOK_OPERATIONS = internalArea(WEBHOOK_ROWS);
 
 /**
  * Every agent operation row, merged from one file per domain and surface.

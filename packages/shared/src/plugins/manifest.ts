@@ -1062,7 +1062,8 @@ export function pluginGrantAdditions(granted: PluginGrantRequest | null, next: P
 }
 
 /** Whether a topic filter asks for nothing beyond the granted filters. */
-function eventFilterCovered(filter: EventTopicFilter, granted: readonly EventTopicFilter[]): boolean {
+/** Whether a grant's event filters cover every topic of `filter` (an app's own webhook subscriptions use it too). */
+export function eventFilterCovered(filter: EventTopicFilter, granted: readonly EventTopicFilter[]): boolean {
   if (granted.includes("*") || granted.includes(filter)) return true;
   if (filter === "*" || filter.endsWith(".*")) return false;
   return topicMatchesAnyFilter(filter as EventTopic, granted);

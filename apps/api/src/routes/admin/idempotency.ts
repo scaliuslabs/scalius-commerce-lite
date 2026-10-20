@@ -13,7 +13,9 @@
 // repeats answer 409 until it expires, rather than act twice. Operations with
 // a durable retry key of their own (the stock ledger, fulfilments, pickup,
 // timeline notes) also derive it from the header (`scopedRequestKey`), so
-// even an expired claim never repeats their effect.
+// even an expired claim never repeats their effect. A response that carries a
+// secret shown once (`idempotencySecretResponse`) is never kept: its repeat is
+// refused (409 idempotency_secret_not_replayed), so no secret rests in system_kv.
 import { z } from "@hono/zod-openapi";
 import type { Context, MiddlewareHandler } from "hono";
 import { systemKv } from "@scalius/database/schema";
@@ -38,7 +40,7 @@ export const idempotencyKeyHeaderSchema = z.object({
 
 type Stored =
   | { state: "processing"; request: string }
-  | { state: "done"; request: string; status: number; contentType: string | null; body: string };
+  | { state: "done"; request: string; status: number; contentType: string | null; body: string; secret?: true };
 
 /** Who the key belongs to: one app, one agent grant or one staff member never share keys. */
 function callerScope(c: Context): string {
@@ -119,6 +121,9 @@ export const idempotentReplay: MiddlewareHandler<{ Bindings: Env }> = async (c, 
     if (earlier.state === "processing") {
       refuse(409, "idempotency_in_progress", "A request with this Idempotency-Key is still running. Retry it shortly.");
     }
+    if (earlier.secret) {
+      refuse(409, "idempotency_secret_not_replayed", "This request already succeeded, and its secret is shown only once. List the resource to find it.");
+    }
     return new Response(earlier.body, {
       status: earlier.status,
       headers: {
@@ -140,12 +145,14 @@ export const idempotentReplay: MiddlewareHandler<{ Bindings: Env }> = async (c, 
     await db.delete(systemKv).where(eq(systemKv.key, storeKey));
     return;
   }
+  const secret = c.get("idempotencySecretResponse") === true && c.res.status < 300;
   const done: Stored = {
     state: "done",
     request,
     status: c.res.status,
     contentType: c.res.headers.get("Content-Type"),
-    body: await c.res.clone().text(),
+    body: secret ? "" : await c.res.clone().text(),
+    ...(secret ? { secret: true as const } : {}),
   };
   try {
     await db.update(systemKv).set({ value: JSON.stringify(done) }).where(eq(systemKv.key, storeKey));

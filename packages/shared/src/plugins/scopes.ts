@@ -18,13 +18,17 @@
 //   - capability scopes (`sensitive`, no `rbac`) confer none either: each
 //     widens one host capability the bridge checks by the scope's name
 //     (`send_messages_any`: `ctx.messaging` to any address).
+// An access scope may also be `sensitive` (stored value, data egress): it
+// confers its RBAC and the consent screen marks it Sensitive.
 //
 // Rules of the table:
 //   - `write_*` includes its `read_*` (an app that edits can read what it edits);
 //   - no access scope reveals protected customer data by itself;
-//   - every RBAC permission is plugin-grantable: no team, agent access,
-//     webhook or app management (packages/core/src/modules/plugins/grants.ts,
-//     checked by its test);
+//   - every RBAC permission is plugin-grantable: no team, agent access or
+//     app management (packages/core/src/modules/plugins/grants.ts, checked by
+//     its test). `write_webhooks` reaches only the app's own subscriptions
+//     (`dashboard.resources.webhook_subscriptions.*`): the staff webhook
+//     operations are internal;
 //   - `staff` is the one dashboard permission a staff member needs to use an
 //     app admin route the manifest gates with this scope (`routes.admin[].scope`).
 //
@@ -40,7 +44,10 @@ export interface PluginScopeDefinition {
   readonly staff: string;
   /** A protected customer data scope: the category it reveals (it confers no RBAC). */
   readonly protects?: ProtectedCustomerData;
-  /** A capability scope: confers no RBAC, widens one host capability, and the consent screen marks it Sensitive. */
+  /**
+   * The consent screen marks it Sensitive. With no `rbac` it is a capability
+   * scope (it widens one host capability); with `rbac`, a sensitive access scope.
+   */
   readonly sensitive?: true;
 }
 
@@ -120,6 +127,21 @@ export const PLUGIN_SCOPES = {
   read_files: { rbac: ["media.view"], staff: "media.view" },
   /** Import files from an HTTPS address, rename, move and trash them. */
   write_files: { rbac: ["media.view", "media.upload", "media.delete", "media.manage_folders"], staff: "media.upload" },
+  /** Gift cards: balances, transactions, owners and recipients (the code stays masked; recipient contacts need the protected data scopes). */
+  read_gift_cards: { rbac: ["gift_cards.view"], staff: "gift_cards.view" },
+  /**
+   * Issue gift cards, adjust their balances, disable, enable and change
+   * expiry. Sensitive: it creates and moves stored value the store owes. The
+   * app never sees a card's code; the store delivers it to the recipient.
+   */
+  write_gift_cards: { rbac: ["gift_cards.view", "gift_cards.manage"], staff: "gift_cards.manage", sensitive: true },
+  /**
+   * Create, edit and delete the app's own webhook subscriptions: endpoints on
+   * its approved hosts, for the event topics and the customer data its grant
+   * already covers. Never sees or changes the store's other webhooks.
+   * Sensitive: store events leave the store.
+   */
+  write_webhooks: { rbac: ["webhooks.view", "webhooks.manage"], staff: "webhooks.manage", sensitive: true },
   /** Store settings: business details, web addresses, markets, languages and custom field definitions. */
   read_settings: { rbac: ["settings.general.view"], staff: "settings.general.view" },
   /** Add and update delivery places (a place dataset) through the place import; never delete them. */
@@ -146,7 +168,8 @@ export function isSensitivePluginScope(scope: PluginScope): boolean {
 
 /** Whether a scope widens a host capability instead of conferring RBAC (`send_messages_any`). */
 export function isCapabilityScope(scope: PluginScope): boolean {
-  return (PLUGIN_SCOPES[scope] as PluginScopeDefinition).sensitive === true;
+  const definition = PLUGIN_SCOPES[scope] as PluginScopeDefinition;
+  return definition.sensitive === true && definition.rbac.length === 0;
 }
 
 /** Whether a scope reveals protected customer data instead of conferring RBAC. */

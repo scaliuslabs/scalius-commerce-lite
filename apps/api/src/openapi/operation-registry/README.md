@@ -18,7 +18,7 @@ metadata; the plugin dispatch, the MCP server and the CLI read that metadata.
   locks the app API only, and the headless storefront contract stabilises in
   a later 2.x.
 - **internal**: no app ever calls it (staff, team, agent access, security,
-  webhooks and app management).
+  the store's webhook endpoints and app management).
 
 ## What the stable tier is
 
@@ -47,6 +47,21 @@ mirror a dashboard screen, an editor section or a summary card.
   "net", days }`); money received against an invoice is recorded with
   `dashboard.resources.payments.create` (Idempotency-Key required), and
   `dashboard.resources.orders.list?overdue=true` lists overdue invoices.
+- **Apps sync products, issue gift cards and keep their own webhooks.**
+  `dashboard.resources.products.create` makes a product with its options and
+  SKUs (prices in minor units, stock at 0: quantities move through
+  `variants.bulk_set_stock` under `write_inventory`); `products.update`
+  patches its fields under `expectedRevision` in one write. Gift cards
+  (`gift_cards.*`, `read_gift_cards` / the Sensitive `write_gift_cards`)
+  issue, adjust under `expectedVersion` and disable; the code never reaches
+  an app (`notify` has the store send it). `webhook_subscriptions.*`
+  (`write_webhooks`, Sensitive) reach only the calling app's own
+  subscriptions (`webhook_subscriptions.plugin_id`), on its approved hosts,
+  for the topics and customer data its grant covers; every delivery re-checks
+  the live grant, an inactive app's endpoints get nothing, uninstall deletes
+  them, and the signing secret is returned once and never replayed for an
+  Idempotency-Key repeat. The store's own endpoints stay staff-only
+  (`dashboard.webhooks.*`, internal).
 - **Money is integer minor units beside its currency**, the same rule as the
   webhook representations: `*Minor` integer fields, and an ISO 4217
   `currency` on the same object or the resource that holds it. Inputs take

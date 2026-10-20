@@ -32,6 +32,12 @@ declare module "hono" {
     agentPrincipal: AgentPrincipal;
     /** Set when an installed plugin calls an operation (plugins/admin-request.ts). */
     pluginPrincipal: PluginPrincipal;
+    /**
+     * Set by a stable route whose response carries a secret shown once (an
+     * app's webhook signing secret): its Idempotency-Key record keeps no body,
+     * and a repeat is refused instead of replaying the secret (routes/admin/idempotency.ts).
+     */
+    idempotencySecretResponse: true;
     /** The single global `Env` declared in apps/api/src/env.d.ts. */
     env: Env;
   }

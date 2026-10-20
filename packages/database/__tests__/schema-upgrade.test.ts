@@ -843,6 +843,12 @@ describe("provider-neutral schema upgrades", { timeout: 30_000 }, () => {
         sqliteStatements: 4,
         postgresStatements: 4,
       },
+      {
+        version: 162,
+        name: "0162_app_webhook_subscriptions",
+        sqliteStatements: 3,
+        postgresStatements: 3,
+      },
     ]);
   });
 
@@ -1095,6 +1101,7 @@ describe("provider-neutral schema upgrades", { timeout: 30_000 }, () => {
           { version: 159, name: "0159_bulk_runs" },
           { version: 160, name: "0160_order_tracking_signals" },
           { version: 161, name: "0161_payment_terms" },
+          { version: 162, name: "0162_app_webhook_subscriptions" },
         ],
       });
     } finally {
