@@ -251,6 +251,41 @@ describe("plugin messaging", () => {
       .rejects.toThrow(/^\[messaging\.invalid\] /);
   });
 
+  it("sends `to` only a staff member, an address its declared recipient fields hold, or anyone with send_messages_any", async () => {
+    const db = environment.db();
+    const letters: PluginManifestInput = {
+      ...manifest,
+      id: "acme.letters",
+      scopes: ["read_customers"],
+      objects: { subscribers: { name: "Subscribers", fields: [{ key: "email", name: "Email", type: "single_line_text" }, { key: "phone", name: "Phone", type: "single_line_text" }], unique: ["email"], indexes: ["phone"] } },
+      customFields: [],
+      messaging: { recipients: [{ object: "subscribers", field: "email" }, { object: "subscribers", field: "phone" }] },
+    };
+    await installPlugin(db, { manifest: letters, source: "upload", bundleSha256: "2".repeat(64) });
+    const installation = await activatePlugin(db, "acme.letters", { actorUserId: "owner", expectedRevision: 1 });
+    expect(installation.grant?.messageRecipients).toEqual(["subscribers.email", "subscribers.phone"]);
+    const bridge = createInProcessBridge(new PluginBridgeHost({ pluginId: "acme.letters", version: "1.0.0", authority: pluginBridgeAuthority(installation) }, environment));
+    const email = (to: string) => bridge.messagingEmail({ to, subject: "News", html: "<p>News</p>" });
+    // read_customers reaches customers by id, never an arbitrary address from the store's sender.
+    await expect(email("stranger@example.com")).rejects.toThrow(/^\[messaging\.recipient_not_allowed\] /);
+    await expect(bridge.messagingSms({ to: "+8801722222222", text: "Hi" })).rejects.toThrow(/^\[messaging\.recipient_not_allowed\] /);
+    expect(messaging.sendEmail).not.toHaveBeenCalled();
+    // The store's staff.
+    expect(await email("OWNER@shop.test")).toEqual({ queued: true });
+    // An address its own records hold, found through the field's unique set.
+    await bridge.objectsWrite([{ object: "subscribers", op: "put", id: "s1", record: { email: "reader@example.com", phone: "+8801722222222" } }]);
+    expect(await email("reader@example.com")).toEqual({ queued: true });
+    expect(messaging.sendEmail).toHaveBeenLastCalledWith(expect.objectContaining({ to: "reader@example.com" }), expect.anything());
+    // A revoked recipient field applies at once.
+    sqlite.exec("UPDATE plugin_installations SET grant_json = json_set(grant_json, '$.messageRecipients', json('[]')) WHERE plugin_id = 'acme.letters'");
+    await expect(email("reader@example.com")).rejects.toThrow(/^\[messaging\.recipient_not_allowed\] /);
+    // send_messages_any (sensitive) reaches any address.
+    sqlite.exec("UPDATE plugin_installations SET grant_json = json_set(grant_json, '$.scopes', json('[\"read_customers\",\"send_messages_any\"]')) WHERE plugin_id = 'acme.letters'");
+    expect(await email("stranger@example.com")).toEqual({ queued: true });
+    // Size limits: HTML is measured in UTF-8 bytes.
+    await expect(bridge.messagingEmail({ to: "stranger@example.com", subject: "Big", html: "অ".repeat(40_000) })).rejects.toThrow(/^\[messaging\.invalid\] html is text of at most 102400 bytes/);
+  });
+
   it("requires marketing.send for marked marketing without weakening transactional access", async () => {
     const bridge = bridgeWith(["customers.view"]);
     await expect(bridge.messagingEmail({ customerId: "cus_1", subject: "Offer", html: "Offer", marketing: true })).rejects.toThrow(/write_marketing/);

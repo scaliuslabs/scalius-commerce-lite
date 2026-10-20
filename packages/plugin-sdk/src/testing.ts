@@ -6,12 +6,16 @@ import { OBJECT_HANDLE_PATTERN, prepareObjectData, objectDataWire } from "@scali
 // exact lookup on a unique set, unique indexes), refusals carry the
 // platform's error codes, and every value is copied across the bridge.
 // ctx.api and ctx.http answer from the callbacks you pass; messages are
-// recorded, not sent.
+// recorded, not sent, after the platform's recipient and size checks.
 
 import {
   checkPluginFunctionOutput,
   isPluginHostAllowed,
   PLUGIN_FUNCTION_SCHEMAS,
+  PLUGIN_MESSAGE_ANY_SCOPE,
+  PLUGIN_MESSAGE_LIMITS,
+  PLUGIN_MESSAGE_RECIPIENT_RULE,
+  pluginMessageTextFits,
   parsePluginManifest,
   pluginHandlerInventory,
   pluginManifestWithFeatures,
@@ -61,6 +65,11 @@ export interface PluginTestHarnessOptions {
   api?: (operationId: string, input: PluginApiCallInput | undefined) => PluginApiResult | Promise<PluginApiResult>;
   /** Answers `ctx.orders.riskHistory`; by default a buyer with no earlier orders. */
   riskHistory?: (orderId: string) => { orders: number; cancelled: number; returnedToSender: number };
+  /**
+   * The store's staff email addresses: `ctx.messaging.email({ to })` reaches
+   * them without a recipient field or `send_messages_any`. Default none.
+   */
+  staff?: string[];
   /** Answers `ctx.http.fetch` for allowed hosts; by default nothing is reachable. */
   fetch?: (url: string, init: unknown) => { status: number; headers?: Record<string, string>; body: string } | Promise<{ status: number; headers?: Record<string, string>; body: string }>;
 }
@@ -133,27 +142,38 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
   };
 
   const permissions = pluginScopePermissions(manifest.scopes);
+  const staff = new Set((options.staff ?? []).map((email) => email.trim().toLowerCase()));
+  /** Who `to` reaches (apps/api/src/plugins/messaging.ts): any address, staff email, or a declared recipient field's value. */
+  const recipientAllowed = (channel: "email" | "sms", to: string) => {
+    if ((manifest.scopes as readonly string[]).includes(PLUGIN_MESSAGE_ANY_SCOPE)) return true;
+    if (channel === "email" && staff.has(to.toLowerCase())) return true;
+    return manifest.messaging.recipients.some(({ object: type, field }) => [...(records.get(type)?.values() ?? [])].some((data) => data[field] === to));
+  };
   const checkMessage = (input: unknown, channel: "email" | "sms") => {
     const message = (typeof input === "object" && input !== null ? input : {}) as { customerId?: unknown; to?: unknown; subject?: unknown; html?: unknown; text?: unknown; marketing?: unknown };
-    const text = (value: unknown, field: string, max: number) => {
-      if (typeof value !== "string" || !value.trim() || value.length > max) refuse("messaging.invalid", `${field} is text of at most ${max} characters.`);
+    const text = (value: unknown, field: string, limit: { chars?: number; bytes?: number }) => {
+      if (!pluginMessageTextFits(value, limit)) refuse("messaging.invalid", `${field} is text of at most ${limit.bytes !== undefined ? `${limit.bytes} bytes` : `${limit.chars} characters`}.`);
     };
+    if (channel === "email") {
+      text(message.subject, "subject", { chars: PLUGIN_MESSAGE_LIMITS.subjectChars });
+      text(message.html, "html", { bytes: PLUGIN_MESSAGE_LIMITS.htmlBytes });
+      if (message.text !== undefined) text(message.text, "text", { bytes: PLUGIN_MESSAGE_LIMITS.textBytes });
+    } else {
+      text(message.text, "text", { chars: PLUGIN_MESSAGE_LIMITS.smsChars });
+    }
     if (message.marketing === true) {
       if (!permissions.has("marketing.send")) refuse("messaging.not_allowed", "Marketing messages need the write_marketing scope.");
       if (message.customerId === undefined) refuse("messaging.invalid", "Marketing messages go to a customerId (consent is per customer).");
     } else {
-      if (!permissions.has("customers.view")) refuse("messaging.not_allowed", "Sending to customers needs the read_customers scope.");
       if ((message.customerId === undefined) === (message.to === undefined)) refuse("messaging.invalid", "Pass exactly one of customerId or to.");
+      if (message.customerId !== undefined && !permissions.has("customers.view")) refuse("messaging.not_allowed", "Sending to customers needs the read_customers scope.");
     }
     if (message.customerId !== undefined && (typeof message.customerId !== "string" || message.customerId.length < 1 || message.customerId.length > 128)) {
       refuse("messaging.invalid", "customerId is a customer id.");
     }
-    if (channel === "email") {
-      text(message.subject, "subject", 200);
-      text(message.html, "html", 100_000);
-      if (message.text !== undefined) text(message.text, "text", 50_000);
-    } else {
-      text(message.text, "text", 1_000);
+    if (message.marketing !== true && message.to !== undefined) {
+      if (typeof message.to !== "string" || !message.to.trim()) refuse("messaging.invalid", channel === "email" ? "to is an e-mail address." : "to is a phone number (+8801XXXXXXXXX).");
+      if (!recipientAllowed(channel, message.to.trim())) refuse("messaging.recipient_not_allowed", PLUGIN_MESSAGE_RECIPIENT_RULE);
     }
   };
 
@@ -315,8 +335,9 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       customFields.set(`${ownerType}:${ownerId}`, { ...customFields.get(`${ownerType}:${ownerId}`), ...copy(values) });
     },
     // The host's refusals (apps/api/src/plugins/messaging.ts): a message to a
-    // customer needs read_customers; a marketing one write_marketing and a
-    // customerId (consent is per customer); otherwise exactly one recipient.
+    // customer needs read_customers; `to` a staff email, a declared recipient
+    // field's value or send_messages_any; a marketing one write_marketing and
+    // a customerId (consent is per customer); otherwise exactly one recipient.
     messagingEmail: async (input) => {
       checkMessage(input, "email");
       sent.emails.push(copy(input));

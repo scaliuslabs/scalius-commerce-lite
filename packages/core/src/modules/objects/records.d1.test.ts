@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { objectTypeDeclarationSchema, objectTypeId, type ObjectTypeDeclaration } from "@scalius/shared/plugins/objects";
-import { deleteObjectRecord, getObjectRecord, getObjectRecordVersion, putObjectRecord, queryObjectRecords, writeObjectRecords } from "./records";
+import { deleteObjectRecord, getObjectRecord, getObjectRecordVersion, objectRecordExists, putObjectRecord, queryObjectRecords, writeObjectRecords } from "./records";
 import { createObjectType, getObjectType, updateObjectType } from "./types";
 
 const PLUGIN = "acme.loyalty";
@@ -67,7 +67,8 @@ describe("conditional records", () => {
       { object: "ledger", op: "put", id: "l2", record: { customer_id: "c1", points: 7 } },
     ]);
     expect((await queryObjectRecords(db, PLUGIN, "ledger", LEDGER, { where: { ref: "R-1" } })).records.map((record) => record.id)).toEqual(["l1"]);
-    expect((await queryObjectRecords(db, PLUGIN, "ledger", LEDGER, { where: { ref: "R-2" } })).records).toEqual([]);
+    expect(await objectRecordExists(db, PLUGIN, "ledger", LEDGER, { ref: "R-1" })).toBe(true);
+    expect(await objectRecordExists(db, PLUGIN, "ledger", LEDGER, { ref: "R-2" })).toBe(false);
     // A record without the unique field is not in its set: a null lookup needs a real index.
     await expect(queryObjectRecords(db, PLUGIN, "ledger", LEDGER, { where: { ref: null } })).rejects.toMatchObject({ objectCode: "object.unindexed_query" });
     await expect(queryObjectRecords(db, PLUGIN, "ledger", LEDGER, { where: { points: 5 } }))

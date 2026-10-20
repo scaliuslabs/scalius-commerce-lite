@@ -15931,6 +15931,7 @@
                         "read_customers",
                         "write_customers",
                         "write_marketing",
+                        "send_messages_any",
                         "read_customer_names",
                         "read_customer_emails",
                         "read_customer_phones",
@@ -16764,6 +16765,7 @@
                 "read_customers",
                 "write_customers",
                 "write_marketing",
+                "send_messages_any",
                 "read_customer_names",
                 "read_customer_emails",
                 "read_customer_phones",
@@ -16848,6 +16850,13 @@
               "type": "string"
             },
             "description": "The app's features that are on (empty for apps that declare none)."
+          },
+          "messageRecipients": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Fields of the app's own records (<object>.<field>) whose email addresses or phone numbers it may message."
           }
         },
         "required": [
@@ -16863,7 +16872,8 @@
           "customFieldOwners",
           "storefrontCode",
           "storefrontConnect",
-          "features"
+          "features",
+          "messageRecipients"
         ],
         "description": "What an app may do; the consent screen lists it in plain words."
       },
@@ -16907,6 +16917,7 @@
                         "read_customers",
                         "write_customers",
                         "write_marketing",
+                        "send_messages_any",
                         "read_customer_names",
                         "read_customer_emails",
                         "read_customer_phones",

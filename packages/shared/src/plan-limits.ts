@@ -119,6 +119,8 @@ export interface PlanLimits {
     readonly invocationsPerMinute: number;
     /** Limit breaches (at most one counted a minute) within an hour that stop the app. */
     readonly breachesBeforeStop: number;
+    /** Emails, SMS, staff notices and buyer pushes one app sends a minute (`ctx.messaging`). */
+    readonly messagesPerMinute: number;
   };
 }
 
@@ -159,6 +161,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       storageBytes: 50 * 1024 * 1024,
       invocationsPerMinute: 600,
       breachesBeforeStop: 5,
+      messagesPerMinute: 60,
     }),
   }),
   paid: Object.freeze({
@@ -197,6 +200,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       storageBytes: 1024 * 1024 * 1024,
       invocationsPerMinute: 6_000,
       breachesBeforeStop: 5,
+      messagesPerMinute: 300,
     }),
   }),
 }) as Readonly<Record<WorkersPlan, PlanLimits>>;

@@ -141,6 +141,8 @@ export function parseStoredPluginGrant(value: string | null): PluginGrantRequest
   if (connect === null) return null;
   const features = raw.features === undefined ? [] : stringList(raw.features);
   if (features === null) return null;
+  const messageRecipients = raw.messageRecipients === undefined ? [] : stringList(raw.messageRecipients);
+  if (messageRecipients === null) return null;
   return {
     ...(parsed as Record<(typeof lists)[number], string[]>),
     publicRoutes: raw.publicRoutes,
@@ -148,6 +150,7 @@ export function parseStoredPluginGrant(value: string | null): PluginGrantRequest
     storefrontCode: raw.storefrontCode === true,
     storefrontConnect: connect,
     features,
+    messageRecipients,
   } as PluginGrantRequest;
 }
 

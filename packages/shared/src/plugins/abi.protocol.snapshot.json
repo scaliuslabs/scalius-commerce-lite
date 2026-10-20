@@ -9491,6 +9491,11 @@
    ],
    "staff": "marketing.send"
   },
+  "send_messages_any": {
+   "rbac": [],
+   "staff": "marketing.send",
+   "sensitive": true
+  },
   "read_customer_names": {
    "rbac": [],
    "staff": "customers.view",

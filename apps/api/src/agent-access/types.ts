@@ -41,6 +41,12 @@ export interface PluginPrincipal {
   /** The protected customer data its granted scopes reveal; other contact fields read null. */
   protectedData: ReadonlySet<ProtectedCustomerData>;
   riskCeiling: AgentRisk;
+  /**
+   * Who its email and SMS may reach by `to` (apps/api/src/plugins/messaging.ts):
+   * any address (`send_messages_any`), and the granted `messaging.recipients`
+   * fields of its own records. Absent: neither (staff and customers by id only).
+   */
+  messaging?: { anyAddress: boolean; recipients: ReadonlyArray<{ object: string; field: string }> };
   /** Host-attested staff initiating this invocation; absent for background jobs. */
   operator?: { userId: string };
 }

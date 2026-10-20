@@ -8,7 +8,9 @@ import {
   PLUGIN_SCOPE_NAMES,
   PROTECTED_CUSTOMER_DATA,
   PROTECTED_DATA_SCOPES,
+  isCapabilityScope,
   isProtectedDataScope,
+  isSensitivePluginScope,
   legacyPermissionScope,
   parsePluginManifest,
   type PluginScopeDefinition,
@@ -19,7 +21,7 @@ import { parseStoredPluginGrant, upgradeStoredPluginManifest } from "./installat
 
 describe("PLUGIN_SCOPES", () => {
   it("maps every access scope to live, plugin-grantable RBAC permissions", () => {
-    for (const scope of PLUGIN_SCOPE_NAMES.filter((name) => !isProtectedDataScope(name))) {
+    for (const scope of PLUGIN_SCOPE_NAMES.filter((name) => !isProtectedDataScope(name) && !isCapabilityScope(name))) {
       const { rbac, staff } = PLUGIN_SCOPES[scope];
       expect(rbac.length, scope).toBeGreaterThan(0);
       for (const permission of rbac) {
@@ -28,6 +30,19 @@ describe("PLUGIN_SCOPES", () => {
       }
       expect((rbac as readonly string[]).includes(staff), `${scope} staff gate`).toBe(true);
       expect(scope).toMatch(/^(read|write)_[a-z]+$/);
+    }
+  });
+
+  it("keeps capability scopes sensitive and RBAC-free: the bridge checks them by name", () => {
+    const capabilities = PLUGIN_SCOPE_NAMES.filter((name) => isCapabilityScope(name));
+    expect(capabilities).toEqual(["send_messages_any"]);
+    for (const scope of capabilities) {
+      const definition = PLUGIN_SCOPES[scope] as PluginScopeDefinition;
+      expect(definition.rbac, scope).toEqual([]);
+      expect(definition.protects, scope).toBeUndefined();
+      expect(isKnownPermission(definition.staff), scope).toBe(true);
+      expect(isSensitivePluginScope(scope), scope).toBe(true);
+      expect(effectivePluginPermissions({ scopes: [scope] }).size, scope).toBe(0);
     }
   });
 

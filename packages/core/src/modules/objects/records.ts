@@ -687,6 +687,20 @@ export async function queryObjectRecords(
   };
 }
 
+/** Whether any record matches `where`, through a declared index or unique set (one indexed row read). */
+export async function objectRecordExists(
+  db: Database,
+  namespace: string,
+  object: string,
+  declaration: ObjectTypeDeclaration,
+  where: ObjectWhere,
+): Promise<boolean> {
+  const plan = planObjectRecordQuery(declaration, { where: await storedWhere(db, declaration, where) });
+  const row = await db.select({ id: objectRecords.id }).from(objectRecords)
+    .where(and(owned(namespace, object), plan.condition)).limit(1).get();
+  return row !== undefined;
+}
+
 export async function countObjectRecords(
   db: Database,
   namespace: string,

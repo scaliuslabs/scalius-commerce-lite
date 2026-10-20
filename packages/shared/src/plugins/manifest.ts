@@ -22,7 +22,7 @@ import { pluginProvidersSchema } from "./providers/descriptors";
 import { checkoutAttributeSchema } from "./buyer-ui";
 import { PLUGIN_BLOCK_TARGETS } from "./storefront";
 import { STOREFRONT_BLOCK_TARGETS } from "./storefront-protocol";
-import { objectTypeDeclarationSchema, OBJECT_TYPE_PATTERN } from "./objects";
+import { objectTypeDeclarationSchema, OBJECT_TYPE_PATTERN, type ObjectTypeDeclaration } from "./objects";
 import { FUNCTION_READS_MAX, functionReadDeclarationSchema, functionReadIssues } from "./function-reads";
 import { PROVIDER_KINDS } from "./providers/kinds";
 import { providerRequiredScopes } from "./protected-data";
@@ -57,8 +57,10 @@ export {
 export {
   PLUGIN_SCOPES,
   PLUGIN_SCOPE_NAMES,
+  isCapabilityScope,
   isPluginScope,
   isProtectedDataScope,
+  isSensitivePluginScope,
   legacyPermissionScope,
   pluginScopePermissions,
   type PluginScope,
@@ -335,6 +337,39 @@ function settingNeedsRead(field: PluginSettingsSchema[number]): boolean {
     || (field.type === "list" && field.fields.some((item) => item.type === "image"));
 }
 
+// ── Messaging ─────────────────────────────────────────────────────────────
+
+/** The most Object fields one app declares as message recipients. */
+export const PLUGIN_MESSAGE_RECIPIENTS_MAX = 4;
+
+/**
+ * Who `ctx.messaging.email` and `sms` may reach by `to` (COMMERCE-HOOKS H5,
+ * "Messaging"): besides a customer by `customerId` (`read_customers`) and the
+ * store's own staff, only an address held in one of these fields of the app's
+ * own Objects. The consent screen lists them. Any other address needs the
+ * sensitive `send_messages_any` scope.
+ */
+const messagingSchema = z.object({
+  recipients: z.array(z.object({
+    /** One of the app's object types (`objects`). */
+    object: z.string().regex(OBJECT_TYPE_PATTERN, PLUGIN_OBJECT_TYPE_RULE),
+    /** A `single_line_text` field holding an email address or phone number, first in an index or alone in a unique set. */
+    field: pluginFieldKeySchema(),
+  }).strict()).max(PLUGIN_MESSAGE_RECIPIENTS_MAX).default([]),
+}).strict();
+
+/** A declared recipient field as the grant names it: `<object>.<field>`. */
+export function pluginMessageRecipientKey(recipient: { object: string; field: string }): string {
+  return `${recipient.object}.${recipient.field}`;
+}
+
+/** Whether an object's declared index (leading field) or unique set (alone) finds a record by `field`. */
+export function objectFieldLookupIndexed(declaration: Pick<ObjectTypeDeclaration, "indexes" | "unique">, field: string): boolean {
+  const lead = (entry: string | readonly string[]) => (typeof entry === "string" ? entry : entry[0]);
+  const alone = (entry: string | readonly string[]) => (typeof entry === "string" ? entry === field : entry.length === 1 && entry[0] === field);
+  return declaration.indexes.some((entry) => lead(entry) === field) || declaration.unique.some(alone);
+}
+
 // ── Settings groups ───────────────────────────────────────────────────────
 
 /** The most app-wide settings sections one app declares. */
@@ -572,6 +607,8 @@ export const pluginManifestSchema = z.object({
   salesChannels: z.array(z.object({ id: urlName, name: title }).strict()).max(3).default([])
     .refine((channels) => new Set(channels.map((channel) => channel.id)).size === channels.length, "Sales channel ids must be unique."),
   settings: pluginAppSettingsSchemaSchema.default([]),
+  /** Who the app's email and SMS may reach by address (`messaging.recipients`); shown on the consent screen. */
+  messaging: messagingSchema.default({ recipients: [] }),
   /**
    * Parts of the app a merchant turns on one at a time (features.ts). Each
    * starts off; turning one on asks consent for its own scopes and hosts, and
@@ -624,6 +661,23 @@ export const pluginManifestSchema = z.object({
   }
   if (new Set(manifest.routes.webhooks.map((route) => route.name)).size !== manifest.routes.webhooks.length) {
     context.addIssue({ code: "custom", path: ["routes", "webhooks"], message: "Webhook route names must be unique." });
+  }
+  manifest.messaging.recipients.forEach((recipient, index) => {
+    const path = ["messaging", "recipients", index];
+    const declaration = manifest.objects[recipient.object];
+    if (!declaration) {
+      context.addIssue({ code: "custom", path: [...path, "object"], message: `Object type ${recipient.object} is not declared.` });
+      return;
+    }
+    const field = declaration.fields.find((entry) => entry.key === recipient.field);
+    if (field?.type !== "single_line_text") {
+      context.addIssue({ code: "custom", path: [...path, "field"], message: `${recipient.object}.${recipient.field} must be a single_line_text field holding an email address or phone number.` });
+    } else if (!objectFieldLookupIndexed(declaration, recipient.field)) {
+      context.addIssue({ code: "custom", path: [...path, "field"], message: `Index ${recipient.field} first in ${recipient.object} (or declare it unique) so a message finds its record by index.` });
+    }
+  });
+  if (new Set(manifest.messaging.recipients.map(pluginMessageRecipientKey)).size !== manifest.messaging.recipients.length) {
+    context.addIssue({ code: "custom", path: ["messaging", "recipients"], message: "Message recipients must be unique." });
   }
   const needAdminRoute = (path: (string | number)[], route: string) => {
     if (!adminRoutes.has(route)) context.addIssue({ code: "custom", path, message: `Admin route ${route} is not declared.` });
@@ -899,12 +953,14 @@ export interface PluginGrantRequest {
   storefrontConnect: string[];
   /** The features turned on (`manifest.features`), sorted. Everything else already includes these features' parts. */
   features: string[];
+  /** Object fields whose addresses the app may email or text (`messaging.recipients`, `<object>.<field>`). */
+  messageRecipients: string[];
 }
 
 /** The list dimensions of a grant request, in key order. */
 export const PLUGIN_GRANT_LIST_DIMENSIONS = [
   "allowedHosts", "blockingFunctions", "customFieldOwners", "events", "features", "functions",
-  "providers", "scopes", "storefrontConnect", "storefrontScripts",
+  "messageRecipients", "providers", "scopes", "storefrontConnect", "storefrontScripts",
 ] as const satisfies ReadonlyArray<keyof PluginGrantRequest>;
 /** The flag dimensions of a grant request, in key order. */
 export const PLUGIN_GRANT_FLAG_DIMENSIONS = ["publicRoutes", "storefrontCode", "storefrontSurfaces"] as const satisfies ReadonlyArray<keyof PluginGrantRequest>;
@@ -914,7 +970,7 @@ export function emptyPluginGrantRequest(): PluginGrantRequest {
   return {
     scopes: [], allowedHosts: [], events: [], functions: [], blockingFunctions: [], providers: [],
     publicRoutes: false, storefrontScripts: [], storefrontSurfaces: false, customFieldOwners: [],
-    storefrontCode: false, storefrontConnect: [], features: [],
+    storefrontCode: false, storefrontConnect: [], features: [], messageRecipients: [],
   };
 }
 
@@ -944,6 +1000,7 @@ export function pluginGrantRequest(declared: PluginManifest, features: Iterable<
       || Boolean(manifest.storefront.stylesheet),
     storefrontConnect: sorted(manifest.storefront.connect),
     features: enabled,
+    messageRecipients: sorted(manifest.messaging.recipients.map(pluginMessageRecipientKey)),
   };
 }
 
@@ -1000,6 +1057,7 @@ export function pluginGrantAdditions(granted: PluginGrantRequest | null, next: P
     storefrontCode: next.storefrontCode && !granted.storefrontCode,
     storefrontConnect: added(granted.storefrontConnect, next.storefrontConnect),
     features: added(granted.features, next.features),
+    messageRecipients: added(granted.messageRecipients, next.messageRecipients),
   };
 }
 

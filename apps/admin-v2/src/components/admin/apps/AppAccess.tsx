@@ -153,6 +153,19 @@ export function AppAccess({ app, consent }: { app: AppDetail; consent?: ReactNod
     );
   }
 
+  const recipients = request.messageRecipients ?? [];
+  if (recipients.length > 0) {
+    sections.push(
+      <Section key="messages" title={t("access_messages")}>
+        {recipients.map((field) => {
+          // "Emails and texts the addresses in its {field} records", with the field as code.
+          const [before, after] = t("messageRecipientsIn", { field: "\u0000" }).split("\u0000");
+          return row(`recipient:${field}`, <span className="break-all">{before}<code>{field}</code>{after}</span>, isNew("messageRecipients", field));
+        })}
+      </Section>,
+    );
+  }
+
   if (sections.length === 0) return <p className="text-body text-muted-foreground">{t("noAccess")}</p>;
   return (
     <>

@@ -558,4 +558,26 @@ describe("the manifest vocabulary", () => {
     expect(issues({ ...FULL, customFields: [{ ownerType: "customer", key: "points", name: "Points", type: "number" }] })[0]).toMatch(/^customFields\.0\.type /);
     expect(issues({ ...FULL, customFields: [{ ownerType: "customer", key: "points__total", name: "Points", type: "integer" }] })[0]).toMatch(/^customFields\.0\.key Use snake_case/);
   });
+
+  it("declares message recipients as indexed text fields of its own records, and asks consent for them", () => {
+    const subscribers = {
+      name: "Subscribers",
+      fields: [{ key: "email", name: "Email", type: "single_line_text" }, { key: "joined_at", name: "Joined", type: "integer" }, { key: "phone", name: "Phone", type: "single_line_text" }],
+      unique: ["email"],
+      indexes: [["phone", "joined_at"]],
+    };
+    const manifest = { ...FULL, objects: { ...FULL.objects, subscribers }, messaging: { recipients: [{ object: "subscribers", field: "email" }, { object: "subscribers", field: "phone" }] } };
+    const parsed = parsePluginManifest(manifest);
+    if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
+    expect(pluginGrantRequest(parsed.manifest).messageRecipients).toEqual(["subscribers.email", "subscribers.phone"]);
+    const base = parsePluginManifest(FULL);
+    if (!base.ok) throw new Error("fixture");
+    expect(pluginGrantExpands(pluginGrantRequest(base.manifest), pluginGrantRequest(parsed.manifest))).toBe(true);
+    expect(pluginGrantKey(pluginGrantRequest(base.manifest))).not.toContain("messageRecipients");
+    expect(issues({ ...manifest, messaging: { recipients: [{ object: "subscribers", field: "joined_at" }] } }))
+      .toEqual(["messaging.recipients.0.field subscribers.joined_at must be a single_line_text field holding an email address or phone number."]);
+    expect(issues({ ...manifest, objects: { ...FULL.objects, subscribers: { ...subscribers, unique: [] } } }))
+      .toEqual(["messaging.recipients.0.field Index email first in subscribers (or declare it unique) so a message finds its record by index."]);
+    expect(issues({ ...manifest, messaging: { recipients: [{ object: "lists", field: "email" }] } })).toEqual(["messaging.recipients.0.object Object type lists is not declared."]);
+  });
 });

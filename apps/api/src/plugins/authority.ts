@@ -26,6 +26,8 @@ import {
   isPluginGrantablePermission,
 } from "@scalius/core/modules/plugins";
 import { grantedProtectedData } from "@scalius/shared/plugins/protected-data";
+import { PLUGIN_MESSAGE_ANY_SCOPE } from "@scalius/shared/plugins/messaging";
+import { pluginMessageRecipientKey } from "@scalius/shared/plugins/manifest";
 import { eq } from "drizzle-orm";
 import { AGENT_OPERATIONS } from "../generated/agent-operations.gen";
 import type { AgentOperationManifestEntry, AgentOperationRbac, AgentOperationStability } from "../openapi/agent-operation-manifest";
@@ -133,11 +135,32 @@ export async function resolvePluginPrincipal(db: Database, pluginId: string): Pr
     permissions,
     protectedData: grantedProtectedData(installation.grant.scopes),
     riskCeiling: derivePluginRiskCeiling(permissions, firstParty),
+    messaging: {
+      anyAddress: installation.grant.scopes.includes(PLUGIN_MESSAGE_ANY_SCOPE),
+      recipients: installation.manifest.messaging.recipients
+        .filter((recipient) => installation.grant!.messageRecipients.includes(pluginMessageRecipientKey(recipient))),
+    },
   };
 }
 
 /** Every plugin shares the standard limiter (60 operation calls a minute), keyed per plugin. */
-export function pluginWithinRateLimit(env: Env, purpose: "api" | "http" | "messaging", pluginId: string): Promise<boolean> {
+export function pluginWithinRateLimit(env: Env, purpose: "api" | "http", pluginId: string): Promise<boolean> {
   if (!env.RL_STANDARD) return Promise.resolve(false);
   return isWithinRateLimit(env, "RL_STANDARD", `plugin-${purpose}`, pluginId);
+}
+
+/**
+ * The app's messages a minute (`planLimits().plugins.messagesPerMinute`):
+ * the standard limiter (60 a minute per key) over that many / 60 shards
+ * picked at random. Fails closed: without the binding nothing is sent.
+ */
+export async function pluginWithinMessageRate(env: Env, pluginId: string, perMinute: number): Promise<boolean> {
+  if (!env.RL_STANDARD) return false;
+  const shards = Math.max(1, Math.ceil(perMinute / 60));
+  const shard = shards === 1 ? 0 : crypto.getRandomValues(new Uint32Array(1))[0]! % shards;
+  try {
+    return await isWithinRateLimit(env, "RL_STANDARD", "plugin-messaging", shards === 1 ? pluginId : `${pluginId}:${shard}`);
+  } catch {
+    return false;
+  }
 }

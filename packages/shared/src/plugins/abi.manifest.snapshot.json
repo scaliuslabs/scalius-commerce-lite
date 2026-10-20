@@ -153,7 +153,7 @@
    },
    "scopes": {
     "default": [],
-    "maxItems": 24,
+    "maxItems": 25,
     "type": "array",
     "items": {
      "type": "string",
@@ -168,6 +168,7 @@
       "read_customers",
       "write_customers",
       "write_marketing",
+      "send_messages_any",
       "read_customer_names",
       "read_customer_emails",
       "read_customer_phones",
@@ -1442,6 +1443,7 @@
           "read_customers",
           "write_customers",
           "write_marketing",
+          "send_messages_any",
           "read_customer_names",
           "read_customer_emails",
           "read_customer_phones",
@@ -3049,6 +3051,38 @@
      ]
     }
    },
+   "messaging": {
+    "default": {
+     "recipients": []
+    },
+    "type": "object",
+    "properties": {
+     "recipients": {
+      "default": [],
+      "maxItems": 4,
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "object": {
+         "type": "string",
+         "pattern": "^[a-z][a-z0-9_]{1,47}$"
+        },
+        "field": {
+         "type": "string",
+         "pattern": "^[a-z][a-z0-9_]{0,63}$"
+        }
+       },
+       "required": [
+        "object",
+        "field"
+       ],
+       "additionalProperties": false
+      }
+     }
+    },
+    "additionalProperties": false
+   },
    "features": {
     "maxItems": 24,
     "type": "array",
@@ -3075,7 +3109,7 @@
       },
       "scopes": {
        "default": [],
-       "maxItems": 24,
+       "maxItems": 25,
        "type": "array",
        "items": {
         "type": "string",
@@ -3090,6 +3124,7 @@
          "read_customers",
          "write_customers",
          "write_marketing",
+         "send_messages_any",
          "read_customer_names",
          "read_customer_emails",
          "read_customer_phones",
