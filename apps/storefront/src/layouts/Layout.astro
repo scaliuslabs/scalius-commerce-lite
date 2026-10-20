@@ -51,7 +51,10 @@ import {
 import { requestBypassesPublicStorefrontCache } from "@/lib/cache-policy";
 import { buildPrivateSessionPrefetchGuardScript } from "@/lib/private-session-prefetch-guard";
 import { AD_CLICK_ID_SCRIPT, STALE_ASSET_RECOVERY_SCRIPT } from "@/lib/inline-boot-scripts";
-import { optimizeAnalyticsScriptDelivery } from "@/lib/analytics-script-delivery";
+import { gateMarketingScript, optimizeAnalyticsScriptDelivery, scriptNeedsConsent, isGoogleTagScript } from "@/lib/analytics-script-delivery";
+import { consentRegimeFor } from "@scalius/shared/tracking-consent";
+import ConsentBanner from "../components/consent/ConsentBanner.astro";
+import { consentBootScript } from "../components/consent/consent-scripts";
 import { appComponentsRenderOn, appScriptsForPage, storefrontAppPage } from "@/lib/app-scripts";
 import { readStorefrontExtensions } from "@scalius/shared/plugins/storefront-components";
 import { setExtensionPage } from "@/lib/extensions";
@@ -171,9 +174,18 @@ if (themePreviewToken) {
   }
 }
 
-const analyticsScripts: AnalyticsConfig[] = isThemePreview || !analytics
+const storeAnalyticsScripts: AnalyticsConfig[] = isThemePreview || !analytics
   ? []
   : (layoutData?.analytics || []).map(optimizeAnalyticsScriptDelivery);
+// Tracking consent (audit spec S4): the banner shows when a tag or a server
+// destination needs consent; Meta and TikTok snippets stay inert until
+// marketing is granted. The regime is the page market's (its URL presence):
+// opt-in for a market selling to the EEA, the UK or Switzerland.
+const consentNeeded = !isThemePreview && analytics
+  && (storeAnalyticsScripts.some(scriptNeedsConsent) || layoutData?.tracking?.serverEvents === true);
+const analyticsScripts: AnalyticsConfig[] = consentNeeded
+  ? storeAnalyticsScripts.map(gateMarketingScript)
+  : storeAnalyticsScripts;
 const tiktokPixelEnabled = analyticsScripts.some((script) => {
   const type = script.type.trim().toLowerCase();
   return (
@@ -231,6 +243,13 @@ const ogLocale = presenceEntry
 // hreflang, the market selector and the geo suggestion exist only while the
 // store sells at more than one URL, so a single-presence store's HTML is unchanged.
 const severalPresences = hasSeveralPresences(marketMatrix);
+const consentRegime = consentRegimeFor(
+  pageMarket(marketMatrix, marketPresence)?.countries ?? [],
+  { otherRegions: layoutData?.tracking?.consentOtherRegions },
+);
+const consentBoot = consentNeeded
+  ? consentBootScript(consentRegime, { google: storeAnalyticsScripts.some(isGoogleTagScript) })
+  : "";
 const canonicalLocation = canonicalUrl ? new URL(canonicalUrl) : null;
 const hreflangLinks = severalPresences && canonicalLocation && storefrontUrl && !noindex && !isThemePreview
   ? hreflangAlternates(
@@ -375,6 +394,8 @@ const cdnDomain = sameOriginMediaSource ? null : cdnDomainUrl || null;
 // Runtime API URL, CDN domain, and currency for client-side JS (the
 // per-request platform context is not available to Vite client bundles).
 const runtimeGlobalsScript = [
+  // Consent first: Google's Consent Mode defaults precede every tag (components/consent).
+  consentBoot,
   `window.__API_BASE_URL__=${serializeJsonForInlineScript(publicApiUrl)};`,
   `window.__CDN_DOMAIN__=${serializeJsonForInlineScript(cdnDomainUrl || "")};`,
   `window.__IMAGE_CDN_BASE_URL__=${serializeJsonForInlineScript(cdnDomainUrl || "")};`,
@@ -384,7 +405,8 @@ const runtimeGlobalsScript = [
   `window.__CURRENCY_CODE__=${serializeJsonForInlineScript(currencyCode)};`,
   `window.__CURRENCY_DECIMAL_PLACES__=${serializeJsonForInlineScript(currencyDecimalPlaces)};`,
   `window.__CURRENCY_PRICE_INCREMENT__=${serializeJsonForInlineScript(currencyPriceIncrement)};`,
-  `window.__META_CAPI_BROWSER_EVENTS_ENABLED__=${serializeJsonForInlineScript(!isThemePreview && analytics && layoutData?.metaCapi?.browserEventsEnabled === true)};`,
+  // Browser events relayed to Meta CAPI and the TikTok Events API (one request each).
+  `window.__META_CAPI_BROWSER_EVENTS_ENABLED__=${serializeJsonForInlineScript(!isThemePreview && analytics && (layoutData?.metaCapi?.browserEventsEnabled === true || layoutData?.tracking?.tiktokBrowserEvents === true))};`,
   `window.__TIKTOK_PIXEL_ENABLED__=${serializeJsonForInlineScript(tiktokPixelEnabled)};`,
   // Buyer services of active apps: written only when an app provides one, so a
   // store without apps ships none of this and the islands stay unloaded.
@@ -612,6 +634,7 @@ const pageStoreTimeZone = storeTimeZone();
     <script is:inline set:html={STALE_ASSET_RECOVERY_SCRIPT} />
 
     {bodyEndScripts.map((script) => <Fragment set:html={script.config} />)}
+    {consentNeeded && <ConsentBanner regime={consentRegime} language={themeLanguage} />}
     {appBodyScripts.map((script) => <script is:inline async src={script.src} data-app-script={script.pluginId}></script>)}
 
     {themeEditorBridge && <script is:inline set:html={themeEditorBridge} />}

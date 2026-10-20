@@ -215,6 +215,7 @@ function getApiErrorCode(data: unknown): string | undefined {
  * @returns A promise resolving to an object with the new order's ID or an error.
  */
 export async function createOrder(
+  // `trackingSignals` is set only by the checkout proxy, from the buyer's request.
   payload: CreateOrderPayload,
   options: CreateOrderOptions = {},
 ): Promise<CreateOrderResult> {

@@ -1,6 +1,8 @@
 // Side effects that run after a storefront order commits.
 import type { Database } from "@scalius/database/client";
+import { OrderStatus } from "@scalius/database/schema";
 import { processExistingMetaPurchaseOutboxForOrder } from "../../integrations/meta/purchase-outbox";
+import { processTrackingDeliveriesForOrder } from "../../integrations/tracking/deliveries";
 import { orderCreatedNotificationOutboxId } from "../notifications";
 import type { StorefrontOrderCommitPayload } from "../orders";
 import { type StorefrontOrderCommitRuntime, wantsOrderCreatedNotification } from "./commit";
@@ -19,6 +21,20 @@ export async function runStorefrontOrderPostCommitSideEffects(
             encryptionKey: env?.CREDENTIAL_ENCRYPTION_KEY,
         }).catch((error: unknown) => {
             console.error("[orders/commit] Meta Purchase CAPI side effect failed for order", payload.orderData.id, error);
+        });
+    }
+
+    // GA4 and TikTok purchases (audit spec S4); one awaiting a hosted payment
+    // is sent when the payment is confirmed.
+    if (
+        (payload.trackingSnapshot?.deliveries.length ?? 0) > 0
+        && payload.orderData.status !== OrderStatus.INCOMPLETE
+    ) {
+        await processTrackingDeliveriesForOrder(db, payload.orderData.id, {
+            storefrontUrl: env?.STOREFRONT_URL,
+            encryptionKey: env?.CREDENTIAL_ENCRYPTION_KEY,
+        }).catch((error: unknown) => {
+            console.error("[orders/commit] Server tracking side effect failed for order", payload.orderData.id, error instanceof Error ? error.name : "error");
         });
     }
 

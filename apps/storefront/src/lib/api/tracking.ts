@@ -26,6 +26,9 @@ export interface MetaCapiEventPayload {
     client_user_agent?: string;
     fbp?: string;
     fbc?: string;
+    /** TikTok's `_ttp` browser id and the landing `ttclid` (Events API relay). */
+    ttp?: string;
+    ttclid?: string;
     external_id?: string[];
     fn?: string;
     ln?: string;
@@ -48,6 +51,8 @@ export interface MetaCapiEventPayload {
     content_category?: string;
     num_items?: number;
   };
+  /** The buyer refused the sale or sharing of data: Meta Limited Data Use, TikTok limited_data_use. */
+  limitedDataUse?: boolean;
 }
 
 /**

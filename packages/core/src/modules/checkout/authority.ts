@@ -55,6 +55,15 @@ import {
 import { createStorefrontTaxAuthorityReadPlan, type StorefrontTaxAuthoritySnapshot } from "../tax";
 import { resolveCheckoutPriceScope } from "../price-lists";
 import { resolveCartWithAppLinePrices, type AppLinePricer } from "./app-line-prices";
+import {
+  ga4MeasurementDocument,
+  ga4ServerEnabled,
+  tiktokEventsDocument,
+  tiktokServerEnabled,
+  trackingConsentDocument,
+  TRACKING_SETTINGS_DOCUMENTS,
+} from "../../integrations/tracking/settings";
+import type { TrackingConsentSettings } from "@scalius/shared/tracking-consent";
 import { backupPriceIncrementSql, sellingCountriesFromSql, sellingCountriesSql, storeCurrencyOf } from "../markets";
 
 /** Settings documents every checkout snapshot reads in its first statement. */
@@ -66,6 +75,8 @@ const CHECKOUT_SETTINGS_DOCUMENTS = [
     metaConversionsDocument,
     paymentMethodsDocument,
     stripeDocument,
+    // Tracking consent, GA4 Measurement Protocol and TikTok Events API (audit spec S4).
+    ...TRACKING_SETTINGS_DOCUMENTS,
 ];
 
 export interface StorefrontCheckoutAuthorityInput {
@@ -137,6 +148,12 @@ export interface StorefrontCheckoutAuthoritySnapshot {
     sideEffects: {
         orderCreatedNotification: boolean;
         metaPurchase: boolean;
+        /** Server tracking destinations and the consent banner setting (audit spec S4). */
+        tracking: {
+            ga4: boolean;
+            tiktok: boolean;
+            consent: TrackingConsentSettings;
+        };
     };
 }
 
@@ -288,7 +305,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                 ? results[0] as GatewaySettingsStoredRow[]
                 : [];
             const documentContext = { encryptionKey: credentialEncryptionKey };
-            const [currencyDocumentRead, countriesRead, notificationsRead, metaRead, checkoutRead, identityRead] = await Promise.all([
+            const [currencyDocumentRead, countriesRead, notificationsRead, metaRead, checkoutRead, identityRead, consentRead, ga4Read, tiktokRead] = await Promise.all([
                 currencyDocument.fromRows(genericRows, documentContext),
                 customerCountriesDocument.fromRows(genericRows, documentContext),
                 notificationsDocument.fromRows(genericRows, documentContext),
@@ -298,7 +315,15 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                     documentContext,
                 ),
                 customerAuthDocument.fromRows(genericRows, documentContext),
+                trackingConsentDocument.fromRows(genericRows, documentContext),
+                ga4MeasurementDocument.fromRows(genericRows, documentContext),
+                tiktokEventsDocument.fromRows(genericRows, documentContext),
             ]);
+            const tracking = {
+                ga4: ga4ServerEnabled(ga4Read),
+                tiktok: tiktokServerEnabled(tiktokRead),
+                consent: consentRead.value,
+            };
             const sideEffectRows = Array.isArray(results[8])
                 ? results[8] as CheckoutSideEffectSettingsRow[]
                 : [];
@@ -473,6 +498,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                                     || staffEmailRecipients.length > 0,
                                 ),
                                 metaPurchase: metaPurchaseEnabled,
+                                tracking,
                             },
                         },
                     };

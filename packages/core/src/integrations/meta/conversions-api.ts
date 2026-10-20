@@ -66,6 +66,8 @@ interface ServerEvent {
   user_data: UserData;
   custom_data?: CustomData;
   data_processing_options?: string[];
+  data_processing_options_country?: number;
+  data_processing_options_state?: number;
 }
 interface CapiPayload {
   data: ServerEvent[];

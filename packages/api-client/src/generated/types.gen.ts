@@ -6479,6 +6479,8 @@ export type PostApiV1MetaEventsData = {
             client_user_agent?: string;
             fbp?: string;
             fbc?: string;
+            ttp?: string;
+            ttclid?: string;
             external_id?: string | Array<string>;
             fn?: string;
             ln?: string;
@@ -6506,6 +6508,7 @@ export type PostApiV1MetaEventsData = {
             search_string?: string;
             [key: string]: unknown;
         };
+        limitedDataUse?: boolean;
     };
     path?: never;
     query?: never;
@@ -6924,6 +6927,11 @@ export type GetApiV1StorefrontLayoutResponses = {
             };
             metaCapi: {
                 browserEventsEnabled: boolean;
+            };
+            tracking: {
+                consentOtherRegions: 'opt_in' | 'notice' | 'link_only';
+                serverEvents: boolean;
+                tiktokBrowserEvents: boolean;
             };
             business: {
                 companyName: string;
@@ -19349,6 +19357,26 @@ export type PostApiV1OrdersData = {
         marketingConsent?: {
             language: string | null;
             channels: Array<'email' | 'sms' | 'whatsapp'>;
+        } | null;
+        /**
+         * The buyer's consent choice and first-party tracking ids, read by the storefront from its own cookies. Never required; stored only when a server tracking destination is on.
+         */
+        trackingSignals?: {
+            consent: {
+                analytics: boolean;
+                marketing: boolean;
+                saleOfData: boolean;
+            } | null;
+            gpc: boolean;
+            fbp: string | null;
+            fbc: string | null;
+            ttp: string | null;
+            ttclid: string | null;
+            gaClientId: string | null;
+            gaSessionId: string | null;
+            gclid: string | null;
+            clientIp: string | null;
+            userAgent: string | null;
         } | null;
         /**
          * The amount due the buyer reviewed in the tax quote (`amountDueMinor`). Required with gift cards: a card that changed since then is a 409 GIFT_CARD_CHANGED.
@@ -37575,6 +37603,157 @@ export type GetApiV1AdminAnalyticsHealthResponses = {
 
 export type GetApiV1AdminAnalyticsHealthResponse = GetApiV1AdminAnalyticsHealthResponses[keyof GetApiV1AdminAnalyticsHealthResponses];
 
+export type GetApiV1AdminAnalyticsTrackingHealthData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/analytics/tracking-health';
+};
+
+export type GetApiV1AdminAnalyticsTrackingHealthErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminAnalyticsTrackingHealthError = GetApiV1AdminAnalyticsTrackingHealthErrors[keyof GetApiV1AdminAnalyticsTrackingHealthErrors];
+
+export type GetApiV1AdminAnalyticsTrackingHealthResponses = {
+    /**
+     * Tracking health
+     */
+    200: {
+        success: true;
+        data: {
+            windowHours: number;
+            since: string;
+            consent: {
+                otherRegions: string;
+                orders: number;
+                analyticsGranted: number;
+                marketingGranted: number;
+                saleOfDataGranted: number;
+                bySource: {
+                    banner: number;
+                    default: number;
+                    gpc: number;
+                };
+            };
+            matchSignalCoverage: {
+                orders: number;
+                percent: {
+                    [key: string]: number;
+                };
+            };
+            destinations: Array<{
+                destination: 'meta' | 'ga4' | 'tiktok';
+                configured: boolean;
+                testMode: boolean;
+                events: Array<{
+                    sent: number;
+                    failed: number;
+                    skipped: number;
+                    pending: number;
+                    event: string;
+                }>;
+                skippedByConsent: number;
+                matchSignals: {
+                    [key: string]: number;
+                };
+                lastError: {
+                    at: string;
+                    message: string;
+                } | null;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminAnalyticsTrackingHealthResponse = GetApiV1AdminAnalyticsTrackingHealthResponses[keyof GetApiV1AdminAnalyticsTrackingHealthResponses];
+
+export type PostApiV1AdminAnalyticsTestEventData = {
+    body: {
+        destination: 'meta' | 'ga4' | 'tiktok';
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/analytics/test-event';
+};
+
+export type PostApiV1AdminAnalyticsTestEventErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminAnalyticsTestEventError = PostApiV1AdminAnalyticsTestEventErrors[keyof PostApiV1AdminAnalyticsTestEventErrors];
+
+export type PostApiV1AdminAnalyticsTestEventResponses = {
+    /**
+     * The provider's answer
+     */
+    200: {
+        success: true;
+        data: {
+            destination: 'meta' | 'ga4' | 'tiktok';
+            accepted: boolean;
+            mode: 'test_event_code' | 'ga4_validation';
+            eventId: string;
+            details: {
+                [key: string]: unknown;
+            };
+        };
+    };
+};
+
+export type PostApiV1AdminAnalyticsTestEventResponse = PostApiV1AdminAnalyticsTestEventResponses[keyof PostApiV1AdminAnalyticsTestEventResponses];
+
 export type GetApiV1AdminAnalyticsByIdSourceData = {
     body?: never;
     path: {
@@ -45543,6 +45722,203 @@ export type PostApiV1AdminSettingsMetaConversionsLogsResponses = {
 };
 
 export type PostApiV1AdminSettingsMetaConversionsLogsResponse = PostApiV1AdminSettingsMetaConversionsLogsResponses[keyof PostApiV1AdminSettingsMetaConversionsLogsResponses];
+
+export type GetApiV1AdminSettingsTrackingData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/tracking';
+};
+
+export type GetApiV1AdminSettingsTrackingErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminSettingsTrackingError = GetApiV1AdminSettingsTrackingErrors[keyof GetApiV1AdminSettingsTrackingErrors];
+
+export type GetApiV1AdminSettingsTrackingResponses = {
+    /**
+     * Settings
+     */
+    200: {
+        success: true;
+        data: {
+            consent: {
+                /**
+                 * The banner of markets that sell to no EEA, UK or Swiss country: `notice` (default; tags run until the buyer refuses), `opt_in` (nothing runs until the buyer agrees) or `link_only` (no banner, only the footer's "Your privacy choices"). EEA, UK and Swiss markets are always opt-in.
+                 */
+                otherRegions: 'opt_in' | 'notice' | 'link_only';
+                revision: number;
+            };
+            ga4: {
+                isEnabled: boolean;
+                measurementId: string | null;
+                /**
+                 * Masked when saved; null when none.
+                 */
+                apiSecret: string | null;
+                /**
+                 * Send to the Measurement Protocol validation server (nothing is recorded).
+                 */
+                debugMode: boolean;
+                revision: number;
+            };
+            tiktok: {
+                isEnabled: boolean;
+                pixelCode: string | null;
+                /**
+                 * Masked when saved; null when none.
+                 */
+                accessToken: string | null;
+                /**
+                 * Events go to Events Manager > Test events while set.
+                 */
+                testEventCode: string | null;
+                revision: number;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsTrackingResponse = GetApiV1AdminSettingsTrackingResponses[keyof GetApiV1AdminSettingsTrackingResponses];
+
+export type PostApiV1AdminSettingsTrackingData = {
+    body: {
+        consent?: {
+            otherRegions: 'opt_in' | 'notice' | 'link_only';
+            expectedRevision: number;
+        };
+        ga4?: {
+            isEnabled?: boolean;
+            measurementId?: string;
+            /**
+             * Omitted or masked keeps the stored value; empty clears it.
+             */
+            apiSecret?: string;
+            debugMode?: boolean;
+            expectedRevision: number;
+        };
+        tiktok?: {
+            isEnabled?: boolean;
+            pixelCode?: string;
+            /**
+             * Omitted or masked keeps the stored value; empty clears it.
+             */
+            accessToken?: string;
+            testEventCode?: string;
+            expectedRevision: number;
+        };
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/tracking';
+};
+
+export type PostApiV1AdminSettingsTrackingErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PostApiV1AdminSettingsTrackingError = PostApiV1AdminSettingsTrackingErrors[keyof PostApiV1AdminSettingsTrackingErrors];
+
+export type PostApiV1AdminSettingsTrackingResponses = {
+    /**
+     * Settings saved
+     */
+    200: {
+        success: true;
+        data: {
+            consent: {
+                /**
+                 * The banner of markets that sell to no EEA, UK or Swiss country: `notice` (default; tags run until the buyer refuses), `opt_in` (nothing runs until the buyer agrees) or `link_only` (no banner, only the footer's "Your privacy choices"). EEA, UK and Swiss markets are always opt-in.
+                 */
+                otherRegions: 'opt_in' | 'notice' | 'link_only';
+                revision: number;
+            };
+            ga4: {
+                isEnabled: boolean;
+                measurementId: string | null;
+                /**
+                 * Masked when saved; null when none.
+                 */
+                apiSecret: string | null;
+                /**
+                 * Send to the Measurement Protocol validation server (nothing is recorded).
+                 */
+                debugMode: boolean;
+                revision: number;
+            };
+            tiktok: {
+                isEnabled: boolean;
+                pixelCode: string | null;
+                /**
+                 * Masked when saved; null when none.
+                 */
+                accessToken: string | null;
+                /**
+                 * Events go to Events Manager > Test events while set.
+                 */
+                testEventCode: string | null;
+                revision: number;
+            };
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsTrackingResponse = PostApiV1AdminSettingsTrackingResponses[keyof PostApiV1AdminSettingsTrackingResponses];
 
 export type GetApiV1AdminSettingsNotificationChannelsTemplatesData = {
     body?: never;

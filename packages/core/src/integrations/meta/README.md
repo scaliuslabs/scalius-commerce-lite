@@ -46,6 +46,7 @@ The route runs these steps in order:
 4. Apply the `RL_STANDARD` rate limit (`meta-events`, per client IP). Excess returns 429.
 5. Add the client IP and user agent from the request headers.
 6. Call `sendCapiEvent()` inside `waitUntil`. Without an execution context it awaits the call.
+7. Relay the same event (same `event_id`) to the TikTok Events API when it is on (`integrations/tiktok/browser-relay.ts`; Lead becomes SubmitForm), under its own circuit (`apps/api/src/utils/tiktok-events-circuit.ts`, cleared by a tracking settings save). The storefront sends nothing while marketing consent is denied, and `limitedDataUse: true` when the sale of data is refused.
 
 The route opens the circuit when `sendCapiEvent()` fails with `retryable: false` (bad credentials, disabled or unconfigured CAPI). The row lives 15 minutes (`expires_at`). Saving Meta settings deletes it (other colos follow within the hint's 60 s). Do not add hot retries, success logs, raw provider payload logs or per-event failure logs for unconfigured credentials.
 
@@ -68,12 +69,14 @@ The route opens the circuit when `sendCapiEvent()` fails with `retryable: false`
 
 ## Purchase outbox (`purchase-outbox.ts`)
 
+- Consent and match signals (audit spec S4, [analytics README](../../modules/analytics/README.md#tracking-consent-and-server-events)): each attempt reads the order's `order_tracking_signals` snapshot in the same batch as the order and its lines, adds `fbp`, `fbc`, `client_ip_address` and `client_user_agent`, sends the commit time as `event_time` (skipped after 7 days), skips with `consent_denied` when marketing is denied, and sets Limited Data Use when the sale of data is refused.
+
 - Table `meta_capi_purchase_outbox`: unique `order_id` and `event_id`, `source`, `status` (`pending`, `processing`, `sent`, `failed`, `skipped`), attempts and a claim lease. It stores no buyer data.
 - The event ID is `Purchase:<orderId>`. It matches the Pixel `eventID` for deduplication.
 - An order is eligible when it is not deleted and not `incomplete`, `cancelled`, `refunded` or `returned`, and it is COD, or paid, or partly paid.
 - The checkout commit inserts the row in the order's commit batch (`source` `storefront-order`) when Meta is enabled with a pixel ID and a token in the checkout authority snapshot. Post-commit code then sends it (`processExistingMetaPurchaseOutboxForOrder`).
 - The payment confirmation path inserts the row in the same batch as the payment change (`source` `payment-<provider>-confirmed`). The payment-event handler then starts the send in `waitUntil`.
-- `meta_purchase_outbox_flush` retries due rows with `flushPendingMetaPurchaseOutbox()`: 25 per run on Paid, 5 on Free. It runs every 15 minutes on Paid and every 23 minutes on Free (the cron's sweep rotation).
+- The `tracking_outbox_flush` job retries due rows with `flushPendingMetaPurchaseOutbox()`: 25 per run on Paid, 5 on Free. It runs every 15 minutes on Paid and every 23 minutes on Free (the cron's sweep rotation).
 - Each attempt claims the row (5-minute lease) and rebuilds the event from the committed `orders` and `order_items`: source URL `<storefront origin>/order-success?orderId=<id>`, value, currency, content IDs (SKU ID, else product ID), contents, order ID and item count. Matching fields are phone, email, first and last name, city, customer ID and country `bd`.
 - A disabled or unconfigured setup, a missing storefront URL, a missing or ineligible order, and a non-retryable Meta error end as `skipped`. A 429, 5xx or network failure ends as `failed` and retries with backoff `60 s x 2^(attempts-1)`, at most 1 hour.
 

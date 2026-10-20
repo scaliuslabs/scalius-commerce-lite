@@ -16,6 +16,7 @@ import { sealAnalyticsDays } from "@scalius/core/modules/analytics";
 import { sweepAutoFulfilment } from "@scalius/core/modules/fulfilment";
 import { sweepOrphanConversationAttachments } from "@scalius/core/modules/conversations";
 import { flushPendingMetaPurchaseOutbox } from "@scalius/core/integrations/meta/purchase-outbox";
+import { planTrackingSweep } from "@scalius/core/integrations/tracking/deliveries";
 import {
   cleanupExpiredCustomerAuthOtpChallenges,
   cleanupExpiredCustomerAuthOtpRateLimits,
@@ -49,6 +50,8 @@ export const EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES = 60;
 /** Due review requests turned into outbox rows per run (Wave B §2.3). */
 export const REVIEW_REQUEST_SWEEP_LIMIT = 100;
 export const META_PURCHASE_OUTBOX_SWEEP_LIMIT = 25;
+export const TRACKING_DELIVERY_SWEEP_LIMIT = 10;
+export const TRACKING_PURGE_SWEEP_LIMIT = 200;
 export const CUSTOMER_AUTH_OTP_SWEEP_LIMIT = 200;
 export const ORDER_PAYMENT_RECOVERY_OTP_SWEEP_LIMIT = 200;
 export const CUSTOMER_AUTH_OTP_RATE_LIMIT_SWEEP_LIMIT = 200;
@@ -339,14 +342,29 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
     },
   },
   {
-    name: "meta_purchase_outbox_flush",
-    async run({ db, env, timed }) {
+    // Server tracking (audit spec S4): Meta Purchase CAPI rows, then GA4 and
+    // TikTok deliveries due a retry, then the tracking snapshots past their
+    // 8 days and finished deliveries past 90. One job, so the rotation keeps
+    // its length; the GA4/TikTok share stays small on Free (2 rows a run).
+    name: "tracking_outbox_flush",
+    async run({ db, env, timed, runContext }) {
+      const encryptionKey = getCredentialEncryptionKey(env as unknown as Record<string, unknown>);
+      // One D1 call when idle: Meta's due rows, GA4/TikTok's and both purges.
+      const trackingSweep = planTrackingSweep(db, {
+        storefrontUrl: env.STOREFRONT_URL,
+        encryptionKey,
+        limit: scaled(TRACKING_DELIVERY_SWEEP_LIMIT),
+        purgeLimit: scaled(TRACKING_PURGE_SWEEP_LIMIT),
+        // Snapshots live 8 days: purging on the hour's first run is enough.
+        purge: firstSweepRunOfHour(runContext.scheduledAt, MAINTENANCE_SWEEPS.length),
+      });
       const metaPurchaseOutbox = await timed("meta_purchase_outbox_flush", () =>
         flushPendingMetaPurchaseOutbox({
           db,
           storefrontUrl: env.STOREFRONT_URL,
-          encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+          encryptionKey,
           limit: scaled(META_PURCHASE_OUTBOX_SWEEP_LIMIT),
+          batchWith: trackingSweep.statements,
         }),
       );
       if (
@@ -359,6 +377,16 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
           `[scheduled] Meta Purchase outbox flush: scanned=${metaPurchaseOutbox.scanned}, ` +
             `sent=${metaPurchaseOutbox.sent}, failed=${metaPurchaseOutbox.failed}, ` +
             `skipped=${metaPurchaseOutbox.skipped}, busy=${metaPurchaseOutbox.busy}`,
+        );
+      }
+      const tracking = await timed("tracking_delivery_flush", () =>
+        trackingSweep.finish(metaPurchaseOutbox.batchedResults),
+      );
+      if (tracking.scanned > 0 || tracking.signalsPurged > 0 || tracking.deliveriesPurged > 0) {
+        console.log(
+          `[scheduled] Tracking deliveries: scanned=${tracking.scanned}, sent=${tracking.sent}, ` +
+            `failed=${tracking.failed}, skipped=${tracking.skipped}, deferred=${tracking.deferred}, ` +
+            `signalsPurged=${tracking.signalsPurged}, deliveriesPurged=${tracking.deliveriesPurged}`,
         );
       }
     },

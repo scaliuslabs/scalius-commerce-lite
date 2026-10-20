@@ -45,6 +45,7 @@ import { paymentProvidersFromRegistrations } from "../../plugins/providers/payme
 import { requestProviderRuntime } from "../../plugins/providers/runtime";
 import { requestAppProviders } from "../../plugins/providers/app-providers";
 import { commitTaxDocument } from "@scalius/core/modules/tax";
+import { resolveOrderTrackingSnapshot } from "@scalius/core/integrations/tracking/signals";
 import { getOptionalExecutionContext } from "../../utils/execution-context";
 import { autoFulfilAfterResponse } from "../../background/auto-fulfil";
 import { AppError, ValidationError, RateLimitError } from "../../utils/api-error";
@@ -213,6 +214,28 @@ function assertGiftCardCheckoutPolicy(
   };
 }
 
+const trackingId = z.string().trim().max(512).nullable();
+/**
+ * What the storefront's checkout proxy read from the buyer's own request:
+ * the stored consent choice (null when none), Global Privacy Control and the
+ * first-party match signals. The API keeps only what that consent allows.
+ */
+const checkoutTrackingSignalsSchema = z.object({
+  consent: z.object({ analytics: z.boolean(), marketing: z.boolean(), saleOfData: z.boolean() }).strict().nullable(),
+  gpc: z.boolean(),
+  fbp: trackingId,
+  fbc: trackingId,
+  ttp: trackingId,
+  ttclid: trackingId,
+  gaClientId: trackingId,
+  gaSessionId: trackingId,
+  gclid: trackingId,
+  clientIp: z.string().trim().max(64).nullable(),
+  userAgent: z.string().max(512).nullable(),
+}).strict().openapi({
+  description: "The buyer's consent choice and first-party tracking ids, read by the storefront from its own cookies. Never required; stored only when a server tracking destination is on.",
+});
+
 const createOrderSchema = z.object({
   checkoutRequestId: z
     .string()
@@ -313,6 +336,7 @@ const createOrderSchema = z.object({
    * Never required; recorded after the order commits.
    */
   marketingConsent: z.object({ language: z.string().trim().max(16).nullable(), channels: z.array(z.enum(["email", "sms", "whatsapp"])).min(1).max(3) }).strict().nullable().optional(),
+  trackingSignals: checkoutTrackingSignalsSchema.nullable().optional(),
   expectedAmountDueMinor: z.number().int().nonnegative().optional().openapi({
     description: "The amount due the buyer reviewed in the tax quote (`amountDueMinor`). Required with gift cards: a card that changed since then is a 409 GIFT_CARD_CHANGED.",
   }),
@@ -628,6 +652,37 @@ app.openapi(createOrderRoute, async (c) => {
       { masterSecret: readMasterSecret(c.env) },
       { apps, channel: "online_store", paymentProviders, appProviders: requestAppProviders(c) },
     );
+
+    // The consent snapshot and match signals the server tracking senders use
+    // (audit spec S4): committed with the order, none when nothing is on.
+    result.commitPayload.trackingSnapshot = resolveOrderTrackingSnapshot({
+      request: data.trackingSignals
+        ? {
+          consent: data.trackingSignals.consent,
+          gpc: data.trackingSignals.gpc,
+          signals: {
+            fbp: data.trackingSignals.fbp,
+            fbc: data.trackingSignals.fbc,
+            ttp: data.trackingSignals.ttp,
+            ttclid: data.trackingSignals.ttclid,
+            gaClientId: data.trackingSignals.gaClientId,
+            gaSessionId: data.trackingSignals.gaSessionId,
+            gclid: data.trackingSignals.gclid,
+          },
+          clientIp: data.trackingSignals.clientIp,
+          userAgent: data.trackingSignals.userAgent,
+        }
+        : null,
+      orderCountry: result.commitPayload.orderData.shippingCountryCode
+        ?? result.commitPayload.orderData.billingCountryCode
+        ?? null,
+      consentSettings: checkoutAuthority.sideEffects.tracking.consent,
+      destinations: {
+        meta: checkoutAuthority.sideEffects.metaPurchase,
+        ga4: checkoutAuthority.sideEffects.tracking.ga4,
+        tiktok: checkoutAuthority.sideEffects.tracking.tiktok,
+      },
+    });
 
     assertStorefrontCheckoutQuoteFingerprint(
       data.expectedQuoteFingerprint,

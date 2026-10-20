@@ -45,7 +45,7 @@ describe("partytownForwardFor", () => {
     expect(partytownForwardFor([script("facebook_pixel", "<script>fbq('init','1')</script>")])).toEqual(["fbq"]);
     expect(partytownForwardFor([script("google_tag_manager", "<script>(function(w){w.dataLayer=[]})</script>")])).toEqual(["dataLayer.push"]);
     expect(partytownForwardFor([script("google_analytics", "<script>gtag('config','G-1')</script>")])).toEqual(["dataLayer.push", "gtag"]);
-    expect(partytownForwardFor([script("tiktok_pixel", "<script>ttq.load('X')</script>")])).toEqual(["ttq.load", "ttq.page", "ttq.track"]);
+    expect(partytownForwardFor([script("tiktok_pixel", "<script>ttq.load('X')</script>")])).toEqual(["ttq.load", "ttq.page", "ttq.track", "ttq.identify", "ttq.grantConsent", "ttq.revokeConsent"]);
   });
 
   it("detects providers inside custom Partytown snippets", () => {

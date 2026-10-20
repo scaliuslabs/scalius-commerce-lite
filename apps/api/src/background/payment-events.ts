@@ -15,6 +15,7 @@ import {
   type PaymentEvent,
 } from "@scalius/core/modules/payments";
 import { processExistingMetaPurchaseOutboxForOrder } from "@scalius/core/integrations/meta/purchase-outbox";
+import { processTrackingDeliveriesForOrder } from "@scalius/core/integrations/tracking/deliveries";
 import type { NotificationSender } from "@scalius/core/modules/notifications";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
@@ -151,6 +152,14 @@ async function applyPaymentEvent(
           encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
         }).catch((error: unknown) => {
           console.error(`[payments] Meta Purchase CAPI side effect failed for confirmed ${provider} order ${event.orderId}:`, error instanceof Error ? error.name : "error");
+        }));
+        // GA4 and TikTok purchases waiting for this payment (audit spec S4).
+        ctx.waitUntil(processTrackingDeliveriesForOrder(db, event.orderId, {
+          storefrontUrl: env.STOREFRONT_URL,
+          encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+          paymentConfirmed: true,
+        }).catch((error: unknown) => {
+          console.error(`[payments] Server tracking side effect failed for confirmed ${provider} order ${event.orderId}:`, error instanceof Error ? error.name : "error");
         }));
         ctx.waitUntil(runOrderAutoFulfil(db, env, ctx, event.orderId).catch((error: unknown) => {
           console.warn(`[payments] Automatic fulfilment of ${event.orderId} failed; the scheduled sweep retries:`, error instanceof Error ? error.name : "error");

@@ -438,6 +438,7 @@ function createTestApp(options: {
       sideEffects: {
         orderCreatedNotification: true,
         metaPurchase: true,
+        tracking: { ga4: false, tiktok: false, consent: { otherRegions: "notice" } },
       },
     };
   });

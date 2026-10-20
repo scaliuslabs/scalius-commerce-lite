@@ -177,6 +177,8 @@ const inline = layout === "inline";
     show(form, copy, status);
     const message = form.querySelector<HTMLElement>("[data-newsletter-message]");
     if (DONE.has(status)) {
+      // Meta Lead, TikTok SubmitForm and GA4 generate_lead (consent permitting).
+      void import("@/lib/analytics").then(({ trackLead }) => trackLead({ source: "newsletter" })).catch(() => undefined);
       form.querySelector<HTMLElement>("[data-newsletter-fields]")?.setAttribute("hidden", "");
       message?.focus();
       return;

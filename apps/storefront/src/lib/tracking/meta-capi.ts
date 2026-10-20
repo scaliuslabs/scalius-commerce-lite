@@ -7,6 +7,7 @@ import {
   sendMetaCapiEvent,
   type MetaCapiEventPayload,
 } from "../api/tracking";
+import { marketingAllowed, saleOfDataRefused } from "./consent";
 export { createMetaEventId } from "./meta-event-id";
 
 function getCookie(name: string): string {
@@ -38,10 +39,15 @@ function getBrowserUserData(): Partial<MetaCapiEventPayload["userData"]> {
   const fbc = getCookie("_fbc") || getFromSession("scalius_fbc") || undefined;
   const fbp = getCookie("_fbp") || undefined;
 
+  // TikTok's browser id and click id ride along for the Events API relay.
+  const ttp = getCookie("_ttp") || undefined;
+  const ttclid = getCookie("scalius_ttclid") || undefined;
   const userData: Partial<MetaCapiEventPayload["userData"]> = {
     client_user_agent: navigator.userAgent,
     fbp: fbp,
     fbc: fbc,
+    ...(ttp ? { ttp } : {}),
+    ...(ttclid ? { ttclid: decodeURIComponent(ttclid) } : {}),
   };
 
   return userData;
@@ -90,7 +96,8 @@ export function sendServerEvent(
   if (typeof window === "undefined") {
     return;
   }
-  if (window.__META_CAPI_BROWSER_EVENTS_ENABLED__ !== true) {
+  // Server relays need the same marketing consent as the pixels.
+  if (window.__META_CAPI_BROWSER_EVENTS_ENABLED__ !== true || !marketingAllowed()) {
     return;
   }
 
@@ -104,6 +111,7 @@ export function sendServerEvent(
       ...(event.userData || {}),
     },
     customData: event.customData,
+    ...(saleOfDataRefused() ? { limitedDataUse: true } : {}),
   };
 
   try {

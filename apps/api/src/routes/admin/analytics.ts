@@ -6,6 +6,8 @@ import {
     deleteAnalyticsScript,
     getAnalyticsProviderHealth,
     getAnalyticsScript,
+    getTrackingHealth,
+    sendTrackingTestEvent,
     listAnalyticsScripts,
     permanentlyDeleteAnalyticsScript,
     restoreAnalyticsScript,
@@ -22,6 +24,7 @@ import {
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 import { created, ok } from "../../utils/api-response";
+import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import {
     conflictResponse,
     errorResponses,
@@ -182,6 +185,96 @@ app.openapi(providerHealthRoute, async (c) => ok(c, await getAnalyticsProviderHe
     c.get("db"),
     { credentialEncryptionKey: c.env.CREDENTIAL_ENCRYPTION_KEY },
 )));
+
+// ── Server tracking (audit spec S4) ──
+
+const deliveryCountsSchema = z.object({
+    sent: z.number().int().nonnegative(),
+    failed: z.number().int().nonnegative(),
+    skipped: z.number().int().nonnegative(),
+    pending: z.number().int().nonnegative(),
+});
+
+const trackingHealthSchema = z.object({
+    windowHours: z.number().int().positive(),
+    since: z.string(),
+    consent: z.object({
+        otherRegions: z.string(),
+        orders: z.number().int().nonnegative(),
+        analyticsGranted: z.number().int().nonnegative(),
+        marketingGranted: z.number().int().nonnegative(),
+        saleOfDataGranted: z.number().int().nonnegative(),
+        bySource: z.object({ banner: z.number().int(), default: z.number().int(), gpc: z.number().int() }),
+    }),
+    matchSignalCoverage: z.object({
+        orders: z.number().int().nonnegative(),
+        percent: z.record(z.string(), z.number()),
+    }),
+    destinations: z.array(z.object({
+        destination: z.enum(["meta", "ga4", "tiktok"]),
+        configured: z.boolean(),
+        testMode: z.boolean(),
+        events: z.array(deliveryCountsSchema.extend({ event: z.string() })),
+        skippedByConsent: z.number().int().nonnegative(),
+        matchSignals: z.record(z.string(), z.number().int().nonnegative()),
+        lastError: z.object({ at: z.string(), message: z.string() }).nullable(),
+    })),
+});
+
+const trackingHealthRoute = createRoute({
+    method: "get",
+    path: "/tracking-health",
+    operationId: "dashboard.analytics.tracking_health",
+    tags: ["Admin - Analytics"],
+    summary: "Get server tracking health for the last 24 hours",
+    description: "Per destination (Meta CAPI, GA4 Measurement Protocol, TikTok Events API): configuration, test mode, server events sent, failed, skipped and pending, purchases skipped by consent, match-signal counts and the latest error; across orders: consent outcomes and match-signal coverage (percent of orders carrying em, ph, fbp, fbc, ip, ua, ttp, ttclid and GA ids). Counts only: no identifier or contact data.",
+    responses: {
+        200: { description: "Tracking health", content: { "application/json": { schema: successEnvelope(trackingHealthSchema) } } },
+        ...errorResponses,
+    },
+});
+
+app.openapi(trackingHealthRoute, async (c) => ok(c, await getTrackingHealth(c.get("db"), {
+    encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
+})));
+
+const testEventRoute = createRoute({
+    method: "post",
+    path: "/test-event",
+    operationId: "dashboard.analytics.send_test_event",
+    tags: ["Admin - Analytics"],
+    summary: "Send one test event to a tracking destination",
+    description: "Meta and TikTok send a ViewContent under their saved test event code (409 without one), so it shows in Events Manager > Test events and never in live data. GA4 sends a sample purchase to the Measurement Protocol validation server and returns its validation messages (nothing is recorded).",
+    request: {
+        body: {
+            required: true,
+            content: { "application/json": { schema: z.object({ destination: z.enum(["meta", "ga4", "tiktok"]) }).strict() } },
+        },
+    },
+    responses: {
+        200: {
+            description: "The provider's answer",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        destination: z.enum(["meta", "ga4", "tiktok"]),
+                        accepted: z.boolean(),
+                        mode: z.enum(["test_event_code", "ga4_validation"]),
+                        eventId: z.string(),
+                        details: z.record(z.string(), z.unknown()),
+                    })),
+                },
+            },
+        },
+        ...errorResponses,
+        409: conflictResponse,
+    },
+});
+
+app.openapi(testEventRoute, async (c) => ok(c, await sendTrackingTestEvent(c.get("db"), c.req.valid("json").destination, {
+    encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
+    storefrontUrl: c.env.STOREFRONT_URL,
+})));
 
 const getByIdRoute = createRoute({
     method: "get",

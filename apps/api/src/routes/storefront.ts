@@ -335,6 +335,16 @@ const layoutDataSchema = z.object({
     canonicalHostAliases: z.array(z.string()),
   }),
   metaCapi: z.object({ browserEventsEnabled: z.boolean() }),
+  /**
+   * Tracking consent and server events (audit spec S4): the banner of markets
+   * outside the EEA, the UK and Switzerland (those are always opt-in), whether
+   * a server destination is on, and whether TikTok takes browser events.
+   */
+  tracking: z.object({
+    consentOtherRegions: z.enum(["opt_in", "notice", "link_only"]),
+    serverEvents: z.boolean(),
+    tiktokBrowserEvents: z.boolean(),
+  }),
   business: z.object({
     companyName: z.string(),
     legalName: z.string(),

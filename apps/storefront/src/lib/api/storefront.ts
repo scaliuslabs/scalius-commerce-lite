@@ -219,6 +219,12 @@ export interface LayoutData {
   metaCapi?: {
     browserEventsEnabled?: boolean;
   };
+  /** Tracking consent and server events (audit spec S4). */
+  tracking?: {
+    consentOtherRegions?: "opt_in" | "notice" | "link_only";
+    serverEvents?: boolean;
+    tiktokBrowserEvents?: boolean;
+  };
   business?: StorefrontBusinessInfo;
   seo?: {
     discovery?: SeoDiscoverySettings;

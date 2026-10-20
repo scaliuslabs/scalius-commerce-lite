@@ -108,6 +108,13 @@ vi.mock("@scalius/core/integrations/meta/purchase-outbox", () => ({
   flushPendingMetaPurchaseOutbox: mocks.flushPendingMetaPurchaseOutbox,
 }));
 
+vi.mock("@scalius/core/integrations/tracking/deliveries", () => ({
+  planTrackingSweep: vi.fn(() => ({
+    statements: [],
+    finish: async () => ({ scanned: 0, sent: 0, failed: 0, skipped: 0, deferred: 0, busy: 0, signalsPurged: 0, deliveriesPurged: 0 }),
+  })),
+}));
+
 vi.mock("@scalius/core/modules/customers", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/customers")>()),
   cleanupExpiredCustomerAuthOtpChallenges: mocks.cleanupExpiredCustomerAuthOtpChallenges,
@@ -461,6 +468,8 @@ describe("runScheduledMaintenance", () => {
       storefrontUrl: undefined,
       encryptionKey: undefined,
       limit: META_PURCHASE_OUTBOX_SWEEP_LIMIT,
+      // The GA4/TikTok sweep's statements ride in the same round trip.
+      batchWith: [],
     });
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("event=scheduled_run_started"));
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("cron=* * * * *"));

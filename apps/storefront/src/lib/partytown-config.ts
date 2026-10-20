@@ -66,7 +66,7 @@ const FORWARD_RULES: ReadonlyArray<{
     pattern: /\bfbq\s*\(|connect\.facebook\.net/,
   },
   {
-    forward: ["ttq.load", "ttq.page", "ttq.track"],
+    forward: ["ttq.load", "ttq.page", "ttq.track", "ttq.identify", "ttq.grantConsent", "ttq.revokeConsent"],
     types: ["tiktok_pixel"],
     pattern: /\bttq\.|analytics\.tiktok\.com/,
   },

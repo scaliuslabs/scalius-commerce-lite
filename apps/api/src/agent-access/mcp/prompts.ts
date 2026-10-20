@@ -86,7 +86,7 @@ export const AGENT_PROMPTS: readonly PromptDefinition[] = [
     title: "Tracking health",
     description: "Pixels and server events: what is connected, what is failing.",
     body: () => [
-      "Check marketing tracking: scalius_search \"analytics settings\" and \"meta conversions\", then read each provider's settings and health.",
+      "Check marketing tracking: scalius_search \"analytics settings\", \"meta conversions\" and \"server tracking health\", then read each provider's settings, the tracking settings and the 24-hour tracking health.",
       "Report per provider (Meta, Google, TikTok, Cloudflare): connected or not, test code set, recent failures, and the one fix that matters most. Change nothing.",
     ].join("\n"),
   },

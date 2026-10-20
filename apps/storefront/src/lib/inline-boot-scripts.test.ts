@@ -32,6 +32,19 @@ describe("ad click id script", () => {
     window.close();
   });
 
+  it("keeps click ids in memory only until the consent banner grants marketing (audit spec S4)", () => {
+    const window = page("https://shop.test/products/a?fbclid=AbC-1.2&ttclid=T~1");
+    (window as unknown as { __scaliusConsent: object }).__scaliusConsent = { analytics: false, marketing: false, saleOfData: false, source: "default" };
+    window.eval(AD_CLICK_ID_SCRIPT);
+    expect(window.document.cookie).toBe("");
+    expect(window.sessionStorage.getItem("scalius_fbc")).toBeNull();
+    expect((window as unknown as { __scaliusClickIds: Record<string, string> }).__scaliusClickIds).toMatchObject({
+      _fbc: expect.stringMatching(/^fb\.1\.\d+\.AbC-1\.2$/),
+      scalius_ttclid: "T~1",
+    });
+    window.close();
+  });
+
   it("does nothing under a theme preview or without ids", () => {
     for (const window of [page("https://shop.test/?gclid=G1", true), page("https://shop.test/?q=shoes")]) {
       window.eval(AD_CLICK_ID_SCRIPT);
