@@ -14,7 +14,8 @@ import { orders } from "@scalius/database/schema";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { hashCustomerSessionToken } from "@scalius/core/modules/customers";
 import { overdueOrderCondition } from "@scalius/core/modules/orders";
-import { recordOrderPayment } from "@scalius/core/modules/payments";
+import { processRefund, recordOrderPayment } from "@scalius/core/modules/payments";
+import { applyOrderStatusChange } from "@scalius/core/modules/orders";
 import { paymentMethodsDocument } from "@scalius/core/modules/settings";
 import { errorResponseFromError } from "../../utils/api-response";
 import { orderRoutes } from "./index";
@@ -227,5 +228,118 @@ describe("net terms through storefront checkout", () => {
     expect(placed.status, JSON.stringify(placed.json)).toBe(201);
     await expect(recordOrderPayment(db, { orderId: String(placed.json.data.orderId), amountMinor: 100, via: "cash", recordedBy: "staff:owner", requestKey: "cod-payment-1" }))
       .rejects.toThrow(/invoice \(net terms\) orders/);
+  });
+
+  describe("adversarial recorded payments", () => {
+    const pay = (orderId: string, amountMinor: number, requestKey: string, via: "bank_transfer" | "cash" | "cheque" = "bank_transfer") =>
+      recordOrderPayment(db, { orderId, amountMinor, via, recordedBy: "staff:owner", requestKey });
+    const ledger = (id: string) => sqlite.prepare(
+      "SELECT COUNT(*) AS rows, COALESCE(SUM(amount_minor), 0) AS sum FROM order_payments WHERE order_id = ? AND payment_type != 'refund' AND status = 'succeeded'",
+    ).get(id) as { rows: number; sum: number };
+    const topics = (topic: string) => (sqlite.prepare("SELECT COUNT(*) AS n FROM event_outbox WHERE topic = ?").get(topic) as { n: number }).n;
+    async function invoice() {
+      const placed = await place(TAGGED);
+      expect(placed.status, JSON.stringify(placed.json)).toBe(201);
+      const id = String(placed.json.data.orderId);
+      return { id, total: Number(stored(id).total_amount_minor) };
+    }
+
+    /** A database whose batches wait until `count` callers have read and reached their batch: a true race. */
+    function racingDb(count: number): Database {
+      const waiting: Array<() => void> = [];
+      const raced = new Proxy(binding, {
+        get(target, property, receiver) {
+          if (property === "batch") {
+            return async (statements: D1PreparedStatement[]) => {
+              if (waiting.length < count - 1) await new Promise<void>((resolve) => { waiting.push(resolve); setTimeout(resolve, 500); });
+              else for (const release of waiting.splice(0)) release();
+              return target.batch(statements);
+            };
+          }
+          const value = Reflect.get(target, property, receiver);
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      });
+      return getDb({ ...ENV, DB: raced } as unknown as Env);
+    }
+
+    it("concurrent payments of the same amount under different keys never record more than the order counts", async () => {
+      const { id, total } = await invoice();
+      const raced = racingDb(2);
+      const results = await Promise.allSettled(["race-key-a", "race-key-b"].map((requestKey) =>
+        recordOrderPayment(raced, { orderId: id, amountMinor: 1_000_000, via: "bank_transfer", recordedBy: "staff:owner", requestKey })));
+      const recorded = results.filter((result) => result.status === "fulfilled").length;
+      expect(recorded).toBe(1);
+      expect(results.find((result) => result.status === "rejected")).toMatchObject({ reason: expect.objectContaining({ message: expect.stringMatching(/changed/) }) });
+      // The ledger and the order agree: every succeeded row is counted exactly once.
+      expect(ledger(id)).toEqual({ rows: 1, sum: 1_000_000 });
+      expect(stored(id)).toMatchObject({ paid_amount_minor: 1_000_000, balance_due_minor: total - 1_000_000 });
+      expect(topics("payment.updated")).toBe(1);
+    });
+
+    it("concurrent replays of one key record one payment", async () => {
+      const { id } = await invoice();
+      const results = await Promise.all([pay(id, 500_000, "replay-key-1"), pay(id, 500_000, "replay-key-1"), pay(id, 500_000, "replay-key-1")]);
+      expect(new Set(results.map((result) => result.paymentId)).size).toBe(1);
+      expect(results.filter((result) => !result.replayed)).toHaveLength(1);
+      expect(ledger(id)).toEqual({ rows: 1, sum: 500_000 });
+      expect(stored(id)).toMatchObject({ paid_amount_minor: 500_000 });
+      // The same key with a different payment is refused.
+      await expect(pay(id, 600_000, "replay-key-1")).rejects.toThrow(/different payment/);
+      await expect(pay(id, 500_000, "replay-key-1", "cash")).rejects.toThrow(/different payment/);
+    });
+
+    it("concurrent payments that together overpay leave at most the total paid", async () => {
+      const { id, total } = await invoice();
+      const half = Math.ceil(total * 0.6);
+      await Promise.allSettled([pay(id, half, "over-key-a"), pay(id, half, "over-key-b")]);
+      const row = stored(id);
+      expect(Number(row.paid_amount_minor)).toBeLessThanOrEqual(total);
+      expect(ledger(id).sum).toBe(Number(row.paid_amount_minor));
+      await expect(pay(id, total, "over-key-c")).rejects.toThrow(/more than the balance due/);
+      await expect(pay(id, 0, "over-key-d")).rejects.toThrow(/amount received/);
+      await expect(pay(id, -5, "over-key-e")).rejects.toThrow(/amount received/);
+    });
+
+    it("emits order.paid exactly once across replays", async () => {
+      const { id, total } = await invoice();
+      await pay(id, total - 100, "paid-key-1");
+      await Promise.all([pay(id, 100, "paid-key-2"), pay(id, 100, "paid-key-2")]);
+      await pay(id, 100, "paid-key-2");
+      await expect(pay(id, 100, "paid-key-3")).rejects.toThrow(/nothing left to pay/);
+      expect(topics("order.paid")).toBe(1);
+      expect(topics("payment.updated")).toBe(2);
+    });
+
+    it("a part payment refunded keeps the rest of the invoice owed, and a later payment settles it", async () => {
+      const { id, total } = await invoice();
+      await pay(id, 1_000_000, "refund-key-1");
+      await processRefund(db, { orderId: id, amount: 4_000, reason: "requested_by_customer", manualSettlementConfirmed: true, requestKey: "refund-req-1" });
+      // 10,000.00 recorded, 4,000.00 refunded: 6,000.00 paid, the rest owed.
+      expect(stored(id)).toMatchObject({ status: "pending", payment_status: "partial", paid_amount_minor: 600_000, balance_due_minor: total - 600_000 });
+      const rest = await pay(id, total - 600_000, "refund-key-2");
+      expect(rest).toMatchObject({ paymentStatus: "paid", balanceDueMinor: 0 });
+      expect(topics("order.paid")).toBe(1);
+    });
+
+    it("refunding all of a part payment does not forgive the invoice or release its stock", async () => {
+      const { id, total } = await invoice();
+      await pay(id, 1_000_000, "forgive-key-1");
+      await processRefund(db, { orderId: id, reason: "requested_by_customer", manualSettlementConfirmed: true, requestKey: "forgive-req-1" });
+      const row = stored(id);
+      expect(row).toMatchObject({ paid_amount_minor: 0, balance_due_minor: total });
+      expect(row.payment_status).not.toBe("paid");
+    });
+
+    it("cancelling a partly paid invoice is refused until the money goes back, then releases its stock", async () => {
+      const { id, total } = await invoice();
+      await pay(id, 1_000_000, "cancel-key-1");
+      await expect(applyOrderStatusChange(db, id, "cancelled", undefined, { generic: true })).rejects.toThrow();
+      expect(stored(id)).toMatchObject({ status: "pending", paid_amount_minor: 1_000_000, balance_due_minor: total - 1_000_000, inventory_action: "reserved" });
+      expect(sqlite.prepare("SELECT reserved_stock FROM product_variants WHERE id = 'v_tea'").get()).toEqual({ reserved_stock: 120 });
+      // A payment can never land on a cancelled invoice.
+      sqlite.prepare("UPDATE orders SET status = 'cancelled' WHERE id = ?").run(id);
+      await expect(pay(id, 100, "cancel-key-2")).rejects.toThrow(/closed/);
+    });
   });
 });

@@ -166,22 +166,41 @@ export async function recordOrderPayment(
   const nextVersion = order.version + 1;
   const paymentType = order.paidAmountMinor === 0 && next.balanceDueMinor === 0 ? "full" : "balance";
 
+  const settlement = presentedSettlement(input.amountMinor, currency.code);
+  const orderUnchanged = and(
+    eq(orders.id, order.id),
+    eq(orders.version, order.version),
+    eq(orders.paidAmountMinor, order.paidAmountMinor),
+    eq(orders.balanceDueMinor, order.balanceDueMinor),
+    sql`${orders.deletedAt} IS NULL`,
+  );
   const statements: SQLiteBatchItem[] = [
-    // The payment row first: its id is the claim (a racing retry inserts nothing).
-    db.insert(orderPayments).values({
-      id: paymentId,
-      orderId: order.id,
-      amountMinor: input.amountMinor,
-      currency: currency.code,
+    // The payment row first, and only while the order is still the one read:
+    // its id is the claim (a racing retry inserts nothing), and a payment
+    // racing under another key finds the order moved and inserts nothing, so
+    // no row is ever left that the order's paid amount does not count.
+    db.insert(orderPayments).select(db.select({
+      id: sql<string>`${paymentId}`.as("id"),
+      orderId: orders.id,
+      amountMinor: sql<number>`${input.amountMinor}`.as("amount_minor"),
+      currency: sql<string>`${currency.code}`.as("currency"),
       // Money received in hand or in the bank is settled as presented.
-      ...presentedSettlement(input.amountMinor, currency.code),
-      paymentMethod: RECORDED_PAYMENT_METHOD,
-      paymentType,
-      status: PaymentRecordStatus.SUCCEEDED,
-      metadata: JSON.stringify(metadata),
-      createdAt: sql`unixepoch()`,
-      updatedAt: sql`unixepoch()`,
-    }).onConflictDoNothing({ target: orderPayments.id }) as unknown as SQLiteBatchItem,
+      settlementCurrency: sql<string>`${settlement.settlementCurrency}`.as("settlement_currency"),
+      settlementAmountMinor: sql<number>`${settlement.settlementAmountMinor}`.as("settlement_amount_minor"),
+      settlementRate: sql<string>`${settlement.settlementRate}`.as("settlement_rate"),
+      exchangeAdjustmentMinor: sql<number>`${settlement.exchangeAdjustmentMinor}`.as("exchange_adjustment_minor"),
+      paymentMethod: sql<string>`${RECORDED_PAYMENT_METHOD}`.as("payment_method"),
+      paymentType: sql<string>`${paymentType}`.as("payment_type"),
+      status: sql<string>`${PaymentRecordStatus.SUCCEEDED}`.as("status"),
+      providerRef: sql<null>`NULL`.as("provider_ref"),
+      providerSecondaryRef: sql<null>`NULL`.as("provider_secondary_ref"),
+      codCollectedBy: sql<null>`NULL`.as("cod_collected_by"),
+      codCollectedAt: sql<null>`NULL`.as("cod_collected_at"),
+      codReceiptUrl: sql<null>`NULL`.as("cod_receipt_url"),
+      metadata: sql<string>`${JSON.stringify(metadata)}`.as("metadata"),
+      createdAt: sql<Date>`unixepoch()`.as("created_at"),
+      updatedAt: sql<Date>`unixepoch()`.as("updated_at"),
+    }).from(orders).where(orderUnchanged)).onConflictDoNothing({ target: orderPayments.id }) as unknown as SQLiteBatchItem,
     db.update(orders).set({
       paymentStatus: next.paymentStatus,
       paidAmountMinor: next.paidAmountMinor,
@@ -189,16 +208,14 @@ export async function recordOrderPayment(
       version: nextVersion,
       updatedAt: sql`unixepoch()`,
     }).where(and(
-      eq(orders.id, order.id),
-      eq(orders.version, order.version),
-      eq(orders.paidAmountMinor, order.paidAmountMinor),
-      eq(orders.balanceDueMinor, order.balanceDueMinor),
-      sql`${orders.deletedAt} IS NULL`,
+      orderUnchanged,
       sql`EXISTS (SELECT 1 FROM ${orderPayments} WHERE ${orderPayments.id} = ${paymentId} AND ${orderPayments.amountMinor} = ${input.amountMinor})`,
     )) as unknown as SQLiteBatchItem,
+    // This payment's row exists only if this batch claimed the order (above).
     buildBatchGuard(db, sql`EXISTS (
       SELECT 1 FROM ${orders}
       WHERE ${orders.id} = ${order.id}
+        AND EXISTS (SELECT 1 FROM ${orderPayments} WHERE ${orderPayments.id} = ${paymentId})
         AND ${orders.version} = ${nextVersion}
         AND ${orders.paidAmountMinor} = ${next.paidAmountMinor}
         AND ${orders.balanceDueMinor} = ${next.balanceDueMinor}
