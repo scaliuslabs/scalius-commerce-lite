@@ -5,6 +5,9 @@ import { registerGateway, getGateway } from "./registry";
 import { codHandler } from "./handlers/cod";
 import { resetStripePaymentElement, stripeHandler } from "./handlers/stripe";
 import { createHostedGatewayHandler } from "./handlers/hosted";
+import { createDeferredGatewayHandler } from "./handlers/deferred";
+import { NET_TERMS_PAYMENT_METHOD } from "@scalius/shared/payment-terms";
+import { formatPageNumber, formatStoreDateTime, pageLanguage } from "@/lib/store-time-zone";
 import { formatMoney, DEFAULT_CURRENCY } from "@/lib/currency";
 import { formatBdMobile } from "@scalius/shared/phone-input";
 import { formatDiscountLineLabel } from "@scalius/shared/checkout-language-format";
@@ -80,7 +83,7 @@ import { pagePath } from "@/lib/presence-url";
 import { checkoutLineGroups, showsOrderLineGroupHeadings } from "../order-line-groups";
 
 // COD, the card flow and a fully gift-card-paid order have their own handlers;
-// every hosted gateway shares one.
+// every hosted gateway shares one, and so does every deferred (pay later) one.
 registerGateway(codHandler);
 registerGateway(stripeHandler);
 registerGateway(giftCardHandler);
@@ -95,12 +98,46 @@ function providerLabelFor(methodId: string): string {
   return getGatewayPresentation(methodId, name).providerLabel ?? name;
 }
 
+function isDeferredMethod(methodId: string): boolean {
+  return gateways.some((gateway) => gateway.id === methodId && gateway.flow === "deferred");
+}
+
 function handlerFor(methodId: string) {
   const existing = getGateway(methodId);
-  if (existing || !isHostedMethod(methodId)) return existing;
-  const handler = createHostedGatewayHandler(methodId, providerLabelFor(methodId));
+  if (existing) return existing;
+  const handler = isHostedMethod(methodId)
+    ? createHostedGatewayHandler(methodId, providerLabelFor(methodId))
+    : isDeferredMethod(methodId)
+    ? createDeferredGatewayHandler(methodId, providerLabelFor(methodId))
+    : null;
+  if (!handler) return undefined;
   registerGateway(handler);
   return handler;
+}
+
+/**
+ * Pay later: "Net 30: pay by 19 November 2026", the date counted from today
+ * in the store's time zone and the page's language. The order keeps the date
+ * it is placed with (the receipt shows it).
+ */
+function deferredPresentation(
+  gateway: CheckoutConfig["gateways"][number],
+  presentation: GatewayPresentation,
+): GatewayPresentation {
+  const days = typeof gateway.dueInDays === "number" && gateway.dueInDays > 0 ? gateway.dueInDays : null;
+  const language = pageLanguage();
+  const description = days === null ? presentation.description : formatCheckoutLanguageText(checkoutCopy.invoicePaymentDescriptionText, {
+    days: formatPageNumber(days, language),
+    date: formatStoreDateTime(Date.now() + days * 86_400_000, language, { dateStyle: "long" }),
+  });
+  return {
+    ...presentation,
+    ...(gateway.id === NET_TERMS_PAYMENT_METHOD ? { buyerLabel: checkoutCopy.invoicePaymentText } : {}),
+    description,
+    markSrc: presentation.markSrc ?? "/payment-marks/invoice.svg",
+    markKind: presentation.markSrc ? presentation.markKind : "icon",
+    hosted: false,
+  };
 }
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -967,7 +1004,7 @@ function quotedPaymentMethodName(gateway: CheckoutConfig["gateways"][number]): s
 
 function paymentActionLabel(methodId: string): string {
   if (!checkoutConfig || !authoritativeTaxQuote) return checkoutCopy.continueText;
-  if (methodId === "cod" || methodId === GIFT_CARD_PAYMENT_METHOD) return checkoutCopy.placeOrderText;
+  if (methodId === "cod" || methodId === GIFT_CARD_PAYMENT_METHOD || isDeferredMethod(methodId)) return checkoutCopy.placeOrderText;
   if (isHostedMethod(methodId)) {
     return formatCheckoutLanguageText(checkoutCopy.continueToProviderText, {
       provider: providerLabelFor(methodId),
@@ -1035,10 +1072,10 @@ async function renderGateways(): Promise<void> {
     const handler = handlerFor(gw.id);
     const fallbackLabel =
       (gw as { name?: string }).name || handler?.meta.label || gw.id;
-    const localized = localizedGatewayPresentation(
-      gw.id,
-      getGatewayPresentation(gw.id, fallbackLabel),
-    );
+    const known = getGatewayPresentation(gw.id, fallbackLabel);
+    const localized = gw.flow === "deferred"
+      ? deferredPresentation(gw, known)
+      : localizedGatewayPresentation(gw.id, known);
     const quotedName = quotedPaymentMethodName(gw);
     const presentation = quotedName ? { ...localized, buyerLabel: quotedName } : localized;
     const card = document.createElement("div");
@@ -1153,7 +1190,7 @@ async function selectMethod(
   }
   testNotice?.classList.toggle(
     "hidden",
-    methodId === "cod" || gw.testMode !== true,
+    methodId === "cod" || gw.flow === "deferred" || gw.testMode !== true,
   );
   const redirectMessage = hostedRedirectMessage(methodId);
   if (redirectNote) {

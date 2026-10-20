@@ -75,6 +75,16 @@ export const orderRepresentationSchema = z.object({
   balanceDueMinor: minor,
   pricesIncludeTax: z.boolean(),
   paymentMethod: text.nullable(),
+  /**
+   * A deferred order's terms (an invoice, `net_terms` or an app's deferred
+   * method): paid by `dueAt`. Null for every other order. The order is
+   * overdue once `dueAt` passes with `balanceDueMinor` above zero.
+   */
+  paymentTerms: z.object({
+    kind: z.literal("net"),
+    days: z.number().int(),
+    dueAt: iso,
+  }).nullable(),
   customerId: id.nullable(),
   /** The buyer's storefront account when the order verifiably belongs to one; null for a guest order. */
   accountCustomerId: id.nullable(),

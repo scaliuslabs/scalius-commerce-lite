@@ -7,6 +7,7 @@
 // to the market's price increment.
 import type { TaxCalculateInput, TaxCalculation, TaxCalculationLine } from "@scalius/shared/plugins/providers/tax";
 import { ValidationError } from "@scalius/core/errors";
+import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
 import { allocateMinorAmount, multiplyMinorByRate, roundToUnit } from "./money";
 import {
     isCountryTaxRegion,
@@ -159,7 +160,7 @@ function assertInput(input: CalculateTaxQuoteInput): void {
     for (const line of input.lines) {
         if (!line.lineId || !line.productId || !line.variantId) throw new RangeError("Tax quote lines require stable ids.");
         if (!Number.isSafeInteger(line.unitPriceMinor) || line.unitPriceMinor < 0) throw new RangeError("Tax quote line price is invalid.");
-        if (!Number.isInteger(line.quantity) || line.quantity < 1 || line.quantity > 99) throw new RangeError("Tax quote line quantity is invalid.");
+        if (!Number.isInteger(line.quantity) || line.quantity < 1 || line.quantity > MAX_LINE_QUANTITY) throw new RangeError("Tax quote line quantity is invalid.");
     }
     if (!Number.isSafeInteger(input.shippingMinor) || input.shippingMinor < 0) {
         throw new RangeError("Tax quote shipping amount is invalid.");

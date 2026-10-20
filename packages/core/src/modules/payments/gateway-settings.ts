@@ -7,7 +7,8 @@
 import type { Database } from "@scalius/database/client";
 import { getStripeCredentialEnvironment } from "@scalius/shared/payment-gateway-environment";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
-import { isPaymentMethodId } from "./gateways/identity";
+import { isPaymentMethodId, NET_TERMS_PAYMENT_METHOD } from "./gateways/identity";
+import { DEFAULT_NET_TERMS_SETTINGS, type NetTermsSettings } from "@scalius/shared/payment-terms";
 import type { PaymentGateway } from "./gateways/port";
 import type { PaymentProviders, PaymentProvidersSource } from "./gateways/registry";
 import { paymentMethodsDocument, stripeDocument } from "../settings";
@@ -170,10 +171,12 @@ async function resolveStripeSettingsFromRows(
   };
 }
 export interface PaymentMethodsConfig {
-  /** Which payment methods are enabled for the storefront: `cod`, built-in gateways, app providers. */
+  /** Which payment methods are enabled for the storefront: `cod`, `net_terms`, built-in gateways, app providers. */
   enabledMethods: string[];
   /** Default payment method shown first on checkout */
   defaultMethod: string;
+  /** The built-in invoice's days and eligibility (`net_terms`; used only when it is enabled). */
+  netTerms: NetTermsSettings;
 }
 
 export interface PaymentMethodPreferences {
@@ -183,6 +186,8 @@ export interface PaymentMethodPreferences {
   defaultMethod: string;
   /** Whether the allowlist was explicitly saved by the merchant. */
   hasExplicitEnabledMethods: boolean;
+  /** The built-in invoice's saved days and eligibility. */
+  netTerms: NetTermsSettings;
 }
 
 /**
@@ -202,14 +207,17 @@ async function resolvePaymentMethodPreferences(
   rows: readonly GatewaySettingsStoredRow[],
 ): Promise<PaymentMethodPreferences> {
   const read = await paymentMethodsDocument.fromRows(rows);
-  if (read.invalid) return { enabledMethods: [], defaultMethod: "cod", hasExplicitEnabledMethods: true };
-  const { enabledMethods, defaultMethod } = read.value;
+  if (read.invalid) {
+    return { enabledMethods: [], defaultMethod: "cod", hasExplicitEnabledMethods: true, netTerms: { ...DEFAULT_NET_TERMS_SETTINGS } };
+  }
+  const { enabledMethods, defaultMethod, netTerms } = read.value;
   return {
     enabledMethods: enabledMethods === null
       ? ["cod"]
       : Array.from(new Set(enabledMethods.filter(isPaymentMethodId))),
     defaultMethod: isPaymentMethodId(defaultMethod) ? defaultMethod : "cod",
     hasExplicitEnabledMethods: enabledMethods !== null,
+    netTerms,
   };
 }
 
@@ -233,7 +241,9 @@ function buildActivePaymentMethods(
 ): PaymentMethodsConfig {
   const validMethods: string[] = [];
   for (const method of preferences.enabledMethods) {
-    if (method === "cod") validMethods.push(method);
+    // Cash on delivery and the invoice need no credentials; the invoice
+    // reaches a buyer only through its eligibility (checkout/payment-terms.ts).
+    if (method === "cod" || method === NET_TERMS_PAYMENT_METHOD) validMethods.push(method);
     else if (method === "stripe") {
       if (isStripeCheckoutUsable(resolved.stripe)) validMethods.push(method);
     } else if (apps.get(method) === true) validMethods.push(method);
@@ -246,6 +256,7 @@ function buildActivePaymentMethods(
     defaultMethod: validMethods.includes(preferences.defaultMethod)
       ? preferences.defaultMethod
       : (validMethods[0] ?? "cod"),
+    netTerms: preferences.netTerms,
   };
 }
 

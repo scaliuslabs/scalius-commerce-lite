@@ -1,3 +1,4 @@
+import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
 import { map } from "nanostores";
 import {
   lineCartKey,
@@ -137,7 +138,8 @@ export type CartLineItemUpdate = {
   updates: CartLineRefresh;
 };
 
-export const MAX_CART_QUANTITY = 99;
+/** The most units one cart line holds: the one order-line limit (`@scalius/shared/order-limits`). */
+export const MAX_CART_QUANTITY = MAX_LINE_QUANTITY;
 /** Mirrors the API's `MAX_SUBMITTED_DISCOUNT_CODES`. */
 export const MAX_DISCOUNT_CODES = 5;
 const DISCOUNT_CODE_PATTERN = /^[A-Z0-9_-]{1,50}$/;

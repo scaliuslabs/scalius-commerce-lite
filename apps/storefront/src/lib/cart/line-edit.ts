@@ -4,6 +4,7 @@
  * buyer content), the product page fills the form from it, and "Update cart"
  * replaces the line under its new key (`replaceCartLine`).
  */
+import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
 import type { CartLineProperty } from "@/store/cart";
 
 const STORAGE_KEY = "scalius_cart_line_edit";
@@ -60,7 +61,7 @@ export function readCartLineEdit(productId: string, now = Date.now()): CartLineE
     lineKey: parsed.lineKey,
     productId,
     variantId: parsed.variantId,
-    quantity: Math.min(99, Math.max(1, Math.floor(parsed.quantity))),
+    quantity: Math.min(MAX_LINE_QUANTITY, Math.max(1, Math.floor(parsed.quantity))),
     properties,
     createdAt: parsed.createdAt,
   };

@@ -2,11 +2,12 @@ import * as React from "react";
 
 import { NumberInput } from "~/components/ui/number-input";
 import { cn } from "@scalius/shared/utils";
+import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
 import { useMessages } from "~/i18n";
 import { orderFormMessages } from "~/i18n/order-form";
 
 const MIN_ORDER_ITEM_QUANTITY = 1;
-const MAX_ORDER_ITEM_QUANTITY = 99;
+const MAX_ORDER_ITEM_QUANTITY = MAX_LINE_QUANTITY;
 
 interface OrderItemQuantityInputProps {
   id?: string;

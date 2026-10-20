@@ -46,6 +46,13 @@ export const homeOpenOrdersQueryOptions = () =>
     queryFn: () => apiData(getApiV1AdminOrders({ query: { view: "unfulfilled", limit: 1 } })),
   });
 
+/** Invoices (net terms) past their due date with money still due: Home's to-do. */
+export const homeOverdueInvoicesQueryOptions = () =>
+  queryOptions({
+    queryKey: ["home", "overdue-invoices"] as const,
+    queryFn: () => apiData(getApiV1AdminOrders({ query: { view: "overdue", limit: 1 } })),
+  });
+
 export const homeLowStockQueryOptions = () =>
   queryOptions({
     queryKey: ["home", "low-stock"] as const,

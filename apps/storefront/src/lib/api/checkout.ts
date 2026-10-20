@@ -12,8 +12,14 @@ export interface GatewayConfig {
   /** A registered gateway id or "cod". */
   id: string;
   name: string;
-  /** card: Stripe.js confirms in the browser; hosted: redirect to the provider; cod: no online payment. */
-  flow?: "card" | "hosted" | "cod";
+  /**
+   * card: Stripe.js confirms in the browser; hosted: redirect to the provider;
+   * cod: no online payment; deferred: pay later by its due date (an invoice),
+   * offered only when the buyer's quote allows it.
+   */
+  flow?: "card" | "hosted" | "cod" | "deferred";
+  /** A deferred method's terms: the order is due this many days after it is placed. */
+  dueInDays?: number;
   publishableKey?: string;   // Stripe only
   currencies?: string[];
   /** The delivery countries it serves, when not every country (cash on delivery: ["BD"]). */
@@ -113,7 +119,8 @@ export function isCheckoutConfigReadFailure(config: CheckoutConfig): boolean {
  */
 export function takesOnlinePayment(config: CheckoutConfig | null | undefined): boolean {
   if (!config || config.unavailable) return true;
-  return config.gateways.some((gateway) => gateway.id !== "cod" && gateway.flow !== "cod");
+  // Paying later by invoice is not paying online: it reaches only some signed-in buyers.
+  return config.gateways.some((gateway) => gateway.id !== "cod" && gateway.flow !== "cod" && gateway.flow !== "deferred");
 }
 
 /**

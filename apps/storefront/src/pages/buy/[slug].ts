@@ -1,3 +1,4 @@
+import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
 import type { APIRoute } from "astro";
 import { getProductBySlug } from "@/lib/api";
 import { getLayoutData } from "@/lib/api/storefront";
@@ -37,7 +38,7 @@ function parseQuickBuyQuantity(value: string | null): number | null {
   value = toLatinDigits(value).trim();
   if (!/^\d+$/.test(value)) return null;
   const quantity = Number.parseInt(value, 10);
-  if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 99) return null;
+  if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > MAX_LINE_QUANTITY) return null;
   return quantity;
 }
 

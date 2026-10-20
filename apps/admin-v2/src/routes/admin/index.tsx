@@ -1,7 +1,7 @@
 import { lazy, Suspense, type ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, CreditCard, ImageOff, Inbox, Menu, Package, TriangleAlert } from "lucide-react";
+import { CalendarClock, ChevronRight, CreditCard, ImageOff, Inbox, Menu, Package, TriangleAlert } from "lucide-react";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { Button } from "~/components/ui/button";
@@ -26,6 +26,7 @@ import {
   dashboardSummaryQueryOptions,
   homeLowStockQueryOptions,
   homeOpenOrdersQueryOptions,
+  homeOverdueInvoicesQueryOptions,
   setupGuideQueryOptions,
 } from "~/lib/api-query-options/dashboard-home";
 import { currencySettingsQueryOptions } from "~/lib/api-query-options/currency";
@@ -94,6 +95,7 @@ function HomePage() {
   const summary = useQuery(dashboardSummaryQueryOptions());
   const activity = useQuery(dashboardActivityQueryOptions());
   const openOrders = useQuery({ ...homeOpenOrdersQueryOptions(), enabled: canOpen("/admin/orders") });
+  const overdueInvoices = useQuery({ ...homeOverdueInvoicesQueryOptions(), enabled: canOpen("/admin/orders") });
   const lowStock = useQuery({ ...homeLowStockQueryOptions(), enabled: canOpen("/admin/inventory") });
   // Store readiness (Shopify's Home tasks): products the product feed leaves
   // out for a fixable reason, and a storefront header without a menu.
@@ -122,6 +124,7 @@ function HomePage() {
   const canSeeOrders = canOpen("/admin/orders");
   const today = (activity.data?.dailyActivityData ?? []).find((day) => day.date === adminCalendarDateKey());
   const openCount = openOrders.data?.pagination.total ?? 0;
+  const overdueCount = overdueInvoices.data?.pagination.total ?? 0;
   const lowCount = lowStock.data?.alerts.length ?? 0;
   const feedGaps = countFeedGaps(feed.data);
   const needsHeaderMenu = placements.data !== undefined && !placements.data.some(({ placement, menuDeletedAt, publicationItemCount }) =>
@@ -129,7 +132,7 @@ function HomePage() {
   const smsBlocked = Boolean(sms.data?.activeProvider) && sms.data?.activeProviderConfigured === false;
   // Active digital products and gift cards a cash-on-delivery-only checkout can't take.
   const onlinePaymentBlocked = setupGuide.data?.onlinePayment?.blockedProducts ?? 0;
-  const caughtUp = openCount === 0 && lowCount === 0 && feedGaps === 0 && !needsHeaderMenu && !smsBlocked && onlinePaymentBlocked === 0;
+  const caughtUp = openCount === 0 && overdueCount === 0 && lowCount === 0 && feedGaps === 0 && !needsHeaderMenu && !smsBlocked && onlinePaymentBlocked === 0;
 
   return (
     <div className="space-y-4 pb-8">
@@ -213,6 +216,13 @@ function HomePage() {
                   ? t("orderToFulfil")
                   // The count stops at the API's cap: "1,000+ orders to fulfil".
                   : t("ordersToFulfil", { count: openOrders.data?.pagination.totalIsCapped ? `${formatNumber(openCount)}+` : openCount })}
+              </TodoLink>
+            ) : null}
+            {overdueCount > 0 ? (
+              <TodoLink to="/admin/orders" search={{ view: "overdue" }} icon={<CalendarClock className="h-4 w-4" />}>
+                {overdueCount === 1 && !overdueInvoices.data?.pagination.totalIsCapped
+                  ? t("overdueInvoiceOne")
+                  : t("overdueInvoices", { count: overdueInvoices.data?.pagination.totalIsCapped ? `${formatNumber(overdueCount)}+` : overdueCount })}
               </TodoLink>
             ) : null}
             {lowCount > 0 ? (

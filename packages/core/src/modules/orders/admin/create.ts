@@ -26,7 +26,8 @@ import { nanoid } from "nanoid";
 import type { CreateOrderInput } from "../validation";
 import { ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
 import { computeOrderPaymentState, createCODTrackingInsertValues } from "../../payments";
-import { validateCustomerPhoneCountry } from "../../settings";
+import { paymentMethodsDocument, validateCustomerPhoneCountry } from "../../settings";
+import { deferredOrderColumns } from "../payment-terms-columns";
 import {
     buildAdminOrderCreateAttemptCommit,
     buildAdminOrderCreateAttemptGuard,
@@ -165,6 +166,11 @@ export async function createManualOrder(
             totalAmountMinor: taxQuote.totalMinor,
             paidAmountMinor: 0,
         });
+        // An invoice (net terms): unpaid now, due in the days staff or the
+        // app chose, else the store's net days (Settings → Payments).
+        const paymentTermsDays = data.paymentMethod === PaymentMethod.NET_TERMS
+            ? data.paymentTermsDays ?? (await paymentMethodsDocument.read(db)).netTerms.dueInDays
+            : null;
         // A named customer files the order under that record (an app's
         // renewal, a B2B buyer); otherwise the guest record of its phone.
         const existingCustomer = data.customerId
@@ -204,6 +210,7 @@ export async function createManualOrder(
 
         return {
             initialPaymentState,
+            paymentTermsDays,
             address,
             shippingAddress,
             billing,
@@ -231,6 +238,7 @@ export async function createManualOrder(
     });
     const {
         initialPaymentState,
+        paymentTermsDays,
         address,
         shippingAddress,
         billing,
@@ -253,6 +261,14 @@ export async function createManualOrder(
         salesChannelId,
     } = prepared;
     let customerId = existingCustomer?.id;
+    const paymentMethod = data.paymentMethod === PaymentMethod.NET_TERMS ? PaymentMethod.NET_TERMS : PaymentMethod.COD;
+    // A named customer that owns a storefront account owns the order too, as
+    // a signed-in checkout does (customer-identity.ts: customer_id equals
+    // account_owner_customer_id), so an app's renewal or a staff order shows
+    // in the buyer's account. The phone's guest record is never an account.
+    const accountOwnerCustomerId = data.customerId && existingCustomer?.accountClaimedAt
+        ? existingCustomer.id
+        : null;
 
     // ── Atomic batch: customer + order + items ──────────────────────────
     // D1 batch() executes all statements in a single atomic operation.
@@ -363,7 +379,9 @@ export async function createManualOrder(
             paidAmountMinor: initialPaymentState.paidAmountMinor,
             balanceDueMinor: initialPaymentState.balanceDueMinor,
             paymentStatus: initialPaymentState.paymentStatus,
-            paymentMethod: PaymentMethod.COD,
+            paymentMethod,
+            // An invoice's terms and due date (SQL literals; nothing for cash on delivery).
+            ...deferredOrderColumns(paymentTermsDays),
             fulfillmentStatus: FulfillmentStatus.PENDING,
             status: OrderStatus.CONFIRMED,
             // The shipping country's market, else (an order taxed at its billing
@@ -371,6 +389,7 @@ export async function createManualOrder(
             marketId: orderMarketIdSql(shippingAddress?.countryCode
                 ?? (taxQuote.jurisdiction?.addressSource === "billing" ? billing?.address?.countryCode ?? null : null)),
             customerId,
+            accountOwnerCustomerId,
             inventoryAction: reservationEntries.length > 0 ? "reserved" : "none",
             // Staff-created; the source says where it came in (facebook, walk_in, …).
             channel: data.channel ?? "admin",
@@ -386,9 +405,11 @@ export async function createManualOrder(
     // A COD order and its collection lifecycle are one durable fact. Keeping
     // this inside the create batch prevents a shippable order whose cash can
     // never be recorded because a later initialization call failed.
-    writeBatch.push(
-        db.insert(codTracking).values(createCODTrackingInsertValues(orderId)),
-    );
+    if (paymentMethod === PaymentMethod.COD) {
+        writeBatch.push(
+            db.insert(codTracking).values(createCODTrackingInsertValues(orderId)),
+        );
+    }
 
     // Order items
     if (preparedOrderItems.length > 0) {
@@ -497,7 +518,7 @@ export async function createManualOrder(
         committed: {
             orderId,
             customerId: customerId!,
-            paymentMethod: PaymentMethod.COD,
+            paymentMethod,
             totalAmountMinor: taxQuote.totalMinor,
             appDiscounts,
         },

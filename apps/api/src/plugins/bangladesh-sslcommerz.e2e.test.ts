@@ -150,7 +150,7 @@ describe("the Bangladesh pack's SSLCommerz", () => {
 
   it("fails closed until activation, then serves the IPN, cancel and refund URLs", { timeout: 60_000 }, async () => {
     // Before activation: never offered, the IPN finds no gateway, a refund stops before any call.
-    await expect(getActivePaymentMethods(db, KEY, providers())).resolves.toEqual({ enabledMethods: ["cod"], defaultMethod: "cod" });
+    await expect(getActivePaymentMethods(db, KEY, providers())).resolves.toMatchObject({ enabledMethods: ["cod"], defaultMethod: "cod" });
     validated("ORDFLY", "val_fly");
     const early = await form(`/webhooks/${METHOD}`, { val_id: "val_fly", tran_id: "ORDFLY_full_ABC12345" });
     expect(early.status).toBe(404);
@@ -159,7 +159,7 @@ describe("the Bangladesh pack's SSLCommerz", () => {
     expect(gateway.calls).toEqual([]);
 
     expect((await activate()).hookError).toBeNull();
-    await expect(getActivePaymentMethods(db, KEY, providers())).resolves.toEqual({ enabledMethods: [METHOD, "cod"], defaultMethod: METHOD });
+    await expect(getActivePaymentMethods(db, KEY, providers())).resolves.toMatchObject({ enabledMethods: [METHOD, "cod"], defaultMethod: METHOD });
 
     // The IPN: validated server to server, credited once.
     const ipn = await form(`/webhooks/${METHOD}`, { val_id: "val_fly", tran_id: "ORDFLY_full_ABC12345", amount: "1.00" });

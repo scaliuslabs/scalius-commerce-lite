@@ -88,6 +88,8 @@ export interface PaymentGateway<S extends GatewaySettings = GatewaySettings> ext
   /** Buyer-facing default method name shown by checkout. */
   readonly checkoutName: string;
   readonly flow: GatewayCheckoutFlow;
+  /** A `deferred` provider's terms in days (its descriptor's `dueInDays`). */
+  readonly dueInDays?: number;
   /** ISO 4217 codes the provider can charge, or "any" for every store currency. */
   readonly chargeCurrencies: readonly string[] | "any";
   /**

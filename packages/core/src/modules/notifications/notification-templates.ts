@@ -468,7 +468,9 @@ export interface EmailStore {
 
 export type EmailPayment =
   | { state: "refunded" | "partially_refunded" | "nothing_due" | "paid" | "partially_paid" | "not_completed" }
-  | { state: "cod"; due: string | null; partiallyPaid: boolean };
+  | { state: "cod"; due: string | null; partiallyPaid: boolean }
+  /** An invoice (net terms): what is left to pay and by when (the date in the store's language). */
+  | { state: "invoice"; due: string | null; dueDate: string; days: number; partiallyPaid: boolean };
 
 /** One order's facts for an email, money already formatted in its saved currency. */
 export interface OrderEmailFacts {
@@ -537,6 +539,7 @@ function paymentLine(language: MessageLanguage, payment: EmailPayment): string {
   const copy = MESSAGE_COPY[language];
   switch (payment.state) {
     case "cod": return copy.cod(payment.due, payment.partiallyPaid);
+    case "invoice": return copy.invoice(payment.due, payment.dueDate, payment.days, payment.partiallyPaid);
     case "refunded": return copy.refunded;
     case "partially_refunded": return copy.partiallyRefunded;
     case "nothing_due": return copy.nothingDue;

@@ -42,8 +42,11 @@ mirror a dashboard screen, an editor section or a summary card.
   `unitPriceMinor` set by hand (recorded on the timeline as `prices_set`),
   addresses use the canonical fields (Bangladesh may add its place ids), and
   an app's order is `channel: "app"`. The dashboard's own form stays
-  `dashboard.orders.create` (beta). Payment is cash on delivery until the
-  deferred-payment slice adds methods (an additive enum value).
+  `dashboard.orders.create` (beta). Payment is cash on delivery or an
+  invoice paid later (`paymentMethod: "net_terms"`, `paymentTerms: { kind:
+  "net", days }`); money received against an invoice is recorded with
+  `dashboard.resources.payments.create` (Idempotency-Key required), and
+  `dashboard.resources.orders.list?overdue=true` lists overdue invoices.
 - **Money is integer minor units beside its currency**, the same rule as the
   webhook representations: `*Minor` integer fields, and an ISO 4217
   `currency` on the same object or the resource that holds it. Inputs take

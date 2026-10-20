@@ -273,6 +273,8 @@ export interface OrderListItem {
 }
 
 export interface OrderDetails extends OrderListItem, OrderBillingAddressFields {
+    /** An invoice's terms (pay later): null when the order is not paid by invoice. */
+    paymentTerms?: { kind: "net"; days: number; dueAt: string; overdue: boolean } | null;
     /** Shop-currency amounts of an order paid in a market's own currency (MARKETS-DESIGN D3); null: same-currency. */
     moneyChain?: {
         shopCurrencyCode: string;
@@ -611,6 +613,8 @@ export interface StorefrontOrderCommitPayload {
         paymentStatus: string;
         paidAmountMinor: number;
         balanceDueMinor: number;
+        /** A deferred order's terms (days): it commits unpaid, due that many days from now. */
+        paymentTermsDays?: number | null;
         fulfillmentStatus: string;
         inventoryPool: string;
         inventoryAction: string;

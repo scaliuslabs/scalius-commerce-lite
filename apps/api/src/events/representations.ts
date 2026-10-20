@@ -184,6 +184,9 @@ function orderFrom(order: OrderRow, lines: readonly OrderLineRow[]) {
     balanceDueMinor: order.balanceDueMinor,
     pricesIncludeTax: Boolean(order.pricesIncludeTax),
     paymentMethod: order.paymentMethod ?? null,
+    paymentTerms: order.paymentTermsDays !== null && order.paymentDueAt
+      ? { kind: "net" as const, days: order.paymentTermsDays, dueAt: isoRequired(order.paymentDueAt) }
+      : null,
     customerId: order.customerId ?? null,
     accountCustomerId: order.accountOwnerCustomerId ?? null,
     contact: { name: order.customerName ?? null, email: order.customerEmail ?? null, phone: order.customerPhone ?? null },
@@ -576,6 +579,9 @@ export function readOrderPaymentRepresentations(db: Database, orderId: string) {
 async function paymentRepresentation(db: Database, paymentId: string) {
   return (await readPaymentRepresentations(db, { id: paymentId }))[0] ?? null;
 }
+
+/** One payment as webhooks carry it (PaymentResource), or null. */
+export const readPaymentRepresentation = paymentRepresentation;
 async function checkoutRepresentation(db: Database, abandonedCheckoutId: string) {
   const row = await db.select({
     id: abandonedCheckouts.id,

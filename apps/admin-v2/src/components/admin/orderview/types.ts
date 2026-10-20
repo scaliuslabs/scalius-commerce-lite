@@ -185,6 +185,8 @@ export interface OrderSupportRequest {
 
 export interface Order {
   relatedObjects?: RelatedObjectRecord[];
+  /** An invoice's terms (pay later): due `dueAt`; null when the order is not paid by invoice. */
+  paymentTerms?: { kind: "net"; days: number; dueAt: string; overdue: boolean } | null;
   attributes?: Record<string, string>;
   id: string;
   version: number;

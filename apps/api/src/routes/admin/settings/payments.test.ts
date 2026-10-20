@@ -1,3 +1,4 @@
+import { DEFAULT_NET_TERMS_SETTINGS } from "@scalius/shared/payment-terms";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { DatabaseSync } from "node:sqlite";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -209,6 +210,7 @@ describe("payment settings", () => {
             expect(storedRows(sqlite, "payment_methods")).toEqual({
                 enabledMethods: ["stripe", "cod"],
                 defaultMethod: "stripe",
+                netTerms: DEFAULT_NET_TERMS_SETTINGS,
             });
 
         });
@@ -256,7 +258,7 @@ describe("payment settings", () => {
             const response = await request("/payment-methods", { enabledMethods: [ORPHAN, "cod"], defaultMethod: "cod" });
 
             expect(response.status, await response.clone().text()).toBe(200);
-            expect(storedRows(sqlite, "payment_methods")).toEqual({ enabledMethods: ["cod"], defaultMethod: "cod" });
+            expect(storedRows(sqlite, "payment_methods")).toEqual({ enabledMethods: ["cod"], defaultMethod: "cod", netTerms: DEFAULT_NET_TERMS_SETTINGS });
         });
 
         it("keeps an installed but inactive app's saved method without blocking the save, and refuses it as the default", async () => {
@@ -267,7 +269,7 @@ describe("payment settings", () => {
                 data: { enabledMethods: [WALLET, "cod"], activeMethods: ["cod"] },
             });
             expect((await request("/payment-methods", { enabledMethods: ["cod", WALLET], defaultMethod: "cod" })).status).toBe(200);
-            expect(storedRows(sqlite, "payment_methods")).toEqual({ enabledMethods: ["cod", WALLET], defaultMethod: "cod" });
+            expect(storedRows(sqlite, "payment_methods")).toEqual({ enabledMethods: ["cod", WALLET], defaultMethod: "cod", netTerms: DEFAULT_NET_TERMS_SETTINGS });
             await expectValidationError(await request("/payment-methods", { enabledMethods: ["cod", WALLET], defaultMethod: WALLET }));
         });
     });
@@ -379,7 +381,7 @@ describe("payment settings", () => {
 
             expect(response.status, await response.clone().text()).toBe(200);
             expect(storedRows(sqlite, gateway)).toEqual(cleared);
-            expect(storedRows(sqlite, "payment_methods")).toEqual({ enabledMethods: ["cod"], defaultMethod: "cod" });
+            expect(storedRows(sqlite, "payment_methods")).toEqual({ enabledMethods: ["cod"], defaultMethod: "cod", netTerms: DEFAULT_NET_TERMS_SETTINGS });
             // Nothing reads as saved any more.
             const read = await (await request(path)).json() as { data: Record<string, unknown> };
             expect(JSON.stringify(read.data)).not.toContain(MASKED);
@@ -395,7 +397,7 @@ describe("payment settings", () => {
 
             await expectValidationError(await remove("/stripe"));
             expect(storedRows(sqlite, "stripe")).toEqual(before);
-            expect(storedRows(sqlite, "payment_methods")).toEqual({ enabledMethods: ["stripe"], defaultMethod: "stripe" });
+            expect(storedRows(sqlite, "payment_methods")).toEqual({ enabledMethods: ["stripe"], defaultMethod: "stripe", netTerms: DEFAULT_NET_TERMS_SETTINGS });
 
         });
 

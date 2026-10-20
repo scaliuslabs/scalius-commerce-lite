@@ -63,6 +63,16 @@ describe("order success state", () => {
     expect(formatOrderSuccessPaymentMethod("stripe", BANGLA_CHECKOUT_LANGUAGE_DATA)).toBe("কার্ড (Stripe)");
   });
 
+  it("treats an unpaid invoice as placed, never as a payment to retry", () => {
+    const terms = { kind: "net" as const, days: 30, dueAt: "2026-11-19T06:00:00.000Z", overdue: false };
+    const invoice = makeOrder({ paymentMethod: "net_terms", status: "pending", paymentStatus: "unpaid", paidAmount: 0, paymentTerms: terms });
+    expect(getOrderSuccessStateKind(invoice)).toBe("order_placed");
+    expect(formatOrderSuccessPaymentMethod("net_terms", ENGLISH_CHECKOUT_LANGUAGE_DATA)).toBe("Pay later by invoice");
+    // An app's own invoice is told apart by its terms.
+    expect(getOrderSuccessStateKind(makeOrder({ paymentMethod: "acme.erp:invoice", status: "pending", paymentStatus: "unpaid", paidAmount: 0, paymentTerms: terms })))
+      .toBe("order_placed");
+  });
+
   it("treats COD pending/unpaid orders as placed", () => {
     const order = makeOrder({
       paymentMethod: "cod",

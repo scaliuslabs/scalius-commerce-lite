@@ -156,6 +156,12 @@ export const checkoutShippingRatesOutputSchema = z.object({
 export const checkoutPaymentMethodsOutputSchema = z.object({
   operations: z.array(z.discriminatedUnion("op", [
     z.object({ op: z.literal("hide"), methodId: id }).strict(),
+    /**
+     * Offer a `gated` method to this buyer: the built-in invoice (net terms)
+     * when the merchant lets apps decide who pays later. Any other method is
+     * skipped; a hide wins over an allow.
+     */
+    z.object({ op: z.literal("allow"), methodId: id }).strict(),
     z.object({ op: z.literal("rename"), methodId: id, name: label }).strict(),
     z.object({ op: z.literal("reorder"), methodIds: z.array(id).min(1).max(20) }).strict(),
   ])).max(40),
@@ -288,7 +294,16 @@ export const PLUGIN_FUNCTION_SCHEMAS = {
     output: checkoutShippingRatesOutputSchema,
   },
   "checkout.payment_methods": {
-    input: z.object({ cart: functionCartSchema, methods: z.array(z.object({ methodId: id, name: label }).strict()).max(20), reads }).strict(),
+    input: z.object({
+      cart: functionCartSchema,
+      methods: z.array(z.object({
+        methodId: id,
+        name: label,
+        /** Offered only if an app answers `{ op: "allow" }` (the invoice, when the merchant lets apps decide). */
+        gated: z.literal(true).optional(),
+      }).strict()).max(20),
+      reads,
+    }).strict(),
     output: checkoutPaymentMethodsOutputSchema,
   },
 } as const satisfies Record<PluginFunctionPoint, { input: z.ZodType; output: z.ZodType }>;

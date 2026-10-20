@@ -503,6 +503,7 @@ export async function prepareManualOrderQuote(
         shippingAdminArea: data.shippingAdminArea ?? null,
         shippingPostalCode: data.shippingPostalCode ?? null,
         locationNames,
+        paymentMethod: data.paymentMethod ?? "cod",
     };
     const appPricing = options.apps ? await options.apps.price(appInput) : withoutApps(appInput);
     // The taxed address: the shipping address; for an order that ships
@@ -542,11 +543,14 @@ export async function prepareManualOrderQuote(
             priceIncrementMinor: currency.priceIncrementMinor,
         },
     }, undefined, { apps: options.appProviders });
-    // A staff order is cash on delivery, which collects cash amounts (whole
-    // taka in BDT): a total it cannot collect exactly is refused here, so the
-    // quote, the create and the amendment all say so before anything commits.
-    const cashIssue = BUILT_IN_PAYMENT_PROVIDERS.amountIssue(COD_PAYMENT_METHOD, taxQuote.totalMinor, currency.code);
-    if (cashIssue) throw new ValidationError(cashIssue, { reason: CASH_ON_DELIVERY_AMOUNT_REASON });
+    // Cash on delivery collects cash amounts (whole taka in BDT): a total it
+    // cannot collect exactly is refused here, so the quote, the create and
+    // the amendment all say so before anything commits. An invoice is paid
+    // by transfer, to the exact amount.
+    if ((data.paymentMethod ?? "cod") === COD_PAYMENT_METHOD) {
+        const cashIssue = BUILT_IN_PAYMENT_PROVIDERS.amountIssue(COD_PAYMENT_METHOD, taxQuote.totalMinor, currency.code);
+        if (cashIssue) throw new ValidationError(cashIssue, { reason: CASH_ON_DELIVERY_AMOUNT_REASON });
+    }
 
     return {
         currency,

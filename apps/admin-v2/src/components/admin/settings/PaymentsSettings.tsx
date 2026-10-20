@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { providerLabel, providerSetupReason } from "~/i18n/provider-copy";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { ArrowDown, ArrowUp, Banknote, Wallet } from "lucide-react";
+import { ArrowDown, ArrowUp, Banknote, FileText, Wallet } from "lucide-react";
 import { toast } from "~/lib/toast";
 import {
   deleteApiV1AdminSettingsStripe,
@@ -57,7 +57,9 @@ import {
   getPaymentMethodOutcome,
   type MethodKey,
 } from "./payment-method-outcome";
-import { COD_METHOD, paymentMethodRows, type PaymentMethodRow } from "./payment-method-rows";
+import { COD_METHOD, NET_TERMS_METHOD, paymentMethodRows, type PaymentMethodRow } from "./payment-method-rows";
+import { NetTermsPanel } from "./NetTermsPanel";
+import { DEFAULT_NET_TERMS_SETTINGS, netTermsNamesAnyone, type NetTermsSettings } from "@scalius/shared/payment-terms";
 import { OfficialProviderMark, PROVIDER_MARKS, type ProviderMarkId } from "./provider-marks";
 import { AppIcon } from "~/components/admin/apps/AppIcon";
 import { appProviderSetupPath } from "~/components/admin/apps/app-sections";
@@ -140,12 +142,25 @@ function MethodMark({ row }: { row: PaymentMethodRow }) {
   // An app's provider shows its own mark (SSLCommerz in the Bangladesh pack), else its app's icon (bKash, Nagad).
   if (row.kind === "app" && row.appIcon) return <AppIcon src={row.appIcon} size="sm" />;
   // Cash, or an app without an icon: a neutral mark.
-  const Icon = row.kind === "cod" ? Banknote : Wallet;
+  const Icon = row.kind === "cod" ? Banknote : row.kind === "invoice" ? FileText : Wallet;
   return (
     <span className="grid size-8 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground" aria-hidden="true">
       <Icon className="size-5" />
     </span>
   );
+}
+
+/** The invoice's readiness in the card's terms: ready once it names who may pay by it. */
+function invoiceStatus(netTerms: NetTermsSettings) {
+  const named = netTermsNamesAnyone(netTerms);
+  return {
+    configured: named,
+    enabled: true,
+    usable: named,
+    missingFields: named ? [] : ["netTerms.customerTags"],
+    providerEnabled: true,
+    environment: "not_applicable" as const,
+  };
 }
 
 /** The built-in gateway whose keys this page edits. */
@@ -357,12 +372,13 @@ export function PaymentMethodsCard() {
     // The outcome is kept: the providers list reads it back for each row.
     onSettled: () => queryClient.invalidateQueries({ queryKey: appPaymentProvidersQuery.queryKey }),
   });
-  // The form validates its empty defaults before the first read too.
+  // The form validates its empty defaults before the first read too. The
+  // invoice is ready once the draft names who may pay by it.
   const rowsFor = (draft: PaymentMethods) =>
     paymentMethodRows({
       enabledMethods: draft.enabledMethods ?? [],
       gateways: draft.gateways ?? [],
-      gatewayStatus: draft.gatewayStatus ?? {},
+      gatewayStatus: { ...draft.gatewayStatus, [NET_TERMS_METHOD]: invoiceStatus(draft.netTerms ?? DEFAULT_NET_TERMS_SETTINGS) },
       appProviders: appProviders.data ?? [],
       appProvidersKnown: appProviders.isSuccess,
     });
@@ -391,7 +407,12 @@ export function PaymentMethodsCard() {
     fetchFn: paymentMethodsQuery.queryFn,
     saveFn: (draft, expectedRevision) =>
       apiData(postApiV1AdminSettingsPaymentMethods({
-        body: { enabledMethods: draft.enabledMethods, defaultMethod: draft.defaultMethod, expectedRevision },
+        body: {
+          enabledMethods: draft.enabledMethods,
+          defaultMethod: draft.defaultMethod,
+          ...(draft.netTerms ? { netTerms: draft.netTerms } : {}),
+          expectedRevision,
+        },
       })),
     invalidateQueryKeys: [checkoutFlowQuery.queryKey, queryKeys.settings.checkoutReadiness()],
     defaultValues: {} as PaymentMethods,
@@ -446,6 +467,7 @@ export function PaymentMethodsCard() {
     const status = row.status;
     const selected = values.enabledMethods.includes(method);
     const neededCurrencies = currencyIssue(values, method);
+    const invoiceRow = row.kind === "invoice";
     const outcome = getPaymentMethodOutcome({
       method,
       status,
@@ -464,6 +486,8 @@ export function PaymentMethodsCard() {
       ? currencyText(neededCurrencies)
       : exclusion
         ? t(exclusion)
+        : invoiceRow
+          ? [t("netTermsSummary", { days: formatNumber(values.netTerms?.dueInDays ?? DEFAULT_NET_TERMS_SETTINGS.dueInDays) }), t(outcome.state === "needs_setup" ? "netTermsNeedsPeople" : outcome.state)].join(" · ")
         : row.kind === "app" && unusable && status?.blockedReason
           ? providerSetupReason(status.blockedReason)
           : [
@@ -476,8 +500,9 @@ export function PaymentMethodsCard() {
             ].filter(Boolean).join(" · ");
     const position = values.enabledMethods.indexOf(method);
     const reorderable = selected && values.enabledMethods.length > 1;
-    // Flipping on a built-in gateway that still needs keys opens its setup.
-    const turnsOnThroughSetup = keyForm !== null && outcome.state === "needs_setup";
+    // Flipping on a built-in gateway that still needs keys opens its setup;
+    // the invoice turns on and opens its settings below the row.
+    const turnsOnThroughSetup = (keyForm !== null || invoiceRow) && outcome.state === "needs_setup";
     const testResult = testResults[method];
     const testing = connectionTest.isPending && connectionTest.variables === method;
     const appActions = row.kind === "app" ? (
@@ -587,6 +612,10 @@ export function PaymentMethodsCard() {
             disabled={!canEdit || (!selected && !outcome.canSelect && !turnsOnThroughSetup)}
             aria-label={t("showAtCheckout", { method: name })}
             onCheckedChange={(on) => {
+              if (invoiceRow) {
+                toggle(method, on);
+                return;
+              }
               if (on && turnsOnThroughSetup) {
                 pendingTurnOn.current = method;
                 setupButtons.current.get(method)?.click();
@@ -596,6 +625,13 @@ export function PaymentMethodsCard() {
             }}
           />
         </label>
+        {invoiceRow && selected ? (
+          <NetTermsPanel
+            value={values.netTerms ?? DEFAULT_NET_TERMS_SETTINGS}
+            disabled={!canEdit}
+            onChange={(netTerms) => setValues((draft) => ({ ...draft, netTerms }))}
+          />
+        ) : null}
       </li>
     );
   });

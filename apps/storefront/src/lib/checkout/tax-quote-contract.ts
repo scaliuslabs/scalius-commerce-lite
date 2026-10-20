@@ -1,3 +1,4 @@
+import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
 import {
   isDeliveryMethodKind,
   isFulfillmentType,
@@ -24,7 +25,7 @@ const MAX_PHONE_LENGTH = 16;
 const MAX_DISPLAY_LABEL_LENGTH = 80;
 const MAX_SHIPPING_METHOD_NAME_LENGTH = 100;
 const MAX_SHIPPING_METHOD_DESCRIPTION_LENGTH = 255;
-const MAX_QUANTITY = 99;
+const MAX_QUANTITY = MAX_LINE_QUANTITY;
 /** Bounds for the options and methods a store app leaves on a quote. */
 const MAX_QUOTED_SHIPPING_RATES = 100;
 const MAX_QUOTED_PAYMENT_METHODS = 32;

@@ -3623,6 +3623,10 @@
          "type": "string",
          "minLength": 1,
          "maxLength": 80
+        },
+        "gated": {
+         "type": "boolean",
+         "const": true
         }
        },
        "required": [
@@ -3725,6 +3729,25 @@
           "op": {
            "type": "string",
            "const": "hide"
+          },
+          "methodId": {
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 128
+          }
+         },
+         "required": [
+          "op",
+          "methodId"
+         ],
+         "additionalProperties": false
+        },
+        {
+         "type": "object",
+         "properties": {
+          "op": {
+           "type": "string",
+           "const": "allow"
           },
           "methodId": {
            "type": "string",

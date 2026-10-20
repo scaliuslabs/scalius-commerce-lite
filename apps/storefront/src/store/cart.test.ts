@@ -96,6 +96,20 @@ describe("cart store", () => {
     expect(hydrateCartFromStorage()).toBe(hydrated);
   });
 
+  it("holds a wholesale quantity up to the one order-line limit, never past it", async () => {
+    const { MAX_LINE_QUANTITY } = await import("@scalius/shared/order-limits");
+    const { addToCart, cartStore, hydrateCartFromStorage, MAX_CART_QUANTITY, updateCartItemByKey } = await importFreshCartModule();
+    hydrateCartFromStorage();
+    expect(MAX_CART_QUANTITY).toBe(MAX_LINE_QUANTITY);
+    await expect(addToCart({ id: "p", variantId: "v1", name: "Bulk", price: 1, quantity: 120 })).resolves.toBe(true);
+    const [key] = Object.keys(cartStore.get().items);
+    expect(cartStore.get().items[key!]?.quantity).toBe(120);
+    expect(updateCartItemByKey(key!, { quantity: 121 })).toBe(true);
+    expect(cartStore.get().items[key!]?.quantity).toBe(121);
+    expect(updateCartItemByKey(key!, { quantity: MAX_LINE_QUANTITY + 1 })).toBe(false);
+    expect(cartStore.get().items[key!]?.quantity).toBe(121);
+  });
+
   it("follows another tab's cart without writing it back", async () => {
     const listeners = new Map<string, (event: { key: string }) => void>();
     Object.assign(window, { addEventListener: (type: string, listener: (event: { key: string }) => void) => listeners.set(type, listener) });
@@ -520,9 +534,9 @@ describe("cart v3 line keys (buyer inputs)", () => {
   });
 
   it("rejects an invalid Buy now or quantity overflow without changing the cart", async () => {
-    const { addToCart, startBuyNow, cartStore } = await importFreshCartModule();
+    const { addToCart, startBuyNow, cartStore, MAX_CART_QUANTITY } = await importFreshCartModule();
     const tee = { id: "tee", variantId: "tee_m", name: "Tee", price: 500 };
-    await addToCart({ ...tee, quantity: 99 });
+    await addToCart({ ...tee, quantity: MAX_CART_QUANTITY });
     const before = structuredClone(cartStore.get());
     const onFailure = vi.fn();
     for (const item of [tee, { ...tee, variantId: "default" }, { ...tee, variantId: "new", price: -1 }]) {

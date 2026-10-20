@@ -94,6 +94,33 @@
      "type": "string",
      "maxLength": 4000
     },
+    "paymentTerms": {
+     "nullable": true,
+     "type": "object",
+     "properties": {
+      "kind": {
+       "type": "string",
+       "enum": [
+        "net"
+       ]
+      },
+      "days": {
+       "type": "integer",
+       "minimum": -9007199254740991,
+       "maximum": 9007199254740991
+      },
+      "dueAt": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 40
+      }
+     },
+     "required": [
+      "kind",
+      "days",
+      "dueAt"
+     ]
+    },
     "customerId": {
      "nullable": true,
      "type": "string",
@@ -475,6 +502,7 @@
     "balanceDueMinor",
     "pricesIncludeTax",
     "paymentMethod",
+    "paymentTerms",
     "customerId",
     "accountCustomerId",
     "contact",

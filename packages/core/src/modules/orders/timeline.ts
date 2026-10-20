@@ -19,6 +19,8 @@ export const ORDER_EVENT_KINDS = [
     "cod_collected",
     "cod_failed",
     "cod_returned",
+    /** Staff or an app recorded a payment against an invoice; `data`: amount, via, reference. */
+    "payment_recorded",
     "refund_recorded",
     "return_created",
     "return_approved",

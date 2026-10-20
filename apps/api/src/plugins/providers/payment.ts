@@ -91,6 +91,7 @@ export function appPaymentGateway(
     label: declaration.name,
     checkoutName: declaration.checkoutName ?? declaration.name,
     flow: declaration.flow,
+    ...(declaration.dueInDays !== undefined ? { dueInDays: declaration.dueInDays } : {}),
     chargeCurrencies: declaration.chargeCurrencies,
     countries: declaration.countries,
     ...(declaration.amountLimits ? { amountLimits: declaration.amountLimits } : {}),

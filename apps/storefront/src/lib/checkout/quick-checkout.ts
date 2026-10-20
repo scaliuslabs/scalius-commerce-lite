@@ -1,3 +1,4 @@
+import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
 import { marketingConsentFormValues } from "./marketing-consent";
 /**
  * Checkout without JavaScript (`/checkout/quick`): the quick-buy line from
@@ -171,7 +172,7 @@ export function readQuickCheckoutLines(cartItems: string): QuickCheckoutLine[] |
     if (typeof entry !== "object" || entry === null) return [];
     const item = entry as Record<string, unknown>;
     if (typeof item.id !== "string" || typeof item.variantId !== "string" || typeof item.name !== "string") return [];
-    if (typeof item.quantity !== "number" || !Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 99) return [];
+    if (typeof item.quantity !== "number" || !Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > MAX_LINE_QUANTITY) return [];
     return [{
       cartKey,
       name: item.name,

@@ -18,8 +18,15 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 const checkoutGatewaySchema = z.object({
   id: z.string(),
   name: z.string(),
-  /** card: confirm in the browser; hosted: redirect to the provider; cod: no online payment. */
-  flow: z.enum(["card", "hosted", "cod"]),
+  /**
+   * card: confirm in the browser; hosted: redirect to the provider; cod: no
+   * online payment; deferred: pay later by its due date (an invoice). A
+   * deferred method reaches only signed-in buyers it names: the buyer's tax
+   * quote (`allowedPaymentMethods`) says whether it does.
+   */
+  flow: z.enum(["card", "hosted", "cod", "deferred"]),
+  /** A deferred method's terms: the order is due this many days after it is placed. */
+  dueInDays: z.number().int().min(1).max(365).optional(),
   currencies: z.array(z.string()).max(4),
   /**
    * The delivery countries it serves, when not every country (cash on

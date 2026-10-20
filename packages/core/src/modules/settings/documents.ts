@@ -22,6 +22,7 @@ import {
   type SeoReturnPolicySettings,
 } from "@scalius/shared/seo-return-policy";
 import { emiSettingsSchema, type EmiSettings } from "@scalius/shared/emi";
+import { DEFAULT_NET_TERMS_SETTINGS, readNetTermsSettings, type NetTermsSettings } from "@scalius/shared/payment-terms";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import {
   DEFAULT_MARKETING_CONSENT_SETTINGS,
@@ -606,6 +607,11 @@ export interface PaymentMethodsSettings {
   /** `null` until the merchant saves an allowlist (COD is then implied). */
   enabledMethods: string[] | null;
   defaultMethod: string;
+  /**
+   * The built-in invoice (`net_terms`): its days and who may use it
+   * (`@scalius/shared/payment-terms`). Unreadable: nobody is eligible.
+   */
+  netTerms: NetTermsSettings;
 }
 
 export const paymentMethodsDocument = defineSettingsDocument<PaymentMethodsSettings>({
@@ -614,8 +620,9 @@ export const paymentMethodsDocument = defineSettingsDocument<PaymentMethodsSetti
     enabledMethods: z.array(z.unknown()).nullable().catch([])
       .transform((methods) => methods?.filter((method): method is string => typeof method === "string") ?? null),
     defaultMethod: z.string().catch("cod"),
+    netTerms: z.unknown().optional().transform(readNetTermsSettings),
   }),
-  defaults: { enabledMethods: null, defaultMethod: "cod" },
+  defaults: { enabledMethods: null, defaultMethod: "cod", netTerms: { ...DEFAULT_NET_TERMS_SETTINGS } },
 });
 
 // ─────────────────────────────────────────

@@ -48,6 +48,15 @@ export const GATEWAY_PRESENTATION: Record<string, GatewayPresentation> = {
     markKind: "icon",
     hosted: false,
   },
+  // The store's invoice (net terms): placed now, paid by its due date.
+  net_terms: {
+    buyerLabel: "Pay later by invoice",
+    description: "",
+    providerLabel: null,
+    markSrc: "/payment-marks/invoice.svg",
+    markKind: "icon",
+    hosted: false,
+  },
   gift_card: {
     buyerLabel: "Gift card",
     description: "",

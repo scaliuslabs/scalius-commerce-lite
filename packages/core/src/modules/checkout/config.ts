@@ -16,6 +16,8 @@ import {
   COD_LABEL,
   COD_PAYMENT_METHOD,
   type GatewaySettings,
+  NET_TERMS_LABEL,
+  NET_TERMS_PAYMENT_METHOD,
   getPaymentGatewaySettingsSnapshot,
   type PaymentProvidersSource,
   publicAmountLimits,
@@ -196,6 +198,18 @@ export async function getCheckoutConfig(
             gateways.push({ id: methodId, name: COD_LABEL, flow: "cod", currencies: [localCurrencyCode], ...served });
             continue;
         }
+        // The invoice is listed with its terms; a buyer's quote says whether
+        // it reaches them (signed-in and eligible only, payment-terms.ts).
+        if (methodId === NET_TERMS_PAYMENT_METHOD) {
+            gateways.push({
+                id: methodId,
+                name: NET_TERMS_LABEL,
+                flow: "deferred",
+                dueInDays: activePaymentMethods.netTerms.dueInDays,
+                currencies: [localCurrencyCode],
+            });
+            continue;
+        }
         const gateway = providers.get(methodId);
         // Built-in settings come with the snapshot; an active app method's gateway loads its own.
         const settings = savedGatewaySettings[methodId] ?? (gateway && isQualifiedProviderId(methodId)
@@ -207,6 +221,7 @@ export async function getCheckoutConfig(
             id: gateway.id,
             name: gateway.checkoutName,
             flow: gateway.flow,
+            ...(gateway.flow === "deferred" && gateway.dueInDays ? { dueInDays: gateway.dueInDays } : {}),
             currencies: [localCurrencyCode],
             ...served,
             ...(amountLimits ? { amountLimits } : {}),

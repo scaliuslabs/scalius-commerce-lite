@@ -560,7 +560,9 @@ export async function createShipment(
     idempotencyKey: shipmentId,
     orderId: order.id,
     recipient,
-    codAmountMinor: Math.max(0, order.balanceDueMinor),
+    // The rider collects what is due, except on an invoice: it is paid by
+    // its due date, never in cash at the door.
+    codAmountMinor: order.paymentTermsDays ? 0 : Math.max(0, order.balanceDueMinor),
     currency: order.currencyCode,
     decimalPlaces: order.currencyDecimalPlaces,
     note: options?.note || order.notes || null,

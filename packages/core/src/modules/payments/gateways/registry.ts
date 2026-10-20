@@ -22,6 +22,8 @@ import {
   GIFT_CARD_TENDER_LABEL,
   GIFT_CARD_TENDER_METHOD,
   isAppPaymentMethod,
+  NET_TERMS_LABEL,
+  NET_TERMS_PAYMENT_METHOD,
 } from "./identity";
 import type { PaymentGateway } from "./port";
 import { minorToMajorString } from "./port";
@@ -38,9 +40,13 @@ export {
   GIFT_CARD_TENDER_LABEL,
   GIFT_CARD_TENDER_METHOD,
   isAppPaymentMethod,
+  isManualSettlementMethod,
   isOnlinePaymentMethod,
   isPaymentMethodId,
+  NET_TERMS_LABEL,
+  NET_TERMS_PAYMENT_METHOD,
   onlinePaymentMethodCondition,
+  RECORDED_PAYMENT_METHOD,
 } from "./identity";
 
 // ── Gateways one request can use ────────────────────────────────────────────
@@ -112,8 +118,16 @@ export interface PaymentProviders {
   readonly gateways: readonly PaymentGateway[];
   get(id: string | null | undefined): PaymentGateway | undefined;
   require(id: string | null | undefined): PaymentGateway;
-  /** Every checkout payment method id: the gateways plus COD. */
+  /** Every checkout payment method id: the gateways plus COD and net terms. */
   methodIds(): string[];
+  /**
+   * Whether a method is deferred (`@scalius/shared/payment-terms`): the
+   * order commits unpaid with a due date and nothing is charged at
+   * checkout. Net terms, and an app provider declared `flow: "deferred"`.
+   */
+  isDeferred(id: string): boolean;
+  /** A deferred app method's declared terms (days); null for net terms (the merchant's setting) and every other method. */
+  declaredTermsDays(id: string): number | null;
   /** Merchant-facing name of a payment method or tender. */
   label(id: string): string;
   /** Store-currency eligibility shared by every checkout surface; credential readiness is separate. */
@@ -162,11 +176,12 @@ export function createPaymentProviders(apps: readonly PaymentGateway[] = []): Pa
 
   const label = (id: string): string => {
     if (id === GIFT_CARD_TENDER_METHOD) return GIFT_CARD_TENDER_LABEL;
+    if (id === NET_TERMS_PAYMENT_METHOD) return NET_TERMS_LABEL;
     return id === COD_PAYMENT_METHOD ? COD_LABEL : get(id)?.label ?? id;
   };
 
   const currencyIssue = (id: string, currencyCode: unknown): string | null => {
-    if (id !== COD_PAYMENT_METHOD && !get(id)) return "This payment method is not supported by checkout.";
+    if (id !== COD_PAYMENT_METHOD && id !== NET_TERMS_PAYMENT_METHOD && !get(id)) return "This payment method is not supported by checkout.";
     const currency = normalizeSupportedCurrencyCode(currencyCode);
     if (!currency) return "Store currency is unavailable. Save a supported currency before enabling payment methods.";
     const gateway = get(id);
@@ -204,7 +219,12 @@ export function createPaymentProviders(apps: readonly PaymentGateway[] = []): Pa
       if (!gateway) throw new ValidationError(`Unsupported payment gateway: ${id ?? "none"}`);
       return gateway;
     },
-    methodIds: () => [...byId.keys(), COD_PAYMENT_METHOD],
+    methodIds: () => [...byId.keys(), COD_PAYMENT_METHOD, NET_TERMS_PAYMENT_METHOD],
+    isDeferred: (id) => id === NET_TERMS_PAYMENT_METHOD || get(id)?.flow === "deferred",
+    declaredTermsDays: (id) => {
+      const gateway = get(id);
+      return gateway?.flow === "deferred" ? gateway.dueInDays ?? null : null;
+    },
     label,
     currencyIssue,
     countries,
@@ -214,7 +234,8 @@ export function createPaymentProviders(apps: readonly PaymentGateway[] = []): Pa
     amountIssue,
     precommitIssue(input) {
       const gateway = get(input.paymentMethod);
-      if (!gateway) return null;
+      // A deferred method charges nothing at checkout.
+      if (!gateway || gateway.flow === "deferred") return null;
       const issue = currencyIssue(gateway.id, input.currencyCode);
       if (issue) return issue;
       const totalMinor = input.totalAmountMinor;

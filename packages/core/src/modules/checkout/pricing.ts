@@ -23,7 +23,7 @@ import {
 } from "../tax";
 import { DELIVERY_HIERARCHY_COUNTRY } from "@scalius/shared/markets";
 import { DELIVERY_RATE_UNAVAILABLE_REASON, deliveryRateInCurrency, destinationCountry, listDeliveryRatesForDestination, type DeliveryRateRow } from "../delivery";
-import { BUILT_IN_PAYMENT_PROVIDERS, COD_LABEL, type PaymentProviders } from "../payments";
+import { BUILT_IN_PAYMENT_PROVIDERS, COD_LABEL, NET_TERMS_LABEL, NET_TERMS_PAYMENT_METHOD, type PaymentProviders } from "../payments";
 import { GIFT_CARD_PAYMENT_METHOD } from "../gift-cards";
 import type { StorefrontOrderShippingMethodSnapshot } from "../orders";
 import { resolveBundlePromotionInterplay, type BundlePromotionInterplay } from "./bundle-discounts";
@@ -578,9 +578,10 @@ export async function previewStorefrontAppDiscounts(
   });
 }
 
-/** A payment method's buyer-facing name (the gateway's checkout name; cash on delivery). */
+/** A payment method's buyer-facing name (the gateway's checkout name; cash on delivery; the invoice). */
 export function checkoutPaymentMethodName(methodId: string, providers: PaymentProviders = BUILT_IN_PAYMENT_PROVIDERS): string {
   if (methodId === "cod") return COD_LABEL;
+  if (methodId === NET_TERMS_PAYMENT_METHOD) return NET_TERMS_LABEL;
   return providers.get(methodId)?.checkoutName?.trim() || methodId;
 }
 
@@ -588,21 +589,32 @@ export function checkoutPaymentMethodName(methodId: string, providers: PaymentPr
  * The payment methods to offer after the apps (`checkout.payment_methods`):
  * the methods checkout already allows, narrowed, renamed and reordered.
  * `changed` is false when no app changed anything (then show the list as is).
+ * A `gated` method (net terms whose merchant lets apps decide) is shown only
+ * when an app allows it; with no app answering it stays hidden.
  */
 export async function resolveAppPaymentMethods(
   apps: CheckoutAppFunctions | undefined,
   cart: FunctionCart | null,
   methodIds: readonly string[],
   providers: PaymentProviders = BUILT_IN_PAYMENT_PROVIDERS,
+  gated: ReadonlySet<string> = NO_GATED_METHODS,
 ): Promise<{ methods: CheckoutPaymentMethodOption[]; changed: boolean }> {
   const methods = [...new Set(methodIds)].map((methodId) => ({ methodId, name: checkoutPaymentMethodName(methodId, providers) }));
-  if (!apps?.points.has("checkout.payment_methods") || !cart || methods.length === 0) return { methods, changed: false };
+  if (!apps?.points.has("checkout.payment_methods") || !cart || methods.length === 0) {
+    return { methods: methods.filter((method) => !gated.has(method.methodId)), changed: false };
+  }
   const results = await apps.run("checkout.payment_methods", {
     cart,
-    methods: methods.slice(0, 20).map((method) => ({ methodId: method.methodId.slice(0, 128), name: method.name.slice(0, 80) })),
+    methods: methods.slice(0, 20).map((method) => ({
+      methodId: method.methodId.slice(0, 128),
+      name: method.name.slice(0, 80),
+      ...(gated.has(method.methodId) ? { gated: true as const } : {}),
+    })),
   });
-  return applyAppPaymentMethodOperations(methods, results, apps);
+  return applyAppPaymentMethodOperations(methods, results, apps, gated);
 }
+
+const NO_GATED_METHODS: ReadonlySet<string> = new Set();
 
 /** Order placement: an app may have hidden the chosen method for this cart. Gift cards are tender, never hidden. */
 export async function assertStorefrontAppPaymentMethod(
@@ -611,10 +623,12 @@ export async function assertStorefrontAppPaymentMethod(
   chosen: string,
   methodIds: readonly string[],
   providers: PaymentProviders = BUILT_IN_PAYMENT_PROVIDERS,
+  /** Methods an app must allow (gated net terms); the chosen one is refused unless one did. */
+  gated: ReadonlySet<string> = NO_GATED_METHODS,
 ): Promise<void> {
   if (chosen === GIFT_CARD_PAYMENT_METHOD || !methodIds.includes(chosen)) return;
-  const { methods, changed } = await resolveAppPaymentMethods(apps, cart, methodIds, providers);
-  if (changed && !methods.some((method) => method.methodId === chosen)) {
+  const { methods, changed } = await resolveAppPaymentMethods(apps, cart, methodIds, providers, gated);
+  if ((changed || gated.has(chosen)) && !methods.some((method) => method.methodId === chosen)) {
     throw new ValidationError(
       "This payment method isn't available for this order. Choose another.",
       { reason: PAYMENT_METHOD_UNAVAILABLE_REASON },

@@ -40,6 +40,7 @@ describe("payment method rows", () => {
     expect(rows.map((row) => [row.id, row.kind])).toEqual([
       [BKASH, "app"],
       ["cod", "cod"],
+      ["net_terms", "invoice"],
       ["stripe", "built_in"],
       [NAGAD, "app"],
     ]);
@@ -53,7 +54,7 @@ describe("payment method rows", () => {
       status: { environment: "live" },
     });
     // An inactive app's readiness, failing closed with the server's reason.
-    expect(rows[3]).toMatchObject({
+    expect(rows[4]).toMatchObject({
       name: "Nagad",
       status: { usable: false, providerEnabled: false, blockedReason: "Activate Nagad in Apps to use it." },
     });
@@ -80,7 +81,7 @@ describe("payment method rows", () => {
       gatewayStatus: { cod: ready },
       appProviders: [],
     };
-    expect(paymentMethodRows({ ...input, appProvidersKnown: true }).map((row) => row.id)).toEqual(["cod", "stripe"]);
+    expect(paymentMethodRows({ ...input, appProvidersKnown: true }).map((row) => row.id)).toEqual(["cod", "net_terms", "stripe"]);
     // Until the installed apps are read it may be an inactive app's: kept, so it can be turned off.
     expect(paymentMethodRows({ ...input, appProvidersKnown: false }).find((row) => row.id === "gone.app:wallet-pay"))
       .toMatchObject({ kind: "app", name: "Wallet pay", pluginId: "gone.app", status: undefined });

@@ -1,3 +1,4 @@
+import { DEFAULT_NET_TERMS_SETTINGS } from "@scalius/shared/payment-terms";
 import { describe, expect, it } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 
@@ -124,11 +125,13 @@ describe("payment gateway settings reads", () => {
     await expect(getActivePaymentMethods(oldDb)).resolves.toEqual({
       enabledMethods: ["cod"],
       defaultMethod: "cod",
+      netTerms: DEFAULT_NET_TERMS_SETTINGS,
     });
 
     await expect(getActivePaymentMethods(freshDb)).resolves.toEqual({
       enabledMethods: [],
       defaultMethod: "cod",
+      netTerms: DEFAULT_NET_TERMS_SETTINGS,
     });
   });
 
@@ -143,6 +146,7 @@ describe("payment gateway settings reads", () => {
     await expect(getActivePaymentMethods(db)).resolves.toEqual({
       enabledMethods: ["cod"],
       defaultMethod: "cod",
+      netTerms: DEFAULT_NET_TERMS_SETTINGS,
     });
   });
 
@@ -166,6 +170,7 @@ describe("payment gateway settings reads", () => {
     ).resolves.toEqual({
       enabledMethods: [],
       defaultMethod: "cod",
+      netTerms: DEFAULT_NET_TERMS_SETTINGS,
     });
   });
 
@@ -173,7 +178,7 @@ describe("payment gateway settings reads", () => {
     const { db, sqlite } = createSqliteD1Database();
     sqlite.exec("INSERT INTO settings (id, key, value, type, category) VALUES ('pm', 'document', '{not json', 'json', 'payment_methods')");
 
-    await expect(getActivePaymentMethods(db)).resolves.toEqual({ enabledMethods: [], defaultMethod: "cod" });
+    await expect(getActivePaymentMethods(db)).resolves.toEqual({ enabledMethods: [], defaultMethod: "cod", netTerms: DEFAULT_NET_TERMS_SETTINGS });
   });
 
   it("does not make Stripe active without a publishable key", async () => {
@@ -194,6 +199,7 @@ describe("payment gateway settings reads", () => {
     ).resolves.toEqual({
       enabledMethods: [],
       defaultMethod: "cod",
+      netTerms: DEFAULT_NET_TERMS_SETTINGS,
     });
   });
 
@@ -218,6 +224,7 @@ describe("payment gateway settings reads", () => {
     ).resolves.toEqual({
       enabledMethods: [],
       defaultMethod: "cod",
+      netTerms: DEFAULT_NET_TERMS_SETTINGS,
     });
   });
 
@@ -337,6 +344,7 @@ describe("payment gateway settings reads", () => {
     ).resolves.toEqual({
       enabledMethods: [],
       defaultMethod: "cod",
+      netTerms: DEFAULT_NET_TERMS_SETTINGS,
     });
   });
 
@@ -353,7 +361,7 @@ describe("payment gateway settings reads", () => {
       ],
     ]);
 
-    await expect(getActivePaymentMethods(db)).resolves.toEqual({ enabledMethods: ["cod"], defaultMethod: "cod" });
+    await expect(getActivePaymentMethods(db)).resolves.toEqual({ enabledMethods: ["cod"], defaultMethod: "cod", netTerms: DEFAULT_NET_TERMS_SETTINGS });
   });
 
   it("keeps Stripe active when every checkout-required key is present", async () => {
@@ -375,6 +383,7 @@ describe("payment gateway settings reads", () => {
     ).resolves.toEqual({
       enabledMethods: ["stripe"],
       defaultMethod: "stripe",
+      netTerms: DEFAULT_NET_TERMS_SETTINGS,
     });
   });
 
@@ -395,6 +404,7 @@ describe("payment gateway settings reads", () => {
     await expect(resolveActivePaymentMethodsFromRows(documentRows(rows))).resolves.toEqual({
       enabledMethods: ["cod", "stripe"],
       defaultMethod: "stripe",
+      netTerms: DEFAULT_NET_TERMS_SETTINGS,
     });
   });
 });

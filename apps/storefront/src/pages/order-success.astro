@@ -61,6 +61,7 @@ import {
   formatOrderReceiptDate,
   localizeOrderReceiptGatewayPresentation,
 } from "@/lib/order-success-localization";
+import { formatPageNumber } from "@/lib/store-time-zone";
 import { isGatewayEligibleForPaymentAmount } from "@/lib/checkout/gateway-amount-eligibility";
 import { DEFAULT_CURRENCY, formatMoney } from "@/lib/currency";
 import { fromMinor } from "@scalius/shared/money";
@@ -378,6 +379,13 @@ const merchantReceiptName = layoutData?.business?.companyName?.trim()
   || layoutData?.business?.legalName?.trim()
   || null;
 const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.code);
+// An invoice still owed: "Payment due by 19 November 2026 (net 30)", or that it was due.
+const receiptPaymentTerms = order?.paymentTerms && order.balanceDue > 0
+  ? formatCheckoutLanguageText(order.paymentTerms.overdue ? copy.invoiceOverdueText : copy.invoiceDueText, {
+      date: formatOrderReceiptDate(order.paymentTerms.dueAt, checkoutLanguage.code) ?? "",
+      days: formatPageNumber(order.paymentTerms.days, checkoutLanguageBaseCode(checkoutLanguage.code)),
+    })
+  : null;
 const orderNumber = order ? formatOrderNumber(order.orderNumber, order.id) : "";
 const nextSteps = order && orderSuccessView ? getOrderSuccessNextSteps(order, orderSuccessView.kind, copy) : [];
 // Opened by tracking or later: a status page ("Order #1057", where it is) instead of the checkout confirmation.
@@ -630,6 +638,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
               >{orderSuccessView.paymentStatusLabel}</span
             >
           </div>
+          {receiptPaymentTerms && <p class="text-end text-sm font-medium" data-payment-terms>{receiptPaymentTerms}</p>}
           {receiptMoney && receiptDiscounts && (
             <div class="space-y-3 border-t border-border pt-4">
               <div class="flex justify-between gap-4">

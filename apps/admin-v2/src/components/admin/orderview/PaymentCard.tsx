@@ -39,7 +39,7 @@ import {
 } from "~/lib/order-tax-presentation";
 import { buildOrderPaymentPresentation } from "~/lib/order-payment-presentation";
 import { canProcessOrderCodAction } from "@scalius/shared/order-state";
-import { formatCurrencyAmount, formatOrderTimestamp } from "./formatters";
+import { formatCurrencyAmount, formatOrderDate, formatOrderTimestamp } from "./formatters";
 import type { CodAction } from "./CodDialogs";
 import { OperationalReadNotice } from "./OperationalReadNotice";
 import { orderBadgeVisibility, statusBadgeVariant } from "./status-badges";
@@ -52,6 +52,8 @@ import type { Order, OrderRefundAttempt, OrderTimestamp } from "./types";
 const RefundDialog = lazy(() => import("./RefundDialog"));
 // So do the cash-on-delivery dialogs (collected, failed, returned).
 const CodDialogs = lazy(() => import("./CodDialogs").then((module) => ({ default: module.CodDialogs })));
+// And the invoice's record-a-payment dialog.
+const RecordPaymentDialog = lazy(() => import("./RecordPaymentDialog").then((module) => ({ default: module.RecordPaymentDialog })));
 
 type Payment = OrderPaymentsPayload["payments"][number];
 type SessionAttempt = OrderPaymentsPayload["paymentSessionAttempts"][number];
@@ -118,6 +120,11 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
   const [codSession, setCodSession] = useState(0);
   const [codCollector, setCodCollector] = useState("");
   const codLoaded = useOpenedOnce(codAction !== null);
+  // Each opening mounts a fresh record-a-payment dialog (its own amount and request key).
+  const [recordOpen, setRecordOpen] = useState(false);
+  const [recordSession, setRecordSession] = useState(0);
+  const recordLoaded = useOpenedOnce(recordOpen);
+  const terms = order.paymentTerms ?? null;
 
   // Payment history is optional: a failed read stays inside this card.
   const paymentsQuery = useQuery({
@@ -336,6 +343,34 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
           ) : null}
         </dl>
 
+        {terms ? (
+          <section className="space-y-2" aria-label={t("netTerms.title")} data-invoice-terms>
+            <dl className="space-y-1">
+              <Row label={t("netTerms.terms")} value={t("netTerms.netDays", { days: formatNumber(terms.days) })} />
+              <div className="flex items-center justify-between gap-4">
+                <dt className="text-muted-foreground">{t("netTerms.due")}</dt>
+                <dd className="flex items-center gap-2">
+                  {formatOrderDate(terms.dueAt)}
+                  {terms.overdue && !presentation.collectionClosed ? <Badge variant="destructive">{t("netTerms.overdue")}</Badge> : null}
+                </dd>
+              </div>
+            </dl>
+            {canUpdateCod && !presentation.collectionClosed && presentation.amountDue > 0 ? (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={isRefundLocked}
+                onClick={() => {
+                  setRecordSession((session) => session + 1);
+                  setRecordOpen(true);
+                }}
+              >
+                {t("netTerms.recordPayment")}
+              </Button>
+            ) : null}
+          </section>
+        ) : null}
+
         {isHydrated && paymentsQuery.isError ? (
           <InlineError title={t("history.failed")} error={paymentsQuery.error} onRetry={refetchPayments} />
         ) : null}
@@ -548,6 +583,21 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
         </Suspense>
       ) : null}
 
+      {recordLoaded && terms ? (
+        <Suspense fallback={null}>
+          <RecordPaymentDialog
+            key={recordSession}
+            open={recordOpen}
+            onClose={() => setRecordOpen(false)}
+            orderId={order.id}
+            orderVersion={order.version}
+            currencyCode={order.currencyCode ?? ""}
+            decimalPlaces={order.currencyDecimalPlaces ?? 2}
+            balanceDue={presentation.amountDue}
+            money={money}
+          />
+        </Suspense>
+      ) : null}
       {refundLoaded ? (
         <Suspense fallback={null}>
           <RefundDialog

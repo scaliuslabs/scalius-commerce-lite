@@ -65,7 +65,7 @@ import { DELIVERY_HIERARCHY_COUNTRY } from "@scalius/shared/markets";
 import { DELIVERY_RATE_UNAVAILABLE_REASON, listDeliveryRatesForDestination } from "../delivery";
 import { buildStorefrontDiscountAllocation, type TaxDiscountAllocationInput } from "../tax";
 
-/** The one payment method a manual order takes. */
+/** A manual order's default payment method (staff may also choose an invoice, `net_terms`). */
 export const MANUAL_ORDER_PAYMENT_METHOD = "cod";
 
 /** The apps' checkout functions on staff orders, bound to this request's database and apps. */
@@ -217,7 +217,8 @@ export async function applyManualOrderAppFunctions(
         console.error(`[orders] manual order app cart could not be built: ${error instanceof Error ? error.name : "error"}`);
         return none;
     }
-    const methods = [{ methodId: MANUAL_ORDER_PAYMENT_METHOD, name: checkoutPaymentMethodName(MANUAL_ORDER_PAYMENT_METHOD) }];
+    const paymentMethod = input.paymentMethod ?? MANUAL_ORDER_PAYMENT_METHOD;
+    const methods = [{ methodId: paymentMethod, name: checkoutPaymentMethodName(paymentMethod) }];
 
     // One wave of app calls: every point sees the same cart.
     const [validations, discounts, rates, payments] = await Promise.all([
@@ -273,9 +274,11 @@ export async function applyManualOrderAppFunctions(
 
     if (payments.length > 0) {
         const offered = applyAppPaymentMethodOperations(methods, payments, apps);
-        if (offered.changed && !offered.methods.some((method) => method.methodId === MANUAL_ORDER_PAYMENT_METHOD)) {
+        if (offered.changed && !offered.methods.some((method) => method.methodId === paymentMethod)) {
             throw new ValidationError(
-                "An app doesn't allow cash on delivery for this order, and orders created here are cash on delivery.",
+                paymentMethod === MANUAL_ORDER_PAYMENT_METHOD
+                    ? "An app doesn't allow cash on delivery for this order."
+                    : "An app doesn't allow paying later by invoice for this order.",
                 { reason: PAYMENT_METHOD_UNAVAILABLE_REASON },
             );
         }

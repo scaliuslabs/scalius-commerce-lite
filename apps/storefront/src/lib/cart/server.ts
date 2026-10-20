@@ -1,5 +1,6 @@
 // src/lib/cart/server.ts
 
+import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
 import {
   createOrder,
   type CreateOrderPayload,
@@ -95,10 +96,10 @@ function parseCartItems(raw: unknown): ValidatedCartItem[] {
       typeof item.quantity !== "number" ||
       !Number.isInteger(item.quantity) ||
       item.quantity < 1 ||
-      item.quantity > 99
+      item.quantity > MAX_LINE_QUANTITY
     ) {
       throw new Error(
-        `Cart item "${item.name || idx}" has an invalid quantity. Must be an integer between 1 and 99.`,
+        `Cart item "${item.name || idx}" has an invalid quantity. Must be a whole number from 1 to ${MAX_LINE_QUANTITY}.`,
       );
     }
 

@@ -3,6 +3,7 @@ import {
   BUILT_IN_PAYMENT_PROVIDERS,
   COD_PAYMENT_METHOD,
   getGatewayAmountIssue,
+  NET_TERMS_PAYMENT_METHOD,
   isOnlinePaymentMethod,
   type PaymentProviders,
 } from "../payments";
@@ -23,6 +24,10 @@ export function isCheckoutGatewayUsableForFlow(options: {
     partialPaymentAmount: unknown;
 }): boolean {
     const checkoutMode = options.checkoutMode ?? "all";
+
+    // The invoice is for signed-in, trusted buyers: no advance deposit, and
+    // not the guest cash-only flow.
+    if (options.gatewayId === NET_TERMS_PAYMENT_METHOD) return checkoutMode !== "guest_cod_only";
 
     if (options.gatewayId === COD_PAYMENT_METHOD && checkoutMode === "gateways_only") return false;
     if (options.gatewayId !== COD_PAYMENT_METHOD && checkoutMode === "guest_cod_only") return false;
@@ -47,10 +52,11 @@ export function getCheckoutFlowValidationIssues(options: {
     const checkoutMode = options.checkoutMode ?? "all";
     const availablePaymentMethods = options.availablePaymentMethods;
     const hasCod = availablePaymentMethods?.includes(COD_PAYMENT_METHOD) === true;
+    const hasInvoice = availablePaymentMethods?.includes(NET_TERMS_PAYMENT_METHOD) === true;
     const hasOnlineGateway = availablePaymentMethods?.some(isOnlinePaymentMethod) === true;
 
     if (availablePaymentMethods) {
-        if (checkoutMode === "all" && !hasCod && !hasOnlineGateway) {
+        if (checkoutMode === "all" && !hasCod && !hasOnlineGateway && !hasInvoice) {
             issues.push("Standard checkout needs at least one enabled and configured payment method.");
         }
         if (checkoutMode === "guest_cod_only" && !hasCod) {

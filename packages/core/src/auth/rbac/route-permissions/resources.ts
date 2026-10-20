@@ -13,7 +13,8 @@ const customers = { permission: PERMISSIONS.CUSTOMERS_VIEW };
 export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/resources/orders": { GET: orders, POST: { permission: PERMISSIONS.ORDERS_CREATE } },
   "/api/v1/admin/resources/orders/*": { GET: orders },
-  "/api/v1/admin/resources/orders/*/payments": { GET: orders },
+  // Recording money received against an invoice is the COD collection's permission.
+  "/api/v1/admin/resources/orders/*/payments": { GET: orders, POST: { permission: PERMISSIONS.ORDERS_EDIT } },
   "/api/v1/admin/resources/orders/*/fulfillments": { GET: orders, POST: shipments },
   "/api/v1/admin/resources/orders/*/shipments": { GET: orders, POST: shipments },
   "/api/v1/admin/resources/shipments/*": { GET: orders },
