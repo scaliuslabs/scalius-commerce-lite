@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 
 import { configDefaults, defineConfig } from "vitest/config";
 
+import { SERIAL_TESTS, testPass } from "./scripts/test-passes.mjs";
+
 function fromRoot(path: string): string {
   return fileURLToPath(new URL(path, import.meta.url));
 }
@@ -19,6 +21,9 @@ const PURE_TESTS = [
   "packages/shared/**/*.test.?(c|m)[jt]s?(x)",
   "packages/plugin-sdk/**/*.test.?(c|m)[jt]s?(x)",
 ];
+// `pnpm test` runs two passes (`scripts/test-passes.mjs`): the parallel pass
+// leaves the serial files out, the serial pass collects only them.
+const pass = testPass();
 const cloudflareWorkersModuleId = "cloudflare:workers";
 const resolvedCloudflareWorkersModuleId = "\0cloudflare-workers-vitest";
 
@@ -74,23 +79,34 @@ export default defineConfig({
     // Transformed modules persist in node_modules/.vitest-cache between runs.
     fsModuleCache: true,
     projects: [
-      {
-        extends: true,
-        test: {
-          name: "pure",
-          include: PURE_TESTS,
-          // No per-file module reset: these modules hold no state. Globals and
-          // env stubs are still undone after every test.
-          isolate: false,
-          unstubGlobals: true,
-          unstubEnvs: true,
-        },
-      },
+      ...(pass === "serial"
+        ? []
+        : [
+            {
+              extends: true,
+              test: {
+                name: "pure",
+                include: PURE_TESTS,
+                // No per-file module reset: these modules hold no state. Globals and
+                // env stubs are still undone after every test.
+                isolate: false,
+                unstubGlobals: true,
+                unstubEnvs: true,
+              },
+            },
+          ]),
       {
         extends: true,
         test: {
           name: "app",
-          exclude: [...configDefaults.exclude, ".claude/**", "audit/**", ...PURE_TESTS],
+          ...(pass === "serial" ? { include: SERIAL_TESTS } : {}),
+          exclude: [
+            ...configDefaults.exclude,
+            ".claude/**",
+            "audit/**",
+            ...PURE_TESTS,
+            ...(pass === "parallel" ? SERIAL_TESTS : []),
+          ],
           // The migrated D1 image, built once for every test process.
           globalSetup: ["./packages/database/src/testing/migrated-image-setup.ts"],
         },
