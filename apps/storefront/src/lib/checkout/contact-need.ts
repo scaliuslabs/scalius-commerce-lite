@@ -5,10 +5,11 @@
  * commits, so the page only decides what to ask for.
  *
  * The information step does not know the payment method yet. It assumes the
- * one that needs the most: cash when the cart can be paid in cash (a service
- * line and an enabled cash method), else the store's deposit plan, else a
- * full online payment. A phone that the rule lets go is optional; email is
- * then required.
+ * one that needs the most: a deferred method when one is offered (the
+ * invoice, or an app's pay-later method, `flow: "deferred"`), else cash when
+ * the cart can be paid in cash (a service line and an enabled cash method),
+ * else the store's deposit plan, else a full online payment. A phone that
+ * the rule lets go is optional; email is then required.
  */
 import {
   orderContactNeeds,
@@ -24,6 +25,8 @@ export interface CheckoutContactNeedInput {
   lines: ReadonlyArray<{ fulfillmentKind?: unknown }>;
   /** Cash on delivery (or at the service) is an enabled method. */
   cashEnabled: boolean;
+  /** A deferred method is offered: the invoice (`net_terms`) or an app's `flow: "deferred"` gateway. */
+  deferredEnabled?: boolean;
   /** The store takes an advance deposit online. */
   partialPaymentEnabled: boolean;
   /** The order's country (the page market's, when nothing ships); null is Bangladesh. */
@@ -37,8 +40,15 @@ export function checkoutContactNeeds(input: CheckoutContactNeedInput): OrderCont
   }));
   // Digital lines alone can't be paid in cash; a service line can.
   const cashPossible = input.cashEnabled && lines.some((line) => line.fulfillmentKind !== "digital");
-  const payment: OrderPaymentKind = cashPossible ? "cod" : input.partialPaymentEnabled ? "partial" : "online";
+  const payment: OrderPaymentKind = input.deferredEnabled === true
+    ? "deferred"
+    : cashPossible ? "cod" : input.partialPaymentEnabled ? "partial" : "online";
   return orderContactNeeds(input.identity, { lines, payment, countryCode: input.countryCode });
+}
+
+/** Whether the checkout offers a deferred (pay later) method, by the gateways it lists. */
+export function offersDeferredPayment(gateways: ReadonlyArray<{ id?: string; flow?: string }>): boolean {
+  return gateways.some((gateway) => gateway.flow === "deferred" || gateway.id === "net_terms");
 }
 
 /**

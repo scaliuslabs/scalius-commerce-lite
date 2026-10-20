@@ -55,6 +55,7 @@ import { phoneHintCopy } from "../checkout/phone-hint";
 import {
   applyCheckoutContactNeeds,
   checkoutContactNeeds,
+  offersDeferredPayment,
   readCheckoutPhoneNeed,
 } from "../checkout/contact-need";
 import {
@@ -95,6 +96,7 @@ const realImports: Record<string, unknown> = {
   checkoutTransferPath,
   checkoutBillingFields,
   checkoutContactNeeds,
+  offersDeferredPayment,
   checkoutInformationFields,
   checkoutPhoneResult,
   clearCheckoutFormDraft,

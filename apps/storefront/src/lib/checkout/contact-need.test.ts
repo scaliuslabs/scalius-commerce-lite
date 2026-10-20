@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from "vitest";
 
-import { applyCheckoutContactNeeds, checkoutContactNeeds, readCheckoutPhoneNeed } from "./contact-need";
+import { applyCheckoutContactNeeds, checkoutContactNeeds, offersDeferredPayment, readCheckoutPhoneNeed } from "./contact-need";
 import { checkoutAddressForMode } from "./delivery-mode";
 
 const optIn = { email: "optional", phoneOptionalForDigital: true } as const;
@@ -23,6 +23,16 @@ describe("checkout contact need (the shared rule in the browser)", () => {
     // Digital lines are never paid in cash; a deposit plan still needs a phone.
     expect(checkoutContactNeeds({ identity: optIn, lines: digital, cashEnabled: true, partialPaymentEnabled: true, countryCode: "US" }).phoneReason)
       .toBe("partial_payment");
+  });
+
+  it("keeps the phone for a pay-later method, the invoice's or an app's, as placement requires", () => {
+    // An app's deferred gateway carries a qualified id: only its flow says it is deferred.
+    expect(offersDeferredPayment([{ id: "stripe", flow: "card" }, { id: "acme.paylater:bnpl", flow: "deferred" }])).toBe(true);
+    expect(offersDeferredPayment([{ id: "net_terms" }])).toBe(true);
+    expect(offersDeferredPayment([{ id: "stripe", flow: "card" }, { id: "cod", flow: "cod" }])).toBe(false);
+    const digitalAbroad = { identity: optIn, lines: digital, cashEnabled: false, partialPaymentEnabled: false, countryCode: "US" };
+    expect(checkoutContactNeeds({ ...digitalAbroad, deferredEnabled: true })).toMatchObject({ phone: "required", phoneReason: "deferred_payment" });
+    expect(checkoutContactNeeds({ ...digitalAbroad, deferredEnabled: false }).phone).toBe("optional");
   });
 
   it("keeps the phone required for physical, unknown-kind, Bangladesh and not-opted-in carts", () => {
