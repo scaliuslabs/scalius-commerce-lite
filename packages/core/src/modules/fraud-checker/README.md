@@ -1,6 +1,6 @@
 # Fraud Checker
 
-The `fraud-checker` domain looks up a buyer's courier delivery history by phone number through the fraud port. It is a manual tool on the dashboard order page: it advises the merchant and never blocks checkout or an order. It is for contributors who change the lookup or the saved checkers.
+The `fraud-checker` domain looks up a buyer's courier delivery history by phone number through the courier-history port (`courier_history`). It is a manual tool on the dashboard order page: it advises the merchant and never blocks checkout or an order. It is for contributors who change the lookup or the saved checkers.
 
 No checkout, order or payment code calls this domain. An installed app that must hold an order handles `order.created` and calls `ctx.orders.hold` instead (`apps/api/src/plugins/bridge.ts`).
 
@@ -11,7 +11,7 @@ No checkout, order or payment code calls this domain. An installed app that must
 
 ## Checkers are apps
 
-Core has no checker of its own. Every checker is an installed app's fraud provider (`<plugin id>:<provider id>`), declared in the app manifest (`providers.fraud`) and written with `defineFraudProvider` from `packages/plugin-sdk`. The Bangladesh courier-history services (FraudBD, FraudGuard, eCourier Fraud Alert and the custom fraudchecker.link API) are the Bangladesh pack's (`plugins/bangladesh`).
+Core has no checker of its own. Every checker is an installed app's courier-history provider (`<plugin id>:<provider id>`), declared in the app manifest (`providers.courier_history`) and written with `defineCourierHistoryProvider` from `packages/plugin-sdk`. A stored manifest or grant that still names the old `fraud` kind reads as `courier_history` (`RENAMED_PROVIDER_KINDS`). The Bangladesh courier-history services (FraudBD, FraudGuard, eCourier Fraud Alert and the custom fraudchecker.link API) are the Bangladesh pack's (`plugins/bangladesh`).
 
 The API passes the app lookup in (`apps/api/src/plugins/providers/app-providers.ts`). A provider is usable only when its app is installed, active, approved for the port and runnable here, and its own settings are set and readable.
 

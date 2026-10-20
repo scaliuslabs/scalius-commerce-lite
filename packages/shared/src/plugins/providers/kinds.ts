@@ -1,11 +1,12 @@
 // Provider ports: the kinds, their operations, provider identities and the
 // typed error every port raises (docs/platform/PLUGINS.md, "Providers").
 //
-// A port is one interface per kind (payment, courier, sms, email, fraud,
-// tax, translation, ai, messaging, push, search, address, fx, identity).
-// The platform's own adapters (COD, Stripe, the email providers, Web Push) and
-// app providers (the Bangladesh pack's SSLCommerz, couriers, SMS gateways and
-// fraud checkers; bKash; Nagad) implement the same port; core code resolves a provider by id and
+// A port is one interface per kind (payment, courier, sms, email,
+// courier_history, tax, translation, ai, messaging, push, search, address,
+// fx, identity). The platform's own adapters (COD, Stripe, the email
+// providers, Web Push) and app providers (the Bangladesh pack's SSLCommerz,
+// couriers, SMS gateways and courier-history checkers; bKash; Nagad)
+// implement the same port; core code resolves a provider by id and
 // never asks which kind of implementation it got. Ports are part of the
 // versioned plugin API (`PLUGIN_API_VERSION`): within a version they change
 // only additively.
@@ -13,10 +14,23 @@
 // Kept free of zod: the sandbox wrapper and the SDK root bundle this file.
 
 export const PROVIDER_KINDS = [
-  "payment", "courier", "sms", "email", "fraud", "tax", "translation", "ai",
+  "payment", "courier", "sms", "email", "courier_history", "tax", "translation", "ai",
   "messaging", "push", "search", "address", "fx", "identity",
 ] as const;
 export type ProviderKind = (typeof PROVIDER_KINDS)[number];
+
+/**
+ * Kinds a stored manifest or grant may still name, read as their current
+ * kind: `shipping` became `courier`, and `fraud` became `courier_history`
+ * (it reports courier history for a phone; a general order-risk port is a
+ * planned beta `risk` kind, not this one).
+ */
+export const RENAMED_PROVIDER_KINDS = { shipping: "courier", fraud: "courier_history" } as const satisfies Record<string, ProviderKind>;
+
+/** The current kind a stored name means (`fraud` → `courier_history`); anything else unchanged. */
+export function currentProviderKind(name: string): string {
+  return Object.hasOwn(RENAMED_PROVIDER_KINDS, name) ? RENAMED_PROVIDER_KINDS[name as keyof typeof RENAMED_PROVIDER_KINDS] : name;
+}
 
 /**
  * Every operation of every port: `required` ones an implementation must
@@ -34,7 +48,8 @@ export const PROVIDER_OPERATIONS = {
   },
   sms: { required: ["send"], optional: ["deliveryStatus", "testConnection"] },
   email: { required: ["send"], optional: ["deliveryStatus", "testConnection"] },
-  fraud: { required: ["check"], optional: ["testConnection"] },
+  // What courier networks know about a buyer's phone (the order page's lookup).
+  courier_history: { required: ["check"], optional: ["testConnection"] },
   tax: { required: ["calculate"], optional: ["commit", "void", "refund", "testConnection"] },
   // Machine translation (MARKETS-DESIGN D9): no built-in provider, apps only.
   translation: { required: ["translate"], optional: ["testConnection"] },
@@ -67,7 +82,7 @@ export const PROVIDER_PORT_TIERS = {
   payment: "stable",
   courier: "stable",
   sms: "stable",
-  fraud: "stable",
+  courier_history: "stable",
   email: "beta",
   tax: "beta",
   translation: "beta",

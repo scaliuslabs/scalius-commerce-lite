@@ -8,7 +8,7 @@ import type { z } from "zod";
 import { COURIER_PORT } from "./providers/courier";
 import { providerConnectionSchema, providerNoInputSchema } from "./providers/common";
 import { EMAIL_PORT, SMS_PORT } from "./providers/messaging";
-import { FRAUD_PORT } from "./providers/fraud";
+import { COURIER_HISTORY_PORT } from "./providers/courier-history";
 import { PROVIDER_OPERATIONS, type ProviderKind } from "./providers/kinds";
 import { PAYMENT_PORT } from "./providers/payment";
 import { TAX_PORT } from "./providers/tax";
@@ -24,7 +24,7 @@ export * from "./providers/amount";
 export * from "./providers/payment";
 export * from "./providers/courier";
 export * from "./providers/messaging";
-export * from "./providers/fraud";
+export * from "./providers/courier-history";
 export * from "./providers/tax";
 export * from "./providers/translation";
 export * from "./providers/ai";
@@ -42,7 +42,7 @@ export const PROVIDER_PORTS = {
   courier: { ...COURIER_PORT, testConnection: TEST_CONNECTION },
   sms: { ...SMS_PORT, testConnection: TEST_CONNECTION },
   email: { ...EMAIL_PORT, testConnection: TEST_CONNECTION },
-  fraud: { ...FRAUD_PORT, testConnection: TEST_CONNECTION },
+  courier_history: { ...COURIER_HISTORY_PORT, testConnection: TEST_CONNECTION },
   tax: { ...TAX_PORT, testConnection: TEST_CONNECTION },
   translation: { ...TRANSLATION_PORT, testConnection: TEST_CONNECTION },
   ai: { ...AI_PORT, testConnection: TEST_CONNECTION },

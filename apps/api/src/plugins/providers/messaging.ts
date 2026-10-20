@@ -54,7 +54,6 @@ function appMessagingProvider(
   runtime: AppProviderRuntime,
   installation: PluginInstallation,
   declaration: PluginProviderDeclaration,
-  idempotencyKey: (input: Record<string, unknown>) => unknown,
 ): Record<string, unknown> {
   const operations = new Set(declaredProviderOperations(declaration));
   const invoke = async (operation: "send" | "deliveryStatus" | "testConnection", input: unknown, call: Call = {}): Promise<unknown> => {
@@ -74,7 +73,7 @@ function appMessagingProvider(
         const answer = await invoke("send", input, call) as SendAnswer;
         return answer.rawStatus === undefined ? answer : { ...answer, rawStatus: sanitized(answer.rawStatus) };
       } catch (error) {
-        return failedSend(error, declaration.name, typeof idempotencyKey(input) === "string");
+        return failedSend(error, declaration.name, typeof input.idempotencyKey === "string");
       }
     },
   };
@@ -83,13 +82,13 @@ function appMessagingProvider(
   return provider;
 }
 
-/** One app SMS provider as the SMS port; the platform's message reference is its idempotency key. */
+/** One app SMS provider as the SMS port; the platform's message reference is its `idempotencyKey`. */
 export function appSmsProvider(
   runtime: AppProviderRuntime,
   installation: PluginInstallation,
   declaration: PluginProviderDeclaration,
 ): SmsProvider {
-  return appMessagingProvider("sms", runtime, installation, declaration, (input) => input.clientReference) as unknown as SmsProvider;
+  return appMessagingProvider("sms", runtime, installation, declaration) as unknown as SmsProvider;
 }
 
 /** One app email provider as the email port; the platform's delivery key is its idempotency key. */
@@ -98,5 +97,5 @@ export function appEmailProvider(
   installation: PluginInstallation,
   declaration: PluginProviderDeclaration,
 ): EmailProvider {
-  return appMessagingProvider("email", runtime, installation, declaration, (input) => input.idempotencyKey) as unknown as EmailProvider;
+  return appMessagingProvider("email", runtime, installation, declaration) as unknown as EmailProvider;
 }

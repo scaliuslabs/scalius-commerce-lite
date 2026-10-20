@@ -11,7 +11,7 @@ export const providerPositiveMinorSchema = providerMinorSchema.min(1);
 export const providerCurrencySchema = z.string().regex(/^[A-Z]{3}$/, "Use an ISO 4217 code.");
 export const providerCountrySchema = z.string().regex(/^[A-Z]{2}$/, "Use an ISO 3166-1 alpha-2 code.");
 /**
- * The countries a courier or fraud checker serves (MARKETS-DESIGN step 3a):
+ * The countries a courier or courier-history checker serves (MARKETS-DESIGN step 3a):
  * `any`, or ISO codes. A provider is never offered for an order shipping
  * elsewhere: it is hidden with the reason, never an error at booking.
  */

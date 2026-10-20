@@ -106,7 +106,7 @@ describe("service ports through the plugin host", () => {
     const places = (await resolveAppProvider(providers, "address", `${SERVICES_FIXTURE_ID}:places`)).provider!;
     expect(places.countries).toEqual(["BD"]);
     const push = (await resolveAppProvider(providers, "push", `${SERVICES_FIXTURE_ID}:push`)).provider!;
-    expect(await push.send({ audience: "customer", recipients: ["cust_1"], notification: { title: "Shipped", body: "" } }, {}))
+    expect(await push.send({ audience: "customer", to: ["cust_1"], notification: { title: "Shipped", body: "" } }, {}))
       .toEqual({ success: true, delivered: 1, providerRef: "push-cust_1" });
     const chat = (await resolveAppProvider(providers, "messaging", `${SERVICES_FIXTURE_ID}:chat`)).provider!;
     expect(await chat.send({ channel: "whatsapp", to: "+8801711111111", template: { name: "order_update", language: "en_US", parameters: ["A"] } }, {}))

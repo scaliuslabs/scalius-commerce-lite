@@ -412,8 +412,8 @@ async function sendReplySms(
         // The receipt's reference keys the provider's idempotency, as for every other SMS.
         const result = await provider.send({
           to: phone,
-          message: copy.replySms(storeName, order),
-          clientReference: createProviderClientReference(delivery),
+          text: copy.replySms(storeName, order),
+          idempotencyKey: createProviderClientReference(delivery),
         }, {});
         return {
           success: result.success,

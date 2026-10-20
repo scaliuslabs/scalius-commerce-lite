@@ -1,4 +1,4 @@
-// The SMS, email, fraud, tax, translation, AI, messaging, push, search,
+// The SMS, email, courier-history, tax, translation, AI, messaging, push, search,
 // address, FX and identity ports as core calls them (docs/platform/PLUGINS.md,
 // "Providers"). Every provider a merchant can choose, built in (an adapter in
 // this package bound to its saved settings) or an app's
@@ -31,7 +31,7 @@ export type BoundProvider<K extends ProviderKind> = ProviderPort<K, ProviderCall
   readonly id: string;
   /** Merchant-facing name. */
   readonly label: string;
-  /** The countries it serves (a fraud checker's buyers); absent means any. */
+  /** The countries it serves (a courier-history checker's buyers); absent means any. */
   readonly countries?: ProviderCountries;
   /** The chat channels a messaging provider carries (`whatsapp`, ...); absent for other ports. */
   readonly channels?: readonly string[];

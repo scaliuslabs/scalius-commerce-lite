@@ -283,7 +283,7 @@ describe("order notification dispatch", () => {
         );
         expect(mocks.sendSms).toHaveBeenCalledWith({
             to: "+8801700000000",
-            message:
+            text:
                 "Hi SMS Customer, your order #order_1 has been refunded. Contact us if you have questions.",
         });
     });
@@ -330,7 +330,7 @@ describe("order notification dispatch", () => {
         );
         expect(mocks.sendSms).toHaveBeenCalledWith({
             to: "+8801700000000",
-            message:
+            text:
                 "Hi Refund Buyer, a partial refund has been processed for order #order_partial. Contact us if you have questions.",
         });
     });
@@ -401,12 +401,12 @@ describe("order notification dispatch", () => {
         expect(mocks.sendEmail.mock.calls[1]?.[0]?.html).not.toContain("raw provider failure");
         expect(mocks.sendSms).toHaveBeenNthCalledWith(1, {
             to: "+8801700000000",
-            message:
+            text:
                 "Hi Refund Buyer, your refund for order #order_refund_state is being processed. We'll update you when it is complete.",
         });
         expect(mocks.sendSms).toHaveBeenNthCalledWith(2, {
             to: "+8801700000000",
-            message:
+            text:
                 "Hi Refund Buyer, we couldn't complete the refund for order #order_refund_state. Please contact support for help.",
         });
     });
@@ -453,7 +453,7 @@ describe("order notification dispatch", () => {
         );
         expect(mocks.sendSms).toHaveBeenCalledWith({
             to: "+8801700000000",
-            message:
+            text:
                 "Hi Balance Buyer, we received the remaining payment for order #order_balance. Your order is now fully paid.",
         });
     });
@@ -662,9 +662,9 @@ describe("order notification dispatch", () => {
         );
         expect(mocks.sendSms).toHaveBeenCalledWith({
             to: "+8801700000000",
-            message:
+            text:
                 "Hi SMS Customer, your order #order_4 has been refunded. Contact us if you have questions.",
-            clientReference: "client_ref_1",
+            idempotencyKey: "client_ref_1",
         });
     });
 
@@ -1206,7 +1206,7 @@ describe("order notification dispatch", () => {
                     language: "en_US",
                     parameters: ["WhatsApp Customer", "#order_wa_app_1", "Order Shipped", "TRACK123"],
                 },
-                clientReference: "client_ref_1",
+                idempotencyKey: "client_ref_1",
             }, {});
             expect(mocks.markOrderNotificationDeliveryReceiptAccepted).toHaveBeenCalledWith(
                 db,

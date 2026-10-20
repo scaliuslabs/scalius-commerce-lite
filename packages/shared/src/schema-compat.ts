@@ -95,19 +95,32 @@ function matchVariants(before: Side[], after: Side[]): Array<[number, number | n
   });
 }
 
+/** Whether every value of type `narrow` is a value of type `wide` (an integer is a number). */
+function typeWithin(narrow: string, wide: readonly string[]): boolean {
+  return wide.includes(narrow) || (narrow === "integer" && wide.includes("number"));
+}
+
 function typeCompatible(before: unknown, after: unknown, direction: SchemaDirection): boolean {
-  if (before === after || before === undefined) return true;
+  if (before === undefined) return true;
   if (after === undefined) return direction === "request";
-  // An integer is a number: a request may widen to number, a response narrow to integer.
-  if (direction === "request") return before === "integer" && after === "number";
-  return before === "number" && after === "integer";
+  const was = (Array.isArray(before) ? before : [before]).map(String);
+  const now = (Array.isArray(after) ? after : [after]).map(String);
+  // A request may accept more types; a response may promise fewer.
+  return direction === "request"
+    ? was.every((type) => typeWithin(type, now))
+    : now.every((type) => typeWithin(type, was));
 }
 
 function compare(before: Side, after: Side, direction: SchemaDirection, path: string, out: string[], seen: Set<string>): void {
-  // A recursive component (a tree) would nest forever: compare the first 24 levels.
+  // A recursive component (a tree) would nest forever: each pair of
+  // references is compared once, at the first place it appears.
   if (path.split(/[.[{]/).length > 24) return;
-  if (seen.has(path)) return;
-  seen.add(path);
+  const refs = [before.schema, after.schema].map((schema) => (isRecord(schema) && typeof schema.$ref === "string" ? schema.$ref : null));
+  if (refs[0] !== null && refs[1] !== null) {
+    const pair = `${direction} ${refs[0]} ${refs[1]}`;
+    if (seen.has(pair)) return;
+    seen.add(pair);
+  }
   const b = normalize(before);
   const a = normalize(after);
   const at = path || "(root)";

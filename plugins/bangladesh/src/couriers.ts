@@ -299,9 +299,10 @@ const pathao = defineCourierProvider({
     let request: { token: string; body: string; baseUrl: string };
     try {
       const account = pathaoAccount(ctx);
-      const deliveryType = input.options.deliveryType || Number(ctx.settings.pathao_delivery_type ?? 48);
-      const itemType = input.options.itemType || Number(ctx.settings.pathao_item_type ?? 2);
-      const weight = input.options.itemWeightKg || Number(ctx.settings.pathao_item_weight ?? 0.5);
+      // The staff's booking choices (the declared `bookingOptions`), else the store's defaults.
+      const deliveryType = Number(input.options.deliveryType ?? ctx.settings.pathao_delivery_type ?? 48);
+      const itemType = Number(input.options.itemType ?? ctx.settings.pathao_item_type ?? 2);
+      const weight = input.parcel.weightGrams ? input.parcel.weightGrams / 1000 : Number(ctx.settings.pathao_item_weight ?? 0.5);
       request = {
         baseUrl: account.baseUrl,
         token: await pathaoToken(ctx, account),
@@ -310,7 +311,7 @@ const pathao = defineCourierProvider({
           merchant_order_id: input.orderId,
           recipient_name: input.recipient.name,
           recipient_phone: toLocalPhone(input.recipient.phone),
-          recipient_address: input.recipient.address || null,
+          recipient_address: [input.recipient.line1, input.recipient.line2].filter(Boolean).join(", ") || null,
           recipient_city: Number(ids.city),
           recipient_zone: Number(ids.zone),
           recipient_area: ids.area ? Number(ids.area) : null,
@@ -492,7 +493,7 @@ const steadfast = defineCourierProvider({
           invoice: input.orderId,
           recipient_name: recipient.name,
           recipient_phone: toLocalPhone(recipient.phone),
-          recipient_address: [recipient.address, recipient.areaName, recipient.zoneName, recipient.cityName].filter(Boolean).join(", "),
+          recipient_address: [recipient.line1, recipient.line2, recipient.placeNames.area, recipient.placeNames.zone, recipient.placeNames.city].filter(Boolean).join(", "),
           cod_amount: codMajor(input),
           note: input.note || undefined,
         }),

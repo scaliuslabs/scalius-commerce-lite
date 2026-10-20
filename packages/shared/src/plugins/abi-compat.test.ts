@@ -14,6 +14,12 @@ describe("plugin ABI breaking changes", () => {
       "manifest id: maxLength tightened to 10.",
       "manifest tags[]: no longer accepts \"b\".",
     ]);
+    // A union of primitive types is a type list: the same list, or a wider one, is no change.
+    const union = manifest(z.object({ id: z.string(), min: z.union([z.string(), z.number()]).optional() }).strict());
+    expect(manifestBreakingChanges(union, union)).toEqual([]);
+    expect(manifestBreakingChanges(union, manifest(z.object({ id: z.string(), min: z.union([z.string(), z.number(), z.boolean()]).optional() }).strict()))).toEqual([]);
+    expect(manifestBreakingChanges(union, manifest(z.object({ id: z.string(), min: z.string().optional() }).strict())))
+      .toEqual(["manifest min: type changed from string,number to string."]);
     expect(manifestBreakingChanges(before, manifest(z.object({ id: z.string(), name: z.string() }).strict()))).toEqual([
       "manifest tags: the field is no longer accepted.",
       "manifest name: a new required field.",

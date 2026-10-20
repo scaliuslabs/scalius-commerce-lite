@@ -9,11 +9,15 @@
 // twice. A call that may have reached the courier but gave no answer raises
 // `ProviderError("retryable", …, { uncertain: true })`.
 //
-// A courier that books by its own location ids (Pathao's city, zone and
-// area) declares `locations` in its manifest entry: the platform reads those
-// ids from the store's places (`externalIds.<key>`), refuses a booking that
-// lacks a required one before anything is written, and passes them as
-// `recipient.locationIds`.
+// The recipient is a postal address in the webhook representations' shape
+// (`events-representations.ts`), with the store's place ids beside it. A
+// courier that books by its own location ids (Pathao's city, zone and area)
+// declares `locations` in its manifest entry: the platform reads those ids
+// from the store's places (`externalIds.<key>`), refuses a booking that lacks
+// a required one before anything is written, and passes them as
+// `recipient.locationIds`. A courier's own booking choices (Pathao's delivery
+// and item type) are options it declares (`bookingOptions`), passed in
+// `options` by key; the parcel's weight and size are the platform's.
 
 import { z } from "zod";
 import {
@@ -49,31 +53,53 @@ export type CourierShipmentStatus = z.infer<typeof courierShipmentStatusSchema>;
 
 const text = (max: number) => z.string().max(max);
 
-/** Where the parcel goes. Location ids are the store's delivery locations; names are for couriers that take text. */
+const places = (max: number) => z.object({ city: text(max).nullable(), zone: text(max).nullable(), area: text(max).nullable() }).strict();
+
+/**
+ * Where the parcel goes: the order's shipping address with the fields and
+ * names of a webhook representation's postal address, plus the store's
+ * delivery places (Bangladesh City, Thana and Area) by id and by name.
+ */
 export const courierRecipientSchema = z.object({
   name: text(200),
   phone: text(40),
-  address: text(2000),
-  cityId: text(128).nullable(),
-  zoneId: text(128).nullable(),
-  areaId: text(128).nullable(),
-  cityName: text(200).nullable(),
-  zoneName: text(200).nullable(),
-  areaName: text(200).nullable(),
+  company: text(200).nullable(),
+  line1: text(1000).nullable(),
+  line2: text(1000).nullable(),
+  dependentLocality: text(200).nullable(),
+  locality: text(200).nullable(),
+  adminArea: text(200).nullable(),
   postalCode: text(40).nullable(),
-  country: providerCountrySchema.nullable(),
+  /** ISO 3166-1 alpha-2. */
+  countryCode: providerCountrySchema.nullable(),
+  /** The store's delivery place ids. */
+  placeIds: places(128),
+  /** The same places by name, for couriers that take text. */
+  placeNames: places(200),
   /**
    * The courier's own ids of the recipient's city, zone and area, read from
    * the store's places (`externalIds.<key>` of the courier's declared
    * `locations`). Present only for a courier that declares `locations`.
    */
-  locationIds: z.object({
-    city: text(128).nullable(),
-    zone: text(128).nullable(),
-    area: text(128).nullable(),
-  }).strict().optional(),
+  locationIds: places(128).optional(),
 }).strict();
 export type CourierRecipient = z.infer<typeof courierRecipientSchema>;
+
+/** A booking option's key, as the courier declares it (`bookingOptions`). */
+export const courierBookingOptionKeySchema = z.string().regex(/^[a-z][a-zA-Z0-9]{0,31}$/, "Use camelCase: a lowercase letter, then at most 31 letters or digits.");
+export const courierBookingOptionValueSchema = z.union([z.string().max(200), z.number().finite(), z.boolean()]);
+export type CourierBookingOptionValue = z.infer<typeof courierBookingOptionValueSchema>;
+
+/** The parcel: weight and outer size, null when the store does not know them. */
+export const courierParcelSchema = z.object({
+  weightGrams: z.number().min(0).max(1_000_000_000).nullable(),
+  dimensionsCm: z.object({
+    length: z.number().min(0).max(10_000),
+    width: z.number().min(0).max(10_000),
+    height: z.number().min(0).max(10_000),
+  }).strict().nullable(),
+}).strict();
+export type CourierParcel = z.infer<typeof courierParcelSchema>;
 
 export const courierShipmentInputSchema = z.object({
   /** The local shipment id: stable across retries of this booking. */
@@ -89,12 +115,15 @@ export const courierShipmentInputSchema = z.object({
   note: text(1000).nullable(),
   itemCount: z.number().int().min(1).max(1_000_000).nullable(),
   itemDescription: text(500).nullable(),
-  /** Staff choices on the booking form (within its bounds); each courier reads the ones it understands. */
-  options: z.object({
-    deliveryType: z.number().int().min(0).max(1_000_000).nullable(),
-    itemType: z.number().int().min(0).max(1_000_000).nullable(),
-    itemWeightKg: z.number().min(0).max(10_000).nullable(),
-  }).strict(),
+  parcel: courierParcelSchema,
+  /**
+   * Staff choices for the courier's own booking options, by the keys its
+   * manifest entry declares (`bookingOptions`): only declared keys, each with
+   * a value of its declared kind. Empty when staff chose none; the courier
+   * then uses its own defaults.
+   */
+  options: z.record(courierBookingOptionKeySchema, courierBookingOptionValueSchema)
+    .refine((options) => Object.keys(options).length <= 10, "At most 10 options."),
 }).strict();
 export type CourierShipmentInput = z.infer<typeof courierShipmentInputSchema>;
 

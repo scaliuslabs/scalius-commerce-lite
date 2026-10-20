@@ -936,8 +936,8 @@ export async function sendOrderNotificationEmail(
                                     }
                                     const smsResult = await smsProvider.send({
                                         to: customerPhone,
-                                        message: await smsMessage(),
-                                        clientReference: createProviderClientReference(target),
+                                        text: await smsMessage(),
+                                        idempotencyKey: createProviderClientReference(target),
                                     }, {});
                                     if (smsResult.success) {
                                         console.log(`[Notifications] SMS sent via ${smsProvider.id} for ${type} (order ${orderId}), ref=${smsResult.providerRef}`);
@@ -956,7 +956,7 @@ export async function sendOrderNotificationEmail(
                             }));
                         }
                     } else if (smsProvider) {
-                        const smsResult = await smsProvider.send({ to: customerPhone, message: await smsMessage() }, {});
+                        const smsResult = await smsProvider.send({ to: customerPhone, text: await smsMessage() }, {});
                         if (smsResult.success) {
                             console.log(`[Notifications] SMS sent via ${smsProvider.id} for ${type} (order ${orderId}), ref=${smsResult.providerRef}`);
                         } else {
@@ -1064,7 +1064,7 @@ export async function sendOrderNotificationEmail(
                     } else {
                         const providerName = sender.provider;
                         const orderTemplate = await getOrderWhatsAppTemplateSettings(db);
-                        const send = async (clientReference?: string): Promise<DeliverySendResult> => sendOrderWhatsAppTemplate({
+                        const send = async (idempotencyKey?: string): Promise<DeliverySendResult> => sendOrderWhatsAppTemplate({
                             sender,
                             template: orderTemplate,
                             orderNumber: (await context()).variables.order_number ?? `#${orderId}`,
@@ -1072,7 +1072,7 @@ export async function sendOrderNotificationEmail(
                             customerName: name,
                             customerPhone,
                             data,
-                            clientReference,
+                            idempotencyKey,
                         });
 
                         if (receiptDb && outboxId) {
@@ -1194,8 +1194,8 @@ async function sendOrderWebPush(options: {
         const { pushProvider } = await notificationsDocument.read(db);
         if (isQualifiedProviderId(pushProvider)) {
             const notification = { ...await options.message(), url: `/account/orders/${encodeURIComponent(orderId)}` };
-            const send = async (clientReference?: string): Promise<DeliverySendResult> => {
-                const result = await sendAppPush(options.appProviders, pushProvider, { audience: "customer", recipients: [customerId], notification, ...(clientReference ? { clientReference } : {}) });
+            const send = async (idempotencyKey?: string): Promise<DeliverySendResult> => {
+                const result = await sendAppPush(options.appProviders, pushProvider, { audience: "customer", to: [customerId], notification, ...(idempotencyKey ? { idempotencyKey } : {}) });
                 return { success: result.success, provider: pushProvider, providerMessageId: result.providerRef, providerStatus: result.rawStatus, rawResponse: result.rawStatus, retryable: result.retryable };
             };
             if (!options.receipt) {
@@ -1330,14 +1330,14 @@ async function sendOrderWhatsAppTemplate(options: {
     customerName: string;
     customerPhone: string;
     data?: Record<string, unknown>;
-    clientReference?: string;
+    idempotencyKey?: string;
 }): Promise<DeliverySendResult> {
     const result = await options.sender.sendTemplate({
         to: options.customerPhone,
         templateName: options.template.templateName,
         languageCode: options.template.languageCode,
         bodyParameters: buildOrderWhatsAppBodyParameters(options),
-        ...(options.clientReference ? { clientReference: options.clientReference } : {}),
+        ...(options.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : {}),
     });
 
     return whatsAppResultToDeliveryResult(result, options.sender.provider);

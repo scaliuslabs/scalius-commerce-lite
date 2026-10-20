@@ -1,15 +1,14 @@
-// The Bangladesh courier-history fraud checkers behind the fraud port:
-// FraudBD, FraudGuard, eCourier Fraud Alert and the custom fraudchecker.link
-// API. Moved from core (packages/core/src/modules/fraud-checker/provider.ts)
-// with the same requests and the same normalization of each answer into the
-// port's `FraudCheck`. The merchant's manual tool on the order page: it
-// advises, it never blocks. They know Bangladesh buyers only
+// The Bangladesh courier-history fraud checkers behind the courier-history
+// port (`courier_history`): FraudBD, FraudGuard, eCourier Fraud Alert and the
+// custom fraudchecker.link API. Moved from core with the same requests and the
+// same normalization of each answer into the port's `CourierHistory`. The
+// merchant's manual tool on the order page: it advises, it never blocks. They know Bangladesh buyers only
 // (`countries: ["BD"]`), so the platform never asks them about anyone else.
 //
 // Errors are `ProviderError`s with merchant-safe messages: never a credential,
 // a provider body or the buyer's phone. Nothing here logs.
 
-import { ProviderError, defineFraudProvider, type FraudCheck, type FraudCheckInput, type PluginContext, type ProviderConnection } from "@scalius/plugin-sdk";
+import { ProviderError, defineCourierHistoryProvider, type CourierHistory, type CourierHistoryInput, type PluginContext, type ProviderConnection } from "@scalius/plugin-sdk";
 import { multipartForm, platformErrorCode, requireText } from "./common";
 
 // ── Normalization (unchanged) ───────────────────────────────────────────
@@ -307,7 +306,7 @@ function computeRiskLevel(data: NormalizedFraudStats): "low" | "medium" | "high"
 }
 
 /** A service answer as the port's answer. */
-export function toFraudCheck(raw: unknown, phone: string): FraudCheck {
+export function toFraudCheck(raw: unknown, phone: string): CourierHistory {
   const data = normalizeFraudResponse(raw, phone);
   const couriers = data.apis
     ? Object.fromEntries(Object.entries(data.apis).map(([name, stats]) => [name, {
@@ -339,7 +338,7 @@ const TEST_PHONE = "+8801700000000";
 const clip = (value: string | undefined, max: number) => (value === undefined ? undefined : value.slice(0, max));
 
 /** The port bounds every text; the services' own words are cut to fit. */
-function bounded(check: FraudCheck): FraudCheck {
+function bounded(check: CourierHistory): CourierHistory {
   const couriers = check.couriers
     ? Object.fromEntries(Object.entries(check.couriers).slice(0, 50).map(([name, stats]) => [name.slice(0, 64), stats]))
     : undefined;
@@ -398,7 +397,7 @@ function serviceUrl(checker: Checker, ctx: PluginContext): string {
   return parsed.href;
 }
 
-async function lookup(checker: Checker, phone: string, ctx: PluginContext): Promise<FraudCheck> {
+async function lookup(checker: Checker, phone: string, ctx: PluginContext): Promise<CourierHistory> {
   const url = serviceUrl(checker, ctx);
   const request = checker.request(phone, ctx);
   let response;
@@ -428,8 +427,8 @@ async function lookup(checker: Checker, phone: string, ctx: PluginContext): Prom
 }
 
 function fraudProvider(checker: Checker) {
-  return defineFraudProvider({
-    check: (input: FraudCheckInput, ctx: PluginContext) => lookup(checker, input.phone, ctx),
+  return defineCourierHistoryProvider({
+    check: (input: CourierHistoryInput, ctx: PluginContext) => lookup(checker, input.phone, ctx),
     async testConnection(_input: Record<string, never>, ctx: PluginContext): Promise<ProviderConnection> {
       try {
         await lookup(checker, TEST_PHONE, ctx);

@@ -326,6 +326,11 @@ export const manifest = {
         trackingUrl: "https://merchant.pathao.com/tracking?consignment_id={trackingId}",
         // Pathao books by its own city and zone (and area) ids, kept on the places.
         locations: { key: "pathao", required: ["city", "zone"], numeric: true },
+        // Chosen per booking; the settings' delivery and item type are the defaults.
+        bookingOptions: [
+          { key: "deliveryType", label: "Delivery type", type: "select", choices: [{ value: 48, label: "Regular" }, { value: 12, label: "Express" }] },
+          { key: "itemType", label: "Item type", type: "select", choices: [{ value: 2, label: "Parcel" }, { value: 1, label: "Document" }] },
+        ],
       },
       {
         id: "steadfast",
@@ -343,7 +348,7 @@ export const manifest = {
       { id: "mimsms", name: "MIM SMS", settings: ["mimsms_username", "mimsms_api_key", "mimsms_sender_name"] },
       { id: "gennet", name: "GenNet iSMS", settings: ["gennet_api_token", "gennet_base_url", "gennet_sid"] },
     ],
-    fraud: [
+    courier_history: [
       { id: "fraudbd", name: "FraudBD", countries: ["BD"], operations: ["testConnection"], settings: ["fraudbd_api_url", "fraudbd_api_key", "fraudbd_username", "fraudbd_password"] },
       { id: "fraudguard", name: "FraudGuard", countries: ["BD"], operations: ["testConnection"], settings: ["fraudguard_api_url", "fraudguard_api_key", "fraudguard_api_secret"] },
       { id: "ecourier", name: "eCourier Fraud Alert", countries: ["BD"], operations: ["testConnection"], settings: ["ecourier_api_url", "ecourier_api_key", "ecourier_api_secret", "ecourier_user_id"] },

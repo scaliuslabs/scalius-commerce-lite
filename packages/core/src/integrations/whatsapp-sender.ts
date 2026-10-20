@@ -7,7 +7,7 @@
 // send always answers (never throws for a provider failure), so the
 // notification and OTP queues keep their own retry rules for both kinds:
 // - `retryable`: retried, unless the provider may already have sent it
-//   (`uncertain`) and the message carries no `clientReference` it can dedupe on.
+//   (`uncertain`) and the message carries no `idempotencyKey` it can dedupe on.
 // - `misconfigured`: final, worded "not configured" so the provider is paused
 //   until its settings are saved, like the built-in one.
 // Statuses are sanitized (no phone numbers, addresses or tokens) before they
@@ -38,7 +38,7 @@ export interface WhatsAppTemplateSend {
   /** The template body values in order. */
   bodyParameters?: string[];
   /** Deterministic per message; an app provider dedupes on it. */
-  clientReference?: string;
+  idempotencyKey?: string;
 }
 
 export type WhatsAppSender =
@@ -126,13 +126,13 @@ export async function resolveWhatsAppSender(
       if (!TEMPLATE_NAME.test(templateName) || !TEMPLATE_LANGUAGE.test(language)) {
         return { success: false, rawStatus: "invalid_whatsapp_template", retryable: false };
       }
-      const idempotent = input.clientReference !== undefined;
+      const idempotent = input.idempotencyKey !== undefined;
       try {
         const answer = await provider.send({
           channel: "whatsapp",
           to: validateAndFormatPhone(input.to),
           template: { name: templateName, language, parameters: appTemplateParameters(input.bodyParameters) },
-          ...(idempotent ? { clientReference: input.clientReference } : {}),
+          ...(idempotent ? { idempotencyKey: input.idempotencyKey } : {}),
         }, {});
         return {
           success: answer.success,

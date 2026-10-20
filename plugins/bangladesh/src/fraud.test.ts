@@ -1,5 +1,5 @@
 // The Bangladesh fraud checkers over the SDK harness: each service's request,
-// and its answer normalized into the fraud port's `FraudCheck` (validated by
+// and its answer normalized into the courier-history port's `CourierHistory` (validated by
 // the harness against the port). The cases are core's tests from before the
 // move (modules/fraud-checker/provider.test.ts). Service HTTP is scripted.
 import { describe, expect, it } from "vitest";

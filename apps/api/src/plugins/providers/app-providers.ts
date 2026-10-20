@@ -1,4 +1,4 @@
-// The app providers core may reach for SMS, email, the fraud check, tax,
+// The app providers core may reach for SMS, email, courier history (the fraud check), tax,
 // machine translation, AI drafting, chat messaging, push, search, address
 // autocomplete, exchange rates and buyer sign-in
 // (`AppProviders`, @scalius/core/integrations/provider-port). Core asks only
@@ -24,7 +24,7 @@ import { getPluginInstallation, type PluginInstallation } from "@scalius/core/mo
 import { parseQualifiedProviderId, type PluginProviderDeclaration } from "@scalius/shared/plugins/providers";
 import { ValidationError } from "../../utils/api-error";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
-import { appFraudProvider } from "./fraud";
+import { appCourierHistoryProvider } from "./courier-history";
 import { appEmailProvider, appSmsProvider } from "./messaging";
 import { appTaxProvider } from "./tax";
 import { appPortProvider } from "./port";
@@ -41,7 +41,7 @@ type Adapter = (runtime: AppProviderRuntime, installation: PluginInstallation, d
 const ADAPTERS: Record<AppProviderKind, Adapter> = {
   sms: appSmsProvider as Adapter,
   email: appEmailProvider as Adapter,
-  fraud: appFraudProvider as Adapter,
+  courier_history: appCourierHistoryProvider as Adapter,
   tax: appTaxProvider as Adapter,
   translation: appPortProvider("translation") as Adapter,
   ai: appPortProvider("ai") as Adapter,
@@ -56,7 +56,7 @@ const ADAPTERS: Record<AppProviderKind, Adapter> = {
 const PORT_NAMES: Record<AppProviderKind, string> = {
   sms: "SMS",
   email: "email",
-  fraud: "fraud check",
+  courier_history: "courier history",
   tax: "tax",
   translation: "translation",
   ai: "AI",

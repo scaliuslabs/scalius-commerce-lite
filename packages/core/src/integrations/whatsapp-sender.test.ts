@@ -52,7 +52,7 @@ describe("resolveWhatsAppSender, built in", () => {
       templateName: "order_update",
       languageCode: "en_US",
       bodyParameters: ["Rina", "#1001"],
-      clientReference: "ref-is-ignored-by-meta",
+      idempotencyKey: "ref-is-ignored-by-meta",
     });
 
     expect(result).toMatchObject({ success: true, providerRef: "wamid.1", rawStatus: "accepted" });
@@ -101,7 +101,7 @@ describe("resolveWhatsAppSender, app provider", () => {
       templateName: "order_update",
       languageCode: "bn",
       bodyParameters: ["Rina", "  ", "#1001"],
-      clientReference: "ord1whatsapp123",
+      idempotencyKey: "ord1whatsapp123",
     });
 
     expect(result).toEqual({ success: true, providerRef: "app-msg-1", rawStatus: "queued" });
@@ -109,7 +109,7 @@ describe("resolveWhatsAppSender, app provider", () => {
       channel: "whatsapp",
       to: "+8801712345678",
       template: { name: "order_update", language: "bn", parameters: ["Rina", "#1001"] },
-      clientReference: "ord1whatsapp123",
+      idempotencyKey: "ord1whatsapp123",
     }, {});
   });
 
@@ -141,7 +141,7 @@ describe("resolveWhatsAppSender, app provider", () => {
 
     // The provider may already have sent it: only a message with a reference is retried.
     expect(await sender.sendTemplate(input)).toMatchObject({ success: false, retryable: false });
-    expect(await sender.sendTemplate({ ...input, clientReference: "ref1" })).toMatchObject({ success: false, retryable: true });
+    expect(await sender.sendTemplate({ ...input, idempotencyKey: "ref1" })).toMatchObject({ success: false, retryable: true });
     expect(await sender.sendTemplate(input)).toMatchObject({ success: false, retryable: true });
     const misconfigured = await sender.sendTemplate(input);
     expect(misconfigured).toMatchObject({ success: false, retryable: false });

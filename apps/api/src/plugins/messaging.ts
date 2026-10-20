@@ -226,7 +226,7 @@ export async function sendPluginSms(
   const provider = await getActiveSmsProvider(db, encryptionKey, appProviders);
   if (!provider) throw new PluginError("messaging.unavailable", "No SMS provider is configured.");
   const finalMessage = marketing ? `${message}\n\n${marketing.footer.text}\n${marketing.footer.unsubscribeLabel}: ${marketing.unsubscribeUrl}` : message;
-  const result = await provider.send({ to: phone, message: finalMessage }, {});
+  const result = await provider.send({ to: phone, text: finalMessage }, {});
   return { queued: result.success };
 }
 

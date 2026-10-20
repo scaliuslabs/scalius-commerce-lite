@@ -562,8 +562,8 @@ describe("OTP delivery after the response", () => {
 
     expect(smsProvider.send).toHaveBeenCalledWith({
       to: "+8801712345678",
-      message: `${message.code} is your River & Loom code. It expires in 5 minutes. Don't share it.`,
-      clientReference: "otpclientref1",
+      text: `${message.code} is your River & Loom code. It expires in 5 minutes. Don't share it.`,
+      idempotencyKey: "otpclientref1",
     }, {});
     expect(mocks.markAuthOtpDeliveryReceiptAccepted).toHaveBeenCalledWith(
       message.db,
@@ -752,7 +752,7 @@ describe("OTP delivery after the response", () => {
         channel: "whatsapp",
         to: "+8801712345678",
         template: { name: "otp_login", language: "en_US", parameters: [message.code] },
-        clientReference: "otpclientref1",
+        idempotencyKey: "otpclientref1",
       }, {});
       expect(mocks.markAuthOtpDeliveryReceiptAccepted).toHaveBeenCalledWith(
         message.db,

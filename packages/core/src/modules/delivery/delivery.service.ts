@@ -91,9 +91,9 @@ function mergeShipmentMetadata(
 
 /**
  * Where the parcel goes, from the saved order's address snapshot: the
- * recipient (the contact unless another was given), the street lines, the
- * store's location ids and names (Bangladesh), the postal code and the
- * country.
+ * recipient (the contact unless another was given) and the postal address as
+ * a webhook representation states it, with the store's place ids and names
+ * (Bangladesh) beside it.
  */
 function shipmentRecipient(order: Order): CourierShipmentInput["recipient"] {
   // A shipped order always has a phone (the shared contact rule); fail closed if not.
@@ -102,16 +102,17 @@ function shipmentRecipient(order: Order): CourierShipmentInput["recipient"] {
   return {
     name: order.shippingName ?? order.customerName,
     phone,
-    address: [order.shippingAddress, order.shippingAddressLine2].filter(Boolean).join(", "),
-    cityId: order.city ?? null,
-    zoneId: order.zone ?? null,
-    areaId: order.area ?? null,
-    cityName: order.cityName ?? order.shippingLocality ?? null,
-    zoneName: order.zoneName ?? null,
-    areaName: order.areaName ?? null,
+    company: order.shippingCompany ?? null,
+    line1: order.shippingAddress ?? null,
+    line2: order.shippingAddressLine2 ?? null,
+    dependentLocality: order.shippingDependentLocality ?? null,
+    locality: order.shippingLocality ?? order.cityName ?? null,
+    adminArea: order.shippingAdminArea ?? null,
     postalCode: order.shippingPostalCode ?? null,
     // Written before 0113 without a country, an address is Bangladesh's.
-    country: order.shippingCountryCode ?? (order.shippingAddress?.trim() ? DELIVERY_HIERARCHY_COUNTRY : null),
+    countryCode: order.shippingCountryCode ?? (order.shippingAddress?.trim() ? DELIVERY_HIERARCHY_COUNTRY : null),
+    placeIds: { city: order.city ?? null, zone: order.zone ?? null, area: order.area ?? null },
+    placeNames: { city: order.cityName ?? order.shippingLocality ?? null, zone: order.zoneName ?? null, area: order.areaName ?? null },
   };
 }
 
@@ -519,8 +520,8 @@ export async function createShipment(
 
   const recipient = shipmentRecipient(order);
   // A courier never books outside its countries (the order page hides it for such an order).
-  if (!providerServesCountry(courier.countries, recipient.country)) {
-    return { success: false, message: courierCountryMessage(courier.label, recipient.country) };
+  if (!providerServesCountry(courier.countries, recipient.countryCode)) {
+    return { success: false, message: courierCountryMessage(courier.label, recipient.countryCode) };
   }
   const preflightFailure = await courier.preflight?.(recipient, db);
   if (preflightFailure) return { success: false, message: preflightFailure };
@@ -556,6 +557,9 @@ export async function createShipment(
   // Provider money and contents are order authority, never browser/provider-
   // form authority. Keep only genuine merchant choices from the caller and
   // overwrite every commerce fact with the fresh saved order projection.
+  // The staff's booking choices are courier options; the courier's adapter
+  // keeps only the ones it declares (`bookingOptions`).
+  const bookingChoices = { deliveryType: options?.deliveryType, itemType: options?.itemType };
   const input: CourierShipmentInput = {
     idempotencyKey: shipmentId,
     orderId: order.id,
@@ -566,11 +570,8 @@ export async function createShipment(
     note: options?.note || order.notes || null,
     itemCount: totalItemCount > 0 ? totalItemCount : null,
     itemDescription: itemDescription || null,
-    options: {
-      deliveryType: options?.deliveryType ?? null,
-      itemType: options?.itemType ?? null,
-      itemWeightKg: options?.itemWeight ?? null,
-    },
+    parcel: { weightGrams: options?.itemWeight === undefined ? null : Math.round(options.itemWeight * 1000), dimensionsCm: null },
+    options: Object.fromEntries(Object.entries(bookingChoices).filter(([, value]) => value !== undefined)) as CourierShipmentInput["options"],
   };
 
   // 1. Insert a "creating" placeholder shipment FIRST

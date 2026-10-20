@@ -8,7 +8,7 @@
 
 import { normalizeMarketCountry } from "@scalius/shared/markets";
 import { parsePhoneNumberFromString } from "@scalius/shared/customer-utils";
-import { providerErrorOf, providerServesCountry, type FraudCheck } from "@scalius/shared/plugins/providers";
+import { providerErrorOf, providerServesCountry, type CourierHistory } from "@scalius/shared/plugins/providers";
 import { settings } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -171,7 +171,7 @@ async function fraudProviderFor(
   row: FraudCheckerProvider,
   apps: AppProviders | undefined,
 ): Promise<{ provider: FraudProvider; issue: null } | { provider: null; issue: string }> {
-  return resolveAppProvider(apps, "fraud", row.providerType);
+  return resolveAppProvider(apps, "courier_history", row.providerType);
 }
 
 /**
@@ -206,7 +206,7 @@ export async function testFraudProvider(
  * installed, not active, not set up), no call and the app's reason.
  */
 export type FraudLookupResult =
-  | { status: "checked"; check: FraudCheck }
+  | { status: "checked"; check: CourierHistory }
   | { status: "country_unsupported"; provider: string; countryCode: string | null }
   | { status: "unavailable"; provider: string; reason: string };
 

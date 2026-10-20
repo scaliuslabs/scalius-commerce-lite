@@ -255,7 +255,7 @@ describe("admin fraud checker credential handling", () => {
     }, env);
 
     expect(response.status, await response.clone().text()).toBe(201);
-    expect(mocks.assertAppProviderInstalled).toHaveBeenCalledWith({ id: "db" }, "fraud", "acme.radar:radar");
+    expect(mocks.assertAppProviderInstalled).toHaveBeenCalledWith({ id: "db" }, "courier_history", "acme.radar:radar");
     expect(mocks.saveFraudProvider).toHaveBeenCalledWith({ id: "db" }, appRow, "credential-key");
     await expect(response.json()).resolves.toEqual({ success: true, data: { id: "row_app", ...appRow } });
 

@@ -1,5 +1,7 @@
-// The SMS and email ports. A send that the provider refused or could not
-// take answers `success: false` (with `retryable: false` for account,
+// The SMS and email ports. Every send port (sms, email, messaging, push)
+// names the recipient `to`, the plain text `text` and the per-message key
+// `idempotencyKey`. A send that the provider refused or could not take
+// answers `success: false` (with `retryable: false` for account,
 // template or recipient errors the same message can never pass); the
 // notification queue retries the rest. Throwing a `ProviderError` means the
 // same: `retryable` stays retryable, `declined` and `misconfigured` do not.
@@ -13,9 +15,9 @@ export const smsSendInputSchema = z.object({
   /** E.164 (`+8801XXXXXXXXX`). */
   to: z.string().min(4).max(20),
   /** Plain text. */
-  message: z.string().min(1).max(2000),
-  /** Deterministic per message, for providers that support idempotency. */
-  clientReference: providerIdempotencyKeySchema.optional(),
+  text: z.string().min(1).max(2000),
+  /** Deterministic per message: never send twice for one key. */
+  idempotencyKey: providerIdempotencyKeySchema.optional(),
 }).strict();
 export type SmsSendInput = z.infer<typeof smsSendInputSchema>;
 
@@ -38,6 +40,7 @@ export const emailSendInputSchema = z.object({
   fromName: z.string().max(200).optional(),
   /** Only the list headers marketing mail needs (`List-Unsubscribe`, `List-Unsubscribe-Post`), each optional. */
   headers: z.partialRecord(z.enum(["List-Unsubscribe", "List-Unsubscribe-Post"]), z.string().max(2000)).optional(),
+  /** Deterministic per message: never send twice for one key. */
   idempotencyKey: providerIdempotencyKeySchema.optional(),
 }).strict();
 export type EmailSendInput = z.infer<typeof emailSendInputSchema>;

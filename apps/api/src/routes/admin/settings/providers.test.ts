@@ -138,7 +138,7 @@ describe("app provider settings", () => {
     const path = `/providers/${encodeURIComponent(`${WALLET_FIXTURE_ID}:wallet`)}/test`;
     // Payment providers: read with View store settings, tested with Edit store settings (Settings → Payments).
     expect((await createApp([PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW]).request("/providers?kind=payment", {}, env)).status).toBe(403);
-    expect((await createApp([PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW]).request("/providers?kind=fraud", {}, env)).status).toBe(200);
+    expect((await createApp([PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW]).request("/providers?kind=courier_history", {}, env)).status).toBe(200);
     expect((await createApp([PERMISSIONS.SETTINGS_GENERAL_VIEW]).request("/providers?kind=payment", {}, env)).status).toBe(200);
     expect((await createApp([PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT]).request(path, { method: "POST" }, env)).status).toBe(403);
     expect((await createApp([PERMISSIONS.SETTINGS_GENERAL_VIEW, PERMISSIONS.SETTINGS_GENERAL_EDIT]).request(path, { method: "POST" }, env)).status).toBe(200);

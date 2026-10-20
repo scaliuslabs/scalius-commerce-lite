@@ -45,15 +45,16 @@ const booking = (codAmountMinor: number, overrides: Partial<CourierShipmentInput
   recipient: {
     name: "Customer",
     phone: "+8801712345678",
-    address: "House 1, Road 2",
-    cityId: "city_1",
-    zoneId: "zone_1",
-    areaId: null,
-    cityName: "Dhaka",
-    zoneName: "Gulshan",
-    areaName: null,
+    company: null,
+    line1: "House 1, Road 2",
+    line2: null,
+    dependentLocality: null,
+    locality: "Dhaka",
+    adminArea: null,
     postalCode: null,
-    country: "BD",
+    countryCode: "BD",
+    placeIds: { city: "city_1", zone: "zone_1", area: null },
+    placeNames: { city: "Dhaka", zone: "Gulshan", area: null },
     locationIds: { city: "1", zone: "52", area: null },
     ...overrides,
   },
@@ -63,7 +64,8 @@ const booking = (codAmountMinor: number, overrides: Partial<CourierShipmentInput
   note: null,
   itemCount: 2,
   itemDescription: "Panjabi x2",
-  options: { deliveryType: null, itemType: null, itemWeightKg: null },
+  parcel: { weightGrams: null, dimensionsCm: null },
+  options: {},
 });
 
 const rateInput = (overrides: Partial<CourierRatesInput> = {}): CourierRatesInput => ({
@@ -233,7 +235,7 @@ describe("Pathao", () => {
   it("takes the staff's choices on the booking form over the defaults", async () => {
     const { instance, calls } = harness({ ...PATHAO, pathao_item_weight: 2 }, answers);
     const input = booking(10_000);
-    await instance.provider("pathao", "createShipment", { ...input, options: { deliveryType: 12, itemType: 1, itemWeightKg: 1.5 } });
+    await instance.provider("pathao", "createShipment", { ...input, parcel: { weightGrams: 1500, dimensionsCm: null }, options: { deliveryType: 12, itemType: 1 } });
     expect(JSON.parse(calls[1]!.body!)).toMatchObject({ delivery_type: 12, item_type: 1, item_weight: 1.5 });
   });
 

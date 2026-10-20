@@ -425,7 +425,7 @@ export async function sendAppPush(appProviders: AppProviders | undefined, provid
     return {
       success: false,
       rawStatus: (failure?.message ?? "The push provider could not send.").slice(0, 300),
-      retryable: failure?.category === "retryable" && (!failure.uncertain || input.clientReference !== undefined),
+      retryable: failure?.category === "retryable" && (!failure.uncertain || input.idempotencyKey !== undefined),
     };
   }
 }
@@ -439,15 +439,15 @@ export async function sendCustomerPush(
   db: Database,
   env: { SCALIUS_SECRET?: unknown; BETTER_AUTH_URL?: unknown; STOREFRONT_URL?: unknown },
   appProviders: AppProviders | undefined,
-  input: { customerId: string; notification: PushNotification; clientReference?: string },
+  input: { customerId: string; notification: PushNotification; idempotencyKey?: string },
 ): Promise<{ delivered: boolean }> {
   const { pushProvider } = await notificationsDocument.read(db);
   if (isQualifiedProviderId(pushProvider)) {
     const result = await sendAppPush(appProviders, pushProvider, {
       audience: "customer",
-      recipients: [input.customerId],
+      to: [input.customerId],
       notification: input.notification,
-      ...(input.clientReference ? { clientReference: input.clientReference } : {}),
+      ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
     });
     return { delivered: result.success };
   }

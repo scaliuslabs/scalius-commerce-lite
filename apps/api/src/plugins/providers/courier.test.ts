@@ -108,8 +108,9 @@ const booking = (orderId: string): CourierShipmentInput => ({
   idempotencyKey: `shp_${orderId}`,
   orderId,
   recipient: {
-    name: "Buyer", phone: "+8801712345678", address: "House 1, Road 2", cityId: "city_local", zoneId: "zone_local", areaId: null,
-    cityName: "Dhaka", zoneName: "Gulshan", areaName: null, postalCode: null, country: "BD",
+    name: "Buyer", phone: "+8801712345678", company: null, line1: "House 1, Road 2", line2: null, dependentLocality: null,
+    locality: "Dhaka", adminArea: null, postalCode: null, countryCode: "BD",
+    placeIds: { city: "city_local", zone: "zone_local", area: null }, placeNames: { city: "Dhaka", zone: "Gulshan", area: null },
   },
   codAmountMinor: 16_000,
   currency: "BDT",
@@ -117,7 +118,8 @@ const booking = (orderId: string): CourierShipmentInput => ({
   note: null,
   itemCount: 1,
   itemDescription: "Panjabi x1",
-  options: { deliveryType: null, itemType: null, itemWeightKg: null },
+  parcel: { weightGrams: null, dimensionsCm: null },
+  options: {},
 });
 
 interface Harness {

@@ -438,7 +438,8 @@ describe("delivery provider active-state authority", () => {
         decimalPlaces: 2,
         itemCount: 2,
         itemDescription: "Aster Clogs x2",
-        options: expect.objectContaining({ deliveryType: 48 }),
+        parcel: { weightGrams: null, dimensionsCm: null },
+        options: { deliveryType: 48 },
       }),
       expect.objectContaining({ settings: { app: "parcel" } }),
     );

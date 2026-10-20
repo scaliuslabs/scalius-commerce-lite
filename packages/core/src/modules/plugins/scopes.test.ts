@@ -127,4 +127,9 @@ describe("rows stored before scopes", () => {
     expect(parseStoredPluginGrant(JSON.stringify({ ...flags, scopes: ["read_orders"] }))).toMatchObject({ scopes: ["read_orders"] });
     expect(parseStoredPluginGrant(JSON.stringify({ ...flags, scopes: ["orders.view"] }))).toBeNull();
   });
+
+  it("reads a provider kind approved under its earlier name as the current kind, so the app stays approved", () => {
+    const flags = { scopes: [], allowedHosts: [], events: [], functions: [], blockingFunctions: [], publicRoutes: false, storefrontScripts: [], storefrontSurfaces: false, customFieldOwners: [] };
+    expect(parseStoredPluginGrant(JSON.stringify({ ...flags, providers: ["sms", "fraud", "courier_history"] }))?.providers).toEqual(["sms", "courier_history"]);
+  });
 });

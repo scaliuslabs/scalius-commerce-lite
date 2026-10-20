@@ -97,7 +97,7 @@ fact commits
 - Table `notification_delivery_receipts`. `receipt_key` is `<outboxId>:<channel>:<sha256 of the lowercase recipient>`. The table stores only the hash and a masked recipient.
 - States: `pending`, `processing` (15-minute lease), `accepted`, `delivered`, `skipped`, `failed`. `accepted`, `delivered` and `skipped` are terminal.
 - A retryable failure waits with the same backoff. At 8 attempts (`MAX_ORDER_NOTIFICATION_DELIVERY_ATTEMPTS`) the receipt becomes `skipped` with `delivery_attempt_limit_reached`.
-- Provider idempotency: Resend gets the receipt key as `Idempotency-Key`. Cloudflare Email returns a `messageId`. An SMS app gets the receipt key as `clientReference` (the Bangladesh pack sends it to GenNet as a 20-character `csms_id`). Meta WhatsApp has no idempotency key, so a Worker crash after Meta accepts and before the receipt write can send twice.
+- Provider idempotency: Resend gets the receipt key as `Idempotency-Key`. Cloudflare Email returns a `messageId`. An SMS app gets the receipt key as `idempotencyKey` (the Bangladesh pack sends it to GenNet as a 20-character `csms_id`). Meta WhatsApp has no idempotency key, so a Worker crash after Meta accepts and before the receipt write can send twice.
 - Code-bearing types (`order_digital_delivered`, `gift_card_issued`) store no `raw_response`. The dispatcher removes the resolved values from every status and error it records.
 
 ## Failures and provider pause

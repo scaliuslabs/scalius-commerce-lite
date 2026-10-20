@@ -13,6 +13,7 @@ import {
   providerOperationSchemas,
   providerServesCountry,
   qualifiedProviderId,
+  declaredCourierBookingOptions,
 } from "../providers";
 import { PLUGIN_API_VERSION } from "../api-version";
 import { checkPluginHandlers, pluginHandlerInventory } from "../handlers";
@@ -33,8 +34,9 @@ const HOSTED_REFUNDS = ["verifyReturn", "queryPayment", "refund", "refundStatus"
 const wire = (minor: number, decimal: string) => ({ minor, decimal });
 const request = { method: "POST", rawBody: "{}", headers: { "x-signature": "abc" }, query: {} };
 const recipient = {
-  name: "Buyer", phone: "+8801700000000", address: "House 1, Road 2",
-  cityId: "c1", zoneId: "z1", areaId: null, cityName: "Dhaka", zoneName: "Gulshan", areaName: null, postalCode: null, country: "BD",
+  name: "Buyer", phone: "+8801700000000", company: null, line1: "House 1, Road 2", line2: null, dependentLocality: null,
+  locality: "Dhaka", adminArea: null, postalCode: null, countryCode: "BD",
+  placeIds: { city: "c1", zone: "z1", area: null }, placeNames: { city: "Dhaka", zone: "Gulshan", area: null },
 };
 
 /** One valid input and output per operation that has meaningful money or identity rules. */
@@ -56,12 +58,12 @@ const SAMPLES: Array<[string, string, unknown, unknown]> = [
   }, { refundId: "RF-PROVIDER-1" }],
   ["courier", "createShipment", {
     idempotencyKey: "shp_1", orderId: "ORD1", recipient, codAmountMinor: 12_550, currency: "BDT", decimalPlaces: 2,
-    note: null, itemCount: 1, itemDescription: null, options: { deliveryType: null, itemType: null, itemWeightKg: 0.5 },
+    note: null, itemCount: 1, itemDescription: null, parcel: { weightGrams: 500, dimensionsCm: null }, options: {},
   }, { externalId: "CN1", trackingId: null, status: "pending", rawStatus: "Pending", chargeMinor: 6000, label: null }],
   ["courier", "trackShipment", { externalId: "CN1" }, { status: "delivered", rawStatus: "Delivered", updatedAt: "2026-10-03T10:00:00+06:00" }],
-  ["sms", "send", { to: "+8801700000000", message: "Your order shipped" }, { success: true, providerRef: "m1" }],
+  ["sms", "send", { to: "+8801700000000", text: "Your order shipped", idempotencyKey: "outbox1" }, { success: true, providerRef: "m1" }],
   ["email", "send", { to: "buyer@example.test", subject: "Shipped", html: "<p>Shipped</p>" }, { success: false, retryable: true }],
-  ["fraud", "check", { phone: "+8801700000000" }, { riskLevel: "low", phone: "01700000000", totalParcels: 10, delivered: 9, cancelled: 1, successRate: 90 }],
+  ["courier_history", "check", { phone: "+8801700000000" }, { riskLevel: "low", phone: "01700000000", totalParcels: 10, delivered: 9, cancelled: 1, successRate: 90 }],
   ["tax", "calculate", {
     idempotencyKey: "tax-1", currency: "BDT", pricesIncludeTax: false,
     destination: { country: "BD", adminArea: null, city: "Dhaka", postalCode: null }, origin: null,
@@ -130,9 +132,14 @@ describe("provider port contracts", () => {
     const located = { ...(input as { recipient: object }), recipient: { ...(input as { recipient: object }).recipient, locationIds: { city: "1", zone: "52", area: null } } };
     expect(courier.createShipment.input.safeParse(located).success).toBe(true);
 
-    const options = (itemWeightKg: number) => ({ ...(input as object), options: { deliveryType: 48, itemType: 2, itemWeightKg } });
-    expect(courier.createShipment.input.safeParse(options(5_000)).success).toBe(true);
-    expect(courier.createShipment.input.safeParse(options(10_001)).success).toBe(false);
+    // The courier's own booking options travel as a bag of declared keys; the parcel's size is the platform's.
+    const booking = (options: Record<string, unknown>, parcel: object = { weightGrams: 5_000_000, dimensionsCm: { length: 30, width: 20, height: 10 } }) =>
+      courier.createShipment.input.safeParse({ ...(input as object), options, parcel }).success;
+    expect(booking({ deliveryType: 48, itemType: 2, express: true, service: "next_day" })).toBe(true);
+    expect(booking({ "delivery-type": 48 })).toBe(false);
+    expect(booking({ deliveryType: { nested: true } })).toBe(false);
+    expect(booking({}, { weightGrams: -1, dimensionsCm: null })).toBe(false);
+    expect(booking({}, { weightGrams: null, dimensionsCm: { length: 30, width: 20 } })).toBe(false);
   });
 
   it("takes each email list header on its own and no other header", () => {
@@ -245,20 +252,43 @@ describe("provider declarations", () => {
     expect(parsePluginManifest({ ...manifest, settings: [environment], providers: { payment: [{ ...wallet, returnCorrelationField: "tran id" }] } }).ok).toBe(false);
   });
 
-  it("lets couriers and fraud checkers declare the countries they serve (MARKETS-DESIGN step 3a)", () => {
+  it("lets a courier declare its own booking options and passes only declared, valid choices", () => {
+    const bookingOptions = [
+      { key: "deliveryType", label: "Delivery type", type: "select", choices: [{ value: 48, label: "Regular" }, { value: 12, label: "Express" }] },
+      { key: "insured", label: "Insured", type: "boolean" },
+      { key: "declaredValue", label: "Declared value", type: "number", min: 0, max: 100_000 },
+    ];
+    const parsed = parsePluginManifest({ ...manifest, providers: { courier: [{ id: "redx", name: "RedX", bookingOptions }] } });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok || parsed.manifest.providers[0]!.kind !== "courier") return;
+    const declared = parsed.manifest.providers[0]!.bookingOptions;
+    expect(declaredCourierBookingOptions(declared, { deliveryType: 12, insured: true, declaredValue: 500, itemType: 2 }))
+      .toEqual({ deliveryType: 12, insured: true, declaredValue: 500 });
+    expect(declaredCourierBookingOptions(declared, { deliveryType: 13, insured: "yes", declaredValue: -1 })).toEqual({});
+    expect(declaredCourierBookingOptions(undefined, { deliveryType: 12 })).toEqual({});
+    const refuses = (options: unknown[]) => parsePluginManifest({ ...manifest, providers: { courier: [{ id: "redx", name: "RedX", bookingOptions: options }] } }).ok;
+    expect(refuses([bookingOptions[0], bookingOptions[0]])).toBe(false);
+    expect(refuses([{ ...bookingOptions[0], key: "delivery_type" }])).toBe(false);
+    expect(refuses([{ ...bookingOptions[0], choices: [] }])).toBe(false);
+  });
+
+  it("lets couriers and courier-history checkers declare the countries they serve (MARKETS-DESIGN step 3a)", () => {
     const parsed = parsePluginManifest({
       ...manifest,
       providers: {
         courier: [{ id: "redx", name: "RedX", countries: ["BD"] }],
-        fraud: [{ id: "radar", name: "Radar", countries: ["BD", "IN"] }],
+        courier_history: [{ id: "radar", name: "Radar", countries: ["BD", "IN"] }],
       },
     });
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
     expect(parsed.manifest.providers).toEqual([
       { kind: "courier", id: "redx", name: "RedX", operations: [], countries: ["BD"] },
-      { kind: "fraud", id: "radar", name: "Radar", operations: [], countries: ["BD", "IN"] },
+      { kind: "courier_history", id: "radar", name: "Radar", operations: [], countries: ["BD", "IN"] },
     ]);
+    // A stored flat manifest written before the rename still reads.
+    const stored = parsePluginManifest({ ...manifest, providers: [{ kind: "fraud", id: "radar", name: "Radar", operations: [], countries: ["BD"] }] });
+    expect(stored.ok && stored.manifest.providers).toEqual([{ kind: "courier_history", id: "radar", name: "Radar", operations: [], countries: ["BD"] }]);
     expect(parsePluginManifest({ ...manifest, providers: { courier: [{ id: "redx", name: "RedX", countries: ["bd"] }] } }).ok).toBe(false);
     expect(providerServesCountry(["BD"], "BD")).toBe(true);
     expect(providerServesCountry(["BD"], "IN")).toBe(false);
@@ -331,10 +361,10 @@ describe("provider declarations", () => {
 
   it("fits a regional pack: up to PLUGIN_PROVIDERS_MAX providers, readiness per provider's own settings", () => {
     const sms = Array.from({ length: 12 }, (_, index) => ({ id: `gateway-${index}`, name: `Gateway ${index}` }));
-    const fraud = Array.from({ length: 12 }, (_, index) => ({ id: `checker-${index}`, name: `Checker ${index}`, countries: ["BD"] }));
+    const courier_history = Array.from({ length: 12 }, (_, index) => ({ id: `checker-${index}`, name: `Checker ${index}`, countries: ["BD"] }));
     expect(PLUGIN_PROVIDERS_MAX).toBe(24);
-    expect(parsePluginManifest({ ...manifest, providers: { sms, fraud } }).ok).toBe(true);
-    expect(parsePluginManifest({ ...manifest, providers: { sms: [...sms, { id: "one-more", name: "One more" }], fraud } }).ok).toBe(false);
+    expect(parsePluginManifest({ ...manifest, providers: { sms, courier_history } }).ok).toBe(true);
+    expect(parsePluginManifest({ ...manifest, providers: { sms: [...sms, { id: "one-more", name: "One more" }], courier_history } }).ok).toBe(false);
 
     const settings = [{ key: "gateway_token", label: "Token", type: "secret" }];
     const declared = parsePluginManifest({ ...manifest, settings, providers: { sms: [{ id: "gateway", name: "Gateway", settings: ["gateway_token"] }] } });

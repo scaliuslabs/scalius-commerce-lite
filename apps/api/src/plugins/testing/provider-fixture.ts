@@ -169,7 +169,7 @@ export default {
           rawStatus: "Booked",
           chargeMinor: 6000,
           label: null,
-          details: { zone: input.recipient.zoneName, codMinor: input.codAmountMinor, items: input.itemCount },
+          details: { zone: input.recipient.placeNames.zone, codMinor: input.codAmountMinor, items: input.itemCount },
         };
         await ctx.objects.bookings.put(input.idempotencyKey, { booking });
         await ctx.objects.orders.put(input.orderId, { booking });

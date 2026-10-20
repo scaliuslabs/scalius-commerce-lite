@@ -111,12 +111,12 @@ describe("the Bangladesh pack's providers", () => {
     // Only the features turned on run: their ports and jobs are registered, nothing else is.
     expect(sqlite.prepare("SELECT kind, name FROM plugin_registrations WHERE plugin_id = ? ORDER BY kind, name").all(PACK)).toEqual([
       { kind: "cron", name: "places_sync" },
-      { kind: "provider", name: "fraud" },
+      { kind: "provider", name: "courier_history" },
       { kind: "provider", name: "sms" },
     ]);
     const granted = (await requirePluginInstallation(db, PACK)).grant!;
     // SMS and fraud checks receive the buyer's phone, so those features ask for it (COMMERCE-HOOKS H5).
-    expect(granted).toMatchObject({ features: ["bdbulksms", "fraudbd", "places"], scopes: ["read_customer_phones", "write_places"], providers: ["fraud", "sms"] });
+    expect(granted).toMatchObject({ features: ["bdbulksms", "fraudbd", "places"], scopes: ["read_customer_phones", "write_places"], providers: ["courier_history", "sms"] });
     expect(granted.allowedHosts).toEqual(["*.fraudbd.com", "api.bdbulksms.net", "fraudbd.com"]);
     // A provider of an off feature is unavailable and says which switch turns it on.
     await expect(apps().resolve("sms", `${PACK}:gennet`)).resolves.toEqual({

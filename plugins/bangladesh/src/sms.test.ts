@@ -6,7 +6,7 @@ import { createPluginTestHarness } from "@scalius/plugin-sdk/testing";
 import pack from "./index";
 import { classifySmsProviderFailure, isRetryableSmsHttpStatus, sanitizeSmsProviderDiagnostic } from "./sms-diagnostics";
 
-const input = { to: "+8801712345678", message: "Your order shipped", clientReference: "outbox1smsrecipient" };
+const input = { to: "+8801712345678", text: "Your order shipped", idempotencyKey: "outbox1smsrecipient" };
 
 interface Call { url: string; headers: Record<string, string>; body: string }
 type Reply = { status: number; body: string } | Error;
@@ -100,7 +100,7 @@ describe("gateway requests", () => {
 
   it("BDBulkSMS never keeps the recipient phone as a provider reference", async () => {
     const { instance } = harness({ bdbulksms_token: "merchant-token-4821" }, json([{ to: "+8801712345678", status: "SENT", statusmsg: "Sent to +8801712345678" }]));
-    const result = await instance.provider("bdbulksms", "send", { ...input, clientReference: "receipt_safe_reference" });
+    const result = await instance.provider("bdbulksms", "send", { ...input, idempotencyKey: "receipt_safe_reference" });
     expect(result.value).toMatchObject({ success: true, providerRef: "receipt_safe_reference", rawStatus: "Sent to [phone]" });
     expect(JSON.stringify(result)).not.toContain("8801712345678");
   });
@@ -119,7 +119,7 @@ describe("gateway requests", () => {
   it("GenNet uses the deterministic client reference as csms_id", async () => {
     const settings = { gennet_api_token: "token", gennet_base_url: "https://sms.gennet.com.bd/", gennet_sid: "BRAND" };
     const { instance, calls } = harness(settings, json({ status: "SUCCESS", status_code: 200, error_message: "", smsinfo: [{ sms_status: "SUCCESS", reference_id: "gennet_ref_1", csms_id: "outboxsmsrecipientha" }] }));
-    const result = await instance.provider("gennet", "send", { to: "+8801700000000", message: "Order update", clientReference: "outbox_sms:recipient_hash" });
+    const result = await instance.provider("gennet", "send", { to: "+8801700000000", text: "Order update", idempotencyKey: "outbox_sms:recipient_hash" });
     expect(result.value).toMatchObject({ success: true, providerRef: "gennet_ref_1" });
     expect(calls[0]!.url).toBe("https://sms.gennet.com.bd/api/v3/send-sms");
     expect(JSON.parse(calls[0]!.body)).toMatchObject({ csms_id: "outboxsmsrecipientha", msisdn: "8801700000000" });
@@ -130,7 +130,7 @@ describe("gateway requests", () => {
       { gennet_api_token: "token", gennet_base_url: "https://sms.gennet.com.bd", gennet_sid: "BRAND" },
       json({ status: "FAILED", status_code: 4023, error_message: "Duplicate csms_id", smsinfo: [] }),
     );
-    const result = await instance.provider("gennet", "send", { to: "+8801700000000", message: "Order update", clientReference: "outbox_sms:recipient_hash" });
+    const result = await instance.provider("gennet", "send", { to: "+8801700000000", text: "Order update", idempotencyKey: "outbox_sms:recipient_hash" });
     expect(result.value).toMatchObject({ success: true, providerRef: "outboxsmsrecipientha", rawStatus: "Duplicate csms_id - already sent" });
   });
 

@@ -110,8 +110,8 @@ describe("app messaging and fraud providers through the bundled loader", () => {
   it("keeps the SMS port on every outcome, never sending twice what may have gone", async () => {
     const sms = (await apps().resolve("sms", TEXTS)).provider!;
     const port = PROVIDER_PORTS.sms.send.output;
-    const send = (message: string, clientReference?: string) =>
-      sms.send({ to: "+8801712345678", message, ...(clientReference ? { clientReference } : {}) }, {});
+    const send = (text: string, idempotencyKey?: string) =>
+      sms.send({ to: "+8801712345678", text, ...(idempotencyKey ? { idempotencyKey } : {}) }, {});
 
     const sent = await send("Your order shipped", "outbox1smsrecipient");
     expect(port.parse(sent)).toEqual({ success: true, providerRef: "T-outbox1smsre", rawStatus: "Queued for [phone]" });
@@ -136,7 +136,7 @@ describe("app messaging and fraud providers through the bundled loader", () => {
 
     // A message that cannot fit the port never reaches the app.
     const before = (await listPluginLogs(db, NOTIFY_FIXTURE_ID)).length;
-    expect(await sms.send({ to: "1", message: "Hi" }, {})).toMatchObject({ success: false, retryable: false });
+    expect(await sms.send({ to: "1", text: "Hi" }, {})).toMatchObject({ success: false, retryable: false });
     expect((await listPluginLogs(db, NOTIFY_FIXTURE_ID)).length).toBe(before);
 
     await expect(sms.testConnection!({}, {})).resolves.toEqual({ ok: true, message: "API key saved." });
@@ -151,7 +151,7 @@ describe("app messaging and fraud providers through the bundled loader", () => {
     await expect(getSmsProviderReadiness(db, KEY, providers)).resolves.toEqual({ status: "ready", issues: [], activeProvider: TEXTS });
     const sms = await getActiveSmsProvider(db, KEY, providers);
     expect(sms).toMatchObject({ id: TEXTS, label: "Acme Texts" });
-    await expect(sms!.send({ to: "+8801712345678", message: "Hello", clientReference: "selected1" }, {})).resolves.toMatchObject({ success: true });
+    await expect(sms!.send({ to: "+8801712345678", text: "Hello", idempotencyKey: "selected1" }, {})).resolves.toMatchObject({ success: true });
 
     await expect(getEmailProviderReadiness({ db, env: env as never, encryptionKey: KEY, appProviders: providers }))
       .resolves.toMatchObject({ status: "ready", provider: MAIL });
@@ -165,7 +165,7 @@ describe("app messaging and fraud providers through the bundled loader", () => {
     const lookup = await fraudLookupWithActiveProvider(db, "01712-345678", KEY, providers);
     expect(lookup.status).toBe("checked");
     if (lookup.status !== "checked") return;
-    expect(PROVIDER_PORTS.fraud.check.output.parse(lookup.check)).toMatchObject({ riskLevel: "medium", phone: "+8801712345678", totalParcels: 5 });
+    expect(PROVIDER_PORTS.courier_history.check.output.parse(lookup.check)).toMatchObject({ riskLevel: "medium", phone: "+8801712345678", totalParcels: 5 });
     await expect(fraudLookupWithActiveProvider(db, "+8801999999999", KEY, providers)).rejects.toThrow("Acme Radar has no history for this number.");
     await expect(testFraudProvider(db, row.id, KEY, providers)).resolves.toEqual({ success: true, message: "Radar reachable." });
   });

@@ -12,7 +12,7 @@ import {
     testFraudProvider,
     fraudLookupWithActiveProvider,
 } from "@scalius/core/modules/fraud-checker";
-import { isQualifiedProviderId, type FraudCheck } from "@scalius/shared/plugins/providers";
+import { isQualifiedProviderId, type CourierHistory } from "@scalius/shared/plugins/providers";
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../utils/encryption-key";
 import { assertAppProviderInstalled, requestAppProviders } from "../../plugins/providers/app-providers";
 import { NotFoundError } from "../../utils/api-error";
@@ -46,7 +46,7 @@ function boundedText(value: unknown, max = 100): string | undefined {
 }
 
 /** The fraud port's answer as the order page reads it, bounded. */
-function projectFraudLookupResult(result: FraudCheck) {
+function projectFraudLookupResult(result: CourierHistory) {
     const rawCouriers = result.couriers && typeof result.couriers === "object" && !Array.isArray(result.couriers)
         ? result.couriers as Record<string, unknown>
         : {};
@@ -164,7 +164,7 @@ app.openapi(createProviderRoute, async (c) => {
     const body = c.req.valid("json");
     const encryptionKey = requireEncryptionKey(c.env as Record<string, unknown>);
 
-    await assertAppProviderInstalled(db, "fraud", body.providerType);
+    await assertAppProviderInstalled(db, "courier_history", body.providerType);
     return created(c, projectProvider(await saveFraudProvider(db, body, encryptionKey)));
 });
 
@@ -191,7 +191,7 @@ const updateProviderRoute = createRoute({
 app.openapi(updateProviderRoute, async (c) => {
     const db = c.get("db");
     const body = c.req.valid("json");
-    await assertAppProviderInstalled(db, "fraud", body.providerType);
+    await assertAppProviderInstalled(db, "courier_history", body.providerType);
     return ok(c, projectProvider(await saveFraudProvider(db, body, requireEncryptionKey(c.env as Record<string, unknown>))));
 });
 

@@ -62,7 +62,7 @@ export const PROVIDER_PROTECTED_DATA = {
   courier: { required: ["name", "phone", "address"], optional: [] },
   sms: { required: ["phone"], optional: [] },
   email: { required: ["email"], optional: [] },
-  fraud: { required: ["phone"], optional: [] },
+  courier_history: { required: ["phone"], optional: [] },
   messaging: { required: ["phone"], optional: [] },
   address: { required: ["address"], optional: [] },
   tax: { required: [], optional: [] },
