@@ -4,7 +4,7 @@
  * browser LCP/CLS on a phone (390 px, slow 4G, 4x CPU) and a desktop profile.
  *
  *   node scripts/storefront-perf.mjs --base http://localhost:4391 \
- *     --d1-explorer http://localhost:8811 [--json] [--runs 3]
+ *     --d1-explorer http://localhost:8811 [--json] [--runs 3] [--sparse]
  *
  * Hit TTFB is judged at the edge: against a remote base the round trip of
  * the edge's own /cdn-cgi/trace on the same connection is subtracted.
@@ -61,6 +61,17 @@ export const PROFILES = Object.freeze({
   },
 });
 
+/**
+ * The storefront frontier is fresh for this long (`CACHE_FRONTIER_DELTA_MS`,
+ * apps/storefront/src/lib/cache-frontier.ts). Consecutive hits share one fresh
+ * frontier; a quiet store's hit (under one request a second per data center)
+ * refreshes it first, a service-binding call to the API and one D1 statement.
+ * `--sparse` waits SPARSE_HIT_GAP_MS before each of a second set of hits, so
+ * the hit budget is also measured on that path (audit R2 B7).
+ */
+export const CACHE_FRONTIER_DELTA_MS = 1_000;
+export const SPARSE_HIT_GAP_MS = 1_500;
+
 export function median(values) {
   const sorted = values.filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
   if (sorted.length === 0) return null;
@@ -81,6 +92,8 @@ export function evaluateBudgets(row, budgets = DEFAULT_BUDGETS) {
   if (row.status >= 500) failures.push(`${row.path}: first response status ${row.status}`);
   if (row.cacheable) {
     over("ttfb hit ms", row.ttfbHit, budgets.ttfbHitMs);
+    // A sparse hit is still a hit: the frontier refresh it pays is held to the hit budget.
+    over("ttfb sparse hit ms", row.ttfbSparseHit, budgets.ttfbHitMs);
     over("ttfb miss ms", row.ttfbMiss, budgets.ttfbMissMs);
   } else {
     over("ttfb (uncached) ms", row.ttfbHit, budgets.ttfbMissMs);
@@ -101,7 +114,7 @@ export function discoverPaths(homeHtml) {
 }
 
 export function parseArgs(argv) {
-  const args = { base: "http://localhost:4391", runs: 3, json: false, profiles: ["phone", "desktop"], paths: null, d1Explorer: null, cdpPort: 9395, budgets: { ...DEFAULT_BUDGETS }, noBrowser: false, mediaUrl: null, bindingCheck: true };
+  const args = { base: "http://localhost:4391", runs: 3, json: false, profiles: ["phone", "desktop"], paths: null, d1Explorer: null, cdpPort: 9395, budgets: { ...DEFAULT_BUDGETS }, noBrowser: false, mediaUrl: null, bindingCheck: true, sparseMs: 0 };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
     const next = () => argv[++i];
@@ -116,6 +129,12 @@ export function parseArgs(argv) {
     else if (flag === "--d1-explorer") args.d1Explorer = next().replace(/\/$/, "");
     else if (flag === "--kv-explorer") throw new Error("--kv-explorer is retired: use --d1-explorer for the local dependency cache");
     else if (flag === "--cdp-port") args.cdpPort = Number(next());
+    else if (flag === "--sparse") args.sparseMs = SPARSE_HIT_GAP_MS;
+    else if (flag === "--sparse-ms") {
+      const gap = Number(next());
+      if (!Number.isInteger(gap) || gap <= CACHE_FRONTIER_DELTA_MS) throw new Error(`--sparse-ms must be an integer above ${CACHE_FRONTIER_DELTA_MS} (the frontier's freshness bound)`);
+      args.sparseMs = gap;
+    }
     else if (flag.startsWith("--budget-")) {
       const key = flag.slice("--budget-".length).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
       if (!(key in args.budgets)) throw new Error(`Unknown budget ${flag}`);
@@ -365,6 +384,16 @@ export async function runStorefrontPerf(options) {
         ttfbFirst: first.ttfb,
         edgeRtt: rtt,
       };
+      if (options.sparseMs > 0 && row.cacheable) {
+        const sparse = [];
+        for (let i = 0; i < runs; i += 1) {
+          await new Promise((resolveWait) => setTimeout(resolveWait, options.sparseMs));
+          sparse.push(await timeFetch(url));
+        }
+        const timed = classifyTimings(path, first, sparse, false, rtt);
+        row.ttfbSparseHit = timed.ttfbHit;
+        row.measurementFailures.push(...timed.measurementFailures.map((failure) => `${failure} (sparse)`));
+      }
       for (const profileName of noBrowser ? [] : profiles) {
         const samples = [];
         for (let i = 0; i < runs; i += 1) samples.push(await measureInBrowser(cdpPort, url, profileName));
@@ -387,10 +416,10 @@ export async function runStorefrontPerf(options) {
 
 function printTable({ rows, failures }) {
   const fmt = (v) => (v === null || v === undefined ? "-" : String(v));
-  console.log("path | status | first(cache) | miss ttfb | hit ttfb at edge (client, rtt) | phone LCP / CLS / KB | desktop LCP / CLS / KB");
+  console.log("path | status | first(cache) | miss ttfb | hit ttfb at edge (client, rtt) | sparse hit ttfb | phone LCP / CLS / KB | desktop LCP / CLS / KB");
   for (const r of rows) {
     console.log([
-      r.path, r.status, `${r.ttfbFirst} (${r.firstCache || "-"})`, fmt(r.ttfbMiss), `${fmt(r.ttfbHit)} (${fmt(r.ttfbHitClient)}, ${fmt(r.edgeRtt)})`,
+      r.path, r.status, `${r.ttfbFirst} (${r.firstCache || "-"})`, fmt(r.ttfbMiss), `${fmt(r.ttfbHit)} (${fmt(r.ttfbHitClient)}, ${fmt(r.edgeRtt)})`, fmt(r.ttfbSparseHit),
       r.phone ? `${fmt(r.phone.lcp)} / ${r.phone.cls} / ${r.phone.transferKb} [${r.phone.lcpElement ?? "-"}]` : "-",
       r.desktop ? `${fmt(r.desktop.lcp)} / ${r.desktop.cls} / ${r.desktop.transferKb} [${r.desktop.lcpElement ?? "-"}]` : "-",
     ].join(" | "));

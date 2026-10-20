@@ -2,7 +2,7 @@ import { forceCacheRefresh } from "./storefront-fidelity/lib/theme.mjs";
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
-import { assertLocalInvalidation, classifyTimings, forceMiss, FORCE_MISS_SQL, localDatabaseId, parseArgs, withSeenSeq, DEFAULT_BUDGETS, bindingCheckTarget, discoverPaths, evaluateBudgets, isLocalBase, median } from "./storefront-perf.mjs";
+import { CACHE_FRONTIER_DELTA_MS, SPARSE_HIT_GAP_MS, assertLocalInvalidation, classifyTimings, forceMiss, FORCE_MISS_SQL, localDatabaseId, parseArgs, withSeenSeq, DEFAULT_BUDGETS, bindingCheckTarget, discoverPaths, evaluateBudgets, isLocalBase, median } from "./storefront-perf.mjs";
 
 describe("storefront perf check", () => {
   it("finds a category and a product on the home page", () => {
@@ -11,6 +11,19 @@ describe("storefront perf check", () => {
 
     expect(discoverPaths(html)).toEqual(["/", "/categories/bags", "/products/linen-shirt", "/search?q=a", "/cart", "/checkout"]);
     expect(discoverPaths("<p>empty store</p>")).toEqual(["/", "/search?q=a", "/cart", "/checkout"]);
+  });
+
+  it("measures sparse hits past the storefront frontier's freshness bound and holds them to the hit budget", () => {
+    const source = readFileSync(new URL("../apps/storefront/src/lib/cache-frontier.ts", import.meta.url), "utf8");
+    expect(source).toContain(`export const CACHE_FRONTIER_DELTA_MS = ${CACHE_FRONTIER_DELTA_MS.toLocaleString("en-US").replace(",", "_")};`);
+    expect(SPARSE_HIT_GAP_MS).toBeGreaterThan(CACHE_FRONTIER_DELTA_MS);
+    expect(parseArgs([]).sparseMs).toBe(0);
+    expect(parseArgs(["--sparse"]).sparseMs).toBe(SPARSE_HIT_GAP_MS);
+    expect(parseArgs(["--sparse-ms", "2500"]).sparseMs).toBe(2500);
+    expect(() => parseArgs(["--sparse-ms", "1000"])).toThrow("above 1000");
+    const row = { path: "/", cacheable: true, ttfbHit: 20, ttfbSparseHit: 90, ttfbMiss: 200 };
+    expect(evaluateBudgets(row)).toEqual(["/: ttfb sparse hit ms 90 > 50"]);
+    expect(evaluateBudgets({ ...row, ttfbSparseHit: 40 })).toEqual([]);
   });
 
   it("takes the median of the finite samples", () => {
