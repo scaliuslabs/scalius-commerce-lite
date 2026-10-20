@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => {
     drainPaymentEvents: vi.fn(),
     drainCatalogProjectionRebuild: vi.fn(),
     drainBulkRuns: vi.fn(),
+    syncBundledPluginsOncePerDeploy: vi.fn(),
     rotateRecommendations: vi.fn(),
     cursorSave: vi.fn(async () => true),
     flushPendingMetaPurchaseOutbox: vi.fn(),
@@ -145,6 +146,7 @@ vi.mock("./events/dispatch", () => ({
 vi.mock("./plugins/scheduled", () => ({
   runScheduledPluginMaintenance: mocks.runScheduledPluginMaintenance,
   measurePluginStorage: mocks.measurePluginStorage,
+  syncBundledPluginsOncePerDeploy: mocks.syncBundledPluginsOncePerDeploy,
 }));
 
 vi.mock("./scheduled/catalog-projections", async (importOriginal) => ({
@@ -234,6 +236,7 @@ describe("runScheduledMaintenance", () => {
     mocks.drainPaymentEvents.mockResolvedValue({ scanned: 0, processed: 0 });
     mocks.drainCatalogProjectionRebuild.mockResolvedValue(0);
     mocks.drainBulkRuns.mockResolvedValue(0);
+    mocks.syncBundledPluginsOncePerDeploy.mockResolvedValue(null);
     mocks.rotateRecommendations.mockResolvedValue(0);
     mocks.runScheduledEventMaintenance.mockResolvedValue({
       events: { scanned: 0, dispatched: 0, failed: 0, skipped: 0, deliveries: [] },
@@ -646,6 +649,8 @@ describe("runScheduledMaintenance", () => {
     expect(mocks.drainPaymentEvents).toHaveBeenCalledWith(mocks.db, env, ctx);
     expect(mocks.drainCatalogProjectionRebuild).toHaveBeenCalledWith(mocks.db);
     expect(mocks.drainBulkRuns).toHaveBeenCalledWith(mocks.db, expect.any(Number));
+    // A new deployment's bundled apps sync on every tick's drain pass (free once claimed).
+    expect(mocks.syncBundledPluginsOncePerDeploy).toHaveBeenCalled();
     // The drains go first: a sweep that keeps failing never delays them.
     expect(mocks.drainCatalogProjectionRebuild.mock.invocationCallOrder[0])
       .toBeLessThan(mocks.releaseExpiredReservations.mock.invocationCallOrder[0]!);

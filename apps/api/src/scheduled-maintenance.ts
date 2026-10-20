@@ -588,8 +588,8 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
   },
   {
     // Plugins (docs/platform/PLUGINS.md): bundled installations in step with
-    // the deployed code, then due cron slots (each claimed once). Every sweep
-    // tick: a plugin's schedule is the merchant's, not ours to thin out.
+    // the deployed code (a new deployment syncs on its first tick, see
+    // bundled_plugin_sync_after_deploy), then due cron slots (each claimed once).
     name: "plugin_maintenance",
     async run({ db, env, executionCtx, runContext, timed }) {
       const { runScheduledPluginMaintenance } = await import("./plugins/scheduled");
@@ -676,6 +676,18 @@ export const BACKGROUND_DRAINS: ReadonlyArray<{ name: string; run(context: Sweep
   {
     name: "projection_rebuild_drain",
     run: ({ db }) => drainCatalogProjectionRebuild(db),
+  },
+  {
+    // A new deployment's bundled apps, in step on its first tick (plugins/scheduled.ts).
+    name: "bundled_plugin_sync_after_deploy",
+    async run({ db, env }) {
+      const { syncBundledPluginsOncePerDeploy } = await import("./plugins/scheduled");
+      const result = await syncBundledPluginsOncePerDeploy(db, env);
+      if (result && (result.installed.length > 0 || result.updated.length > 0 || result.failed.length > 0)) {
+        console.log(`[scheduled] Bundled apps after deploy: installed=${result.installed.length}, updated=${result.updated.length}, failed=${result.failed.length}`);
+      }
+      return result;
+    },
   },
   {
     // Bulk runs larger than one request (routes/admin/resources-bulk.ts).
