@@ -139,7 +139,7 @@ const sections = [
   },
   // ── Selling ───────────────────────────────────────────────────────────
   {
-    type: "featured-product",
+    type: "featured_product",
     name: "Featured product",
     description: "One product in the spotlight: a large photo, the price, a few points and add to cart.",
     settings: [
@@ -212,7 +212,7 @@ const sections = [
   },
   // ── Landing kit ───────────────────────────────────────────────────────
   {
-    type: "landing-hero",
+    type: "landing_hero",
     name: "Landing: product hero",
     description: "The top of a one-product campaign page: photos, the offer price, points, a countdown and “Order now”.",
     settings: [
@@ -232,7 +232,7 @@ const sections = [
     ],
   },
   {
-    type: "landing-features",
+    type: "landing_features",
     name: "Landing: features",
     description: "Why to buy: icon cards, photo rows or numbered steps, with an “Order now” button.",
     settings: [
@@ -254,7 +254,7 @@ const sections = [
     ],
   },
   {
-    type: "landing-order",
+    type: "landing_order",
     name: "Landing: order form",
     description: "The product, your assurances and the store's order form when available. Order buttons use a product-page fallback when checkout is unavailable.",
     settings: [
@@ -278,7 +278,7 @@ const sections = [
 
 const skins = [
   {
-    id: "noor-header",
+    id: "noor_header",
     target: "header",
     name: "Noor header",
     description: "Announcements, a centred logo with full-width menus, search and a phone drawer; a campaign header on landing pages.",
@@ -302,7 +302,7 @@ const skins = [
     ],
   },
   {
-    id: "noor-footer",
+    id: "noor_footer",
     target: "footer",
     name: "Noor footer",
     description: "A sign-up band, your contact details and menus, and the payment methods you take.",
@@ -323,7 +323,7 @@ const skins = [
     ],
   },
   {
-    id: "noor-card",
+    id: "noor_card",
     target: "product-card",
     name: "Noor card",
     description: "A quiet photo with a second photo on hover, small badges, and add to cart on the photo.",
@@ -347,7 +347,7 @@ const skins = [
     ],
   },
   {
-    id: "noor-product",
+    id: "noor_product",
     target: "product-main",
     name: "Noor product page",
     description: "The store's gallery beside the title and the store's own buy form, which stays in view while the page scrolls, then the description, reviews and related products.",
@@ -363,7 +363,7 @@ const skins = [
   // The merchant fills the store's section (its photos, products, questions);
   // a skin gives it Noor's look and adds only what the section has no field for.
   {
-    id: "noor-hero",
+    id: "noor_hero",
     target: "section:hero",
     name: "Noor hero",
     description: "The first slide as a large photo with words over it or beside it; several slides become a slideshow.",
@@ -385,49 +385,49 @@ const skins = [
     ],
   },
   {
-    id: "noor-products-tabs",
+    id: "noor_products_tabs",
     target: "section:product-tabs",
     name: "Noor product tabs",
     description: "Products in tabs, as a grid or a scrolling row.",
     settings: productsSkinSettings("tabs"),
   },
   {
-    id: "noor-products-grid",
+    id: "noor_products_grid",
     target: "section:product-grid",
     name: "Noor product grid",
     description: "Products in a grid of the section's columns and rows.",
     settings: productsSkinSettings("grid"),
   },
   {
-    id: "noor-products-rail",
+    id: "noor_products_rail",
     target: "section:product-rail",
     name: "Noor product row",
     description: "Products in a scrolling row.",
     settings: productsSkinSettings("rail"),
   },
   {
-    id: "noor-tiles-categories",
+    id: "noor_tiles_categories",
     target: "section:category-tiles",
     name: "Noor category tiles",
     description: "The chosen categories as photo tiles: a mosaic, a row or circles.",
     settings: tilesSkinSettings(),
   },
   {
-    id: "noor-tiles-cards",
+    id: "noor_tiles_cards",
     target: "section:shop-by",
     name: "Noor photo tiles",
     description: "Photo cards with a label and a link as tiles: a mosaic, a row or circles.",
     settings: tilesSkinSettings(),
   },
   {
-    id: "noor-promo-tiles",
+    id: "noor_promo_tiles",
     target: "section:banner-mosaic",
     name: "Noor promo tiles",
     description: "Up to three large photo links side by side; each photo's description is its heading.",
     settings: [{ key: "height", label: "Height", type: "select", default: "m", options: HEIGHTS.slice(0, 3) }, tone(), spacing()],
   },
   {
-    id: "noor-look",
+    id: "noor_look",
     target: "section:lookbook",
     name: "Noor shop the look",
     description: "A photo with numbered points beside the products in it.",
@@ -449,7 +449,7 @@ const skins = [
     ],
   },
   {
-    id: "noor-sale",
+    id: "noor_sale",
     target: "section:deal-block",
     name: "Noor sale banner",
     description: "A banner counting down to the promotion's end, then its products in a row.",
@@ -466,7 +466,7 @@ const skins = [
     ],
   },
   {
-    id: "noor-promises",
+    id: "noor_promises",
     target: "section:usp-strip",
     name: "Noor promises",
     description: "The store's delivery facts or your own points with icons.",
@@ -478,28 +478,28 @@ const skins = [
     ],
   },
   {
-    id: "noor-story",
+    id: "noor_story",
     target: "section:editorial",
     name: "Noor story and text",
     description: "An editorial section's photo beside your words with points and numbers, or its heading and paragraphs. Other layouts stay the store's.",
     settings: storySkinSettings(true),
   },
   {
-    id: "noor-text",
+    id: "noor_text",
     target: "section:seo-text",
     name: "Noor text",
     description: "Long text as a heading and paragraphs, with an optional button.",
     settings: storySkinSettings(false),
   },
   {
-    id: "noor-specifications",
+    id: "noor_specifications",
     target: "section:specifications",
     name: "Noor specifications",
     description: "The product's specifications, including values connected to its custom fields.",
     settings: [tone(), spacing()],
   },
   {
-    id: "noor-faq",
+    id: "noor_faq",
     target: "section:faq",
     name: "Noor questions",
     description: "Questions that open to their answers, marked up for search engines.",
@@ -513,7 +513,7 @@ const skins = [
     ],
   },
   {
-    id: "noor-signup",
+    id: "noor_signup",
     target: "section:newsletter",
     name: "Noor sign-up call",
     description: "Invites buyers to join your list; the button opens the store's sign-up page.",
@@ -573,30 +573,30 @@ const templates = [
     name: "Noor",
     description: "An editorial store with a hero, product rows, collection tiles and a featured product. Add your own story, reviews and policies from the section library.",
     // The theme document version these values are written for; the store upgrades them from here.
-    themeVersion: 10,
+    themeVersion: 11,
     theme: {
       tokens,
       blocks: { navigation: { source: "menu", maxTopItems: 7, linkBudget: 150 } },
       apps: {
         skins: {
-          header: { app: "scalius.noor/noor-header", values: { announcements: [] } },
-          footer: { app: "scalius.noor/noor-footer", values: { payments: [], tagline: "", newsletter_heading: "Stay in touch", newsletter_text: "" } },
-          "product-card": { app: "scalius.noor/noor-card", values: {} },
-          "product-main": { app: "scalius.noor/noor-product", values: {} },
+          header: { app: "scalius.noor/noor_header", values: { announcements: [] } },
+          footer: { app: "scalius.noor/noor_footer", values: { payments: [], tagline: "", newsletter_heading: "Stay in touch", newsletter_text: "" } },
+          "product-card": { app: "scalius.noor/noor_card", values: {} },
+          "product-main": { app: "scalius.noor/noor_product", values: {} },
         },
       },
       sections: [
         // The hero shows once the merchant adds a slide with a photo.
-        skinned("noor-hero", "hero", { layout: "full-bleed", slides: [] }, "noor-hero", { height: "l", scrim: "soft" }),
+        skinned("noor-hero", "hero", { layout: "full-bleed", slides: [] }, "noor_hero", { height: "l", scrim: "soft" }),
         skinned("noor-new", "product-tabs", {
           title: "New arrivals",
           tabs: [{ label: "New in", source: { kind: "newest" } }, { label: "On sale", source: { kind: "on-sale" } }],
           limit: 8,
-        }, "noor-products-tabs"),
-        skinned("noor-tiles", "category-tiles", { style: "photo", title: "Shop by category", categoryIds: [] }, "noor-tiles-categories"),
-        section("noor-feature", "featured-product", { eyebrow: "Featured product", points: [] }),
-        skinned("noor-best", "product-rail", { title: "Popular products", source: { kind: "popular" }, limit: 12 }, "noor-products-rail", { link_label: "Shop all" }),
-        skinned("noor-signup", "newsletter", { heading: "Stay in touch", text: "", email: "optional", whatsapp: false }, "noor-signup"),
+        }, "noor_products_tabs"),
+        skinned("noor-tiles", "category-tiles", { style: "photo", title: "Shop by category", categoryIds: [] }, "noor_tiles_categories"),
+        section("noor-feature", "featured_product", { eyebrow: "Featured product", points: [] }),
+        skinned("noor-best", "product-rail", { title: "Popular products", source: { kind: "popular" }, limit: 12 }, "noor_products_rail", { link_label: "Shop all" }),
+        skinned("noor-signup", "newsletter", { heading: "Stay in touch", text: "", email: "optional", whatsapp: false }, "noor_signup"),
       ],
     },
   },
@@ -605,15 +605,15 @@ const templates = [
 /** A campaign starts with product facts; policies and testimonials require merchant content. */
 const pagePresets = [
   {
-    id: "product-campaign",
+    id: "product_campaign",
     name: "Product campaign",
     description: "A single-product page with its price, space for your selling points, checkout guidance and the store's order form when available.",
-    themeVersion: 10,
+    themeVersion: 11,
     sections: [
-      section("lp-hero", "landing-hero", { badge: "" }),
+      section("lp-hero", "landing_hero", { badge: "" }),
       // The existing renderer leaves this section out until the merchant adds items.
-      section("lp-features", "landing-features"),
-      section("lp-steps", "landing-features", {
+      section("lp-features", "landing_features"),
+      section("lp-steps", "landing_features", {
         heading: "How to order",
         style: "steps",
         items: [
@@ -623,7 +623,7 @@ const pagePresets = [
         ],
         tone: "soft",
       }),
-      section("lp-order", "landing-order"),
+      section("lp-order", "landing_order"),
     ],
   },
 ] satisfies Preset[];

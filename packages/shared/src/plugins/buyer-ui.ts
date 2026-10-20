@@ -2,8 +2,10 @@
 import { z } from "zod";
 import { PLUGIN_BLOCK_TARGETS, type PluginBlockTarget } from "./storefront";
 import type { PluginUiJson, PluginUiTone } from "./ui";
+import { pluginKeySchema, pluginUrlNameSchema } from "./manifest-patterns";
 
-const key = z.string().regex(/^[a-z][a-z0-9_-]{0,47}$/);
+/** A checkout attribute key: snake_case (it is stored on the order). */
+const key = pluginKeySchema();
 const label = z.string().trim().min(1).max(120);
 export const checkoutAttributeSchema = z.object({
   key, label, help: z.string().max(500).optional(),
@@ -43,7 +45,7 @@ export const buyerUiActionSchema: z.ZodType<BuyerUiAction> = z.discriminatedUnio
   z.object({ kind: z.literal("add_line"), variantId: z.string().min(1).max(128), quantity: z.number().int().min(1).max(10) }).strict(),
   z.object({ kind: z.literal("set_attribute"), key, value: z.string().max(500) }).strict(),
   z.object({ kind: z.literal("apply_code"), code: z.string().min(1).max(64) }).strict(),
-  z.object({ kind: z.literal("app_route"), route: z.string().regex(/^[a-z][a-z0-9-]{0,47}$/), body: json.optional() }).strict(),
+  z.object({ kind: z.literal("app_route"), route: pluginUrlNameSchema(), body: json.optional() }).strict(),
 ]);
 const text = z.string().max(2000);
 const node: z.ZodType<BuyerUiNode> = z.lazy(() => z.union([

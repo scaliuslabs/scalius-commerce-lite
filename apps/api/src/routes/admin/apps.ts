@@ -46,6 +46,7 @@ import {
   PLUGIN_FUNCTION_POINTS,
   PLUGIN_NAV_PLACEMENTS,
   PLUGIN_SCOPE_NAMES,
+  STOREFRONT_BLOCK_TARGETS,
   isProtectedDataScope,
   knownPluginFeatures,
   pluginFeatureOwners,
@@ -300,7 +301,7 @@ const appDetailSchema = appSummarySchema.extend({
       description: "Whether the store uses it: a payment method checkout lists (offered), one hidden in Settings, Payments (hidden) or one that cannot charge the store currency (currency); the notification SMS service (chosen) or another one (not_chosen). Null for other kinds.",
     }),
   })).openapi({ description: "The providers the app offers, each set up on its capability's settings page." }),
-  routes: z.object({ admin: z.array(routeSchema), public: z.array(routeSchema), webhooks: z.array(z.string()) }),
+  routes: z.object({ admin: z.array(routeSchema), public: z.array(routeSchema), webhooks: z.array(routeSchema) }),
   cron: z.array(z.object({
     name: z.string(),
     schedule: z.string(),
@@ -318,7 +319,7 @@ const appDetailSchema = appSummarySchema.extend({
     proxy: z.boolean(),
     head: z.boolean(),
     sections: z.array(z.object({ type: z.string(), name: z.string() })),
-    productBlocks: z.array(z.object({ type: z.string(), name: z.string(), placement: z.enum(["buy-box", "below"]) })),
+    productBlocks: z.array(z.object({ type: z.string(), name: z.string(), placement: z.enum(STOREFRONT_BLOCK_TARGETS) })),
     scripts: z.array(z.object({ src: z.string(), placement: z.string(), pages: z.array(z.string()) })),
     themeProblems: z.array(z.object({
       kind: z.enum(["template", "page-preset"]),
@@ -559,7 +560,7 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
     routes: {
       admin: manifest.routes.admin.map((route) => ({ name: route.name, methods: [...route.methods] })),
       public: manifest.routes.public.map((route) => ({ name: route.name, methods: [...route.methods] })),
-      webhooks: [...manifest.routes.webhooks],
+      webhooks: manifest.routes.webhooks.map((route) => ({ name: route.name, methods: [...route.methods] })),
     },
     cron: manifest.cron.map((job) => {
       const run = lastRuns[job.name] ?? null;
@@ -1021,7 +1022,7 @@ app.openapi(deactivateRoute, async (c) => {
 // ── Features ──
 
 const featureParams = idParams.extend({
-  featureId: z.string().regex(/^[a-z][a-z0-9-]{0,47}$/).openapi({ description: "The feature's id (manifest.features[].id)." }),
+  featureId: z.string().regex(/^[a-z][a-z0-9_-]{0,47}$/).openapi({ description: "The feature's id (manifest.features[].id)." }),
 });
 const featureResultSchema = successEnvelope(z.object({
   app: appDetailSchema,

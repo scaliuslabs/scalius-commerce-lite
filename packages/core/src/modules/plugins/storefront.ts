@@ -99,7 +99,7 @@ export function activePluginStorefrontExtensions(installations: Iterable<PluginI
       sectionSettings: Object.fromEntries(storefront.sections.map((section) => [section.type, section.settings])),
       skins: storefront.skins.map((skin) => ({ id: skin.id, target: skin.target as StorefrontSkinTarget, settings: skin.settings })),
       blocks: storefront.productBlocks
-        .map((block) => ({ type: block.type, target: `product.${block.placement}` as const, settings: block.settings })),
+        .map((block) => ({ type: block.type, target: block.placement, settings: block.settings })),
       islands: storefront.islands.map((island) => island.name),
       stylesheet: storefront.stylesheet,
       connect: storefront.connect.filter((host) => granted.has(host)),

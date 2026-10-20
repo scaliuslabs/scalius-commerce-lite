@@ -27,19 +27,22 @@
 
 import { z } from "zod";
 import { isEventTopicFilter, type EventTopicFilter } from "../events";
-import { PLUGIN_HOST_PATTERN, PLUGIN_NAME_PATTERN } from "./manifest-patterns";
+import { PLUGIN_HOST_PATTERN, pluginKeySchema, pluginUrlNameSchema } from "./manifest-patterns";
 import { PLUGIN_SCOPE_NAMES, type PluginScope } from "./scopes";
 import type { PluginManifest } from "./manifest";
 
 /** The most features one app declares. */
 export const PLUGIN_FEATURES_MAX = 24;
 
-const name = z.string().regex(PLUGIN_NAME_PATTERN);
-const names = (max: number) => z.array(name).max(max).default([])
+/** Claims by name: snake_case keys, or names that are also URL path segments (snake_case or kebab-case). */
+const listOf = (item: z.ZodString, max: number) => z.array(item).max(max).default([])
   .refine((values) => new Set(values).size === values.length, "List each name once.");
+const keys = (max: number) => listOf(pluginKeySchema(), max);
+const urlNames = (max: number) => listOf(pluginUrlNameSchema(), max);
 
 export const pluginFeatureSchema = z.object({
-  id: name,
+  /** A URL path segment (`/api/v1/admin/apps/<plugin id>/features/<id>/enable`): snake_case or kebab-case. */
+  id: pluginUrlNameSchema(),
   name: z.string().trim().min(1).max(80),
   description: z.string().trim().min(1).max(500),
   /**
@@ -54,24 +57,24 @@ export const pluginFeatureSchema = z.object({
   allowedHosts: z.array(z.string().toLowerCase().regex(PLUGIN_HOST_PATTERN)).max(20).default([])
     .refine((hosts) => new Set(hosts).size === hosts.length, "List each host once."),
   /** Provider ids (`providers[].id`) this feature contributes, with their own settings fields. */
-  providers: names(24),
+  providers: urlNames(24),
   /** Settings groups (`settingsGroups[].id`) whose fields belong to this feature. */
-  settingsGroups: names(20),
-  routes: z.object({ admin: names(40), public: names(20), webhooks: names(10) }).strict()
+  settingsGroups: keys(20),
+  routes: z.object({ admin: urlNames(40), public: urlNames(20), webhooks: urlNames(10) }).strict()
     .default({ admin: [], public: [], webhooks: [] }),
-  cron: names(10),
+  cron: keys(10),
   /** Event topic filters of the manifest's `events` that only this feature subscribes to. */
   events: z.array(z.string().refine(isEventTopicFilter, "Unknown event topic.")).max(40).default([])
     .transform((topics) => topics as EventTopicFilter[]),
   /** Function points of the manifest's `functions` this feature implements. */
   functions: z.array(z.string().min(1).max(64)).max(16).default([]),
-  /** Dashboard pages, cards, actions and widgets (by id). */
-  admin: names(40),
+  /** Dashboard pages, cards, actions and widgets (by id; a page id may be kebab-case). */
+  admin: urlNames(40),
   /** Storefront surfaces by their declared names. */
   storefront: z.object({
-    sections: names(32),
-    productBlocks: names(10),
-    skins: names(30),
+    sections: keys(32),
+    productBlocks: keys(10),
+    skins: keys(30),
   }).strict().default({ sections: [], productBlocks: [], skins: [] }),
 }).strict();
 
@@ -171,7 +174,7 @@ export function pluginManifestWithFeatures(manifest: PluginManifest, enabled: It
     routes: {
       admin: manifest.routes.admin.filter((route) => keep(owners.adminRoutes, route.name)),
       public: manifest.routes.public.filter((route) => keep(owners.publicRoutes, route.name)),
-      webhooks: manifest.routes.webhooks.filter((route) => keep(owners.webhooks, route)),
+      webhooks: manifest.routes.webhooks.filter((route) => keep(owners.webhooks, route.name)),
     },
     cron: manifest.cron.filter((job) => keep(owners.cron, job.name)),
     events: manifest.events.filter((filter) => keep(owners.events, filter)),
@@ -255,7 +258,7 @@ export function pluginFeatureIssues(manifest: PluginManifest): Issue[] {
     settingsGroups: new Set(manifest.settingsGroups.map((group) => group.id)),
     adminRoutes: new Set(manifest.routes.admin.map((route) => route.name)),
     publicRoutes: new Set(manifest.routes.public.map((route) => route.name)),
-    webhooks: new Set(manifest.routes.webhooks),
+    webhooks: new Set(manifest.routes.webhooks.map((route) => route.name)),
     cron: new Set(manifest.cron.map((job) => job.name)),
     events: new Set<string>(manifest.events),
     functions: new Set<string>(manifest.functions.map((fn) => fn.point)),

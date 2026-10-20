@@ -55,7 +55,7 @@ export type CatalogChannelId = (typeof CATALOG_CHANNEL_IDS)[number];
  * A channel id: a built-in `sc_<word>` or an app channel `<plugin id>:<id>`
  * (`acme.tiktok:shop`; the plugin id and manifest name shapes).
  */
-export const SALES_CHANNEL_ID_PATTERN = /^(?:sc_[a-z0-9_]{1,40}|[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?:[a-z][a-z0-9-]{0,47})$/;
+export const SALES_CHANNEL_ID_PATTERN = /^(?:sc_[a-z0-9_]{1,40}|[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?:[a-z][a-z0-9_-]{0,47})$/;
 export const SALES_CHANNEL_ID_MAX_LENGTH = 160;
 
 export function isSalesChannelId(value: unknown): value is string {

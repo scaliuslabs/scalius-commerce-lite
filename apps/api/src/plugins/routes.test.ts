@@ -36,7 +36,7 @@ const echoManifest = {
   routes: {
     admin: [{ name: "look", methods: ["GET", "POST"] }, { name: "send", methods: ["POST"], scope: "write_marketing" }],
     public: [{ name: "inspect", methods: ["GET", "POST"] }, { name: "boom", methods: ["GET"] }],
-    webhooks: ["hook"],
+    webhooks: [{ name: "hook" }],
   },
 };
 const echoModule = {
@@ -242,6 +242,8 @@ describe("plugin routes", { timeout: 30_000 }, () => {
     expect(hook.json.headers.cookie).toBeUndefined();
     expect(hook.json.headers.authorization).toBeUndefined();
     expect((await call("/api/v1/plugins/acme.echo/webhooks/hook", { method: "PUT" })).status).toBe(405);
+    // A webhook answers POST unless its route declares more.
+    expect((await call("/api/v1/plugins/acme.echo/webhooks/hook", { method: "GET" })).status).toBe(405);
   });
 
   it("rate-limits public and webhook routes per client", async () => {

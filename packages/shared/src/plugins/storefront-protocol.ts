@@ -131,7 +131,7 @@ export const storefrontIslandFile = (name: string) => `islands/${name}.js`;
 export const storefrontPublicFile = (path: string) => `public/${path}`;
 
 /** A file path inside the storefront part of a package: lower case, no `..`. */
-export const STOREFRONT_FILE_PATH = /^(?:storefront\.js|styles\.css|islands\/[a-z][a-z0-9-]{0,47}\.js|public\/(?:[a-z0-9][a-z0-9_-]{0,63}\/){0,3}[a-z0-9][a-z0-9_.-]{0,99})$/;
+export const STOREFRONT_FILE_PATH = /^(?:storefront\.js|styles\.css|islands\/[a-z][a-z0-9_-]{0,47}\.js|public\/(?:[a-z0-9][a-z0-9_-]{0,63}\/){0,3}[a-z0-9][a-z0-9_.-]{0,99})$/;
 
 /** The content type a storefront file is served with; null for a path that is not one. */
 export function storefrontFileContentType(path: string): string | null {

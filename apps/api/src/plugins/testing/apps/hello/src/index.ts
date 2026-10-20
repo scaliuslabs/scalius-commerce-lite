@@ -43,7 +43,7 @@ export const manifest = {
       { name: "greet", methods: ["GET"] },
       { name: "visits", methods: ["GET", "POST"] },
     ],
-    webhooks: ["ping"],
+    webhooks: [{ name: "ping", description: "Answers a provider's delivery check." }],
   },
   cron: [{ name: "tidy", schedule: "0 * * * *" }],
   objects: {

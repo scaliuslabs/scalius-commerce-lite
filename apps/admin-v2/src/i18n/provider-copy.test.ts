@@ -23,7 +23,7 @@ it("keeps English setup copy and unknown provider diagnostics intact", () => {
 });
 
 it("names first-party jobs in plain words without changing their identifiers", () => {
-  expect(providerLabel("pathao-places", "en")).toBe("Update Pathao delivery areas");
-  expect(providerLabel("places-sync", "bn")).toBe("ডেলিভারি এলাকা হালনাগাদ");
+  expect(providerLabel("pathao_places", "en")).toBe("Update Pathao delivery areas");
+  expect(providerLabel("places_sync", "bn")).toBe("ডেলিভারি এলাকা হালনাগাদ");
   expect(providerLabel("FraudChecker (custom API)", "bn")).toBe("FraudChecker (নিজস্ব সংযোগ)");
 });

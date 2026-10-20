@@ -61,6 +61,19 @@ describe("conditional records", () => {
     expect(sqlite.prepare("SELECT * FROM object_records WHERE type_id = ? ORDER BY id").all(type.id)).toEqual(beforeRecords);
   });
 
+  it("answers an exact lookup on a unique set without an index slot of its own", async () => {
+    await writeObjectRecords(db, PLUGIN, collections, [
+      { object: "ledger", op: "put", id: "l1", record: { customer_id: "c1", ref: "R-1", points: 5 } },
+      { object: "ledger", op: "put", id: "l2", record: { customer_id: "c1", points: 7 } },
+    ]);
+    expect((await queryObjectRecords(db, PLUGIN, "ledger", LEDGER, { where: { ref: "R-1" } })).records.map((record) => record.id)).toEqual(["l1"]);
+    expect((await queryObjectRecords(db, PLUGIN, "ledger", LEDGER, { where: { ref: "R-2" } })).records).toEqual([]);
+    // A record without the unique field is not in its set: a null lookup needs a real index.
+    await expect(queryObjectRecords(db, PLUGIN, "ledger", LEDGER, { where: { ref: null } })).rejects.toMatchObject({ objectCode: "object.unindexed_query" });
+    await expect(queryObjectRecords(db, PLUGIN, "ledger", LEDGER, { where: { points: 5 } }))
+      .rejects.toThrow("declared indexes: customer_id, unique ref");
+  });
+
   it("orders decimal indexes exactly across signs, fractions and values beyond JS integer precision", async () => {
     const declaration = objectTypeDeclarationSchema.parse({ name: "Amounts", fields: [{ key: "amount", name: "Amount", type: "decimal" }], indexes: ["amount"] });
     await createObjectType(db, { type: "amounts", ...declaration });

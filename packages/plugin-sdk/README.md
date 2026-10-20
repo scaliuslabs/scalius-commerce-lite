@@ -109,6 +109,8 @@ An installation with `source` `bundled` uses the bundled loader. `registry` and 
 
 `parsePluginManifest` (`@scalius/plugin-sdk/manifest`) validates it. Unknown keys fail. Limits are in parentheses.
 
+**Names.** Every name and key is snake_case, `^[a-z][a-z0-9_]{0,47}$` (`vendor_split`, `points_banner`): object types and fields, settings, custom fields, timeline kinds, checkout attributes, cron jobs, cards, actions, widgets, tabs, list columns, settings groups and storefront section, block, skin and template ids. A name that is part of a URL may also be kebab-case: route names, page ids, island names, feature ids, provider ids and sales channel ids. A refusal names the rule (`Use snake_case: …`).
+
 - `id`, `name`, `version` (semver), `apiVersion` (`PLUGIN_API_VERSION`, `2026-10`), `description`, `author`: identity. Uploaded apps cannot use `scalius.*` ids.
 - `scopes`: access scopes from `PLUGIN_SCOPES` (`read_products`, `write_orders`, ...). The merchant approves them on the consent screen; every `ctx.api` call, timeline write and customer message is checked against the approved ones. A `write_*` scope includes its `read_*`. No scope reaches staff, agent access, webhooks or app management. Stock is `read_inventory`/`write_inventory`, not `write_products`; `write_marketing` sends to consenting customers without revealing their addresses.
 - Buyer contact data is its own tier: `read_customer_names`, `read_customer_emails`, `read_customer_phones` and `read_customer_addresses` (street lines, company, neighbourhood; the city, area and country are always visible). Without one, the matching fields of `ctx.api` responses read `null` (they are marked `x-scalius-protected` in the contract) and provider inputs leave them out. Ask only for what you use: a courier provider must declare names, phones and addresses, an SMS gateway or fraud check phones, an email provider emails, a chat provider phones, an address provider addresses (the manifest is refused otherwise); a payment provider receives in `buyer` only the fields its scopes reveal.
@@ -116,17 +118,17 @@ An installation with `source` `bundled` uses the bundled loader. `registry` and 
 - `events` (40): topics, `<resource>.*` or `*`.
 - `functions`: one per declared point, `{ point, priority, onError, reads }`; `buyer.ui` also declares `targets`.
 - `timeline` (10): `{ kind, title }`, the kinds of order timeline entries the app writes.
-- `objects` (20): named typed entities in the app's namespace (`<plugin id>.<type>`). Each declares fields, optional indexes/uniqueness, display/handle, staff access, public visibility and events. Types sync on activation and update.
+- `objects` (20): named typed entities in the app's namespace (`<plugin id>.<type>`). Each declares fields, optional indexes/uniqueness, display/handle, staff access, public visibility and events. An index (4) or unique set (2) is one field (`"order_id"`) or a list of one to four (`["order_id"]`, `["customer_id", "created_at"]`). Types sync on activation and update.
 - `providers` (24 in all): provider declarations, grouped by port. A regional pack (`plugins/bangladesh`) bundles a country's integrations in one app.
-- `routes`: `admin` (40) and `public` (20) entries `{ name, methods }`; `webhooks` (10) names.
+- `routes`: `admin` (40), `public` (20) and `webhooks` (10) entries, each `{ name, methods?, description? }`. `methods` defaults to `["GET"]` for admin and public routes and to `["POST"]` for webhooks.
 - `cron` (10): `{ name, schedule }`.
 - `checkout.attributes` (10): typed buyer inputs scoped as `<app id>.<key>`; up to 8 KiB total on an order.
-- `customFields` (50): fields in the app's namespace on a product, variant, customer, order, category, collection, brand or page.
+- `customFields` (50): fields in the app's namespace on a product, variant, customer, order, category, collection, brand or page. `type` is one of `CUSTOM_FIELD_TYPES` (`@scalius/shared/custom-fields`), checked with the manifest.
 - `salesChannels` (3): sales channels the app sells through (`{ id, name }`), Shopify's sales-channel apps. Each becomes the channel `<plugin id>:<id>`, active while the app is. Merchants publish products to it; the app pages them from `GET /api/v1/admin/settings/sales-channels/<channel id>/products` (`products.view`) and follows `product.publication_changed`.
 - `features` (24): parts of the app the merchant turns on one at a time (see "Features").
 - `settings` (80; 40 for a storefront surface): the merchant's form. Types: `text`, `textarea`, `number`, `boolean`, `select`, `multiselect`, `secret`, `url` (https), `email`, `color`.
 - `admin`: `pages` (10), `cards` (20), `actions` (20), `widgets` (5), each naming an admin route; `listColumns` (see "List columns").
-- `storefront`: `sections` (32), `productBlocks` (10), `scripts` (5, https; `pages` is `all`, `home`, `product` or `listing`: app JavaScript never runs on cart, checkout, the receipt or an account page; their hosts join the storefront CSP), `head` and `proxy` flags.
+- `storefront`: `sections` (32), `productBlocks` (10; `placement` is `product.buy-box` or `product.below`, the render target), `scripts` (5, https; `pages` is `all`, `home`, `product` or `listing`: app JavaScript never runs on cart, checkout, the receipt or an account page; their hosts join the storefront CSP), `head` and `proxy` flags.
 - `limits`: `cpuMs` 5-200 (default 50), `wallMs` 100-30,000 (default 10,000).
 - `translations`: text by BCP 47 tag (`bn`, `fr`, `pt-BR`; up to 20) for `name`, `tagline`, `description`, the admin titles and `features.<id>.{name, description}`.
 
@@ -216,7 +218,7 @@ A refusal throws an error with a stable `code` (`object.conflict`, `http.not_all
 
 ## Objects and private cache
 
-`ctx.objects.<type>` holds records validated against the type's declared fields. A record is at most 64 KiB and its id is 1-128 printable characters. A query uses declared indexes only: equality on the leading fields of one index, ordering by its next field. `limit` is at most 100 (default 50).
+`ctx.objects.<type>` holds records validated against the type's declared fields. A record is at most 64 KiB and its id is 1-128 printable characters. A query uses declared indexes only: equality on the leading fields of one index, ordering by its next field. A unique set also answers an exact lookup on all its fields (every value given), with no index of its own. `limit` is at most 100 (default 50).
 
 Every write advances the record's **revision** (`object_records.revision`). Conditional write:
 
@@ -271,7 +273,7 @@ Which seam: a decision inside a request is a function; a provider of a capabilit
 | --- | --- | --- | --- |
 | `admin` | `/api/v1/plugins/<id>/admin/<name>` | Dashboard session. `apps.view` reads; `apps.use` also changes. | 1 MiB |
 | `public` | `/api/v1/plugins/<id>/public/<name>` | None. 60 requests a minute per client and app. | 256 KiB |
-| `webhooks` | `/api/v1/plugins/<id>/webhooks/<name>` | None. `GET` or `POST`. 60 requests a minute per client and route. `rawBody` holds the exact body for signature checks. | 1 MiB |
+| `webhooks` | `/api/v1/plugins/<id>/webhooks/<name>` | None. `POST` unless the route's `methods` say otherwise (a provider's `GET` check: `["GET", "POST"]`). 60 requests a minute per client and route. `rawBody` holds the exact body for signature checks. | 1 MiB |
 
 - Only active apps answer, and only declared routes and methods. Cookies never reach a handler. Admin and public handlers see only `accept`, `accept-language`, `content-type`, `if-none-match`, `user-agent` and `x-requested-with`. Webhook handlers see every header except credentials and network headers.
 - Responses are JSON. An app cannot set cookies, CSP, CORS, `content-type` or redirect headers. A public or webhook response is `no-store` unless it sets exactly `cache-control: public, max-age=N` with N at most 300.

@@ -6,7 +6,6 @@ import { AppError } from "../../errors";
  */
 export type PluginErrorCode =
   | "manifest.invalid"
-  | "manifest.custom_field_type"
   | "manifest.reserved_vendor"
   | "installation.exists"
   | "installation.not_found"

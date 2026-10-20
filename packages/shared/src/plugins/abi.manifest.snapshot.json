@@ -391,7 +391,7 @@
        "properties": {
         "key": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_]{0,47}$"
         },
         "label": {
          "type": "string",
@@ -480,7 +480,7 @@
          "properties": {
           "id": {
            "type": "string",
-           "pattern": "^[a-z][a-z0-9-]{0,47}$"
+           "pattern": "^[a-z][a-z0-9_-]{0,47}$"
           },
           "name": {
            "type": "string",
@@ -628,7 +628,7 @@
          "properties": {
           "id": {
            "type": "string",
-           "pattern": "^[a-z][a-z0-9-]{0,47}$"
+           "pattern": "^[a-z][a-z0-9_-]{0,47}$"
           },
           "name": {
            "type": "string",
@@ -688,7 +688,7 @@
            "properties": {
             "key": {
              "type": "string",
-             "pattern": "^[a-z][a-z0-9_-]{0,31}$"
+             "pattern": "^[a-z][a-z0-9_]{0,31}$"
             },
             "required": {
              "default": [],
@@ -729,7 +729,7 @@
          "properties": {
           "id": {
            "type": "string",
-           "pattern": "^[a-z][a-z0-9-]{0,47}$"
+           "pattern": "^[a-z][a-z0-9_-]{0,47}$"
           },
           "name": {
            "type": "string",
@@ -777,7 +777,7 @@
          "properties": {
           "id": {
            "type": "string",
-           "pattern": "^[a-z][a-z0-9-]{0,47}$"
+           "pattern": "^[a-z][a-z0-9_-]{0,47}$"
           },
           "name": {
            "type": "string",
@@ -825,7 +825,7 @@
          "properties": {
           "id": {
            "type": "string",
-           "pattern": "^[a-z][a-z0-9-]{0,47}$"
+           "pattern": "^[a-z][a-z0-9_-]{0,47}$"
           },
           "name": {
            "type": "string",
@@ -891,7 +891,7 @@
          "properties": {
           "id": {
            "type": "string",
-           "pattern": "^[a-z][a-z0-9-]{0,47}$"
+           "pattern": "^[a-z][a-z0-9_-]{0,47}$"
           },
           "name": {
            "type": "string",
@@ -939,7 +939,7 @@
          "properties": {
           "id": {
            "type": "string",
-           "pattern": "^[a-z][a-z0-9-]{0,47}$"
+           "pattern": "^[a-z][a-z0-9_-]{0,47}$"
           },
           "name": {
            "type": "string",
@@ -987,7 +987,7 @@
          "properties": {
           "id": {
            "type": "string",
-           "pattern": "^[a-z][a-z0-9-]{0,47}$"
+           "pattern": "^[a-z][a-z0-9_-]{0,47}$"
           },
           "name": {
            "type": "string",
@@ -1035,7 +1035,7 @@
          "properties": {
           "id": {
            "type": "string",
-           "pattern": "^[a-z][a-z0-9-]{0,47}$"
+           "pattern": "^[a-z][a-z0-9_-]{0,47}$"
           },
           "name": {
            "type": "string",
@@ -1099,7 +1099,7 @@
          "properties": {
           "id": {
            "type": "string",
-           "pattern": "^[a-z][a-z0-9-]{0,47}$"
+           "pattern": "^[a-z][a-z0-9_-]{0,47}$"
           },
           "name": {
            "type": "string",
@@ -1147,7 +1147,7 @@
          "properties": {
           "id": {
            "type": "string",
-           "pattern": "^[a-z][a-z0-9-]{0,47}$"
+           "pattern": "^[a-z][a-z0-9_-]{0,47}$"
           },
           "name": {
            "type": "string",
@@ -1195,7 +1195,7 @@
          "properties": {
           "id": {
            "type": "string",
-           "pattern": "^[a-z][a-z0-9-]{0,47}$"
+           "pattern": "^[a-z][a-z0-9_-]{0,47}$"
           },
           "name": {
            "type": "string",
@@ -1261,7 +1261,7 @@
          "properties": {
           "id": {
            "type": "string",
-           "pattern": "^[a-z][a-z0-9-]{0,47}$"
+           "pattern": "^[a-z][a-z0-9_-]{0,47}$"
           },
           "name": {
            "type": "string",
@@ -1309,7 +1309,7 @@
          "properties": {
           "id": {
            "type": "string",
-           "pattern": "^[a-z][a-z0-9-]{0,47}$"
+           "pattern": "^[a-z][a-z0-9_-]{0,47}$"
           },
           "name": {
            "type": "string",
@@ -1404,9 +1404,12 @@
        "properties": {
         "name": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_-]{0,47}$"
         },
         "methods": {
+         "default": [
+          "GET"
+         ],
          "minItems": 1,
          "maxItems": 5,
          "type": "array",
@@ -1457,8 +1460,7 @@
         }
        },
        "required": [
-        "name",
-        "methods"
+        "name"
        ],
        "additionalProperties": false
       }
@@ -1472,9 +1474,12 @@
        "properties": {
         "name": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_-]{0,47}$"
         },
         "methods": {
+         "default": [
+          "GET"
+         ],
          "minItems": 1,
          "maxItems": 5,
          "type": "array",
@@ -1496,8 +1501,7 @@
         }
        },
        "required": [
-        "name",
-        "methods"
+        "name"
        ],
        "additionalProperties": false
       }
@@ -1507,8 +1511,40 @@
       "maxItems": 10,
       "type": "array",
       "items": {
-       "type": "string",
-       "pattern": "^[a-z][a-z0-9-]{0,47}$"
+       "type": "object",
+       "properties": {
+        "name": {
+         "type": "string",
+         "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+        },
+        "methods": {
+         "default": [
+          "POST"
+         ],
+         "minItems": 1,
+         "maxItems": 5,
+         "type": "array",
+         "items": {
+          "type": "string",
+          "enum": [
+           "GET",
+           "POST",
+           "PUT",
+           "PATCH",
+           "DELETE"
+          ]
+         }
+        },
+        "description": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 500
+        }
+       },
+       "required": [
+        "name"
+       ],
+       "additionalProperties": false
       }
      }
     },
@@ -1523,7 +1559,7 @@
      "properties": {
       "name": {
        "type": "string",
-       "pattern": "^[a-z][a-z0-9-]{0,47}$"
+       "pattern": "^[a-z][a-z0-9_]{0,47}$"
       },
       "schedule": {
        "type": "string",
@@ -1538,7 +1574,6 @@
     }
    },
    "objects": {
-    "default": {},
     "type": "object",
     "propertyNames": {
      "type": "string",
@@ -1680,7 +1715,6 @@
        "pattern": "^[a-z][a-z0-9_]{0,63}$"
       },
       "indexes": {
-       "default": [],
        "maxItems": 4,
        "type": "array",
        "items": {
@@ -1690,7 +1724,7 @@
           "pattern": "^[a-z][a-z0-9_]{0,63}$"
          },
          {
-          "minItems": 2,
+          "minItems": 1,
           "maxItems": 4,
           "type": "array",
           "items": {
@@ -1702,7 +1736,6 @@
        }
       },
       "unique": {
-       "default": [],
        "maxItems": 2,
        "type": "array",
        "items": {
@@ -1712,7 +1745,7 @@
           "pattern": "^[a-z][a-z0-9_]{0,63}$"
          },
          {
-          "minItems": 2,
+          "minItems": 1,
           "maxItems": 4,
           "type": "array",
           "items": {
@@ -1773,7 +1806,7 @@
       },
       "key": {
        "type": "string",
-       "pattern": "^[a-z][a-z0-9_]{0,63}$"
+       "maxLength": 64
       },
       "name": {
        "type": "string",
@@ -1782,8 +1815,38 @@
       },
       "type": {
        "type": "string",
-       "minLength": 1,
-       "maxLength": 48
+       "enum": [
+        "single_line_text",
+        "multi_line_text",
+        "integer",
+        "decimal",
+        "boolean",
+        "date",
+        "date_time",
+        "url",
+        "color",
+        "json",
+        "money",
+        "product_reference",
+        "variant_reference",
+        "collection_reference",
+        "media_reference",
+        "object_reference",
+        "list.single_line_text",
+        "list.multi_line_text",
+        "list.integer",
+        "list.decimal",
+        "list.date",
+        "list.date_time",
+        "list.url",
+        "list.color",
+        "list.money",
+        "list.product_reference",
+        "list.variant_reference",
+        "list.collection_reference",
+        "list.media_reference",
+        "list.object_reference"
+       ]
       },
       "description": {
        "type": "string",
@@ -1842,7 +1905,7 @@
      "properties": {
       "id": {
        "type": "string",
-       "pattern": "^[a-z][a-z0-9-]{0,47}$"
+       "pattern": "^[a-z][a-z0-9_-]{0,47}$"
       },
       "name": {
        "type": "string",
@@ -1886,7 +1949,7 @@
         },
         "group": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_-]{0,47}$"
         },
         "type": {
          "type": "string",
@@ -1933,7 +1996,7 @@
         },
         "group": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_-]{0,47}$"
         },
         "type": {
          "type": "string",
@@ -1980,7 +2043,7 @@
         },
         "group": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_-]{0,47}$"
         },
         "type": {
          "type": "string",
@@ -2030,7 +2093,7 @@
         },
         "group": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_-]{0,47}$"
         },
         "type": {
          "type": "string",
@@ -2071,7 +2134,7 @@
         },
         "group": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_-]{0,47}$"
         },
         "type": {
          "type": "string",
@@ -2137,7 +2200,7 @@
         },
         "group": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_-]{0,47}$"
         },
         "type": {
          "type": "string",
@@ -2206,7 +2269,7 @@
         },
         "group": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_-]{0,47}$"
         },
         "type": {
          "type": "string",
@@ -2243,7 +2306,7 @@
         },
         "group": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_-]{0,47}$"
         },
         "type": {
          "type": "string",
@@ -2284,7 +2347,7 @@
         },
         "group": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_-]{0,47}$"
         },
         "type": {
          "type": "string",
@@ -2326,7 +2389,7 @@
         },
         "group": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_-]{0,47}$"
         },
         "type": {
          "type": "string",
@@ -2367,7 +2430,7 @@
         },
         "group": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_-]{0,47}$"
         },
         "type": {
          "type": "string",
@@ -2404,7 +2467,7 @@
         },
         "group": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_-]{0,47}$"
         },
         "type": {
          "type": "string",
@@ -2451,7 +2514,7 @@
         },
         "group": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_-]{0,47}$"
         },
         "type": {
          "type": "string",
@@ -2488,7 +2551,7 @@
         },
         "group": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_-]{0,47}$"
         },
         "type": {
          "type": "string",
@@ -2530,7 +2593,7 @@
         },
         "group": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_-]{0,47}$"
         },
         "type": {
          "type": "string",
@@ -2565,7 +2628,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -2612,7 +2675,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -2659,7 +2722,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -2709,7 +2772,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -2750,7 +2813,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -2816,7 +2879,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -2857,7 +2920,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -2898,7 +2961,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -2935,7 +2998,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -2994,7 +3057,7 @@
      "properties": {
       "id": {
        "type": "string",
-       "pattern": "^[a-z][a-z0-9-]{0,47}$"
+       "pattern": "^[a-z][a-z0-9_-]{0,47}$"
       },
       "name": {
        "type": "string",
@@ -3059,7 +3122,7 @@
        "type": "array",
        "items": {
         "type": "string",
-        "pattern": "^[a-z][a-z0-9-]{0,47}$"
+        "pattern": "^[a-z][a-z0-9_-]{0,47}$"
        }
       },
       "settingsGroups": {
@@ -3068,7 +3131,7 @@
        "type": "array",
        "items": {
         "type": "string",
-        "pattern": "^[a-z][a-z0-9-]{0,47}$"
+        "pattern": "^[a-z][a-z0-9_]{0,47}$"
        }
       },
       "routes": {
@@ -3085,7 +3148,7 @@
          "type": "array",
          "items": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9-]{0,47}$"
+          "pattern": "^[a-z][a-z0-9_-]{0,47}$"
          }
         },
         "public": {
@@ -3094,7 +3157,7 @@
          "type": "array",
          "items": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9-]{0,47}$"
+          "pattern": "^[a-z][a-z0-9_-]{0,47}$"
          }
         },
         "webhooks": {
@@ -3103,7 +3166,7 @@
          "type": "array",
          "items": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9-]{0,47}$"
+          "pattern": "^[a-z][a-z0-9_-]{0,47}$"
          }
         }
        },
@@ -3115,7 +3178,7 @@
        "type": "array",
        "items": {
         "type": "string",
-        "pattern": "^[a-z][a-z0-9-]{0,47}$"
+        "pattern": "^[a-z][a-z0-9_]{0,47}$"
        }
       },
       "events": {
@@ -3142,7 +3205,7 @@
        "type": "array",
        "items": {
         "type": "string",
-        "pattern": "^[a-z][a-z0-9-]{0,47}$"
+        "pattern": "^[a-z][a-z0-9_-]{0,47}$"
        }
       },
       "storefront": {
@@ -3159,7 +3222,7 @@
          "type": "array",
          "items": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9-]{0,47}$"
+          "pattern": "^[a-z][a-z0-9_]{0,47}$"
          }
         },
         "productBlocks": {
@@ -3168,7 +3231,7 @@
          "type": "array",
          "items": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9-]{0,47}$"
+          "pattern": "^[a-z][a-z0-9_]{0,47}$"
          }
         },
         "skins": {
@@ -3177,7 +3240,7 @@
          "type": "array",
          "items": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9-]{0,47}$"
+          "pattern": "^[a-z][a-z0-9_]{0,47}$"
          }
         }
        },
@@ -3201,7 +3264,7 @@
      "properties": {
       "id": {
        "type": "string",
-       "pattern": "^[a-z][a-z0-9-]{0,47}$"
+       "pattern": "^[a-z][a-z0-9_]{0,47}$"
       },
       "title": {
        "type": "string",
@@ -3246,7 +3309,7 @@
        "properties": {
         "id": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_-]{0,47}$"
         },
         "title": {
          "type": "string",
@@ -3269,7 +3332,7 @@
         },
         "route": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_-]{0,47}$"
         },
         "tabs": {
          "minItems": 2,
@@ -3280,7 +3343,7 @@
           "properties": {
            "id": {
             "type": "string",
-            "pattern": "^[a-z][a-z0-9-]{0,47}$"
+            "pattern": "^[a-z][a-z0-9_]{0,47}$"
            },
            "title": {
             "type": "string",
@@ -3289,7 +3352,7 @@
            },
            "route": {
             "type": "string",
-            "pattern": "^[a-z][a-z0-9-]{0,47}$"
+            "pattern": "^[a-z][a-z0-9_-]{0,47}$"
            }
           },
           "required": [
@@ -3318,7 +3381,7 @@
        "properties": {
         "id": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_]{0,47}$"
         },
         "target": {
          "type": "string",
@@ -3341,7 +3404,7 @@
         },
         "route": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_-]{0,47}$"
         }
        },
        "required": [
@@ -3362,7 +3425,7 @@
        "properties": {
         "id": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_]{0,47}$"
         },
         "target": {
          "type": "string",
@@ -3385,7 +3448,7 @@
         },
         "route": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_-]{0,47}$"
         },
         "bulk": {
          "default": false,
@@ -3414,7 +3477,7 @@
        "properties": {
         "id": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_]{0,47}$"
         },
         "title": {
          "type": "string",
@@ -3423,7 +3486,7 @@
         },
         "route": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_-]{0,47}$"
         }
        },
        "required": [
@@ -3443,7 +3506,7 @@
        "properties": {
         "id": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_]{0,47}$"
         },
         "resource": {
          "type": "string",
@@ -3483,7 +3546,7 @@
             },
             "field": {
              "type": "string",
-             "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,47}$"
+             "pattern": "^[a-z][a-z0-9_]{0,63}$"
             }
            },
            "required": [
@@ -3540,7 +3603,7 @@
      "properties": {
       "kind": {
        "type": "string",
-       "pattern": "^[a-z][a-z0-9-]{0,47}$"
+       "pattern": "^[a-z][a-z0-9_]{0,47}$"
       },
       "title": {
        "type": "string",
@@ -3580,7 +3643,7 @@
        "properties": {
         "type": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_]{0,47}$"
         },
         "name": {
          "type": "string",
@@ -3621,7 +3684,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -3668,7 +3731,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -3715,7 +3778,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -3765,7 +3828,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -3806,7 +3869,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -3872,7 +3935,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -3941,7 +4004,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -3978,7 +4041,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -4019,7 +4082,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -4061,7 +4124,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -4102,7 +4165,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -4139,7 +4202,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -4186,7 +4249,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -4223,7 +4286,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -4265,7 +4328,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -4300,7 +4363,7 @@
                   },
                   "group": {
                    "type": "string",
-                   "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                   "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                   },
                   "type": {
                    "type": "string",
@@ -4347,7 +4410,7 @@
                   },
                   "group": {
                    "type": "string",
-                   "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                   "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                   },
                   "type": {
                    "type": "string",
@@ -4394,7 +4457,7 @@
                   },
                   "group": {
                    "type": "string",
-                   "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                   "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                   },
                   "type": {
                    "type": "string",
@@ -4444,7 +4507,7 @@
                   },
                   "group": {
                    "type": "string",
-                   "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                   "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                   },
                   "type": {
                    "type": "string",
@@ -4485,7 +4548,7 @@
                   },
                   "group": {
                    "type": "string",
-                   "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                   "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                   },
                   "type": {
                    "type": "string",
@@ -4551,7 +4614,7 @@
                   },
                   "group": {
                    "type": "string",
-                   "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                   "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                   },
                   "type": {
                    "type": "string",
@@ -4592,7 +4655,7 @@
                   },
                   "group": {
                    "type": "string",
-                   "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                   "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                   },
                   "type": {
                    "type": "string",
@@ -4633,7 +4696,7 @@
                   },
                   "group": {
                    "type": "string",
-                   "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                   "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                   },
                   "type": {
                    "type": "string",
@@ -4670,7 +4733,7 @@
                   },
                   "group": {
                    "type": "string",
-                   "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                   "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                   },
                   "type": {
                    "type": "string",
@@ -4760,7 +4823,7 @@
                "properties": {
                 "setting": {
                  "type": "string",
-                 "pattern": "^[a-z][a-z0-9_]{0,63}$"
+                 "pattern": "^[a-z][a-z0-9_]{0,47}$"
                 }
                },
                "required": [
@@ -4801,7 +4864,7 @@
        "properties": {
         "type": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_]{0,47}$"
         },
         "name": {
          "type": "string",
@@ -4811,8 +4874,8 @@
         "placement": {
          "type": "string",
          "enum": [
-          "buy-box",
-          "below"
+          "product.buy-box",
+          "product.below"
          ]
         },
         "settings": {
@@ -4844,7 +4907,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -4891,7 +4954,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -4938,7 +5001,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -4988,7 +5051,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -5029,7 +5092,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -5095,7 +5158,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -5164,7 +5227,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -5201,7 +5264,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -5242,7 +5305,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -5284,7 +5347,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -5325,7 +5388,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -5362,7 +5425,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -5409,7 +5472,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -5446,7 +5509,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -5488,7 +5551,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -5523,7 +5586,7 @@
                   },
                   "group": {
                    "type": "string",
-                   "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                   "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                   },
                   "type": {
                    "type": "string",
@@ -5570,7 +5633,7 @@
                   },
                   "group": {
                    "type": "string",
-                   "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                   "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                   },
                   "type": {
                    "type": "string",
@@ -5617,7 +5680,7 @@
                   },
                   "group": {
                    "type": "string",
-                   "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                   "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                   },
                   "type": {
                    "type": "string",
@@ -5667,7 +5730,7 @@
                   },
                   "group": {
                    "type": "string",
-                   "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                   "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                   },
                   "type": {
                    "type": "string",
@@ -5708,7 +5771,7 @@
                   },
                   "group": {
                    "type": "string",
-                   "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                   "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                   },
                   "type": {
                    "type": "string",
@@ -5774,7 +5837,7 @@
                   },
                   "group": {
                    "type": "string",
-                   "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                   "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                   },
                   "type": {
                    "type": "string",
@@ -5815,7 +5878,7 @@
                   },
                   "group": {
                    "type": "string",
-                   "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                   "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                   },
                   "type": {
                    "type": "string",
@@ -5856,7 +5919,7 @@
                   },
                   "group": {
                    "type": "string",
-                   "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                   "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                   },
                   "type": {
                    "type": "string",
@@ -5893,7 +5956,7 @@
                   },
                   "group": {
                    "type": "string",
-                   "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                   "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                   },
                   "type": {
                    "type": "string",
@@ -6013,7 +6076,7 @@
        "properties": {
         "id": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_]{0,47}$"
         },
         "target": {
          "type": "string",
@@ -6058,7 +6121,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -6105,7 +6168,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -6152,7 +6215,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -6202,7 +6265,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -6243,7 +6306,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -6309,7 +6372,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -6378,7 +6441,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -6415,7 +6478,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -6456,7 +6519,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -6498,7 +6561,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -6539,7 +6602,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -6576,7 +6639,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -6623,7 +6686,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -6660,7 +6723,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -6702,7 +6765,7 @@
              },
              "group": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,47}$"
+              "pattern": "^[a-z][a-z0-9_-]{0,47}$"
              },
              "type": {
               "type": "string",
@@ -6737,7 +6800,7 @@
                   },
                   "group": {
                    "type": "string",
-                   "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                   "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                   },
                   "type": {
                    "type": "string",
@@ -6784,7 +6847,7 @@
                   },
                   "group": {
                    "type": "string",
-                   "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                   "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                   },
                   "type": {
                    "type": "string",
@@ -6831,7 +6894,7 @@
                   },
                   "group": {
                    "type": "string",
-                   "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                   "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                   },
                   "type": {
                    "type": "string",
@@ -6881,7 +6944,7 @@
                   },
                   "group": {
                    "type": "string",
-                   "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                   "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                   },
                   "type": {
                    "type": "string",
@@ -6922,7 +6985,7 @@
                   },
                   "group": {
                    "type": "string",
-                   "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                   "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                   },
                   "type": {
                    "type": "string",
@@ -6988,7 +7051,7 @@
                   },
                   "group": {
                    "type": "string",
-                   "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                   "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                   },
                   "type": {
                    "type": "string",
@@ -7029,7 +7092,7 @@
                   },
                   "group": {
                    "type": "string",
-                   "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                   "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                   },
                   "type": {
                    "type": "string",
@@ -7070,7 +7133,7 @@
                   },
                   "group": {
                    "type": "string",
-                   "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                   "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                   },
                   "type": {
                    "type": "string",
@@ -7107,7 +7170,7 @@
                   },
                   "group": {
                    "type": "string",
-                   "pattern": "^[a-z][a-z0-9-]{0,47}$"
+                   "pattern": "^[a-z][a-z0-9_-]{0,47}$"
                   },
                   "type": {
                    "type": "string",
@@ -7176,7 +7239,7 @@
        "properties": {
         "id": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_]{0,47}$"
         },
         "name": {
          "type": "string",
@@ -7218,7 +7281,7 @@
        "properties": {
         "id": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_]{0,47}$"
         },
         "name": {
          "type": "string",
@@ -7265,7 +7328,7 @@
        "properties": {
         "name": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_-]{0,47}$"
         },
         "description": {
          "type": "string",
@@ -7323,7 +7386,7 @@
        "type": "object",
        "propertyNames": {
         "type": "string",
-        "pattern": "^[a-z][a-z0-9-]{0,47}$"
+        "pattern": "^[a-z][a-z0-9_-]{0,47}$"
        },
        "additionalProperties": {
         "type": "string",
@@ -7335,7 +7398,7 @@
        "type": "object",
        "propertyNames": {
         "type": "string",
-        "pattern": "^[a-z][a-z0-9-]{0,47}$"
+        "pattern": "^[a-z][a-z0-9_]{0,47}$"
        },
        "additionalProperties": {
         "type": "string",
@@ -7347,7 +7410,7 @@
        "type": "object",
        "propertyNames": {
         "type": "string",
-        "pattern": "^[a-z][a-z0-9-]{0,47}$"
+        "pattern": "^[a-z][a-z0-9_-]{0,47}$"
        },
        "additionalProperties": {
         "type": "string",
@@ -7359,7 +7422,7 @@
        "type": "object",
        "propertyNames": {
         "type": "string",
-        "pattern": "^[a-z][a-z0-9-]{0,47}$"
+        "pattern": "^[a-z][a-z0-9_]{0,47}$"
        },
        "additionalProperties": {
         "type": "string",
@@ -7371,7 +7434,7 @@
        "type": "object",
        "propertyNames": {
         "type": "string",
-        "pattern": "^[a-z][a-z0-9-]{0,47}$"
+        "pattern": "^[a-z][a-z0-9_]{0,47}$"
        },
        "additionalProperties": {
         "type": "string",
@@ -7383,7 +7446,7 @@
        "type": "object",
        "propertyNames": {
         "type": "string",
-        "pattern": "^[a-z][a-z0-9-]{0,47}$"
+        "pattern": "^[a-z][a-z0-9_]{0,47}$"
        },
        "additionalProperties": {
         "type": "string",
@@ -7395,7 +7458,7 @@
        "type": "object",
        "propertyNames": {
         "type": "string",
-        "pattern": "^[a-z][a-z0-9-]{0,47}$"
+        "pattern": "^[a-z][a-z0-9_]{0,47}$"
        },
        "additionalProperties": {
         "type": "string",
@@ -7407,13 +7470,13 @@
        "type": "object",
        "propertyNames": {
         "type": "string",
-        "pattern": "^[a-z][a-z0-9-]{0,47}$"
+        "pattern": "^[a-z][a-z0-9_-]{0,47}$"
        },
        "additionalProperties": {
         "type": "object",
         "propertyNames": {
          "type": "string",
-         "pattern": "^[a-z][a-z0-9-]{0,47}$"
+         "pattern": "^[a-z][a-z0-9_]{0,47}$"
         },
         "additionalProperties": {
          "type": "string",
@@ -7426,7 +7489,7 @@
        "type": "object",
        "propertyNames": {
         "type": "string",
-        "pattern": "^[a-z][a-z0-9-]{0,47}$"
+        "pattern": "^[a-z][a-z0-9_]{0,47}$"
        },
        "additionalProperties": {
         "type": "object",
@@ -7485,7 +7548,7 @@
        "type": "object",
        "propertyNames": {
         "type": "string",
-        "pattern": "^[a-z][a-z0-9-]{0,47}$"
+        "pattern": "^[a-z][a-z0-9_-]{0,47}$"
        },
        "additionalProperties": {
         "type": "object",

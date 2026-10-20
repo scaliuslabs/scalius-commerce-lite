@@ -122,7 +122,7 @@ describe("packed Noor gallery integration", () => {
     const landing = await read("noor-landing", "storefront/landing/eid-sale");
     const sections = landing.sections as { apps: unknown };
     const surfaces = [...readHomepageAppSurfaces(sections.apps).values()];
-    const order = surfaces.find((surface) => surface.component?.type === "landing-order")!;
+    const order = surfaces.find((surface) => surface.component?.type === "landing_order")!;
     expect(surfaces.length).toBeGreaterThan(1);
     expect(surfaces.every((surface) => surface.component?.pluginId === NOOR_EXTENSION.pluginId)).toBe(true);
     expect(order.component!.lists[0]!.source).toBe("product:prod_0");
@@ -142,7 +142,7 @@ describe("packed Noor gallery integration", () => {
       const hero = galleryEntry(id)!.theme.pages.home[0]!;
       expect(hero.type).toBe("hero");
       if (hero.type === "hero") {
-        expect(hero.skin?.app).toBe("scalius.noor/noor-hero");
+        expect(hero.skin?.app).toBe("scalius.noor/noor_hero");
         expect(hero.settings.slides.length >= slides).toBe(true);
         expect(hero.settings.slides.length === 0).toBe(slides === 0);
       }

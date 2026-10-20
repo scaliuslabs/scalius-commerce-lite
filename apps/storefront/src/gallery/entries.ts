@@ -623,7 +623,7 @@ function noorEntries(): GalleryEntry[] {
     const theme = clone(base);
     theme.apps ??= {};
     theme.apps.skins ??= {};
-    theme.apps.skins.header = { app: "scalius.noor/noor-header", values: { ...theme.apps.skins.header?.values, ...values } };
+    theme.apps.skins.header = { app: "scalius.noor/noor_header", values: { ...theme.apps.skins.header?.values, ...values } };
     return { id, family: "integration:noor", title, page: "product", theme, focus: WHOLE_PAGE, scenario: { noor: "active", product: "fashion", productInfo: "tabs", menu: "compact", ...scenario } };
   };
   const quiet = product("noor-product-quiet", "Noor header without an announcement", { announcements: [] });
@@ -675,13 +675,13 @@ function noorEntries(): GalleryEntry[] {
   // Noor's skins of the store's own sections, over the fixture content of each.
   const skinned = clone(base);
   skinned.pages.home = ([
-    ["hero", "noor-hero"], ["product-tabs", "noor-products-tabs"], ["product-grid", "noor-products-grid"], ["product-rail", "noor-products-rail"],
-    ["category-tiles", "noor-tiles-categories"], ["shop-by", "noor-tiles-cards"], ["banner-mosaic", "noor-promo-tiles"], ["lookbook", "noor-look"],
-    ["deal-block", "noor-sale"], ["usp-strip", "noor-promises"], ["editorial", "noor-story"], ["seo-text", "noor-text"], ["faq", "noor-faq"], ["newsletter", "noor-signup"], ["specifications", "noor-specifications"],
+    ["hero", "noor_hero"], ["product-tabs", "noor_products_tabs"], ["product-grid", "noor_products_grid"], ["product-rail", "noor_products_rail"],
+    ["category-tiles", "noor_tiles_categories"], ["shop-by", "noor_tiles_cards"], ["banner-mosaic", "noor_promo_tiles"], ["lookbook", "noor_look"],
+    ["deal-block", "noor_sale"], ["usp-strip", "noor_promises"], ["editorial", "noor_story"], ["seo-text", "noor_text"], ["faq", "noor_faq"], ["newsletter", "noor_signup"], ["specifications", "noor_specifications"],
   ] as const).map(([type, skin]) => ({ ...contentSection(type, `skin-${type}`), skin: { app: `scalius.noor/${skin}`, values: {} } }) as StorefrontSection);
   entries.push({ id: "noor-section-skins", family: "integration:noor", title: "Noor skins of the store's own sections", page: "home", theme: skinned, focus: WHOLE_PAGE, scenario: { noor: "active", menu: "compact" } });
   const slideshow = { ...homeEntry, id: "noor-home-slideshow", title: "Noor transparent header over the first slideshow", theme: clone(home) };
-  slideshow.theme.pages.home[0] = { id: "noor-slideshow", type: "hero", version: 1, skin: { app: "scalius.noor/noor-hero", values: { autoplay: false } }, settings: {
+  slideshow.theme.pages.home[0] = { id: "noor-slideshow", type: "hero", version: 1, skin: { app: "scalius.noor/noor_hero", values: { autoplay: false } }, settings: {
     layout: "full-bleed",
     slides: [
       { image: "banner-eid", focalPoint: { x: 50, y: 50 }, alt: "The Eid edit", heading: "The Eid edit", text: "Handwoven colour for the celebrations ahead.", buttonLabel: "Shop the collection", link: "/collections/col-eid" },
@@ -704,7 +704,7 @@ function noorEntries(): GalleryEntry[] {
   landing.pages.landing = { "eid-sale": { title: "Noor product campaign", description: "A packed app campaign with the store's actual checkout form.", sections: noorLandingSections() } };
   entries.push({ id: "noor-landing", family: "integration:noor", title: "Noor campaign + actual core order form", page: "landing", theme: landing, focus: WHOLE_PAGE, scenario: { noor: "active", menu: "compact", product: "fashion" } });
   const unavailableOrder = clone(landing);
-  unavailableOrder.pages.landing!["eid-sale"]!.sections = noorLandingSections().filter((section) => section.type === "app" && section.settings.app === "scalius.noor/landing-order").map((section) => section.type === "app" ? { ...section, settings: { ...section.settings, values: { ...section.settings.values, assurances: [] } } } : section);
+  unavailableOrder.pages.landing!["eid-sale"]!.sections = noorLandingSections().filter((section) => section.type === "app" && section.settings.app === "scalius.noor/landing_order").map((section) => section.type === "app" ? { ...section, settings: { ...section.settings, values: { ...section.settings.values, assurances: [] } } } : section);
   entries.push({ id: "noor-landing-no-cod", family: "integration:noor", title: "Noor order section when inline checkout is unavailable", page: "landing", theme: unavailableOrder, focus: { include: [".scalius-order-form-unavailable"] }, scenario: { noor: "active", menu: "compact", product: "fashion", checkout: "no-cod" } });
   return entries;
 }

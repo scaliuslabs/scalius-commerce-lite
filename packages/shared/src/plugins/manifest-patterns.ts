@@ -1,9 +1,41 @@
-// Name and host patterns of the plugin manifest, apart from its schema so the
-// storefront-components contract can use them without a cycle. Part of the
-// versioned plugin API.
+// The identifier rule and host patterns of the plugin manifest, apart from its
+// schema so the storefront-components contract can use them without a cycle.
+// Part of the versioned plugin API.
+//
+// One identifier rule (docs/platform/PLUGINS.md, "Names"):
+//   - every manifest name and data key is snake_case (`PLUGIN_KEY_PATTERN`):
+//     object types and fields, settings, custom fields, timeline kinds,
+//     checkout attributes, skin, section and block types, cron jobs, cards,
+//     actions, widgets, tabs, list columns, settings groups, templates;
+//   - a name that becomes a URL path segment (`PLUGIN_URL_NAME_PATTERN`) may
+//     also be kebab-case: route names, page ids, island names, feature ids,
+//     provider ids and sales channel ids.
 
-/** Route, page, card, action, cron, collection and section names. */
-export const PLUGIN_NAME_PATTERN = /^[a-z][a-z0-9-]{0,47}$/;
+import { z } from "zod";
+
+/** A manifest name or data key: snake_case, at most 48 characters. */
+export const PLUGIN_KEY_PATTERN = /^[a-z][a-z0-9_]{0,47}$/;
+export const PLUGIN_KEY_RULE = "Use snake_case: a lowercase letter, then at most 47 lowercase letters, digits or underscores.";
+
+/** A name that is also a URL path segment: snake_case or kebab-case, at most 48 characters. */
+export const PLUGIN_URL_NAME_PATTERN = /^[a-z][a-z0-9_-]{0,47}$/;
+export const PLUGIN_URL_NAME_RULE = "Use snake_case or kebab-case (this name is part of a URL): a lowercase letter, then at most 47 lowercase letters, digits, underscores or hyphens.";
+
+/** An object or custom field key: snake_case, at most 64 characters. */
+export const PLUGIN_FIELD_KEY_PATTERN = /^[a-z][a-z0-9_]{0,63}$/;
+export const PLUGIN_FIELD_KEY_RULE = "Use snake_case: a lowercase letter, then at most 63 lowercase letters, digits or underscores.";
+
+/** An object type: snake_case, 2 to 48 characters (the store's `object_types.type` check). */
+export const PLUGIN_OBJECT_TYPE_PATTERN = /^[a-z][a-z0-9_]{1,47}$/;
+export const PLUGIN_OBJECT_TYPE_RULE = "Use snake_case: a lowercase letter, then 1 to 47 lowercase letters, digits or underscores.";
+
+/** A manifest name or data key (`PLUGIN_KEY_PATTERN`). */
+export const pluginKeySchema = () => z.string().regex(PLUGIN_KEY_PATTERN, PLUGIN_KEY_RULE);
+/** A name that is also a URL path segment (`PLUGIN_URL_NAME_PATTERN`). */
+export const pluginUrlNameSchema = () => z.string().regex(PLUGIN_URL_NAME_PATTERN, PLUGIN_URL_NAME_RULE);
+/** An object or custom field key (`PLUGIN_FIELD_KEY_PATTERN`). */
+export const pluginFieldKeySchema = () => z.string().regex(PLUGIN_FIELD_KEY_PATTERN, PLUGIN_FIELD_KEY_RULE);
+
 /**
  * Exact hosts or one leading wildcard label (`*.example.com`); never IP
  * literals or localhost. An exact host may name one non-default https port
@@ -27,4 +59,3 @@ export function isPluginHostAllowed(hostname: string, allowedHosts: readonly str
     return host === allowed;
   });
 }
-

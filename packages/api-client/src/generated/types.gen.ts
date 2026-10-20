@@ -434,7 +434,7 @@ export type MarketPresence = {
 };
 
 export type StorefrontThemeDocument = {
-    version: 10;
+    version: 11;
     template: 'department-mall' | 'boutique' | 'marketplace' | 'daily-essentials' | 'showcase-landing';
     tokens: {
         colors: {
@@ -2799,7 +2799,7 @@ export type ThemeAppSurfaces = {
         key: string;
         type: string;
         name: string;
-        placement: 'buy-box' | 'below';
+        placement: 'product.buy-box' | 'product.below';
         settings: Array<AppSettingField>;
     }>;
 };
@@ -3689,7 +3689,10 @@ export type AppDetail = AppSummary & {
             name: string;
             methods: Array<string>;
         }>;
-        webhooks: Array<string>;
+        webhooks: Array<{
+            name: string;
+            methods: Array<string>;
+        }>;
     };
     cron: Array<{
         name: string;
@@ -3719,7 +3722,7 @@ export type AppDetail = AppSummary & {
         productBlocks: Array<{
             type: string;
             name: string;
-            placement: 'buy-box' | 'below';
+            placement: 'product.buy-box' | 'product.below';
         }>;
         scripts: Array<{
             src: string;

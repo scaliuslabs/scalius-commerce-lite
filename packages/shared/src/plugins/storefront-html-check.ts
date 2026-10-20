@@ -42,7 +42,7 @@ export function checkStorefrontHeaderHtml(html: string, options: StorefrontHeade
       }
       if (tag === "scalius-island") {
         const name = attributes["data-island"] ?? "";
-        if (!/^[a-z][a-z0-9-]{0,47}$/.test(name)) {
+        if (!/^[a-z][a-z0-9_-]{0,47}$/.test(name)) {
           issues.push(`scalius-island needs a valid data-island name (lowercase letters, digits and hyphens, starting with a letter).`);
         } else if (islands && !islands.has(name)) {
           issues.push(`Island ${JSON.stringify(name)} is not declared in storefront.islands; declare it and provide src/islands/${name}.ts.`);

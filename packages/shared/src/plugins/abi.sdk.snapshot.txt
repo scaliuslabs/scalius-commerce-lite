@@ -892,7 +892,11 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
                 methods: ("POST" | "PUT" | "PATCH" | "DELETE" | "GET")[];
                 description?: string | undefined;
             }[];
-            webhooks: string[];
+            webhooks: {
+                name: string;
+                methods: ("POST" | "PUT" | "PATCH" | "DELETE" | "GET")[];
+                description?: string | undefined;
+            }[];
         };
         cron: {
             name: string;
@@ -927,7 +931,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
             ownerType: "page" | "product" | "order" | "customer" | "category" | "collection" | "brand" | "variant";
             key: string;
             name: string;
-            type: string;
+            type: "boolean" | "date" | "url" | "integer" | "decimal" | "single_line_text" | "multi_line_text" | "date_time" | "color" | "json" | "money" | "product_reference" | "variant_reference" | "collection_reference" | "media_reference" | "object_reference" | "list.date" | "list.url" | "list.integer" | "list.decimal" | "list.single_line_text" | "list.multi_line_text" | "list.date_time" | "list.color" | "list.money" | "list.product_reference" | "list.variant_reference" | "list.collection_reference" | "list.media_reference" | "list.object_reference";
             storefrontVisible: boolean;
             description?: string | undefined;
             to?: string | undefined;
@@ -1708,7 +1712,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
             productBlocks: {
                 type: string;
                 name: string;
-                placement: "buy-box" | "below";
+                placement: "product.buy-box" | "product.below";
                 settings: ({
                     type: "text";
                     maxLength: number;

@@ -37,7 +37,7 @@ const PACK: PluginManifestInput = {
   },
   routes: {
     admin: [{ name: "places", methods: ["GET"] }, { name: "home", methods: ["GET"] }],
-    webhooks: ["pay-callback"],
+    webhooks: [{ name: "pay-callback" }],
   },
   admin: { pages: [{ id: "places", title: "Places", route: "places" }, { id: "home", title: "Home", route: "home" }] },
   cron: [{ name: "sync", schedule: "0 * * * *" }],

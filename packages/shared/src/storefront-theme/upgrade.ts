@@ -23,13 +23,36 @@ type Json = Record<string, unknown>;
 /** One document step: a document (or a part of one) at version `n` in, at `n + 1` out. */
 export type StorefrontThemeDocumentUpgrade = (document: Json) => Json;
 
+/** `<plugin id>/<name>` as version 10 named an app surface: the name kebab-case. */
+const V10_APP_KEY = /^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\/([a-z][a-z0-9-]{0,47})$/;
+
+/** Every `app` and `template` value that names an app surface, with its name's hyphens as underscores. */
+function snakeAppKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(snakeAppKeys);
+  if (!isRecord(value)) return value;
+  return Object.fromEntries(Object.entries(value).map(([key, entry]) => {
+    if ((key === "app" || key === "template") && typeof entry === "string") {
+      const match = V10_APP_KEY.exec(entry);
+      return [key, match ? `${match[1]}/${match[2]!.replaceAll("-", "_")}` : entry];
+    }
+    return [key, snakeAppKeys(entry)];
+  }));
+}
+
 /**
  * The document steps by the version they upgrade from: entry `n` turns a
- * version `n` document into version `n + 1`. Empty while version 10 is the
- * only readable version; compat.test.ts requires one for every version from
- * the oldest readable one to the one before the current.
+ * version `n` document into version `n + 1`. compat.test.ts requires one for
+ * every version from the oldest readable one to the one before the current.
+ *
+ * - 10 → 11: an app's section, block, skin and template names are snake_case
+ *   (the manifest's identifier rule, plugins/manifest-patterns.ts), so every
+ *   `<plugin id>/<name>` the document names (an app section's `app`, a skin's
+ *   or product block's `app`, `apps.template`) reads with the name's hyphens
+ *   as underscores: the name its app now declares.
  */
-export const STOREFRONT_THEME_DOCUMENT_UPGRADES: Readonly<Record<number, StorefrontThemeDocumentUpgrade>> = {};
+export const STOREFRONT_THEME_DOCUMENT_UPGRADES: Readonly<Record<number, StorefrontThemeDocumentUpgrade>> = {
+  10: (document) => snakeAppKeys(document) as Json,
+};
 
 /** A chain: the versions it reads, its document steps and each section type's own. */
 export interface StorefrontThemeUpgradeChain {

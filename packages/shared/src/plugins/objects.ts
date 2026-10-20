@@ -5,12 +5,14 @@ import {
   type CustomFieldCodecContext, type CustomFieldType,
 } from "../custom-fields";
 import { PLUGIN_ID_PATTERN } from "./ids";
+import { PLUGIN_FIELD_KEY_PATTERN, PLUGIN_FIELD_KEY_RULE, PLUGIN_OBJECT_TYPE_PATTERN, PLUGIN_OBJECT_TYPE_RULE } from "./manifest-patterns";
 
 export const OBJECT_MERCHANT_NAMESPACE = "custom";
 export const OBJECT_TYPE_ID_PREFIX = "oty_";
 export const OBJECT_RECORD_ID_PREFIX = "obj_";
-export const OBJECT_TYPE_PATTERN = /^[a-z][a-z0-9_]{1,47}$/;
-export const OBJECT_FIELD_KEY_PATTERN = /^[a-z][a-z0-9_]{0,63}$/;
+/** The manifest's identifier rule (manifest-patterns.ts): object types and field keys are snake_case. */
+export const OBJECT_TYPE_PATTERN = PLUGIN_OBJECT_TYPE_PATTERN;
+export const OBJECT_FIELD_KEY_PATTERN = PLUGIN_FIELD_KEY_PATTERN;
 export const OBJECT_HANDLE_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?$/;
 export const OBJECT_TYPES_MAX = 100;
 export const OBJECT_FIELDS_MAX = 40;
@@ -40,7 +42,7 @@ const validationsSchema = z.object({
 }).strict();
 
 export const objectFieldSchema = z.object({
-  key: z.string().regex(OBJECT_FIELD_KEY_PATTERN),
+  key: z.string().regex(OBJECT_FIELD_KEY_PATTERN, PLUGIN_FIELD_KEY_RULE),
   name: z.string().trim().min(1).max(80),
   type: z.enum(OBJECT_FIELD_TYPES),
   to: z.string().refine((value) => parseObjectTypeHandle(value) !== null, "Use a qualified object type.").optional(),
@@ -52,14 +54,24 @@ export const objectFieldSchema = z.object({
   if (reference !== Boolean(field.to)) context.addIssue({ code: "custom", path: ["to"], message: reference ? "Choose the referenced object type." : "Only object references declare a target type." });
 });
 export type ObjectField = z.output<typeof objectFieldSchema>;
-const fieldKey = z.string().regex(OBJECT_FIELD_KEY_PATTERN);
-const indexSchema = z.union([fieldKey, z.array(fieldKey).min(2).max(4).refine((keys) => new Set(keys).size === keys.length, "An index names each field once.")]);
+const fieldKey = z.string().regex(OBJECT_FIELD_KEY_PATTERN, PLUGIN_FIELD_KEY_RULE);
+/**
+ * One field (`"order_id"`) or up to four in order (`["order_id"]`,
+ * `["customer_id", "created_at"]`); a one-field list reads as the field.
+ */
+const indexSchema = z.union([
+  fieldKey,
+  z.array(fieldKey).min(1).max(4).refine((keys) => new Set(keys).size === keys.length, "An index names each field once.")
+    .transform((keys) => (keys.length === 1 ? keys[0]! : keys)),
+]);
 const declarationShape = {
   name: z.string().trim().min(1).max(80),
   description: z.string().trim().max(300).optional(),
   fields: z.array(objectFieldSchema).min(1).max(OBJECT_FIELDS_MAX),
   display: fieldKey.optional(),
+  /** Query paths (`ctx.objects.<type>.query`): equality on an index's leading fields, ordered by its next one. */
   indexes: z.array(indexSchema).max(4).default([]),
+  /** Unique field sets; each one also answers an exact lookup on all its fields, with no index slot of its own. */
   unique: z.array(indexSchema).max(2).default([]),
   handle: z.boolean().default(false),
   storefront: z.boolean().default(false),
@@ -85,7 +97,7 @@ function checkDeclaration(value: { fields: ObjectField[]; display?: string; inde
   }
 }
 export const objectTypeDeclarationSchema = z.object(declarationShape).strict().superRefine(checkDeclaration);
-export const objectTypeInputSchema = z.object({ type: z.string().regex(OBJECT_TYPE_PATTERN), ...declarationShape }).strict().superRefine(checkDeclaration);
+export const objectTypeInputSchema = z.object({ type: z.string().regex(OBJECT_TYPE_PATTERN, PLUGIN_OBJECT_TYPE_RULE), ...declarationShape }).strict().superRefine(checkDeclaration);
 export type ObjectTypeDeclaration = z.output<typeof objectTypeDeclarationSchema>;
 export type ObjectTypeInput = z.input<typeof objectTypeInputSchema>;
 

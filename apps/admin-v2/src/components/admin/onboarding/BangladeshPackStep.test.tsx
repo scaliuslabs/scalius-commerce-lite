@@ -98,7 +98,7 @@ describe("Bangladesh pack step", () => {
       ...pack, status: "active", revision, runtimeAvailable: true, translations: null, features,
       settings: { fields: [], values: {}, secrets: {}, missing: [], sections: [] }, providers: [], cron: [], admin: { pages: [], cards: [], actions: [], widgets: [] },
     });
-    const places = feature("places", { recommended: true, request: request({ scopes: [{ name: "write_places", risk: "write", sensitive: false }], cron: ["places-sync"] }) });
+    const places = feature("places", { recommended: true, request: request({ scopes: [{ name: "write_places", risk: "write", sensitive: false }], cron: ["places_sync"] }) });
     const bkash = feature("bkash", { request: request({ allowedHosts: ["tokenized.pay.bka.sh"], providers: [{ id: "scalius.bangladesh:bkash", kind: "payment", name: "bKash", icon: null }] }) });
     sdk.getApiV1AdminApps.mockImplementation(() => ok({ apps: [{ ...pack, status: "active" }], available: [], sandboxAvailable: false }));
     sdk.getApiV1AdminAppsById.mockImplementation(() => ok({ app: app([places, bkash], 3) }));

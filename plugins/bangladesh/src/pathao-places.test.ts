@@ -142,7 +142,7 @@ describe("refresh from Pathao", () => {
     const { instance, pathaoCalls } = store(40);
     await instance.route("admin", "refresh-pathao-places", { method: "POST" });
     expect(pathaoCalls.length).toBeLessThanOrEqual(STEP_CALLS);
-    for (let run = 0; run < 10; run += 1) await instance.cron("pathao-places");
+    for (let run = 0; run < 10; run += 1) await instance.cron("pathao_places");
     const zones = 2 * 40;
     // One token per step, the city list, every city's zones, every zone's areas.
     expect(pathaoCalls.filter((path) => path.endsWith("/area-list"))).toHaveLength(zones);
@@ -153,7 +153,7 @@ describe("refresh from Pathao", () => {
 
   it("does nothing on its job until a merchant starts a refresh, and says what is missing without Pathao's keys", async () => {
     const { instance, pathaoCalls } = store();
-    await instance.cron("pathao-places");
+    await instance.cron("pathao_places");
     expect(pathaoCalls).toHaveLength(0);
     const bare = createPluginTestHarness(pack, {});
     const result = await bare.route("admin", "refresh-pathao-places", { method: "POST" });

@@ -188,5 +188,5 @@ function Faq({ settings, context }: SectionProps<{ heading: string | null; quest
 
 export default defineStorefront({
   sections: { hero: Hero, featured: Featured, features: Features, faq: Faq },
-  skins: { "studio-header": Header, "studio-footer": Footer, "studio-card": ProductCardSkin },
+  skins: { studio_header: Header, studio_footer: Footer, studio_card: ProductCardSkin },
 });

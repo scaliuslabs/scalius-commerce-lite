@@ -116,7 +116,7 @@ export function qualifiedProviderId(pluginId: string, providerId: string): strin
 }
 
 const PLUGIN_ID = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
-const PROVIDER_ID = /^[a-z][a-z0-9-]{0,47}$/;
+const PROVIDER_ID = /^[a-z][a-z0-9_-]{0,47}$/;
 
 /** The plugin and provider of an app provider id; null for a built-in id or anything malformed. */
 export function parseQualifiedProviderId(id: unknown): { pluginId: string; providerId: string } | null {

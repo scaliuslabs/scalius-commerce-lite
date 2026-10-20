@@ -24,7 +24,7 @@
 //   /webhooks/steadfast URLs). Pathao books by its own place ids, which the
 //   platform reads from the places (`locations`).
 // - Places (places.ts): the City/Thana/Area directory, loaded through the
-//   place import when the places feature is turned on and kept current by the hourly `places-sync`;
+//   place import when the places feature is turned on and kept current by the hourly `places_sync`;
 //   "Refresh from Pathao" (pathao-places.ts) re-reads Pathao's live list.
 //
 // Each provider names the settings it needs (`providers.*[].settings`), so
@@ -269,7 +269,7 @@ export const manifest = {
       scopes: ["write_places"],
       routes: { admin: ["places", "load-places"] },
       admin: ["places"],
-      cron: ["places-sync"],
+      cron: ["places_sync"],
     }),
     // bKash pre-fills the wallet number from the buyer's phone.
     feature("bkash", { providers: ["bkash"], allowedHosts: [BKASH_HOSTS.sandbox, BKASH_HOSTS.live], scopes: [...BUYER_PHONE] }),
@@ -283,7 +283,7 @@ export const manifest = {
       allowedHosts: PATHAO_HOSTS,
       scopes: ["write_places", ...PARCEL_RECIPIENT],
       routes: { admin: ["refresh-pathao-places"] },
-      cron: ["pathao-places"],
+      cron: ["pathao_places"],
     }),
     feature("steadfast", { providers: ["steadfast"], allowedHosts: STEADFAST_HOSTS, scopes: [...PARCEL_RECIPIENT] }),
     feature("smsnetbd", { providers: ["smsnetbd"], allowedHosts: SMS_HOST(0), scopes: [...BUYER_PHONE] }),
@@ -361,9 +361,9 @@ export const manifest = {
     pages: [{ id: "places", title: "Bangladesh places", placement: "settings", route: "places" }],
   },
   cron: [
-    { name: "places-sync", schedule: "17 * * * *" },
+    { name: "places_sync", schedule: "17 * * * *" },
     // Continues a Pathao refresh under way (a few dozen Pathao calls a run); otherwise it reads one KV key.
-    { name: "pathao-places", schedule: "*/5 * * * *" },
+    { name: "pathao_places", schedule: "*/5 * * * *" },
   ],
   // Activation loads the places (24 import calls) and a fraud service may take its full 10 s.
   limits: { wallMs: 30_000 },
@@ -525,17 +525,17 @@ export default definePlugin({
   },
   cron: {
     // Finishes a load that activation could not complete, and loads a newer dataset after an update.
-    "places-sync": async (ctx) => {
+    places_sync: async (ctx) => {
       if (placesCurrent(await readPlacesState(ctx))) return;
       await seed(ctx);
     },
     // Continues a Pathao refresh a merchant started; nothing to do otherwise.
-    "pathao-places": async (ctx) => {
+    pathao_places: async (ctx) => {
       if (pathaoRefreshRunning(await readPathaoRefresh(ctx))) await continuePathaoRefresh(ctx);
     },
   },
   lifecycle: {
-    // Turning the places on loads them; the hourly places-sync finishes a load that did not complete.
+    // Turning the places on loads them; the hourly places_sync finishes a load that did not complete.
     enable: async (ctx, { feature: id }) => {
       if (id !== "places") return;
       const state = await seed(ctx);

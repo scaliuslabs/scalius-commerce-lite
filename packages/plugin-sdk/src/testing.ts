@@ -2,10 +2,11 @@ import { OBJECT_HANDLE_PATTERN, prepareObjectData, objectDataWire } from "@scali
 // `@scalius/plugin-sdk/testing`: run a plugin's handlers in a unit test with
 // the same runtime the platform uses (./runtime), over an in-memory bridge.
 // Objects enforce the manifest the way the platform does (declared
-// objects, queries through the leading fields of a declared index,
-// unique indexes), refusals carry the platform's error codes, and every
-// value is copied across the bridge. ctx.api and ctx.http answer from the
-// callbacks you pass; messages are recorded, not sent.
+// objects, queries through the leading fields of a declared index or an
+// exact lookup on a unique set, unique indexes), refusals carry the
+// platform's error codes, and every value is copied across the bridge.
+// ctx.api and ctx.http answer from the callbacks you pass; messages are
+// recorded, not sent.
 
 import {
   checkPluginFunctionOutput,
@@ -112,7 +113,14 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
   const sent = { emails: [] as unknown[], sms: [] as unknown[], notices: [] as unknown[], pushes: [] as unknown[], timeline: [] as unknown[], holds: [] as unknown[], risks: [] as unknown[] };
 
   const object = (name: string) => records.get(name) ?? refuse("object.undeclared_type", `Object type "${name}" is not declared in the manifest.`);
-  const indexFor = (name: string, whereFields: string[], orderField: string | undefined) => {
+  const indexFor = (name: string, where: Record<string, Scalar>, orderField: string | undefined) => {
+    const whereFields = Object.keys(where);
+    // A unique set answers an exact lookup on all its fields, every value given.
+    for (const entry of manifest.objects[name]!.unique) {
+      const fields = fieldsOf(entry);
+      if (fields.length === whereFields.length && fields.every((field) => whereFields.includes(field) && where[field] !== null && where[field] !== undefined)
+        && (orderField === undefined || orderField === "id" || fields.includes(orderField))) return true;
+    }
     for (const entry of manifest.objects[name]!.indexes) {
       const fields = fieldsOf(entry);
       const fixed = fields.slice(0, whereFields.length);
@@ -244,7 +252,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     objectsQuery: async (name, query) => {
       const { where = {}, orderBy, limit = 50, cursor } = (query ?? {}) as { where?: Record<string, Scalar>; orderBy?: { field: string; direction?: string }; limit?: number; cursor?: string | null };
       const store = object(name);
-      if (!indexFor(name, Object.keys(where), orderBy?.field)) refuse("object.unindexed_query", "Query by the leading fields of a declared index and order by its next field.");
+      if (!indexFor(name, where, orderBy?.field)) refuse("object.unindexed_query", "Query by the leading fields of a declared index and order by its next field.");
       const field = orderBy?.field ?? "id";
       const sign = orderBy?.direction === "desc" ? -1 : 1;
       const matches = [...store].filter(([, data]) => Object.entries(where).every(([key, value]) => compare(scalar(data[key]), scalar(value)) === 0))
@@ -258,7 +266,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     },
     objectsCount: async (name, where) => {
       const filter = (where ?? {}) as Record<string, Scalar>;
-      if (!indexFor(name, Object.keys(filter), undefined)) refuse("object.unindexed_query", "Count by the leading fields of a declared index.");
+      if (!indexFor(name, filter, undefined)) refuse("object.unindexed_query", "Count by the leading fields of a declared index.");
       return [...object(name).values()].filter((data) => Object.entries(filter).every(([key, value]) => compare(scalar(data[key]), scalar(value)) === 0)).length;
     },
     kvGet: async (key) => (kv.has(key) ? copy({ value: kv.get(key), revision: kvRevisions.get(key) ?? 1 }) : null),

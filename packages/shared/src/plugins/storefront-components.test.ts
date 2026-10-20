@@ -63,7 +63,7 @@ describe("storefront manifest", () => {
       ...base,
       storefront: {
         sections: [{ type: "hero", name: "Hero", settings: [{ key: "image", label: "Image", type: "image" }] }],
-        productBlocks: [{ type: "size-guide", name: "Size guide", placement: "below" }],
+        productBlocks: [{ type: "size_guide", name: "Size guide", placement: "product.below" }],
         skins: [
           { id: "head", target: "header", name: "Header" },
           { id: "pdp", target: "product-main", name: "Product page" },
@@ -86,7 +86,7 @@ describe("storefront manifest", () => {
       return parsed.ok ? [] : parsed.issues.map((issue) => issue.message);
     };
     expect(issues({ storefront: { skins: [{ id: "card", target: "product-card", name: "Card", settings: [{ key: "p", label: "P", type: "products" }] }] } }).join()).toMatch(/skin's settings cannot name images or products/);
-    expect(issues({ storefront: { productBlocks: [{ type: "b", name: "B", placement: "below", settings: [{ key: "i", label: "I", type: "image" }] }] } }).join()).toMatch(/product block's settings cannot name images/);
+    expect(issues({ storefront: { productBlocks: [{ type: "b", name: "B", placement: "product.below", settings: [{ key: "i", label: "I", type: "image" }] }] } }).join()).toMatch(/product block's settings cannot name images/);
     expect(issues({ storefront: { skins: [{ id: "x", target: "section:recently-viewed", name: "X" }] } }).join()).toMatch(/section:<core section type>/);
     expect(issues({ storefront: { skins: [{ id: "x", target: "sidebar", name: "X" }] } }).join()).toMatch(/section:<core section type>/);
     expect(issues({ storefront: { skins: [{ id: "x", target: "header", name: "X" }, { id: "x", target: "footer", name: "Y" }] } }).join()).toMatch(/Skin ids must be unique/);

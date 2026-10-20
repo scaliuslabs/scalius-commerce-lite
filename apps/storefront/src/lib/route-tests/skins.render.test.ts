@@ -96,14 +96,14 @@ const EXTENSION = {
     { id: "grid", target: "listing-main", settings: [] },
     { id: "bar", target: "header", settings: [] },
   ],
-  blocks: [{ type: "size-guide", target: "product.below", settings: [] }],
+  blocks: [{ type: "size_guide", target: "product.below", settings: [] }],
 };
 
 function theme(skin: "pdp" | null = "pdp"): StorefrontThemeDocument {
   const document = storefrontTemplateTheme("boutique");
   return {
     ...document,
-    blocks: { ...document.blocks, product: { ...document.blocks.product, apps: [{ id: "guide", app: "acme.theme/size-guide", values: {} }] } },
+    blocks: { ...document.blocks, product: { ...document.blocks.product, apps: [{ id: "guide", app: "acme.theme/size_guide", values: {} }] } },
     apps: { skins: {
       ...(skin ? { "product-main": { app: `acme.theme/${skin}`, values: {} } } : {}),
       "listing-main": { app: "acme.theme/grid", values: {} },
@@ -204,7 +204,7 @@ describe("a product-main skin", () => {
   it("draws the main part from the page's projection around the store's own buy form, in the page's one batch", async () => {
     const jobs = app({
       "product-main": () => '<article class="acme-pdp"><h1>Linen, by Acme</h1><scalius-embed kind="buy-form" data-title="false"></scalius-embed><scalius-embed kind="reviews"></scalius-embed></article>',
-      "block:size-guide": (job) => `<p class="acme-guide">Sizes for ${(job.data as { product: { title: string } }).product.title}</p>`,
+      "block:size_guide": (job) => `<p class="acme-guide">Sizes for ${(job.data as { product: { title: string } }).product.title}</p>`,
     });
     const { calls, response, page } = await renderProduct(theme());
     expect(response.status).toBe(200);

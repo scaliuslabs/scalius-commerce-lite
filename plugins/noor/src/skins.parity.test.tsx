@@ -54,61 +54,61 @@ const heroSlide = { image: image("wide"), focalPoint: { x: 50, y: 50 }, alt: "wi
 
 describe("Noor skins draw what Noor's own sections drew", () => {
   const cases: Array<[keyof typeof before, string, string, Record<string, unknown>, Record<string, unknown>]> = [
-    ["hero-overlay", "noor-hero", "hero",
+    ["hero-overlay", "noor_hero", "hero",
       { eyebrow: "New season", secondary_label: "Our story", secondary_link: "/pages/about", layout: "overlay", position: "center", height: "l", scrim: "strong", tone: "soft" },
       { layout: "full-bleed", slides: [{ ...heroSlide, phoneImage: image("tall"), heading: "Eid edit", text: "Hand-picked for the festival.", buttonLabel: "Shop all" }] }],
-    ["hero-split", "noor-hero", "hero",
+    ["hero-split", "noor_hero", "hero",
       { layout: "split", position: "end", height: "m", tone: "accent" },
       { layout: "full-bleed", slides: [{ ...heroSlide, heading: "Linen season", buttonLabel: "Shop all" }] }],
-    ["products-tabs", "noor-products-tabs", "products",
+    ["products-tabs", "noor_products_tabs", "products",
       { eyebrow: "Shop", text: "Fresh this week.", link: "/search", link_label: "View all", layout: "grid", columns: 4, tone: "soft", spacing: "l" },
       { title: "New arrivals", limit: 8, tabs: [{ label: "New in", products: list("newest") }, { label: "On sale", products: list("on-sale") }, { label: "Popular", products: list("popular") }] }],
-    ["products-row", "noor-products-rail", "products",
+    ["products-row", "noor_products_rail", "products",
       { link: "/search", link_label: "Shop all", columns: 4, tone: "plain", spacing: "m" },
       { title: "Popular products", products: list("popular"), limit: 12 }],
-    ["products-grid", "noor-products-grid", "products",
+    ["products-grid", "noor_products_grid", "products",
       { link: "/search", link_label: "View all", tone: "plain", spacing: "s" },
       { title: "All products", products: list("newest"), columns: 3, rows: 2 }],
-    ["tiles-mosaic", "noor-tiles-categories", "collection-tiles",
+    ["tiles-mosaic", "noor_tiles_categories", "collection-tiles",
       { eyebrow: "Browse", link: "/search", link_label: "All categories", layout: "mosaic", tone: "plain", spacing: "m" },
       { style: "photo", title: "Shop by category", categories: [tile("c1", "Sarees", "a", "/categories/sarees"), tile("c2", "Panjabi", "b", "/categories/panjabi"), tile("c3", "Kids", "c", "/categories/kids")] }],
-    ["tiles-circles", "noor-tiles-cards", "collection-tiles",
+    ["tiles-circles", "noor_tiles_cards", "collection-tiles",
       { layout: "circles", tone: "soft", spacing: "s" },
       { title: "Categories", cards: [{ image: image("a"), title: "Sarees", href: "/categories/sarees" }, { image: image("b"), title: "Panjabi", href: "/categories/panjabi" }] }],
-    ["tiles-row", "noor-tiles-categories", "collection-tiles",
+    ["tiles-row", "noor_tiles_categories", "collection-tiles",
       { layout: "row", tone: "ink", spacing: "m" },
       { style: "photo", title: "Collections", categories: [tile("c1", "Eid", "a", "/collections/eid"), tile("c2", "Winter", "b", "/collections/winter")] }],
-    ["promo-tiles", "noor-promo-tiles", "promo-tiles",
+    ["promo-tiles", "noor_promo_tiles", "promo-tiles",
       { height: "m", tone: "plain", spacing: "m" },
       { tiles: [{ image: image("a"), alt: "Summer sale", href: "/collections/sale" }, { image: image("b"), alt: "New arrivals", href: "/collections/new" }] }],
-    ["shop-the-look", "noor-look", "shop-the-look",
+    ["shop-the-look", "noor_look", "shop-the-look",
       {
         eyebrow: "Shop the look", text: "Pieces from the lookbook.", image_side: "end", tone: "soft", spacing: "m",
         hotspots: [{ x: 30, y: 40, title: "Panjabi", text: "Cotton, regular fit", link: "/products/panjabi" }, { x: 70, y: 60, title: "Scarf" }],
       },
       { title: "The Eid edit", image: image("look"), products: list("popular"), photo: "tall" }],
-    ["sale-countdown", "noor-sale", "sale-countdown",
+    ["sale-countdown", "noor_sale", "sale-countdown",
       { eyebrow: "Limited time", text: "Up to 40% off.", label: "View products", link: "/collections/sale", tone: "accent", spacing: "l" },
       { title: "End of season sale", products: list("on-sale", 0), promotion: { endsAt: new Date(Date.UTC(2026, 11, 31, 12)).toISOString() } }],
-    ["promises", "noor-promises", "promises",
+    ["promises", "noor_promises", "promises",
       { eyebrow: "Why us", heading: "Our promises", style: "cards", tone: "soft", spacing: "s" },
       { style: "icons", source: { kind: "custom", items: [{ title: "Free delivery", detail: "Over ৳2,000" }, { title: "Cash on delivery", detail: "Pay when it arrives" }, { title: "Easy returns", detail: "Seven days" }] } }],
-    ["image-text", "noor-story", "image-text",
+    ["image-text", "noor_story", "image-text",
       {
         eyebrow: "Our story", points: [{ text: "Natural dyes" }, { text: "Fair pay" }], stats: [{ value: "12", label: "Studios" }, { value: "4,000", label: "Pieces" }],
         cta_label: "Read more", cta_link: "/pages/about", tone: "soft", spacing: "m",
       },
       { layout: "image-with-text", heading: "Made by hand", body: "Every piece is woven in Dhaka.\n\nWe work with small studios.", image: image("story"), imageSide: "end" }],
-    ["rich-text", "noor-story", "rich-text",
+    ["rich-text", "noor_story", "rich-text",
       { eyebrow: "Notes", cta_label: "Shop fabrics", cta_link: "/search", align: "start", size: "l", tone: "plain", spacing: "m" },
       { layout: "rich-text", heading: "About our fabrics", body: "Soft cotton.\n\nBreathable linen." }],
-    ["rich-text", "noor-text", "rich-text",
+    ["rich-text", "noor_text", "rich-text",
       { eyebrow: "Notes", cta_label: "Shop fabrics", cta_link: "/search", align: "start", size: "l", tone: "plain", spacing: "m" },
       { heading: "About our fabrics", body: "Soft cotton.\n\nBreathable linen." }],
-    ["faq", "noor-faq", "faq",
+    ["faq", "noor_faq", "faq",
       { eyebrow: "Help", text: "Everything about orders.", contact_label: "Contact us", contact_link: "/pages/contact", structured_data: true, tone: "plain", spacing: "m" },
       { heading: "Questions, answered", items: [{ question: "Delivery time?", answer: "Two to four days." }, { question: "Can I return?", answer: "Yes, within seven days." }] }],
-    ["signup", "noor-signup", "signup",
+    ["signup", "noor_signup", "signup",
       { eyebrow: "Newsletter", button: "Join the list", link: "/newsletter", tone: "ink", spacing: "m" },
       { heading: "Stay in touch", text: "Early access and offers.", email: "optional", whatsapp: false }],
   ];
@@ -127,36 +127,36 @@ describe("Noor skins of the store's sections", () => {
       /loading="(\w+)"/.exec(tag)?.[1], /fetchpriority="(\w+)"/.exec(tag)?.[1] ?? null,
     ]);
     const tabs = { title: "New arrivals", limit: 8, tabs: [{ label: "New in", products: list("newest", 6) }, { label: "On sale", products: list("on-sale") }] };
-    const lead = photos(draw("noor-products-tabs", "products", { columns: 4 }, tabs, true));
+    const lead = photos(draw("noor_products_tabs", "products", { columns: 4 }, tabs, true));
     // The first tab: its first row of four eager (two high, two normal), then lazy; the hidden tab stays lazy.
     expect(lead.slice(0, 6)).toEqual([["eager", "high"], ["eager", "high"], ["eager", null], ["eager", null], ["lazy", null], ["lazy", null]]);
     expect(lead.slice(6).every(([loading]) => loading === "lazy")).toBe(true);
     // A grid's first row is its column count; a section below the lead loads lazily.
-    const grid = photos(draw("noor-products-grid", "products", {}, { title: "All", products: list("newest", 6), columns: 3, rows: 2 }, true));
+    const grid = photos(draw("noor_products_grid", "products", {}, { title: "All", products: list("newest", 6), columns: 3, rows: 2 }, true));
     expect(grid.map(([loading]) => loading)).toEqual(["eager", "eager", "eager", "lazy", "lazy", "lazy"]);
     for (const aboveFold of [false, undefined]) {
-      const below = photos(draw("noor-products-rail", "products", { columns: 4 }, { title: "Popular", products: list("popular"), limit: 12 }, aboveFold));
+      const below = photos(draw("noor_products_rail", "products", { columns: 4 }, { title: "Popular", products: list("popular"), limit: 12 }, aboveFold));
       expect(below.every(([loading, priority]) => loading === "lazy" && priority === null)).toBe(true);
     }
   });
 
   it("draws several hero slides as the slideshow, and nothing for a hero without a photo", () => {
     const slides = [{ ...heroSlide, heading: "One" }, { ...heroSlide, image: image("second"), alt: "second", heading: "Two" }];
-    const html = draw("noor-hero", "hero", { height: "m" }, { layout: "full-bleed", slides });
+    const html = draw("noor_hero", "hero", { height: "m" }, { layout: "full-bleed", slides });
     expect(html).toContain('data-island="slideshow"');
     expect(html.match(/ data-slide[ >]/g)).toHaveLength(2);
     expect(html).toContain('<h2 class="noor-display">One</h2>');
-    expect(draw("noor-hero", "hero", {}, { layout: "full-bleed", slides: [] })).toBe("");
-    expect(draw("noor-hero", "hero", {}, { layout: "full-bleed", slides: [{ ...heroSlide, image: null }] })).toBe("");
+    expect(draw("noor_hero", "hero", {}, { layout: "full-bleed", slides: [] })).toBe("");
+    expect(draw("noor_hero", "hero", {}, { layout: "full-bleed", slides: [{ ...heroSlide, image: null }] })).toBe("");
   });
 
   it("leaves the editorial layouts it does not draw to the store", () => {
-    expect(draw("noor-story", "image-text", {}, { layout: "multicolumn", heading: "Why", columns: [] })).toBe("");
-    expect(draw("noor-story", "image-text", {}, { layout: "testimonial", quotes: [] })).toBe("");
+    expect(draw("noor_story", "image-text", {}, { layout: "multicolumn", heading: "Why", columns: [] })).toBe("");
+    expect(draw("noor_story", "image-text", {}, { layout: "testimonial", quotes: [] })).toBe("");
   });
 
   it("gives the promises the icon their words suggest, and a tick otherwise", () => {
-    const html = draw("noor-promises", "promises", {}, {
+    const html = draw("noor_promises", "promises", {}, {
       style: "icons",
       source: { kind: "delivery-facts", items: [{ title: "Free delivery", detail: "" }, { title: "Pay cash on delivery", detail: "" }, { title: "7-day exchange", detail: "" }, { title: "Handmade", detail: "" }] },
     });
@@ -165,7 +165,7 @@ describe("Noor skins of the store's sections", () => {
   });
 
   it("draws the deal's products in a row under the banner", () => {
-    const html = draw("noor-sale", "sale-countdown", { label: "See all" }, { title: "Eid sale", products: list("on-sale", 3), promotion: null });
+    const html = draw("noor_sale", "sale-countdown", { label: "See all" }, { title: "Eid sale", products: list("on-sale", 3), promotion: null });
     expect(html).toContain('class="noor-s noor-s-sale"');
     expect(html).toContain('href="/collections/on-sale"');
     expect(html.match(/<article class="noor-card /g)).toHaveLength(3);
@@ -173,11 +173,11 @@ describe("Noor skins of the store's sections", () => {
   });
 
   it("draws saved tile subtitles and optional sale/signup images", () => {
-    const tiles = draw("noor-tiles-cards", "collection-tiles", {}, { title: "Linen", cards: [{ image: image("tile"), title: "Summer", subtitle: "Made for warm days", href: "/linen" }] });
+    const tiles = draw("noor_tiles_cards", "collection-tiles", {}, { title: "Linen", cards: [{ image: image("tile"), title: "Summer", subtitle: "Made for warm days", href: "/linen" }] });
     expect(tiles).toContain("Made for warm days");
     for (const [skin, type, data] of [
-      ["noor-sale", "sale-countdown", { title: "Season sale", products: list("on-sale", 0), promotion: null, image: image("sale") }],
-      ["noor-signup", "signup", { heading: "Stay in touch", text: "News", image: image("signup") }],
+      ["noor_sale", "sale-countdown", { title: "Season sale", products: list("on-sale", 0), promotion: null, image: image("sale") }],
+      ["noor_signup", "signup", { heading: "Stay in touch", text: "News", image: image("signup") }],
     ] as const) {
       const html = draw(skin, type, {}, data);
       expect(html).toContain(`src="${data.image.url}"`);
@@ -186,7 +186,7 @@ describe("Noor skins of the store's sections", () => {
   });
 
   it("draws Specifications from the same resolved core rows", () => {
-    const html = draw("noor-specifications", "specifications", {}, { heading: "Specifications", rows: [
+    const html = draw("noor_specifications", "specifications", {}, { heading: "Specifications", rows: [
       { label: "Fabric", value: "Cotton" }, { label: "Unfilled", value: "" },
     ] });
     expect(html).toContain("<dt>Fabric</dt><dd>Cotton</dd>");
@@ -199,28 +199,28 @@ describe("Noor skins of the store's sections", () => {
       { key: "chest", name: "Chest", list: false, parts: [{ kind: "text", text: "38 inches" }] },
       { key: "guide", name: "Guide", list: false, parts: [{ kind: "link", href: "/size-guide", label: "Size guide", external: false }] },
     ] };
-    const html = draw("noor-specifications", "specifications", {}, settings);
+    const html = draw("noor_specifications", "specifications", {}, settings);
     expect(html).toContain("<dt>Chest</dt>");
     expect(html).toContain("38 inches");
     expect(html).toContain('href="/size-guide"');
     expect(html).not.toContain("Ask us");
     expect(storefrontShown(html, "scalius.noor").dropped).toBe(0);
-    expect(draw("noor-specifications", "specifications", {}, { ...settings, objectFields: [] })).toContain("Ask us");
+    expect(draw("noor_specifications", "specifications", {}, { ...settings, objectFields: [] })).toContain("Ask us");
   });
 
   it("keeps countdown units in a semantic list", () => {
-    const html = draw("noor-sale", "sale-countdown", {}, { title: "Sale", products: list("on-sale", 0), promotion: { endsAt: "2026-12-31T00:00:00Z" } });
+    const html = draw("noor_sale", "sale-countdown", {}, { title: "Sale", products: list("on-sale", 0), promotion: { endsAt: "2026-12-31T00:00:00Z" } });
     expect(html).toContain('<ol class="noor-timer-list" aria-live="off">');
     expect(html).not.toContain('role="timer"');
   });
 
   it("falls back to the products' own listing for a view-all link", () => {
-    const html = draw("noor-products-rail", "products", { link_label: "View all" }, { title: "Popular", products: list("popular"), limit: 12 });
+    const html = draw("noor_products_rail", "products", { link_label: "View all" }, { title: "Popular", products: list("popular"), limit: 12 });
     expect(html).toContain('<a class="noor-more" href="/collections/popular">');
   });
 
   it("draws the product page around the store's buy form, with the store's reviews and related products", () => {
-    const html = renderSkin(storefront, "noor-product", "product-main", skinSettings("noor-product", {}));
+    const html = renderSkin(storefront, "noor_product", "product-main", skinSettings("noor_product", {}));
     expect(html).toContain('<scalius-embed kind="buy-form" data-title="false"></scalius-embed>');
     // The store's gallery, buy form, reviews and related products.
     expect(html).toContain('<div class="noor-pdp-media"><scalius-embed kind="gallery"></scalius-embed></div>');
@@ -228,7 +228,7 @@ describe("Noor skins of the store's sections", () => {
     expect(html).toContain('<h1 class="noor-h1">Linen shirt</h1>');
     expect(html).toContain("Breathable linen, cut for the heat.");
     expect(storefrontShown(html, "scalius.noor").dropped).toBe(0);
-    const bare = renderSkin(storefront, "noor-product", "product-main", skinSettings("noor-product", { show_reviews: false, show_related: false, show_breadcrumbs: false, show_description: false }));
+    const bare = renderSkin(storefront, "noor_product", "product-main", skinSettings("noor_product", { show_reviews: false, show_related: false, show_breadcrumbs: false, show_description: false }));
     expect(bare.match(/<scalius-embed/g)).toHaveLength(2);
     expect(bare).not.toContain("noor-crumbs");
   });

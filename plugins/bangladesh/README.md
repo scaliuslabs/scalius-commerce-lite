@@ -31,7 +31,7 @@ A store that picks Bangladesh in the new-store setup (`/admin/welcome`) sees the
    - `pathao`: deliveries, the Pathao hosts, and `write_places` for Refresh from Pathao.
 
    A Super Admin approves it. The feature's provider, settings, routes and jobs start with the same write. Turning a feature off needs no approval: its access is revoked and its provider, routes and jobs stop at once. Its saved keys stay for when it is turned on again.
-4. Turning **Places** on loads the places. It sends them in calls of 500, parents first, for at most 20 seconds. The hourly `places-sync` job finishes a load that did not complete. The **Bangladesh places** page (Settings) shows the progress and has **Load places now**.
+4. Turning **Places** on loads the places. It sends them in calls of 500, parents first, for at most 20 seconds. The hourly `places_sync` job finishes a load that did not complete. The **Bangladesh places** page (Settings) shows the progress and has **Load places now**.
 5. Each service's keys are entered on its page in the pack, under its switch (the Set up links in Settings → Payments, Shipping → Couriers, Notifications and Apps and integrations land there).
 6. One switch puts a payment or SMS service to use. A payment feature that is turned on joins checkout's payment methods, after the ones already there, and checkout offers it as soon as its keys are saved; Settings → Payments stays the place to reorder or hide it, and a hidden one is not added back until its feature is turned off and on again. When no SMS service is chosen, the first SMS provider whose keys are saved becomes the notification SMS service. The service's status says "Ready" only while checkout offers it or notifications send through it, and otherwise why not ("Hidden at checkout", "Not used for sending").
 
@@ -127,7 +127,7 @@ Every key is in the pack's settings. Secrets are sealed with `CREDENTIAL_ENCRYPT
 - The seed is idempotent. The import matches by key, then by the row id the place was exported from. So a store set up before the dataset keeps its rows, and zones, tax regions and addresses keep their places.
 - Progress is in the app's KV (`places`). A new pack version with a new dataset loads again through the same import.
 - **Uninstall never deletes a place**, with or without the app's data: zones, tax regions and addresses point at them.
-- **Refresh from Pathao** (places page) reads Pathao's live cities, thanas and areas with the Pathao keys and imports them (source `bd`, no `finish`: only what Pathao marks unusable turns off). A step makes at most 45 Pathao calls, because the app's own requests share its 60-a-minute limit; the `pathao-places` job (every 5 minutes, idle when no refresh runs) finishes it. Progress is in the app's KV (`pathao-refresh`).
+- **Refresh from Pathao** (places page) reads Pathao's live cities, thanas and areas with the Pathao keys and imports them (source `bd`, no `finish`: only what Pathao marks unusable turns off). A step makes at most 45 Pathao calls, because the app's own requests share its 60-a-minute limit; the `pathao_places` job (every 5 minutes, idle when no refresh runs) finishes it. Progress is in the app's KV (`pathao-refresh`).
 
 ## Limits and gaps
 

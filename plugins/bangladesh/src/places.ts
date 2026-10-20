@@ -11,7 +11,7 @@
 // - Chunked: 500 places per call, parents first; the last call `finish`es the
 //   version (the dataset's own places it no longer lists turn inactive).
 // - Resumable: progress is kept in KV after every chunk. Activation loads
-//   what fits in its time; the hourly `places-sync` job finishes the rest and
+//   what fits in its time; the hourly `places_sync` job finishes the rest and
 //   loads a newer dataset after an app update (an update runs no hook).
 // - Never deletes: uninstalling the app leaves every place in the store.
 //

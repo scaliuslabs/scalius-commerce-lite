@@ -39,9 +39,9 @@ const FULL: PluginManifestInput = {
   routes: {
     admin: [{ name: "dashboard", methods: ["GET"] }, { name: "adjust", methods: ["POST"] }],
     public: [{ name: "balance", methods: ["GET"] }],
-    webhooks: ["acme-callback"],
+    webhooks: [{ name: "acme-callback" }],
   },
-  cron: [{ name: "expire-points", schedule: "0 3 * * *" }],
+  cron: [{ name: "expire_points", schedule: "0 3 * * *" }],
   objects: { ledger: {
     name: "Ledger",
     fields: [
@@ -59,11 +59,11 @@ const FULL: PluginManifestInput = {
   ],
   admin: {
     pages: [{ id: "overview", title: "Loyalty", route: "dashboard" }],
-    cards: [{ id: "customer-points", target: "customer", title: "Points", route: "dashboard" }],
+    cards: [{ id: "customer_points", target: "customer", title: "Points", route: "dashboard" }],
     actions: [{ id: "grant", target: "customer", label: "Grant points", route: "adjust" }],
   },
   storefront: {
-    sections: [{ type: "points-banner", name: "Points banner" }],
+    sections: [{ type: "points_banner", name: "Points banner" }],
     scripts: [{ src: "https://cdn.acme.example/widget.js" }],
     proxy: true,
   },
@@ -318,7 +318,7 @@ describe("storefront surfaces in the manifest", () => {
     expect(parsePluginManifest({ ...base, storefront: { sections: [section()] } }).ok).toBe(true);
     expect(issues({ ...base, storefront: { sections: [section({ route: "draw" })] } })).toHaveLength(1);
     expect(issues({ ...base, storefront: { sections: [section({ reads: ["reviews"] })] } })).toHaveLength(1);
-    expect(issues({ ...base, storefront: { productBlocks: [{ type: "stars", name: "Stars", placement: "buy-box", route: "draw" }] } })).toHaveLength(1);
+    expect(issues({ ...base, storefront: { productBlocks: [{ type: "stars", name: "Stars", placement: "product.buy-box", route: "draw" }] } })).toHaveLength(1);
   });
 
   it("keeps storefront settings public: no secrets", () => {
@@ -327,7 +327,7 @@ describe("storefront surfaces in the manifest", () => {
   });
 
   it("needs unique product block types", () => {
-    const block = { type: "stars", name: "Stars", placement: "below" } as const;
+    const block = { type: "stars", name: "Stars", placement: "product.below" } as const;
     expect(issues({ ...base, storefront: { productBlocks: [block, block] } })).toEqual(["storefront.productBlocks Product block types must be unique."]);
   });
 
@@ -508,5 +508,54 @@ describe("plugin functions", () => {
     expect(output.safeParse(discount(5000)).success).toBe(true);
     expect(output.safeParse(discount(-1)).success).toBe(false);
     expect(output.safeParse(discount(12.5)).success).toBe(false);
+  });
+});
+
+describe("the manifest vocabulary", () => {
+  const issues = (input: unknown) => {
+    const parsed = parsePluginManifest(input);
+    return parsed.ok ? [] : parsed.issues.map((issue) => `${issue.path} ${issue.message}`);
+  };
+
+  it("takes snake_case for every name, kebab-case only where the name is a URL path segment, and names the rule", () => {
+    expect(issues({
+      ...FULL,
+      routes: { admin: [{ name: "adjust_points" }, { name: "dashboard" }, { name: "adjust" }], public: [{ name: "balance-check" }], webhooks: [] },
+      timeline: [{ kind: "vendor_split", title: "Vendor split" }],
+    })).toEqual([]);
+    expect(issues({ ...FULL, timeline: [{ kind: "vendor-split", title: "Vendor split" }] }))
+      .toEqual(["timeline.0.kind Use snake_case: a lowercase letter, then at most 47 lowercase letters, digits or underscores."]);
+    expect(issues({ ...FULL, cron: [{ name: "expire-points", schedule: "0 3 * * *" }] })[0]).toMatch(/^cron\.0\.name Use snake_case/);
+    expect(issues({ ...FULL, routes: { ...FULL.routes, public: [{ name: "Balance" }] } })[0])
+      .toMatch(/^routes\.public\.0\.name Use snake_case or kebab-case \(this name is part of a URL\)/);
+  });
+
+  it("gives every route one shape: webhooks POST and pages GET unless methods say otherwise", () => {
+    const parsed = parsePluginManifest({ ...FULL, routes: { ...FULL.routes, admin: [{ name: "dashboard" }, { name: "adjust", methods: ["POST"] }], webhooks: [{ name: "acme-callback" }, { name: "verify", methods: ["GET", "POST"] }] } });
+    if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
+    expect(parsed.manifest.routes.admin[0]).toEqual({ name: "dashboard", methods: ["GET"] });
+    expect(parsed.manifest.routes.webhooks).toEqual([{ name: "acme-callback", methods: ["POST"] }, { name: "verify", methods: ["GET", "POST"] }]);
+    expect(issues({ ...FULL, routes: { ...FULL.routes, webhooks: ["acme-callback"] } })).toHaveLength(1);
+    expect(issues({ ...FULL, routes: { ...FULL.routes, webhooks: [{ name: "a" }, { name: "a" }] } })).toEqual(["routes.webhooks Webhook route names must be unique."]);
+  });
+
+  it("names a product block's placement by its render target", () => {
+    const block = { type: "stars", name: "Stars" };
+    expect(issues({ ...FULL, storefront: { productBlocks: [{ ...block, placement: "product.buy-box" }] } })).toEqual([]);
+    expect(issues({ ...FULL, storefront: { productBlocks: [{ ...block, placement: "buy-box" }] } })).toHaveLength(1);
+  });
+
+  it("takes an index as one field or a list of one to four, and reads a one-field list as the field", () => {
+    const ledger = FULL.objects!.ledger!;
+    const parsed = parsePluginManifest({ ...FULL, objects: { ledger: { ...ledger, indexes: [["customer_id"], ["customer_id", "created_at"]] } } });
+    if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
+    expect(parsed.manifest.objects.ledger!.indexes).toEqual(["customer_id", ["customer_id", "created_at"]]);
+    expect(issues({ ...FULL, objects: { ledger: { ...ledger, indexes: [[]] } } })).toHaveLength(1);
+  });
+
+  it("checks a custom field's type with the manifest, not at install", () => {
+    expect(issues({ ...FULL, customFields: [{ ownerType: "customer", key: "points", name: "Points", type: "integer" }] })).toEqual([]);
+    expect(issues({ ...FULL, customFields: [{ ownerType: "customer", key: "points", name: "Points", type: "number" }] })[0]).toMatch(/^customFields\.0\.type /);
+    expect(issues({ ...FULL, customFields: [{ ownerType: "customer", key: "points__total", name: "Points", type: "integer" }] })[0]).toMatch(/^customFields\.0\.key Use snake_case/);
   });
 });

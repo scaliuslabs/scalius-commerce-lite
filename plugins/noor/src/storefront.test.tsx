@@ -91,7 +91,7 @@ describe("Noor manifest", () => {
       expect(declaration, section.settings.app).toBeDefined();
       validate(section.id, declaration.settings, section.settings.values);
     }
-    const tabs = declared.storefront.skins.find((skin) => skin.id === "noor-products-tabs")!;
+    const tabs = declared.storefront.skins.find((skin) => skin.id === "noor_products_tabs")!;
     const invalid = validatePluginSettingValues(tabs.settings.filter((field) => field.key === "columns"), { columns: 9 });
     expect(invalid.ok).toBe(false);
     if (!invalid.ok) expect(invalid.errors).toEqual([expect.objectContaining({ key: "columns" })]);
@@ -104,7 +104,7 @@ describe("Noor manifest", () => {
     expect(Object.keys(storefront.definition.skins ?? {}).sort()).toEqual(declared.storefront.skins.map((skin) => skin.id).sort());
     // The nine sections the store has no equivalent of; the rest are skins of the store's own sections.
     expect(declared.storefront.sections.map((section) => section.type).sort()).toEqual([
-      "featured-product", "gallery", "landing-features", "landing-hero", "landing-order", "marquee", "slideshow", "testimonials", "video",
+      "featured_product", "gallery", "landing_features", "landing_hero", "landing_order", "marquee", "slideshow", "testimonials", "video",
     ]);
     expect(declared.storefront.skins.map((skin) => skin.target).sort()).toEqual([
       "footer", "header", "product-card", "product-main",
@@ -127,7 +127,7 @@ describe("Noor manifest", () => {
     const document = applyStorefrontAppTemplate(DEFAULT_STOREFRONT_THEME, "scalius.noor/noor", theme!);
     const result = storefrontThemeDocumentSchema.safeParse(document);
     expect(result.success ? [] : result.error.issues).toEqual([]);
-    expect(document.apps?.skins?.header?.app).toBe("scalius.noor/noor-header");
+    expect(document.apps?.skins?.header?.app).toBe("scalius.noor/noor_header");
     expect(document.apps?.template).toBe("scalius.noor/noor");
     // The header shows the merchant's own menu, in their order.
     expect(document.blocks.navigation.source).toBe("menu");
@@ -159,28 +159,28 @@ describe("Noor manifest", () => {
     expect(campaign.map((section) => section.id)).toEqual(["lp-hero", "lp-features", "lp-steps", "lp-order"]);
     const appCampaign = campaign.filter((section) => section.type === "app");
     const hero = appCampaign[0]!.settings.values;
-    const html = renderSection(storefront, "landing-hero", settingsFor("landing-hero", { ...hero, product: "prod_1" }));
+    const html = renderSection(storefront, "landing_hero", settingsFor("landing_hero", { ...hero, product: "prod_1" }));
     expect(html).toContain("Linen shirt");
     expect(html).not.toContain("Special offer");
     expect(html).not.toContain("noor-urgency");
-    expect(renderSection(storefront, "landing-features", settingsFor("landing-features", appCampaign[1]!.settings.values))).toBe("");
-    const order = renderSection(storefront, "landing-order", settingsFor("landing-order", { ...appCampaign.at(-1)!.settings.values, product: "prod_1" }));
+    expect(renderSection(storefront, "landing_features", settingsFor("landing_features", appCampaign[1]!.settings.values))).toBe("");
+    const order = renderSection(storefront, "landing_order", settingsFor("landing_order", { ...appCampaign.at(-1)!.settings.values, product: "prod_1" }));
     expect(order).toContain('<scalius-embed kind="order-form"');
     expect(order).not.toContain("noor-assure");
   });
 
   it("resolves omitted copy neutrally while preserving explicit merchant values", () => {
-    expect(settingsFor("landing-hero")).toMatchObject({ badge: null, urgency: null });
-    expect(slotSettings("noor-hero")).toMatchObject({ eyebrow: null, secondary_label: null });
-    expect(slotSettings("noor-sale")).toMatchObject({ eyebrow: null, text: null });
+    expect(settingsFor("landing_hero")).toMatchObject({ badge: null, urgency: null });
+    expect(slotSettings("noor_hero")).toMatchObject({ eyebrow: null, secondary_label: null });
+    expect(slotSettings("noor_sale")).toMatchObject({ eyebrow: null, text: null });
     expect(settingsFor("testimonials")).toMatchObject({ heading: "Customer reviews", items: [] });
     const unrated = settingsFor("testimonials", { items: [{ quote: "A merchant-supplied quote without a score", name: "Customer" }] });
     expect(unrated.items).toEqual([expect.objectContaining({ rating: null })]);
     expect(renderSection(storefront, "testimonials", unrated)).not.toContain("noor-stars");
     expect(settingsFor("gallery")).toMatchObject({ heading: "Gallery", handle: null });
-    expect(slotSettings("noor-footer")).toMatchObject({ tagline: null, newsletter_text: null, payments: [] });
+    expect(slotSettings("noor_footer")).toMatchObject({ tagline: null, newsletter_text: null, payments: [] });
     const saved = { heading: "Our real promotion", text: "Delivery in five days", eyebrow: "Merchant's collection" };
-    expect(settingsFor("featured-product", saved)).toMatchObject(saved);
+    expect(settingsFor("featured_product", saved)).toMatchObject(saved);
   });
 
   it("keeps merchant-authored saved claims and testimonials renderable", () => {
@@ -194,15 +194,15 @@ describe("Noor manifest", () => {
 
   it("offers a campaign page preset built from its own landing sections", () => {
     const [preset] = declared.storefront.pagePresets;
-    expect(preset?.id).toBe("product-campaign");
+    expect(preset?.id).toBe("product_campaign");
     const sections = readStorefrontPagePresetSections(preset!.sections, preset!.themeVersion!);
     expect(sections).not.toBeNull();
     const types = sections!.map((section) => (section.type === "app" ? section.settings.app : section.type));
     for (const type of types) expect(declared.storefront.sections.map((section) => `scalius.noor/${section.type}`)).toContain(type);
-    expect(types[0]).toBe("scalius.noor/landing-hero");
-    expect(types.at(-1)).toBe("scalius.noor/landing-order");
+    expect(types[0]).toBe("scalius.noor/landing_hero");
+    expect(types.at(-1)).toBe("scalius.noor/landing_order");
     // Both ends of the page take the product the merchant picks with the preset.
-    for (const type of ["landing-hero", "landing-order"]) {
+    for (const type of ["landing_hero", "landing_order"]) {
       expect(declared.storefront.sections.find((section) => section.type === type)!.settings.some((field) => field.type === "product")).toBe(true);
     }
   });
@@ -210,7 +210,7 @@ describe("Noor manifest", () => {
 
 describe("Noor chrome", () => {
   it("draws the header with menus, the drawer, search and the cart count", () => {
-    const html = shown(renderHeader(storefront, "noor-header", slotSettings("noor-header")));
+    const html = shown(renderHeader(storefront, "noor_header", slotSettings("noor_header")));
     expect(html).toContain('class="noor-header is-center"');
     expect(html).toContain('popovertarget="noor-drawer"');
     expect(html).toContain('id="noor-search" popover="auto"');
@@ -223,7 +223,7 @@ describe("Noor chrome", () => {
   });
 
   it("opens full-width panels for menus with groups and dropdowns for flat ones", () => {
-    const html = renderHeader(storefront, "noor-header", slotSettings("noor-header"), {
+    const html = renderHeader(storefront, "noor_header", slotSettings("noor_header"), {
       menu: [
         { title: "Women", url: "/categories/women", children: [{ title: "Sarees", url: "/categories/sarees", children: [{ title: "Jamdani", url: "/categories/jamdani", children: [] }] }] },
         { title: "Shop", url: "/search", children: [{ title: "New", url: "/collections/new", children: [] }] },
@@ -240,7 +240,7 @@ describe("Noor chrome", () => {
       { title: "Jamdani", url: "/jamdani", children: [{ title: "Cotton", url: "/cotton-jamdani", children: [] }] },
     ] }] }];
     for (const menu_style of ["simple", "mega"]) {
-      const html = shown(renderHeader(storefront, "noor-header", slotSettings("noor-header", { menu_style }), { menu }));
+      const html = shown(renderHeader(storefront, "noor_header", slotSettings("noor_header", { menu_style }), { menu }));
       const drawer = html.slice(html.indexOf('id="noor-drawer"'), html.indexOf('id="noor-search"'));
       expect(drawer).toContain('href="/jamdani"');
       expect(drawer).toContain('href="/cotton-jamdani"');
@@ -250,7 +250,7 @@ describe("Noor chrome", () => {
   });
 
   it("rotates its own announcements, the first one showing", () => {
-    const html = renderHeader(storefront, "noor-header", slotSettings("noor-header", {
+    const html = renderHeader(storefront, "noor_header", slotSettings("noor_header", {
       announcements: [{ text: "Eid delivery until the 28th", link: "/pages/eid" }, { text: "Cash on delivery everywhere", link: null }],
     }));
     expect(html).toContain('<li data-active=""><a href="/pages/eid">Eid delivery until the 28th');
@@ -258,16 +258,16 @@ describe("Noor chrome", () => {
   });
 
   it("sits over the hero only on the homepage", () => {
-    const settings = slotSettings("noor-header", { transparent_home: true });
+    const settings = slotSettings("noor_header", { transparent_home: true });
     // The store's hero, drawn by Noor's hero skin.
-    const lead = { kind: "core" as const, type: "hero", skin: { id: "noor-hero", settings: slotSettings("noor-hero") } };
-    expect(renderHeader(storefront, "noor-header", settings, { page: { lead } })).toContain("is-transparent");
-    expect(renderHeader(storefront, "noor-header", settings)).not.toContain("is-transparent");
-    expect(renderHeader(storefront, "noor-header", settings, {}, { context: { page: { kind: "product", path: "/products/x" } } })).not.toContain("is-transparent");
+    const lead = { kind: "core" as const, type: "hero", skin: { id: "noor_hero", settings: slotSettings("noor_hero") } };
+    expect(renderHeader(storefront, "noor_header", settings, { page: { lead } })).toContain("is-transparent");
+    expect(renderHeader(storefront, "noor_header", settings)).not.toContain("is-transparent");
+    expect(renderHeader(storefront, "noor_header", settings, {}, { context: { page: { kind: "product", path: "/products/x" } } })).not.toContain("is-transparent");
   });
 
   it("keeps solid chrome for non-overlay or unresolved leading sections", () => {
-    const settings = slotSettings("noor-header", { transparent_home: true });
+    const settings = slotSettings("noor_header", { transparent_home: true });
     const app = { kind: "app" as const, pluginId: "scalius.noor", type: "slideshow", instanceId: "first" };
     const hero = { kind: "core" as const, type: "hero" };
     const leads = [
@@ -275,43 +275,43 @@ describe("Noor chrome", () => {
       { kind: "core" as const, type: "product-grid" },
       // The store's own hero, or another skin's, or one Noor draws beside the photo.
       hero,
-      { ...hero, skin: { id: "other-hero", settings: slotSettings("noor-hero") } },
-      { ...hero, skin: { id: "noor-hero", settings: slotSettings("noor-hero", { layout: "split" }) } },
-      { kind: "core" as const, type: "seo-text", skin: { id: "noor-hero", settings: slotSettings("noor-hero") } },
+      { ...hero, skin: { id: "other-hero", settings: slotSettings("noor_hero") } },
+      { ...hero, skin: { id: "noor_hero", settings: slotSettings("noor_hero", { layout: "split" }) } },
+      { kind: "core" as const, type: "seo-text", skin: { id: "noor_hero", settings: slotSettings("noor_hero") } },
       app,
       { ...app, pluginId: "another.theme", settings: settingsFor("slideshow", { slides: [{ image: "hero" }] }) },
       { ...app, settings: settingsFor("slideshow", { slides: [] }) },
     ];
-    for (const lead of leads) expect(renderHeader(storefront, "noor-header", settings, { page: { lead } })).not.toContain("is-transparent");
+    for (const lead of leads) expect(renderHeader(storefront, "noor_header", settings, { page: { lead } })).not.toContain("is-transparent");
   });
 
   it("accepts an image-backed slideshow and declares the actual sticky box", () => {
-    const settings = slotSettings("noor-header", { transparent_home: true });
+    const settings = slotSettings("noor_header", { transparent_home: true });
     const lead = { kind: "app" as const, pluginId: "scalius.noor", type: "slideshow", instanceId: "first", settings: settingsFor("slideshow", { slides: [{ image: "wide", phone_image: "phone" }] }) };
     expect(lead.settings.slides).toEqual([expect.objectContaining({ image: image("wide"), phone_image: image("phone") })]);
-    const header = renderHeader(storefront, "noor-header", settings, { page: { lead } });
+    const header = renderHeader(storefront, "noor_header", settings, { page: { lead } });
     expect(header).toContain("is-transparent");
     expect(header).toContain('data-sticky-header=""');
     expect(header).toContain('href="/account" data-account-link=""');
-    expect(renderHeader(storefront, "noor-header", slotSettings("noor-header", { sticky: false }))).not.toContain("data-sticky-header");
+    expect(renderHeader(storefront, "noor_header", slotSettings("noor_header", { sticky: false }))).not.toContain("data-sticky-header");
   });
 
   it("turns into a campaign header and footer on landing pages, unless the merchant keeps the full ones", () => {
-    const header = shown(renderHeader(storefront, "noor-header", slotSettings("noor-header"), {}, { context: LANDING }));
+    const header = shown(renderHeader(storefront, "noor_header", slotSettings("noor_header"), {}, { context: LANDING }));
     expect(header).toContain("noor-header is-campaign");
     expect(header).not.toContain('href="#order"');
     expect(header).toContain('data-noor-order-link');
     expect(header).toContain('href="/search"');
     expect(header).toContain('data-order-label="Order now"');
     expect(header).not.toContain("noor-nav");
-    expect(renderHeader(storefront, "noor-header", slotSettings("noor-header", { landing_header: "full" }), {}, { context: LANDING })).toContain("noor-nav");
-    const footer = shown(renderFooter(storefront, "noor-footer", slotSettings("noor-footer"), {}, { context: LANDING }));
+    expect(renderHeader(storefront, "noor_header", slotSettings("noor_header", { landing_header: "full" }), {}, { context: LANDING })).toContain("noor-nav");
+    const footer = shown(renderFooter(storefront, "noor_footer", slotSettings("noor_footer"), {}, { context: LANDING }));
     expect(footer).toContain("noor-footer is-campaign");
     expect(footer).not.toContain("noor-footer-main");
   });
 
   it("draws the footer with contact, menus, social links and payments", () => {
-    const html = shown(renderFooter(storefront, "noor-footer", slotSettings("noor-footer", { payments: [{ name: "bKash" }, { name: "Nagad" }] })));
+    const html = shown(renderFooter(storefront, "noor_footer", slotSettings("noor_footer", { payments: [{ name: "bKash" }, { name: "Nagad" }] })));
     expect(html).toContain("noor-footer tone-ink");
     expect(html).toContain('href="tel:+8801700000000"');
     expect(html).toContain('href="mailto:hello@acme.example"');
@@ -322,7 +322,7 @@ describe("Noor chrome", () => {
 
   it("draws the card with renditions, the hover photo, the sale badge and quick add", () => {
     const product = fixtureProductCard({ hoverImage: image("back") });
-    const html = shown(renderProductCard(storefront, "noor-card", slotSettings("noor-card"), product));
+    const html = shown(renderProductCard(storefront, "noor_card", slotSettings("noor_card"), product));
     expect(html).toContain("noor-card ratio-portrait has-hover");
     expect(html).toContain('srcset="https://media.example.com/shirt-480.webp 480w');
     expect(html).toContain("noor-card-img is-alt");
@@ -331,9 +331,9 @@ describe("Noor chrome", () => {
   });
 
   it("writes ratings, review counts and discounts in the page's numbers and plural rules", () => {
-    const one = renderProductCard(storefront, "noor-card", slotSettings("noor-card"), { rating: { average: 4.5, count: 1 } });
+    const one = renderProductCard(storefront, "noor_card", slotSettings("noor_card"), { rating: { average: 4.5, count: 1 } });
     expect(one).toContain('aria-label="Rated 4.5 out of 5 from 1 review"');
-    const bangla = renderProductCard(storefront, "noor-card", slotSettings("noor-card"), { rating: { average: 4.5, count: 12 } }, {
+    const bangla = renderProductCard(storefront, "noor_card", slotSettings("noor_card"), { rating: { average: 4.5, count: 12 } }, {
       context: { store: { name: "দোকান", currency: "BDT", locale: "bn-BD", language: "bn", timeZone: "Asia/Dhaka" } },
     });
     expect(bangla).toContain("১২টি রিভিউতে ৫-এর মধ্যে ৪.৫");
@@ -342,10 +342,10 @@ describe("Noor chrome", () => {
   });
 
   it("offers no add button on a sold-out card, and a round one when asked", () => {
-    const soldOut = renderProductCard(storefront, "noor-card", slotSettings("noor-card"), { soldOut: true, quickAdd: false });
+    const soldOut = renderProductCard(storefront, "noor_card", slotSettings("noor_card"), { soldOut: true, quickAdd: false });
     expect(soldOut).toContain("Sold out");
     expect(soldOut).not.toContain("noor-card-bar");
-    expect(renderProductCard(storefront, "noor-card", slotSettings("noor-card", { action: "icon" }))).toContain("noor-card-icon");
+    expect(renderProductCard(storefront, "noor_card", slotSettings("noor_card", { action: "icon" }))).toContain("noor-card-icon");
   });
 });
 
@@ -356,7 +356,7 @@ describe("Noor sections", () => {
       if (html) expect(storefrontShown(html, "scalius.noor").dropped).toBe(0);
     }
     expect(renderSection(storefront, "slideshow", settingsFor("slideshow"))).toBe("");
-    expect(renderSection(storefront, "landing-order", settingsFor("landing-order"))).toBe("");
+    expect(renderSection(storefront, "landing_order", settingsFor("landing_order"))).toBe("");
   });
 
   it("shells every section in the store's rhythm, its own tone and spacing", () => {
@@ -400,7 +400,7 @@ describe("Noor landing kit", () => {
   );
 
   it("opens a campaign page with the product, the offer and every way to order", () => {
-    const html = shown(render("landing-hero", {
+    const html = shown(render("landing_hero", {
       photos: [{ image: "front" }], points: [{ text: "Genuine" }], phone: "+880 1711-000000", whatsapp: "8801711000000", ends_at: "2026-12-31",
     }));
     expect(html).toContain('<h1 class="noor-h1">Linen shirt</h1>');
@@ -417,8 +417,8 @@ describe("Noor landing kit", () => {
   });
 
   it("places the store's order form at its instance anchor, with the phone order bar", () => {
-    const html = shown(render("landing-order", { assurances: [{ icon: "truck", text: "2-day delivery" }], max_quantity: 3 }));
-    expect(html).toContain('id="noor-order-app-landing-order"');
+    const html = shown(render("landing_order", { assurances: [{ icon: "truck", text: "2-day delivery" }], max_quantity: 3 }));
+    expect(html).toContain('id="noor-order-app-landing_order"');
     // The embed names the product by id, never by a URL a canonical path override can change.
     expect(html).toContain('<scalius-embed kind="order-form" data-product="product:prod_1-1" data-max-quantity="3"></scalius-embed>');
     expect(html).toContain('data-island="landing-bar"');
@@ -427,13 +427,13 @@ describe("Noor landing kit", () => {
   });
 
   it("shows only merchant-authored order assurances", () => {
-    const empty = shown(render("landing-order", { assurances: [] }));
+    const empty = shown(render("landing_order", { assurances: [] }));
     expect(empty).not.toContain('class="noor-assure"');
     expect(empty).not.toContain("Cash on delivery");
-    const merchant = shown(render("landing-order", { assurances: [{ icon: "cash", text: "COD available in Dhaka" }] }));
+    const merchant = shown(render("landing_order", { assurances: [{ icon: "cash", text: "COD available in Dhaka" }] }));
     expect(merchant).toContain("COD available in Dhaka");
     expect(merchant.match(/class="noor-assure"/g)).toHaveLength(1);
-    const bangla = shown(render("landing-order", { assurances: [] }, { store: { name: "দোকান", currency: "BDT", locale: "bn-BD", language: "bn", timeZone: "Asia/Dhaka" } }));
+    const bangla = shown(render("landing_order", { assurances: [] }, { store: { name: "দোকান", currency: "BDT", locale: "bn-BD", language: "bn", timeZone: "Asia/Dhaka" } }));
     expect(bangla).not.toContain("ক্যাশ অন ডেলিভারি");
   });
 
@@ -442,8 +442,8 @@ describe("Noor landing kit", () => {
       abi: storefront.abi,
       context: fixtureContext(LANDING),
       jobs: ["first", "second"].map((instanceId) => ({
-        id: instanceId, kind: "section" as const, type: "landing-order", instanceId,
-        settings: settingsFor("landing-order", { product: "prod_1" }),
+        id: instanceId, kind: "section" as const, type: "landing_order", instanceId,
+        settings: settingsFor("landing_order", { product: "prod_1" }),
       })),
     });
     for (const [index, result] of reply.results.entries()) {
@@ -456,14 +456,14 @@ describe("Noor landing kit", () => {
 
   it("draws features as cards, photo rows or numbered steps", () => {
     const items = [{ title: "Fill in the form" }, { title: "We call to confirm" }];
-    expect(shown(render("landing-features", { items, style: "steps" }))).toContain('<span class="noor-step" aria-hidden="true">2</span>');
-    expect(shown(render("landing-features", { items, style: "rows" }))).toContain('class="noor-rows"');
-    expect(shown(render("landing-features", { items, cta_label: "Order now" }))).toContain('data-noor-order-link hidden');
+    expect(shown(render("landing_features", { items, style: "steps" }))).toContain('<span class="noor-step" aria-hidden="true">2</span>');
+    expect(shown(render("landing_features", { items, style: "rows" }))).toContain('class="noor-rows"');
+    expect(shown(render("landing_features", { items, cta_label: "Order now" }))).toContain('data-noor-order-link hidden');
   });
 
   it("keeps a sold-out product's order section without a form", () => {
-    const html = renderSection(storefront, "landing-order", resolveStorefrontSettings(
-      declared.storefront.sections.find((section) => section.type === "landing-order")!.settings,
+    const html = renderSection(storefront, "landing_order", resolveStorefrontSettings(
+      declared.storefront.sections.find((section) => section.type === "landing_order")!.settings,
       { product: "prod_1" },
       { image: () => null, products: () => [fixtureProductCard({ soldOut: true })] },
     ));
@@ -472,17 +472,17 @@ describe("Noor landing kit", () => {
   });
 
   it("asks for a product only in the editor's preview", () => {
-    const settings = resolveStorefrontSettings(declared.storefront.sections.find((section) => section.type === "landing-hero")!.settings, {}, {
+    const settings = resolveStorefrontSettings(declared.storefront.sections.find((section) => section.type === "landing_hero")!.settings, {}, {
       image: () => null,
       products: () => [],
     });
-    expect(renderSection(storefront, "landing-hero", settings)).toBe("");
-    expect(renderSection(storefront, "landing-hero", settings, { context: { preview: true } })).toContain("Choose the product");
+    expect(renderSection(storefront, "landing_hero", settings)).toBe("");
+    expect(renderSection(storefront, "landing_hero", settings, { context: { preview: true } })).toContain("Choose the product");
   });
 
   it("speaks Bangla on a Bangla store", () => {
     const bangla = { store: { name: "দোকান", currency: "BDT", locale: "bn-BD", language: "bn" as const, timeZone: "Asia/Dhaka" } };
-    expect(render("landing-hero", {}, bangla)).toContain("এখনই অর্ডার করুন");
-    expect(render("landing-order", {}, bangla)).toContain("আপনার অর্ডার");
+    expect(render("landing_hero", {}, bangla)).toContain("এখনই অর্ডার করুন");
+    expect(render("landing_order", {}, bangla)).toContain("আপনার অর্ডার");
   });
 });

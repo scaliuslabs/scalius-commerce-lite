@@ -23,7 +23,7 @@ export const NOOR_EXTENSION: StorefrontExtension = {
   sectionSettings: Object.fromEntries(storefront.sections.map((section) => [section.type, section.settings])),
   skins: storefront.skins.map(({ id, target, settings }) => ({ id, target: target as StorefrontSkinTarget, settings })),
   blocks: storefront.productBlocks
-    .map((block) => ({ type: block.type, target: `product.${block.placement}` as const, settings: block.settings })),
+    .map((block) => ({ type: block.type, target: block.placement, settings: block.settings })),
   islands: storefront.islands.map((island) => island.name),
   stylesheet: storefront.stylesheet,
   connect: storefront.connect,
@@ -38,9 +38,9 @@ export function noorTheme(base: StorefrontThemeDocument): StorefrontThemeDocumen
     if (section.type !== "app") return section;
     const values = { ...section.settings.values };
     if (section.settings.app === "scalius.noor/hero") values.image = "banner-eid";
-    if (section.settings.app === "scalius.noor/featured-product") values.product = "prod_0";
-    if (section.settings.app === "scalius.noor/image-text") values.image = "wide-story";
-    if (section.settings.app === "scalius.noor/collection-tiles") values.tiles = [
+    if (section.settings.app === "scalius.noor/featured_product") values.product = "prod_0";
+    if (section.settings.app === "scalius.noor/image_text") values.image = "wide-story";
+    if (section.settings.app === "scalius.noor/collection_tiles") values.tiles = [
       { image: "product-0", title: "Handwoven sarees", link: "/categories/women" },
       { image: "product-3", title: "Everyday essentials", link: "/collections/col-eid" },
     ];
@@ -52,7 +52,7 @@ export function noorTheme(base: StorefrontThemeDocument): StorefrontThemeDocumen
 export function noorLandingSections(): StorefrontSection[] {
   const sections = readStorefrontPagePresetSections(storefront.pagePresets[0]?.sections, storefront.pagePresets[0]?.themeVersion ?? STOREFRONT_DECLARATION_THEME_VERSION);
   if (!sections) throw new Error("The Noor campaign preset no longer fits the section document.");
-  return sections.map((section) => section.type === "app" && ["scalius.noor/landing-hero", "scalius.noor/landing-order"].includes(section.settings.app)
+  return sections.map((section) => section.type === "app" && ["scalius.noor/landing_hero", "scalius.noor/landing_order"].includes(section.settings.app)
     ? { ...section, settings: { ...section.settings, values: { ...section.settings.values, product: "prod_0" } } }
     : section);
 }

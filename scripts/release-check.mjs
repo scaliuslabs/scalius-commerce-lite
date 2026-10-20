@@ -1863,8 +1863,12 @@ async function checkPublicApiReads(options, { fetchImpl, logger }) {
   return { reads };
 }
 
-/** An app surface key in the theme document: `<plugin id>/<surface>` (PLUGIN_SURFACE_KEY_PATTERN). */
-const THEME_APP_KEY = /^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\/([a-z][a-z0-9-]{0,47})$/;
+/**
+ * An app surface key in the theme document: `<plugin id>/<surface>`
+ * (PLUGIN_SURFACE_KEY_PATTERN: a snake_case surface since theme version 11;
+ * a version 10 document a not-yet-upgraded API serves still names kebab-case).
+ */
+const THEME_APP_KEY = /^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\/([a-z][a-z0-9_-]{0,47})$/;
 
 /**
  * Whether every app the published theme draws with (skins, app sections and
