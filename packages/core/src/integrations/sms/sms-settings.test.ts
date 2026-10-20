@@ -46,7 +46,7 @@ describe("SMS settings", () => {
 
     const provider = await getActiveSmsProvider(db, undefined, lookup);
     expect(lookup.resolve).toHaveBeenCalledWith("sms", APP_ID);
-    await expect(provider!.send({ to: "+8801700000000", message: "Hi" }, {})).resolves.toEqual({ success: true, providerRef: "app-1" });
+    await expect(provider!.send({ to: "+8801700000000", text: "Hi" }, {})).resolves.toEqual({ success: true, providerRef: "app-1" });
     await expect(getSmsProviderReadiness(db, undefined, lookup)).resolves.toEqual({ status: "ready", issues: [], activeProvider: APP_ID });
     await expect(getSmsSettings(db, undefined, lookup)).resolves.toEqual({ activeProvider: APP_ID, activeProviderConfigured: true, activeProviderError: null, revision: 1 });
 

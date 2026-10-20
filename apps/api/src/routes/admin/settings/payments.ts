@@ -521,16 +521,17 @@ app.openapi(saveStripeRoute, async (c) => {
             throw new ValidationError("Stripe can be offered at checkout only while it is turned on.");
         }
         const methods = body.showAtCheckout ? await paymentMethodsDocument.readDetailed(db) : null;
-        if (methods && !methods.value.enabledMethods.includes("stripe")) {
+        const enabledMethods = methods?.value.enabledMethods ?? [];
+        if (methods && !enabledMethods.includes("stripe")) {
             const currencyIssue = (await requestPaymentProviders(c)).currencyIssue("stripe", (await getCurrencySettings(db)).currencyCode);
             if (currencyIssue) throw new ValidationError(currencyIssue);
         }
         const [written] = await writeSettingsDocuments(db, [
             { document: stripeDocument, patch, ctx: { encryptionKey: encKey }, expectedRevision: body.expectedRevision },
-            ...(methods && !methods.value.enabledMethods.includes("stripe")
+            ...(methods && !enabledMethods.includes("stripe")
                 ? [{
                     document: paymentMethodsDocument,
-                    patch: { enabledMethods: [...methods.value.enabledMethods, "stripe"], defaultMethod: methods.value.defaultMethod },
+                    patch: { enabledMethods: [...enabledMethods, "stripe"], defaultMethod: methods.value.defaultMethod },
                     expectedRevision: methods.revision,
                 }]
                 : []),

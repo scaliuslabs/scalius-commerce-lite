@@ -17,7 +17,7 @@ describe("registry downloads and redirects", () => {
       vi.stubGlobal("fetch", fetch);
       await expect(fetchRegistryIndex("https://registry.example.com/index.json")).rejects.toThrow(/public https/);
       expect(fetch).toHaveBeenCalledTimes(1);
-      expect(fetch.mock.calls[0]![1]).toMatchObject({ redirect: "manual" });
+      expect((fetch.mock.calls[0] as unknown[])[1]).toMatchObject({ redirect: "manual" });
     }
   });
 

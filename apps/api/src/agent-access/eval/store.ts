@@ -51,7 +51,7 @@ function memoryBucket() {
     size: bytes.byteLength,
     httpMetadata: {},
     customMetadata: {},
-    body: new Response(bytes).body,
+    body: new Response(bytes.slice()).body,
     arrayBuffer: async () => bytes.slice().buffer,
     text: async () => new TextDecoder().decode(bytes),
   });

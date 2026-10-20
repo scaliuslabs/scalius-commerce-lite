@@ -684,7 +684,6 @@ export async function finalizeAcceptedRefundAttemptIds(
             version: number;
             currencyCode: string;
             currencyDecimalPlaces: number;
-            paymentTermsDays: number | null;
         };
         currency: OrderCurrencySnapshot;
         paymentRows: Array<Pick<OrderPayment, "paymentType" | "status" | "amountMinor">>;
@@ -701,7 +700,6 @@ export async function finalizeAcceptedRefundAttemptIds(
                 version: orders.version,
                 currencyCode: orders.currencyCode,
                 currencyDecimalPlaces: orders.currencyDecimalPlaces,
-                paymentTermsDays: orders.paymentTermsDays,
             })
             .from(orders)
             .where(eq(orders.id, orderId))
