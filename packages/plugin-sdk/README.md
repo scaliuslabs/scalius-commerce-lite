@@ -230,9 +230,21 @@ await ctx.objects.balances.put(customerId, next, { expectedRevision: current?.re
 ```
 
 - `update(id, patch, { expectedRevision? })` merges top-level fields. Without a pinned revision it re-reads and merges again, so no update is lost.
-- `increment(id, field, delta, { min?, max? })` adds to a whole-number field. A result outside the bounds fails with `object.out_of_range` and changes nothing.
+- `increment(id, field, delta, { min?, max? })` adds to a whole-number field. A result outside the bounds fails with `object.out_of_range` and changes nothing. A money field is not a whole number: `update` it with the new amount.
 - `ctx.objects.batch([...])` writes up to 25 `put`, `delete` and `check` operations across object types, all or nothing. Each may carry `expectedRevision`. A batch writes each record once.
 - A unique index violation fails with `object.unique_violation`.
+
+### Money
+
+Money crosses every app boundary in one format: integer minor units plus an ISO 4217 code. Resource reads, webhooks, functions and ports carry `*Minor` fields beside a `currency` field. A `money` field of an object or a custom field holds `PluginMoney`, `{ amountMinor, currency }`, in the store currency (`ctx.store.currency`). A `list.money` field holds an array of them. `ctx.objects`, `ctx.customFields`, declared function reads and the HTTP API (`objects.*`, `dashboard.custom_fields.*`) all read and write this one shape:
+
+```ts
+// 1,250 taka in a BDT store (2 decimal places)
+await ctx.objects.wallets!.put(customerId, { balance: { amountMinor: 125000, currency: ctx.store.currency } });
+const wallet = await ctx.objects.wallets!.get(customerId); // { balance: { amountMinor: 125000, currency: "BDT" } }
+```
+
+A write refuses (`object.invalid`) a decimal, a bare number, another currency, a negative or fractional `amountMinor`, and an amount off the store's price increment. Validation bounds (`min`, `max`) on a money field are integer minor units of the store currency. A `where` filter on a money field takes the `PluginMoney` you read or its `amountMinor`; on the HTTP API, `where[price]=125000`. Only the storefront contract (sections, components and `/api/v1` buyer reads) shows money as a formatted amount of the page currency.
 
 `ctx.kv` is a key/value store with TTLs (value 64 KiB, key 256 characters, TTL at most one year, `list(prefix)` at most 1,000 keys). `getVersion` and `compareAndSet(key, expectedRevision | null, value)` give the same compare-and-set (`kv.conflict`). `batch` is a reserved object name. Private caches are never exposed as content to staff or the storefront.
 
@@ -258,7 +270,7 @@ Which seam: a decision inside a request is a function; a provider of a capabilit
   ```
 
   - Keys: `customer`, `line.variantId`, `line.productId`, `attribute.<key>` (the buyer's value of one of your checkout attributes), or `{ from: "<as>.<field>" }`, the id held in a `single_line_text` or `object_reference` field of an earlier single-key read. A custom-field read names fields of one owner type (`product`, `variant` or `customer`) and is keyed by it.
-  - `input.reads[as]` is `{ revision, data } | null` for a single key and `Record<key, { revision, data }>` (records that exist) per line; `readOne(reads, as)` and `readMany(reads, as)` read them typed. Custom-field records have revision 0. Data is in the SDK's wire form, as `ctx.objects` reads it.
+  - `input.reads[as]` is `{ revision, data } | null` for a single key and `Record<key, { revision, data }>` (records that exist) per line; `readOne(reads, as)` and `readMany(reads, as)` read them typed. Custom-field records have revision 0. Data is in the SDK's wire form, as `ctx.objects` reads it (money as `{ amountMinor, currency }`).
   - Bounds: at most 100 keys asked per function (a single key counts one; a per-line read its distinct SKUs or products, at most its `max`) and 256 KiB of resolved JSON. A function over a bound does not run, which `onError` treats as a failure.
   - Cost: the reads ride the checkout's own read batch (one statement per object type, hop and custom-field group), so they add statements but never a round trip or wave.
 

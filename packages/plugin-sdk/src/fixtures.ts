@@ -8,7 +8,7 @@
 
 import type { EventTopic } from "@scalius/shared/events";
 import type { FunctionCart, FunctionReads, PluginFunctionInput } from "@scalius/shared/plugins";
-import type { PluginEvent, PluginRouteRequest } from "./context";
+import type { PluginEvent, PluginMoney, PluginRouteRequest } from "./context";
 
 let eventCounter = 0;
 
@@ -69,6 +69,15 @@ function checkoutDiscountsInput(overrides: { cart?: Partial<FunctionCart>; reads
   return { cart: cart(overrides.cart), reads: overrides.reads ?? {} };
 }
 
+/**
+ * An amount as object fields, custom fields and reads carry it: integer minor
+ * units of the store currency (the harness store is BDT, 2 decimal places).
+ * `money(125_000)` is 1,250 taka.
+ */
+function money(amountMinor: number, currency = "BDT"): PluginMoney {
+  return { amountMinor, currency };
+}
+
 /** One read record, as `input.reads` carries it (`{ revision, data }`). */
 function readRecord<T extends Record<string, unknown>>(data: T, revision = 1): { revision: number; data: T } {
   return { revision, data };
@@ -88,4 +97,4 @@ function adminRouteRequest(overrides: Partial<PluginRouteRequest> = {}): PluginR
   };
 }
 
-export const fixtures = { event, cartLine, cart, checkoutDiscountsInput, readRecord, adminRouteRequest };
+export const fixtures = { event, cartLine, cart, checkoutDiscountsInput, money, readRecord, adminRouteRequest };

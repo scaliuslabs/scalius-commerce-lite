@@ -185,7 +185,8 @@ describe("money in objects and custom fields", () => {
       },
     });
     const harness = createPluginTestHarness({ default: wallet }, { store: { currency: "BDT", decimalPlaces: 2 } });
-    const balance = { amountMinor: 125000, currency: "BDT" };
+    const balance = fixtures.money(125_000);
+    expect(balance).toEqual({ amountMinor: 125000, currency: "BDT" });
     expect(await harness.route("admin", "credit", { method: "POST", body: { balance } })).toMatchObject({
       ok: true,
       value: { body: { read: { balance, history: [balance, balance] }, field: { credit_limit: balance }, found: 1 } },
