@@ -27,8 +27,20 @@ import type {
 } from "@scalius/shared/plugins";
 import type { ProviderImplementation, ProviderKind } from "@scalius/shared/plugins/providers";
 import type { PluginContext, PluginEvent, PluginRouteRequest, PluginRouteResponse } from "./context";
+import type { PluginContextOf, PluginSettingsOf } from "./manifest-types";
 
 export type * from "./context";
+export {
+  defineManifest,
+  type ObjectFieldValue,
+  type ObjectRecordOf,
+  type PluginContextOf,
+  type PluginObjectsOf,
+  type PluginSettingsOf,
+  type SettingsOf,
+  type SettingValueOf,
+  type StorefrontSettingsOf,
+} from "./manifest-types";
 // The root entry stays free of schema code (zod), so a packed plugin carries
 // only its own logic; `@scalius/plugin-sdk/manifest` has the manifest parser.
 export { PLUGIN_API_VERSION } from "@scalius/shared/plugins/api-version";
@@ -86,12 +98,12 @@ export type {
 } from "@scalius/shared/plugins";
 export { adminContext, adminLocale, ui, wantsPage, type PluginAdminContext, type PluginAdminLocale } from "./ui";
 
-export type PluginEventHandler<T extends EventTopic = EventTopic> = (event: PluginEvent<T>, ctx: PluginContext) => Promise<void> | void;
+export type PluginEventHandler<T extends EventTopic = EventTopic, Ctx = PluginContext> = (event: PluginEvent<T>, ctx: Ctx) => Promise<void> | void;
 
 /** Pure: no context, no I/O; gets the input and the plugin's settings. */
-export type PluginFunctionHandler<P extends PluginFunctionPoint> = (
+export type PluginFunctionHandler<P extends PluginFunctionPoint, Settings = Readonly<Record<string, PluginSettingValue>>> = (
   input: PluginFunctionInput<P>,
-  settings: Readonly<Record<string, PluginSettingValue>>,
+  settings: Settings,
 ) => PluginFunctionAnswer<P> | Promise<PluginFunctionAnswer<P>>;
 
 export type { FunctionReadRecord, FunctionReads };
@@ -112,7 +124,7 @@ export function readMany<T extends Record<string, unknown> = Record<string, unkn
     : {};
 }
 
-export type PluginRouteHandler = (request: PluginRouteRequest, ctx: PluginContext) => Promise<PluginRouteResponse> | PluginRouteResponse;
+export type PluginRouteHandler<Ctx = PluginContext> = (request: PluginRouteRequest, ctx: Ctx) => Promise<PluginRouteResponse> | PluginRouteResponse;
 /**
  * A cron job run. Schedules are five-field cron in the store's time zone,
  * checked by the platform's maintenance (every 15 minutes on Workers Paid,
@@ -122,32 +134,39 @@ export type PluginRouteHandler = (request: PluginRouteRequest, ctx: PluginContex
  * slot runs (within 24 hours). `scheduledAt` is the slot, so use it, not the
  * clock, for time windows.
  */
-export type PluginCronHandler = (ctx: PluginContext, run: { name: string; scheduledAt: string }) => Promise<void> | void;
-export type PluginLifecycleHandler = (ctx: PluginContext) => Promise<void> | void;
+export type PluginCronHandler<Ctx = PluginContext> = (ctx: Ctx, run: { name: string; scheduledAt: string }) => Promise<void> | void;
+export type PluginLifecycleHandler<Ctx = PluginContext> = (ctx: Ctx) => Promise<void> | void;
 
-export interface PluginDefinition {
-  manifest: PluginManifestInput;
+/**
+ * An app: its manifest and the handlers it declares. With a manifest from
+ * `defineManifest` (literal types), handlers get `PluginContextOf<M>`:
+ * `ctx.objects.<name>` reads its declared record type and `ctx.settings` its
+ * declared keys. `Ctx` stays assignable to `PluginContext`, so helpers that
+ * take a `PluginContext` keep working.
+ */
+export interface PluginDefinition<M extends PluginManifestInput = PluginManifestInput, Ctx = PluginContextOf<M>> {
+  manifest: M;
   /** Keyed like the manifest's `events`: an exact topic, a `<resource>.*` wildcard or `*`. */
-  events?: { [T in EventTopic]?: PluginEventHandler<T> } & { [F in Exclude<EventTopicFilter, EventTopic>]?: PluginEventHandler };
-  functions?: { [P in PluginFunctionPoint]?: PluginFunctionHandler<P> };
+  events?: { [T in EventTopic]?: PluginEventHandler<T, Ctx> } & { [F in Exclude<EventTopicFilter, EventTopic>]?: PluginEventHandler<EventTopic, Ctx> };
+  functions?: { [P in PluginFunctionPoint]?: PluginFunctionHandler<P, PluginSettingsOf<M>> };
   routes?: {
-    admin?: Record<string, PluginRouteHandler>;
-    public?: Record<string, PluginRouteHandler>;
-    webhooks?: Record<string, PluginRouteHandler>;
+    admin?: Record<string, PluginRouteHandler<Ctx>>;
+    public?: Record<string, PluginRouteHandler<Ctx>>;
+    webhooks?: Record<string, PluginRouteHandler<Ctx>>;
   };
-  cron?: Record<string, PluginCronHandler>;
+  cron?: Record<string, PluginCronHandler<Ctx>>;
   /** Provider implementations keyed by the manifest's provider id (`definePaymentProvider`, …). */
   providers?: Record<string, PluginProvider>;
   lifecycle?: {
-    install?: PluginLifecycleHandler;
-    activate?: PluginLifecycleHandler;
-    deactivate?: PluginLifecycleHandler;
+    install?: PluginLifecycleHandler<Ctx>;
+    activate?: PluginLifecycleHandler<Ctx>;
+    deactivate?: PluginLifecycleHandler<Ctx>;
     /** `keepData` is false when the merchant chose to delete the plugin's data. */
-    uninstall?: (ctx: PluginContext, options: { keepData: boolean }) => Promise<void> | void;
+    uninstall?: (ctx: Ctx, options: { keepData: boolean }) => Promise<void> | void;
     /** A person turned one of the app's features on; it runs with the feature's access. */
-    enable?: (ctx: PluginContext, options: { feature: string }) => Promise<void> | void;
+    enable?: (ctx: Ctx, options: { feature: string }) => Promise<void> | void;
     /** A person turned one of the app's features off; it runs with the access the app keeps. */
-    disable?: (ctx: PluginContext, options: { feature: string }) => Promise<void> | void;
+    disable?: (ctx: Ctx, options: { feature: string }) => Promise<void> | void;
   };
   /**
    * Data updates keyed by the manifest's `migrations[].version`. Each runs
@@ -156,13 +175,17 @@ export interface PluginDefinition {
    * previous version able to read the result: a failed update rolls the code
    * back, never the data.
    */
-  migrations?: Record<string, PluginMigrationHandler>;
+  migrations?: Record<string, PluginMigrationHandler<Ctx>>;
 }
 
-export type PluginMigrationHandler = (ctx: PluginContext) => Promise<void> | void;
+export type PluginMigrationHandler<Ctx = PluginContext> = (ctx: Ctx) => Promise<void> | void;
 
-/** Identity at runtime; gives plugin authors full types. */
-export function definePlugin<const T extends PluginDefinition>(definition: T): T {
+/**
+ * Identity at runtime; gives plugin authors full types. Handlers are typed
+ * by the manifest: declare it with `defineManifest` to get typed
+ * `ctx.objects.<name>` records and `ctx.settings` keys.
+ */
+export function definePlugin<const M extends PluginManifestInput, const T extends PluginDefinition<M>>(definition: T & { manifest: M }): T {
   return definition;
 }
 
