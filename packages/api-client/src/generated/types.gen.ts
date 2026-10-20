@@ -2320,7 +2320,35 @@ export type GiftCardSummaryResource = {
     createdAt: string;
 };
 
-export type GiftCardResource = GiftCardSummaryResource & {
+export type GiftCardResource = {
+    id: string;
+    /**
+     * The code's last four characters; the code itself never leaves the store.
+     */
+    last4: string;
+    currency: string;
+    /**
+     * The value it was issued with, in minor units of `currency`.
+     */
+    initialAmountMinor: number;
+    /**
+     * What is left to spend, in minor units of `currency`.
+     */
+    balanceMinor: number;
+    status: 'active' | 'disabled';
+    expiresAt: string | null;
+    expired: boolean;
+    source: 'purchase' | 'manual' | 'refund';
+    /**
+     * The customer who owns it, if any.
+     */
+    customerId: string | null;
+    recipientName: string | null;
+    /**
+     * Send it as `expectedVersion` to change the card; every balance movement advances it.
+     */
+    version: number;
+    createdAt: string;
     recipientEmail: string | null;
     recipientPhone: string | null;
     /**

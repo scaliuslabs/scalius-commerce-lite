@@ -11026,55 +11026,124 @@
         ]
       },
       "GiftCardResource": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/GiftCardSummaryResource"
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
           },
-          {
-            "type": "object",
-            "properties": {
-              "recipientEmail": {
-                "type": "string",
-                "nullable": true,
-                "x-scalius-protected": "email"
-              },
-              "recipientPhone": {
-                "type": "string",
-                "nullable": true,
-                "x-scalius-protected": "phone"
-              },
-              "message": {
-                "type": "string",
-                "nullable": true,
-                "description": "The message the recipient reads with the card."
-              },
-              "note": {
-                "type": "string",
-                "nullable": true,
-                "description": "The store's own note; buyers never see it."
-              },
-              "sourceOrderId": {
-                "type": "string",
-                "nullable": true,
-                "description": "The order it was bought or refunded on, if any."
-              },
-              "transactions": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/GiftCardTransactionResource"
-                },
-                "description": "Its ledger, in minor units of `currency`."
-              }
-            },
-            "required": [
-              "recipientEmail",
-              "recipientPhone",
-              "message",
-              "note",
-              "sourceOrderId",
-              "transactions"
+          "last4": {
+            "type": "string",
+            "description": "The code's last four characters; the code itself never leaves the store."
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3
+          },
+          "initialAmountMinor": {
+            "type": "integer",
+            "description": "The value it was issued with, in minor units of `currency`."
+          },
+          "balanceMinor": {
+            "type": "integer",
+            "description": "What is left to spend, in minor units of `currency`."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "disabled"
             ]
+          },
+          "expiresAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "expired": {
+            "type": "boolean"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "purchase",
+              "manual",
+              "refund"
+            ]
+          },
+          "customerId": {
+            "type": "string",
+            "nullable": true,
+            "description": "The customer who owns it, if any."
+          },
+          "recipientName": {
+            "type": "string",
+            "nullable": true,
+            "x-scalius-protected": "name"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "description": "Send it as `expectedVersion` to change the card; every balance movement advances it."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "recipientEmail": {
+            "type": "string",
+            "nullable": true,
+            "x-scalius-protected": "email"
+          },
+          "recipientPhone": {
+            "type": "string",
+            "nullable": true,
+            "x-scalius-protected": "phone"
+          },
+          "message": {
+            "type": "string",
+            "nullable": true,
+            "description": "The message the recipient reads with the card."
+          },
+          "note": {
+            "type": "string",
+            "nullable": true,
+            "description": "The store's own note; buyers never see it."
+          },
+          "sourceOrderId": {
+            "type": "string",
+            "nullable": true,
+            "description": "The order it was bought or refunded on, if any."
+          },
+          "transactions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GiftCardTransactionResource"
+            },
+            "description": "Its ledger, in minor units of `currency`."
           }
+        },
+        "required": [
+          "id",
+          "last4",
+          "currency",
+          "initialAmountMinor",
+          "balanceMinor",
+          "status",
+          "expiresAt",
+          "expired",
+          "source",
+          "customerId",
+          "recipientName",
+          "version",
+          "createdAt",
+          "recipientEmail",
+          "recipientPhone",
+          "message",
+          "note",
+          "sourceOrderId",
+          "transactions"
         ]
       },
       "GiftCardTransactionResource": {
