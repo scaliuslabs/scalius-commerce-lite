@@ -59,7 +59,12 @@ export interface PlatformConfig {
   customerAuthCookieDomain: string;
   /** Extra origins allowed to make credentialed API requests. */
   corsAllowedOrigins: string[];
-  /** Require the derived `ADMIN_SETUP_TOKEN` header on `POST /api/v1/setup`. */
+  /**
+   * Require the derived `ADMIN_SETUP_TOKEN` header on `POST /api/v1/setup`.
+   * On for a new store (audit R2 F9: whoever reached setup first after a
+   * deploy became its owner); `pnpm run deploy` prints the key. A saved
+   * document keeps its own value, so an existing store is unaffected.
+   */
   setupTokenRequired: boolean;
   identityHandoff: IdentityHandoffConfig;
   /**
@@ -98,7 +103,7 @@ export const EMPTY_PLATFORM_CONFIG: Readonly<PlatformConfig> = Object.freeze({
   mediaUrl: "",
   customerAuthCookieDomain: "",
   corsAllowedOrigins: [] as string[],
-  setupTokenRequired: false,
+  setupTokenRequired: true,
   identityHandoff: EMPTY_IDENTITY_HANDOFF_CONFIG,
   timeZone: DEFAULT_STORE_TIME_ZONE,
   unitSystem: DEFAULT_UNIT_SYSTEM,
@@ -393,7 +398,11 @@ export function normalizePlatformConfig(raw: unknown): PlatformConfig {
     mediaUrl: normalizeMediaBaseUrl(source.mediaUrl),
     customerAuthCookieDomain: normalizeCookieDomain(source.customerAuthCookieDomain),
     corsAllowedOrigins: normalizeCorsOrigins(source.corsAllowedOrigins),
-    setupTokenRequired: source.setupTokenRequired === true,
+    // No document at all is a new store: it needs the key (audit R2 F9). A
+    // stored document keeps its own choice, so an existing store is unaffected.
+    setupTokenRequired: raw && typeof raw === "object"
+      ? source.setupTokenRequired === true
+      : EMPTY_PLATFORM_CONFIG.setupTokenRequired,
     identityHandoff: normalizeIdentityHandoffConfig(source.identityHandoff),
     ...normalizeStoreDefaults(source),
   };
@@ -416,8 +425,9 @@ export function normalizeStoreDefaults(source: {
 /**
  * Local development runs the three Workers on fixed loopback ports. When the
  * current request arrives on a loopback origin, unset platform URLs fall back
- * to those ports so `pnpm dev` needs no configuration. Production origins are
- * never guessed.
+ * to those ports and first-admin setup needs no key, so `pnpm dev` needs no
+ * configuration. Production origins are never guessed, and a production
+ * request never arrives on a loopback origin.
  */
 export function withLocalDevelopmentDefaults(
   config: PlatformConfig,
@@ -430,6 +440,7 @@ export function withLocalDevelopmentDefaults(
     apiUrl: config.apiUrl || LOCAL_DEVELOPMENT_PLATFORM_CONFIG.apiUrl,
     dashboardUrl: config.dashboardUrl || LOCAL_DEVELOPMENT_PLATFORM_CONFIG.dashboardUrl,
     mediaUrl: config.mediaUrl || LOCAL_DEVELOPMENT_PLATFORM_CONFIG.mediaUrl,
+    setupTokenRequired: LOCAL_DEVELOPMENT_PLATFORM_CONFIG.setupTokenRequired,
   };
 }
 

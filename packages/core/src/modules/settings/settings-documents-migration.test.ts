@@ -272,7 +272,10 @@ describe.each(["d1", "turso"] as const)("0065 settings documents migration (%s)"
       apiUrl: "https://api.shop.example.com",
       dashboardUrl: "",
       corsAllowedOrigins: ["https://a.example.com", "https://b.example.com"],
-      setupTokenRequired: false,
+      // A pre-document store never saved the flag, so it reads the default. It
+      // only gates first-admin setup, which such a store (it has an admin) has
+      // already closed.
+      setupTokenRequired: true,
     });
     expect(await getEmailRuntimeSettings({ db, encryptionKey: KEY })).toMatchObject({
       provider: "cloudflare",
