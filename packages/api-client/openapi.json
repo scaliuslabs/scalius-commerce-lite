@@ -153038,7 +153038,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "internal",
           "principals": [
             "admin"
           ],
