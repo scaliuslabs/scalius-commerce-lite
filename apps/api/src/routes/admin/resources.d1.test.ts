@@ -7,6 +7,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
+import { paymentMethodsDocument } from "@scalius/core/modules/settings";
 import { EVENT_REPRESENTATION_SCHEMAS } from "@scalius/shared/events";
 import type { ProtectedCustomerData } from "@scalius/shared/plugins/protected-data";
 import { errorResponseFromError } from "../../utils/api-response";
@@ -123,6 +124,12 @@ describe("the stable app API's resources", () => {
   it("places an app's invoice order on net terms, records its payments once per key, and lists it while overdue", async () => {
     sqlite.exec(`INSERT INTO customers (id, name, phone, email, origin) VALUES ('cust_b2b', 'Trader Ltd', '+8801744444444', 'buyer@trader.test', 'merchant')`);
     principal = { pluginId: "acme.b2b", protectedData: new Set() };
+    // An app may invoice only while the store offers invoices.
+    await paymentMethodsDocument.write(db, {
+      enabledMethods: ["cod", "net_terms"],
+      defaultMethod: "cod",
+      netTerms: { dueInDays: 30, customerTags: [], segmentIds: [], appsDecide: false },
+    });
     const placed = await call("POST", "/resources/orders", {
       body: {
         customerId: "cust_b2b",
