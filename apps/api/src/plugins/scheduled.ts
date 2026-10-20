@@ -14,6 +14,7 @@ import { syncBundledPlugins, type BundledSyncResult } from "./bundled-sync";
 import { runDuePluginCron, type PluginCronTickResult } from "./cron";
 import type { MarketFxRefreshResult } from "@scalius/core/modules/markets";
 import { claimSystemKv, deleteSystemKv } from "@scalius/core/utils/system-kv";
+import { planLimits } from "@scalius/shared/plan-limits";
 import { workerCacheHint } from "@scalius/shared/worker-cache-hint";
 
 const BUNDLED_SYNCED_FOR_VERSION_KEY = "plugins:bundled-synced-for-version";
@@ -24,7 +25,10 @@ const BUNDLED_SYNCED_FOR_VERSION_KEY = "plugins:bundled-synced-for-version";
  * every 23 minutes): until then an app whose manifest changed reads as
  * unreadable and does nothing (its payment methods leave checkout). Once per
  * Worker version, claimed in system_kv; the per-colo hint makes every later
- * tick free. A failed sync releases the claim, so the next tick retries.
+ * tick free. A failed sync releases the claim, so the next tick retries. Each
+ * tick syncs at most the plan's `bundledAppSyncsPerTick` apps (an install fills
+ * most of a Free tick's 50 D1 queries) and releases the claim while any app is
+ * still behind, so the following ticks finish the rest.
  */
 export async function syncBundledPluginsOncePerDeploy(db: Database, env: Env): Promise<BundledSyncResult | null> {
   const version = env.CF_VERSION_METADATA?.id;
@@ -36,7 +40,11 @@ export async function syncBundledPluginsOncePerDeploy(db: Database, env: Env): P
     return null;
   }
   try {
-    const result = await syncBundledPlugins(db);
+    const result = await syncBundledPlugins(db, undefined, planLimits().background.bundledAppSyncsPerTick);
+    if (result.pending) {
+      await deleteSystemKv(db, BUNDLED_SYNCED_FOR_VERSION_KEY);
+      return result;
+    }
     await hint?.put("synced", "1").catch(() => undefined);
     return result;
   } catch (error) {

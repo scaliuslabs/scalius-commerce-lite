@@ -72,6 +72,12 @@ export interface PlanLimits {
     readonly catalogRebuildChunksPerDrain: number;
     /** Chunks (90 items each) of due bulk runs one drain commits; the rest continue next tick. */
     readonly bulkRunChunksPerDrain: number;
+    /**
+     * Bundled apps the first ticks after a deploy install or update, one
+     * tick at a time (an install is a few dozen D1 queries); the rest sync
+     * on the next tick.
+     */
+    readonly bundledAppSyncsPerTick: number;
   };
   readonly maintenance: {
     /** A sweep tick comes every this many minutes (the cron fires every minute; apps/api/src/scheduled/slices.ts). */
@@ -142,7 +148,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       nightlySoldRecommendationLimit: 5,
       catalogRebuildChunk: 90,
       catalogRebuildChunksPerDrain: 1,
-      bulkRunChunksPerDrain: 3,
+      bulkRunChunksPerDrain: 3, bundledAppSyncsPerTick: 1,
     }),
     maintenance: Object.freeze({
       sweepEveryMinutes: 1,
@@ -181,7 +187,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       nightlySoldRecommendationLimit: 200,
       catalogRebuildChunk: 900,
       catalogRebuildChunksPerDrain: 10,
-      bulkRunChunksPerDrain: 12,
+      bulkRunChunksPerDrain: 12, bundledAppSyncsPerTick: 1_000,
     }),
     maintenance: Object.freeze({
       sweepEveryMinutes: 15,

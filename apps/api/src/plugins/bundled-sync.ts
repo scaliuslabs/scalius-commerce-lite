@@ -50,6 +50,8 @@ export interface BundledSyncResult {
   failed: Array<{ pluginId: string; reason: string }>;
   /** Whether an active app approved for the `fx` port provides exchange rates (the tick then refreshes market rates). */
   fxApps: boolean;
+  /** Bundled apps still behind the deployed code because this run reached its `limit`. */
+  pending: boolean;
 }
 
 async function bundledManifest(pluginId: string, entry: BundledPluginEntry): Promise<unknown> {
@@ -116,8 +118,10 @@ async function syncOne(
 export async function syncBundledPlugins(
   db: Database,
   registry: BundledPluginRegistry = BUNDLED_PLUGINS,
+  /** At most this many installs or updates; the rest are left `pending` for the next run. */
+  limit = Number.POSITIVE_INFINITY,
 ): Promise<BundledSyncResult> {
-  const result: BundledSyncResult = { installed: [], updated: [], removed: [], failed: [], fxApps: false };
+  const result: BundledSyncResult = { installed: [], updated: [], removed: [], failed: [], fxApps: false, pending: false };
   const ids = Object.keys(registry);
   const read = await readPluginInstallations(db);
   const installations = new Map(read.installations.map((installation) => [installation.pluginId, installation]));
@@ -139,11 +143,17 @@ export async function syncBundledPlugins(
       throw error;
     }
   }
+  let synced = 0;
   for (const pluginId of ids.sort()) {
     const entry = registry[pluginId]!;
     const installation = stored.get(pluginId);
     if (!needsSync(entry, installation)) continue;
+    if (synced >= limit) {
+      result.pending = true;
+      break;
+    }
     await syncOne(db, pluginId, entry, installation, result);
+    synced += 1;
   }
   return result;
 }
@@ -161,7 +171,7 @@ export async function syncBundledPlugin(
   const entry = Object.prototype.hasOwnProperty.call(registry, pluginId) ? registry[pluginId] : undefined;
   if (!entry) return null;
   const current = (await readPluginInstallation(db, pluginId)) ?? undefined;
-  const result: BundledSyncResult = { installed: [], updated: [], removed: [], failed: [], fxApps: false };
+  const result: BundledSyncResult = { installed: [], updated: [], removed: [], failed: [], fxApps: false, pending: false };
   if (needsSync(entry, current)) await syncOne(db, pluginId, entry, current, result);
   if (result.failed.length > 0) return null;
   return requirePluginInstallation(db, pluginId).catch(() => null);

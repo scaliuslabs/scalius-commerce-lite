@@ -244,7 +244,7 @@ describe("runScheduledMaintenance", () => {
       pluginDeliveries: 0,
     });
     mocks.runScheduledPluginMaintenance.mockResolvedValue({
-      bundled: { installed: [], updated: [], removed: [], failed: [], fxApps: false },
+      bundled: { installed: [], updated: [], removed: [], failed: [], fxApps: false, pending: false },
       cron: { due: 0, ran: 0, failed: 0, skipped: 0, deferred: 0, expired: 0 },
       prunedCronRuns: 0,
     });
