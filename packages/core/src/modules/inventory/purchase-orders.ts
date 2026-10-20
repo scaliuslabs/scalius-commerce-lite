@@ -38,6 +38,7 @@ import { digitalStockError, isDigitalKind, variantOptionLabelSql } from "../prod
 import { type StoreCurrency } from "../settings";
 import { readStoreCurrency } from "../markets";
 import { inventoryOperationKeySchema } from "./inventory.validation";
+import { dateOnlySchema, optionalTextSchema, parseInventoryInput } from "./validation";
 import { resolveActiveInventoryLocation } from "./locations";
 import { assertActiveSupplier } from "./suppliers";
 import { addedQuantitySql, commandActorUserIdSql, executeStockCommand, idsFromJsonSql, readStockCommandSkus, type StockCommandEdge } from "./stock-commands";
@@ -53,11 +54,7 @@ const NUMBER_START = 1000;
 // Inputs
 // ─────────────────────────────────────────
 
-const dateOnlySchema = z.string().trim()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date like 2026-10-31.")
-  .refine((value) => !Number.isNaN(Date.parse(`${value}T00:00:00Z`)) && new Date(`${value}T00:00:00Z`).toISOString().startsWith(value), "Use a real calendar date.");
 
-const optionalText = (max: number) => z.string().trim().max(max).nullable().optional();
 
 export const purchaseOrderLineInputSchema = z.object({
   variantId: z.string().trim().min(1).max(100),
@@ -71,8 +68,8 @@ const headerShape = {
   /** Where the goods arrive; the default location when omitted on create. */
   destinationLocationId: z.string().trim().min(1).max(100).optional(),
   expectedOn: dateOnlySchema.nullable().optional(),
-  reference: optionalText(100),
-  notes: optionalText(2000),
+  reference: optionalTextSchema(100),
+  notes: optionalTextSchema(2000),
   shipping: unitCostAmountSchema.optional(),
   otherCosts: unitCostAmountSchema.optional(),
   tax: unitCostAmountSchema.optional(),
@@ -112,16 +109,6 @@ export const listPurchaseOrdersQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional().default(50),
 });
 export type ListPurchaseOrdersQuery = z.input<typeof listPurchaseOrdersQuerySchema>;
-
-function parse<T>(schema: z.ZodType<T>, input: unknown, fallback = "Invalid purchase order"): T {
-  const parsed = schema.safeParse(input);
-  if (!parsed.success) {
-    throw new ValidationError(parsed.error.issues[0]?.message ?? fallback, {
-      issues: parsed.error.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message })),
-    });
-  }
-  return parsed.data;
-}
 
 // ─────────────────────────────────────────
 // Read models
@@ -281,7 +268,7 @@ function numberFromQuery(q: string): number | null {
 }
 
 export async function listPurchaseOrders(db: Database, query: ListPurchaseOrdersQuery = {}) {
-  const { q, status, supplierId, locationId, page, limit } = parse(listPurchaseOrdersQuerySchema, query);
+  const { q, status, supplierId, locationId, page, limit } = parseInventoryInput(listPurchaseOrdersQuerySchema, query, "Invalid purchase order");
   const conditions: SQL[] = [];
   if (status === "open") conditions.push(inArray(purchaseOrders.status, [...PURCHASE_ORDER_OPEN_STATUSES]));
   else if (status !== "all") conditions.push(eq(purchaseOrders.status, status));
@@ -578,7 +565,7 @@ export async function createPurchaseOrder(
   input: CreatePurchaseOrderInput,
   actorId?: string | null,
 ): Promise<PurchaseOrderDetail> {
-  const data = parse(createPurchaseOrderSchema, input);
+  const data = parseInventoryInput(createPurchaseOrderSchema, input, "Invalid purchase order");
   const currency = await readStoreCurrency(db);
   const destination = await resolveActiveInventoryLocation(db, data.destinationLocationId);
   if (data.supplierId) await assertActiveSupplier(db, data.supplierId);
@@ -627,7 +614,7 @@ export async function updatePurchaseOrder(
   id: string,
   input: UpdatePurchaseOrderInput,
 ): Promise<PurchaseOrderDetail> {
-  const data = parse(updatePurchaseOrderSchema, input);
+  const data = parseInventoryInput(updatePurchaseOrderSchema, input, "Invalid purchase order");
   const header = await readHeader(db, id);
   assertRevision(header, data.expectedRevision);
   assertStatus(header, ["draft", "ordered", "partially_received"], "edited");
@@ -798,7 +785,7 @@ export async function receivePurchaseOrder(
   input: ReceivePurchaseOrderInput,
   actorId?: string | null,
 ): Promise<PurchaseOrderReceiptResult> {
-  const data = parse(receivePurchaseOrderSchema, input, "Invalid receipt");
+  const data = parseInventoryInput(receivePurchaseOrderSchema, input, "Invalid receipt");
   if (new Set(data.lines.map((line) => line.lineId)).size !== data.lines.length) {
     throw new ValidationError("Each purchase order line appears once in a receipt.");
   }

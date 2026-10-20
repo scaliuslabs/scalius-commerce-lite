@@ -22,6 +22,7 @@ import {
 import { AppError, ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { z } from "zod";
 import { readIncomingStock, type IncomingStockRow } from "./inventory-insights";
+import { optionalTextSchema, parseInventoryInput } from "./validation";
 import { readStoreCountry } from "../../utils/store-country";
 
 /** RAISE message of the trigger that refuses a stock movement without an active location. */
@@ -221,19 +222,18 @@ export async function assertInventoryLocationCovers(
 // Location records
 // ─────────────────────────────────────────
 
-const optionalText = (max: number) => z.string().trim().max(max).nullable().optional();
 
 export const inventoryLocationInputSchema = z.object({
     name: z.string().trim().min(1, "Enter a name.").max(80),
     code: z.string().trim().min(1, "Enter a code.").max(24)
         .regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/, "Use letters, numbers, hyphens or underscores."),
     kind: z.enum(INVENTORY_LOCATION_KINDS).optional(),
-    addressLine1: optionalText(200),
-    addressLine2: optionalText(200),
-    city: optionalText(80),
-    postalCode: optionalText(20),
+    addressLine1: optionalTextSchema(200),
+    addressLine2: optionalTextSchema(200),
+    city: optionalTextSchema(80),
+    postalCode: optionalTextSchema(20),
     countryCode: z.string().trim().regex(/^[A-Za-z]{2}$/, "Use a two-letter country code.").optional(),
-    phone: optionalText(32),
+    phone: optionalTextSchema(32),
 });
 export type InventoryLocationInput = z.input<typeof inventoryLocationInputSchema>;
 
@@ -257,16 +257,6 @@ function locationValues(input: z.output<typeof inventoryLocationInputSchema>) {
         countryCode: input.countryCode?.toUpperCase(),
         phone: blankToNull(input.phone),
     };
-}
-
-function parseLocationInput<T>(schema: z.ZodType<T>, input: unknown): T {
-    const parsed = schema.safeParse(input);
-    if (!parsed.success) {
-        throw new ValidationError(parsed.error.issues[0]?.message ?? "Invalid location", {
-            issues: parsed.error.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message })),
-        });
-    }
-    return parsed.data;
 }
 
 export interface InventoryLocationRecord {
@@ -373,7 +363,7 @@ export async function createInventoryLocation(
     db: Database,
     input: InventoryLocationInput,
 ): Promise<InventoryLocationRecord> {
-    const data = locationValues(parseLocationInput(inventoryLocationInputSchema, input));
+    const data = locationValues(parseInventoryInput(inventoryLocationInputSchema, input, "Invalid location"));
     await assertCodeAvailable(db, data.code);
     // A location without a country is in the store's (the backup market's).
     const countryCode = data.countryCode ?? await readStoreCountry(db);
@@ -402,7 +392,7 @@ export async function updateInventoryLocation(
     id: string,
     input: UpdateInventoryLocationInput,
 ): Promise<InventoryLocationRecord> {
-    const { expectedVersion, ...fields } = parseLocationInput(updateInventoryLocationSchema, input);
+    const { expectedVersion, ...fields } = parseInventoryInput(updateInventoryLocationSchema, input, "Invalid location");
     const data = locationValues(fields);
     await assertCodeAvailable(db, data.code, id);
     let updated: Array<{ id: string }>;

@@ -9,15 +9,15 @@ import { z } from "zod";
 import type { Database } from "@scalius/database/client";
 import { purchaseOrders, suppliers, SUPPLIER_STATUSES, type SupplierStatus } from "@scalius/database/schema";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
+import { optionalTextSchema, parseInventoryInput } from "./validation";
 
-const optionalText = (max: number) => z.string().trim().max(max).nullable().optional();
 
 export const supplierInputSchema = z.object({
   name: z.string().trim().min(1, "Enter a name.").max(120),
-  contactName: optionalText(120),
-  phone: optionalText(32),
+  contactName: optionalTextSchema(120),
+  phone: optionalTextSchema(32),
   email: z.union([z.string().trim().email("Enter a valid email.").max(254), z.literal("")]).nullable().optional(),
-  notes: optionalText(2000),
+  notes: optionalTextSchema(2000),
 });
 export type SupplierInput = z.input<typeof supplierInputSchema>;
 
@@ -47,16 +47,6 @@ export interface SupplierRecord {
   openPurchaseOrders: number;
   createdAt: Date;
   updatedAt: Date;
-}
-
-function parse<T>(schema: z.ZodType<T>, input: unknown): T {
-  const parsed = schema.safeParse(input);
-  if (!parsed.success) {
-    throw new ValidationError(parsed.error.issues[0]?.message ?? "Invalid supplier", {
-      issues: parsed.error.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message })),
-    });
-  }
-  return parsed.data;
 }
 
 function values(input: z.output<typeof supplierInputSchema>) {
@@ -93,7 +83,7 @@ const supplierFields = {
 };
 
 export async function listSuppliers(db: Database, query: ListSuppliersQuery = {}) {
-  const { q, status, page, limit } = parse(listSuppliersQuerySchema, query);
+  const { q, status, page, limit } = parseInventoryInput(listSuppliersQuerySchema, query, "Invalid supplier");
   const conditions: SQL[] = [];
   if (status !== "all") conditions.push(eq(suppliers.status, status));
   if (q) {
@@ -120,7 +110,7 @@ export async function getSupplier(db: Database, id: string): Promise<SupplierRec
 }
 
 export async function createSupplier(db: Database, input: SupplierInput): Promise<SupplierRecord> {
-  const data = values(parse(supplierInputSchema, input));
+  const data = values(parseInventoryInput(supplierInputSchema, input, "Invalid supplier"));
   const id = `sup_${nanoid(16)}`;
   await db.insert(suppliers).values({
     id,
@@ -134,7 +124,7 @@ export async function createSupplier(db: Database, input: SupplierInput): Promis
 }
 
 export async function updateSupplier(db: Database, id: string, input: UpdateSupplierInput): Promise<SupplierRecord> {
-  const { expectedVersion, ...fields } = parse(updateSupplierSchema, input);
+  const { expectedVersion, ...fields } = parseInventoryInput(updateSupplierSchema, input, "Invalid supplier");
   const updated = await db.update(suppliers).set({
     ...values(fields),
     version: sql`${suppliers.version} + 1`,
