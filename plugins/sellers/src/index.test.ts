@@ -8,6 +8,12 @@ import plugin, { manifest } from "./index";
 import { commissionOf } from "./model";
 import { nextStatus } from "./splits";
 
+/** The HTML of a proxied page answer ("" for a redirect or JSON). */
+function pageHtml(value: unknown): string {
+  const output = parsePluginPageOutput((value as { body: unknown }).body);
+  return output && "page" in output ? output.page.html : "";
+}
+
 const ORDER = {
   id: "ord_1",
   orderNumber: 1001,
@@ -138,14 +144,14 @@ describe("scalius.sellers portal", () => {
     const guest = await harness.route("public", "apply", { headers: { accept: "text/html" } });
     expect(parsePluginPageOutput((guest.value as { body: unknown }).body)).toMatchObject({ page: { title: "Seller dashboard" } });
     const form = await harness.route("public", "apply", { customer: { id: "cus_9" } });
-    expect(parsePluginPageOutput((form.value as { body: unknown }).body)?.page?.html ?? "").toContain('action="/apps/scalius.sellers/apply"');
+    expect(pageHtml(form.value)).toContain('action="/apps/scalius.sellers/apply"');
     const bad = await harness.route("public", "apply", { method: "POST", customer: { id: "cus_9" }, body: { name: "x", email: "nope" } });
     expect((bad.value as { status?: number }).status).toBe(422);
     const applied = await harness.route("public", "apply", { method: "POST", customer: { id: "cus_9" }, body: { name: "Rina's Crafts", email: "rina@sellers.test" } });
     expect((applied.value as { body: unknown }).body).toEqual({ redirect: "/apps/scalius.sellers/portal" });
     expect(harness.records.get("sellers")?.get("sel_rina-s-crafts")).toMatchObject({ status: "pending", customer_id: "cus_9" });
     const portal = await harness.route("public", "portal", { customer: { id: "cus_9" } });
-    expect(parsePluginPageOutput((portal.value as { body: unknown }).body)?.page?.html ?? "").toContain("being reviewed");
+    expect(pageHtml(portal.value)).toContain("being reviewed");
   });
 
   it("lets a seller ship only their own split, as a fulfilment of exactly its lines", async () => {
@@ -166,7 +172,7 @@ describe("scalius.sellers portal", () => {
   it("shows a seller's public page only while approved", async () => {
     const { harness } = await marketplace();
     const open = await harness.route("public", "store", { subpath: "/acme-audio" });
-    expect(parsePluginPageOutput((open.value as { body: unknown }).body)?.page?.html ?? "").toContain("Earbuds");
+    expect(pageHtml(open.value)).toContain("Earbuds");
     await harness.route("admin", "seller-status", { method: "POST", body: { sellerId: "sel_acme-audio", status: "suspended" } });
     const closed = await harness.route("public", "store", { subpath: "/acme-audio" });
     expect((closed.value as { status?: number }).status).toBe(404);

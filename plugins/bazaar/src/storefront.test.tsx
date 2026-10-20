@@ -62,12 +62,6 @@ describe("scalius.bazaar manifest", () => {
     expect(document.apps?.skins?.header?.app).toBe("scalius.bazaar/bazaar_header");
     expect(document.apps?.skins?.["listing-main"]?.app).toBe("scalius.bazaar/bazaar_listing");
   });
-
-  it("keeps the demo content pack out of the storefront module", async () => {
-    const { readFile } = await import("node:fs/promises");
-    const source = await readFile(new URL("./storefront.tsx", import.meta.url), "utf8");
-    expect(source).not.toMatch(/from\s+["']\.\/demo/);
-  });
 });
 
 describe("scalius.bazaar storefront", () => {

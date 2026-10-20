@@ -143,14 +143,20 @@ async function ordersPage(ctx: PluginContext, id: string, seller: Seller, cursor
 }
 
 async function productsPage(ctx: PluginContext, id: string, seller: Seller) {
-  const owned = await productSellers(ctx).query({ where: { seller_id: id }, orderBy: { field: "assigned_at", direction: "desc" }, limit: 50 });
+  const owned = await productSellers(ctx).query({ where: { seller_id: id }, orderBy: { field: "assigned_at", direction: "desc" }, limit: 20 });
+  // One read per product (no bulk read for apps yet: BURST-NOTES gap 19), bounded at 20.
+  const names = new Map<string, { name: string; status: string }>();
+  for (const record of owned.records) {
+    const result = await ctx.api.call<{ data?: { name?: string; status?: string } }>("dashboard.resources.products.get", { path: { id: record.id } });
+    if (result.ok && result.data?.data?.name) names.set(record.id, { name: result.data.data.name, status: result.data.data.status ?? "" });
+  }
   return page(`${seller.name}: products`, (
     <section class="sellers-page">
       <h1>Products</h1>
       <Nav current="products" />
       <p>The store lists your products. To add or change one, contact the store: sellers cannot edit the catalogue yet.</p>
       {owned.records.length === 0 ? <p class="sellers-empty">No products yet.</p> : (
-        <ul class="sellers-list">{owned.records.map((record) => <li>{record.id}</li>)}</ul>
+        <ul class="sellers-list">{owned.records.map((record) => <li>{names.get(record.id)?.name ?? record.id}{names.get(record.id)?.status ? ` (${names.get(record.id)!.status})` : ""}</li>)}</ul>
       )}
     </section>
   ));
