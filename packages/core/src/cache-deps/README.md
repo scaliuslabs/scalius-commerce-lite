@@ -31,6 +31,7 @@ The triggers keep these rules:
 
 - A buyer-visible change of a registered row advances every key its rule derives, from the old and the new row image. It does so in the same transaction, whatever code wrote the row. An update rule fires only when a visible column changed. A move out of a menu, category, brand, product or promotion advances the one it left. Every change also advances `t:<table>`.
 - A stock change inside the SKU availability band advances nothing. A band change advances the product keys.
+- A promotion redemption advances its promotion only when it exhausts it (the count reaches `max_redemptions`, or the spend reaches `max_discount_spend_minor`), and a removed one only when it un-exhausts it. The other redemptions of a flash sale leave its pages cached.
 - `rebuildCatalogProjections` sets `cache_clock.coarse = 1` for its batches. Every trigger then advances only `store`.
 - `POST /api/v1/cache/clear` (Settings, Advanced, "Refresh store"; permission `settings.cache.manage`) advances `store`. Every entry depends on `store`.
 - An entry with `s0` below `cache_clock.floor` is invalid. No code prunes `cache_dep`, so the floor stays 0.
@@ -66,7 +67,7 @@ t:<table>   store
 
 ### Migrations
 
-Migration 0100 holds the clock tables and the baseline triggers (deployed, immutable). Migration 0101 holds the triggers of the ordering projections (`product_recommendations`, `product_sales_stats`, `orders`, `order_items`). `pnpm --filter @scalius/database exec tsx scripts/cache-dep-triggers.ts --write` regenerates only 0101. A table registered after 0101 gets a hand-assembled migration that contains every generated statement verbatim, and `CACHE_DEP_LATER_TABLES` names that migration (0104 custom fields, 0108 promotion customer segments, 0110 the plugin tables, 0112 the market tables).
+Migration 0100 holds the clock tables and the baseline triggers (deployed, immutable). Migration 0101 holds the triggers of the ordering projections (`product_recommendations`, `product_sales_stats`, `orders`, `order_items`). `pnpm --filter @scalius/database exec tsx scripts/cache-dep-triggers.ts --write` regenerates only 0101. A table registered after 0101 gets a hand-assembled migration that contains every generated statement verbatim, and `CACHE_DEP_LATER_TABLES` names that migration (0104 custom fields, 0108 promotion customer segments, 0110 the plugin tables, 0112 the market tables). A rule changed after its trigger deployed is reinstalled by the migration `CACHE_DEP_LATER_TRIGGERS` names; when it narrows a deployed guard, `CACHE_DEP_BASELINE_WHERE` keeps the guard deployed 0100 rendered (0167 promotion exhaustion).
 
 ## Read side: recording
 

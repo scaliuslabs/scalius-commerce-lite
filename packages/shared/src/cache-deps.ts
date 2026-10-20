@@ -326,6 +326,18 @@ export interface CacheDepTableSpec {
 }
 
 const p = (column: string): CacheDepKeyTemplate => ({ prefix: "p:", columns: [column] });
+/**
+ * A redemption row's promotion, when it has a redemption or spend limit
+ * (deployed 0100's whole guard on every redemption rule). The exhaustion
+ * guards add to it; both totals read the table after the write.
+ */
+export const LIMITED_PROMOTION_OF_ROW =
+  "SELECT 1 FROM promotions WHERE promotions.id = R.promotion_id AND (promotions.max_redemptions IS NOT NULL OR promotions.max_discount_spend_minor IS NOT NULL)";
+const PROMOTION_REDEMPTION_COUNT =
+  "(SELECT count(*) FROM promotion_redemptions AS limit_rows WHERE limit_rows.promotion_id = R.promotion_id)";
+const PROMOTION_REDEMPTION_SPEND =
+  "(SELECT coalesce(sum(limit_rows.discount_amount_minor), 0) FROM promotion_redemptions AS limit_rows WHERE limit_rows.promotion_id = R.promotion_id)";
+
 const own = (kind: string, column = "id"): CacheDepKeyTemplate[] => [
   { prefix: `${kind}:`, columns: [column] },
   { dep: `${kind}:${CACHE_DEP_ANY}` },
@@ -759,17 +771,35 @@ const CACHE_DEP_TABLE_RULES = {
   promotion_redemptions: {
     kinds: ["promo"],
     noise: [],
-    note: "Redemptions change what a buyer sees only for a promotion with a redemption or spend limit; unlimited promotions never advance a key at checkout.",
-    rules: (["insert", "update", "delete"] as const).map((event): CacheDepRule => ({
-      name: event.slice(0, 3),
-      event,
-      image: event === "delete" ? "old" : "new",
-      ...(event === "update" ? { changed: "visible" as const } : {}),
-      where: {
-        exists: "SELECT 1 FROM promotions WHERE promotions.id = R.promotion_id AND (promotions.max_redemptions IS NOT NULL OR promotions.max_discount_spend_minor IS NOT NULL)",
+    note: "A redemption changes what a buyer can see of a promotion only when it exhausts it (its redemption count reaches the limit, or its discount spend reaches the budget, the evaluator's rule) or a removed one un-exhausts it; every other redemption, and every one of an unlimited promotion, advances nothing, so a flash sale's pages stay cached through checkout. Redemptions are immutable (PROMOTION_REDEMPTION_IMMUTABLE), so the update rules never fire; they keep the conservative limited-promotion guard.",
+    rules: [
+      {
+        name: "ins",
+        event: "insert",
+        image: "new",
+        // After the insert: the count now equals the limit (it was one below),
+        // or the spend now reaches the budget and was below it without this row.
+        where: { exists: `${LIMITED_PROMOTION_OF_ROW} AND ((promotions.max_redemptions IS NOT NULL AND ${PROMOTION_REDEMPTION_COUNT} = promotions.max_redemptions) OR (promotions.max_discount_spend_minor IS NOT NULL AND ${PROMOTION_REDEMPTION_SPEND} >= promotions.max_discount_spend_minor AND ${PROMOTION_REDEMPTION_SPEND} - R.discount_amount_minor < promotions.max_discount_spend_minor))` },
+        keys: [{ prefix: "promo:", columns: ["promotion_id"] }],
       },
-      keys: [{ prefix: "promo:", columns: ["promotion_id"] }],
-    })),
+      {
+        name: "upd",
+        event: "update",
+        image: "new",
+        changed: "visible",
+        where: { exists: LIMITED_PROMOTION_OF_ROW },
+        keys: [{ prefix: "promo:", columns: ["promotion_id"] }],
+      },
+      {
+        name: "del",
+        event: "delete",
+        image: "old",
+        // After the delete: the count is one below the limit (it was at it),
+        // or the spend is below the budget and reached it with this row.
+        where: { exists: `${LIMITED_PROMOTION_OF_ROW} AND ((promotions.max_redemptions IS NOT NULL AND ${PROMOTION_REDEMPTION_COUNT} + 1 = promotions.max_redemptions) OR (promotions.max_discount_spend_minor IS NOT NULL AND ${PROMOTION_REDEMPTION_SPEND} < promotions.max_discount_spend_minor AND ${PROMOTION_REDEMPTION_SPEND} + R.discount_amount_minor >= promotions.max_discount_spend_minor))` },
+        keys: [{ prefix: "promo:", columns: ["promotion_id"] }],
+      },
+    ],
   },
   promotion_customer_segments: {
     kinds: ["promo"],
