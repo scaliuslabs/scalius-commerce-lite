@@ -89,6 +89,10 @@ export default defineConfig({
     exclude: [...configDefaults.exclude, ".claude/**", "audit/**"],
     // Transformed modules persist in node_modules/.vitest-cache between runs.
     fsModuleCache: true,
+    // Each run records the modules every test file loaded, so `--changed`
+    // (`pnpm test:affected`, scripts/test-affected.mjs) selects by what a test
+    // really imports instead of walking the static graph.
+    experimental: { recordDependencies: true },
     projects: [
       ...(pass === "serial"
         ? []
