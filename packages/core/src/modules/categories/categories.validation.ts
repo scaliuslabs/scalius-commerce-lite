@@ -92,8 +92,16 @@ export const categoryRevisionClaimSchema = z.object({
     expectedRevision: expectedRevisionSchema,
 });
 
+/** On create an empty field may be omitted: a category needs no image, description or search text to exist. */
+const omittedAsNull = <T extends z.ZodType>(schema: T) =>
+    schema.optional().transform((value) => value ?? null);
+
 export const createCategorySchema = categorySchema.extend({
     ...categoryPlacementFields,
+    image: omittedAsNull(imageSchema),
+    description: omittedAsNull(categorySchema.shape.description),
+    metaTitle: omittedAsNull(categorySchema.shape.metaTitle),
+    metaDescription: omittedAsNull(categorySchema.shape.metaDescription),
     slug: categorySchema.shape.slug.optional()
         .describe("Omit to derive the web address from the name; a taken one gets a -2, -3… suffix."),
     status: categoryStatusSchema.optional().default("draft"),

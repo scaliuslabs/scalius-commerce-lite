@@ -24544,18 +24544,18 @@ export type GetApiV1AdminCategoriesResponse = GetApiV1AdminCategoriesResponses[k
 export type PostApiV1AdminCategoriesData = {
     body: {
         name: string;
-        description: string | null;
+        description?: string | null;
         content?: string | null;
         /**
          * Omit to derive the web address from the name; a taken one gets a -2, -3… suffix.
          */
         slug?: string;
-        metaTitle: string | null;
-        metaDescription: string | null;
+        metaTitle?: string | null;
+        metaDescription?: string | null;
         canonicalPath?: string | null;
         noIndex?: boolean;
         excludeFromSitemap?: boolean;
-        image: {
+        image?: {
             id: string;
             url: string;
             filename: string;
@@ -43175,6 +43175,7 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
                     checkoutSelected?: boolean;
                     checkoutVisible?: boolean;
                     environment?: 'test' | 'live' | 'mixed' | 'unknown' | 'not_applicable';
+                    countries?: 'any' | Array<string>;
                 };
                 cod: {
                     configured: boolean;
@@ -43187,6 +43188,7 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
                     checkoutSelected?: boolean;
                     checkoutVisible?: boolean;
                     environment?: 'test' | 'live' | 'mixed' | 'unknown' | 'not_applicable';
+                    countries?: 'any' | Array<string>;
                 };
                 net_terms: {
                     configured: boolean;
@@ -43199,6 +43201,7 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
                     checkoutSelected?: boolean;
                     checkoutVisible?: boolean;
                     environment?: 'test' | 'live' | 'mixed' | 'unknown' | 'not_applicable';
+                    countries?: 'any' | Array<string>;
                 };
                 [key: string]: {
                     configured: boolean;
@@ -43211,6 +43214,7 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
                     checkoutSelected?: boolean;
                     checkoutVisible?: boolean;
                     environment?: 'test' | 'live' | 'mixed' | 'unknown' | 'not_applicable';
+                    countries?: 'any' | Array<string>;
                 } | {
                     configured: boolean;
                     enabled: boolean;
@@ -43222,6 +43226,7 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
                     checkoutSelected?: boolean;
                     checkoutVisible?: boolean;
                     environment?: 'test' | 'live' | 'mixed' | 'unknown' | 'not_applicable';
+                    countries?: 'any' | Array<string>;
                 } | {
                     configured: boolean;
                     enabled: boolean;
@@ -43233,6 +43238,7 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
                     checkoutSelected?: boolean;
                     checkoutVisible?: boolean;
                     environment?: 'test' | 'live' | 'mixed' | 'unknown' | 'not_applicable';
+                    countries?: 'any' | Array<string>;
                 } | {
                     configured: boolean;
                     enabled: boolean;
@@ -43244,6 +43250,7 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
                     checkoutSelected?: boolean;
                     checkoutVisible?: boolean;
                     environment?: 'test' | 'live' | 'mixed' | 'unknown' | 'not_applicable';
+                    countries?: 'any' | Array<string>;
                 };
             };
             [key: string]: unknown;
@@ -45167,6 +45174,78 @@ export type PutApiV1AdminSettingsShippingMethodsByIdResponses = {
 };
 
 export type PutApiV1AdminSettingsShippingMethodsByIdResponse = PutApiV1AdminSettingsShippingMethodsByIdResponses[keyof PutApiV1AdminSettingsShippingMethodsByIdResponses];
+
+export type PatchApiV1AdminSettingsShippingMethodsByIdRatesByRateIdData = {
+    body: {
+        /**
+         * The zone's revision from the read.
+         */
+        expectedRevision: number;
+        /**
+         * The delivery charge, in major units.
+         */
+        fee?: number;
+        /**
+         * Free delivery from this order subtotal, in major units; null removes it.
+         */
+        freeOver?: number | null;
+        isActive?: boolean;
+    };
+    path: {
+        id: string;
+        rateId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/settings/shipping-methods/{id}/rates/{rateId}';
+};
+
+export type PatchApiV1AdminSettingsShippingMethodsByIdRatesByRateIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PatchApiV1AdminSettingsShippingMethodsByIdRatesByRateIdError = PatchApiV1AdminSettingsShippingMethodsByIdRatesByRateIdErrors[keyof PatchApiV1AdminSettingsShippingMethodsByIdRatesByRateIdErrors];
+
+export type PatchApiV1AdminSettingsShippingMethodsByIdRatesByRateIdResponses = {
+    /**
+     * Rate saved
+     */
+    200: {
+        success: true;
+        data: {
+            id?: string;
+            revision: number;
+        };
+    };
+};
+
+export type PatchApiV1AdminSettingsShippingMethodsByIdRatesByRateIdResponse = PatchApiV1AdminSettingsShippingMethodsByIdRatesByRateIdResponses[keyof PatchApiV1AdminSettingsShippingMethodsByIdRatesByRateIdResponses];
 
 export type GetApiV1AdminSettingsMarketsData = {
     body?: never;

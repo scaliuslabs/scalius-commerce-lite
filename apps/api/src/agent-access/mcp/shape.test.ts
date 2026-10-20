@@ -40,6 +40,34 @@ describe("MCP response shaping", () => {
     expect(fitToBudget({ ok: 1 }, 8192)).toEqual({ data: { ok: 1 }, meta: {} });
   });
 
+  it("keeps the newest days of an oldest-first series, and the head of a paged list", () => {
+    // home.activity's 90-day default: oldest first, today last.
+    const start = Date.UTC(2026, 6, 23);
+    const dailyActivityData = Array.from({ length: 90 }, (_, index) => ({
+      date: new Date(start + index * 86_400_000).toISOString().slice(0, 10),
+      orders: index,
+      revenue: index * 1000,
+      newCustomers: 0,
+    }));
+    const today = dailyActivityData.at(-1)!;
+    const cut = fitToBudget({ dailyActivityData }, 2048);
+    const kept = (cut.data as { dailyActivityData: typeof dailyActivityData }).dailyActivityData;
+    expect(jsonBytes(cut.data)).toBeLessThanOrEqual(2048);
+    expect(kept.length).toBe(cut.meta.returned);
+    expect(kept.length).toBeLessThan(90);
+    expect(kept.at(-1)).toEqual(today);
+    expect(kept[0]).toEqual(dailyActivityData[90 - kept.length]);
+    expect(cut.meta.hint).toMatch(/oldest rows were dropped/);
+
+    // A cursor continues after the page's last row: a paged list keeps its head, whatever its order.
+    const paged = fitToBudget({ dailyActivityData }, 2048, { paged: true });
+    expect((paged.data as { dailyActivityData: unknown[] }).dailyActivityData[0]).toEqual(dailyActivityData[0]);
+
+    // Newest-first rows, or rows without dates, keep the head as before.
+    const newestFirst = fitToBudget({ rows: [...dailyActivityData].reverse() }, 2048);
+    expect((newestFirst.data as { rows: unknown[] }).rows[0]).toEqual(today);
+  });
+
   it("turns each pagination style into one opaque cursor and restores it", () => {
     const versions = operation("dashboard.theme.versions_list");
     const meta = paginationMeta(versions, { versions: [], nextBeforeRevision: 15 });

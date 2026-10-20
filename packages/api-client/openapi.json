@@ -77224,7 +77224,7 @@
           "maxRequestBytes": 1048576,
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
-          "when": "Use when placing an order for an existing customer with SKUs and quantities: cash on delivery (COD) or an invoice paid later (net terms, net 30); prices in minor units.",
+          "when": "Use when creating or placing an order for a customer with products and quantities: a cash on delivery (COD) order, or an invoice paid later (net terms, net 30); prices in minor units.",
           "dryRun": "none",
           "confirmation": "none"
         },
@@ -86266,11 +86266,7 @@
                   }
                 },
                 "required": [
-                  "name",
-                  "description",
-                  "metaTitle",
-                  "metaDescription",
-                  "image"
+                  "name"
                 ]
               }
             }
@@ -109433,7 +109429,7 @@
           "maxRequestBytes": 1048576,
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
-          "when": "Use when creating a coupon code or automatic discount: percent or amount off, minimum order, dates, products or customers it applies to.",
+          "when": "Use when creating a coupon or automatic discount. Code: method code, codes [{code}], effects [{target order, allocation once, kind percentage_off {basisPoints} | fixed_amount_off {amountMinor,currencyCode}}]; minimum_merchandise_subtotal.",
           "dryRun": "none",
           "confirmation": "none"
         },
@@ -133223,7 +133219,7 @@
           "maxRequestBytes": 1048576,
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
-          "when": "Use when adding a tracking or analytics script (GA4, Google Tag Manager, TikTok pixel, Cloudflare Web Analytics, custom snippet) as an inactive draft.",
+          "when": "Use when adding a tracking or analytics script (GA4 from its G- ID alone, Google Tag Manager, TikTok pixel, Cloudflare Web Analytics, custom snippet); Google tags load under Consent Mode v2, denied by default for EEA, UK and Swiss visitors.",
           "dryRun": "none",
           "confirmation": "none"
         },
@@ -149463,6 +149459,22 @@
                                     "unknown",
                                     "not_applicable"
                                   ]
+                                },
+                                "countries": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "any"
+                                      ]
+                                    },
+                                    {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    }
+                                  ]
                                 }
                               },
                               "required": [
@@ -149515,6 +149527,22 @@
                                     "unknown",
                                     "not_applicable"
                                   ]
+                                },
+                                "countries": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "any"
+                                      ]
+                                    },
+                                    {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    }
+                                  ]
                                 }
                               },
                               "required": [
@@ -149566,6 +149594,22 @@
                                     "mixed",
                                     "unknown",
                                     "not_applicable"
+                                  ]
+                                },
+                                "countries": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "any"
+                                      ]
+                                    },
+                                    {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    }
                                   ]
                                 }
                               },
@@ -149624,6 +149668,22 @@
                                   "mixed",
                                   "unknown",
                                   "not_applicable"
+                                ]
+                              },
+                              "countries": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "any"
+                                    ]
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
                                 ]
                               }
                             },
@@ -155082,7 +155142,7 @@
           "maxRequestBytes": 1048576,
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
-          "when": "Use when reading delivery zones, delivery charges and local pickup.",
+          "when": "Use when reading delivery zones and each zone's rates with their fees (zones[].rates[].fee), and local pickup.",
           "dryRun": "none",
           "confirmation": "none"
         },
@@ -156063,7 +156123,7 @@
           "maxRequestBytes": 1048576,
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
-          "when": "Use when changing a shipping zone's regions or delivery charges.",
+          "when": "Use when replacing a shipping zone's regions, areas and whole rate list.",
           "dryRun": "none",
           "confirmation": "none"
         },
@@ -156183,6 +156243,215 @@
           "when": "Use when deleting a shipping zone.",
           "dryRun": "none",
           "confirmation": "required"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.shipping_methods.edit"
+        }
+      }
+    },
+    "/api/v1/admin/settings/shipping-methods/{id}/rates/{rateId}": {
+      "patch": {
+        "operationId": "dashboard.shipping_zones.rate_update",
+        "tags": [
+          "Admin - Shipping Zones"
+        ],
+        "summary": "Set one delivery rate's fee, free-delivery threshold or availability in a zone",
+        "description": "A narrow change to one rate: the zone id, its revision and the rate id come from dashboard.shipping_methods.list (zones[].id, zones[].revision, zones[].rates[].id). Amounts are decimal major units in the store currency, as that read returns them (60 is ৳60 in a BDT store); freeOver null removes the threshold. Everything else in the zone stays as it is.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "rateId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The zone's revision from the read."
+                  },
+                  "fee": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100000,
+                    "description": "The delivery charge, in major units."
+                  },
+                  "freeOver": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0,
+                    "maximum": 100000,
+                    "description": "Free delivery from this order subtotal, in major units; null removes it."
+                  },
+                  "isActive": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "expectedRevision"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Rate saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "revision": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "revision"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 8192,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when setting one zone's delivery charge or free-delivery threshold, such as ৳60 inside Dhaka.",
+          "dryRun": "none",
+          "confirmation": "none"
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -195928,7 +196197,7 @@
           "maxRequestBytes": 1048576,
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
-          "when": "Use when creating a product: simple (one price and stock) or with options like size and colour, with images, published or draft.",
+          "when": "Use when creating a new product or item to sell: a simple product with a price and units in stock, or a shirt or t-shirt in sizes and colours (variants), each with price and stock; publish it or keep a draft.",
           "dryRun": "none",
           "confirmation": "none"
         },
@@ -250694,6 +250963,7 @@
         "operationIds": [
           "dashboard.shipping_methods.list",
           "dashboard.shipping_zones.apply_template",
+          "dashboard.shipping_zones.rate_update",
           "dashboard.shipping_zones.update",
           "dashboard.shipping_zones.create"
         ],
@@ -250701,7 +250971,7 @@
         "requiresConfirmation": true,
         "requiresVerification": true,
         "rules": [
-          "Read the zones first: without zones, the Dhaka template creates inside/outside zones; then set each zone's rate.",
+          "Read the zones first: without zones, the Dhaka template creates inside/outside zones; then set each zone's rate fee with rate_update (zone id, revision and rate id from the read; fees in major units).",
           "Every delivery rate belongs to a zone; an address in no zone gets no delivery."
         ]
       },
@@ -259361,6 +259631,14 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.shipping_zones.pickup_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.shipping_zones.rate_update",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.delivery-fees"
           ]
         },
         {

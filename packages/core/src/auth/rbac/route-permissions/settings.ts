@@ -314,6 +314,9 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
     PUT: { permission: PERMISSIONS.SETTINGS_SHIPPING_METHODS_EDIT },
     DELETE: { permission: PERMISSIONS.SETTINGS_SHIPPING_METHODS_EDIT },
   },
+  "/api/v1/admin/settings/shipping-methods/*/rates/*": {
+    PATCH: { permission: PERMISSIONS.SETTINGS_SHIPPING_METHODS_EDIT },
+  },
   "/api/v1/admin/settings/checkout-languages": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },

@@ -999,6 +999,72 @@ export async function updateDeliveryZone(
     return { id, revision: expectedRevision + 1 };
 }
 
+/** A narrow change to one rate of a zone; amounts are decimal major units, `freeOver: null` clears the threshold. */
+export interface DeliveryRatePatch {
+    fee?: number;
+    freeOver?: number | null;
+    isActive?: boolean;
+}
+
+/**
+ * Changes one rate's charge, free-delivery threshold or availability, against
+ * the zone revision the caller read; everything else in the zone stays as it
+ * is. The zone's revision advances exactly as a full zone save does.
+ */
+export async function updateDeliveryZoneRate(
+    db: Database,
+    zoneId: string,
+    rateId: string,
+    patch: DeliveryRatePatch,
+    expectedRevision: number,
+    currency: StoreCurrency,
+): Promise<{ id: string; revision: number }> {
+    const current = await db.select({ revision: deliveryZones.revision }).from(deliveryZones)
+        .where(eq(deliveryZones.id, zoneId)).get();
+    if (!current) throw new NotFoundError("Shipping zone not found");
+    if (current.revision !== expectedRevision) {
+        throw new SettingsRevisionConflictError("delivery_zone", expectedRevision, current.revision);
+    }
+    const rate = await db.select({ id: shippingMethods.id, isActive: shippingMethods.isActive }).from(shippingMethods)
+        .where(and(eq(shippingMethods.id, rateId), eq(shippingMethods.zoneId, zoneId), isNull(shippingMethods.deletedAt))).get();
+    if (!rate) throw new NotFoundError("Delivery rate not found in this zone");
+    const issues: Issue[] = [];
+    const values: Partial<typeof shippingMethods.$inferInsert> = {};
+    if (patch.fee !== undefined) values.feeMinor = amountToMinor(patch.fee, currency, ["fee"], issues);
+    if (patch.freeOver !== undefined) {
+        values.freeOverMinor = patch.freeOver === null ? null : amountToMinor(patch.freeOver, currency, ["freeOver"], issues);
+    }
+    if (patch.isActive !== undefined) values.isActive = patch.isActive;
+    if (Object.keys(values).length === 0) issues.push({ path: [], message: "Change the fee, the free-delivery threshold or whether the rate is active." });
+    throwIssues(issues);
+    if (patch.isActive === false && rate.isActive) {
+        const active = await db.select({ id: shippingMethods.id }).from(shippingMethods)
+            .where(and(eq(shippingMethods.zoneId, zoneId), eq(shippingMethods.isActive, true), isNull(shippingMethods.deletedAt)));
+        await assertCheckoutKeepsARate(db, zoneId, active.length - 1);
+    }
+    try {
+        await safeBatch(db, [
+            buildBatchGuard(
+                db,
+                sql`EXISTS (SELECT 1 FROM delivery_zones WHERE id = ${zoneId} AND revision = ${expectedRevision})`,
+                ZONE_REVISION_GUARD,
+            ),
+            db.update(deliveryZones)
+                .set({ revision: expectedRevision + 1, updatedAt: now })
+                .where(eq(deliveryZones.id, zoneId)),
+            db.update(shippingMethods).set({ ...values, updatedAt: now }).where(eq(shippingMethods.id, rateId)),
+        ] as never);
+    } catch (error) {
+        if (isBatchGuardError(error, ZONE_REVISION_GUARD)) {
+            const latest = await db.select({ revision: deliveryZones.revision }).from(deliveryZones)
+                .where(eq(deliveryZones.id, zoneId)).get();
+            throw new SettingsRevisionConflictError("delivery_zone", expectedRevision, latest?.revision ?? 0);
+        }
+        throw error;
+    }
+    return { id: zoneId, revision: expectedRevision + 1 };
+}
+
 /** Deletes a zone; its rates are soft-deleted and its addresses fall to the next matching zone, or none. */
 export async function deleteDeliveryZone(db: Database, id: string): Promise<void> {
     const existing = await db.select({ id: deliveryZones.id }).from(deliveryZones).where(eq(deliveryZones.id, id)).get();

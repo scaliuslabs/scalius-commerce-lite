@@ -13,6 +13,7 @@ import {
     getPaymentMethodPreferences,
     getStripeSettings,
     getStripeCheckoutReadiness,
+    COD_COUNTRIES,
     COD_PAYMENT_METHOD,
     isAppPaymentMethod,
     isPaymentMethodId,
@@ -188,6 +189,8 @@ const gatewayStatusSchema = z.object({
     checkoutSelected: z.boolean().optional(),
     checkoutVisible: z.boolean().optional(),
     environment: z.enum(["test", "live", "mixed", "unknown", "not_applicable"]).optional(),
+    /** The delivery countries the method serves ("any" for every country); cash on delivery serves only Bangladesh. */
+    countries: z.union([z.literal("any"), z.array(z.string())]).optional(),
 });
 
 /** A gateway the merchant can offer: built in, or an active app's provider. */
@@ -295,6 +298,7 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
         missingFields: [],
         providerEnabled: true,
         environment: "not_applicable",
+        countries: COD_COUNTRIES === "any" ? "any" : [...COD_COUNTRIES],
         ...selection(COD_PAYMENT_METHOD),
     };
     // The invoice is ready once it names who may pay by it.

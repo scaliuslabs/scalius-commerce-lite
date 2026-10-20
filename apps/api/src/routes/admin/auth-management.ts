@@ -78,6 +78,7 @@ import {
     createAccountSessionCommandIdFactory,
     presentAccountSession,
 } from "./account-session-presentation";
+import { delegatingUser } from "./delegation";
 import { STORE_NAME_MAX_LENGTH, applyStoreSetup } from "@scalius/core/modules/onboarding";
 import { TIME_ZONE_MAX_LENGTH, isValidTimeZone } from "@scalius/shared/commerce-time";
 import { UNIT_SYSTEMS, WEIGHT_UNITS } from "@scalius/shared/store-defaults";
@@ -466,12 +467,13 @@ app.openapi(createUserRoute, async (c) => {
             .get();
         if (!selectedRole) throw new ValidationError("Selected role does not exist");
 
-        if (selectedRole.name === "super_admin" && sessionUser.isSuperAdmin !== true) {
+        const delegator = delegatingUser(c);
+        if (selectedRole.name === "super_admin" && !delegator.isSuperAdmin) {
             throw new ForbiddenError("Only the store owner can assign the Super Admin role");
         }
 
         const callerPermissions = c.get("adminPermissions");
-        if (sessionUser.isSuperAdmin !== true) {
+        if (!delegator.isSuperAdmin) {
             const selectedRolePermissions = await db
                 .select({ name: permissions.name })
                 .from(rolePermissions)

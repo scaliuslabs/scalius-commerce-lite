@@ -226,27 +226,60 @@ export function selectPointers(value: unknown, pointers: readonly string[]): unk
 interface ArraySlot {
   bytes: number;
   length: number;
+  /** The rows are a time series, oldest first: a cut keeps the newest rows. */
+  oldestFirst: boolean;
   replace: (rows: number) => unknown;
 }
 
+/**
+ * A time series ordered oldest first: every row carries a `date` string
+ * (ISO, so text order is time order), never decreasing, and the series spans
+ * more than one date. Cutting such a series from the end would drop today.
+ */
+function isOldestFirstSeries(rows: readonly unknown[]): boolean {
+  if (rows.length < 2) return false;
+  let previous = "";
+  for (const row of rows) {
+    if (!isRecord(row) || typeof row.date !== "string" || row.date < previous) return false;
+    previous = row.date;
+  }
+  return (rows[0] as { date: string }).date < previous;
+}
+
+/** The `rows` a cut keeps: a list's first rows, or an oldest-first series' last (newest) ones. */
+function keptRows(array: readonly unknown[], rows: number, oldestFirst: boolean): unknown[] {
+  return oldestFirst ? array.slice(array.length - rows) : array.slice(0, rows);
+}
+
 /** The arrays a list payload keeps its rows in: the value itself, or arrays up to two levels down. */
-function arraySlots(data: unknown): ArraySlot[] {
+function arraySlots(data: unknown, paged: boolean): ArraySlot[] {
   const slots: ArraySlot[] = [];
+  // A cursor continues after the page's last row, so a paged list always keeps its head.
+  const oldestFirst = (rows: readonly unknown[]) => !paged && isOldestFirstSeries(rows);
   if (Array.isArray(data)) {
-    slots.push({ bytes: jsonBytes(data), length: data.length, replace: (rows) => data.slice(0, rows) });
+    const tail = oldestFirst(data);
+    slots.push({ bytes: jsonBytes(data), length: data.length, oldestFirst: tail, replace: (rows) => keptRows(data, rows, tail) });
     return slots;
   }
   if (!isRecord(data)) return slots;
   for (const [key, value] of Object.entries(data)) {
     if (Array.isArray(value)) {
-      slots.push({ bytes: jsonBytes(value), length: value.length, replace: (rows) => ({ ...data, [key]: value.slice(0, rows) }) });
+      const tail = oldestFirst(value);
+      slots.push({
+        bytes: jsonBytes(value),
+        length: value.length,
+        oldestFirst: tail,
+        replace: (rows) => ({ ...data, [key]: keptRows(value, rows, tail) }),
+      });
     } else if (isRecord(value)) {
       for (const [innerKey, inner] of Object.entries(value)) {
         if (!Array.isArray(inner)) continue;
+        const tail = oldestFirst(inner);
         slots.push({
           bytes: jsonBytes(inner),
           length: inner.length,
-          replace: (rows) => ({ ...data, [key]: { ...value, [innerKey]: inner.slice(0, rows) } }),
+          oldestFirst: tail,
+          replace: (rows) => ({ ...data, [key]: { ...value, [innerKey]: keptRows(inner, rows, tail) } }),
         });
       }
     }
@@ -269,15 +302,25 @@ function outline(data: unknown): unknown {
 
 /**
  * Keeps `data` within `budget` bytes. Over budget, the largest row array is
- * cut to the rows that fit (`returned` of `pageRows`); without one, the agent
- * gets an outline of the keys and sizes. Either way `truncated` and a hint
- * name the way to the rest: `select` or `cursor`.
+ * cut to the rows that fit (`returned` of `pageRows`): a list keeps its first
+ * rows, an unpaged oldest-first time series (`date` rows such as daily
+ * activity) its newest ones, so today is never the row that is dropped.
+ * Without a row array, the agent gets an outline of the keys and sizes.
+ * Either way `truncated` and a hint name the way to the rest: `select` or
+ * `cursor`. `paged`: the payload carries a cursor or page.
  */
-export function fitToBudget(data: unknown, budget: number): { data: unknown; meta: ShapedMeta } {
+export function fitToBudget(
+  data: unknown,
+  budget: number,
+  options: { paged?: boolean } = {},
+): { data: unknown; meta: ShapedMeta } {
   const limit = Math.max(512, Math.min(budget, AGENT_MAX_RESULT_BYTES));
   if (jsonBytes(data) <= limit) return { data, meta: {} };
   const hint = "Over the result budget: use select for the fields you need, a smaller limit, or the cursor.";
-  for (const slot of arraySlots(data)) {
+  for (const slot of arraySlots(data, options.paged === true)) {
+    const cutHint = slot.oldestFirst
+      ? "Over the result budget: the oldest rows were dropped and the newest kept; use select for the fields you need or ask for a shorter range."
+      : hint;
     let low = 0;
     let high = slot.length;
     while (low < high) {
@@ -287,7 +330,7 @@ export function fitToBudget(data: unknown, budget: number): { data: unknown; met
     }
     const cut = slot.replace(low);
     if (jsonBytes(cut) <= limit && (low > 0 || slot.length > 0)) {
-      return { data: cut, meta: { truncated: true, returned: low, pageRows: slot.length, hint } };
+      return { data: cut, meta: { truncated: true, returned: low, pageRows: slot.length, hint: cutHint } };
     }
   }
   return { data: outline(data), meta: { truncated: true, hint } };

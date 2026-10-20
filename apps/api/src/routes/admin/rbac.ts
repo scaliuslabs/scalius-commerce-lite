@@ -3,7 +3,8 @@
 
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
 import { eq, inArray, and, count } from "drizzle-orm";
-import type { Database } from "@scalius/database/client";
+import { chunkForD1, type Database } from "@scalius/database/client";
+import { autoSeedRbacIfNeeded } from "@scalius/core/auth/rbac/auto-seed";
 import { roles, rolePermissions, permissions, userRoles, user } from "@scalius/database/schema";
 import {
     hasPermission,
@@ -24,6 +25,7 @@ import { getPermissionsByCategory } from "@scalius/core/auth/rbac/permission-met
 import { ok, created } from "../../utils/api-response";
 import { UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError } from "../../utils/api-error";
 import { successEnvelope, errorResponses, conflictResponse } from "../../schemas/responses";
+import { delegatingUser } from "./delegation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const ROLE_LIST_PAGE_LIMIT = 1;
 const ROLE_PERMISSION_LIMIT = 200;
@@ -33,6 +35,37 @@ const ACCOUNT_OVERRIDE_LIMIT = 100;
 type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 type AdminRouteContext<R extends RouteConfig> = Parameters<AdminRouteHandler<R>>[0];
 
+
+/**
+ * The permission rows for a role's names, read in D1-sized chunks. The rows
+ * are the code-owned catalog reconciled by the RBAC seed, which runs on a
+ * dashboard sign-in; a store reached only through an agent, or a new deploy's
+ * new permission, may not have its row yet, so a miss reconciles once. A name
+ * that is still unknown is refused: a role never claims a permission it lacks.
+ */
+async function permissionRowsFor(db: Database, names: readonly string[]): Promise<Array<{ id: string; name: string }>> {
+    const wanted = [...new Set(names)];
+    if (wanted.length === 0) return [];
+    const read = async () => {
+        const rows: Array<{ id: string; name: string }> = [];
+        for (const chunk of chunkForD1(wanted)) {
+            rows.push(...await db
+                .select({ id: permissions.id, name: permissions.name })
+                .from(permissions)
+                .where(inArray(permissions.name, chunk)));
+        }
+        return rows;
+    };
+    let rows = await read();
+    if (rows.length < wanted.length) {
+        await autoSeedRbacIfNeeded(db);
+        rows = await read();
+    }
+    const found = new Set(rows.map((row) => row.name));
+    const unknown = wanted.find((name) => !found.has(name));
+    if (unknown) throw new ValidationError(`Unknown permission: ${unknown}`);
+    return rows;
+}
 
 export function assertPermissionSubset(
     sessionUser: { isSuperAdmin?: boolean },
@@ -207,7 +240,7 @@ app.openapi(createRoleRoute, (async (c: AdminRouteContext<typeof createRoleRoute
         const data = c.req.valid("json");
         assertPrerequisites(data.permissions);
         assertPermissionSubset(
-            sessionUser,
+            delegatingUser(c),
             c.get("adminPermissions"),
             data.permissions,
         );
@@ -217,35 +250,28 @@ app.openapi(createRoleRoute, (async (c: AdminRouteContext<typeof createRoleRoute
             throw new ConflictError("A role with this name already exists");
         }
 
+        const permRecords = await permissionRowsFor(db, data.permissions);
         const roleId = crypto.randomUUID();
-        await db.insert(roles).values({
-            id: roleId,
-            name: data.name,
-            displayName: data.displayName,
-            description: data.description || null,
-            isSystem: false,
-            createdAt: new Date(),
-            updatedAt: new Date()
-        });
-
-        if (data.permissions.length > 0) {
-            const permRecords = await db
-                .select({ id: permissions.id, name: permissions.name })
-                .from(permissions)
-                .where(inArray(permissions.name, data.permissions));
-
-            if (permRecords.length > 0) {
-                const inserts = permRecords.map((perm: { id: string; name: string }) =>
-                    db.insert(rolePermissions).values({
-                        id: crypto.randomUUID(),
-                        roleId,
-                        permissionId: perm.id,
-                        createdAt: new Date()
-                    })
-                );
-                await db.batch(inserts as [typeof inserts[0], ...typeof inserts]);
-            }
-        }
+        // The role and its permissions land together or not at all.
+        await db.batch([
+            db.insert(roles).values({
+                id: roleId,
+                name: data.name,
+                displayName: data.displayName,
+                description: data.description || null,
+                isSystem: false,
+                createdAt: new Date(),
+                updatedAt: new Date()
+            }),
+            ...permRecords.map((perm) =>
+                db.insert(rolePermissions).values({
+                    id: crypto.randomUUID(),
+                    roleId,
+                    permissionId: perm.id,
+                    createdAt: new Date()
+                })
+            ),
+        ] as const);
 
         return created(c, {
             role: {
@@ -372,11 +398,12 @@ app.openapi(updateRoleRoute, async (c) => {
             }
             assertPrerequisites(data.permissions);
             assertPermissionSubset(
-                sessionUser,
+                delegatingUser(c),
                 c.get("adminPermissions"),
                 data.permissions,
             );
         }
+        const permRecords = data.permissions === undefined ? null : await permissionRowsFor(db, data.permissions);
 
         if (data.displayName || data.description !== undefined) {
             await db
@@ -389,27 +416,19 @@ app.openapi(updateRoleRoute, async (c) => {
                 .where(eq(roles.id, roleId));
         }
 
-        if (data.permissions !== undefined) {
-            await db.delete(rolePermissions).where(eq(rolePermissions.roleId, roleId));
-
-            if (data.permissions.length > 0) {
-                const permRecords = await db
-                    .select({ id: permissions.id, name: permissions.name })
-                    .from(permissions)
-                    .where(inArray(permissions.name, data.permissions));
-
-                if (permRecords.length > 0) {
-                    const inserts = permRecords.map((perm: { id: string; name: string }) =>
-                        db.insert(rolePermissions).values({
-                            id: crypto.randomUUID(),
-                            roleId,
-                            permissionId: perm.id,
-                            createdAt: new Date()
-                        })
-                    );
-                    await db.batch(inserts as [typeof inserts[0], ...typeof inserts]);
-                }
-            }
+        if (permRecords) {
+            // The old set is replaced in one batch: never a role left without its permissions.
+            await db.batch([
+                db.delete(rolePermissions).where(eq(rolePermissions.roleId, roleId)),
+                ...permRecords.map((perm) =>
+                    db.insert(rolePermissions).values({
+                        id: crypto.randomUUID(),
+                        roleId,
+                        permissionId: perm.id,
+                        createdAt: new Date()
+                    })
+                ),
+            ] as const);
         }
 
         const updatedRole = await db.select().from(roles).where(eq(roles.id, roleId)).limit(1);
@@ -545,11 +564,11 @@ app.openapi(assignRoleRoute, async (c) => {
         if (role.length === 0) {
             throw new NotFoundError("Role not found");
         }
-        if (role[0]?.name === "super_admin" && sessionUser.isSuperAdmin !== true) {
+        if (role[0]?.name === "super_admin" && !delegatingUser(c).isSuperAdmin) {
             throw new ForbiddenError("Only the store owner can assign the Super Admin role");
         }
         assertPermissionSubset(
-            sessionUser,
+            delegatingUser(c),
             c.get("adminPermissions"),
             await getRolePermissions(db, data.roleId),
         );
@@ -680,7 +699,7 @@ app.openapi(setOverrideRoute, async (c) => {
         }
 
         assertPermissionSubset(
-            sessionUser,
+            delegatingUser(c),
             c.get("adminPermissions"),
             [data.permission],
         );
@@ -746,7 +765,7 @@ app.openapi(removeOverrideRoute, async (c) => {
         }
 
         assertPermissionSubset(
-            sessionUser,
+            delegatingUser(c),
             c.get("adminPermissions"),
             [data.permission],
         );

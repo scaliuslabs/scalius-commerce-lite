@@ -23,7 +23,7 @@ import {
 import {
     getActiveAnalyticsConfigError,
     getAnalyticsProviderIdentifier,
-    normalizeCloudflareWebAnalyticsConfig,
+    normalizeAnalyticsConfig,
     resolveAnalyticsPartytownPolicy,
     type AnalyticsScriptType,
     type createAnalyticsSchema,
@@ -111,9 +111,7 @@ function formatScriptSummary(script: Analytics) {
 function normalizeAnalyticsScriptValues(
     data: CreateAnalyticsInput | UpdateAnalyticsInput,
 ) {
-    const config = data.type === "cloudflare_web_analytics"
-        ? normalizeCloudflareWebAnalyticsConfig(data.config)
-        : data.config.trim();
+    const config = normalizeAnalyticsConfig(data.type, data.config);
 
     return {
         config,

@@ -49,6 +49,13 @@ describe("category publication on D1", () => {
     expect({ ...row(active.id) }).toEqual({ status: "published", revision: 1 });
   });
 
+  it("creates a plain category from a name alone: no image, description or search text", async () => {
+    const db = database();
+    const { id } = await createCategory(db, createCategorySchema.parse({ name: "Plain panjabi" }));
+    expect(sqlite!.prepare("SELECT name, slug, description, meta_title FROM categories WHERE id = ?").get(id))
+      .toMatchObject({ name: "Plain panjabi", slug: "plain-panjabi", description: null, meta_title: null });
+  });
+
   it("publishes a category that has no products yet", async () => {
     const db = database();
     const { id } = await createCategory(db, createCategorySchema.parse(fields));

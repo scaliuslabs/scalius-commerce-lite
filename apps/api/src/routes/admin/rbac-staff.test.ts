@@ -1,8 +1,10 @@
+import { Buffer } from "node:buffer";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { autoSeedRbacIfNeeded } from "@scalius/core/auth/rbac/auto-seed";
 import { getFreshUserPermissionsFromD1 } from "@scalius/core/auth/rbac/helpers";
 import { createSqliteD1Database, type SqliteTestDatabase } from "@scalius/database/testing/sqlite-d1";
+import { deriveRuntimeSecrets } from "@scalius/shared/runtime-secrets";
 
 import { errorResponseFromError } from "../../utils/api-response";
 import { adminAuthManagementRoutes } from "./auth-management";
@@ -13,11 +15,29 @@ let database: SqliteTestDatabase;
 const roleId = (name: string) =>
     (database.sqlite.prepare("SELECT id FROM roles WHERE name = ?").get(name) as { id: string }).id;
 
-/** Settings → Users as `actorId`, with the permissions the admin middleware would resolve. */
-async function asStaff(actorId: string) {
+/** Worker entry's env: secrets derived from SCALIUS_SECRET and the dashboard origin (invites need both). */
+async function workerEnv(): Promise<Env> {
+    return {
+        ...await deriveRuntimeSecrets("rbac-staff-test-master-secret-0123456789"),
+        DB: database.binding,
+        BETTER_AUTH_URL: "https://admin.shop.test",
+        PUBLIC_API_BASE_URL: "https://api.shop.test",
+        CREDENTIAL_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64"),
+    } as unknown as Env;
+}
+
+/**
+ * Settings → Users as `actorId`, with the permissions the admin middleware
+ * would resolve. With `agentGrant`, an agent acting for `actorId` holds
+ * only those permissions, as admin-auth sets them for an agent principal.
+ */
+async function asStaff(actorId: string, options: { agentGrant?: string[] } = {}) {
     const actor = database.sqlite.prepare("SELECT id, name, email, is_super_admin FROM user WHERE id = ?")
         .get(actorId) as { id: string; name: string; email: string; is_super_admin: number };
-    const permissions = await getFreshUserPermissionsFromD1(database.db, actorId);
+    const permissions = options.agentGrant
+        ? new Set(options.agentGrant)
+        : await getFreshUserPermissionsFromD1(database.db, actorId);
+    const env = await workerEnv();
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1/admin");
     app.onError((error, c) => {
         const { body, status } = errorResponseFromError(error);
@@ -27,6 +47,7 @@ async function asStaff(actorId: string) {
         c.set("db", database.db);
         c.set("user", { ...actor, role: "admin", isSuperAdmin: actor.is_super_admin === 1 } as never);
         c.set("adminPermissions", permissions);
+        if (options.agentGrant) c.set("agentPrincipal", { kind: "agent", ownerUserId: actor.id } as never);
         await next();
     });
     app.route("/rbac", adminRbacRoutes);
@@ -36,7 +57,7 @@ async function asStaff(actorId: string) {
             method,
             headers: { "Content-Type": "application/json" },
             body: body === undefined ? undefined : JSON.stringify(body),
-        }, {} as Env);
+        }, env);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- asserted field by field below
         return { status: response.status, body: await response.json() as { data?: any; error?: any } };
     };
@@ -95,6 +116,68 @@ describe("roles", () => {
             if (!list.body.data.pagination.hasMore) break;
         }
         expect(Object.fromEntries(counts)).toMatchObject({ manager: 1, sales_rep: 1, super_admin: 0 });
+    });
+});
+
+describe("roles keep every permission they claim", () => {
+    it("reconciles a permission the catalog does not hold yet, and refuses an unknown one", async () => {
+        // A store only an agent has used, or a new deploy's permission: the seed has not run.
+        database.sqlite.exec(`
+          DELETE FROM role_permissions WHERE permission_id IN (SELECT id FROM permissions WHERE name IN ('orders.view', 'orders.edit'));
+          DELETE FROM user_permissions WHERE permission_id IN (SELECT id FROM permissions WHERE name IN ('orders.view', 'orders.edit'));
+          DELETE FROM permissions WHERE name IN ('orders.view', 'orders.edit');
+        `);
+        const call = await asStaff("owner");
+        const created = await call("POST", "/rbac/roles", {
+            name: "order_manager", displayName: "Order manager", permissions: ["orders.view", "orders.edit"],
+        });
+        expect(created.status).toBe(201);
+        const stored = database.sqlite.prepare(`SELECT p.name FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id
+          WHERE rp.role_id = ? ORDER BY p.name`).all(created.body.data.role.id) as Array<{ name: string }>;
+        expect(stored.map((row) => row.name)).toEqual(["orders.edit", "orders.view"]);
+
+        const unknown = await call("POST", "/rbac/roles", {
+            name: "wizard", displayName: "Wizard", permissions: ["orders.view", "orders.teleport"],
+        });
+        expect(unknown.status).toBe(400);
+        expect(unknown.body.error.message).toContain("orders.teleport");
+        expect(database.sqlite.prepare("SELECT COUNT(*) AS n FROM roles WHERE name = 'wizard'").get()).toEqual({ n: 0 });
+    });
+});
+
+describe("an agent acting for the owner delegates only its grant", () => {
+    const grant = ["team.view", "team.manage", "team.manage_roles", "orders.view", "orders.edit"];
+
+    it("invites a staff member who can only manage orders (eval task 26)", async () => {
+        const agent = await asStaff("owner", { agentGrant: grant });
+        const role = await agent("POST", "/rbac/roles", {
+            name: "order_manager", displayName: "Order manager", permissions: ["orders.view", "orders.edit"],
+        });
+        expect(role.status).toBe(201);
+        const invite = await agent("POST", "/auth/users", { name: "Tanvir Hasan", email: "tanvir@shop.test", roleId: role.body.data.role.id });
+        expect(invite.status).toBe(201);
+        expect(invite.body.data.onboardingRequired).toBe(true);
+        expect([...await getFreshUserPermissionsFromD1(database.db, invite.body.data.user.id)].sort())
+            .toEqual(["orders.edit", "orders.view"]);
+    });
+
+    it("never grants above the grant, even for a super-admin owner", async () => {
+        const agent = await asStaff("owner", { agentGrant: grant });
+        const above = await agent("POST", "/rbac/roles", {
+            name: "refunder", displayName: "Refunder", permissions: ["orders.view", "orders.refund"],
+        });
+        expect(above.status).toBe(403);
+        expect((await agent("POST", "/rbac/user-roles", { userId: "staff", roleId: roleId("super_admin") })).status).toBe(403);
+        expect((await agent("POST", "/rbac/user-roles", { userId: "staff", roleId: roleId("manager") })).status).toBe(403);
+        const invite = await agent("POST", "/auth/users", { name: "Eve", email: "eve@shop.test", roleId: roleId("super_admin") });
+        expect(invite.status).toBe(403);
+        expect(database.sqlite.prepare("SELECT COUNT(*) AS n FROM user WHERE email = 'eve@shop.test'").get()).toEqual({ n: 0 });
+
+        // The owner signed in to the dashboard still delegates anything.
+        const owner = await asStaff("owner");
+        expect((await owner("POST", "/rbac/roles", {
+            name: "refunder", displayName: "Refunder", permissions: ["orders.view", "orders.refund"],
+        })).status).toBe(201);
     });
 });
 
