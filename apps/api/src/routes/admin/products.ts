@@ -90,7 +90,7 @@ const productPickerSummarySchema = z.object({
 
 const productAgentSummarySchema = z.object({
     id: z.string().max(180),
-    name: z.string().max(100),
+    name: z.string().max(255),
     slug: z.string().max(100),
     price: z.number(),
     isActive: z.boolean(),
@@ -833,7 +833,7 @@ const duplicateProductRoute = createRoute({
         body: {
             content: {
                 "application/json": {
-                    schema: z.object({ name: z.string().trim().min(3).max(100).openapi({ description: "Title of the copy" }) }),
+                    schema: z.object({ name: z.string().trim().min(1).max(255).openapi({ description: "Title of the copy" }) }),
                 },
             },
         },

@@ -334,9 +334,8 @@ export const storeTransferMessages = defineMessages({
 export const importIssueMessages = defineMessages({
   en: {
     handle_missing: "No Handle (web address).",
-    title_too_short: "The title needs at least 3 characters.",
-    title_shortened: "The title was shortened to 100 characters.",
-    description_too_short: "The description is shorter than 10 characters and was left out.",
+    title_too_short: "A product needs a title.",
+    title_shortened: "The title was shortened to 255 characters.",
     category_name_too_short: "A category name is shorter than 3 characters; imported without a category.",
     category_path_shortened: "Categories go four levels deep; the path was shortened.",
     option_value_missing: "A variant has no value for one of the options.",
@@ -394,9 +393,8 @@ export const importIssueMessages = defineMessages({
   },
   bn: {
     handle_missing: "হ্যান্ডেল (ওয়েব ঠিকানা) নেই।",
-    title_too_short: "শিরোনামে অন্তত ৩টি অক্ষর লাগে।",
-    title_shortened: "শিরোনাম ১০০ অক্ষরে ছোট করা হয়েছে।",
-    description_too_short: "বিবরণ ১০ অক্ষরের কম, তাই বাদ গেছে।",
+    title_too_short: "পণ্যের একটি শিরোনাম লাগে।",
+    title_shortened: "শিরোনাম ২৫৫ অক্ষরে ছোট করা হয়েছে।",
     category_name_too_short: "ক্যাটাগরির নাম ৩ অক্ষরের কম; ক্যাটাগরি ছাড়া ইমপোর্ট হয়েছে।",
     category_path_shortened: "ক্যাটাগরি চার ধাপ পর্যন্ত যায়; পথটি ছোট করা হয়েছে।",
     option_value_missing: "একটি ভ্যারিয়েন্টে একটি অপশনের মান নেই।",

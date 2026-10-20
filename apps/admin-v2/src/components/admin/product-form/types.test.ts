@@ -39,16 +39,17 @@ const messages = (values: Partial<ProductFormValues>) => {
 };
 
 describe("product form checks", () => {
-  it("says an empty title can't be blank, then asks for three characters", () => {
+  it("takes a title of 1 to 255 characters", () => {
     expect(messages({ name: "" })[0]).toBe(`name: ${translate(productMessages, "titleRequired")}`);
-    expect(messages({ name: "ab" })).toEqual([`name: ${translate(productMessages, "titleMin")}`]);
+    expect(messages({ name: "   " })[0]).toBe(`name: ${translate(productMessages, "titleRequired")}`);
+    expect(messages({ name: "TV" })).toEqual([]);
+    expect(messages({ name: "x".repeat(255) })).toEqual([]);
+    expect(messages({ name: "x".repeat(256) })).toEqual([`name: ${translate(productMessages, "titleMax")}`]);
     expect(messages({})).toEqual([]);
   });
 
-  it("accepts an empty description in every form the editor writes, and still asks for ten characters of text", () => {
-    for (const empty of [null, "", "<p></p>", "<p></p><p></p>", "<p><br></p>"]) expect(messages({ description: empty })).toEqual([]);
-    expect(messages({ description: "<p>Too short</p>" })).toEqual([]);
-    expect(messages({ description: "<p>a</p>" })).toEqual([`description: ${translate(productMessages, "descriptionMin")}`]);
+  it("takes a description of any length", () => {
+    for (const value of [null, "", "<p></p>", "<p><br></p>", "<p>a</p>", "<p>Hi</p>"]) expect(messages({ description: value })).toEqual([]);
   });
 
   it("holds the save while the compare-at price can't be stored, with the reason", () => {

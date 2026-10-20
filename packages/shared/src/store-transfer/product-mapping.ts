@@ -10,7 +10,6 @@ import {
   CATEGORY_NAME_MAX,
   CATEGORY_NAME_MIN,
   CATEGORY_PATH_MAX,
-  PRODUCT_DESCRIPTION_MIN,
   PRODUCT_TITLE_MAX,
   PRODUCT_TITLE_MIN,
   SKU_MAX,
@@ -125,7 +124,7 @@ export function importHandle(raw: string, title: string): string {
 export function importTitle(context: MappingContext, raw: string, line: number, subject: string): string | null {
   const title = raw.replace(/\s+/g, " ").trim();
   if (title.length < PRODUCT_TITLE_MIN) {
-    context.error(line, "title_too_short", `A product title needs at least ${PRODUCT_TITLE_MIN} characters ("${title}").`, { subject, column: "Title" });
+    context.error(line, "title_too_short", "A product needs a title.", { subject, column: "Title" });
     return null;
   }
   if (title.length > PRODUCT_TITLE_MAX) {
@@ -135,14 +134,10 @@ export function importTitle(context: MappingContext, raw: string, line: number, 
   return title;
 }
 
-/** Description HTML, or null (with a warning) when it is too short for the editor's rule. */
-export function importDescription(context: MappingContext, html: string, line: number, subject: string): string | null {
+/** Description HTML, or null when there is none. Any length is kept, as the editor keeps it. */
+export function importDescription(_context: MappingContext, html: string, _line: number, _subject: string): string | null {
   const value = html.trim();
   if (!value) return null;
-  if (value.length < PRODUCT_DESCRIPTION_MIN) {
-    context.warn(line, "description_too_short", `Description "${value}" is shorter than ${PRODUCT_DESCRIPTION_MIN} characters and was left out.`, { subject });
-    return null;
-  }
   return value.length > 100_000 ? value.slice(0, 100_000) : value;
 }
 
