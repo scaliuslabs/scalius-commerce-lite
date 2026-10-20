@@ -113,7 +113,10 @@ const saveStripeSchema = z.object({
     secretKey: z.string().optional(),
     publishableKey: z.string().optional(),
     webhookSecret: z.string().optional(),
-    enabled: z.boolean().optional()
+    enabled: z.boolean().optional(),
+    showAtCheckout: z.literal(true).optional().openapi({
+        description: "With enabled: also offers Stripe at checkout, written in the same batch as the keys (the dashboard switch's Turn on is one save).",
+    }),
 });
 
 type SaveStripeInput = z.infer<typeof saveStripeSchema>;
@@ -470,11 +473,26 @@ app.openapi(saveStripeRoute, async (c) => {
             webhookSecret: submittedSecret(body.webhookSecret),
             enabled: body.enabled,
         };
-        const { revision } = await stripeDocument.write(db, patch, { encryptionKey: encKey }, {
-            expectedRevision: body.expectedRevision,
-        });
+        if (body.showAtCheckout && body.enabled !== true) {
+            throw new ValidationError("Stripe can be offered at checkout only while it is turned on.");
+        }
+        const methods = body.showAtCheckout ? await paymentMethodsDocument.readDetailed(db) : null;
+        if (methods && !methods.value.enabledMethods.includes("stripe")) {
+            const currencyIssue = (await requestPaymentProviders(c)).currencyIssue("stripe", (await getCurrencySettings(db)).currencyCode);
+            if (currencyIssue) throw new ValidationError(currencyIssue);
+        }
+        const [written] = await writeSettingsDocuments(db, [
+            { document: stripeDocument, patch, ctx: { encryptionKey: encKey }, expectedRevision: body.expectedRevision },
+            ...(methods && !methods.value.enabledMethods.includes("stripe")
+                ? [{
+                    document: paymentMethodsDocument,
+                    patch: { enabledMethods: [...methods.value.enabledMethods, "stripe"], defaultMethod: methods.value.defaultMethod },
+                    expectedRevision: methods.revision,
+                }]
+                : []),
+        ]);
 
-        return ok(c, { message: "Stripe settings saved successfully", revision });
+        return ok(c, { message: "Stripe settings saved successfully", revision: written!.revision });
 });
 
 // ─────────────────────────────────────────

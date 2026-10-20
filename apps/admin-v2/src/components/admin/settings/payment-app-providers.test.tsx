@@ -92,7 +92,7 @@ const providers = [
 ];
 
 const row = (id: string) => document.querySelector<HTMLElement>(`[data-method="${id}"]`)!;
-const toggle = (id: string) => row(id).querySelector<HTMLButtonElement>("[role=switch]")!;
+const toggle = (id: string) => row(id).querySelector<HTMLButtonElement>("[role=checkbox]")!;
 
 describe("app payment providers in payment settings", () => {
   let root: Root;

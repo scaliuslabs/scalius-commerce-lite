@@ -19,7 +19,8 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { SearchableSelect } from "~/components/ui/searchable-select";
-import { Switch } from "~/components/ui/switch";
+import { Checkbox } from "~/components/ui/checkbox";
+import { ChoiceField } from "~/components/ui/field";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
 import { AdminApiResponseError, readSettingsRevisionConflict } from "~/lib/admin-api-error";
@@ -192,8 +193,9 @@ function PasswordField({
 
 /**
  * A gateway's keys. They can be saved a few at a time; the gateway turns on
- * once every key is there. `turnOn` (the merchant flipped its checkout
- * switch) requires every key and marks the missing ones.
+ * once every key is there. `turnOn` (the merchant ticked it for checkout)
+ * requires every key, marks the missing ones, and offers the gateway at
+ * checkout in the same request, so turning it on is one save.
  */
 function GatewayFields({
   gateway,
@@ -218,7 +220,12 @@ function GatewayFields({
     queryKey: query.queryKey,
     fetchFn: query.queryFn,
     saveFn: async (draft, expectedRevision) => {
-      const body = { ...draft, enabled: turnOn || missingKeys(draft).length === 0, expectedRevision };
+      const body = {
+        ...draft,
+        enabled: turnOn || missingKeys(draft).length === 0,
+        ...(turnOn ? { showAtCheckout: true as const } : {}),
+        expectedRevision,
+      };
       const result = await apiData(postApiV1AdminSettingsStripe({ body }));
       if (turnOn) onTurnedOn?.();
       return result;
@@ -572,21 +579,23 @@ export function PaymentMethodsCard() {
                 <GatewayFields
                   gateway={keyForm}
                   turnOn={turningOn === method}
-                  // Keys complete: show it at checkout, saved with the page like any switch.
+                  // Saved at checkout with the keys; the page's draft ticks it too, so nothing is left to save.
                   onTurnedOn={() => toggle(method, true)}
                 />
               </SettingsDialog>
             ) : null}
           </div>
         ) : null}
-        {/* A 44px hit area around the small switch (touch target). */}
+        {/* A 44px hit area around the checkbox (touch target). It is saved with the page (F9);
+            a gateway that still needs keys opens its setup, whose Save turns it on at checkout. */}
         <label className="-mx-1 -my-3 flex size-11 items-center justify-center">
-          <Switch
+          <Checkbox
             checked={selected}
             // Fail closed: a method that can't be used can only be turned off.
             disabled={!canEdit || (!selected && !outcome.canSelect && !turnsOnThroughSetup)}
             aria-label={t("showAtCheckout", { method: name })}
-            onCheckedChange={(on) => {
+            onCheckedChange={(checked) => {
+              const on = checked === true;
               if (on && turnsOnThroughSetup) {
                 pendingTurnOn.current = method;
                 setupButtons.current.get(method)?.click();
@@ -699,17 +708,22 @@ export function PaymentOptionsCard() {
           </label>
         ))}
       </RadioGroup>
-      <label className="flex min-h-11 items-center justify-between gap-4 border-t border-border pt-4 text-body">
-        <span>
-          <span className="block font-medium">{t("advance")}</span>
-          <span className="block text-muted-foreground">{t("advanceHelp")}</span>
-        </span>
-        <Switch
-          checked={values.partialPaymentEnabled}
-          disabled={!canEdit}
-          onCheckedChange={(on) => setValue("partialPaymentEnabled", on)}
-        />
-      </label>
+      {/* Saved with the card, like the mode above it: a checkbox (F9). */}
+      <ChoiceField
+        id="advance-payment"
+        className="border-t border-border pt-4"
+        label={t("advance")}
+        help={t("advanceHelp")}
+        control={
+          <Checkbox
+            id="advance-payment"
+            checked={values.partialPaymentEnabled}
+            disabled={!canEdit}
+            aria-describedby="advance-payment-help"
+            onCheckedChange={(checked) => setValue("partialPaymentEnabled", checked === true)}
+          />
+        }
+      />
       {values.partialPaymentEnabled ? (
         <SettingsField id="advance-amount" label={t("advanceAmount")} help={t("advanceAmountHelp")}>
           <Input

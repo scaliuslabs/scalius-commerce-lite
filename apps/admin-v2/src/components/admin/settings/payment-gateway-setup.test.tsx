@@ -166,17 +166,24 @@ describe("payment gateway setup", () => {
     expect(dialog.querySelector("#stripe-secret-note")?.textContent).toBe("Saved. Type a new value to replace it.");
     expect(sdk.postApiV1AdminSettingsStripe).not.toHaveBeenCalled();
 
+    // The server now offers Stripe at checkout: the keys' save did it.
+    sdk.getApiV1AdminSettingsPaymentMethods.mockImplementation(() =>
+      envelope({ ...methods({ checkoutSelected: true }), enabledMethods: ["cod", "stripe"] }));
     type(dialog.querySelector<HTMLInputElement>("#stripe-webhook")!, "whsec_123");
     await act(async () => button("Save").click());
 
     await vi.waitFor(() => expect(sdk.postApiV1AdminSettingsStripe).toHaveBeenCalledOnce());
+    // One save: the keys, Stripe on, and Stripe at checkout in the same request.
     expect(sdk.postApiV1AdminSettingsStripe.mock.calls[0]![0].body).toMatchObject({
       publishableKey: "pk_test_123",
       webhookSecret: "whsec_123",
       enabled: true,
+      showAtCheckout: true,
     });
-    // Stripe is now switched on in the page's unsaved changes.
-    await vi.waitFor(() => expect(page?.dirty).toBe(true));
+    expect(sdk.postApiV1AdminSettingsPaymentMethods).not.toHaveBeenCalled();
+    // Ticked, with nothing left for the page's Save.
+    await vi.waitFor(() => expect(container.querySelector('[aria-label="Show Stripe at checkout"]')?.getAttribute("aria-checked")).toBe("true"));
+    await vi.waitFor(() => expect(page?.dirty).toBe(false));
   });
 
   async function openStripeSetup() {
