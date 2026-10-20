@@ -721,13 +721,10 @@ export async function sendOrderNotificationEmail(
     const templates = once(async () => (await getNotificationTemplates(db, (await context()).language)).templates);
     const smsMessage = async () => composeOrderSms(await context(), (await templates()).sms[type].body);
 
-    const receiptEnabled = Boolean(db && options.outboxId);
-    const receiptDb = receiptEnabled ? db : undefined;
     const outboxId = options.outboxId;
     // The order's phone, read once for SMS and WhatsApp (null: placed without one).
-    const orderPhone = once(async () => db
-        ? (await db.select({ customerPhone: orders.customerPhone }).from(orders).where(eq(orders.id, orderId)).get())?.customerPhone ?? null
-        : null);
+    const orderPhone = once(async () =>
+        (await db.select({ customerPhone: orders.customerPhone }).from(orders).where(eq(orders.id, orderId)).get())?.customerPhone ?? null);
 
     // An order placed without a phone (the shared contact rule then required
     // its email) hears by email where the merchant chose SMS or WhatsApp.
@@ -742,9 +739,9 @@ export async function sendOrderNotificationEmail(
 
     // The merchant turned this message off: the order's log says so ("Not sent")
     // instead of showing the message as sent.
-    if (receiptDb && outboxId && !enabledChannels.some((channel) => CUSTOMER_CHANNELS.has(channel))) {
+    if (outboxId && !enabledChannels.some((channel) => CUSTOMER_CHANNELS.has(channel))) {
         outcomes.push(await recordSkippedDelivery({
-            db: receiptDb,
+            db,
             outboxId,
             orderId,
             notificationType: type,
@@ -761,9 +758,9 @@ export async function sendOrderNotificationEmail(
         const composeEmail = async () => composeOrderEmail(await context(), (await templates()).email[type]);
 
         if (!email) {
-            if (receiptDb && outboxId) {
+            if (outboxId) {
                 outcomes.push(await recordSkippedDelivery({
-                    db: receiptDb,
+                    db,
                     outboxId,
                     orderId,
                     notificationType: type,
@@ -774,9 +771,9 @@ export async function sendOrderNotificationEmail(
                     reason: "missing_email_recipient",
                 }));
             }
-        } else if (receiptDb && outboxId) {
+        } else if (outboxId) {
             const blocked = await recordProviderBlockedDeliveryIfNeeded({
-                db: receiptDb,
+                db,
                 outboxId,
                 orderId,
                 notificationType: type,
@@ -789,7 +786,7 @@ export async function sendOrderNotificationEmail(
                 outcomes.push(blocked);
             } else {
                 outcomes.push(await dispatchWithReceipt({
-                    db: receiptDb,
+                    db,
                     outboxId,
                     orderId,
                     notificationType: type,
@@ -835,9 +832,9 @@ export async function sendOrderNotificationEmail(
             const customerPhone = await orderPhone();
 
             if (!customerPhone) {
-                if (receiptDb && outboxId) {
+                if (outboxId) {
                     outcomes.push(await recordSkippedDelivery({
-                        db: receiptDb,
+                        db,
                         outboxId,
                         orderId,
                         notificationType: type,
@@ -848,15 +845,15 @@ export async function sendOrderNotificationEmail(
                         reason: "missing_sms_recipient",
                     }));
                 }
-            } else if (db) {
+            } else {
                 const smsReadiness = await getSmsProviderReadiness(db, options.encryptionKey, options.appProviders);
                 const readinessProviderName = smsReadiness.activeProvider ?? "sms";
 
                 if (!isReady(smsReadiness)) {
                     const reason = smsReadiness.issues[0]?.message ?? "SMS provider is not configured";
-                    if (receiptDb && outboxId) {
+                    if (outboxId) {
                         const blocked = await recordProviderBlockedDeliveryIfNeeded({
-                            db: receiptDb,
+                            db,
                             outboxId,
                             orderId,
                             notificationType: type,
@@ -868,13 +865,13 @@ export async function sendOrderNotificationEmail(
                         if (blocked) {
                             outcomes.push(blocked);
                         } else {
-                            await blockProviderForMerchantActionableFailure(receiptDb, {
+                            await blockProviderForMerchantActionableFailure(db, {
                                 channel: "sms",
                                 provider: readinessProviderName,
                                 reason,
                             });
                             outcomes.push(await recordSkippedDelivery({
-                                db: receiptDb,
+                                db,
                                 outboxId,
                                 orderId,
                                 notificationType: type,
@@ -894,9 +891,9 @@ export async function sendOrderNotificationEmail(
                     const smsProvider = await getActiveSmsProvider(db, options.encryptionKey, options.appProviders);
                     const providerName = smsProvider?.id ?? readinessProviderName;
 
-                    if (receiptDb && outboxId) {
+                    if (outboxId) {
                         const blocked = await recordProviderBlockedDeliveryIfNeeded({
-                            db: receiptDb,
+                            db,
                             outboxId,
                             orderId,
                             notificationType: type,
@@ -909,7 +906,7 @@ export async function sendOrderNotificationEmail(
                             outcomes.push(blocked);
                         } else {
                             outcomes.push(await dispatchWithReceipt({
-                                db: receiptDb,
+                                db,
                                 outboxId,
                                 orderId,
                                 notificationType: type,
@@ -962,16 +959,16 @@ export async function sendOrderNotificationEmail(
             }
         } catch (smsError: unknown) {
             console.error(`[Notifications] SMS dispatch failed for ${type} (order ${orderId}): ${compactProviderLogDetail(smsError)}`);
-            if (receiptDb && outboxId) {
+            if (outboxId) {
                 const reason = normalizeError(smsError);
                 if (isNonRetryableDispatchStatus(reason)) {
-                    await blockProviderForMerchantActionableFailure(receiptDb, {
+                    await blockProviderForMerchantActionableFailure(db, {
                         channel: "sms",
                         provider: "sms",
                         reason,
                     });
                     outcomes.push(await recordSkippedDelivery({
-                        db: receiptDb,
+                        db,
                         outboxId,
                         orderId,
                         notificationType: type,
@@ -1000,9 +997,9 @@ export async function sendOrderNotificationEmail(
             const customerPhone = await orderPhone();
 
             if (!customerPhone) {
-                if (receiptDb && outboxId) {
+                if (outboxId) {
                     outcomes.push(await recordSkippedDelivery({
-                        db: receiptDb,
+                        db,
                         outboxId,
                         orderId,
                         notificationType: type,
@@ -1018,9 +1015,9 @@ export async function sendOrderNotificationEmail(
                 try {
                     whatsappRecipient = normalizeWhatsAppRecipient(customerPhone);
                 } catch {
-                    if (receiptDb && outboxId) {
+                    if (outboxId) {
                         outcomes.push(await recordSkippedDelivery({
-                            db: receiptDb,
+                            db,
                             outboxId,
                             orderId,
                             notificationType: type,
@@ -1034,14 +1031,12 @@ export async function sendOrderNotificationEmail(
                 }
 
                 if (whatsappRecipient) {
-                    const sender = db
-                        ? await resolveWhatsAppSender(db, { encryptionKey: options.encryptionKey, appProviders: options.appProviders })
-                        : null;
-                    if (!sender?.ready) {
-                        const providerName = sender?.provider ?? "whatsapp";
-                        if (receiptDb && outboxId) {
+                    const sender = await resolveWhatsAppSender(db, { encryptionKey: options.encryptionKey, appProviders: options.appProviders });
+                    if (!sender.ready) {
+                        const providerName = sender.provider;
+                        if (outboxId) {
                             outcomes.push(await recordSkippedDelivery({
-                                db: receiptDb,
+                                db,
                                 outboxId,
                                 orderId,
                                 notificationType: type,
@@ -1052,7 +1047,7 @@ export async function sendOrderNotificationEmail(
                                 reason: providerName === "whatsapp" ? "missing_whatsapp_credentials" : "whatsapp_provider_not_ready",
                             }));
                         } else {
-                            console.warn(`[Notifications] WhatsApp channel enabled for ${type} but the sender is not ready: ${compactProviderLogDetail(sender?.reason ?? "no database connection")}`);
+                            console.warn(`[Notifications] WhatsApp channel enabled for ${type} but the sender is not ready: ${compactProviderLogDetail(sender.reason)}`);
                         }
                     } else {
                         const providerName = sender.provider;
@@ -1068,9 +1063,9 @@ export async function sendOrderNotificationEmail(
                             clientReference,
                         });
 
-                        if (receiptDb && outboxId) {
+                        if (outboxId) {
                             const blocked = await recordProviderBlockedDeliveryIfNeeded({
-                                db: receiptDb,
+                                db,
                                 outboxId,
                                 orderId,
                                 notificationType: type,
@@ -1083,7 +1078,7 @@ export async function sendOrderNotificationEmail(
                                 outcomes.push(blocked);
                             } else {
                                 outcomes.push(await dispatchWithReceipt({
-                                    db: receiptDb,
+                                    db,
                                     outboxId,
                                     orderId,
                                     notificationType: type,
@@ -1094,7 +1089,7 @@ export async function sendOrderNotificationEmail(
                                     send: async (target) => send(createProviderClientReference(target)),
                                 }));
                             }
-                        } else if (db) {
+                        } else {
                             const result = await send();
                             if (result.success) {
                                 console.log(`[Notifications] WhatsApp sent for ${type} (order ${orderId}), ref=${result.providerMessageId}`);
@@ -1103,19 +1098,17 @@ export async function sendOrderNotificationEmail(
                                     `[Notifications] WhatsApp failed for ${type} (order ${orderId}): ${compactProviderLogDetail(result.providerStatus ?? result.rawResponse ?? "provider_failure")}`,
                                 );
                             }
-                        } else {
-                            console.warn(`[Notifications] WhatsApp channel enabled for ${type} without a database connection`);
                         }
                     }
                 }
             }
         } catch (whatsappError: unknown) {
             console.error(`[Notifications] WhatsApp dispatch failed for ${type} (order ${orderId}): ${compactProviderLogDetail(whatsappError)}`);
-            if (receiptDb && outboxId) {
+            if (outboxId) {
                 const reason = normalizeError(whatsappError);
                 if (isNonRetryableDispatchStatus(reason)) {
                     outcomes.push(await recordSkippedDelivery({
-                        db: receiptDb,
+                        db,
                         outboxId,
                         orderId,
                         notificationType: type,
@@ -1139,14 +1132,14 @@ export async function sendOrderNotificationEmail(
         }
     }
 
-    if (enabledChannels.includes("push") && db) {
+    if (enabledChannels.includes("push")) {
         outcomes.push(...await sendOrderWebPush({
             db,
             env: options.env,
             appProviders: options.appProviders,
             orderId,
             type,
-            receipt: receiptDb && outboxId ? { outboxId } : null,
+            receipt: outboxId ? { outboxId } : null,
             message: async () => {
                 const message = await context();
                 return {
