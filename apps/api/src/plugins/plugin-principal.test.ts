@@ -107,6 +107,11 @@ describe("ctx.api.call as a plugin principal", () => {
     ]);
   });
 
+  it("names a schema refusal VALIDATION_ERROR, as the SDK's contract double does", async () => {
+    const refused = await call("dashboard.orders.comment_add", { path: { id: "ord_rbac1" }, body: { body: 42 }, idempotencyKey: "plugin-comment-bad" });
+    expect(refused).toMatchObject({ ok: false, status: 400, error: { code: "VALIDATION_ERROR" } });
+  });
+
   it("reads buyer contact fields as null unless a protected customer data scope reveals them", async () => {
     // acme.rbac holds write_orders only: the order reads, its contact does not.
     const hidden = await call("dashboard.resources.orders.get", { path: { id: "ord_rbac1" } });

@@ -106,7 +106,11 @@ function unwrap(status: number, ok: boolean, body: unknown): PluginApiResult {
       status,
       data: null,
       error: {
-        code: typeof error.code === "string" ? error.code : "ERROR",
+        // A route's schema refusal carries no code, only the ZodError name;
+        // name it as the MCP and the SDK's createContractApi do.
+        code: typeof error.code === "string"
+          ? error.code
+          : error.name === "ZodError" ? "VALIDATION_ERROR" : "ERROR",
         message: typeof error.message === "string" ? error.message : "The operation failed.",
       },
     };
