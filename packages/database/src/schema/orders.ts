@@ -309,10 +309,13 @@ export const orders = sqliteTable("orders", {
         table.paymentStatus,
         table.updatedAt,
     ),
-    // Deferred orders with money due, by due date: the overdue list and to-do.
+    // Deferred orders with money due, live ones first by due date: the overdue
+    // list, its count and the Home to-do (migration 0163). `deleted_at` leads
+    // so its equality outranks `orders_list_updated_at_idx` without planner
+    // statistics; readers repeat this WHERE verbatim (`overdueOrderCondition`).
     index("orders_payment_due_idx")
-        .on(table.paymentDueAt, table.id)
-        .where(sql`${table.paymentDueAt} IS NOT NULL AND ${table.deletedAt} IS NULL AND ${table.balanceDueMinor} > 0`),
+        .on(table.deletedAt, table.paymentDueAt, table.id)
+        .where(sql`${table.paymentDueAt} IS NOT NULL AND ${table.balanceDueMinor} > 0`),
     index("orders_fulfillment_queue_idx").on(
         table.deletedAt,
         table.fulfillmentStatus,

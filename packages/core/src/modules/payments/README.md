@@ -129,8 +129,11 @@ confirmed manual settlements.
 ## Deferred payment (net terms)
 
 `@scalius/shared/payment-terms` is the vocabulary; migration 0161 adds
-`orders.payment_terms_days` and `orders.payment_due_at` (placement + days)
-and a partial index of deferred orders with money due.
+`orders.payment_terms_days` and `orders.payment_due_at` (placement + days).
+Migration 0163's partial index `orders_payment_due_idx`
+(`deleted_at, payment_due_at, id` where money is due) serves the overdue
+count, list and App API read; `overdueOrderCondition` repeats its WHERE and
+`list-scale.d1.test.ts` pins the plans.
 
 - The built-in invoice (`net_terms`, not a gateway) is enabled like cash on
   delivery in the `payment_methods` document, whose `netTerms` holds the

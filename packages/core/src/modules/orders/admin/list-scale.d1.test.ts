@@ -6,9 +6,12 @@
 // gets; the measured timings are in migration 0127's notes.
 import { afterEach, describe, expect, it } from "vitest";
 import type { DatabaseSync } from "node:sqlite";
+import { and, asc, isNull } from "drizzle-orm";
+import { orders } from "@scalius/database/schema";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { LIST_LEAD_LIMIT } from "../../../utils/list-lead";
 import { type CapturedQuery, pageKeysPlan, SORTS_THE_TABLE } from "../../../testing/list-plans";
+import { overdueOrderCondition } from "../payment-terms-columns";
 import { listOrders, listMatchingArchivableOrders } from "./list";
 
 const harnesses: Array<{ sqlite: DatabaseSync }> = [];
@@ -96,6 +99,36 @@ describe("order list plans (migration 0127)", () => {
             await listOrders(db, { limit: 50, sort: "createdAt", order: "desc", ...options });
             expect(pageKeys(sqlite, queries), JSON.stringify(options)).toMatch(/^SEARCH orders USING (INTEGER PRIMARY KEY|INDEX orders_status_idx) \((status=\? AND )?rowid=\?\)/);
         }
+    });
+});
+
+// Overdue invoices (migration 0163): Home asks for the count on every load,
+// and stores have few overdue invoices, so the count, the page and the App
+// API list must read the partial index, never walk every live order.
+describe("overdue invoice plans (migration 0163)", () => {
+    const plan = (sqlite: DatabaseSync, query: CapturedQuery) => (sqlite.prepare(`EXPLAIN QUERY PLAN ${query.query}`)
+        .all(...query.values.map((value) => typeof value === "boolean" ? Number(value) : value) as never[]) as Array<{ detail: string }>)
+        .map((row) => row.detail).join(" | ");
+    // The live-order equality, then the due date as the range.
+    const OVERDUE_INDEX = /SEARCH orders USING INDEX orders_payment_due_idx \(deleted_at=\? AND payment_due_at>\? AND payment_due_at<\?\)/;
+
+    it("counts and pages the Overdue view from orders_payment_due_idx", async () => {
+        const { db, sqlite, queries } = setup();
+        await listOrders(db, { limit: 1, sort: "createdAt", order: "desc", view: "overdue" });
+        const count = queries.find(({ query }) => /count\(/i.test(query) && !DATA.test(query));
+        expect(count, "the count probe").toBeDefined();
+        expect(plan(sqlite, count!)).toMatch(OVERDUE_INDEX);
+        expect(plan(sqlite, count!)).not.toMatch(/orders_list_updated_at_idx|SCAN orders/);
+        // The page sorts the overdue invoices only, never the live orders.
+        expect(pageKeys(sqlite, queries)).toMatch(new RegExp(`^${OVERDUE_INDEX.source}`));
+    });
+
+    it("reads the App API overdue list from orders_payment_due_idx", async () => {
+        const { db, sqlite, queries } = setup();
+        await db.select({ id: orders.id }).from(orders)
+            .where(and(isNull(orders.deletedAt), overdueOrderCondition()))
+            .orderBy(asc(orders.updatedAt), asc(orders.id)).limit(51).all();
+        expect(plan(sqlite, queries.at(-1)!)).toMatch(new RegExp(`^${OVERDUE_INDEX.source}`));
     });
 });
 

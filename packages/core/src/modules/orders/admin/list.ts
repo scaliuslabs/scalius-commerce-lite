@@ -179,7 +179,7 @@ function ordersAmong(db: Database, orderIds: SQL): SQL {
 }
 
 // Cash on delivery still out (`cod_tracking_status_idx`): couriers' work in flight.
-// (Overdue invoices read `orders_payment_due_idx`, payment-terms-columns.ts.)
+// (Overdue invoices read `orders_payment_due_idx`, migration 0163, payment-terms-columns.ts.)
 function codTrackingOrderIds(statuses: readonly string[]): SQL {
     return sql`SELECT ${codTracking.orderId} AS order_id FROM ${codTracking}
         WHERE ${inArray(codTracking.codStatus, [...statuses])}`;

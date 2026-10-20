@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 161,
-  name: "0161_payment_terms",
+  version: 163,
+  name: "0163_payment_due_live_index",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -586,6 +586,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 161,
     name: "0161_payment_terms",
     sourceSha256: "6e6ed65780e481fea14f5c00d39d254576d40d60c4153ba4d6ee59cfcbd5d25b",
+  },
+  {
+    version: 163,
+    name: "0163_payment_due_live_index",
+    sourceSha256: "0d86bdc0dc918c072882cff7575ef0fb887906812b2fdc13af2ddfa9db942e71",
   },
 ] as const;
 
