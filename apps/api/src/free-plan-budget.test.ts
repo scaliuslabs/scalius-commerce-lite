@@ -17,6 +17,7 @@ import { seedCatalog, seedOrders } from "./testing/free-plan-seed";
 import { jsonRequest, placeOrder as checkoutOrder, taxQuote as checkoutQuote } from "./testing/free-plan-checkout";
 import { BUDGETS, type Budget } from "./testing/free-plan-budgets";
 import { syncBundledPluginsOncePerDeploy } from "./plugins/scheduled";
+import { getDb } from "@scalius/database/client";
 
 /**
  * The Workers plan budget of the operations a store depends on, measured through
@@ -401,5 +402,79 @@ describe.each(PLANS)("Workers %s plan budget", (plan) => {
     // One invocation now: the commit and its after-response work.
     measurements.push({ ...commit, id: "order-lifecycle", label: "One 3-line order: checkout commit + its after-response work" });
     expectWithin({ ...commit, id: "order-lifecycle" });
+  });
+  // ── Bulk runs, server tracking and hosted payments ─────────────────────────────
+
+  it("bulk run chunk: 90 products drafted, then made active again", async () => {
+    const { advanceBulkRun, createBulkRun } = await import("./bulk-runs/engine");
+    // The engine called directly on the metered binding (the cron drain's chunk).
+    const metered = getDb(store.env);
+    const products = Array.from({ length: 90 }, (_, index) => ({ id: `p_bulk_${index + 1}` }));
+    const runs: string[] = [];
+    const m = await run("bulk-run-chunk", "Bulk run chunk (90 products' status, coarse cache clock)", 2, async () => {
+      const row = await advanceBulkRun(metered, runs.at(-1)!, 1);
+      expect(row).toMatchObject({ processed: 90, changed: 90 });
+    }, async (index) => {
+      const { row } = await createBulkRun(store.db, {
+        kind: "products.set_status",
+        input: { products, status: index === 0 ? "draft" : "active" },
+      }, { operationKey: `budget-bulk-${plan}-${index}`, createdBy: null, lease: false });
+      runs.push(row.id);
+    });
+    // Each run's empty last page, unmetered: both runs finish.
+    for (const id of runs) await advanceBulkRun(store.db, id, 1);
+    expectWithin(m);
+  });
+
+  it("an order with Meta, GA4 and TikTok server tracking on, then its hosted payment confirmed", async () => {
+    const { metaConversionsDocument } = await import("@scalius/core/modules/settings");
+    const { ga4MeasurementDocument, tiktokEventsDocument } = await import("@scalius/core/integrations/tracking/settings");
+    const { claimAndApplyPaymentEvent } = await import("./routes/payment/payment-events");
+    const encryptionKey = store.env.CREDENTIAL_ENCRYPTION_KEY as string;
+    const enable = async (isEnabled: boolean) => {
+      await metaConversionsDocument.write(store.db, { pixelId: "1234567890123", accessToken: "EAAB-live-token-value", isEnabled }, { encryptionKey });
+      await ga4MeasurementDocument.write(store.db, { isEnabled, measurementId: "G-BUDGET1234", apiSecret: "mp-secret-value-01", debugMode: false }, { encryptionKey });
+      await tiktokEventsDocument.write(store.db, { isEnabled, pixelCode: "C4ABCDEF0123456789", accessToken: "tiktok-live-token-01", testEventCode: "" }, { encryptionKey });
+    };
+    await enable(true);
+    try {
+      const { quoteFingerprint } = await taxQuote(3);
+      const orders: string[] = [];
+      const commit = await run("order-3-line-commit-tracking", "Checkout commit (3 lines) with Meta, GA4 and TikTok deliveries after the response", 2, async () => {
+        orders.push(await placeOrder(3, quoteFingerprint));
+      });
+      expectWithin(commit);
+
+      // A hosted payment's confirmation: the order is a card order whose
+      // purchase deliveries were held for the payment (as a hosted checkout
+      // leaves them), and they go out now.
+      const metered = getDb(store.env);
+      let orderId = "";
+      let event = 0;
+      const confirmed = await run("payment-webhook-confirmed", "Hosted payment confirmed (webhook claim, payment, notification, Meta/GA4/TikTok purchases)", 2, async () => {
+        const { total } = store.sqlite.prepare("SELECT total_amount_minor AS total FROM orders WHERE id = ?").get(orderId) as { total: number };
+        event += 1;
+        const result = await claimAndApplyPaymentEvent({
+          db: metered,
+          caller: { env: store.env, executionCtx: store.meter.ctx },
+          provider: "stripe",
+          event: {
+            kind: "confirmed", orderId, providerRef: `pi_budget_${plan}_${event}`, amountMinor: total, currency: "BDT",
+            eventType: "payment_intent.succeeded", eventId: `evt_budget_${plan}_${event}`,
+          },
+          source: "webhook",
+        });
+        expect(result).toEqual({ status: "accepted" });
+      }, async (index) => {
+        orderId = orders[index]!;
+        store.sqlite.prepare("UPDATE orders SET payment_method = 'stripe' WHERE id = ?").run(orderId);
+        store.sqlite.prepare("UPDATE meta_capi_purchase_outbox SET status = 'pending', sent_at = NULL, next_attempt_at = unixepoch() + 3600 WHERE order_id = ?").run(orderId);
+        store.sqlite.prepare("UPDATE tracking_deliveries SET status = 'pending', sent_at = NULL, next_attempt_at = unixepoch() + 3600 WHERE order_id = ?").run(orderId);
+      });
+      expectWithin(confirmed);
+      expect(store.sqlite.prepare("SELECT count(*) AS n FROM order_payments WHERE payment_method = 'stripe' AND status = 'succeeded'").get()).toEqual({ n: 2 });
+    } finally {
+      await enable(false);
+    }
   });
 });
