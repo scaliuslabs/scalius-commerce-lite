@@ -17,7 +17,7 @@ pnpm exec vitest run tests/unit/core/orders # one directory or file
 pnpm test:ci                                # what CI runs
 ```
 
-`pnpm test:ci` runs the same tests, but runs the three database export and upload tests in `packages/database/__tests__/` one worker at a time.
+`pnpm test` (and `pnpm test:ci`) runs everything in two passes: the three database export and upload tests in `packages/database/__tests__/` (`SERIAL_TESTS` in `scripts/test-runner.mjs`) run last, one worker, alone, since each builds a full database and misses its time limit beside the parallel suite.
 
 The root `vitest.config.ts` sets `globals: true` and ignores `.claude/**`. It resolves the `@/` alias to `apps/admin-v2/src` or `apps/storefront/src` by the importing file. It stubs the `cloudflare:workers` module.
 
