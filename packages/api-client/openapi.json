@@ -72858,7 +72858,7 @@
         "tags": [
           "Orders"
         ],
-        "summary": "Status-only view of an order by its number (no personal data)",
+        "summary": "Status view of an order by its number and the last 4 phone digits or email",
         "requestBody": {
           "required": true,
           "content": {
@@ -72871,10 +72871,17 @@
                     "minLength": 1,
                     "maxLength": 64,
                     "description": "Order number (\"#1001\") or order id"
+                  },
+                  "contact": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 254,
+                    "description": "The last 4 digits of the phone number on the order, or its email"
                   }
                 },
                 "required": [
-                  "reference"
+                  "reference",
+                  "contact"
                 ],
                 "additionalProperties": false
               }
@@ -73270,7 +73277,7 @@
           "maxRequestBytes": 1048576,
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
-          "exclusionReason": "Service-authenticated storefront proxy for the Track-your-order status view; guessable order numbers stay behind the storefront's per-IP limit.",
+          "exclusionReason": "Service-authenticated storefront proxy for the Track-your-order status view; it needs the order number plus the last 4 phone digits or the email, behind per-IP and per-order limits.",
           "dryRun": "none",
           "confirmation": "none"
         },
@@ -73299,6 +73306,12 @@
                     "maxLength": 64,
                     "description": "Order number (\"#1001\") or order id"
                   },
+                  "contact": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 254,
+                    "description": "The last 4 digits of the phone number on the order, or its email"
+                  },
                   "channel": {
                     "type": "string",
                     "enum": [
@@ -73309,7 +73322,8 @@
                   }
                 },
                 "required": [
-                  "reference"
+                  "reference",
+                  "contact"
                 ],
                 "additionalProperties": false
               }

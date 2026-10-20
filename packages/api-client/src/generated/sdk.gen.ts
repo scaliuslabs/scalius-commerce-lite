@@ -1556,7 +1556,7 @@ export const postApiV1OrdersPaymentRecoveryVerifyOtp = <ThrowOnError extends boo
 });
 
 /**
- * Status-only view of an order by its number (no personal data)
+ * Status view of an order by its number and the last 4 phone digits or email
  */
 export const postApiV1OrdersLookupStatus = <ThrowOnError extends boolean = false>(options: Options<PostApiV1OrdersLookupStatusData, ThrowOnError>): RequestResult<PostApiV1OrdersLookupStatusResponses, PostApiV1OrdersLookupStatusErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1OrdersLookupStatusResponses, PostApiV1OrdersLookupStatusErrors, ThrowOnError>({
     url: '/api/v1/orders/lookup/status',

@@ -19404,6 +19404,10 @@ export type PostApiV1OrdersLookupStatusData = {
          * Order number ("#1001") or order id
          */
         reference: string;
+        /**
+         * The last 4 digits of the phone number on the order, or its email
+         */
+        contact: string;
     };
     path?: never;
     query?: never;
@@ -19522,6 +19526,10 @@ export type PostApiV1OrdersLookupSendOtpData = {
          * Order number ("#1001") or order id
          */
         reference: string;
+        /**
+         * The last 4 digits of the phone number on the order, or its email
+         */
+        contact: string;
         channel?: 'email' | 'sms' | 'whatsapp';
     };
     path?: never;

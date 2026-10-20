@@ -124,7 +124,7 @@ export const STOREFRONT_ORDER_OPERATIONS = {
     principals: ["internal"],
     risk: "security",
     reason:
-      "Service-authenticated storefront proxy for the Track-your-order status view; guessable order numbers stay behind the storefront's per-IP limit.",
+      "Service-authenticated storefront proxy for the Track-your-order status view; it needs the order number plus the last 4 phone digits or the email, behind per-IP and per-order limits.",
   },
   "storefront.orders_lookup_send_otp.send_otp": {
     exposure: "excluded",

@@ -1,9 +1,11 @@
-// Public "Track your order". The order number alone opens a status-only view
-// (no personal data; the API route rate-limits it per IP). Anything more is
-// proven by a one-time code sent through a channel the merchant chose in
-// Customer accounts to a contact SAVED on the order (never to what the visitor
-// types). A correct code issues a private receipt proof, so the buyer lands on
-// the normal receipt from any device.
+// Public "Track your order". The order number alone shows nothing (audit R2
+// F5): with the last 4 digits of the phone saved on the order, or its email,
+// it opens a status view (first name, items, totals, tracking; the API route
+// rate-limits it per IP and per order). Anything more is proven by a one-time
+// code sent through a channel the merchant chose in Customer accounts to a
+// contact SAVED on the order (never to what the visitor types). A correct
+// code issues a private receipt proof, so the buyer lands on the normal
+// receipt from any device.
 import { and, eq, isNull, or, type SQL } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { orders } from "@scalius/database/schema";
@@ -34,7 +36,7 @@ const ORDER_LOOKUP_PURPOSE = "order_lookup";
 const ORDER_LOOKUP_KEY_PREFIX = "order_lookup:";
 const WRONG_CODE_MESSAGE = "That code isn't right. Check it and try again.";
 /** One answer for every miss, so a number that doesn't exist looks like any other. */
-export const ORDER_LOOKUP_NOT_FOUND_MESSAGE = "We couldn't find an order with that number. Check it and try again.";
+export const ORDER_LOOKUP_NOT_FOUND_MESSAGE = "We couldn't find an order with that number and contact. Check them and try again.";
 
 /**
  * The order a buyer names: "#1001", "1001" or the internal id. Returns null
@@ -50,6 +52,8 @@ export function orderReferenceCondition(reference: string): SQL | null {
 
 export interface SendOrderLookupOtpInput {
     reference: string;
+    /** The last 4 digits of the order's phone, or its email: the number alone sends nothing. */
+    contact: string;
     /** The merchant-chosen channel the buyer picked; the first available one otherwise. */
     channel?: CustomerAuthOtpChannel;
     ip: string;
@@ -82,6 +86,45 @@ function parseLookupReference(reference: string): { condition: SQL; referenceKey
     if (!condition) throw new ValidationError("Enter your order number, for example #1001.");
     const referenceKey = toLatinDigits(reference).trim().replace(/^#\s*/, "").toUpperCase();
     return { condition, referenceKey };
+}
+
+function digitsOf(value: string | null | undefined): string {
+    return toLatinDigits(value ?? "").replace(/\D/g, "");
+}
+
+/**
+ * Whether what a visitor typed with the order number is a contact saved on
+ * the order: an email (any case) or the last 4 digits of its phone or
+ * WhatsApp number (a longer number counts by its last 4 digits). An order
+ * placed without a phone (`NO_PHONE`) has no digits to match.
+ */
+export function orderLookupContactMatches(
+    order: { customerPhone: string | null; customerEmail: string | null; customerWhatsapp: string | null },
+    contact: string,
+): boolean {
+    const typed = toLatinDigits(contact ?? "").trim();
+    if (typed.length === 0 || typed.length > 254) return false;
+    if (typed.includes("@")) {
+        const email = order.customerEmail?.trim().toLowerCase();
+        return Boolean(email) && email === typed.toLowerCase();
+    }
+    if (/[^\d\s()+.-]/.test(typed)) return false;
+    const digits = digitsOf(typed);
+    if (digits.length < 4 || digits.length > 15) return false;
+    const last4 = digits.slice(-4);
+    return [order.customerPhone, order.customerWhatsapp].some((phone) => {
+        const saved = digitsOf(phone);
+        return saved.length >= 4 && saved.slice(-4) === last4;
+    });
+}
+
+/**
+ * The order a reference names, when the contact is one saved on it. Null for
+ * a miss of either, so a wrong contact looks like a wrong number.
+ */
+export async function findOrderByReferenceAndContact(db: Database, reference: string, contact: string) {
+    const order = await findOrderByReference(db, reference);
+    return order && orderLookupContactMatches(order, contact) ? order : null;
 }
 
 /** The order a reference names, with the contacts codes may go to. Null when none. */
@@ -119,9 +162,9 @@ export async function sendOrderLookupOtp(
         hashKey: input.encryptionKey,
     });
 
-    // The status view already said the order exists; the code goes to the
-    // contact saved on it, never to anything the visitor typed.
-    const order = await findOrderByReference(db, input.reference);
+    // The visitor proved a contact saved on the order; the code still goes to
+    // the saved contact, never to anything the visitor typed.
+    const order = await findOrderByReferenceAndContact(db, input.reference, input.contact);
     if (!order) throw new NotFoundError(ORDER_LOOKUP_NOT_FOUND_MESSAGE);
     const { channel, method, target, destination } = await chooseOrderCodeChannel(db, order, input);
 

@@ -9,7 +9,9 @@ import {
   describeOrderCodeSendRefusal,
   formatCountdown,
   getOrderCodeFailureText,
+  getOrderLookupContactError,
   getOrderLookupFieldErrors,
+  normalizeOrderLookupContact,
   normalizeOrderReference,
 } from "./order-lookup";
 
@@ -37,6 +39,21 @@ describe("order lookup input", () => {
       reference: BANGLA_CHECKOUT_LANGUAGE_DATA.trackOrderNumberInvalidText,
     });
     expect(getOrderLookupFieldErrors(en, "১০০১")).toEqual({});
+  });
+
+  it("asks for the last 4 phone digits or the email with the number", () => {
+    expect(normalizeOrderLookupContact("0001")).toBe("0001");
+    expect(normalizeOrderLookupContact("০০০১")).toBe("0001");
+    expect(normalizeOrderLookupContact("+880 1712-000001")).toBe("0001");
+    expect(normalizeOrderLookupContact(" buyer@example.test ")).toBe("buyer@example.test");
+    for (const invalid of ["", "001", "buyer", "12ab", "a@", "1".repeat(16)]) {
+      expect(normalizeOrderLookupContact(invalid), invalid).toBeNull();
+    }
+    expect(getOrderLookupContactError(en, "")).toEqual({ contact: en.trackOrderContactInvalidText });
+    expect(getOrderLookupContactError(BANGLA_CHECKOUT_LANGUAGE_DATA, "12")).toEqual({
+      contact: BANGLA_CHECKOUT_LANGUAGE_DATA.trackOrderContactInvalidText,
+    });
+    expect(getOrderLookupContactError(en, "0001")).toEqual({});
   });
 });
 
