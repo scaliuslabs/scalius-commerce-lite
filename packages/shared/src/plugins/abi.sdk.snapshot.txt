@@ -351,14 +351,16 @@ import type { EventTopic, EventTopicFilter } from "@scalius/shared/events";
 import type { FunctionReadRecord, FunctionReads, PluginFunctionAnswer, PluginFunctionInput, PluginFunctionPoint, PluginManifestInput, PluginSettingValue } from "@scalius/shared/plugins";
 import type { ProviderImplementation, ProviderKind } from "@scalius/shared/plugins/providers";
 import type { PluginContext, PluginEvent, PluginRouteRequest, PluginRouteResponse } from "./context";
+import type { PluginContextOf, PluginSettingsOf } from "./manifest-types";
 export type * from "./context";
+export { defineManifest, type DefinedManifest, type ObjectFieldValue, type ObjectRecordOf, type PluginContextOf, type PluginObjectsOf, type PluginSettingsOf, type SettingsOf, type SettingValueOf, type StorefrontSettingsOf, } from "./manifest-types";
 export { PLUGIN_API_VERSION } from "@scalius/shared/plugins/api-version";
 export { ProviderError, type ProviderErrorCategory } from "@scalius/shared/plugins/providers/kinds";
 export type { CourierFind, CourierRecipient, CourierShipment, CourierShipmentInput, CourierRatesInput, CourierRates, CourierShipmentStatus, CourierTracking, CourierWebhook, CourierWebhookReply, EmailSend, EmailSendInput, FraudCheck, FraudCheckInput, MessageStatus, PaymentEvent, PaymentQuery, PaymentQueryInput, PaymentRefund, PaymentRefundInput, PaymentRefundProbe, PaymentRefundProbeInput, PaymentSession, PaymentSessionInput, PaymentSettlement, PaymentVerification, ProviderConnection, ProviderHttpRequest, ProviderImplementation, ProviderKind, ProviderOperationInput, ProviderOperationOutput, ProviderWireAmount, SmsSend, SmsSendInput, TaxAddress, TaxCalculateInput, TaxCalculation, TaxCalculationLine, } from "@scalius/shared/plugins/providers";
 export type { PluginFeature, PluginFeatureInput, PluginManifest, PluginManifestInput, PluginUiActionResult, PluginUiDocument, PluginUiNode, PluginUiTarget, } from "@scalius/shared/plugins";
 export { adminContext, adminLocale, ui, wantsPage, type PluginAdminContext, type PluginAdminLocale } from "./ui";
-export type PluginEventHandler<T extends EventTopic = EventTopic> = (event: PluginEvent<T>, ctx: PluginContext) => Promise<void> | void;
-export type PluginFunctionHandler<P extends PluginFunctionPoint> = (input: PluginFunctionInput<P>, settings: Readonly<Record<string, PluginSettingValue>>) => PluginFunctionAnswer<P> | Promise<PluginFunctionAnswer<P>>;
+export type PluginEventHandler<T extends EventTopic = EventTopic, Ctx = PluginContext> = (event: PluginEvent<T>, ctx: Ctx) => Promise<void> | void;
+export type PluginFunctionHandler<P extends PluginFunctionPoint, Settings = Readonly<Record<string, PluginSettingValue>>> = (input: PluginFunctionInput<P>, settings: Settings) => PluginFunctionAnswer<P> | Promise<PluginFunctionAnswer<P>>;
 export type { FunctionReadRecord, FunctionReads };
 export declare function readOne<T extends Record<string, unknown> = Record<string, unknown>>(reads: FunctionReads | undefined, as: string): {
     revision: number;
@@ -368,47 +370,49 @@ export declare function readMany<T extends Record<string, unknown> = Record<stri
     revision: number;
     data: T;
 }>;
-export type PluginRouteHandler = (request: PluginRouteRequest, ctx: PluginContext) => Promise<PluginRouteResponse> | PluginRouteResponse;
-export type PluginCronHandler = (ctx: PluginContext, run: {
+export type PluginRouteHandler<Ctx = PluginContext> = (request: PluginRouteRequest, ctx: Ctx) => Promise<PluginRouteResponse> | PluginRouteResponse;
+export type PluginCronHandler<Ctx = PluginContext> = (ctx: Ctx, run: {
     name: string;
     scheduledAt: string;
 }) => Promise<void> | void;
-export type PluginLifecycleHandler = (ctx: PluginContext) => Promise<void> | void;
-export interface PluginDefinition {
-    manifest: PluginManifestInput;
+export type PluginLifecycleHandler<Ctx = PluginContext> = (ctx: Ctx) => Promise<void> | void;
+export interface PluginDefinition<M extends PluginManifestInput = PluginManifestInput, Ctx = PluginContextOf<M>> {
+    manifest: M;
     events?: {
-        [T in EventTopic]?: PluginEventHandler<T>;
+        [T in EventTopic]?: PluginEventHandler<T, Ctx>;
     } & {
-        [F in Exclude<EventTopicFilter, EventTopic>]?: PluginEventHandler;
+        [F in Exclude<EventTopicFilter, EventTopic>]?: PluginEventHandler<EventTopic, Ctx>;
     };
     functions?: {
-        [P in PluginFunctionPoint]?: PluginFunctionHandler<P>;
+        [P in PluginFunctionPoint]?: PluginFunctionHandler<P, PluginSettingsOf<M>>;
     };
     routes?: {
-        admin?: Record<string, PluginRouteHandler>;
-        public?: Record<string, PluginRouteHandler>;
-        webhooks?: Record<string, PluginRouteHandler>;
+        admin?: Record<string, PluginRouteHandler<Ctx>>;
+        public?: Record<string, PluginRouteHandler<Ctx>>;
+        webhooks?: Record<string, PluginRouteHandler<Ctx>>;
     };
-    cron?: Record<string, PluginCronHandler>;
+    cron?: Record<string, PluginCronHandler<Ctx>>;
     providers?: Record<string, PluginProvider>;
     lifecycle?: {
-        install?: PluginLifecycleHandler;
-        activate?: PluginLifecycleHandler;
-        deactivate?: PluginLifecycleHandler;
-        uninstall?: (ctx: PluginContext, options: {
+        install?: PluginLifecycleHandler<Ctx>;
+        activate?: PluginLifecycleHandler<Ctx>;
+        deactivate?: PluginLifecycleHandler<Ctx>;
+        uninstall?: (ctx: Ctx, options: {
             keepData: boolean;
         }) => Promise<void> | void;
-        enable?: (ctx: PluginContext, options: {
+        enable?: (ctx: Ctx, options: {
             feature: string;
         }) => Promise<void> | void;
-        disable?: (ctx: PluginContext, options: {
+        disable?: (ctx: Ctx, options: {
             feature: string;
         }) => Promise<void> | void;
     };
-    migrations?: Record<string, PluginMigrationHandler>;
+    migrations?: Record<string, PluginMigrationHandler<Ctx>>;
 }
-export type PluginMigrationHandler = (ctx: PluginContext) => Promise<void> | void;
-export declare function definePlugin<const T extends PluginDefinition>(definition: T): T;
+export type PluginMigrationHandler<Ctx = PluginContext> = (ctx: Ctx) => Promise<void> | void;
+export declare function definePlugin<const M extends PluginManifestInput, const T extends PluginDefinition<M>>(definition: T & {
+    manifest: M;
+}): T;
 export type PluginProviderOf<K extends ProviderKind> = {
     readonly kind: K;
 } & ProviderImplementation<K, PluginContext>;
@@ -457,6 +461,131 @@ export declare const defineFxProvider: <const T extends ProviderImplementation<"
 export declare const defineIdentityProvider: <const T extends ProviderImplementation<"identity", PluginContext>>(implementation: T) => {
     readonly kind: "identity";
 } & T;
+
+// packages/plugin-sdk/src/manifest-types.d.ts
+import type { PluginManifestInput, PluginSettingValue } from "@scalius/shared/plugins";
+import type { StorefrontImage, StorefrontProductCard, StorefrontResolvedSettings } from "@scalius/shared/plugins/storefront-protocol";
+import type { PluginContext, PluginObjectCollection, PluginObjects } from "./context";
+type Manifest = PluginManifestInput;
+declare const DEFINED_MANIFEST: unique symbol;
+export type DefinedManifest<M> = M & {
+    readonly [DEFINED_MANIFEST]?: true;
+};
+type IsDefined<M> = typeof DEFINED_MANIFEST extends keyof M ? true : false;
+type Values<T> = T extends readonly (infer U)[] ? U : never;
+type IsLiteral<K> = K extends string ? (string extends K ? false : true) : false;
+export type ObjectFieldValue<Type> = Type extends `list.${infer Item}` ? Array<ObjectFieldValue<Item>> : Type extends "integer" | "decimal" ? number : Type extends "boolean" ? boolean : Type extends "json" ? unknown : Type extends "money" ? number | string : Type extends string ? string : unknown;
+type FieldOf<O> = O extends {
+    fields?: infer F;
+} ? Values<F> : never;
+type RequiredKeys<F> = F extends {
+    key: infer K extends string;
+    required: true;
+} ? K : never;
+type OptionalKeys<F> = F extends {
+    key: infer K extends string;
+} ? (F extends {
+    required: true;
+} ? never : K) : never;
+type FieldType<F, K> = F extends {
+    key: K;
+    type: infer T;
+} ? ObjectFieldValue<T> : never;
+export type ObjectRecordOf<O> = IsLiteral<FieldOf<O> extends {
+    key: infer K;
+} ? K : string> extends true ? {
+    [K in RequiredKeys<FieldOf<O>>]: FieldType<FieldOf<O>, K>;
+} & {
+    [K in OptionalKeys<FieldOf<O>>]?: FieldType<FieldOf<O>, K> | null;
+} : Record<string, unknown>;
+type ObjectsOf<M> = M extends {
+    objects?: infer O;
+} ? NonNullable<O> : never;
+export type PluginObjectsOf<M> = [
+    ObjectsOf<M>
+] extends [never] ? PluginObjects : string extends keyof ObjectsOf<M> ? PluginObjects : {
+    readonly [Name in keyof ObjectsOf<M>]: PluginObjectCollection<ObjectRecordOf<ObjectsOf<M>[Name]>>;
+} & PluginObjects;
+type OptionValue<F> = F extends {
+    options: infer O;
+} ? (Values<O> extends {
+    value: infer V;
+} ? V : string) : string;
+export type SettingValueOf<F> = F extends {
+    type: "number";
+} ? number : F extends {
+    type: "boolean";
+} ? boolean : F extends {
+    type: "select";
+} ? OptionValue<F> : F extends {
+    type: "multiselect";
+} ? Array<OptionValue<F>> : F extends {
+    type: "image";
+} ? StorefrontImage | null : F extends {
+    type: "product";
+} ? StorefrontProductCard | null : F extends {
+    type: "products";
+} ? StorefrontProductCard[] : F extends {
+    type: "list";
+    fields: infer Items;
+} ? Array<{
+    [I in Values<Items> as I extends {
+        key: infer K extends string;
+    } ? K : never]: SettingItemValue<I>;
+}> : string;
+type SettingItemValue<I> = I extends {
+    type: "number";
+} ? number | null : I extends {
+    type: "boolean";
+} ? boolean | null : I extends {
+    type: "image";
+} ? StorefrontImage | null : string | null;
+type FeatureGroups<M> = M extends {
+    features?: infer F;
+} ? (Values<NonNullable<F>> extends {
+    settingsGroups?: infer G;
+} ? Values<NonNullable<G>> : never) : never;
+type Always<F, M> = F extends {
+    default: unknown;
+} ? (F extends {
+    group: FeatureGroups<M>;
+} ? false : true) : false;
+export type SettingsOf<Fields, M = unknown> = IsLiteral<Values<Fields> extends {
+    key: infer K;
+} ? K : string> extends true ? {
+    readonly [F in Values<Fields> as F extends {
+        key: infer K extends string;
+    } ? (Always<F, M> extends true ? K : never) : never]: SettingValueOf<F>;
+} & {
+    readonly [F in Values<Fields> as F extends {
+        key: infer K extends string;
+    } ? (Always<F, M> extends true ? never : K) : never]?: SettingValueOf<F> | null;
+} : unknown;
+export type PluginSettingsOf<M> = IsDefined<M> extends true ? (M extends {
+    settings?: infer S;
+} ? SettingsOf<NonNullable<S>, M> : unknown) & Readonly<Record<string, PluginSettingValue>> : Readonly<Record<string, PluginSettingValue>>;
+export type PluginContextOf<M> = IsDefined<M> extends true ? Omit<PluginContext, "objects" | "settings"> & {
+    objects: PluginObjectsOf<M>;
+    settings: PluginSettingsOf<M>;
+} : PluginContext;
+type StorefrontOf<M> = M extends {
+    storefront?: infer S;
+} ? NonNullable<S> : never;
+type Declared<List, Id extends string, Key extends string> = Values<List> extends infer E ? (E extends {
+    [P in Id]: Key;
+} ? E : never) : never;
+type SettingsOfEntry<E> = (E extends {
+    settings?: infer S;
+} ? SettingsOf<NonNullable<S>> : unknown) extends infer R ? (unknown extends R ? StorefrontResolvedSettings : R) : never;
+export type StorefrontSettingsOf<M, Kind extends "section" | "block" | "skin", Key extends string> = Kind extends "section" ? SettingsOfEntry<Declared<StorefrontOf<M> extends {
+    sections?: infer L;
+} ? NonNullable<L> : never, "type", Key>> : Kind extends "block" ? SettingsOfEntry<Declared<StorefrontOf<M> extends {
+    productBlocks?: infer L;
+} ? NonNullable<L> : never, "type", Key>> : SettingsOfEntry<Declared<StorefrontOf<M> extends {
+    skins?: infer L;
+} ? NonNullable<L> : never, "id", Key>>;
+export declare function defineManifest<const M extends Manifest>(manifest: M): DefinedManifest<M>;
+export {};
 
 // packages/plugin-sdk/src/manifest.d.ts
 export { parsePluginManifest, pluginFeatureRequest, pluginGrantRequest, pluginManifestWithFeatures, type PluginManifest, type PluginManifestInput, } from "@scalius/shared/plugins";
@@ -810,6 +939,77 @@ export declare function renderHeader(module: StorefrontModule, component: string
 export declare function renderFooter(module: StorefrontModule, component: string, settings?: StorefrontResolvedSettings, data?: Partial<StorefrontFooterData>, options?: RenderOptions): string;
 export declare function renderProductCard(module: StorefrontModule, component: string, settings?: StorefrontResolvedSettings, product?: Partial<StorefrontProductCard>, options?: RenderOptions): string;
 
+// packages/plugin-sdk/src/testing-contract.d.ts
+import type { PluginApiCallInput, PluginApiResult } from "./context";
+export type ContractSchema = Record<string, unknown>;
+export interface StableContractParameter {
+    name: string;
+    in: "path" | "query" | "header" | string;
+    required?: boolean;
+    schema?: ContractSchema;
+    description?: string;
+}
+export interface StableContractOperation {
+    method: string;
+    path: string;
+    risk: string;
+    idempotency: "none" | "supported" | "required" | string;
+    revision: "none" | "optional" | "required" | string;
+    scopes: string[];
+    input: {
+        parameters?: StableContractParameter[];
+        requestBody?: {
+            required?: boolean;
+            content?: Record<string, {
+                schema?: ContractSchema;
+            }>;
+        };
+    } | null;
+    output: ContractSchema | null;
+}
+export interface StableContract {
+    operations: Record<string, StableContractOperation>;
+    components: Record<string, ContractSchema>;
+}
+export declare const stableContract: StableContract;
+export interface ContractCall {
+    operationId: string;
+    operation: StableContractOperation;
+    path: Record<string, string | number>;
+    query: Record<string, string | number | boolean | null>;
+    body: unknown;
+    idempotencyKey: string | undefined;
+}
+export type ContractHandler = (call: ContractCall) => unknown | Promise<unknown>;
+export interface ContractApiOptions {
+    handlers?: Record<string, ContractHandler>;
+    scopes?: readonly string[];
+    checkOutput?: boolean;
+    contract?: StableContract;
+}
+export interface ContractApi {
+    (operationId: string, input: PluginApiCallInput | undefined, call?: {
+        scopes?: readonly string[];
+    }): Promise<PluginApiResult>;
+    readonly calls: Array<{
+        operationId: string;
+        input: PluginApiCallInput | undefined;
+        result: PluginApiResult;
+    }>;
+}
+interface SchemaIssue {
+    path: string;
+    message: string;
+    missing?: string;
+}
+export declare function contractSchemaIssue(schemaInput: unknown, value: unknown, contract?: StableContract, path?: string): SchemaIssue | null;
+export declare function createContractApi(options?: ContractApiOptions): ContractApi;
+export {};
+
+// packages/plugin-sdk/src/testing-contract.gen.d.ts
+import type { StableContract } from "./testing-contract";
+export declare const STABLE_CONTRACT: StableContract;
+
 // packages/plugin-sdk/src/testing.d.ts
 import { type PluginFunctionInputDraft, type PluginFunctionOutput, type PluginFunctionPoint, type PluginSettingValue } from "@scalius/shared/plugins";
 import type { EventTopic } from "@scalius/shared/events";
@@ -818,11 +1018,14 @@ import { type PluginInvocationResult, type PluginLogRecord } from "./runtime";
 export { parsePluginUiActionResult, parsePluginUiDocument, pluginUiRouteActions, sanitizePluginHead, } from "@scalius/shared/plugins";
 export { sanitizePluginHtml } from "@scalius/shared/plugins/html";
 export { fixtures } from "./fixtures";
+export { contractSchemaIssue, createContractApi, stableContract, type ContractApi, type ContractApiOptions, type ContractCall, type ContractHandler, type StableContract, type StableContractOperation, } from "./testing-contract";
 export interface PluginTestHarnessOptions {
     settings?: Record<string, PluginSettingValue>;
     features?: string[];
     store?: Partial<PluginStoreInfo>;
-    api?: (operationId: string, input: PluginApiCallInput | undefined) => PluginApiResult | Promise<PluginApiResult>;
+    api?: (operationId: string, input: PluginApiCallInput | undefined, call: {
+        scopes: readonly string[];
+    }) => PluginApiResult | Promise<PluginApiResult>;
     riskHistory?: (orderId: string) => {
         orders: number;
         cancelled: number;

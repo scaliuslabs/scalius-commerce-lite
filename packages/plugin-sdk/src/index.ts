@@ -32,6 +32,7 @@ import type { PluginContextOf, PluginSettingsOf } from "./manifest-types";
 export type * from "./context";
 export {
   defineManifest,
+  type DefinedManifest,
   type ObjectFieldValue,
   type ObjectRecordOf,
   type PluginContextOf,
