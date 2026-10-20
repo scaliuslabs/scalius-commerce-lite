@@ -47,7 +47,7 @@ describe("importing a place dataset", () => {
         expect(byName("Section 10")).toMatchObject({ id: "leg_s10", parent: "leg_mirpur", ids: '{"pathao":"100"}', metadata: '{"home_delivery_available":true,"pickup_available":false}' });
         expect(byName("Section 11")).toMatchObject({ active: 0, sourceActive: 0 });
         expect(byName("Gulshan").id).toMatch(/^[a-z0-9]{20,}$/);
-    }, 20_000); // The first test also builds the migrated SQLite database.
+    }); // The first test also builds the migrated SQLite database.
 
     it("changes nothing when the same version runs again", async () => {
         const { db, seq, fence, queries } = harness();

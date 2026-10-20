@@ -260,14 +260,18 @@ export function getBuildCommandForTarget(target) {
   }
 }
 
+/**
+ * The one workspace typecheck (scripts/typecheck.mjs): a single TypeScript 7
+ * project-reference build that checks every package once, then the
+ * storefront's `astro check`. An API deploy skips only the astro check; a
+ * storefront deploy needs both (the storefront reads the shared packages).
+ * No target is the full deploy.
+ */
 export function getTypecheckCommandForTarget(target) {
-  const workspaces = {
-    api: ["@scalius/admin-v2", "@scalius/api"],
-    storefront: ["@scalius/storefront"],
-  }[target];
-  if (!workspaces) throw new Error(`Unknown deploy target: ${target}`);
-  const filters = workspaces.map((workspace) => `--filter ${workspace}`).join(" ");
-  return `${pnpm} --workspace-concurrency=1 ${filters} typecheck`;
+  if (target === undefined) return "node scripts/typecheck.mjs";
+  const args = { api: " --no-astro", storefront: "" }[target];
+  if (args === undefined) throw new Error(`Unknown deploy target: ${target}`);
+  return `node scripts/typecheck.mjs${args}`;
 }
 
 export function getSequentialWorkspaceCommand(task) {
@@ -1373,10 +1377,8 @@ export async function main() {
   try {
     // 1. Typecheck first — catches type mismatches esbuild ignores
     run(
-      requestedTarget
-        ? getTypecheckCommandForTarget(requestedTarget)
-        : getSequentialWorkspaceCommand("typecheck"),
-      requestedTarget ? `Typecheck ${requestedTarget} workspace` : "Typecheck all workspaces sequentially",
+      getTypecheckCommandForTarget(requestedTarget ?? undefined),
+      requestedTarget ? `Typecheck for the ${requestedTarget} deploy` : "Typecheck every workspace",
     );
 
     if (!requestedTarget || requestedTarget === "api") {

@@ -247,7 +247,7 @@ describe("customer segments", () => {
             const membership = await customerSegmentMembership(db, probe.id, [{ id: "seg_probe", definition }], { nowSeconds: NOW, timeZone: "Asia/Dhaka" });
             expect(membership.has("seg_probe"), `${probe.id} ${JSON.stringify(definition)}`).toBe(expected.includes(probe.id));
         }
-    }, 120_000);
+    });
 
     it("filters the customer list, sorts by stored order facts and exports the same customers", async () => {
         const facts = seedStore(sqlite, 120, 3);
@@ -306,7 +306,7 @@ describe("customer segments", () => {
         expect(explained.map((row) => row.detail).join(" | ")).toMatch(/SEARCH customers USING INDEX sqlite_autoindex_customers_1 \(id=\?\)|SEARCH customers USING INTEGER PRIMARY KEY|SEARCH customers USING PRIMARY KEY/);
         const tagged = customerSegmentDefinitionSchema.parse({ conditions: [{ field: "tags", op: "has_any", tags: ["vip"] }] });
         expect((await countSegmentMembers(db, tagged)).count).toBe(9_999);
-    }, 120_000);
+    });
 
     it("saves, renames, protects and soft-deletes segments", async () => {
         seedStore(sqlite, 20, 11);

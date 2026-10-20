@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { enableCompileCache } from "node:module";
+import { availableParallelism } from "node:os";
 import { fileURLToPath } from "node:url";
 
 import { configDefaults, defineConfig } from "vitest/config";
@@ -24,6 +25,10 @@ const PURE_TESTS = [
 // `pnpm test` runs two passes (`scripts/test-passes.mjs`): the parallel pass
 // leaves the serial files out, the serial pass collects only them.
 const pass = testPass();
+// Test processes: half the cores, two to six (a 16 GB host shares them with
+// typechecks and other agents; each app fork holds migrated D1 images and a
+// DOM). `SCALIUS_TEST_WORKERS` overrides it; `--maxWorkers` wins over both.
+const testWorkers = Number(process.env.SCALIUS_TEST_WORKERS) || Math.min(6, Math.max(2, Math.floor(availableParallelism() / 2)));
 const cloudflareWorkersModuleId = "cloudflare:workers";
 const resolvedCloudflareWorkersModuleId = "\0cloudflare-workers-vitest";
 
@@ -72,12 +77,22 @@ export default defineConfig({
   },
   test: {
     globals: true,
+    maxWorkers: testWorkers,
+    // One limit sized for a loaded host, instead of per-file overrides. A
+    // test that is long by design (a property or race gate, a scale run)
+    // keeps its own, larger limit.
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
     // The OAuth provider imports `cloudflare:workers`; inline it so the stub above resolves.
     server: { deps: { inline: ["@cloudflare/workers-oauth-provider"] } },
     // Frozen review copies and agent checkouts are not source test suites.
     exclude: [...configDefaults.exclude, ".claude/**", "audit/**"],
     // Transformed modules persist in node_modules/.vitest-cache between runs.
     fsModuleCache: true,
+    // Each run records the modules every test file loaded, so `--changed`
+    // (`pnpm test:affected`, scripts/test-affected.mjs) selects by what a test
+    // really imports instead of walking the static graph.
+    experimental: { recordDependencies: true },
     projects: [
       ...(pass === "serial"
         ? []
@@ -107,8 +122,12 @@ export default defineConfig({
             ...PURE_TESTS,
             ...(pass === "parallel" ? SERIAL_TESTS : []),
           ],
-          // The migrated D1 image, built once for every test process.
-          globalSetup: ["./packages/database/src/testing/migrated-image-setup.ts"],
+          // Every migrated D1/Turso image the suite asks for, built once for
+          // all test processes; the storefront's generated build id.
+          globalSetup: [
+            "./packages/database/src/testing/migrated-image-setup.ts",
+            "./apps/storefront/scripts/test-build-id-setup.mjs",
+          ],
         },
       },
     ],

@@ -201,7 +201,7 @@ describe("catalogue dependency declarations", () => {
       report.push([url, dependencies.keys.length]);
     }
     if (process.env.CACHE_DEPS_CATALOGUE_REPORT) console.log(JSON.stringify(report));
-  }, 120_000);
+  });
 
   it("declares the registry's keys for each read shape", async () => {
     const seeded = await seededCatalogue();
@@ -266,7 +266,7 @@ describe("catalogue dependency declarations", () => {
     // Brand page and wall: the brand, its logo file.
     expect((await keysOf("/api/v1/brands/walton")).keys).toEqual(expect.arrayContaining(["b:brd_walton01", "m:media_logo"]));
     expect((await keysOf("/api/v1/brands")).keys).toEqual(expect.arrayContaining(["b:*", "m:media_logo"]));
-  }, 120_000);
+  });
 
   it("rejects a stored listing whose facet counts change when a product leaves the category", async () => {
     const seeded = await seededCatalogue();
@@ -285,7 +285,7 @@ describe("catalogue dependency declarations", () => {
       seeded.sqlite.prepare("UPDATE products SET category_id = 'cat_eid' WHERE id = 'p_linen'").run();
       await refreshProjections(seeded, ["p_linen"]);
     }
-  }, 120_000);
+  });
 
   it("rejects stored reads on the writes that change them, and keeps them on writes that do not", async () => {
     const seeded = await seededCatalogue();
@@ -311,7 +311,7 @@ describe("catalogue dependency declarations", () => {
     const after = await renderScoped("/api/v1/products/linen-panjabi", seeded.env, seeded.ctx, true);
     expect(after.body).toEqual(before.body);
     expect(advancedSince(seeded, s0, before.dependencies.keys)).toEqual([]);
-  }, 120_000);
+  });
 
   it("carries no internal row fields (updatedAt, revision, version) in buyer catalogue payloads", async () => {
     const seeded = await seededCatalogue();
@@ -342,7 +342,7 @@ describe("catalogue dependency declarations", () => {
       expect(rows.length, url).toBeGreaterThan(0);
       expect(rows.every((row) => typeof row.updatedAt === "string"), url).toBe(true);
     }
-  }, 120_000);
+  });
 
   it("lists only indexable categories and collections in their sitemaps, filtered before the limit", async () => {
     const seeded = await seededCatalogue();
@@ -363,5 +363,5 @@ describe("catalogue dependency declarations", () => {
       data: { collections: Array<{ id: string }> };
     };
     expect(collections.data.collections.map((row) => row.id)).toEqual(["col_grid", "col_rail"]);
-  }, 120_000);
+  });
 });

@@ -27,6 +27,7 @@ import {
   trimTrailingSlash,
 } from "./dev-local-utils.mjs";
 import { DEV_PORT_ENV, devOrigins, readDevPorts } from "./dev-ports.mjs";
+import { INSTALLED_SECRETS, processEnvHasSecrets } from "./dev-secrets.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -235,28 +236,42 @@ function checkPackageScripts(checks) {
   }
 }
 
-function checkLocalEnvFiles(checks) {
+function checkLocalEnvFiles(checks, env = process.env) {
   const paths = {
     api: resolve(root, "apps", "api", ".dev.vars"),
     storefront: resolve(root, "apps", "storefront", ".dev.vars"),
   };
+  // A Worker's secrets come from its .dev.vars, else from the process env
+  // (agent and CI stacks must not write secret files). Wrangler binds only
+  // the declared installed secrets from the env (scripts/dev-secrets.mjs).
+  const fromEnv = (worker) => existsSync(paths[worker]) || !processEnvHasSecrets(worker, env)
+    ? undefined
+    : Object.fromEntries(INSTALLED_SECRETS[worker].map((name) => [name, env[name]]));
+  const envVars = { api: fromEnv("api"), storefront: fromEnv("storefront") };
   const missingRuntime = [
-    ["apps/api/.dev.vars", paths.api],
-    ["apps/storefront/.dev.vars", paths.storefront],
-  ].filter(([, path]) => !existsSync(path));
+    ["apps/api/.dev.vars", paths.api, envVars.api],
+    ["apps/storefront/.dev.vars", paths.storefront, envVars.storefront],
+  ].filter(([, path, vars]) => !existsSync(path) && !vars);
+  const envSourced = Object.keys(envVars).filter((worker) => envVars[worker]);
   if (missingRuntime.length === 0) {
-    pass(checks, "Runtime env files", "All Worker .dev.vars files exist.");
+    pass(
+      checks,
+      "Runtime env files",
+      envSourced.length === 0
+        ? "All Worker .dev.vars files exist."
+        : `Installed secrets for ${envSourced.join(" and ")} come from the process environment.`,
+    );
   } else {
     fail(
       checks,
       "Runtime env files",
       `Missing ${missingRuntime.map(([label]) => label).join(", ")}.`,
-      "Run pnpm dev:setup --env-only.",
+      `Run pnpm dev:setup --env-only, or export ${INSTALLED_SECRETS.api.join(" and ")} in the environment.`,
     );
   }
 
-  const apiVars = readEnvVarsIfExists(paths.api);
-  const storefrontVars = readEnvVarsIfExists(paths.storefront);
+  const apiVars = envVars.api ?? readEnvVarsIfExists(paths.api);
+  const storefrontVars = envVars.storefront ?? readEnvVarsIfExists(paths.storefront);
 
   // The only installed secrets: SCALIUS_SECRET (>= 32 chars, identical across
   // API/storefront) and CREDENTIAL_ENCRYPTION_KEY (base64 32 bytes, API only).

@@ -491,7 +491,7 @@ describe("withLocalDevelopmentDefaults", () => {
     );
     expect(config).toEqual({
       ...PRODUCTION_CONFIG,
-      mediaUrl: LOCAL_DEVELOPMENT_PLATFORM_CONFIG.mediaUrl,
+      mediaUrl: "http://127.0.0.1:8787/api/v1/media",
       // Local development creates its first admin without a setup key.
       setupTokenRequired: false,
     });
@@ -504,6 +504,16 @@ describe("withLocalDevelopmentDefaults", () => {
     expect(withLocalDevelopmentDefaults(emptyPlatformConfig(), "http://localhost:8787").setupTokenRequired).toBe(false);
     // A saved document keeps its own choice: an existing store is unaffected.
     expect(normalizePlatformConfig({ setupTokenRequired: false }).setupTokenRequired).toBe(false);
+  });
+
+  it("points the API and media at the API's own origin on a non-default port", () => {
+    const config = withLocalDevelopmentDefaults(
+      { ...EMPTY_PLATFORM_CONFIG, corsAllowedOrigins: [] },
+      "http://localhost:8811",
+    );
+    expect(config.apiUrl).toBe("http://localhost:8811");
+    expect(config.mediaUrl).toBe("http://localhost:8811/api/v1/media");
+    expect(config.storefrontUrl).toBe(LOCAL_DEVELOPMENT_PLATFORM_CONFIG.storefrontUrl);
   });
 
   it("never guesses origins for non-loopback, service-binding, or missing request origins", () => {

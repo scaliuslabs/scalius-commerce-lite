@@ -322,11 +322,10 @@ describe("deploy target wiring", () => {
   });
 
   it("keeps typechecking and deployment commands on supported workspaces", () => {
-    expect(getTypecheckCommandForTarget("api")).toContain(
-      "--workspace-concurrency=1 --filter @scalius/admin-v2 --filter @scalius/api typecheck",
-    );
-    expect(getTypecheckCommandForTarget("storefront")).toContain("--filter @scalius/storefront typecheck");
-    expect(getSequentialWorkspaceCommand("typecheck")).toContain("--concurrency=1");
+    // One TypeScript build for every workspace, never a per-workspace fan-out.
+    expect(getTypecheckCommandForTarget(undefined)).toBe("node scripts/typecheck.mjs");
+    expect(getTypecheckCommandForTarget("api")).toBe("node scripts/typecheck.mjs --no-astro");
+    expect(getTypecheckCommandForTarget("storefront")).toBe("node scripts/typecheck.mjs");
     expect(getSequentialWorkspaceCommand("build")).toContain("--concurrency=1");
     expect(getBuildCommandForTarget("api")).toContain("turbo run build --filter=@scalius/api --concurrency=1");
     expect(getBuildCommandForTarget("storefront")).toContain("--filter @scalius/storefront build");

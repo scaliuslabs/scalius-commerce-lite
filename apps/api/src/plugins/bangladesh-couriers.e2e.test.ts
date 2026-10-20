@@ -134,7 +134,7 @@ describe("the Bangladesh pack's couriers", () => {
   const row = (sql: string, ...params: string[]) => sqlite.prepare(sql).get(...params) as Record<string, unknown>;
   const rows = (sql: string, ...params: string[]) => sqlite.prepare(sql).all(...params) as Array<Record<string, unknown>>;
 
-  it("fails closed until activation, then serves the couriers' webhook URLs and books once", { timeout: 60_000 }, async () => {
+  it("fails closed until activation, then serves the couriers' webhook URLs and books once", async () => {
     const PATHAO = `${PACK}:pathao`;
     const STEADFAST = `${PACK}:steadfast`;
     // Before activation: blocked with the pack's reason; nothing books; the webhook route finds no courier.

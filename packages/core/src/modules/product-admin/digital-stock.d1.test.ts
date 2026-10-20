@@ -112,7 +112,7 @@ const updateInput = (id: string, expectedAggregateRevision: number, slug: string
     updateProductSchema.parse({ ...baseInput, slug, id, expectedAggregateRevision, ...extra });
 
 describe("digital stock rules on product writes", () => {
-    beforeAll(() => createSqliteD1Database().sqlite.close(), 30_000);
+    beforeAll(() => createSqliteD1Database().sqlite.close());
 
     it("refuses a quantity on a digital SKU at create (schema issue and core check)", async () => {
         const issues = (input: unknown) => {

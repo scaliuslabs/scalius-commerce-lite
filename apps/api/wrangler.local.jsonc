@@ -103,5 +103,11 @@
   // LOCAL_MAILPIT_URL is the single dev-only var: the local mailbox sink.
   "vars": {
     "LOCAL_MAILPIT_URL": "http://127.0.0.1:8025"
+  },
+  // The installed secrets, from apps/api/.dev.vars or, when that file is
+  // absent, from the process env. Declaring them makes Wrangler bind only
+  // these names from the env, never the rest of the shell (scripts/dev-secrets.mjs).
+  "secrets": {
+    "required": ["SCALIUS_SECRET", "CREDENTIAL_ENCRYPTION_KEY"]
   }
 }

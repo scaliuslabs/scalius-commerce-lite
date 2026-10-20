@@ -193,7 +193,7 @@ describe("orders list rows across the state matrix", () => {
       act(() => root.unmount());
       root = createRoot(host);
     }
-  }, 120_000);
+  });
 
   it.each(["en", "bn"] as const)("gives every phone card the same four lines (%s)", async (locale) => {
     setLocale(locale);
@@ -213,5 +213,5 @@ describe("orders list rows across the state matrix", () => {
       expect(link.children[3]!.firstElementChild!.className).toMatch(/\btruncate\b/);
       expect(link.children[1]!.firstElementChild!.className).toMatch(/\btruncate\b/);
     }
-  }, 120_000);
+  });
 });

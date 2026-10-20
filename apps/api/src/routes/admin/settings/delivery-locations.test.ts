@@ -59,7 +59,7 @@ describe("deleting a delivery location", () => {
     ]);
     const areas = await (await send("GET", "/delivery-locations?country=BD&level=3&parentId=para")).json() as Listed;
     expect(areas.data.locations.every((row) => row.descendants === undefined)).toBe(true);
-  }, 20_000); // The first test also builds the migrated SQLite database.
+  }); // The first test also builds the migrated SQLite database.
 
   it("deletes a city with its thanas and areas and takes them out of shipping zones", async () => {
     const { send, live } = createTestApp();

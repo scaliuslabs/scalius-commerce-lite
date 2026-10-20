@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { fileURLToPath } from "node:url";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { Window } from "happy-dom";
 import type { ViteDevServer } from "vite";
 import type { Product, ProductOptionDefinition, ProductVariant } from "@/lib/api";
@@ -27,6 +27,8 @@ let ProductBuyBox: unknown;
 let AppComponent: unknown;
 
 beforeAll(async () => {
+  // Render-only: no API, so the layout read never dials the local-dev fallback (localhost:8787).
+  vi.stubGlobal("fetch", async () => new Response(null, { status: 503 }));
   const { getViteConfig } = await import("astro/config");
   const { createServer } = await import("vite");
   const configure = getViteConfig({
