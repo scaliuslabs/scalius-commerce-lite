@@ -40,7 +40,7 @@ import {
   isFramedBrowserContinuationRelayPathname,
 } from "@/lib/browser-continuation-relay";
 import { themeEditorOrigin } from "@scalius/shared/theme-editor-bridge";
-import { currentRequestTheme, resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { currentRequestTheme, pageRendersDegradedTheme, resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { readStorefrontExtensions } from "@scalius/shared/plugins/storefront-components";
 import { themeAppConnectHosts } from "@/lib/extensions/stylesheets";
 import { readThemePreviewCookie } from "@/lib/theme-preview-cookie";
@@ -141,9 +141,13 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
         (url.pathname === "/.well-known/ucp" &&
           response.headers.get("Content-Type")?.toLowerCase().includes("application/json")));
 
-    if (publicPolicy && publicResponse && renderOptedOutOfSharedCache(response.headers)) {
-      // The page rendered from a failed read (markRenderUncacheable): serve
-      // it to this buyer only, never from the shared cache.
+    if (
+      publicPolicy && publicResponse
+      && (renderOptedOutOfSharedCache(response.headers) || await pageRendersDegradedTheme({ request, locals }, response, layout))
+    ) {
+      // The page rendered from a failed read (markRenderUncacheable) or drew
+      // the default theme in place of an unreadable one: serve it to this
+      // buyer only, never from the shared cache.
       setPrivateResponse(response, "BYPASS_DEGRADED");
     } else if (publicPolicy && publicResponse) {
       applyBrowserCachePolicyForPublicResponse(response, url.pathname);
