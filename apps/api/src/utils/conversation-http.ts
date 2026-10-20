@@ -94,7 +94,7 @@ export async function serveConversationAttachment(
 ): Promise<Response> {
   const object = await env.BUCKET.get(attachment.r2Key);
   if (!object || !("body" in object) || !object.body) {
-    return new Response(JSON.stringify({ success: false, error: { code: "NOT_FOUND", message: "Attachment not found" } }), {
+    return new Response(JSON.stringify({ success: false, error: { code: "not_found", message: "Attachment not found" } }), {
       status: 404,
       headers: { "Content-Type": "application/json", "Cache-Control": "private, no-store" },
     });

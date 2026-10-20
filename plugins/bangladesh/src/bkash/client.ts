@@ -91,7 +91,7 @@ export function takaToMinor(amount: string): number | null {
   return Number.isSafeInteger(minor) ? minor : null;
 }
 
-/** The stable code of a platform refusal (`http.timeout`, `object.unique_violation`), as the SDK runtime raises it. */
+/** The stable code of a platform refusal (`http_timeout`, `object_unique_violation`), as the SDK runtime raises it. */
 export function platformErrorCode(error: unknown): string | null {
   if (!(error instanceof Error) || !("code" in error)) return null;
   return typeof error.code === "string" ? error.code : null;
@@ -101,7 +101,7 @@ export function platformErrorCode(error: unknown): string | null {
 export function rejectionError(rejection: BkashRejection, action: string, options: { mutating: boolean }): ProviderError {
   const detail = rejection.message ? `${rejection.code}: ${rejection.message}` : rejection.code;
   const message = `${action} (bKash code ${detail}).`;
-  const code = `bkash.${rejection.code.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 32) || "rejected"}`;
+  const code = `bkash_${rejection.code.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 32) || "rejected"}`;
   if (rejection.transient) return new ProviderError("retryable", message, { uncertain: options.mutating, code });
   if (CREDENTIAL_CODES.has(rejection.code)) return new ProviderError("misconfigured", message, { code });
   return new ProviderError("declined", message, { code });
@@ -129,7 +129,7 @@ export function credentialsOf(settings: Settings): BkashCredentials {
     password: settingText(settings, "bkash_password"),
   };
   if (!credentials.appKey || !credentials.appSecret || !credentials.username || !credentials.password) {
-    throw new ProviderError("misconfigured", "Enter the bKash app key, app secret, username and password in the bKash settings.", { code: "bkash.settings" });
+    throw new ProviderError("misconfigured", "Enter the bKash app key, app secret, username and password in the bKash settings.", { code: "bkash_settings" });
   }
   return credentials;
 }
@@ -154,19 +154,19 @@ function rejectionOf(answer: BkashAnswer): BkashRejection | null {
 function unreachable(error: unknown, mutating: boolean): ProviderError {
   const code = platformErrorCode(error);
   if (code === "rate_limited") {
-    return new ProviderError("retryable", "This store is sending bKash too many requests; try again in a minute.", { code: "bkash.rate_limited" });
+    return new ProviderError("retryable", "This store is sending bKash too many requests; try again in a minute.", { code: "bkash_rate_limited" });
   }
-  if (code === "http.not_allowed" || code === "http.invalid_request") {
-    return new ProviderError("misconfigured", "The bKash app could not send its request.", { code: "bkash.request" });
+  if (code === "http_not_allowed" || code === "http_invalid_request") {
+    return new ProviderError("misconfigured", "The bKash app could not send its request.", { code: "bkash_request" });
   }
-  if (code === "http.timeout") {
-    return new ProviderError("retryable", "bKash did not answer in time.", { uncertain: mutating, code: "bkash.timeout" });
+  if (code === "http_timeout") {
+    return new ProviderError("retryable", "bKash did not answer in time.", { uncertain: mutating, code: "bkash_timeout" });
   }
-  return new ProviderError("retryable", "bKash could not be reached.", { uncertain: mutating, code: "bkash.unreachable" });
+  return new ProviderError("retryable", "bKash could not be reached.", { uncertain: mutating, code: "bkash_unreachable" });
 }
 
 const credentialsRefused = () =>
-  new ProviderError("misconfigured", "bKash rejected the app key, app secret, username or password.", { code: "bkash.credentials" });
+  new ProviderError("misconfigured", "bKash rejected the app key, app secret, username or password.", { code: "bkash_credentials" });
 
 /**
  * A client for one operation. `timeBudgetMs` is the whole operation's time:
@@ -180,7 +180,7 @@ export function createBkashClient(ctx: PluginContext, timeBudgetMs: number): Bka
 
   function timeLeft(): number {
     const left = Math.floor(endsAt - Date.now());
-    if (left < MIN_CALL_MS) throw new ProviderError("retryable", "bKash did not answer in time.", { code: "bkash.timeout" });
+    if (left < MIN_CALL_MS) throw new ProviderError("retryable", "bKash did not answer in time.", { code: "bkash_timeout" });
     return Math.min(left, MAX_CALL_MS);
   }
 
@@ -205,16 +205,16 @@ export function createBkashClient(ctx: PluginContext, timeBudgetMs: number): Bka
     }
     if (response.status === 401 || response.status === 403) return "unauthorized";
     if (response.status === 429) {
-      throw new ProviderError("retryable", "bKash is limiting requests; try again shortly.", { code: "bkash.rate_limited" });
+      throw new ProviderError("retryable", "bKash is limiting requests; try again shortly.", { code: "bkash_rate_limited" });
     }
     if (response.status >= 500) {
-      throw new ProviderError("retryable", `bKash is unavailable (HTTP ${response.status}).`, { uncertain: mutating, code: "bkash.unavailable" });
+      throw new ProviderError("retryable", `bKash is unavailable (HTTP ${response.status}).`, { uncertain: mutating, code: "bkash_unavailable" });
     }
     const answer = answerOf(await response.text());
     const rejection = answer ? rejectionOf(answer) : null;
     if (rejection) return { ok: false, rejection };
     if (!answer || !response.ok) {
-      throw new ProviderError("retryable", "bKash's answer could not be read.", { uncertain: mutating, code: "bkash.unreadable" });
+      throw new ProviderError("retryable", "bKash's answer could not be read.", { uncertain: mutating, code: "bkash_unreadable" });
     }
     return { ok: true, answer };
   }
@@ -233,7 +233,7 @@ export function createBkashClient(ctx: PluginContext, timeBudgetMs: number): Bka
       throw credentialsRefused();
     }
     const token = field(reply.answer, "id_token");
-    if (!token) throw new ProviderError("retryable", "bKash's answer could not be read.", { code: "bkash.unreadable" });
+    if (!token) throw new ProviderError("retryable", "bKash's answer could not be read.", { code: "bkash_unreadable" });
     const ttlSeconds = Math.floor(Number(field(reply.answer, "expires_in"))) - TOKEN_MARGIN_SECONDS;
     if (Number.isSafeInteger(ttlSeconds) && ttlSeconds >= 60) await ctx.kv.set(await tokenKey(), token, { ttlSeconds });
     return token;

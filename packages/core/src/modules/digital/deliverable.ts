@@ -4,7 +4,7 @@ import { sql, type SQL, type SQLWrapper } from "drizzle-orm";
  * Cart-validation readiness column for a digital variant (design §3.1): 1 when
  * the variant has something ready to deliver, a ready file (the product-wide
  * ones or its own) or a ready licence-key pool, and none of its ready pools is
- * empty; else 0 (FULFILMENT_UNAVAILABLE). A key pool is also the variant's
+ * empty; else 0 (fulfilment_unavailable). A key pool is also the variant's
  * tracked stock, so reservations keep demand within the keys left.
  * A correlated expression inside the existing variant read: no round trip.
  * Driven by `digital_assets_variant_status_idx`, `digital_assets_product_status_idx`

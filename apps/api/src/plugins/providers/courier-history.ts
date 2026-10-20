@@ -22,7 +22,7 @@ const E164 = /^\+[1-9]\d{6,14}$/;
 function e164(phone: string): string {
   const compact = compactPhone(phone);
   const normalized = E164.test(compact) ? compact : normalizeBdMobile(compact);
-  if (!normalized) throw new ProviderError("declined", "Enter the customer's phone number with its country code.", { code: "fraud.phone_invalid" });
+  if (!normalized) throw new ProviderError("declined", "Enter the customer's phone number with its country code.", { code: "fraud_phone_invalid" });
   return normalized;
 }
 

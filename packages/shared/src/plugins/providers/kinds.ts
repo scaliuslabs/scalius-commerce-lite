@@ -168,7 +168,7 @@ const ERROR_CODE = /^[a-z][a-z0-9_.-]{0,63}$/;
 /**
  * The one error a port operation raises. Its message must be safe to show a
  * merchant: never a raw provider body, a credential or buyer contact data.
- * `code` is a short stable identifier (`bkash.2023`, `provider.timeout`).
+ * `code` is a short stable identifier (`bkash_2023`, `provider_timeout`).
  */
 export class ProviderError extends Error {
   readonly category: ProviderErrorCategory;
@@ -180,7 +180,7 @@ export class ProviderError extends Error {
     this.name = "ProviderError";
     this.category = category;
     this.uncertain = options.uncertain === true;
-    this.code = options.code && ERROR_CODE.test(options.code) ? options.code : `provider.${category}`;
+    this.code = options.code && ERROR_CODE.test(options.code) ? options.code : `provider_${category}`;
   }
 }
 

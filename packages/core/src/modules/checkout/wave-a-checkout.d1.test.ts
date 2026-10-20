@@ -184,18 +184,18 @@ describe("Wave A checkout", () => {
 
     it("F13: a line whose type has no fulfiller fails closed before anything is written", async () => {
         await expect(checkout({ items: [line("p_dig", "v_dig", 1, 200)], paymentMethod: "stripe" }))
-            .rejects.toMatchObject({ details: { itemIssues: [expect.objectContaining({ code: "FULFILMENT_UNAVAILABLE" })] } });
+            .rejects.toMatchObject({ details: { itemIssues: [expect.objectContaining({ code: "fulfilment_unavailable" })] } });
         expect(one("SELECT count(*) AS n FROM orders")).toEqual({ n: 0 });
     });
 
     it("P1: the server prices buyer inputs from the schema and freezes a labelled snapshot", async () => {
         await expect(checkout({ ...address, shippingMethodId: "m_ship", items: [line("p_tee", "v_tee", 1, 800)] }))
-            .rejects.toMatchObject({ details: { itemIssues: [expect.objectContaining({ code: "PROPERTIES_REQUIRED", propertyKey: "fit" })] } });
+            .rejects.toMatchObject({ details: { itemIssues: [expect.objectContaining({ code: "properties_required", propertyKey: "fit" })] } });
         await expect(checkout({ ...address, shippingMethodId: "m_ship", items: [line("p_tee", "v_tee", 1, 800, [{ key: "fit", value: "tight" }])] }))
-            .rejects.toMatchObject({ details: { itemIssues: [expect.objectContaining({ code: "PROPERTIES_INVALID" })] } });
+            .rejects.toMatchObject({ details: { itemIssues: [expect.objectContaining({ code: "properties_invalid" })] } });
         // A client that shows the base price only is told the price changed.
         await expect(checkout({ ...address, shippingMethodId: "m_ship", items: [line("p_tee", "v_tee", 1, 800, [{ key: "fit", value: "slim" }])] }))
-            .rejects.toMatchObject({ details: { itemIssues: [expect.objectContaining({ code: "PRICE_CHANGED", currentPrice: 900 })] } });
+            .rejects.toMatchObject({ details: { itemIssues: [expect.objectContaining({ code: "price_changed", currentPrice: 900 })] } });
 
         const result = await checkout({
             ...address,
@@ -231,8 +231,8 @@ describe("Wave A checkout", () => {
         ]);
         expect(validation.valid).toBe(false);
         expect(validation.issues.map((issue) => [issue.cartKey, issue.code, issue.availableQuantity])).toEqual([
-            ["a", "QUANTITY_UNAVAILABLE", 3],
-            ["b", "QUANTITY_UNAVAILABLE", 3],
+            ["a", "quantity_unavailable", 3],
+            ["b", "quantity_unavailable", 3],
         ]);
         expect((await validateStorefrontCartItems(db, [
             { productId: "p_mug", variantId: "v_mug", quantity: 2 },

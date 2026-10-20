@@ -132,8 +132,8 @@ export class MockNagad {
     const fault = this.faults[step];
     delete this.faults[step];
     // The harness bridge reports transport failures the way the platform does: `[code] message`.
-    if (fault === "timeout") throw new Error("[http.timeout] The request timed out.");
-    if (fault === "unreachable") throw new Error("[http.failed] The request to sandbox-ssl.mynagad.com failed.");
+    if (fault === "timeout") throw new Error("[http_timeout] The request timed out.");
+    if (fault === "unreachable") throw new Error("[http_failed] The request to sandbox-ssl.mynagad.com failed.");
     if (fault === "server_error") return { status: 502, body: "<html>Bad gateway</html>" };
     if (fault === "reject_signature") return json(400, { reason: "INVALID_SIGNATURE", message: "Invalid Signature" });
     if (step === "initialize") return this.initialize(call, path, fault);

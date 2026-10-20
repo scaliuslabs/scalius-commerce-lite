@@ -274,7 +274,7 @@ describe("MCP surface v2 execution", () => {
       bodies.push(input.body);
       return bodies.length === 1
         ? result(operation.operationId, 200, { success: true, data: { value: "resolved-value" } })
-        : result(operation.operationId, 409, { success: false, error: { code: "CONFLICT", message: "Conflict" } });
+        : result(operation.operationId, 409, { success: false, error: { code: "conflict", message: "Conflict" } });
     });
     const output = await tool("scalius_write")({
       steps: [
@@ -286,7 +286,7 @@ describe("MCP surface v2 execution", () => {
     const value = output.structuredContent as { ok: boolean; steps: Array<{ id: string; ok: boolean; error?: Record<string, unknown> }> };
     expect(value.ok).toBe(false);
     expect(value.steps.map((step) => [step.id, step.ok])).toEqual([["create", true], ["update", false]]);
-    expect(value.steps[1]!.error).toMatchObject({ code: "CONFLICT", status: 409, current: null });
+    expect(value.steps[1]!.error).toMatchObject({ code: "conflict", status: 409, current: null });
     expect(bodies).toEqual([{ value: "initial" }, "resolved-value"]);
   });
 
@@ -309,15 +309,15 @@ describe("MCP surface v2 execution", () => {
     const kinds: Array<[string, () => Promise<void>, Record<string, unknown>]> = [
       ["inactive grant", async () => { mocks.resolvePrincipal.mockResolvedValue(null); }, { code: "unauthorized", status: 401, retryable: false }],
       ["unauthorized operation", async () => { mocks.authorizeOperation.mockResolvedValue(false); }, { code: "operation_not_found", status: 404 }],
-      ["route forbidden", routeError(403, "FORBIDDEN"), { code: "FORBIDDEN", status: 403, retryable: false }],
-      ["missing resource", routeError(404, "NOT_FOUND"), { code: "NOT_FOUND", status: 404, retryable: false }],
-      ["stale revision", routeError(409, "PRODUCT_REVISION_CONFLICT", { expectedRevision: 7, currentRevision: 9 }), { code: "PRODUCT_REVISION_CONFLICT", status: 409, retryable: true, current: { revision: 9 } }],
+      ["route forbidden", routeError(403, "forbidden"), { code: "forbidden", status: 403, retryable: false }],
+      ["missing resource", routeError(404, "not_found"), { code: "not_found", status: 404, retryable: false }],
+      ["stale revision", routeError(409, "product_revision_conflict", { expectedRevision: 7, currentRevision: 9 }), { code: "product_revision_conflict", status: 409, retryable: true, current: { revision: 9 } }],
       ["idempotency in progress", routeError(409, "idempotency_in_progress"), { code: "idempotency_in_progress", status: 409, retryable: true, retryAfterMs: 2000, current: null }],
-      ["state conflict", routeError(409, "CONFLICT"), { code: "CONFLICT", status: 409, retryable: false, current: null }],
-      ["validation", routeError(400, "VALIDATION_ERROR", { issues: [{ path: ["name"], message: "Required", expected: "string", received: "undefined" }] }), { code: "VALIDATION_ERROR", status: 400, field: "body.name" }],
+      ["state conflict", routeError(409, "conflict"), { code: "conflict", status: 409, retryable: false, current: null }],
+      ["validation", routeError(400, "validation_error", { issues: [{ path: ["name"], message: "Required", expected: "string", received: "undefined" }] }), { code: "validation_error", status: 400, field: "body.name" }],
       ["reused idempotency key", routeError(422, "idempotency_key_reused"), { code: "idempotency_key_reused", status: 422, field: "idempotencyKey" }],
-      ["route rate limit", routeError(429, "RATE_LIMIT", { retryAfterSeconds: 30 }, { retryAfterMs: 30_000 }), { code: "RATE_LIMIT", status: 429, retryable: true, retryAfterMs: 30_000 }],
-      ["store busy", routeError(503, "SERVICE_UNAVAILABLE"), { code: "SERVICE_UNAVAILABLE", status: 503, retryable: true }],
+      ["route rate limit", routeError(429, "rate_limited", { retryAfterSeconds: 30 }, { retryAfterMs: 30_000 }), { code: "rate_limited", status: 429, retryable: true, retryAfterMs: 30_000 }],
+      ["store busy", routeError(503, "service_unavailable"), { code: "service_unavailable", status: 503, retryable: true }],
       ["unknown body property", thrown(new AgentDispatchError("unknown_body_property", "Unknown body property 'colour'. Allowed properties: name.")), { code: "unknown_body_property", status: 400, field: "body.colour" }],
       ["oversized body", thrown(new AgentDispatchError("body_too_large", "Operation body exceeds the 1 MiB limit", 413)), { code: "body_too_large", status: 413, retryable: false }],
       ["dispatch unavailable", thrown(new AgentDispatchError("operation_dispatch_failed", "Operation dispatch is temporarily unavailable", 502)), { code: "operation_dispatch_failed", status: 502, retryable: true }],
@@ -339,8 +339,8 @@ describe("MCP surface v2 execution", () => {
     });
 
     it("bounds an error with a huge route message to 600 bytes", async () => {
-      await routeError(409, "CONFLICT", { currentRevision: 3, currentState: "x".repeat(5000) })();
-      mocks.dispatchAgentOperation.mockResolvedValue(result(sequentialWrite.operationId, 409, { success: false, error: { code: "CATEGORY_REVISION_CONFLICT", message: "বাংলা ".repeat(400), details: { currentRevision: 3 } } }));
+      await routeError(409, "conflict", { currentRevision: 3, currentState: "x".repeat(5000) })();
+      mocks.dispatchAgentOperation.mockResolvedValue(result(sequentialWrite.operationId, 409, { success: false, error: { code: "category_revision_conflict", message: "বাংলা ".repeat(400), details: { currentRevision: 3 } } }));
       const output = await tool("scalius_write")({ operationId: sequentialWrite.operationId });
       expect(bytes(output.structuredContent)).toBeLessThanOrEqual(AGENT_ERROR_MAX_BYTES);
       expect((output.structuredContent as { error: Record<string, unknown> }).error).toMatchObject({ current: { revision: 3 }, retryable: true });

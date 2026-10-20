@@ -158,7 +158,7 @@ All 9 buyer-visible order statuses that trigger status notifications are covered
 
 ### Fulfilment, COD and bulk shipping
 
-See [fulfilment](../fulfilment/README.md). Those actions move the order through `status/lifecycle.ts`. An open app hold (`holds.ts`) refuses a courier booking (also in the claim's `WHERE`, so a hold placed meanwhile still wins), a hand-over and a generic status change other than cancel with `details.reason = "ORDER_ON_HOLD"`; auto-fulfilment skips the order (`on_hold`) until the sweep finds it released.
+See [fulfilment](../fulfilment/README.md). Those actions move the order through `status/lifecycle.ts`. An open app hold (`holds.ts`) refuses a courier booking (also in the claim's `WHERE`, so a hold placed meanwhile still wins), a hand-over and a generic status change other than cancel with `details.reason = "order_on_hold"`; auto-fulfilment skips the order (`on_hold`) until the sweep finds it released.
 
 ### Archive Flow
 

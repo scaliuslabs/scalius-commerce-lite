@@ -315,11 +315,11 @@ describe("idempotent command execution", () => {
     });
     expect(stale).toMatchObject({ status: "conflict", code: "STALE_REVISION" });
 
-    const client = { send: vi.fn().mockRejectedValue(new ApplyHttpError(409, "REVISION_CONFLICT")) };
+    const client = { send: vi.fn().mockRejectedValue(new ApplyHttpError(409, "revision_conflict")) };
     const conflict = await executeIdempotentCommand({ action: "update", logicalKey: "category:footwear", expectedRevision: 3 }, {
       client, resolveCurrent: vi.fn().mockResolvedValue({ id: "cat_1", revision: 3 }), matchesDesired: async () => false,
     });
-    expect(conflict).toMatchObject({ status: "conflict", code: "REVISION_CONFLICT" });
+    expect(conflict).toMatchObject({ status: "conflict", code: "revision_conflict" });
     expect(client.send).toHaveBeenCalledTimes(1);
   });
 });

@@ -58,7 +58,7 @@ import {
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
 /** The batch guard's marker when the store is no longer new. */
-export const STORE_SETUP_DONE = "STORE_SETUP_DONE";
+export const STORE_SETUP_DONE = "store_setup_done";
 /** A store name's length (the business name field and the market name share it). */
 export const STORE_NAME_MAX_LENGTH = 120;
 
@@ -202,7 +202,7 @@ export interface StoreSetupResult {
 
 /**
  * Sets up a new store in one batch. A store that is no longer new is a 409
- * (`STORE_SETUP_DONE`) and nothing is written; the same request sent twice
+ * (`store_setup_done`) and nothing is written; the same request sent twice
  * therefore answers 409 the second time, with the store as the first one left it.
  */
 export async function applyStoreSetup(

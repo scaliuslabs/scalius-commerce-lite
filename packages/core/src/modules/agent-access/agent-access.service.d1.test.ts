@@ -166,7 +166,7 @@ describe("agent management D1 commit-time races", () => {
       permissions: ["agent_access.view", "agent_access.manage"],
       riskCeiling: "security",
       expiresAt: new Date(Date.now() + 2400_000),
-    })).rejects.toThrow("AGENT_GRANT_AUTHORITY_CHANGED");
+    })).rejects.toThrow("agent_grant_authority_changed");
     expect(sqlite.prepare(`
       SELECT label, permissions_json permissionsJson, risk_ceiling riskCeiling,
              authority_revision authorityRevision

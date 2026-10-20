@@ -13,7 +13,7 @@ const MAX_FILE_BYTES = 16 * 1024 * 1024;
 const SAFE_NAME = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[A-Za-z0-9._@/-]{1,200}$/;
 
 function invalid(message: string): never {
-  throw new PluginError("package.invalid", message);
+  throw new PluginError("package_invalid", message);
 }
 
 async function inflateRaw(data: Uint8Array, expectedSize: number): Promise<Uint8Array> {

@@ -39,7 +39,7 @@ app.openapi(createRoute({
     const orderId = c.req.valid("param").id;
     const { requestKey } = c.req.valid("json");
     if (await countOrderDigitalEntitlements(db, orderId) === 0) {
-        throw new AppError(409, "NOTHING_TO_RESEND", "This order has no downloads or keys to send.");
+        throw new AppError(409, "nothing_to_resend", "This order has no downloads or keys to send.");
     }
     const result = await recordAndSendNotification({
         db,

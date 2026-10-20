@@ -128,7 +128,7 @@ export async function createAgentBrowserHandoff(
           AND agent_credentials.expires_at > unixepoch()
       )`;
   await safeBatch(db, [
-    buildBatchGuard(db, credentialGuard, "AGENT_BROWSER_HANDOFF_AUTHORITY_INACTIVE"),
+    buildBatchGuard(db, credentialGuard, "agent_browser_handoff_authority_inactive"),
     db.insert(agentBrowserHandoffs).values({
       id: handoffId,
       grantId: principal.grantId,

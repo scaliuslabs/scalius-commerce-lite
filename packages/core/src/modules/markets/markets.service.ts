@@ -56,7 +56,7 @@ import { checkoutCopyFollowsDefaultWrites, ensureStoreLanguageWrites } from "../
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
-export const MARKET_REVISION_CONFLICT = "MARKET_REVISION_CONFLICT";
+export const MARKET_REVISION_CONFLICT = "market_revision_conflict";
 
 export interface MarketPresenceRecord {
     value: string;

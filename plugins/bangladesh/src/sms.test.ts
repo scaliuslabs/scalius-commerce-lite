@@ -69,7 +69,7 @@ describe.each(CASES)("%s keeps the SMS port", (_name, provider, settings, answer
   });
 
   it("throws a retryable, uncertain error when the gateway does not answer, and logs nothing about the message", async () => {
-    const { instance } = harness(settings, Object.assign(new Error("[http.timeout] The request timed out."), { code: "http.timeout" }));
+    const { instance } = harness(settings, Object.assign(new Error("[http_timeout] The request timed out."), { code: "http_timeout" }));
     const result = await instance.provider(provider, "send", input);
     expect(result).toMatchObject({ ok: false, error: { category: "retryable", uncertain: true } });
     expect(JSON.stringify([result, instance.logs])).not.toMatch(/8801712345678|merchant-(?:key|token)/);

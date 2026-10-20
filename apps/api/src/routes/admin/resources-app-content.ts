@@ -111,7 +111,7 @@ async function deleteOne(
 ): Promise<void> {
   const revision = item.expectedRevision;
   if (item.type !== "collection" && revision === undefined) {
-    throw new AppError(400, "VALIDATION_ERROR", "Send expectedRevision for this item.");
+    throw new AppError(400, "validation_error", "Send expectedRevision for this item.");
   }
   switch (item.type) {
     case "product":

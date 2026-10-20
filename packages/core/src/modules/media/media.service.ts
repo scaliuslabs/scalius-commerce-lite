@@ -50,7 +50,7 @@ export class MediaDependencyConflictError extends AppError {
     constructor(usage: MediaUsage) {
         super(
             409,
-            "MEDIA_DEPENDENCY_CONFLICT",
+            "media_dependency_conflict",
             "This file is still used. Remove it from those places before deleting it permanently. Files shown on past orders are kept.",
             usage,
         );
@@ -972,7 +972,7 @@ export async function deleteMediaFolder(db: Database, id: string, expectedVersio
         WHERE ${mediaFolders.id} = ${id}
           AND ${mediaFolders.version} = ${expectedVersion}
           AND ${mediaFolders.deletedAt} IS NULL
-    )`, "MEDIA_FOLDER_DELETE_CONFLICT");
+    )`, "media_folder_delete_conflict");
     try {
         await safeBatch(db, [
             guard,
@@ -992,7 +992,7 @@ export async function deleteMediaFolder(db: Database, id: string, expectedVersio
             }).where(and(eq(media.folderId, id), ne(media.status, "deleted"))),
         ] as never);
     } catch (error) {
-        if (isBatchGuardError(error, "MEDIA_FOLDER_DELETE_CONFLICT")) {
+        if (isBatchGuardError(error, "media_folder_delete_conflict")) {
             throw new ConflictError("Media folder changed. Reload and try again.");
         }
         throw error;

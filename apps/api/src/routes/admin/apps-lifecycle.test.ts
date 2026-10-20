@@ -142,7 +142,7 @@ describe("admin app lifecycle routes", () => {
     // Free: no one-click install.
     const free = await call("POST", "/apps/registry/install", { registryId: "acme", id: "acme.points" });
     expect(free.status).toBe(409);
-    expect(free.json.error.details.code).toBe("installation.sandbox_required");
+    expect(free.json.error.details.code).toBe("installation_sandbox_required");
   });
 
   it("installs from a registry on Paid: stored, installed, waiting for approval, and listed as an update later", async () => {
@@ -174,7 +174,7 @@ describe("admin app lifecycle routes", () => {
     const unsigned = await testPackage(await release("acme.points", "1.0.0"));
     const missing = await call("POST", "/apps/upload", unsigned);
     expect(missing.status).toBe(409);
-    expect(missing.json.error.details.code).toBe("signature.missing");
+    expect(missing.json.error.details.code).toBe("signature_missing");
 
     actor = { id: "manager", isSuperAdmin: false };
     expect((await call("POST", "/apps/upload?allowUnsigned=true", unsigned)).status).toBe(403);
@@ -187,7 +187,7 @@ describe("admin app lifecycle routes", () => {
     const signed = await testPackage(await release("beta.reviews", "1.0.0"), developer);
     const untrusted = await call("POST", "/apps/upload", signed);
     expect(untrusted.status).toBe(409);
-    expect(untrusted.json.error.details).toMatchObject({ code: "signature.untrusted", keyId: developer.key.id, developer: "Beta Labs" });
+    expect(untrusted.json.error.details).toMatchObject({ code: "signature_untrusted", keyId: developer.key.id, developer: "Beta Labs" });
     const trusted = await call("POST", "/apps/upload?trustDeveloper=true", signed);
     expect(trusted.json.data.app).toMatchObject({ signed: true, signer: { keyId: developer.key.id, name: "Beta Labs" } });
     expect((await call("GET", "/apps/registry/settings")).json.data.trustedKeys.map((key: Json) => key.id)).toEqual([developer.key.id]);

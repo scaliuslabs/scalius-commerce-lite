@@ -20251,7 +20251,7 @@
                   "code": {
                     "type": "string",
                     "enum": [
-                      "PRODUCT_REVISION_CONFLICT"
+                      "product_revision_conflict"
                     ]
                   },
                   "message": {
@@ -20303,7 +20303,7 @@
                   "code": {
                     "type": "string",
                     "enum": [
-                      "PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT"
+                      "product_media_sku_reference_conflict"
                     ]
                   },
                   "message": {
@@ -26177,10 +26177,10 @@
             "schema": {
               "type": "string",
               "maxLength": 1024,
-              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR."
+              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor."
             },
             "required": false,
-            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR.",
+            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.",
             "name": "cursor",
             "in": "query"
           },
@@ -27385,10 +27385,10 @@
             "schema": {
               "type": "string",
               "maxLength": 1024,
-              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR."
+              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor."
             },
             "required": false,
-            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR.",
+            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.",
             "name": "cursor",
             "in": "query"
           },
@@ -57070,7 +57070,7 @@
             }
           },
           "409": {
-            "description": "Refused: DOWNLOAD_LIMIT_REACHED, DOWNLOAD_REVOKED (removed by the store, or the order was cancelled or refunded) or DOWNLOAD_EXPIRED",
+            "description": "Refused: download_limit_reached, download_revoked (removed by the store, or the order was cancelled or refunded) or download_expired",
             "content": {
               "application/json": {
                 "schema": {
@@ -64464,10 +64464,10 @@
             "schema": {
               "type": "string",
               "maxLength": 1024,
-              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR."
+              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor."
             },
             "required": false,
-            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR.",
+            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.",
             "name": "cursor",
             "in": "query"
           },
@@ -70581,10 +70581,10 @@
             "schema": {
               "type": "string",
               "maxLength": 1024,
-              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR."
+              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor."
             },
             "required": false,
-            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR.",
+            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.",
             "name": "cursor",
             "in": "query"
           },
@@ -71567,10 +71567,10 @@
             "schema": {
               "type": "string",
               "maxLength": 1024,
-              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR."
+              "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor."
             },
             "required": false,
-            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR.",
+            "description": "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.",
             "name": "cursor",
             "in": "query"
           },
@@ -81950,15 +81950,15 @@
                               "code": {
                                 "type": "string",
                                 "enum": [
-                                  "PRODUCT_UNAVAILABLE",
-                                  "VARIANT_REQUIRED",
-                                  "VARIANT_UNAVAILABLE",
-                                  "VARIANT_MISMATCH",
-                                  "QUANTITY_UNAVAILABLE",
-                                  "PRICE_CHANGED",
-                                  "PROPERTIES_REQUIRED",
-                                  "PROPERTIES_INVALID",
-                                  "FULFILMENT_UNAVAILABLE"
+                                  "product_unavailable",
+                                  "variant_required",
+                                  "variant_unavailable",
+                                  "variant_mismatch",
+                                  "quantity_unavailable",
+                                  "price_changed",
+                                  "properties_required",
+                                  "properties_invalid",
+                                  "fulfilment_unavailable"
                                 ]
                               },
                               "action": {
@@ -82286,10 +82286,10 @@
                               "code": {
                                 "type": "string",
                                 "enum": [
-                                  "GIFT_CARD_UNUSABLE",
-                                  "GIFT_CARD_DUPLICATE",
-                                  "GIFT_CARD_NOT_NEEDED",
-                                  "GIFT_CARD_NOT_ELIGIBLE"
+                                  "gift_card_unusable",
+                                  "gift_card_duplicate",
+                                  "gift_card_not_needed",
+                                  "gift_card_not_eligible"
                                 ]
                               },
                               "message": {
@@ -86133,10 +86133,10 @@
                               "code": {
                                 "type": "string",
                                 "enum": [
-                                  "GIFT_CARD_UNUSABLE",
-                                  "GIFT_CARD_DUPLICATE",
-                                  "GIFT_CARD_NOT_NEEDED",
-                                  "GIFT_CARD_NOT_ELIGIBLE"
+                                  "gift_card_unusable",
+                                  "gift_card_duplicate",
+                                  "gift_card_not_needed",
+                                  "gift_card_not_eligible"
                                 ]
                               },
                               "message": {
@@ -87250,7 +87250,7 @@
                   "expectedAmountDueMinor": {
                     "type": "integer",
                     "minimum": 0,
-                    "description": "The amount due the buyer reviewed in the tax quote (`amountDueMinor`). Required with gift cards: a card that changed since then is a 409 GIFT_CARD_CHANGED."
+                    "description": "The amount due the buyer reviewed in the tax quote (`amountDueMinor`). Required with gift cards: a card that changed since then is a 409 gift_card_changed."
                   }
                 },
                 "required": [
@@ -90736,7 +90736,7 @@
             }
           },
           "409": {
-            "description": "Refused: DOWNLOAD_LIMIT_REACHED, DOWNLOAD_REVOKED (removed by the store, or the order was cancelled or refunded) or DOWNLOAD_EXPIRED",
+            "description": "Refused: download_limit_reached, download_revoked (removed by the store, or the order was cancelled or refunded) or download_expired",
             "content": {
               "application/json": {
                 "schema": {
@@ -104381,7 +104381,7 @@
           "Admin - Categories"
         ],
         "summary": "Move a category in the tree",
-        "description": "Moves the category and its whole subtree under `parentId` (null: the top level). Refused (400 CATEGORY_PLACEMENT_REFUSED) for a cycle, a fifth level, or a trashed or missing parent.",
+        "description": "Moves the category and its whole subtree under `parentId` (null: the top level). Refused (400 category_placement_refused) for a cycle, a fifth level, or a trashed or missing parent.",
         "parameters": [
           {
             "schema": {
@@ -118063,10 +118063,10 @@
               "type": "number",
               "nullable": true,
               "default": 1,
-              "description": "Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (PAGE_TOO_DEEP beyond), use after/before to go deeper"
+              "description": "Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (page_too_deep beyond), use after/before to go deeper"
             },
             "required": false,
-            "description": "Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (PAGE_TOO_DEEP beyond), use after/before to go deeper",
+            "description": "Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (page_too_deep beyond), use after/before to go deeper",
             "name": "page",
             "in": "query"
           },
@@ -118087,10 +118087,10 @@
             "schema": {
               "type": "string",
               "maxLength": 1024,
-              "description": "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR."
+              "description": "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with invalid_cursor."
             },
             "required": false,
-            "description": "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR.",
+            "description": "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with invalid_cursor.",
             "name": "after",
             "in": "query"
           },
@@ -132226,7 +132226,7 @@
           "Admin - Media"
         ],
         "summary": "Permanently delete unreferenced trashed media",
-        "description": "Refused with 409 MEDIA_DEPENDENCY_CONFLICT while the file is used anywhere (see dashboard.media.usage) or kept by past orders.",
+        "description": "Refused with 409 media_dependency_conflict while the file is used anywhere (see dashboard.media.usage) or kept by past orders.",
         "operationId": "dashboard.media.permanently_delete",
         "parameters": [
           {
@@ -160562,7 +160562,7 @@
           "Admin - Settings"
         ],
         "summary": "Put a published version in the draft (it goes live only when the draft is published)",
-        "description": "A version that names images deleted from Files since is refused with THEME_VERSION_IMAGES_MISSING (details.missingImages: how many); send withoutMissingImages to restore it without them (slides, cards and tiles showing one are left out, other images become empty).",
+        "description": "A version that names images deleted from Files since is refused with theme_version_images_missing (details.missingImages: how many); send withoutMissingImages to restore it without them (slides, cards and tiles showing one are left out, other images become empty).",
         "operationId": "dashboard.theme.version_restore",
         "requestBody": {
           "required": true,
@@ -163774,7 +163774,7 @@
           "Admin - Settings"
         ],
         "summary": "Put a restore point back in the draft (it goes live only when the draft is published)",
-        "description": "The draft it replaces becomes a restore point too, so the restore can be undone. A point that names images deleted from Files since is refused with THEME_VERSION_IMAGES_MISSING; send withoutMissingImages to restore it without them.",
+        "description": "The draft it replaces becomes a restore point too, so the restore can be undone. A point that names images deleted from Files since is refused with theme_version_images_missing; send withoutMissingImages to restore it without them.",
         "operationId": "dashboard.theme.draft_snapshot_restore",
         "requestBody": {
           "required": true,
@@ -171132,7 +171132,7 @@
           "Admin - Settings"
         ],
         "summary": "Set up a new store",
-        "description": "Name a new store and set its country (the backup market's one country), currency (default: the country's), store language, time zone and units (default: the country's system) in one write. Creates no tax region and no shipping zone. A store that has an order or edited markets answers 409 STORE_SETUP_DONE and nothing changes.",
+        "description": "Name a new store and set its country (the backup market's one country), currency (default: the country's), store language, time zone and units (default: the country's system) in one write. Creates no tax region and no shipping zone. A store that has an order or edited markets answers 409 store_setup_done and nothing changes.",
         "operationId": "dashboard.settings.store_setup_apply",
         "requestBody": {
           "required": true,
@@ -193398,10 +193398,10 @@
               "type": "number",
               "nullable": true,
               "default": 1,
-              "description": "Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (PAGE_TOO_DEEP beyond), use after/before to go deeper"
+              "description": "Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (page_too_deep beyond), use after/before to go deeper"
             },
             "required": false,
-            "description": "Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (PAGE_TOO_DEEP beyond), use after/before to go deeper",
+            "description": "Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (page_too_deep beyond), use after/before to go deeper",
             "name": "page",
             "in": "query"
           },
@@ -193421,10 +193421,10 @@
             "schema": {
               "type": "string",
               "maxLength": 1024,
-              "description": "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR."
+              "description": "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with invalid_cursor."
             },
             "required": false,
-            "description": "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR.",
+            "description": "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with invalid_cursor.",
             "name": "after",
             "in": "query"
           },
@@ -195222,10 +195222,10 @@
               "type": "number",
               "nullable": true,
               "default": 1,
-              "description": "Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (PAGE_TOO_DEEP beyond), use after/before to go deeper"
+              "description": "Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (page_too_deep beyond), use after/before to go deeper"
             },
             "required": false,
-            "description": "Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (PAGE_TOO_DEEP beyond), use after/before to go deeper",
+            "description": "Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (page_too_deep beyond), use after/before to go deeper",
             "name": "page",
             "in": "query"
           },
@@ -195246,10 +195246,10 @@
             "schema": {
               "type": "string",
               "maxLength": 1024,
-              "description": "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR."
+              "description": "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with invalid_cursor."
             },
             "required": false,
-            "description": "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR.",
+            "description": "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with invalid_cursor.",
             "name": "after",
             "in": "query"
           },
@@ -211675,10 +211675,10 @@
               "type": "integer",
               "minimum": 1,
               "default": 1,
-              "description": "Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (PAGE_TOO_DEEP beyond), use after/before to go deeper"
+              "description": "Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (page_too_deep beyond), use after/before to go deeper"
             },
             "required": false,
-            "description": "Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (PAGE_TOO_DEEP beyond), use after/before to go deeper",
+            "description": "Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (page_too_deep beyond), use after/before to go deeper",
             "name": "page",
             "in": "query"
           },
@@ -211699,10 +211699,10 @@
             "schema": {
               "type": "string",
               "maxLength": 1024,
-              "description": "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR."
+              "description": "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with invalid_cursor."
             },
             "required": false,
-            "description": "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR.",
+            "description": "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with invalid_cursor.",
             "name": "after",
             "in": "query"
           },
@@ -212990,10 +212990,10 @@
             "schema": {
               "type": "string",
               "maxLength": 1024,
-              "description": "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR."
+              "description": "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with invalid_cursor."
             },
             "required": false,
-            "description": "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR.",
+            "description": "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with invalid_cursor.",
             "name": "after",
             "in": "query"
           },
@@ -262951,7 +262951,7 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 0,
-                    "description": "The revision the editor loaded; a stale one is refused with 409 SETTINGS_REVISION_CONFLICT."
+                    "description": "The revision the editor loaded; a stale one is refused with 409 settings_revision_conflict."
                   }
                 },
                 "required": [

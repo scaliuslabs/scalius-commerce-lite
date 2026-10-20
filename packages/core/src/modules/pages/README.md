@@ -30,7 +30,7 @@ Permissions are in `packages/core/src/auth/rbac/route-permissions/content.ts` (`
 
 ## Rules
 
-- **Revision guard.** Every edit and lifecycle command carries a positive `expectedRevision`. A stale claim is `PAGE_REVISION_CONFLICT` (409); the wrong lifecycle state is `PAGE_STATE_CONFLICT` (409). Bulk commands take at most 90 unique claims and apply all or none.
+- **Revision guard.** Every edit and lifecycle command carries a positive `expectedRevision`. A stale claim is `page_revision_conflict` (409); the wrong lifecycle state is `page_state_conflict` (409). Bulk commands take at most 90 unique claims and apply all or none.
 - **Lifecycle.** Create defaults to draft. Trash and restore force draft and clear the schedule. Permanent delete works only from trash.
 - **Publish authority.** Changing `is_published` or `published_at` needs `pages.publish`. The route passes `canPublish`; without it the service throws `ForbiddenError`. An ordinary edit may keep the current publication state.
 - **Visibility.** A page is public when it is not trashed, `is_published` is true and `published_at` is null or not in the future.

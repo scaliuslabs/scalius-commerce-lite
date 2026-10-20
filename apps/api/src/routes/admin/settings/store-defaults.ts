@@ -142,7 +142,7 @@ const applyStoreSetupRoute = createRoute({
   path: "/store-setup",
   tags: ["Admin - Settings"],
   summary: "Set up a new store",
-  description: "Name a new store and set its country (the backup market's one country), currency (default: the country's), store language, time zone and units (default: the country's system) in one write. Creates no tax region and no shipping zone. A store that has an order or edited markets answers 409 STORE_SETUP_DONE and nothing changes.",
+  description: "Name a new store and set its country (the backup market's one country), currency (default: the country's), store language, time zone and units (default: the country's system) in one write. Creates no tax region and no shipping zone. A store that has an order or edited markets answers 409 store_setup_done and nothing changes.",
   operationId: "dashboard.settings.store_setup_apply",
   request: {
     body: {

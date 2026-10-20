@@ -57,14 +57,14 @@ export async function phoneCodeChannel(
 /** No chosen channel can reach a contact saved on this order. */
 export class NoOrderCodeChannelError extends AppError {
   constructor() {
-    super(409, "NO_CODE_CHANNEL", "This order has no contact we can send a code to.");
+    super(409, "no_code_channel", "This order has no contact we can send a code to.");
   }
 }
 
 /** The chosen channel's provider can't send right now (fail closed, no fallback). */
 export class OrderCodeChannelUnavailableError extends AppError {
   constructor(channel: CustomerAuthOtpChannel) {
-    super(409, "CODE_CHANNEL_UNAVAILABLE", CHANNEL_UNAVAILABLE[channel]);
+    super(409, "code_channel_unavailable", CHANNEL_UNAVAILABLE[channel]);
   }
 }
 

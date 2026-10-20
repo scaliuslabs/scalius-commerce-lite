@@ -141,9 +141,9 @@ describe.each(PLANS)("admin product list keyset pagination on the %s plan", (pla
             ["a cursor and a later page", { sort: "name", page: 2, after: cursor }],
         ];
         for (const [label, options] of cases) {
-            await expect(listProducts(db, options), label).rejects.toMatchObject({ status: 400, code: "INVALID_CURSOR" });
+            await expect(listProducts(db, options), label).rejects.toMatchObject({ status: 400, code: "invalid_cursor" });
         }
-        await expect(listProducts(db, { page: lists.maxOffset / 10 + 1, limit: 10 })).rejects.toMatchObject({ status: 400, code: "PAGE_TOO_DEEP" });
+        await expect(listProducts(db, { page: lists.maxOffset / 10 + 1, limit: 10 })).rejects.toMatchObject({ status: 400, code: "page_too_deep" });
     });
 
     it("pages a text search by position and keeps every match reachable", async () => {

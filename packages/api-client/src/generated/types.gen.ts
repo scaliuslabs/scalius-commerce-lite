@@ -4188,7 +4188,7 @@ export type WarrantyClaim = {
 export type ProductMutationConflict = {
     success: false;
     error: {
-        code: 'PRODUCT_REVISION_CONFLICT';
+        code: 'product_revision_conflict';
         message: string;
         details: {
             expectedRevision: number;
@@ -4198,7 +4198,7 @@ export type ProductMutationConflict = {
 } | {
     success: false;
     error: {
-        code: 'PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT';
+        code: 'product_media_sku_reference_conflict';
         message: string;
         details: {
             affectedCount: number;
@@ -5865,7 +5865,7 @@ export type GetApiV1CollectionsByIdData = {
         page?: number;
         limit?: number;
         /**
-         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR.
+         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.
          */
         cursor?: string;
         sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating';
@@ -6234,7 +6234,7 @@ export type GetApiV1BrandsBySlugProductsData = {
          */
         limit?: number;
         /**
-         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR.
+         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.
          */
         cursor?: string;
         /**
@@ -14693,7 +14693,7 @@ export type PostApiV1CustomerAuthDownloadsByEntitlementIdTicketErrors = {
      */
     404: ErrorResponse;
     /**
-     * Refused: DOWNLOAD_LIMIT_REACHED, DOWNLOAD_REVOKED (removed by the store, or the order was cancelled or refunded) or DOWNLOAD_EXPIRED
+     * Refused: download_limit_reached, download_revoked (removed by the store, or the order was cancelled or refunded) or download_expired
      */
     409: ErrorResponse;
     /**
@@ -17009,7 +17009,7 @@ export type GetApiV1ProductsData = {
          */
         limit?: number;
         /**
-         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR.
+         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.
          */
         cursor?: string;
         /**
@@ -18686,7 +18686,7 @@ export type GetApiV1CategoriesBySlugProductsData = {
          */
         limit?: number;
         /**
-         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR.
+         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.
          */
         cursor?: string;
         /**
@@ -18992,7 +18992,7 @@ export type GetApiV1CategoriesBySlugProductSummariesData = {
         page?: number;
         limit?: number;
         /**
-         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR.
+         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.
          */
         cursor?: string;
         sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating';
@@ -21195,7 +21195,7 @@ export type PostApiV1OrdersCartValidationResponses = {
                 cartKey?: string | null;
                 productId: string;
                 variantId: string | null;
-                code: 'PRODUCT_UNAVAILABLE' | 'VARIANT_REQUIRED' | 'VARIANT_UNAVAILABLE' | 'VARIANT_MISMATCH' | 'QUANTITY_UNAVAILABLE' | 'PRICE_CHANGED' | 'PROPERTIES_REQUIRED' | 'PROPERTIES_INVALID' | 'FULFILMENT_UNAVAILABLE';
+                code: 'product_unavailable' | 'variant_required' | 'variant_unavailable' | 'variant_mismatch' | 'quantity_unavailable' | 'price_changed' | 'properties_required' | 'properties_invalid' | 'fulfilment_unavailable';
                 action: 'remove' | 'select_variant' | 'reduce_quantity' | 'refresh_item' | 'edit_properties';
                 message: string;
                 productName: string | null;
@@ -21281,7 +21281,7 @@ export type PostApiV1OrdersCartValidationResponses = {
             allowedPaymentMethods: Array<string>;
             giftCardIssues: Array<{
                 handle: string | null;
-                code: 'GIFT_CARD_UNUSABLE' | 'GIFT_CARD_DUPLICATE' | 'GIFT_CARD_NOT_NEEDED' | 'GIFT_CARD_NOT_ELIGIBLE';
+                code: 'gift_card_unusable' | 'gift_card_duplicate' | 'gift_card_not_needed' | 'gift_card_not_eligible';
                 message: string;
             }>;
             delivery?: {
@@ -22001,7 +22001,7 @@ export type PostApiV1OrdersTaxQuoteResponses = {
              */
             giftCardIssues: Array<{
                 handle: string | null;
-                code: 'GIFT_CARD_UNUSABLE' | 'GIFT_CARD_DUPLICATE' | 'GIFT_CARD_NOT_NEEDED' | 'GIFT_CARD_NOT_ELIGIBLE';
+                code: 'gift_card_unusable' | 'gift_card_duplicate' | 'gift_card_not_needed' | 'gift_card_not_eligible';
                 message: string;
             }>;
             shippingMethod: {
@@ -22297,7 +22297,7 @@ export type PostApiV1OrdersData = {
             userAgent: string | null;
         } | null;
         /**
-         * The amount due the buyer reviewed in the tax quote (`amountDueMinor`). Required with gift cards: a card that changed since then is a 409 GIFT_CARD_CHANGED.
+         * The amount due the buyer reviewed in the tax quote (`amountDueMinor`). Required with gift cards: a card that changed since then is a 409 gift_card_changed.
          */
         expectedAmountDueMinor?: number;
     };
@@ -23341,7 +23341,7 @@ export type PostApiV1OrdersReceiptByIdDownloadsByEntitlementIdTicketErrors = {
      */
     404: ErrorResponse;
     /**
-     * Refused: DOWNLOAD_LIMIT_REACHED, DOWNLOAD_REVOKED (removed by the store, or the order was cancelled or refunded) or DOWNLOAD_EXPIRED
+     * Refused: download_limit_reached, download_revoked (removed by the store, or the order was cancelled or refunded) or download_expired
      */
     409: ErrorResponse;
     /**
@@ -32124,7 +32124,7 @@ export type GetApiV1AdminCustomersData = {
     path?: never;
     query?: {
         /**
-         * Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (PAGE_TOO_DEEP beyond), use after/before to go deeper
+         * Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (page_too_deep beyond), use after/before to go deeper
          */
         page?: number | null;
         /**
@@ -32132,7 +32132,7 @@ export type GetApiV1AdminCustomersData = {
          */
         limit?: number | null;
         /**
-         * Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR.
+         * Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with invalid_cursor.
          */
         after?: string;
         /**
@@ -53841,7 +53841,7 @@ export type GetApiV1AdminOrdersData = {
     path?: never;
     query?: {
         /**
-         * Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (PAGE_TOO_DEEP beyond), use after/before to go deeper
+         * Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (page_too_deep beyond), use after/before to go deeper
          */
         page?: number | null;
         /**
@@ -53849,7 +53849,7 @@ export type GetApiV1AdminOrdersData = {
          */
         limit?: number | null;
         /**
-         * Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR.
+         * Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with invalid_cursor.
          */
         after?: string;
         /**
@@ -54344,7 +54344,7 @@ export type GetApiV1AdminOrdersPaymentRecoveryData = {
     path?: never;
     query?: {
         /**
-         * Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (PAGE_TOO_DEEP beyond), use after/before to go deeper
+         * Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (page_too_deep beyond), use after/before to go deeper
          */
         page?: number | null;
         /**
@@ -54352,7 +54352,7 @@ export type GetApiV1AdminOrdersPaymentRecoveryData = {
          */
         limit?: number | null;
         /**
-         * Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR.
+         * Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with invalid_cursor.
          */
         after?: string;
         /**
@@ -58773,7 +58773,7 @@ export type GetApiV1AdminProductsData = {
     path?: never;
     query?: {
         /**
-         * Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (PAGE_TOO_DEEP beyond), use after/before to go deeper
+         * Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (page_too_deep beyond), use after/before to go deeper
          */
         page?: number;
         /**
@@ -58781,7 +58781,7 @@ export type GetApiV1AdminProductsData = {
          */
         limit?: number;
         /**
-         * Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR.
+         * Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with invalid_cursor.
          */
         after?: string;
         /**
@@ -59190,7 +59190,7 @@ export type GetApiV1AdminProductsSummariesData = {
         page?: number;
         limit?: number;
         /**
-         * Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR.
+         * Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with invalid_cursor.
          */
         after?: string;
         /**
@@ -74659,7 +74659,7 @@ export type PutApiV1AdminSettingsCheckoutLanguagesByIdData = {
          */
         isDefault?: boolean;
         /**
-         * The revision the editor loaded; a stale one is refused with 409 SETTINGS_REVISION_CONFLICT.
+         * The revision the editor loaded; a stale one is refused with 409 settings_revision_conflict.
          */
         expectedRevision: number;
     };

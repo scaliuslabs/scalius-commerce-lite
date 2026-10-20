@@ -37,7 +37,7 @@ import type { CustomerSegment } from "~/lib/api-query-options/customers";
 const t = (key: keyof typeof customerSegmentMessages.en, vars?: Record<string, string | number>) => translate(customerSegmentMessages, key, vars);
 const ok = <T,>(data: T) => Promise.resolve({ data: { success: true, data }, response: { status: 200 } });
 const refused = (status: number, message: string) =>
-  Promise.resolve({ error: { success: false, error: { code: "CONFLICT", message } }, response: { status } });
+  Promise.resolve({ error: { success: false, error: { code: "conflict", message } }, response: { status } });
 
 const DEFINITION = {
   version: 1 as const,

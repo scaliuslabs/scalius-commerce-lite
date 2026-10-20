@@ -65,19 +65,19 @@ describe("custom field definition routes", () => {
 
     const taken = await call("POST", "/custom-field-definitions", { ownerType: "product", name: "Other", key: "care_guide", type: "url" });
     expect(taken.status).toBe(409);
-    expect(taken.body.error.code).toBe("CUSTOM_FIELD_KEY_TAKEN");
+    expect(taken.body.error.code).toBe("custom_field_key_taken");
     const badType = await call("POST", "/custom-field-definitions", { ownerType: "product", name: "Flags", type: "list.boolean" });
     expect(badType.status).toBe(400);
     const pluginNamespace = await call("POST", "/custom-field-definitions", { ownerType: "product", name: "Points", namespace: "acme.loyalty", type: "integer" });
     expect(pluginNamespace.status).toBe(403);
-    expect(pluginNamespace.body.error.code).toBe("CUSTOM_FIELD_NAMESPACE_FORBIDDEN");
+    expect(pluginNamespace.body.error.code).toBe("custom_field_namespace_forbidden");
 
     const id = care.body.data.definition.id as string;
     const edited = await call("PATCH", `/custom-field-definitions/${id}`, { expectedRevision: 1, name: "Care" });
     expect(edited.body.data.definition).toMatchObject({ name: "Care", revision: 2 });
     const stale = await call("PATCH", `/custom-field-definitions/${id}`, { expectedRevision: 1, name: "Late" });
     expect(stale.status).toBe(409);
-    expect(stale.body.error.code).toBe("CUSTOM_FIELD_REVISION_CONFLICT");
+    expect(stale.body.error.code).toBe("custom_field_revision_conflict");
 
     const list = await call("GET", "/custom-field-definitions?ownerType=product");
     expect(list.body.data.definitions.map((definition: { key: string }) => definition.key)).toEqual(["care_guide", "msrp"]);
@@ -137,7 +137,7 @@ describe("custom field value routes", () => {
     );
     const refused = await call("PUT", "/custom-fields/customer/cus_a", { values: [{ definitionId: points.id, value: 10 }] });
     expect(refused.status).toBe(403);
-    expect(refused.body.error.code).toBe("CUSTOM_FIELD_NAMESPACE_FORBIDDEN");
+    expect(refused.body.error.code).toBe("custom_field_namespace_forbidden");
     const read = await call("GET", "/custom-fields/customer/cus_a");
     expect(read.body.data.fields).toEqual([expect.objectContaining({ definition: expect.objectContaining({ namespace: "acme.loyalty" }), value: null })]);
   });

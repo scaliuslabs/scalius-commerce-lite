@@ -93,32 +93,32 @@ describe("app releases", () => {
     expect(verified).toMatchObject({ sha256: entry.sha256, signer: registry.developer.key });
     expect([...verified.assets.keys()]).toEqual(["assets/icon.svg"]);
 
-    await expect(verifyRelease({ ...base, code: new TextEncoder().encode(`${good.code}//x`) })).rejects.toMatchObject({ pluginCode: "package.hash_mismatch" });
-    await expect(verifyRelease({ ...base, trustedKeys: [] })).rejects.toMatchObject({ pluginCode: "signature.untrusted" });
-    await expect(verifyRelease({ ...base, manifest: { ...good.manifest, scopes: ["read_orders"] } })).rejects.toMatchObject({ pluginCode: "signature.invalid" });
-    await expect(verifyRelease({ ...base, signature: null })).rejects.toMatchObject({ pluginCode: "signature.missing" });
-    await expect(verifyRelease({ ...base, asset: async () => new TextEncoder().encode("<svg/>") })).rejects.toMatchObject({ pluginCode: "package.invalid" });
+    await expect(verifyRelease({ ...base, code: new TextEncoder().encode(`${good.code}//x`) })).rejects.toMatchObject({ pluginCode: "package_hash_mismatch" });
+    await expect(verifyRelease({ ...base, trustedKeys: [] })).rejects.toMatchObject({ pluginCode: "signature_untrusted" });
+    await expect(verifyRelease({ ...base, manifest: { ...good.manifest, scopes: ["read_orders"] } })).rejects.toMatchObject({ pluginCode: "signature_invalid" });
+    await expect(verifyRelease({ ...base, signature: null })).rejects.toMatchObject({ pluginCode: "signature_missing" });
+    await expect(verifyRelease({ ...base, asset: async () => new TextEncoder().encode("<svg/>") })).rejects.toMatchObject({ pluginCode: "package_invalid" });
     await expect(verifyRelease({ ...base, manifest: { ...good.manifest, apiVersion: "2099-01" } }))
-      .rejects.toMatchObject({ pluginCode: "installation.incompatible" });
+      .rejects.toMatchObject({ pluginCode: "installation_incompatible" });
   });
 
   it("downloads only from a configured registry and only what a trusted key signed", async () => {
-    await expect(downloadRegistryRelease(db, { registryId: "acme", id: "acme.points" })).rejects.toMatchObject({ pluginCode: "registry.not_configured" });
+    await expect(downloadRegistryRelease(db, { registryId: "acme", id: "acme.points" })).rejects.toMatchObject({ pluginCode: "registry_not_configured" });
     await registry.publish(await release("1.0.0"));
     await registry.publish(await release("1.1.0"));
     await trustRegistry();
     const newest = await downloadRegistryRelease(db, { registryId: "acme", id: "acme.points" });
     expect(newest.manifest.version).toBe("1.1.0");
     expect((await downloadRegistryRelease(db, { registryId: "acme", id: "acme.points", version: "1.0.0" })).manifest.version).toBe("1.0.0");
-    await expect(downloadRegistryRelease(db, { registryId: "acme", id: "acme.missing" })).rejects.toMatchObject({ pluginCode: "registry.not_found" });
+    await expect(downloadRegistryRelease(db, { registryId: "acme", id: "acme.missing" })).rejects.toMatchObject({ pluginCode: "registry_not_found" });
 
     // A release whose served code differs from what was signed.
     await registry.publish(await release("1.2.0"), { tamper: true });
-    await expect(downloadRegistryRelease(db, { registryId: "acme", id: "acme.points" })).rejects.toMatchObject({ pluginCode: "package.hash_mismatch" });
+    await expect(downloadRegistryRelease(db, { registryId: "acme", id: "acme.points" })).rejects.toMatchObject({ pluginCode: "package_hash_mismatch" });
     // A release signed by someone the store does not trust.
     const stranger = await createTestDeveloper("Stranger");
     await registry.publish(await release("1.3.0"), { signer: stranger });
-    await expect(downloadRegistryRelease(db, { registryId: "acme", id: "acme.points" })).rejects.toMatchObject({ pluginCode: "signature.untrusted" });
+    await expect(downloadRegistryRelease(db, { registryId: "acme", id: "acme.points" })).rejects.toMatchObject({ pluginCode: "signature_untrusted" });
   });
 
   it("asks before trusting a new developer or an unsigned package, and refuses a forged one", async () => {
@@ -126,25 +126,25 @@ describe("app releases", () => {
     const developer = await createTestDeveloper("Acme Labs");
     const signed = await readPluginPackageZip(await testPackage(good, developer));
     await expect(verifyUploadedPackage(db, signed, { allowUnsigned: false, trustDeveloper: false }))
-      .rejects.toMatchObject({ pluginCode: "signature.untrusted", details: expect.objectContaining({ keyId: developer.key.id, developer: "Acme Labs" }) });
+      .rejects.toMatchObject({ pluginCode: "signature_untrusted", details: expect.objectContaining({ keyId: developer.key.id, developer: "Acme Labs" }) });
     const trusted = await verifyUploadedPackage(db, signed, { allowUnsigned: false, trustDeveloper: true });
     expect(trusted.newKey).toEqual(developer.key);
     expect(trusted.release.signer).toEqual(developer.key);
 
     const unsigned = await readPluginPackageZip(await testPackage(good));
-    await expect(verifyUploadedPackage(db, unsigned, { allowUnsigned: false, trustDeveloper: false })).rejects.toMatchObject({ pluginCode: "signature.missing" });
+    await expect(verifyUploadedPackage(db, unsigned, { allowUnsigned: false, trustDeveloper: false })).rejects.toMatchObject({ pluginCode: "signature_missing" });
     expect((await verifyUploadedPackage(db, unsigned, { allowUnsigned: true, trustDeveloper: false })).release.signer).toBeNull();
 
     // A signature for other code never passes, even with trust.
     const forged = await readPluginPackageZip(await testPackage(good, developer));
     forged.set("plugin.js", new TextEncoder().encode(`${good.code}// changed`));
-    await expect(verifyUploadedPackage(db, forged, { allowUnsigned: true, trustDeveloper: true })).rejects.toMatchObject({ pluginCode: "signature.invalid" });
+    await expect(verifyUploadedPackage(db, forged, { allowUnsigned: true, trustDeveloper: true })).rejects.toMatchObject({ pluginCode: "signature_invalid" });
   });
 
   it("refuses packages that are not ZIPs or that escape their folder", async () => {
-    await expect(readPluginPackageZip(new TextEncoder().encode("not a zip"))).rejects.toMatchObject({ pluginCode: "package.invalid" });
+    await expect(readPluginPackageZip(new TextEncoder().encode("not a zip"))).rejects.toMatchObject({ pluginCode: "package_invalid" });
     const { storedZip } = await import("./testing/registry-fixture");
-    await expect(readPluginPackageZip(storedZip({ "../evil.js": "x" }))).rejects.toMatchObject({ pluginCode: "package.invalid" });
+    await expect(readPluginPackageZip(storedZip({ "../evil.js": "x" }))).rejects.toMatchObject({ pluginCode: "package_invalid" });
     const nested = await readPluginPackageZip(storedZip({ "acme-points/manifest.json": "{}", "acme-points/plugin.js": "x" }));
     expect([...nested.keys()].sort()).toEqual(["manifest.json", "plugin.js"]);
   });

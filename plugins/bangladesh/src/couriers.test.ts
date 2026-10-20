@@ -179,7 +179,7 @@ describe("Pathao", () => {
       const destination = rateInput().destination;
       for (const city of [null, "city_1", "0", "-1", "1.5"]) {
         expect(await instance.provider("pathao", "rates", rateInput({ destination: { ...destination, placeIds: { city, zone: "52", area: null } } })))
-          .toMatchObject({ ok: false, error: { category: "declined", code: "pathao.locations" } });
+          .toMatchObject({ ok: false, error: { category: "declined", code: "pathao_locations" } });
       }
       expect(calls).toHaveLength(0);
       const invalid = harness({ ...PATHAO, pathao_store_id: "924oops" }, pricePlan());
@@ -189,13 +189,13 @@ describe("Pathao", () => {
 
     it.each([undefined, null, -1, "80", Number.MAX_SAFE_INTEGER])("refuses an unusable final price %s without guessing a fee", async (finalPrice) => {
       const { instance } = harness(PATHAO, pricePlan({ final_price: finalPrice, price: 80, cod_enabled: 1 }));
-      expect(await instance.provider("pathao", "rates", rateInput())).toMatchObject({ ok: false, error: { code: "pathao.rates_failed", uncertain: false } });
+      expect(await instance.provider("pathao", "rates", rateInput())).toMatchObject({ ok: false, error: { code: "pathao_rates_failed", uncertain: false } });
     });
 
     it("keeps provider errors private and never retries a rate call", async () => {
       const { instance, calls } = harness(PATHAO, (call) => call.url.endsWith("/issue-token") ? json({ access_token: "rate-token" }) : json({ code: 422, message: "private provider detail" }, 422));
       const result = await instance.provider("pathao", "rates", rateInput());
-      expect(result).toMatchObject({ ok: false, error: { category: "retryable", code: "pathao.rates_failed" } });
+      expect(result).toMatchObject({ ok: false, error: { category: "retryable", code: "pathao_rates_failed" } });
       expect(JSON.stringify(result)).not.toContain("private provider detail");
       expect(calls).toHaveLength(2);
     });
@@ -248,15 +248,15 @@ describe("Pathao", () => {
 
   it("fails certainly when nothing was sent, uncertainly when the answer was lost, and declines an explicit rejection", async () => {
     const noToken = harness(PATHAO, (call) => (call.url.endsWith("/issue-token") ? json({ message: "bad" }, 401) : json({})));
-    expect(await noToken.instance.provider("pathao", "createShipment", booking(10_000))).toMatchObject({ ok: false, error: { category: "retryable", uncertain: false, code: "pathao.prepare_failed" } });
+    expect(await noToken.instance.provider("pathao", "createShipment", booking(10_000))).toMatchObject({ ok: false, error: { category: "retryable", uncertain: false, code: "pathao_prepare_failed" } });
     expect(noToken.calls).toHaveLength(1);
 
-    const lost = harness(PATHAO, (call) => (call.url.endsWith("/issue-token") ? json({ access_token: "t" }) : Object.assign(new Error("[http.timeout] timed out"), { code: "http.timeout" })));
-    expect(await lost.instance.provider("pathao", "createShipment", booking(10_000))).toMatchObject({ ok: false, error: { category: "retryable", uncertain: true, code: "pathao.outcome_unknown" } });
+    const lost = harness(PATHAO, (call) => (call.url.endsWith("/issue-token") ? json({ access_token: "t" }) : Object.assign(new Error("[http_timeout] timed out"), { code: "http_timeout" })));
+    expect(await lost.instance.provider("pathao", "createShipment", booking(10_000))).toMatchObject({ ok: false, error: { category: "retryable", uncertain: true, code: "pathao_outcome_unknown" } });
 
     const refused = harness(PATHAO, (call) => (call.url.endsWith("/issue-token") ? json({ access_token: "t" }) : json({ code: 422, message: "Invalid", errors: { recipient_phone: ["bad"] } }, 422)));
     const result = await refused.instance.provider("pathao", "createShipment", booking(10_000));
-    expect(result).toMatchObject({ ok: false, error: { category: "declined", code: "pathao.rejected" } });
+    expect(result).toMatchObject({ ok: false, error: { category: "declined", code: "pathao_rejected" } });
     expect(JSON.stringify(result)).not.toContain("recipient_phone");
 
     const odd = harness(PATHAO, (call) => (call.url.endsWith("/issue-token") ? json({ access_token: "t" }) : json({ code: 500 }, 500)));
@@ -378,8 +378,8 @@ describe("Steadfast", () => {
 
   it("declines an explicit rejection and keeps a lost answer for reconciliation", async () => {
     const refused = harness(STEADFAST, () => json({ status: 422, message: "Invalid" }, 422));
-    expect(await refused.instance.provider("steadfast", "createShipment", booking(100))).toMatchObject({ ok: false, error: { category: "declined", code: "steadfast.rejected" } });
-    const lost = harness(STEADFAST, () => new Error("[http.failed] network"));
+    expect(await refused.instance.provider("steadfast", "createShipment", booking(100))).toMatchObject({ ok: false, error: { category: "declined", code: "steadfast_rejected" } });
+    const lost = harness(STEADFAST, () => new Error("[http_failed] network"));
     expect(await lost.instance.provider("steadfast", "createShipment", booking(100))).toMatchObject({ ok: false, error: { category: "retryable", uncertain: true } });
   });
 

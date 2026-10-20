@@ -247,7 +247,7 @@ describe("CategoryForm", () => {
 
   it("tells the merchant to reload when the category changed elsewhere", async () => {
     api.update.mockRejectedValue(
-      new AdminApiResponseError("conflict", 409, "CATEGORY_REVISION_CONFLICT", {
+      new AdminApiResponseError("conflict", 409, "category_revision_conflict", {
         expectedRevision: 4,
         currentRevision: 5,
       }),

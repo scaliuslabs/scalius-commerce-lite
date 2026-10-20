@@ -132,7 +132,7 @@ describe("useSettingsForm freshness", () => {
       .mockResolvedValueOnce({ label: "before", caption: "", phone: "+8801712345678", revision: 1 })
       .mockResolvedValue({ label: "before", caption: "their caption", phone: "+880 1712-345678", revision: 2 });
     const saveFn = vi.fn<(values: Values, revision: number) => Promise<Values>>()
-      .mockRejectedValueOnce(new AdminApiResponseError("Changed", 409, "SETTINGS_REVISION_CONFLICT", {
+      .mockRejectedValueOnce(new AdminApiResponseError("Changed", 409, "settings_revision_conflict", {
         document: "business", expectedRevision: 1, currentRevision: 2,
       }))
       .mockImplementation(async (values) => ({ ...values, phone: "+8801712345678" }));
@@ -508,7 +508,7 @@ describe("useSettingsForm freshness", () => {
         saveFn: async () => {
           throw Object.assign(new Error("changed"), {
             status: 409,
-            code: "SETTINGS_REVISION_CONFLICT",
+            code: "settings_revision_conflict",
             details: { document: "demo", expectedRevision: 1, currentRevision: 2 },
           });
         },

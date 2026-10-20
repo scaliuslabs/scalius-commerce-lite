@@ -9,7 +9,7 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { AppError, ValidationError } from "@scalius/core/errors";
 import type { PageRevisionClaim } from "./pages.validation";
 
-export const PAGE_REVISION_CONFLICT = "PAGE_REVISION_CONFLICT";
+export const PAGE_REVISION_CONFLICT = "page_revision_conflict";
 
 export type PageLifecycleState = "active" | "trashed";
 
@@ -29,7 +29,7 @@ export class PageStateConflictError extends AppError {
     constructor(pageId: string, requiredState: PageLifecycleState) {
         super(
             409,
-            "PAGE_STATE_CONFLICT",
+            "page_state_conflict",
             requiredState === "active"
                 ? "This page is no longer active. Return to pages and reload."
                 : "This page is not in trash. Return to pages and reload.",

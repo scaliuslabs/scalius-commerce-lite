@@ -34,6 +34,6 @@ describe("cart line limits", () => {
 
     it("refuses a line beyond exact money", async () => {
         const result = await validateStorefrontCartItems(db, [{ productId: "p_gold", variantId: "v_gold", quantity: 2 }], currency);
-        expect(result.issues).toEqual([expect.objectContaining({ code: "QUANTITY_UNAVAILABLE", action: "reduce_quantity" })]);
+        expect(result.issues).toEqual([expect.objectContaining({ code: "quantity_unavailable", action: "reduce_quantity" })]);
     });
 });

@@ -60,7 +60,7 @@ const listRoute = createRoute({
     description: "Find recent or new customers and search bounded customer summaries.",
     request: {
         query: z.object({
-            page: z.coerce.number().default(1).openapi({ description: "Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (PAGE_TOO_DEEP beyond), use after/before to go deeper" }),
+            page: z.coerce.number().default(1).openapi({ description: "Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (page_too_deep beyond), use after/before to go deeper" }),
             limit: z.coerce.number().max(100).default(10).openapi({ description: "Items per page" }),
             ...keysetQuerySchema,
             search: z.string().optional().default("").openapi({ description: "Search term" }),

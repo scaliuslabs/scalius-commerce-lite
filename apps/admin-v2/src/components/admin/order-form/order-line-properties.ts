@@ -59,7 +59,7 @@ export function checkLineProperties(
 ): LinePropertiesCheck {
   const properties = propertyEntries(values);
   const result = resolveLineProperties(schema, properties);
-  if (!result.ok) return { ok: false, key: result.key, reason: result.code === "PROPERTIES_REQUIRED" ? "required" : "invalid" };
+  if (!result.ok) return { ok: false, key: result.key, reason: result.code === "properties_required" ? "required" : "invalid" };
   return {
     ok: true,
     properties: result.canonical,

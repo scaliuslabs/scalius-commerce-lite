@@ -178,7 +178,7 @@ export function appCourier(
     signal: AbortSignal | undefined,
   ): Promise<ProviderOperationOutput<"courier", M>> => {
     if (!providerOperationSchemas("courier", operation)!.input.safeParse(input).success) {
-      throw new ProviderError("declined", `${declaration.name} cannot take this request.`, { code: "provider.invalid_request" });
+      throw new ProviderError("declined", `${declaration.name} cannot take this request.`, { code: "provider_invalid_request" });
     }
     const host = await runtime.host();
     return withSignal(host.invokeProvider(installation, "courier", declaration.id, operation, input), signal);
@@ -211,7 +211,7 @@ export function appCourier(
       const locations = declaration.locations;
       if (!locations) return invoke("createShipment", fitShipmentInput(input, declaration), signal);
       const read = await courierLocationIds(db, declaration.name, locations, input.recipient);
-      if ("refusal" in read) throw new ProviderError("declined", read.refusal, { code: "courier.locations" });
+      if ("refusal" in read) throw new ProviderError("declined", read.refusal, { code: "courier_locations" });
       return invoke("createShipment", fitShipmentInput({ ...input, recipient: { ...input.recipient, locationIds: read.ids } }, declaration), signal);
     },
     trackShipment: (input, { signal }) => invoke("trackShipment", input, signal),

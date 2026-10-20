@@ -26,7 +26,7 @@ describe("database migration freeze", () => {
     expect(await response?.json()).toEqual({
       success: false,
       error: "Commerce data migration is in progress. Please retry shortly.",
-      code: "DATABASE_MIGRATION_IN_PROGRESS",
+      code: "database_migration_in_progress",
     });
   });
 

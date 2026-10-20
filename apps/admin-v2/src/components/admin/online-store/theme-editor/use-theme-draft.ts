@@ -235,7 +235,7 @@ export function useThemeDraft({ workspace, refetch, canEdit, apps }: {
     } catch (error) {
       setBusy(false);
       if (isAdminApiConflictError(error)) void noteConflict();
-      else if (source !== null && error instanceof AdminApiResponseError && error.code === "THEME_VERSION_IMAGES_MISSING") {
+      else if (source !== null && error instanceof AdminApiResponseError && error.code === "theme_version_images_missing") {
         const images = (error.details as { missingImages?: unknown } | undefined)?.missingImages;
         return { missingImages: typeof images === "number" ? images : 1 };
       } else toast.error(actionErrorText(error));

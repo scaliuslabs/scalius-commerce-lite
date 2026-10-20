@@ -192,16 +192,16 @@ function jsonError(status: number, code: string, message: string, headers: Recor
 }
 
 const FAILURE_STATUS: Record<PluginInvocationFailure, { status: number; code: string; message: string }> = {
-  inactive: { status: 404, code: "NOT_FOUND", message: "This app is not available." },
-  outdated: { status: 503, code: "APP_UPDATING", message: "The app was just updated. Try again in a few seconds." },
-  unavailable: { status: 503, code: "APP_UNAVAILABLE", message: "The app cannot run on this store's plan." },
-  load_failed: { status: 502, code: "APP_FAILED", message: "The app could not be loaded." },
-  settings_unreadable: { status: 503, code: "APP_UNAVAILABLE", message: "The app's settings cannot be read. Save them again in the dashboard." },
-  timeout: { status: 504, code: "APP_TIMEOUT", message: "The app took too long to answer." },
-  error: { status: 502, code: "APP_FAILED", message: "The app could not answer." },
-  invalid: { status: 502, code: "APP_FAILED", message: "The app gave an invalid answer." },
-  limited: { status: 429, code: "APP_BUSY", message: "The app is busy. Try again in a minute." },
-  migration_failed: { status: 502, code: "APP_FAILED", message: "The app could not update its data." },
+  inactive: { status: 404, code: "not_found", message: "This app is not available." },
+  outdated: { status: 503, code: "app_updating", message: "The app was just updated. Try again in a few seconds." },
+  unavailable: { status: 503, code: "app_unavailable", message: "The app cannot run on this store's plan." },
+  load_failed: { status: 502, code: "app_failed", message: "The app could not be loaded." },
+  settings_unreadable: { status: 503, code: "app_unavailable", message: "The app's settings cannot be read. Save them again in the dashboard." },
+  timeout: { status: 504, code: "app_timeout", message: "The app took too long to answer." },
+  error: { status: 502, code: "app_failed", message: "The app could not answer." },
+  invalid: { status: 502, code: "app_failed", message: "The app gave an invalid answer." },
+  limited: { status: 429, code: "app_busy", message: "The app is busy. Try again in a minute." },
+  migration_failed: { status: 502, code: "app_failed", message: "The app could not update its data." },
 };
 
 /** `Cache-Control` of a plugin response on a surface: admin never stored; others only an exact, short public max-age. */
@@ -272,17 +272,17 @@ export interface PluginRouteDependencies {
 export async function handlePluginRoute(c: Context<{ Bindings: Env }>, deps: PluginRouteDependencies = {}): Promise<Response> {
   const url = new URL(c.req.url);
   const target = parsePluginRoutePath(url.pathname);
-  if (!target) return jsonError(404, "NOT_FOUND", "Not found.");
+  if (!target) return jsonError(404, "not_found", "Not found.");
   const db = c.get("db") as Database;
   const method = c.req.method.toUpperCase();
 
   const installation = await getActivePluginInstallation(db, target.pluginId);
   // Unknown and inactive apps look the same from outside.
-  if (!installation?.grant) return jsonError(404, "NOT_FOUND", "This app is not available.");
+  if (!installation?.grant) return jsonError(404, "not_found", "This app is not available.");
   const methods = declaredPluginRouteMethods(installation, target.surface, target.name);
-  if (!methods) return jsonError(404, "NOT_FOUND", "Not found.");
+  if (!methods) return jsonError(404, "not_found", "Not found.");
   if (!methods.includes(method)) {
-    return jsonError(405, "METHOD_NOT_ALLOWED", `Use ${methods.join(", ")}.`, { Allow: methods.join(", ") });
+    return jsonError(405, "method_not_allowed", `Use ${methods.join(", ")}.`, { Allow: methods.join(", ") });
   }
   if (target.surface === "admin") {
     const scope = installation.manifest.routes.admin.find((route) => route.name === target.name)?.scope;
@@ -291,18 +291,18 @@ export async function handlePluginRoute(c: Context<{ Bindings: Env }>, deps: Plu
     // This runs before reading the body or invoking either plugin loader.
     const staffPermissions = c.get("adminPermissions") as ReadonlySet<string> | undefined;
     if (scope && (!installation.grant.scopes.includes(scope) || !staffPermissions?.has(PLUGIN_SCOPES[scope].staff))) {
-      return jsonError(403, "FORBIDDEN", "You do not have permission to perform this action.");
+      return jsonError(403, "forbidden", "You do not have permission to perform this action.");
     }
   }
   if (target.surface !== "admin") {
-    if (!installation.grant.publicRoutes) return jsonError(404, "NOT_FOUND", "This app is not available.");
+    if (!installation.grant.publicRoutes) return jsonError(404, "not_found", "This app is not available.");
     if (c.req.header(PLUGIN_APP_PROXY_HEADER) && !installation.manifest.storefront.proxy) {
-      return jsonError(404, "NOT_FOUND", "Not found.");
+      return jsonError(404, "not_found", "Not found.");
     }
     const client = getTrustedClientIp(c);
     const purpose = target.surface === "public" ? `plugin-public:${target.pluginId}` : `plugin-webhook:${target.pluginId}:${target.name}`;
     if (!(await isWithinRateLimit(c.env, "RL_STANDARD", purpose, client))) {
-      return jsonError(429, "RATE_LIMIT", "Too many requests. Try again in a minute.", { "Retry-After": "60" });
+      return jsonError(429, "rate_limited", "Too many requests. Try again in a minute.", { "Retry-After": "60" });
     }
   }
 
@@ -310,11 +310,11 @@ export async function handlePluginRoute(c: Context<{ Bindings: Env }>, deps: Plu
   try {
     raw = await readBoundedBody(c.req.raw, PLUGIN_ROUTE_BODY_LIMITS[target.surface]);
   } catch (error) {
-    if (error instanceof BodyTooLargeError) return jsonError(413, "PAYLOAD_TOO_LARGE", "The request body is too large.");
+    if (error instanceof BodyTooLargeError) return jsonError(413, "payload_too_large", "The request body is too large.");
     throw error;
   }
   const parsed = parseBody(raw, c.req.header("content-type") ?? "");
-  if (!parsed.ok) return jsonError(400, "INVALID_JSON", "The request body is not valid JSON.");
+  if (!parsed.ok) return jsonError(400, "invalid_json", "The request body is not valid JSON.");
   const user = target.surface === "admin" ? (c.get("user") as { id?: string } | undefined) : undefined;
   const proxied = target.surface === "public" && Boolean(c.req.header(PLUGIN_APP_PROXY_HEADER)) && installation.manifest.storefront.proxy;
   if (proxied && !(await appFormVerified(c.env as unknown as Record<string, unknown>, target.pluginId, method, c.req.header("cookie"), c.req.header("content-type"), parsed.body))) {
@@ -325,7 +325,7 @@ export async function handlePluginRoute(c: Context<{ Bindings: Env }>, deps: Plu
         headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'" },
       });
     }
-    return jsonError(403, "FORM_EXPIRED", FORM_EXPIRED_MESSAGE);
+    return jsonError(403, "form_expired", FORM_EXPIRED_MESSAGE);
   }
   const request: PluginRouteRequest = {
     method,

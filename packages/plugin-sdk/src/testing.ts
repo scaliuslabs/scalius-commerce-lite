@@ -93,7 +93,7 @@ export interface PluginTestHarnessOptions {
   fetch?: (url: string, init: unknown) => { status: number; headers?: Record<string, string>; body: string } | Promise<{ status: number; headers?: Record<string, string>; body: string }>;
 }
 
-/** `harness.fn`'s result: the checked answer, or the host's refusal (`function.invalid_output`). */
+/** `harness.fn`'s result: the checked answer, or the host's refusal (`function_invalid_output`). */
 export type PluginFunctionTestResult<P extends PluginFunctionPoint> = Omit<PluginInvocationResult, "value"> & { value: PluginFunctionOutput<P> | null };
 
 type Scalar = string | number | boolean | null;
@@ -146,7 +146,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
   const emailKeys = new Set<string>();
   const sent = { emails: [] as unknown[], sms: [] as unknown[], notices: [] as unknown[], pushes: [] as unknown[], timeline: [] as unknown[], holds: [] as unknown[], risks: [] as unknown[] };
 
-  const object = (name: string) => records.get(name) ?? refuse("object.undeclared_type", `Object type "${name}" is not declared in the manifest.`);
+  const object = (name: string) => records.get(name) ?? refuse("object_undeclared_type", `Object type "${name}" is not declared in the manifest.`);
   const indexFor = (name: string, where: Record<string, Scalar>, orderField: string | undefined) => {
     const whereFields = Object.keys(where);
     // A unique set answers an exact lookup on all its fields, every value given.
@@ -177,7 +177,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
   const checkMessage = (input: unknown, channel: "email" | "sms") => {
     const message = (typeof input === "object" && input !== null ? input : {}) as { customerId?: unknown; to?: unknown; subject?: unknown; html?: unknown; text?: unknown; marketing?: unknown };
     const text = (value: unknown, field: string, limit: { chars?: number; bytes?: number }) => {
-      if (!pluginMessageTextFits(value, limit)) refuse("messaging.invalid", `${field} is text of at most ${limit.bytes !== undefined ? `${limit.bytes} bytes` : `${limit.chars} characters`}.`);
+      if (!pluginMessageTextFits(value, limit)) refuse("messaging_invalid", `${field} is text of at most ${limit.bytes !== undefined ? `${limit.bytes} bytes` : `${limit.chars} characters`}.`);
     };
     if (channel === "email") {
       text(message.subject, "subject", { chars: PLUGIN_MESSAGE_LIMITS.subjectChars });
@@ -187,25 +187,25 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       text(message.text, "text", { chars: PLUGIN_MESSAGE_LIMITS.smsChars });
     }
     if (message.marketing === true) {
-      if (!permissions.has("marketing.send")) refuse("messaging.not_allowed", "Marketing messages need the write_marketing scope.");
-      if (message.customerId === undefined) refuse("messaging.invalid", "Marketing messages go to a customerId (consent is per customer).");
+      if (!permissions.has("marketing.send")) refuse("messaging_not_allowed", "Marketing messages need the write_marketing scope.");
+      if (message.customerId === undefined) refuse("messaging_invalid", "Marketing messages go to a customerId (consent is per customer).");
     } else {
-      if ((message.customerId === undefined) === (message.to === undefined)) refuse("messaging.invalid", "Pass exactly one of customerId or to.");
-      if (message.customerId !== undefined && !permissions.has("customers.view")) refuse("messaging.not_allowed", "Sending to customers needs the read_customers scope.");
+      if ((message.customerId === undefined) === (message.to === undefined)) refuse("messaging_invalid", "Pass exactly one of customerId or to.");
+      if (message.customerId !== undefined && !permissions.has("customers.view")) refuse("messaging_not_allowed", "Sending to customers needs the read_customers scope.");
     }
     if (message.customerId !== undefined && (typeof message.customerId !== "string" || message.customerId.length < 1 || message.customerId.length > 128)) {
-      refuse("messaging.invalid", "customerId is a customer id.");
+      refuse("messaging_invalid", "customerId is a customer id.");
     }
     if (message.marketing !== true && message.to !== undefined) {
-      if (typeof message.to !== "string" || !message.to.trim()) refuse("messaging.invalid", channel === "email" ? "to is an e-mail address." : "to is a phone number (+8801XXXXXXXXX).");
-      if (!recipientAllowed(channel, message.to.trim())) refuse("messaging.recipient_not_allowed", PLUGIN_MESSAGE_RECIPIENT_RULE);
+      if (typeof message.to !== "string" || !message.to.trim()) refuse("messaging_invalid", channel === "email" ? "to is an e-mail address." : "to is a phone number (+8801XXXXXXXXX).");
+      if (!recipientAllowed(channel, message.to.trim())) refuse("messaging_recipient_not_allowed", PLUGIN_MESSAGE_RECIPIENT_RULE);
     }
   };
 
   const bridge: PluginRuntimeBridge = {
     apiCall: async (operationId, input) => copy(options.api
       ? await options.api(operationId, input as PluginApiCallInput | undefined, { scopes: [...manifest.scopes] })
-      : { ok: false, status: 404, data: null, error: { code: "api.unknown_operation", message: `Unknown operation ${operationId}.` } }),
+      : { ok: false, status: 404, data: null, error: { code: "api_unknown_operation", message: `Unknown operation ${operationId}.` } }),
     objectsGet: async (name, id) => {
       const data = object(name).get(id);
       return data ? copy({ data: wire(name, data), revision: revisions.get(revisionKey(name, id)) ?? 1, ...(metadata.get(revisionKey(name, id)) ?? { handle: null, status: defaultStatus(name) }) }) : null;
@@ -221,24 +221,24 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     // All-or-nothing, as one platform batch: every condition and unique index
     // is checked against the state the whole batch leaves before anything changes.
     objectsWrite: async (operations) => {
-      if (!Array.isArray(operations) || operations.length < 1 || operations.length > 25) refuse("object.invalid_batch", "A batch has 1 to 25 operations.");
+      if (!Array.isArray(operations) || operations.length < 1 || operations.length > 25) refuse("object_invalid_batch", "A batch has 1 to 25 operations.");
       const staged = new Map([...records].map(([name, store]) => [name, new Map(store)]));
       const stagedMetadata = new Map(metadata);
       const seen = new Set<string>();
       const touched: Array<{ name: string; id: string; written: boolean }> = [];
       for (const operation of operations as Array<Record<string, unknown>>) {
         const { op, object: name, id, expectedRevision } = operation as { op?: unknown; object: string; id: string; expectedRevision?: unknown };
-        if (op !== "put" && op !== "delete" && op !== "check") refuse("object.invalid_batch", "Each operation is a put, delete or check.");
-        const store = staged.get(name) ?? refuse("object.undeclared_type", `Object type "${name}" is not declared in the manifest.`);
-        if (typeof id !== "string" || id.length < 1 || id.length > 128) refuse("object.invalid_id", "Record ids are 1 to 128 printable characters.");
-        if (seen.has(revisionKey(name, id))) refuse("object.invalid_batch", "A batch writes each record once.");
+        if (op !== "put" && op !== "delete" && op !== "check") refuse("object_invalid_batch", "Each operation is a put, delete or check.");
+        const store = staged.get(name) ?? refuse("object_undeclared_type", `Object type "${name}" is not declared in the manifest.`);
+        if (typeof id !== "string" || id.length < 1 || id.length > 128) refuse("object_invalid_id", "Record ids are 1 to 128 printable characters.");
+        if (seen.has(revisionKey(name, id))) refuse("object_invalid_batch", "A batch writes each record once.");
         seen.add(revisionKey(name, id));
         if (expectedRevision !== undefined || op === "check") {
           if (expectedRevision !== null && !(typeof expectedRevision === "number" && Number.isSafeInteger(expectedRevision) && expectedRevision >= 1)) {
-            refuse("object.invalid_batch", "expectedRevision is a revision you read, or null for a record that must not exist.");
+            refuse("object_invalid_batch", "expectedRevision is a revision you read, or null for a record that must not exist.");
           }
           const current = records.get(name)!.has(id) ? revisions.get(revisionKey(name, id)) ?? 1 : null;
-          if (current !== expectedRevision) refuse("object.conflict", `${name}/${id} changed since it was read (or exists when it must not): read it again and retry.`);
+          if (current !== expectedRevision) refuse("object_conflict", `${name}/${id} changed since it was read (or exists when it must not): read it again and retry.`);
         }
         if (op === "check") {
           touched.push({ name, id, written: false });
@@ -248,16 +248,16 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
           touched.push({ name, id, written: false });
         } else {
           const record = operation.record;
-          if (typeof record !== "object" || record === null || Array.isArray(record)) refuse("object.invalid_record", "A record is a plain JSON object.");
+          if (typeof record !== "object" || record === null || Array.isArray(record)) refuse("object_invalid_record", "A record is a plain JSON object.");
           const previous = stagedMetadata.get(revisionKey(name, id));
           const handle = operation.handle === undefined ? previous?.handle ?? null : operation.handle;
           const status = operation.status === undefined ? previous?.status ?? defaultStatus(name) : operation.status;
-          if (operation.handle !== undefined && (!manifest.objects[name]!.handle || (handle !== null && (typeof handle !== "string" || !OBJECT_HANDLE_PATTERN.test(handle))))) refuse("object.invalid", "This object does not accept that handle.");
-          if (status !== "active" && status !== "draft" && status !== "published") refuse("object.invalid_record", "Status is active, draft or published.");
-          if (manifest.objects[name]!.storefront ? status === "active" : status !== "active") refuse("object.invalid", "Only storefront objects have draft or published status.");
+          if (operation.handle !== undefined && (!manifest.objects[name]!.handle || (handle !== null && (typeof handle !== "string" || !OBJECT_HANDLE_PATTERN.test(handle))))) refuse("object_invalid", "This object does not accept that handle.");
+          if (status !== "active" && status !== "draft" && status !== "published") refuse("object_invalid_record", "Status is active, draft or published.");
+          if (manifest.objects[name]!.storefront ? status === "active" : status !== "active") refuse("object_invalid", "Only storefront objects have draft or published status.");
           stagedMetadata.set(revisionKey(name, id), { handle, status } as { handle: string | null; status: "active" | "draft" | "published" });
           const checked = prepareObjectData(manifest.objects[name]!, record as Record<string, unknown>, codec, status as "active" | "draft" | "published");
-          if (!checked.ok) refuse("object.invalid", checked.issues.map((issue) => `${issue.key}: ${issue.message}`).join("; "));
+          if (!checked.ok) refuse("object_invalid", checked.issues.map((issue) => `${issue.key}: ${issue.message}`).join("; "));
           store.set(id, copy(checked.data));
           touched.push({ name, id, written: true });
         }
@@ -266,7 +266,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
         const handles = new Set<string>();
         for (const id of store.keys()) {
           const handle = stagedMetadata.get(revisionKey(name, id))?.handle;
-          if (handle && handles.has(handle)) refuse("object.unique_violation", "Another record already has this handle.");
+          if (handle && handles.has(handle)) refuse("object_unique_violation", "Another record already has this handle.");
           if (handle) handles.add(handle);
         }
         for (const entry of manifest.objects[name]!.unique) {
@@ -275,7 +275,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
           for (const data of store.values()) {
             if (fields.some((field) => scalar(data[field]) === null)) continue;
             const key = JSON.stringify(fields.map((field) => scalar(data[field])));
-            if (values.has(key)) refuse("object.unique_violation", `Another record already has this ${fields.join(" + ")}.`);
+            if (values.has(key)) refuse("object_unique_violation", `Another record already has this ${fields.join(" + ")}.`);
             values.add(key);
           }
         }
@@ -298,7 +298,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       const { where: requested = {}, orderBy, limit = 50, cursor } = (query ?? {}) as { where?: Record<string, unknown>; orderBy?: { field: string; direction?: string }; limit?: number; cursor?: string | null };
       const store = object(name);
       const where = storedWhere(name, requested);
-      if (!indexFor(name, where, orderBy?.field)) refuse("object.unindexed_query", "Query by the leading fields of a declared index and order by its next field.");
+      if (!indexFor(name, where, orderBy?.field)) refuse("object_unindexed_query", "Query by the leading fields of a declared index and order by its next field.");
       const field = orderBy?.field ?? "id";
       const sign = orderBy?.direction === "desc" ? -1 : 1;
       const matches = [...store].filter(([, data]) => Object.entries(where).every(([key, value]) => compare(scalar(data[key]), scalar(value)) === 0))
@@ -313,14 +313,14 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     objectsCount: async (name, where) => {
       object(name);
       const filter = storedWhere(name, (where ?? {}) as Record<string, unknown>);
-      if (!indexFor(name, filter, undefined)) refuse("object.unindexed_query", "Count by the leading fields of a declared index.");
+      if (!indexFor(name, filter, undefined)) refuse("object_unindexed_query", "Count by the leading fields of a declared index.");
       return [...object(name).values()].filter((data) => Object.entries(filter).every(([key, value]) => compare(scalar(data[key]), scalar(value)) === 0)).length;
     },
     kvGet: async (key) => (kv.has(key) ? copy({ value: kv.get(key), revision: kvRevisions.get(key) ?? 1 }) : null),
     kvSet: async (key, value, options) => {
       const expected = options?.expectedRevision;
       if (expected !== undefined && (kv.has(key) ? kvRevisions.get(key) ?? 1 : null) !== expected) {
-        refuse("kv.conflict", `${key} changed since it was read: read it again and retry.`);
+        refuse("kv_conflict", `${key} changed since it was read: read it again and retry.`);
       }
       const revision = (kv.has(key) ? kvRevisions.get(key) ?? 1 : 0) + 1;
       kv.set(key, copy(value));
@@ -337,28 +337,28 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       let port = "";
       try {
         const parsedUrl = new URL(url);
-        if (parsedUrl.protocol !== "https:") refuse("http.not_allowed", "The URL must start with https://.");
+        if (parsedUrl.protocol !== "https:") refuse("http_not_allowed", "The URL must start with https://.");
         host = parsedUrl.hostname;
         port = parsedUrl.port;
       } catch (error) {
         if (error instanceof Error && error.message.startsWith("[")) throw error;
-        refuse("http.not_allowed", "Enter a full URL.");
+        refuse("http_not_allowed", "Enter a full URL.");
       }
       if (!isPluginHostAllowed(host, manifest.allowedHosts, port)) {
-        refuse("http.not_allowed", `${port ? `${host}:${port}` : host} is not in the plugin's allowedHosts.`);
+        refuse("http_not_allowed", `${port ? `${host}:${port}` : host} is not in the plugin's allowedHosts.`);
       }
-      if (!options.fetch) refuse("http.failed", `The request to ${host} failed.`);
+      if (!options.fetch) refuse("http_failed", `The request to ${host} failed.`);
       const response = await options.fetch(url, copy(init));
       return { status: response.status, headers: response.headers ?? {}, body: response.body };
     },
     customFieldsGet: async (ownerType, ownerId) => {
-      if (!manifest.customFields.some((field) => field.ownerType === ownerType)) refuse("custom_fields.undeclared", `The plugin declares no ${ownerType} custom fields.`);
+      if (!manifest.customFields.some((field) => field.ownerType === ownerType)) refuse("custom_fields_undeclared", `The plugin declares no ${ownerType} custom fields.`);
       return copy(customFields.get(`${ownerType}:${ownerId}`) ?? {});
     },
     customFieldsSet: async (ownerType, ownerId, values) => {
       const declared = new Set(manifest.customFields.filter((field) => field.ownerType === ownerType).map((field) => field.key));
       const undeclared = Object.keys(values).find((key) => !declared.has(key));
-      if (undeclared) refuse("custom_fields.undeclared", `Custom field ${ownerType}.${undeclared} is not declared in the manifest.`);
+      if (undeclared) refuse("custom_fields_undeclared", `Custom field ${ownerType}.${undeclared} is not declared in the manifest.`);
       // The platform's codec: a value it would refuse is refused here (money takes { amountMinor, currency } only).
       const next: Record<string, unknown> = { ...customFields.get(`${ownerType}:${ownerId}`) };
       for (const [key, value] of Object.entries(values)) {
@@ -366,7 +366,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
         const type = field.type as CustomFieldType;
         const validations = parseCustomFieldValidations(type, field.to ? { to: field.to } : {}, codec);
         const parsed = parseCustomFieldValue({ type, validations: validations.ok ? validations.value : {} }, value, codec);
-        if (!parsed.ok) refuse("custom_fields.invalid", `${ownerType}.${key}: ${parsed.issue.message}`);
+        if (!parsed.ok) refuse("custom_fields_invalid", `${ownerType}.${key}: ${parsed.issue.message}`);
         // Kept in the wire form a read returns (money as { amountMinor, currency }).
         if (parsed.value === null) delete next[key];
         else next[key] = customFieldWireValue(type, parsed.value, codec);
@@ -382,7 +382,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       checkMessage(input, "email");
       const key = (input as { idempotencyKey?: unknown }).idempotencyKey;
       if (key !== undefined) {
-        if (typeof key !== "string" || !/^[\x20-\x7E]{8,200}$/u.test(key)) refuse("messaging.invalid", "idempotencyKey is 8 to 200 printable characters.");
+        if (typeof key !== "string" || !/^[\x20-\x7E]{8,200}$/u.test(key)) refuse("messaging_invalid", "idempotencyKey is 8 to 200 printable characters.");
         if (emailKeys.has(key)) return { queued: true, duplicate: true };
         emailKeys.add(key);
       }
@@ -396,38 +396,38 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     },
     messagingNotifyStaff: async (input) => void sent.notices.push(copy(input)),
     messagingPush: async (input) => {
-      if (!pluginScopePermissions(manifest.scopes).has("customers.view")) refuse("messaging.not_allowed", "Sending to customers needs the read_customers scope.");
+      if (!pluginScopePermissions(manifest.scopes).has("customers.view")) refuse("messaging_not_allowed", "Sending to customers needs the read_customers scope.");
       sent.pushes.push(copy(input));
       return { delivered: true };
     },
     timelineAdd: async (input) => {
       const entry = copy(input) as { kind?: unknown };
-      if (!pluginScopePermissions(manifest.scopes).has("orders.edit")) refuse("timeline.not_allowed", "Writing to order timelines needs the write_orders scope.");
-      if (!manifest.timeline.some((declared) => declared.kind === entry.kind)) refuse("timeline.undeclared", `Timeline kind ${String(entry.kind)} is not declared in the manifest.`);
+      if (!pluginScopePermissions(manifest.scopes).has("orders.edit")) refuse("timeline_not_allowed", "Writing to order timelines needs the write_orders scope.");
+      if (!manifest.timeline.some((declared) => declared.kind === entry.kind)) refuse("timeline_undeclared", `Timeline kind ${String(entry.kind)} is not declared in the manifest.`);
       sent.timeline.push(entry);
       return { id: `oev_test${sent.timeline.length}` };
     },
     // The host's checks (apps/api/src/plugins/bridge.ts); one hold and one assessment per order.
     ordersHold: async (input) => {
       const hold = copy(input) as { orderId?: unknown; reason?: unknown };
-      if (!permissions.has("orders.edit")) refuse("orders.not_allowed", "Holding orders needs the write_orders scope.");
-      if (typeof hold.orderId !== "string" || hold.orderId.length < 1 || hold.orderId.length > 128) refuse("orders.invalid", "orderId is an order id.");
-      if (typeof hold.reason !== "string" || !hold.reason.trim() || hold.reason.length > 500) refuse("orders.invalid", "reason is text of 1 to 500 characters.");
+      if (!permissions.has("orders.edit")) refuse("orders_not_allowed", "Holding orders needs the write_orders scope.");
+      if (typeof hold.orderId !== "string" || hold.orderId.length < 1 || hold.orderId.length > 128) refuse("orders_invalid", "orderId is an order id.");
+      if (typeof hold.reason !== "string" || !hold.reason.trim() || hold.reason.length > 500) refuse("orders_invalid", "reason is text of 1 to 500 characters.");
       if (!sent.holds.some((entry) => (entry as { orderId: string }).orderId === hold.orderId)) sent.holds.push(hold);
     },
     ordersAssessRisk: async (input) => {
       const risk = copy(input) as { orderId?: unknown; level?: unknown; reasons?: unknown };
-      if (!permissions.has("orders.edit")) refuse("orders.not_allowed", "Assessing orders needs the write_orders scope.");
-      if (typeof risk.orderId !== "string" || risk.orderId.length < 1 || risk.orderId.length > 128) refuse("orders.invalid", "orderId is an order id.");
-      if (risk.level !== "low" && risk.level !== "medium" && risk.level !== "high") refuse("orders.invalid", "level is low, medium or high.");
+      if (!permissions.has("orders.edit")) refuse("orders_not_allowed", "Assessing orders needs the write_orders scope.");
+      if (typeof risk.orderId !== "string" || risk.orderId.length < 1 || risk.orderId.length > 128) refuse("orders_invalid", "orderId is an order id.");
+      if (risk.level !== "low" && risk.level !== "medium" && risk.level !== "high") refuse("orders_invalid", "level is low, medium or high.");
       if (!Array.isArray(risk.reasons) || risk.reasons.length > 5 || !risk.reasons.every((reason) => typeof reason === "string" && reason.trim() && reason.length <= 200)) {
-        refuse("orders.invalid", "reasons are up to five texts of 1 to 200 characters.");
+        refuse("orders_invalid", "reasons are up to five texts of 1 to 200 characters.");
       }
       if (!sent.risks.some((entry) => (entry as { orderId: string }).orderId === risk.orderId)) sent.risks.push(risk);
     },
     ordersRiskHistory: async (orderId) => {
-      if (!permissions.has("orders.view")) refuse("orders.not_allowed", "Reading order history needs the read_orders scope.");
-      if (typeof orderId !== "string" || orderId.length < 1 || orderId.length > 128) refuse("orders.invalid", "orderId is an order id.");
+      if (!permissions.has("orders.view")) refuse("orders_not_allowed", "Reading order history needs the read_orders scope.");
+      if (typeof orderId !== "string" || orderId.length < 1 || orderId.length > 128) refuse("orders_invalid", "orderId is an order id.");
       return copy(options.riskHistory?.(orderId) ?? { orders: 0, cancelled: 0, returnedToSender: 0 });
     },
   };
@@ -480,7 +480,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
      * Runs one function the way checkout does: the input is parsed with the
      * point's schema (a mismatch throws: on the platform it is the host's
      * own input), and the answer is checked like the host checks it. An
-     * invalid answer comes back as `ok: false` with `function.invalid_output`
+     * invalid answer comes back as `ok: false` with `function_invalid_output`
      * (production skips the app, or stops checkout with `onError: "block"`).
      * Pass `reads` as the host resolves the function's declared reads.
      */
@@ -518,7 +518,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     /**
      * Runs one provider operation the way the platform does: the input must
      * match the port (a mismatch throws, as it would be a platform bug), the
-     * answer is validated (an invalid one fails as `provider.invalid_response`)
+     * answer is validated (an invalid one fails as `provider_invalid_response`)
      * and the store's messaging is refused. A `ProviderError` the operation
      * raises comes back as `error.category` / `error.uncertain`.
      */
@@ -529,7 +529,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       if (!schemas) throw new Error(`The ${declaration.kind} port has no ${operation} operation.`);
       const checked = schemas.input.safeParse(input);
       if (!checked.success) throw new TypeError(`Invalid ${declaration.kind}.${operation} input: ${checked.error.issues[0]?.path.join(".")} ${checked.error.issues[0]?.message}`);
-      const notAllowed = async () => refuse("messaging.not_allowed", "Provider operations reach their provider with ctx.http, not the store's messaging.");
+      const notAllowed = async () => refuse("messaging_not_allowed", "Provider operations reach their provider with ctx.http, not the store's messaging.");
       const result = await run(
         { kind: "provider", provider: providerId, operation, input: checked.data },
         { ...bridge, messagingEmail: notAllowed, messagingSms: notAllowed, messagingNotifyStaff: notAllowed, messagingPush: notAllowed },
@@ -543,7 +543,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
         ok: false,
         value: null,
         error: {
-          code: "provider.invalid_response",
+          code: "provider_invalid_response",
           message: `Invalid ${operation} answer at ${issue?.path.join(".") || "(root)"}: ${issue?.message ?? "invalid"}.`,
           category: "retryable",
           uncertain: true,

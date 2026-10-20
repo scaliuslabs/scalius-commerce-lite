@@ -34,7 +34,7 @@ export interface ReferenceCreationRights {
 export const ALL_REFERENCE_RIGHTS: ReferenceCreationRights = { brands: true, categories: true, attributes: true };
 
 function refuse(kind: string, name: string, permission: string): never {
-  throw new AppError(403, "FORBIDDEN", `Creating the ${kind} "${name}" needs the ${permission} permission. Create it first or ask an owner to import.`);
+  throw new AppError(403, "forbidden", `Creating the ${kind} "${name}" needs the ${permission} permission. Create it first or ask an owner to import.`);
 }
 
 export class ImportReferenceResolver {

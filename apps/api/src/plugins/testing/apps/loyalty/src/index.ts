@@ -150,7 +150,7 @@ async function earn(orderId: string, ctx: PluginContext): Promise<void> {
       ctx.log.info("Points earned", { orderId, points });
       return;
     } catch (error) {
-      if ((error as { code?: string }).code !== "object.conflict") throw error;
+      if ((error as { code?: string }).code !== "object_conflict") throw error;
     }
   }
   throw new Error("Points could not be credited after concurrent changes; the event will be retried.");

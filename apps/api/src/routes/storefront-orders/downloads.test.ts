@@ -119,7 +119,7 @@ describe("account downloads", () => {
     await mint(`/customer-auth/downloads/${entitlementId}/ticket`, { session: OWNER_SESSION });
     const third = await mint(`/customer-auth/downloads/${entitlementId}/ticket`, { session: OWNER_SESSION });
     expect(third.response.status).toBe(409);
-    expect(third.body.error?.code).toBe("DOWNLOAD_LIMIT_REACHED");
+    expect(third.body.error?.code).toBe("download_limit_reached");
   });
 
   it("reveals a licence key only to its owner, never cached", async () => {

@@ -53,7 +53,7 @@ describe("dashboard session read", () => {
     beginBootSessionRead();
     const failed = readDashboardSession().catch((error) => error);
     await vi.advanceTimersByTimeAsync(ADMIN_API_READ_TIMEOUT_MS);
-    expect(await failed).toMatchObject({ code: "ADMIN_API_READ_TIMEOUT", status: 504 });
+    expect(await failed).toMatchObject({ code: "admin_api_read_timeout", status: 504 });
     await expect(readDashboardSession()).resolves.toMatchObject(signedOut);
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(vi.getTimerCount()).toBe(0);

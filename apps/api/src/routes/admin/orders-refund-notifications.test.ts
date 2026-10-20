@@ -316,7 +316,7 @@ describe("admin refund notification routes", () => {
             data: { amount: 30, gateway: "stripe" },
         });
         const body = await response.json() as { error: { code: string; message: string; details?: unknown } };
-        expect(body.error.code).toBe("SERVICE_UNAVAILABLE");
+        expect(body.error.code).toBe("service_unavailable");
         expect(body.error.message).toContain("Refund partially processed");
         expect(body.error.details).toBeUndefined();
     });

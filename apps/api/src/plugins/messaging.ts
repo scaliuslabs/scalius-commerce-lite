@@ -45,7 +45,7 @@ const E164 = /^\+[1-9]\d{6,14}$/;
 
 function requireContactAccess(context: PluginMessagingContext): void {
   if (!context.permissions.includes("customers.view")) {
-    throw new PluginError("messaging.not_allowed", "Sending to customers needs the read_customers scope.");
+    throw new PluginError("messaging_not_allowed", "Sending to customers needs the read_customers scope.");
   }
 }
 
@@ -58,7 +58,7 @@ async function requireRate(context: PluginMessagingContext): Promise<void> {
 
 function requireCustomerId(customerId: unknown): string {
   if (typeof customerId !== "string" || customerId.length < 1 || customerId.length > 128) {
-    throw new PluginError("messaging.invalid", "customerId is a customer id.");
+    throw new PluginError("messaging_invalid", "customerId is a customer id.");
   }
   return customerId;
 }
@@ -67,7 +67,7 @@ async function customerContact(context: PluginMessagingContext, customerId: unkn
   const id = requireCustomerId(customerId);
   const row = await context.runtime.db().select({ email: customers.email, phone: customers.phone })
     .from(customers).where(eq(customers.id, id)).get();
-  if (!row) throw new PluginError("messaging.invalid", "The customer was not found.");
+  if (!row) throw new PluginError("messaging_invalid", "The customer was not found.");
   return { email: row.email ?? null, phone: row.phone ?? null };
 }
 
@@ -94,7 +94,7 @@ async function recipientAllowed(context: PluginMessagingContext, channel: "email
 }
 
 async function requireRecipient(context: PluginMessagingContext, channel: "email" | "sms", to: string): Promise<void> {
-  if (!(await recipientAllowed(context, channel, to))) throw new PluginError("messaging.recipient_not_allowed", PLUGIN_MESSAGE_RECIPIENT_RULE);
+  if (!(await recipientAllowed(context, channel, to))) throw new PluginError("messaging_recipient_not_allowed", PLUGIN_MESSAGE_RECIPIENT_RULE);
 }
 
 /**
@@ -117,9 +117,9 @@ function escapeHtml(value: string): string {
 
 /** Marketing sends: the subscribed address and what the message must carry, or null (not subscribed). */
 async function marketingPermission(context: PluginMessagingContext, customerId: string | undefined, channel: "email" | "sms") {
-  if (!context.permissions.includes("marketing.send")) throw new PluginError("messaging.not_allowed", "Marketing messages need the write_marketing scope.");
+  if (!context.permissions.includes("marketing.send")) throw new PluginError("messaging_not_allowed", "Marketing messages need the write_marketing scope.");
   if (customerId === undefined) {
-    throw new PluginError("messaging.invalid", "Marketing messages go to a customerId (consent is per customer).");
+    throw new PluginError("messaging_invalid", "Marketing messages go to a customerId (consent is per customer).");
   }
   const id = requireCustomerId(customerId);
   const env = await context.runtime.composedEnv();
@@ -131,12 +131,12 @@ async function marketingPermission(context: PluginMessagingContext, customerId: 
   return permission.allowed ? permission : null;
 }
 
-/** Text within `limit` (characters and/or UTF-8 bytes), or a `messaging.invalid` refusal. */
+/** Text within `limit` (characters and/or UTF-8 bytes), or a `messaging_invalid` refusal. */
 function text(value: unknown, field: string, limit: { chars?: number; bytes?: number }, required = true): string | undefined {
   if (value === undefined && !required) return undefined;
   if (!pluginMessageTextFits(value, limit)) {
     const size = limit.bytes !== undefined ? `${limit.bytes} bytes` : `${limit.chars} characters`;
-    throw new PluginError("messaging.invalid", `${field} is text of at most ${size}.`);
+    throw new PluginError("messaging_invalid", `${field} is text of at most ${size}.`);
   }
   return value;
 }
@@ -144,7 +144,7 @@ function text(value: unknown, field: string, limit: { chars?: number; bytes?: nu
 /** Exactly one of `customerId` and `to`, outside marketing. */
 function requireOneRecipient(input: { customerId?: unknown; to?: unknown }): void {
   if ((input.customerId === undefined) === (input.to === undefined)) {
-    throw new PluginError("messaging.invalid", "Pass exactly one of customerId or to.");
+    throw new PluginError("messaging_invalid", "Pass exactly one of customerId or to.");
   }
 }
 
@@ -168,7 +168,7 @@ async function sendOnce(
   send: () => Promise<{ queued: boolean }>,
 ): Promise<{ queued: boolean; duplicate?: boolean }> {
   if (key === undefined) return send();
-  if (typeof key !== "string" || !IDEMPOTENCY_KEY.test(key)) throw new PluginError("messaging.invalid", "idempotencyKey is 8 to 200 printable characters.");
+  if (typeof key !== "string" || !IDEMPOTENCY_KEY.test(key)) throw new PluginError("messaging_invalid", "idempotencyKey is 8 to 200 printable characters.");
   const db = context.runtime.db();
   const storeKey = `app-email:${context.pluginId}:${await sha256Hex(key)}`;
   const now = Math.floor(Date.now() / 1000);
@@ -231,7 +231,7 @@ export async function sendPluginEmail(
     if (!email || !EMAIL.test(email)) return { queued: false };
     to = email;
   } else {
-    if (typeof input.to !== "string" || !EMAIL.test(input.to.trim())) throw new PluginError("messaging.invalid", "to is an e-mail address.");
+    if (typeof input.to !== "string" || !EMAIL.test(input.to.trim())) throw new PluginError("messaging_invalid", "to is an e-mail address.");
     to = input.to.trim();
     await requireRecipient(context, "email", to);
   }
@@ -272,7 +272,7 @@ export async function sendPluginSms(
       if (!phone) return { queued: false };
     } else {
       phone = typeof input.to === "string" ? smsNumber(input.to) : null;
-      if (!phone) throw new PluginError("messaging.invalid", "to is a phone number (+8801XXXXXXXXX).");
+      if (!phone) throw new PluginError("messaging_invalid", "to is a phone number (+8801XXXXXXXXX).");
       await requireRecipient(context, "sms", (input.to as string).trim());
     }
   }
@@ -280,7 +280,7 @@ export async function sendPluginSms(
   const { db, encryptionKey, appProviders } = await messagingRuntime(context);
   const { getActiveSmsProvider } = await import("@scalius/core/integrations/sms");
   const provider = await getActiveSmsProvider(db, encryptionKey, appProviders);
-  if (!provider) throw new PluginError("messaging.unavailable", "No SMS provider is configured.");
+  if (!provider) throw new PluginError("messaging_unavailable", "No SMS provider is configured.");
   const finalMessage = marketing ? `${message}\n\n${marketing.footer.text}\n${marketing.footer.unsubscribeLabel}: ${marketing.unsubscribeUrl}` : message;
   const result = await provider.send({ to: phone, text: finalMessage }, {});
   return { queued: result.success };
@@ -294,7 +294,7 @@ export async function notifyPluginStaff(
   const body = text(input?.body, "body", { chars: 300 }, false);
   const url = input?.url;
   if (url !== undefined && (typeof url !== "string" || !/^\/admin(?:\/[^\s]*)?$/.test(url) || url.startsWith("//"))) {
-    throw new PluginError("messaging.invalid", "url is a dashboard path starting with /admin.");
+    throw new PluginError("messaging_invalid", "url is a dashboard path starting with /admin.");
   }
   await requireRate(context);
   const env = await context.runtime.composedEnv();
@@ -322,11 +322,11 @@ export async function pushPluginCustomer(
   const body = text(input.body, "body", { chars: 500 }, false);
   const url = input.url;
   if (url !== undefined && (typeof url !== "string" || !/^\/(?!\/)[^\s\\]{0,1999}$/.test(url) || url.startsWith("/admin"))) {
-    throw new PluginError("messaging.invalid", "url is a store path starting with /.");
+    throw new PluginError("messaging_invalid", "url is a store path starting with /.");
   }
   const tag = input.tag;
   if (tag !== undefined && (typeof tag !== "string" || !/^[a-z0-9_.:-]{1,64}$/.test(tag))) {
-    throw new PluginError("messaging.invalid", "tag is 1 to 64 lowercase letters, digits, dots, colons, dashes or underscores.");
+    throw new PluginError("messaging_invalid", "tag is 1 to 64 lowercase letters, digits, dots, colons, dashes or underscores.");
   }
   await requireRate(context);
   const { env, db, appProviders } = await messagingRuntime(context);

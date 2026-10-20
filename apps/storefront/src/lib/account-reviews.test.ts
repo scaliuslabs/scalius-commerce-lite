@@ -117,17 +117,17 @@ describe("outcomes", () => {
   });
 
   it("map every API refusal to kind copy", () => {
-    expect(reviewFlagForApi(409, "REVIEW_EXISTS", null, account)).toBe("exists");
-    expect(reviewFlagForApi(409, "REVIEW_NOT_ELIGIBLE", null, account)).toBe("not_eligible");
-    expect(reviewFlagForApi(409, "REVIEW_NOT_EDITABLE", null, account)).toBe("not_editable");
-    expect(reviewFlagForApi(409, "CONFLICT", null, account)).toBe("changed");
-    expect(reviewFlagForApi(403, "REVIEWS_DISABLED", null, receipt)).toBe("disabled");
-    expect(reviewFlagForApi(429, "RATE_LIMITED", null, account)).toBe("rate_limited");
-    expect(reviewFlagForApi(503, "SERVICE_UNAVAILABLE", null, account)).toBe("unavailable");
-    expect(reviewFlagForApi(400, "VALIDATION_ERROR", "rating", account)).toBe("rating");
-    expect(reviewFlagForApi(400, "VALIDATION_ERROR", "body", account)).toBe("invalid");
-    expect(reviewFlagForApi(401, "UNAUTHORIZED", null, account)).toBe("signin");
-    expect(reviewFlagForApi(404, "NOT_FOUND", null, receipt)).toBe("receipt");
+    expect(reviewFlagForApi(409, "review_exists", null, account)).toBe("exists");
+    expect(reviewFlagForApi(409, "review_not_eligible", null, account)).toBe("not_eligible");
+    expect(reviewFlagForApi(409, "review_not_editable", null, account)).toBe("not_editable");
+    expect(reviewFlagForApi(409, "conflict", null, account)).toBe("changed");
+    expect(reviewFlagForApi(403, "reviews_disabled", null, receipt)).toBe("disabled");
+    expect(reviewFlagForApi(429, "rate_limited", null, account)).toBe("rate_limited");
+    expect(reviewFlagForApi(503, "service_unavailable", null, account)).toBe("unavailable");
+    expect(reviewFlagForApi(400, "validation_error", "rating", account)).toBe("rating");
+    expect(reviewFlagForApi(400, "validation_error", "body", account)).toBe("invalid");
+    expect(reviewFlagForApi(401, "unauthorized", null, account)).toBe("signin");
+    expect(reviewFlagForApi(404, "not_found", null, receipt)).toBe("receipt");
     expect(reviewNoticeText("exists", copy)).toBe("You've already reviewed this product.");
     expect(reviewNoticeText("published", pickReviewFormCopy(null, BANGLA_CHECKOUT_LANGUAGE_DATA))).toContain("ধন্যবাদ");
   });

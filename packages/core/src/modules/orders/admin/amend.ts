@@ -61,7 +61,7 @@ import { type ManualOrderQuote, type PreparedManualOrderQuote, prepareManualOrde
 import { getOrderEditReadiness, orderEditLockMessage } from "./readiness";
 import { type SQLiteBatchItem, updateCustomerStatsService } from "./shared";
 
-const ORDER_AMENDMENT_GUARD_MARKER = "ORDER_AMENDMENT_CONFLICT";
+const ORDER_AMENDMENT_GUARD_MARKER = "order_amendment_conflict";
 
 export interface ManualOrderAmendmentPreview extends ManualOrderQuote {
     orderId: string;

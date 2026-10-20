@@ -15,7 +15,7 @@ const seed: PluginContextSeed = {
 
 function bridge(overrides: Partial<PluginRuntimeBridge> = {}): PluginRuntimeBridge {
   const refuse = async () => {
-    throw new Error("[object.undeclared_type] Object type is not declared.");
+    throw new Error("[object_undeclared_type] Object type is not declared.");
   };
   return {
     apiCall: vi.fn(), objectsGet: vi.fn(refuse), objectsGetByHandle: vi.fn(refuse), objectsWrite: vi.fn(), objectsQuery: vi.fn(), objectsCount: vi.fn(),
@@ -38,9 +38,9 @@ const definition = (overrides: Record<string, unknown> = {}) => ({
 describe("invokePluginDefinition", () => {
   it("refuses modules whose handlers or identity disagree with the installation", async () => {
     const extra = await invokePluginDefinition(definition({ cron: { sneaky: vi.fn() } }), { kind: "function", point: "checkout.discounts", input: { n: 1 } }, seed, null);
-    expect(extra).toMatchObject({ ok: false, error: { code: "plugin.handlers_mismatch", message: 'Cron job "sneaky" has a handler but is not declared in the manifest.' } });
+    expect(extra).toMatchObject({ ok: false, error: { code: "plugin_handlers_mismatch", message: 'Cron job "sneaky" has a handler but is not declared in the manifest.' } });
     const other = await invokePluginDefinition(definition({ manifest: { id: "acme.other", version: "1.0.0" } }), { kind: "function", point: "checkout.discounts", input: { n: 1 } }, seed, null);
-    expect(other).toMatchObject({ ok: false, error: { code: "plugin.identity_mismatch" } });
+    expect(other).toMatchObject({ ok: false, error: { code: "plugin_identity_mismatch" } });
   });
 
   it("runs a pure function with its input and settings only", async () => {
@@ -69,7 +69,7 @@ describe("invokePluginDefinition", () => {
     });
     const result = await invokePluginDefinition(module, { kind: "event", event: { id: "evt_1", topic: "order.paid", apiVersion: "2026-10", occurredAt: "", resource: { type: "order", id: "o" }, facts: {} } }, seed, bridge());
     expect(result.ok).toBe(true);
-    expect(seen).toMatchObject({ name: "PluginPlatformError", code: "object.undeclared_type", message: "Object type is not declared." });
+    expect(seen).toMatchObject({ name: "PluginPlatformError", code: "object_undeclared_type", message: "Object type is not declared." });
     expect(result.logs).toHaveLength(100);
     expect(result.droppedLogs).toBe(5);
   });

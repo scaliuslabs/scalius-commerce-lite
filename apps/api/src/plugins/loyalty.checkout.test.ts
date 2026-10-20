@@ -190,7 +190,7 @@ describe("loyalty points through storefront checkout", () => {
     expect(placed.status).toBe(400);
     expect(placed.json.error).toMatchObject({
       message: "An offer in your order changed while it was being placed. Review your order and try again.",
-      details: { reason: "APP_OFFER_CHANGED" },
+      details: { reason: "app_offer_changed" },
     });
     expect(sqlite.prepare("SELECT count(*) AS n FROM orders").get()).toEqual({ n: 0 });
     expect((await getObjectRecordVersion(db, "acme.loyalty", "balances", "cust_1"))?.data).toEqual({ points: 5, earned: 300, spent: 295 });

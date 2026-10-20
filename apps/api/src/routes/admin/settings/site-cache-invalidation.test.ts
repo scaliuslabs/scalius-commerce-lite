@@ -830,7 +830,7 @@ describe("site settings write behavior", () => {
 
     expect(response.status).toBe(409);
     expect(payload.error).toEqual({
-      code: "CONFLICT",
+      code: "conflict",
       message:
         "Currency code cannot be changed after products or orders exist. You can still update the currency symbol.",
     });

@@ -75,6 +75,12 @@ mirror a dashboard screen, an editor section or a summary card.
   milliseconds, no bare string, no union of forms. Discount schedules are
   `startsAt`/`endsAt`. The test fails on any `*At`/`*Since` field of another
   form (`isoTimestampSchema` in `schemas/timestamps.ts`).
+- **Error codes are one lower_snake vocabulary** (`not_found`, `validation_error`,
+  `price_changed`, `product_revision_conflict`, `api_operation_not_stable`); an
+  area prefix is `<area>_<code>`, never dotted or upper-case.
+  `apps/api/src/error-vocabulary.test.ts` holds every producer to it. Batch
+  guard markers stay upper-case inside SQL (`buildBatchGuard` spells them so);
+  the dashboard's sign-in and account-security flows keep Better Auth's codes.
 - **Lists page one way**: `cursor` + `limit` in, `{ <plural>, nextCursor }` out.
   Page-numbered and offset lists (the dashboard's brands, categories,
   collections, content and discounts lists, `*.get_section`) are beta; a

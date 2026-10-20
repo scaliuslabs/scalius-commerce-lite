@@ -123,7 +123,7 @@ describe("custom data settings", () => {
     sdk.postApiV1AdminCustomFieldDefinitions
       .mockImplementationOnce(() => Promise.reject(new Error("Failed to fetch")))
       .mockImplementationOnce(() => Promise.resolve({
-        error: { success: false, error: { code: "CUSTOM_FIELD_KEY_TAKEN", message: "Another field already uses this key." } },
+        error: { success: false, error: { code: "custom_field_key_taken", message: "Another field already uses this key." } },
         response: { status: 409 },
       }));
     await render();
@@ -142,7 +142,7 @@ describe("custom data settings", () => {
 
   it("still says the key is taken when another field holds it", async () => {
     sdk.postApiV1AdminCustomFieldDefinitions.mockImplementation(() => Promise.resolve({
-      error: { success: false, error: { code: "CUSTOM_FIELD_KEY_TAKEN", message: "Another field already uses this key." } },
+      error: { success: false, error: { code: "custom_field_key_taken", message: "Another field already uses this key." } },
       response: { status: 409 },
     }));
     await render();

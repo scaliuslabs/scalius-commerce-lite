@@ -57,7 +57,7 @@ async function call(method: string, path: string, body: unknown, headers: Record
 const refused = {
   success: false,
   error: {
-    code: "VALIDATION_ERROR",
+    code: "validation_error",
     message: DIGITAL_STOCK_IS_KEYS_MESSAGE,
     details: { reason: DIGITAL_STOCK_IS_KEYS_REASON },
   },

@@ -23,7 +23,7 @@ The product model and its rules live in [`products`](../products/README.md). Sto
 
 - `products.aggregate_revision` is the editor's concurrency token. Product reads and list rows return it.
 - Every composition write sends `expectedAggregateRevision`. The write advances the revision exactly once in the same D1 batch (`buildProductAggregateRevisionGuard`, then `buildProductAggregateRevisionBump`) and returns the new value.
-- A stale or wrong-state write fails with `409 PRODUCT_REVISION_CONFLICT` (carries expected and current revision) or `409 PRODUCT_STATE_CONFLICT`. Active edits cannot touch trash.
+- A stale or wrong-state write fails with `409 product_revision_conflict` (carries expected and current revision) or `409 product_state_conflict`. Active edits cannot touch trash.
 - Attribute value rewrites and category deletes advance affected products' revisions in their own batches, so an open editor goes stale.
 - Operational stock and order writes do not touch the revision. They use SKU `stockVersion` and ledger v2.
 - `createProduct` returns revision 1. A save that changes nothing writes nothing: no revision bump, no `updated_at`, no DVC key.

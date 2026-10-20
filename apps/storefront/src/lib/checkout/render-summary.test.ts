@@ -229,7 +229,7 @@ afterEach(() => {
 });
 
 describe("checkout attempt recovery", () => {
-  it.each(["CHECKOUT_ATTEMPT_EXPIRED", "CHECKOUT_ATTEMPT_CONFLICT"])(
+  it.each(["checkout_attempt_expired", "checkout_attempt_conflict"])(
     "%s offers an explicit safe action without resubmitting or changing the cart", async (errorCode) => {
       installStripePaymentFixture();
       const config = (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__;
@@ -252,7 +252,7 @@ describe("checkout attempt recovery", () => {
       document.getElementById("payButton")!.click();
       await vi.waitFor(() => expect(document.getElementById("checkoutRecoveryAction")!.hidden).toBe(false));
       const action = document.getElementById("checkoutRecoveryAction") as HTMLAnchorElement;
-      const expired = errorCode === "CHECKOUT_ATTEMPT_EXPIRED";
+      const expired = errorCode === "checkout_attempt_expired";
       expect(action.getAttribute("href")).toBe(expired ? "/cart"
         : "/order-success?orderId=existing_order&payment=scalius.bangladesh%3Abkash");
       expect(action.textContent).toBe(expired ? "Return to cart" : "Review existing checkout");
@@ -318,7 +318,7 @@ describe("checkout attempt recovery", () => {
     }
   });
 
-  it.each(["created", "CHECKOUT_ATTEMPT_EXPIRED", "CHECKOUT_ATTEMPT_CONFLICT"])(
+  it.each(["created", "checkout_attempt_expired", "checkout_attempt_conflict"])(
     "ignores a late %s result from the previous checkout page", async (outcome) => {
       installStripePaymentFixture();
       (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__.activeDefaultMethod = "cod";
@@ -881,7 +881,7 @@ describe("initCheckoutPage", () => {
         return new Response(JSON.stringify({
           success: false,
           error: "Your order total or checkout terms changed.",
-          errorCode: "STOREFRONT_CHECKOUT_QUOTE_CONFLICT",
+          errorCode: "storefront_checkout_quote_conflict",
         }), {
           status: 409,
           headers: { "Content-Type": "application/json" },
@@ -1410,8 +1410,8 @@ describe("initCheckoutPage", () => {
             success: false,
             error: validationError,
             errorCode: failure === "final order validation"
-              ? "VALIDATION_ERROR"
-              : "STOREFRONT_CHECKOUT_QUOTE_CONFLICT",
+              ? "validation_error"
+              : "storefront_checkout_quote_conflict",
           }), { status: failure === "final order validation" ? 400 : 409 });
         }
         if (failure === "initial quote" || requests.length > 1) {
@@ -1497,7 +1497,7 @@ describe("initCheckoutPage", () => {
       cartKey: "line_1",
       productId: "prod_1",
       variantId: "var_1",
-      code: "QUANTITY_UNAVAILABLE" as const,
+      code: "quantity_unavailable" as const,
       action: "reduce_quantity" as const,
       message: "Only 1 left.",
       productName: "Product",
@@ -1770,7 +1770,7 @@ describe("payment page with store app checkout functions", () => {
         return new Response(JSON.stringify({
           success: false,
           error: "This payment method isn't available for this order. Choose another.",
-          errorCode: "VALIDATION_ERROR",
+          errorCode: "validation_error",
           details: refusal,
         }), { status: 400 });
       }

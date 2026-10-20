@@ -12,7 +12,7 @@ function mismatch(
   return new AdminApiResponseError(
     "Manual-order request mismatch",
     409,
-    "ADMIN_ORDER_CREATE_REQUEST_MISMATCH",
+    "admin_order_create_request_mismatch",
     {
       state,
       canRetryWithNewKey: options.canRetryWithNewKey ?? state === "failed",

@@ -61,7 +61,7 @@ describe("checkout language revision", () => {
     });
     expect(tabB.status).toBe(409);
     expect(tabB.body.error).toMatchObject({
-      code: "SETTINGS_REVISION_CONFLICT",
+      code: "settings_revision_conflict",
       details: { document: "checkout_language", expectedRevision: 0, currentRevision: 1 },
     });
 

@@ -39,7 +39,7 @@ import { getDecimalPlaces } from "@scalius/shared/currency";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
-export const PRICE_LIST_REVISION_CONFLICT = "PRICE_LIST_REVISION_CONFLICT";
+export const PRICE_LIST_REVISION_CONFLICT = "price_list_revision_conflict";
 
 /** What a list does now: its status read with its schedule. */
 export type PriceListState = "draft" | "scheduled" | "active" | "expired";

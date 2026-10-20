@@ -49,7 +49,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
   // A production Worker without the binding fails closed.
   const target = resolveBackendTarget(apiPath);
   if (!target) {
-    return new Response(JSON.stringify({ success: false, error: { code: "SERVICE_UNAVAILABLE", message: "We couldn't reach the store. Check your connection and try again." } }), {
+    return new Response(JSON.stringify({ success: false, error: { code: "service_unavailable", message: "We couldn't reach the store. Check your connection and try again." } }), {
       status: 503,
       headers: { "Content-Type": "application/json", "Cache-Control": "private, no-store" },
     });
@@ -95,7 +95,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
     console.error("[customer-auth proxy] Error:", err instanceof Error ? err.message : err);
     return new Response(JSON.stringify({
       success: false,
-      error: { code: "SERVICE_UNAVAILABLE", message: "We couldn't reach the store. Check your connection and try again." },
+      error: { code: "service_unavailable", message: "We couldn't reach the store. Check your connection and try again." },
     }), {
       status: 502,
       headers: { "Content-Type": "application/json", "Cache-Control": "private, no-store" },

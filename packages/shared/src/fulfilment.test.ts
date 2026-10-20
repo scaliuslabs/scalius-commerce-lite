@@ -104,7 +104,7 @@ describe("checkout fulfilment plan (§2.7)", () => {
   it("refuses a physical cart without a delivery method, and an empty cart", () => {
     expect(resolveCheckoutFulfilment([physical, digital], null)).toEqual({
       ok: false,
-      issue: "DELIVERY_METHOD_REQUIRED",
+      issue: "delivery_method_required",
     });
     expect(resolveCheckoutFulfilment([], "delivery")).toEqual({ ok: false, issue: "EMPTY" });
   });

@@ -193,7 +193,7 @@ describe("custom data card", () => {
     expect(scope!.dirty).toBe(true);
     expect(button(t("saveCard"))).toBeUndefined();
 
-    sdk.putApiV1AdminCustomFieldsProductByOwnerId.mockImplementation(() => refused(400, "VALIDATION_ERROR", "bad", {
+    sdk.putApiV1AdminCustomFieldsProductByOwnerId.mockImplementation(() => refused(400, "validation_error", "bad", {
       issues: [{ path: ["values", 0, "value"], code: "pattern", message: "The value does not match the required pattern." }],
     }));
     let saved = true;
@@ -201,7 +201,7 @@ describe("custom data card", () => {
     expect(saved).toBe(false);
     expect(container.textContent).toContain(t("issue.pattern"));
 
-    sdk.putApiV1AdminCustomFieldsProductByOwnerId.mockImplementation(() => refused(409, "CUSTOM_FIELD_REVISION_CONFLICT", "changed"));
+    sdk.putApiV1AdminCustomFieldsProductByOwnerId.mockImplementation(() => refused(409, "custom_field_revision_conflict", "changed"));
     await act(async () => { saved = await scope!.saveAll(); });
     expect(saved).toBe(false);
     expect(scope!.failure).toBe("conflict");
@@ -326,7 +326,7 @@ describe("custom data card", () => {
   });
 
   it("retains saved IDs when a lookup fails or its view permission is missing", async () => {
-    sdk.getApiV1AdminProductsByIds.mockImplementation(() => refused(403, "FORBIDDEN", "Unavailable"));
+    sdk.getApiV1AdminProductsByIds.mockImplementation(() => refused(403, "forbidden", "Unavailable"));
     load([entry("Product", "product_reference", "prod_known"), entry("Collection", "collection_reference", "col_known")]);
     await render(false, false);
     await vi.waitFor(() => expect(savedValue("Collection")).toBe("Saved collection"));

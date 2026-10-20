@@ -237,7 +237,7 @@ describe("payment gateway setup", () => {
 
   it("says why Stripe's keys can't be removed while checkout depends on it", async () => {
     sdk.deleteApiV1AdminSettingsStripe.mockResolvedValue({
-      error: { success: false, error: { code: "VALIDATION_ERROR", message: "Cannot disable Stripe because…" } },
+      error: { success: false, error: { code: "validation_error", message: "Cannot disable Stripe because…" } },
       response: { status: 400 },
     });
     const dialog = await openStripeSetup();

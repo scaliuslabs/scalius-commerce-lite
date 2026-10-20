@@ -131,7 +131,7 @@ describe("catalog actions on D1 storage", () => {
     await expect(bulkUpdateProducts(db, [
       { id: tee.id, expectedAggregateRevision: 2 },
       { id: mug.id, expectedAggregateRevision: 1 },
-    ], { isActive: false })).rejects.toMatchObject({ code: "PRODUCT_REVISION_CONFLICT" });
+    ], { isActive: false })).rejects.toMatchObject({ code: "product_revision_conflict" });
     expect(sqlite.prepare("SELECT is_active FROM products WHERE id = ?").get(tee.id)).toEqual({ is_active: 1 });
   });
 

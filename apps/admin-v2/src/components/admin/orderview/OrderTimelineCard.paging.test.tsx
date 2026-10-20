@@ -166,7 +166,7 @@ describe("bounded order timeline history", () => {
 
   it("offers a fresh newest window after an invalid cursor, retaining the current rows", async () => {
     await render(); await click("Load older"); await click("Older events"); await click("Load older");
-    mocks.read.mockRejectedValueOnce(new AdminApiResponseError("Old cursor", 400, "INVALID_CURSOR"));
+    mocks.read.mockRejectedValueOnce(new AdminApiResponseError("Old cursor", 400, "invalid_cursor"));
     await click("Older events"); expect(ids()[0]).toBe("A_105"); expect(rows()).toHaveLength(100);
     await click("Newest events"); expect(ids()[0]).toBe("A_205");
     expect(host.querySelector('[role="alert"]')).toBeNull();

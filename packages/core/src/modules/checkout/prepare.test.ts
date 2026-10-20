@@ -503,7 +503,7 @@ describe("createStorefrontOrder product availability verification", () => {
       details: {
         itemIssues: [
           expect.objectContaining({
-            code: "PRODUCT_UNAVAILABLE",
+            code: "product_unavailable",
             message: "Standard Product is no longer available.",
           }),
         ],
@@ -521,7 +521,7 @@ describe("createStorefrontOrder product availability verification", () => {
       details: {
         itemIssues: [
           expect.objectContaining({
-            code: "PRODUCT_UNAVAILABLE",
+            code: "product_unavailable",
             message: "Standard Product is no longer available.",
           }),
         ],
@@ -551,7 +551,7 @@ describe("createStorefrontOrder product availability verification", () => {
       details: {
         itemIssues: [
           expect.objectContaining({
-            code: "VARIANT_MISMATCH",
+            code: "variant_mismatch",
             message: "Standard Product has changed. Please remove it and add the option again.",
           }),
         ],
@@ -583,7 +583,7 @@ describe("createStorefrontOrder product availability verification", () => {
         issues: [expect.objectContaining({
           cartKey: "line_variant_required",
           variantId: null,
-          code: "VARIANT_REQUIRED",
+          code: "variant_required",
           action: "select_variant",
           message: "Standard Product needs a saved option selection before checkout.",
         })],
@@ -693,7 +693,7 @@ describe("createStorefrontOrder product availability verification", () => {
         itemIssues: [
           expect.objectContaining({
             cartKey: "line_no_inventory",
-            code: "VARIANT_UNAVAILABLE",
+            code: "variant_unavailable",
             action: "remove",
             message: "Standard Product is no longer available.",
           }),
@@ -721,7 +721,7 @@ describe("createStorefrontOrder product availability verification", () => {
         itemIssues: [expect.objectContaining({
           cartKey: "line_deleted_sku",
           variantId: "var_deleted",
-          code: "VARIANT_UNAVAILABLE",
+          code: "variant_unavailable",
           action: "remove",
         })],
       },
@@ -855,7 +855,7 @@ describe("createStorefrontOrder product availability verification", () => {
         itemIssues: [
           expect.objectContaining({
             cartKey: "line_mixed_axes",
-            code: "PRODUCT_UNAVAILABLE",
+            code: "product_unavailable",
             action: "remove",
             message: "Standard Product is not available for checkout right now.",
           }),
@@ -888,7 +888,7 @@ describe("createStorefrontOrder product availability verification", () => {
         itemIssues: [
           expect.objectContaining({
             cartKey: "line_bad_no_option",
-            code: "PRODUCT_UNAVAILABLE",
+            code: "product_unavailable",
             action: "remove",
             message: "Standard Product is not available for checkout right now.",
           }),
@@ -930,7 +930,7 @@ describe("createStorefrontOrder product availability verification", () => {
         itemIssues: [
           expect.objectContaining({
             cartKey: "line_old_simple",
-            code: "VARIANT_REQUIRED",
+            code: "variant_required",
             action: "select_variant",
             message: "Standard Product needs an option selection before checkout.",
           }),
@@ -966,7 +966,7 @@ describe("createStorefrontOrder product availability verification", () => {
         itemIssues: [
           expect.objectContaining({
             cartKey: "line_ambiguous",
-            code: "PRODUCT_UNAVAILABLE",
+            code: "product_unavailable",
             action: "remove",
             message: "Standard Product is not available for checkout right now.",
           }),
@@ -1021,16 +1021,16 @@ describe("createStorefrontOrder product availability verification", () => {
       const details = (error as ValidationError).details as { itemIssues: Array<{ code: string; message: string; availableQuantity?: number; currentPrice?: number }> };
       expect(details.itemIssues).toEqual([
         expect.objectContaining({
-          code: "PRODUCT_UNAVAILABLE",
+          code: "product_unavailable",
           message: "Removed Product is no longer available.",
         }),
         expect.objectContaining({
-          code: "QUANTITY_UNAVAILABLE",
+          code: "quantity_unavailable",
           message: "Only 10 left for Standard Product.",
           availableQuantity: 10,
         }),
         expect.objectContaining({
-          code: "PRICE_CHANGED",
+          code: "price_changed",
           message: "The price for Price Changed Product changed. Please review the updated cart total.",
           currentPrice: 80,
         }),

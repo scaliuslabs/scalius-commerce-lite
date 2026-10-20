@@ -115,7 +115,7 @@ describe("POST /theme/ai-draft", () => {
       expect(response.status, JSON.stringify(value)).toBe(400);
       const body = await response.json() as { error: { message: string; details: { code: string } } };
       expect(body.error.message).toMatch(/^Acme AI gave an answer that does not fit \(.+\)\. Nothing was added\. Try other words\.$/);
-      expect(body.error.details).toEqual({ code: "ai.invalid_output" });
+      expect(body.error.details).toEqual({ code: "ai_invalid_output" });
     }
   });
 
@@ -127,7 +127,7 @@ describe("POST /theme/ai-draft", () => {
       expect(response.status, JSON.stringify(value)).toBe(400);
       const body = await response.json() as { error: { message: string; details: { code: string } } };
       expect(body.error.message).toBe("Acme AI returned nothing this theme can show. Try other words.");
-      expect(body.error.details).toEqual({ code: "ai.invalid_output" });
+      expect(body.error.details).toEqual({ code: "ai_invalid_output" });
     }
   });
 
@@ -138,7 +138,7 @@ describe("POST /theme/ai-draft", () => {
     expect(refused.status).toBe(400);
     const refusedBody = await refused.json() as { error: { message: string; details: { code: string } } };
     expect(refusedBody.error.message).toBe("Acme AI: The API key was refused.");
-    expect(refusedBody.error.details).toEqual({ code: "ai.provider" });
+    expect(refusedBody.error.details).toEqual({ code: "ai_provider" });
 
     fake.generate.mockRejectedValue(new Error("socket hang up with secret-token-123"));
     const failed = await call("/theme/ai-draft", { method: "POST", body: request });

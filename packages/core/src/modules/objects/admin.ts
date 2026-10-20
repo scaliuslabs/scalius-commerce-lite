@@ -14,8 +14,8 @@ export function objectDeclaration(type: ObjectTypeView) {
 }
 async function visibleType(db: Database, id: string, write = false): Promise<ObjectTypeView> {
   const type = await getObjectType(db, id);
-  if (!type || type.admin === "none") throw new ObjectError("object.not_found", "Object type not found.");
-  if (write && type.admin !== "edit") throw new ObjectError("object.forbidden", "This app's objects are read-only.");
+  if (!type || type.admin === "none") throw new ObjectError("object_not_found", "Object type not found.");
+  if (write && type.admin !== "edit") throw new ObjectError("object_forbidden", "This app's objects are read-only.");
   return type;
 }
 const iso = (seconds: number) => new Date(Number(seconds) * 1000).toISOString();
@@ -58,7 +58,7 @@ export async function listObjectRecords(db: Database, id: string, options: Objec
     length++;
   }
   if (length === records.length) return result;
-  if (!length) throw new ObjectError("object.response_too_large", "This type and record exceed the object list response budget; get the record directly.");
+  if (!length) throw new ObjectError("object_response_too_large", "This type and record exceed the object list response budget; get the record directly.");
   const last = rows.find((row) => row.id === records[length - 1]!.id)!;
   return { ...result, records: records.slice(0, length), nextCursor: await objectCursorAfter(db, objectDeclaration(type), options, last) };
 }
@@ -73,7 +73,7 @@ export async function upsertObjectRecord(db: Database, typeId: string, id: strin
     expectedRevision: input.expectedRevision, ...(input.handle !== undefined ? { handle: input.handle } : {}),
     ...(input.status !== undefined ? { status: input.status } : {}), ...(input.position !== undefined ? { position: input.position } : {}) }]);
   const record = await present(db, type, id);
-  if (!record) throw new ObjectError("object.not_found", "Object record not found.");
+  if (!record) throw new ObjectError("object_not_found", "Object record not found.");
   return record;
 }
 export async function deleteObjectEntry(db: Database, typeId: string, id: string, expectedRevision: number): Promise<void> {

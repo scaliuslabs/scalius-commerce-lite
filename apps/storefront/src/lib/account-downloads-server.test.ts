@@ -196,11 +196,11 @@ describe("Download form post", () => {
   });
 
   it("303s back with only the outcome flag and the file anchor", async () => {
-    api.fetch.mockResolvedValueOnce(Response.json({ success: false, error: { code: "DOWNLOAD_LIMIT_REACHED", message: "x" } }, { status: 409 }));
+    api.fetch.mockResolvedValueOnce(Response.json({ success: false, error: { code: "download_limit_reached", message: "x" } }, { status: 409 }));
     const limit = await post({ entitlementId: ENT, returnTo: "/account/orders/ord_1" }, SESSION);
     expect(limit.headers.get("Location")).toBe(`/account/orders/ord_1?download=limit#download-${ENT}`);
 
-    api.fetch.mockResolvedValueOnce(Response.json({ success: false, error: { code: "DOWNLOAD_EXPIRED", message: "x" } }, { status: 409 }));
+    api.fetch.mockResolvedValueOnce(Response.json({ success: false, error: { code: "download_expired", message: "x" } }, { status: 409 }));
     const expired = await post({ entitlementId: ENT, returnTo: "/account/downloads" }, SESSION);
     expect(expired.headers.get("Location")).toBe(`/account/downloads?download=expired#download-${ENT}`);
   });
@@ -248,7 +248,7 @@ describe("reads and reveals", () => {
     expect(call!.url).not.toContain("AAAA");
     expect(call!.headers.get("X-Receipt-Token")).toBe(PROOF);
 
-    api.fetch.mockResolvedValueOnce(Response.json({ success: false, error: { code: "RATE_LIMITED" } }, { status: 429 }));
+    api.fetch.mockResolvedValueOnce(Response.json({ success: false, error: { code: "rate_limited" } }, { status: 429 }));
     expect(await revealLicenceKey(request("/x", { cookie: SESSION }), { kind: "account" }, "dlk_1")).toEqual({ ok: false, flag: "rate" });
   });
 });

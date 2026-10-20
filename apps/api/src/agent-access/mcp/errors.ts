@@ -43,10 +43,6 @@ function siblingOperation(operationId: string | undefined, names: readonly strin
 const READ_SIBLINGS = ["get", "get_section", "get_status", "list"] as const;
 const LIST_SIBLINGS = ["list", "search", "lookup", "get"] as const;
 
-function lowerCode(code: string): string {
-  return code.toLowerCase();
-}
-
 /** Current-state facts a conflict body carries (`currentRevision`, `currentVersion`, ids). */
 function conflictCurrent(details: unknown): Record<string, unknown> | null {
   if (!isRecord(details)) return null;
@@ -124,7 +120,8 @@ export function recoveryFor(input: {
   retryAfterMs?: number;
 }): Pick<AgentToolError, "retryable" | "hint" | "current" | "field" | "retryAfterMs"> {
   const { status, operationId } = input;
-  const code = lowerCode(input.code);
+  // Codes are one lower_snake vocabulary; a revision conflict ends in `revision_conflict` or `version_conflict`.
+  const code = input.code;
   const operation = operationId ? AGENT_OPERATIONS_BY_ID[operationId] : undefined;
   const read = siblingOperation(operationId, READ_SIBLINGS);
 
@@ -184,7 +181,7 @@ export function recoveryFor(input: {
   }
   if (status === 409) {
     const current = conflictCurrent(input.details);
-    const revisionConflict = /revision|version|stale/.test(code) || (current !== null && Object.keys(current).some((key) => /revision|version/i.test(key)));
+    const revisionConflict = /(revision|version)_conflict$|_stale$/.test(code) || (current !== null && Object.keys(current).some((key) => /revision|version/i.test(key)));
     if (revisionConflict) {
       return {
         retryable: true,
@@ -312,7 +309,7 @@ export function errorFromOperationResult(result: AgentOperationResult): AgentToo
   const code = routeError && typeof routeError.code === "string"
     ? routeError.code
     : routeError && routeError.name === "ZodError"
-      ? "VALIDATION_ERROR"
+      ? "validation_error"
       : `http_${result.status}`;
   const message = routeError && typeof routeError.message === "string"
     ? routeError.message

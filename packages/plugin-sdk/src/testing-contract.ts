@@ -16,7 +16,7 @@
 //   413 body_too_large             a body over 1 MiB
 //   400 missing_path_parameter / unknown_path_parameter
 //   422 idempotency_key_reused     the same key for a different request
-//   400 VALIDATION_ERROR           path, query or body against the schema
+//   400 validation_error           path, query or body against the schema
 //                                  (enums, required fields, revision preconditions)
 //
 // A valid call reaches your handler. Its answer is checked against the
@@ -277,7 +277,7 @@ function validation(where: string, issue: SchemaIssue, operation: StableContract
   const precondition = issue.missing && /^expected/i.test(issue.missing) && operation.revision !== "none"
     ? " This operation is revision-checked: pass the revision you read (a change since is refused with 409)."
     : "";
-  return refusal(400, "VALIDATION_ERROR", `${where}${issue.path ? `.${issue.path}` : ""} ${issue.message}.${precondition}`);
+  return refusal(400, "validation_error", `${where}${issue.path ? `.${issue.path}` : ""} ${issue.message}.${precondition}`);
 }
 
 function isApiResult(value: unknown): value is PluginApiResult {
@@ -308,17 +308,17 @@ export function createContractApi(options: ContractApiOptions = {}): ContractApi
 
   const answer = async (operationId: string, rawInput: unknown, granted: readonly string[] | undefined): Promise<PluginApiResult> => {
     if (typeof operationId !== "string" || !OPERATION_ID.test(operationId)) {
-      return refusal(404, "api.unknown_operation", "Plugins call dashboard or objects operations by their reviewed id.");
+      return refusal(404, "api_unknown_operation", "Plugins call dashboard or objects operations by their reviewed id.");
     }
     const operation = contract.operations[operationId];
     const exists = Boolean(operation) || NON_STABLE_OPERATIONS.has(operationId);
-    if (!exists) return refusal(404, "api.unknown_operation", `Unknown operation ${operationId}: it is not part of the stable app API.`);
+    if (!exists) return refusal(404, "api_unknown_operation", `Unknown operation ${operationId}: it is not part of the stable app API.`);
     const input = normalize(rawInput);
-    if (typeof input === "string") return refusal(400, "api.invalid_input", input);
+    if (typeof input === "string") return refusal(400, "api_invalid_input", input);
     // As the host: an operation that exists but is beta or internal is refused, not unknown.
-    if (!operation) return refusal(403, "api.operation_not_stable", `${operationId} is not part of the stable app API.`);
+    if (!operation) return refusal(403, "api_operation_not_stable", `${operationId} is not part of the stable app API.`);
     if (granted && !operation.scopes.some((scope) => granted.includes(scope))) {
-      return refusal(403, "api.operation_forbidden", `Operation is not authorized: ${operationId} needs one of ${operation.scopes.join(", ") || "(no app scope)"}.`);
+      return refusal(403, "api_operation_forbidden", `Operation is not authorized: ${operationId} needs one of ${operation.scopes.join(", ") || "(no app scope)"}.`);
     }
 
     // The dispatcher's checks, in its order.

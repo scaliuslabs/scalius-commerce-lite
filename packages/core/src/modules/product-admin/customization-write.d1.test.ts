@@ -169,7 +169,7 @@ describe("product writes persist buyer inputs and fulfilment kinds", () => {
         await expect(updateProduct(db, id, updateInput(id, 7, {
             customizationSchema: buyerInputs,
             fulfillmentKind: "service",
-        }))).rejects.toMatchObject({ code: "PRODUCT_REVISION_CONFLICT" });
+        }))).rejects.toMatchObject({ code: "product_revision_conflict" });
         expect(product(id)).toMatchObject({ customization_schema: null, aggregate_revision: 1 });
         expect(kinds(id)).toEqual([expect.objectContaining({ fulfillment_kind: "physical" })]);
     });

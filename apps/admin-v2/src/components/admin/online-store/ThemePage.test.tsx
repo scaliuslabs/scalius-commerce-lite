@@ -210,7 +210,7 @@ describe("themes page", () => {
 
   it("reloads and says so when another session changed the draft", async () => {
     render(workspaceOf(DEFAULT_STOREFRONT_THEME));
-    api.draft.mockRejectedValueOnce(new AdminApiResponseError("Draft changed", 409, "CONFLICT"));
+    api.draft.mockRejectedValueOnce(new AdminApiResponseError("Draft changed", 409, "conflict"));
     act(() => radio("Boutique").click());
     await act(async () => confirm("Replace").click());
     expect(toasts.error).toHaveBeenCalledTimes(1);

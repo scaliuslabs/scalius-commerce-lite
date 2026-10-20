@@ -69,7 +69,7 @@ export function rethrowProductVariantIdentityConstraint(error: unknown): never {
 /** A submitted SKU is already another product's; `details` names that product for the editor. */
 export class SkuTakenError extends AppError {
     constructor(details: { field: string; sku: string; productId: string; productName: string }) {
-        super(409, "SKU_TAKEN", `SKU ${details.sku} is already used by ${details.productName}.`, details);
+        super(409, "sku_taken", `SKU ${details.sku} is already used by ${details.productName}.`, details);
         this.name = "SkuTakenError";
     }
 }
@@ -235,8 +235,8 @@ async function assertSelectableVariantImage(
 
 function isAtomicVariantConflict(error: unknown): boolean {
     const message = error instanceof Error ? error.message : String(error);
-    return isBatchGuardError(error, "VARIANT_EDIT_CONFLICT")
-        || isBatchGuardError(error, "VARIANT_DELETE_CONFLICT")
+    return isBatchGuardError(error, "variant_edit_conflict")
+        || isBatchGuardError(error, "variant_delete_conflict")
         || /constraint|unique/i.test(message);
 }
 
@@ -666,7 +666,7 @@ export async function updateVariant(
 
 /** A stock-changing SKU edit's batch guard (the SKU moved on since the plan read it). */
 export function isVariantEditBatchConflict(error: unknown): boolean {
-    return isBatchGuardError(error, "VARIANT_EDIT_CONFLICT");
+    return isBatchGuardError(error, "variant_edit_conflict");
 }
 
 /**
@@ -880,7 +880,7 @@ export async function planVariantUpdate(
                   AND ${productVariants.stockVersion} = ${existingVariant.stockVersion}
                   AND ${productVariants.reservedStock} <= ${stock}
                   AND ${productVariants.deletedAt} IS NULL
-            )`, "VARIANT_EDIT_CONFLICT");
+            )`, "variant_edit_conflict");
 
         return {
             // The digital-stock guards go last, so the indexes below stay put.
@@ -995,7 +995,7 @@ export async function deleteVariant(
                   AND ${productVariants.deletedAt} IS NULL
                   AND ${customerOptionPredicate()}
             )
-        )`, "VARIANT_DELETE_CONFLICT");
+        )`, "variant_delete_conflict");
     const deleteStatement = db
         .update(productVariants)
         .set({

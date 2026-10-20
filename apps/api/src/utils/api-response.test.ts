@@ -11,7 +11,7 @@ describe("errorResponseFromError", () => {
     const conflict = Object.assign(new Error("Failed query"), { cause: { code: "40001" } });
     const response = errorResponseFromError(conflict);
     expect(response.status).toBe(503);
-    expect(response.body.error.code).toBe("SERVICE_UNAVAILABLE");
+    expect(response.body.error.code).toBe("service_unavailable");
     expect(errorResponseFromError(Object.assign(new Error("duplicate"), { code: "23505" })).status).toBe(500);
   });
 
@@ -22,7 +22,7 @@ describe("errorResponseFromError", () => {
     expect(response.body).toEqual({
       success: false,
       error: {
-        code: "INTERNAL_ERROR",
+        code: "internal_error",
         message: "Internal Server Error",
       },
     });
@@ -35,7 +35,7 @@ describe("errorResponseFromError", () => {
 
     expect(response.status).toBe(400);
     expect(response.body.success).toBe(false);
-    expect(response.body.error.code).toBe("VALIDATION_ERROR");
+    expect(response.body.error.code).toBe("validation_error");
     expect(response.body.error.message).toBe("Phone number is required");
     expect(response.body.error.details).toEqual({ field: "phone" });
   });
@@ -45,7 +45,7 @@ describe("errorResponseFromError", () => {
 
     expect(response.status).toBe(404);
     expect(response.body.success).toBe(false);
-    expect(response.body.error.code).toBe("NOT_FOUND");
+    expect(response.body.error.code).toBe("not_found");
     expect(response.body.error.message).toBe("Order not found");
   });
 });
@@ -79,7 +79,7 @@ describe("logApiError", () => {
       JSON.stringify({
         event: "api.error",
         status: 503,
-        code: "SERVICE_UNAVAILABLE",
+        code: "service_unavailable",
         message: "Stripe is not configured",
         method: "POST",
         path: "/api/v1/payment/stripe/intent",
@@ -108,7 +108,7 @@ describe("logApiError", () => {
       JSON.stringify({
         event: "api.error",
         status: 500,
-        code: "INTERNAL_ERROR",
+        code: "internal_error",
         message: "Unexpected API error",
         method: "GET",
         path: "/api/v1/admin/orders",
@@ -138,7 +138,7 @@ describe("logApiError", () => {
       JSON.stringify({
         event: "api.error",
         status: 500,
-        code: "INTERNAL_ERROR",
+        code: "internal_error",
         message: "Unexpected API error",
         method: "POST",
         path: "/api/v1/orders",

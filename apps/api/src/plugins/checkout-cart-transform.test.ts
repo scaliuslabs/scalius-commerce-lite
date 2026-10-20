@@ -186,7 +186,7 @@ describe("cart.transform (real schema, test apps)", () => {
     expect(view.positions).toEqual([0, 2]);
     // A buyer who saw another bundle price is asked to refresh it.
     const stale = presentTransformedCartLines(result, result.transform!, [line("p_box", "v_box", 2, 950, "box"), buyerLines[1]!]);
-    expect(stale.cart.issues).toEqual([expect.objectContaining({ index: 0, code: "PRICE_CHANGED", currentPrice: 900, cartKey: "box" })]);
+    expect(stale.cart.issues).toEqual([expect.objectContaining({ index: 0, code: "price_changed", currentPrice: 900, cartKey: "box" })]);
   });
 
   it("orders the components through the order route's reads: stock on the components, the bundle on each line", async () => {
@@ -221,7 +221,7 @@ describe("cart.transform (real schema, test apps)", () => {
     await installBundles();
     const { reads } = await place(input([line("p_box", "v_box", 1, 950, "box")]));
     expect(() => reads.authority()).toThrow(expect.objectContaining({
-      details: { itemIssues: [expect.objectContaining({ index: 0, code: "PRICE_CHANGED", currentPrice: 900 })] },
+      details: { itemIssues: [expect.objectContaining({ index: 0, code: "price_changed", currentPrice: 900 })] },
     }));
   });
 
@@ -238,7 +238,7 @@ describe("cart.transform (real schema, test apps)", () => {
     });
     const expected = expect.objectContaining({
       index: 0, cartKey: "box", productId: "p_box", variantId: "v_box",
-      code: "QUANTITY_UNAVAILABLE", action: "reduce_quantity", requestedQuantity: 3, availableQuantity: 2,
+      code: "quantity_unavailable", action: "reduce_quantity", requestedQuantity: 3, availableQuantity: 2,
     });
     expect(presentTransformedCartLines(result, result.transform!, buyerLines).cart.issues).toEqual([expected]);
     const { reads } = await place(input(buyerLines));
@@ -353,6 +353,6 @@ describe("cart.transform (real schema, test apps)", () => {
     await installApp("acme.strict", [{ point: "cart.transform", onError: "block" }]);
     answers["acme.strict"] = () => failed("TypeError: down");
     await expect(validateStorefrontCartItems(db, lines, { currencyCode: "BDT", priceIncrementMinor: 100, transformer: createCartTransformer(db, await apps(), context) }))
-      .rejects.toMatchObject({ details: { reason: "CHECKOUT_APP_UNAVAILABLE" } });
+      .rejects.toMatchObject({ details: { reason: "checkout_app_unavailable" } });
   });
 });

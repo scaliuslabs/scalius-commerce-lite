@@ -10,7 +10,7 @@ import { currentPresence } from "@/lib/presence-url";
 import { accountCopy } from "@/lib/account-copy";
 
 /** Lines the store no longer sells as ordered; a short stock line still goes in, capped. */
-const GONE = new Set(["PRODUCT_UNAVAILABLE", "VARIANT_REQUIRED", "VARIANT_UNAVAILABLE", "VARIANT_MISMATCH"]);
+const GONE = new Set(["product_unavailable", "variant_required", "variant_unavailable", "variant_mismatch"]);
 
 /** How many lines went back in the cart, or null when the store couldn't be reached. */
 export async function addOrderToCart(items: Array<CustomerOrderItem & OrderLineFulfilmentFacts>): Promise<{ added: number; missing: number } | null> {

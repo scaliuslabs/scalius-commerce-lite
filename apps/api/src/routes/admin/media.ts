@@ -405,7 +405,7 @@ const permanentDeleteRoute = createRoute({
     path: "/{id}/permanent",
     tags: ["Admin - Media"],
     summary: "Permanently delete unreferenced trashed media",
-    description: "Refused with 409 MEDIA_DEPENDENCY_CONFLICT while the file is used anywhere (see dashboard.media.usage) or kept by past orders.",
+    description: "Refused with 409 media_dependency_conflict while the file is used anywhere (see dashboard.media.usage) or kept by past orders.",
     operationId: "dashboard.media.permanently_delete",
     request: { params: idParam, query: z.object({ expectedVersion: z.coerce.number().int().min(1) }) },
     responses: { 204: noContentResponse, ...mediaErrorResponses, 503: serviceUnavailableResponse },

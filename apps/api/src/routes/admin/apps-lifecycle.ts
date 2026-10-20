@@ -74,7 +74,7 @@ function sandboxAvailable(c: AppContext): boolean {
 
 function requireSandbox(c: AppContext): void {
   if (!sandboxAvailable(c)) {
-    throw new PluginError("installation.sandbox_required", "Installing from the dashboard needs Workers Paid with the plugin sandbox. On Workers Free, run the command shown and deploy.");
+    throw new PluginError("installation_sandbox_required", "Installing from the dashboard needs Workers Paid with the plugin sandbox. On Workers Free, run the command shown and deploy.");
   }
 }
 
@@ -319,7 +319,7 @@ export function registerAppLifecycleRoutes(app: OpenAPIHono<{ Bindings: Env }>, 
     const db = c.get("db");
     const body = c.req.valid("json");
     if (await getPluginInstallation(db, body.id)) {
-      throw new PluginError("installation.exists", `${body.id} is already installed; update it from its page.`);
+      throw new PluginError("installation_exists", `${body.id} is already installed; update it from its page.`);
     }
     const { downloadRegistryRelease, storeRelease, installRelease } = await releases();
     const release = await downloadRegistryRelease(db, body);
@@ -364,7 +364,7 @@ export function registerAppLifecycleRoutes(app: OpenAPIHono<{ Bindings: Env }>, 
     const body = c.req.valid("json");
     const current = await requirePluginInstallation(db, id);
     if (current.source === "bundled") {
-      throw new PluginError("installation.source_conflict", `${current.manifest.name} is compiled into this deployment: update it with pnpm plugin add, then deploy.`);
+      throw new PluginError("installation_source_conflict", `${current.manifest.name} is compiled into this deployment: update it with pnpm plugin add, then deploy.`);
     }
     const { downloadRegistryRelease, storeRelease } = await releases();
     const release = await downloadRegistryRelease(db, { registryId: body.registryId, id, ...(body.version ? { version: body.version } : {}) });
@@ -421,16 +421,16 @@ export function registerAppLifecycleRoutes(app: OpenAPIHono<{ Bindings: Env }>, 
       throw new ForbiddenError("Only a Super Admin can install an unsigned app or trust a new developer.");
     }
     const declared = Number(c.req.header("content-length") ?? "0");
-    if (declared > PLUGIN_PACKAGE_MAX_BYTES) throw new PluginError("package.invalid", "The package is larger than 20 MiB.");
+    if (declared > PLUGIN_PACKAGE_MAX_BYTES) throw new PluginError("package_invalid", "The package is larger than 20 MiB.");
     const bytes = new Uint8Array(await c.req.arrayBuffer());
-    if (bytes.byteLength === 0) throw new PluginError("package.invalid", "The package is empty.");
+    if (bytes.byteLength === 0) throw new PluginError("package_invalid", "The package is empty.");
     const db = c.get("db");
     const { readPluginPackageZip } = await import("../../plugins/package-zip");
     const { verifyUploadedPackage, storeRelease, installRelease, trustDeveloperKey } = await releases();
     const { release, newKey } = await verifyUploadedPackage(db, await readPluginPackageZip(bytes), trust);
     const current = await getPluginInstallation(db, release.manifest.id);
     if (current?.source === "bundled") {
-      throw new PluginError("installation.source_conflict", `${current.manifest.name} is compiled into this deployment: update it with pnpm plugin add, then deploy.`);
+      throw new PluginError("installation_source_conflict", `${current.manifest.name} is compiled into this deployment: update it with pnpm plugin add, then deploy.`);
     }
     await storeRelease(c.env, release);
     if (newKey) await trustDeveloperKey(db, newKey);

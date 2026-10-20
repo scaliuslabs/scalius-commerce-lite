@@ -117,7 +117,7 @@ export function readSettingsRevisionConflict(
   const parsed = readAdminApiError(error);
   if (
     parsed?.status !== 409 ||
-    parsed.code !== "SETTINGS_REVISION_CONFLICT" ||
+    parsed.code !== "settings_revision_conflict" ||
     !parsed.details ||
     typeof parsed.details !== "object"
   ) {

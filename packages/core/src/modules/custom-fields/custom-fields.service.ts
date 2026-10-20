@@ -71,10 +71,10 @@ import type {
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
-export const CUSTOM_FIELD_REVISION_CONFLICT = "CUSTOM_FIELD_REVISION_CONFLICT";
-export const CUSTOM_FIELD_KEY_TAKEN = "CUSTOM_FIELD_KEY_TAKEN";
-export const CUSTOM_FIELD_NAMESPACE_FORBIDDEN = "CUSTOM_FIELD_NAMESPACE_FORBIDDEN";
-const GUARD_FAILED = "CUSTOM_FIELD_GUARD_FAILED";
+export const CUSTOM_FIELD_REVISION_CONFLICT = "custom_field_revision_conflict";
+export const CUSTOM_FIELD_KEY_TAKEN = "custom_field_key_taken";
+export const CUSTOM_FIELD_NAMESPACE_FORBIDDEN = "custom_field_namespace_forbidden";
+const GUARD_FAILED = "custom_field_guard_failed";
 
 export class CustomFieldRevisionConflictError extends AppError {
     constructor(definitionId: string, expectedRevision: number, currentRevision: number | null) {

@@ -57,7 +57,7 @@ describe("checkout config API caching", () => {
     expect(mocks.getCheckoutConfig).toHaveBeenCalledTimes(2);
     await expect(first.json()).resolves.toMatchObject({
       success: false,
-      error: { code: "CHECKOUT_CONFIG_UNAVAILABLE" },
+      error: { code: "checkout_config_unavailable" },
     });
   });
 });

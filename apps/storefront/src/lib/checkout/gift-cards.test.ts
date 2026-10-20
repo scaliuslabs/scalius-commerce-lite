@@ -132,7 +132,7 @@ describe("giftCardQuoteRefusal", () => {
 
   it("drops every card the quote names and says so once", () => {
     const refusal = giftCardQuoteRefusal([card("a"), card("b")], [
-      { handle: handle("a"), code: "GIFT_CARD_UNUSABLE", message: "This gift card can't be used." },
+      { handle: handle("a"), code: "gift_card_unusable", message: "This gift card can't be used." },
     ], copy);
     expect(refusal.dropped).toEqual([handle("a")]);
     expect(refusal.remaining).toEqual([card("b")]);
@@ -141,7 +141,7 @@ describe("giftCardQuoteRefusal", () => {
 
   it("explains a card the other cards made unnecessary", () => {
     const refusal = giftCardQuoteRefusal([card("a"), card("b")], [
-      { handle: handle("b"), code: "GIFT_CARD_NOT_NEEDED", message: "server words" },
+      { handle: handle("b"), code: "gift_card_not_needed", message: "server words" },
     ], copy);
     expect(refusal.message).toBe(GIFT_CARD_CHECKOUT_COPY.giftCardNotNeededText);
     expect(refusal.remaining).toEqual([card("a")]);
@@ -149,7 +149,7 @@ describe("giftCardQuoteRefusal", () => {
 
   it("keeps the cards for an order-level issue and ignores issues about other handles", () => {
     const refusal = giftCardQuoteRefusal([card("a")], [
-      { handle: handle("z"), code: "GIFT_CARD_UNUSABLE", message: "x" },
+      { handle: handle("z"), code: "gift_card_unusable", message: "x" },
       { handle: null, code: "SOMETHING_NEW", message: "Server explanation." },
     ], copy);
     expect(refusal).toEqual({ remaining: [card("a")], dropped: [], message: "Server explanation." });

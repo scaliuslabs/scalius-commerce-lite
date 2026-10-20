@@ -157,7 +157,7 @@ app.openapi(getCheckoutConfigRoute, async (c) => {
     return c.json({
       success: false as const,
       error: {
-        code: "CHECKOUT_CONFIG_UNAVAILABLE",
+        code: "checkout_config_unavailable",
         message: "Checkout configuration is temporarily unavailable. Please try again shortly.",
       },
     }, 503);

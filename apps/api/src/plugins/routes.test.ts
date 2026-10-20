@@ -180,7 +180,7 @@ describe("plugin routes", { timeout: 30_000 }, () => {
     const form = await call("/api/v1/plugins/acme.hello/public/visits", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "name=Tania" });
     expect(form).toMatchObject({ status: 201, json: { message: "Welcome, Tania!" } });
     const bad = await call("/api/v1/plugins/acme.hello/public/visits", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{" });
-    expect(bad).toMatchObject({ status: 400, json: { error: { code: "INVALID_JSON" } } });
+    expect(bad).toMatchObject({ status: 400, json: { error: { code: "invalid_json" } } });
     const huge = await call("/api/v1/plugins/acme.hello/public/visits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "x".repeat(300 * 1024) }) });
     expect(huge.status).toBe(413);
   });
@@ -226,7 +226,7 @@ describe("plugin routes", { timeout: 30_000 }, () => {
     expect(seen.headers.get("x-echo")).toBe("1");
 
     const failed = await call("/api/v1/plugins/acme.echo/public/boom");
-    expect(failed).toMatchObject({ status: 502, json: { error: { code: "APP_FAILED", message: "The app could not answer." } } });
+    expect(failed).toMatchObject({ status: 502, json: { error: { code: "app_failed", message: "The app could not answer." } } });
   });
 
   it("gives webhook routes the raw body and provider headers, never credentials", async () => {

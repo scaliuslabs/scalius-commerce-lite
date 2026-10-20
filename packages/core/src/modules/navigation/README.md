@@ -34,7 +34,7 @@ Menu lists, item lists, publication lists and resource search page by keyset cur
 
 ## Rules
 
-- **Revision guard.** Every menu mutation (metadata, item create, update, move, delete, trash, restore, publish, rollback) claims `expectedRevision` and advances the menu `revision` by one in the same batch. A stale claim is `NAVIGATION_REVISION_CONFLICT` (409). A placement save claims its own revision (`NAVIGATION_PLACEMENT_REVISION_CONFLICT`); a new placement claims 0.
+- **Revision guard.** Every menu mutation (metadata, item create, update, move, delete, trash, restore, publish, rollback) claims `expectedRevision` and advances the menu `revision` by one in the same batch. A stale claim is `navigation_revision_conflict` (409). A placement save claims its own revision (`navigation_placement_revision_conflict`); a new placement claims 0.
 - **Publish.** `publishNavigationMenu` snapshots the draft items as a new publication at `revision + 1` with a SHA-256 checksum and sets `published_revision`. It refuses a menu that exceeds a placement it is in, a broken hierarchy, an unsupported system target or an enabled link to a resource that is not ready (page not published, category not published, collection not active, product not active, or trashed).
 - **Rollback.** `rollbackNavigationMenu` restores an earlier publication into the draft and publishes it as a new revision. It verifies the checksum first.
 - **Placements.** A menu must be published and fit the placement's 150 items before it is assigned. A menu with an enabled placement cannot be trashed.

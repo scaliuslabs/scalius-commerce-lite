@@ -124,7 +124,7 @@ describe("delivery zone settings API", () => {
     expect((await send("PUT", `/admin/settings/shipping-methods/${data.id}`, { ...insideDhaka, expectedRevision: 1 })).status).toBe(200);
     const stale = await send("PUT", `/admin/settings/shipping-methods/${data.id}`, { ...insideDhaka, name: "Stale", expectedRevision: 1 });
     expect(stale.status).toBe(409);
-    expect(await stale.json()).toMatchObject({ error: { code: "SETTINGS_REVISION_CONFLICT" } });
+    expect(await stale.json()).toMatchObject({ error: { code: "settings_revision_conflict" } });
   });
 
   it("lists only the rates for the buyer's destination on the public route, at home and abroad", async () => {

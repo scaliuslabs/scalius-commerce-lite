@@ -145,9 +145,9 @@ export interface GiftCardQuoteIssue {
 
 /** The buyer's sentence for each issue code the quote reports; other codes use the API's own words. */
 const ISSUE_COPY: Record<string, keyof GiftCardCheckoutCopy> = {
-  GIFT_CARD_UNUSABLE: "giftCardUnusableText",
-  GIFT_CARD_DUPLICATE: "giftCardDuplicateText",
-  GIFT_CARD_NOT_NEEDED: "giftCardNotNeededText",
+  gift_card_unusable: "giftCardUnusableText",
+  gift_card_duplicate: "giftCardDuplicateText",
+  gift_card_not_needed: "giftCardNotNeededText",
 };
 
 /**

@@ -260,7 +260,7 @@ describe("CollectionForm", () => {
   });
 
   it("reloads a conflicting collection under the merchant's edits and saves with the fresh version", async () => {
-    api.updateCollection.mockRejectedValueOnce(new AdminApiResponseError("changed", 409, "COLLECTION_REVISION_CONFLICT"));
+    api.updateCollection.mockRejectedValueOnce(new AdminApiResponseError("changed", 409, "collection_revision_conflict"));
     api.getCollection.mockResolvedValue({
       ...savedCollection,
       version: 9,

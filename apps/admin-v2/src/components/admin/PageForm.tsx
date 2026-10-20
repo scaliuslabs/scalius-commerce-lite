@@ -152,7 +152,7 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
       }
     },
     onError: (error, message) => {
-      if (error instanceof AdminApiResponseError && error.code === "PAGE_REVISION_CONFLICT") throw new SaveConflict(t("conflict"));
+      if (error instanceof AdminApiResponseError && error.code === "page_revision_conflict") throw new SaveConflict(t("conflict"));
       if (!message.includes("slug already exists")) return undefined;
       form.setError("slug", { type: "server", message: t("addressTaken") });
       return t("addressTaken");

@@ -40,7 +40,7 @@ type MediaLifecycle = "trash" | "restore" | "permanent";
 /** Plain catalog text for a refused change; server wording is never shown. */
 function failureText(error: unknown): string | undefined {
   if (!(error instanceof AdminApiResponseError)) return undefined;
-  if (error.code === "MEDIA_DEPENDENCY_CONFLICT") return t("stillUsed");
+  if (error.code === "media_dependency_conflict") return t("stillUsed");
   if (error.status === 409) return t("changedElsewhere");
   return undefined;
 }

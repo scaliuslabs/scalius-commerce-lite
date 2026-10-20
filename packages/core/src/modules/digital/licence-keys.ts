@@ -199,7 +199,7 @@ export async function revokeLicenceKeys(
     const available = await db.select({ id: digitalLicenceKeys.id }).from(digitalLicenceKeys)
         .where(and(eq(digitalLicenceKeys.assetId, input.assetId), inArray(digitalLicenceKeys.id, ids), eq(digitalLicenceKeys.status, "available")))
         .all();
-    if (available.length === 0) throw new AppError(409, "LICENCE_KEYS_NOT_AVAILABLE", "None of these keys are unused.");
+    if (available.length === 0) throw new AppError(409, "licence_keys_not_available", "None of these keys are unused.");
     const targets = available.map((row) => row.id);
     const result = await executeInventoryOperation(db, {
         operationKey,
@@ -214,12 +214,12 @@ export async function revokeLicenceKeys(
             db.update(digitalLicenceKeys).set({ status: "revoked", revokedAt: sql`unixepoch()` })
                 .where(and(inArray(digitalLicenceKeys.id, targets), eq(digitalLicenceKeys.status, "available"))) as BatchItem<"sqlite">,
             // Every targeted key left the pool here: a key assigned meanwhile aborts the batch.
-            buildBatchGuard(db, sql`(SELECT count(*) FROM ${digitalLicenceKeys} WHERE ${inArray(digitalLicenceKeys.id, targets)} AND ${digitalLicenceKeys.status} = 'revoked') = ${targets.length}`, "LICENCE_KEYS_CHANGED"),
+            buildBatchGuard(db, sql`(SELECT count(*) FROM ${digitalLicenceKeys} WHERE ${inArray(digitalLicenceKeys.id, targets)} AND ${digitalLicenceKeys.status} = 'revoked') = ${targets.length}`, "licence_keys_changed"),
         ],
     }).catch((error: unknown) => {
         // A key assigned meanwhile fails the guard on every retry (a conflict in the end).
-        if (error instanceof ConflictError || isBatchGuardError(error, "LICENCE_KEYS_CHANGED")) {
-            throw new AppError(409, "LICENCE_KEYS_CHANGED", "Some of these keys were just sold. Reload and try again.");
+        if (error instanceof ConflictError || isBatchGuardError(error, "licence_keys_changed")) {
+            throw new AppError(409, "licence_keys_changed", "Some of these keys were just sold. Reload and try again.");
         }
         throw error;
     });

@@ -67,14 +67,14 @@ describe("order timeline lines from apps", () => {
     const hello = await installHello(db, sqlite);
     const runtime = { env: pluginTestEnv(binding), ctx: pluginTestCtx(), db: () => db, composedEnv: async () => pluginTestEnv(binding) };
     const helloBridge = new PluginBridgeHost({ pluginId: hello.pluginId, version: hello.version, authority: pluginBridgeAuthority(hello) }, runtime);
-    await expect(helloBridge.timelineAdd({ orderId: "ord_t1", kind: "greeted", message: "Hi" })).rejects.toThrow("[timeline.not_allowed]");
+    await expect(helloBridge.timelineAdd({ orderId: "ord_t1", kind: "greeted", message: "Hi" })).rejects.toThrow("[timeline_not_allowed]");
 
     const tagger = await installTagger();
     const bridge = new PluginBridgeHost({ pluginId: tagger.pluginId, version: tagger.version, authority: pluginBridgeAuthority(tagger) }, runtime);
-    await expect(bridge.timelineAdd({ orderId: "ord_t1", kind: "shipped", message: "Gone" })).rejects.toThrow("[timeline.undeclared]");
-    await expect(bridge.timelineAdd({ orderId: "ord_none", kind: "tagged", message: "Gone" })).rejects.toThrow("[timeline.not_found]");
-    await expect(bridge.timelineAdd({ orderId: "ord_t1", kind: "tagged", message: "x".repeat(501) })).rejects.toThrow("[timeline.invalid]");
-    await expect(bridge.timelineAdd({ orderId: "ord_t1", kind: "tagged", message: "Ok", fields: { "bad key": 1 } })).rejects.toThrow("[timeline.invalid]");
+    await expect(bridge.timelineAdd({ orderId: "ord_t1", kind: "shipped", message: "Gone" })).rejects.toThrow("[timeline_undeclared]");
+    await expect(bridge.timelineAdd({ orderId: "ord_none", kind: "tagged", message: "Gone" })).rejects.toThrow("[timeline_not_found]");
+    await expect(bridge.timelineAdd({ orderId: "ord_t1", kind: "tagged", message: "x".repeat(501) })).rejects.toThrow("[timeline_invalid]");
+    await expect(bridge.timelineAdd({ orderId: "ord_t1", kind: "tagged", message: "Ok", fields: { "bad key": 1 } })).rejects.toThrow("[timeline_invalid]");
     expect(await bridge.timelineAdd({ orderId: "ord_t1", kind: "tagged", message: "Packed", fields: { boxes: 2, fragile: true } }))
       .toEqual({ id: expect.stringMatching(/^oev_/) });
   });

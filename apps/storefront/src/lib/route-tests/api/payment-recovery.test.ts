@@ -88,7 +88,7 @@ describe("payment recovery storefront proxies", () => {
     mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
       success: false,
       error: {
-        code: "SERVICE_UNAVAILABLE",
+        code: "service_unavailable",
         message: "Provider detail that must not be buyer-facing",
       },
     }), {
@@ -106,7 +106,7 @@ describe("payment recovery storefront proxies", () => {
     const json = await response.json() as Record<string, unknown>;
 
     expect(response.status).toBe(503);
-    expect(json).toEqual({ success: false, errorCode: "SERVICE_UNAVAILABLE" });
+    expect(json).toEqual({ success: false, errorCode: "service_unavailable" });
     expect(JSON.stringify(json)).not.toContain("Provider detail");
   });
 
@@ -161,7 +161,7 @@ describe("payment recovery storefront proxies", () => {
     mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
       success: false,
       error: {
-        code: "VALIDATION_ERROR",
+        code: "validation_error",
         message: "Verification code could not be verified. Please request a new code.",
       },
     }), {
@@ -179,18 +179,18 @@ describe("payment recovery storefront proxies", () => {
     const json = await response.json() as Record<string, unknown>;
 
     expect(response.status).toBe(400);
-    expect(json).toEqual({ success: false, errorCode: "VALIDATION_ERROR" });
+    expect(json).toEqual({ success: false, errorCode: "validation_error" });
     expect(JSON.stringify(json)).not.toContain("could not be verified");
   });
 
   it("passes the wait with its sentence, and the attempts left without backend copy", async () => {
     mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
       success: false,
-      error: { code: "RATE_LIMIT", message: "Too many codes.", details: { retryAfterSeconds: 45 } },
+      error: { code: "rate_limited", message: "Too many codes.", details: { retryAfterSeconds: 45 } },
     }), { status: 429, headers: { "Content-Type": "application/json", "Retry-After": "45" } }));
     mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
       success: false,
-      error: { code: "VALIDATION_ERROR", message: "That code isn't right.", details: { attemptsLeft: 1 } },
+      error: { code: "validation_error", message: "That code isn't right.", details: { attemptsLeft: 1 } },
     }), { status: 400, headers: { "Content-Type": "application/json" } }));
 
     const limited = await sendCode({
@@ -210,9 +210,9 @@ describe("payment recovery storefront proxies", () => {
 
     expect(limited.status).toBe(429);
     expect(limited.headers.get("Retry-After")).toBe("45");
-    expect(await limited.json()).toEqual({ success: false, errorCode: "RATE_LIMIT", message: "Too many codes.", retryAfterSeconds: 45 });
+    expect(await limited.json()).toEqual({ success: false, errorCode: "rate_limited", message: "Too many codes.", retryAfterSeconds: 45 });
     expect(wrong.status).toBe(400);
-    expect(await wrong.json()).toEqual({ success: false, errorCode: "VALIDATION_ERROR", attemptsLeft: 1 });
+    expect(await wrong.json()).toEqual({ success: false, errorCode: "validation_error", attemptsLeft: 1 });
   });
 
   it("sends a signed-in owner straight to the receipt with a private proof cookie", async () => {

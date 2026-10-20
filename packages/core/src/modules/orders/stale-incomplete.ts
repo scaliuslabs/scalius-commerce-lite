@@ -23,7 +23,7 @@ import { giftCardOnlyTenders, releaseCancelledOrderGiftCards } from "./status/li
 
 export const DEFAULT_STALE_INCOMPLETE_ORDER_CLEANUP_LIMIT = 25;
 export const MAX_STALE_INCOMPLETE_ORDER_CLEANUP_LIMIT = 100;
-const STALE_GIFT_CARD_RELEASE_CONFLICT = "STALE_GIFT_CARD_RELEASE_CONFLICT";
+const STALE_GIFT_CARD_RELEASE_CONFLICT = "stale_gift_card_release_conflict";
 /** How long a cancelled order must sit untouched before its leftover gift-card holds are released. */
 const LEFTOVER_HOLD_GRACE_SECONDS = 600;
 

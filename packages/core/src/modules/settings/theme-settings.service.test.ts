@@ -133,7 +133,7 @@ describe("versioned storefront theme settings", () => {
 
       await expect(getThemeSettings(db)).rejects.toMatchObject({
         status: 503,
-        code: "SERVICE_UNAVAILABLE",
+        code: "service_unavailable",
         message: "Published storefront style is unreadable. Re-save it before editing.",
       });
       await expect(getThemeWorkspace(db)).rejects.toMatchObject({ status: 503 });
@@ -174,7 +174,7 @@ describe("versioned storefront theme settings", () => {
       const document = theme as StorefrontThemeDocument;
       await expect(saveThemeDraft(db, document, 0, 0)).rejects.toMatchObject({
         status: 400,
-        code: "VALIDATION_ERROR",
+        code: "validation_error",
         message: expect.stringMatching(message),
       });
     }
@@ -194,7 +194,7 @@ describe("versioned storefront theme settings", () => {
       draftDiffersFromLive: false,
     });
 
-    await expect(publishThemeDraft(db, 0, 1)).rejects.toMatchObject({ status: 409, code: "CONFLICT" });
+    await expect(publishThemeDraft(db, 0, 1)).rejects.toMatchObject({ status: 409, code: "conflict" });
     await expect(getThemeSettings(db)).resolves.toEqual({ theme: firstTheme, revision: 1 });
   });
 
@@ -224,9 +224,9 @@ describe("versioned storefront theme settings", () => {
     });
 
     await expect(saveThemeDraft(db, storefrontTemplateTheme("boutique"), 1, 1, "admin_a"))
-      .rejects.toMatchObject({ status: 409, code: "CONFLICT" });
+      .rejects.toMatchObject({ status: 409, code: "conflict" });
     await expect(publishThemeDraft(db, 1, 1, "admin_a"))
-      .rejects.toMatchObject({ status: 409, code: "CONFLICT" });
+      .rejects.toMatchObject({ status: 409, code: "conflict" });
     await expect(restoreThemeVersion(db, 1, 1, 1, "admin_a")).rejects.toMatchObject({ status: 409 });
     await expect(discardThemeDraft(db, 3, 1, "admin_a")).rejects.toMatchObject({ status: 409 });
 
@@ -252,7 +252,7 @@ describe("versioned storefront theme settings", () => {
 
     await expect(
       saveThemeDraft(db, storefrontTemplateTheme("boutique"), 1, 1, "admin_2"),
-    ).rejects.toMatchObject({ status: 409, code: "CONFLICT" });
+    ).rejects.toMatchObject({ status: 409, code: "conflict" });
 
     await expect(getThemeWorkspace(db)).resolves.toMatchObject({
       published: { theme: DEFAULT_STOREFRONT_THEME, revision: 1 },
@@ -279,7 +279,7 @@ describe("versioned storefront theme settings", () => {
     expect((await getThemeVersion(db, 2)).theme).toEqual(draftTheme);
 
     await expect(publishThemeDraft(db, 1, 2, "admin_2"))
-      .rejects.toMatchObject({ status: 409, code: "CONFLICT" });
+      .rejects.toMatchObject({ status: 409, code: "conflict" });
     await expect(getThemeSettings(db)).resolves.toEqual({ theme: draftTheme, revision: 2 });
     await expect(getThemeWorkspace(db)).resolves.toMatchObject({ draft: { theme: draftTheme }, draftDiffersFromLive: false });
   });
@@ -319,7 +319,7 @@ describe("versioned storefront theme settings", () => {
     sqlite.exec(`UPDATE media SET status = 'deleted', trashed_at = unixepoch(), deleted_at = unixepoch() WHERE id IN ('media_logo', 'media_slide')`);
 
     await expect(restoreThemeVersion(db, 2, 4, 2, "admin_2")).rejects.toMatchObject({
-      status: 400, code: "THEME_VERSION_IMAGES_MISSING", details: { missingImages: 2 },
+      status: 400, code: "theme_version_images_missing", details: { missingImages: 2 },
     });
     expect((await getThemeWorkspace(db)).draft.revision).toBe(4);
 

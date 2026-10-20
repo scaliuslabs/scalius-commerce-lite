@@ -210,7 +210,7 @@ describe("PageForm", () => {
   });
 
   it("normalizes an empty server reload while preserving the local edit until discard", async () => {
-    api.update.mockRejectedValue(new AdminApiResponseError("changed", 409, "PAGE_REVISION_CONFLICT"));
+    api.update.mockRejectedValue(new AdminApiResponseError("changed", 409, "page_revision_conflict"));
     api.read.mockResolvedValue({ ...savedPost, revision: 3, content: "<p></p>", isPublished: false, publishedAt: null });
     await render({ contentType: "article", defaultValues: savedPost, isEdit: true });
     type(byLabel("Title"), "My local title");
@@ -272,7 +272,7 @@ describe("PageForm", () => {
   });
 
   it("tells the merchant to reload when the page changed elsewhere", async () => {
-    api.update.mockRejectedValue(new AdminApiResponseError("changed", 409, "PAGE_REVISION_CONFLICT"));
+    api.update.mockRejectedValue(new AdminApiResponseError("changed", 409, "page_revision_conflict"));
     await render({ contentType: "article", defaultValues: savedPost, isEdit: true });
 
     type(byLabel("Title"), "Panjabi size guide");

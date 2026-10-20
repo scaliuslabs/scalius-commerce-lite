@@ -69,15 +69,15 @@ const cartIssueSchema = z.object({
   productId: z.string(),
   variantId: z.string().nullable(),
   code: z.enum([
-    "PRODUCT_UNAVAILABLE",
-    "VARIANT_REQUIRED",
-    "VARIANT_UNAVAILABLE",
-    "VARIANT_MISMATCH",
-    "QUANTITY_UNAVAILABLE",
-    "PRICE_CHANGED",
-    "PROPERTIES_REQUIRED",
-    "PROPERTIES_INVALID",
-    "FULFILMENT_UNAVAILABLE",
+    "product_unavailable",
+    "variant_required",
+    "variant_unavailable",
+    "variant_mismatch",
+    "quantity_unavailable",
+    "price_changed",
+    "properties_required",
+    "properties_invalid",
+    "fulfilment_unavailable",
   ]),
   action: z.enum(["remove", "select_variant", "reduce_quantity", "refresh_item", "edit_properties"]),
   message: z.string(),
@@ -247,7 +247,7 @@ async function giftCardHandleIssues(
     }
     return usable.has(handle)
       ? []
-      : [{ handle, code: "GIFT_CARD_DUPLICATE", message: "This gift card is already applied." }];
+      : [{ handle, code: "gift_card_duplicate", message: "This gift card is already applied." }];
   });
 }
 

@@ -17,7 +17,7 @@ export const BUNDLED_STOREFRONT_EXTENSIONS: Readonly<Record<string, BundledStore
     files: () => import("./bundled/scalius-noor/files.gen"),
   },
   "scalius.sellers": {
-    release: "77606ce74fe0b8d81f3af4ed91c86bf51019d449b7f0ef351d8cb8b3c6a71e1d",
+    release: "c77f01924cbb36afbe066bf83bdb84d158f33e7369ac7abc36deea0f25ffc2d8",
     module: () => import("./bundled/scalius-sellers/storefront.gen.js"),
     files: () => import("./bundled/scalius-sellers/files.gen"),
   },

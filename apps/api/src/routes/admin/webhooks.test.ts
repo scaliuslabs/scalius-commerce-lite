@@ -98,7 +98,7 @@ describe("admin webhook routes", () => {
   it("guards edits by version with a specific conflict code", async () => {
     const stale = await call("PATCH", `/webhooks/${webhookId}`, { expectedVersion: 7, description: "x" });
     expect(stale.status).toBe(409);
-    expect(stale.json.error.code).toBe("WEBHOOK_VERSION_CONFLICT");
+    expect(stale.json.error.code).toBe("webhook_version_conflict");
     const saved = await call("PATCH", `/webhooks/${webhookId}`, { expectedVersion: 1, topics: ["*"], status: "disabled" });
     expect(saved.status).toBe(200);
     expect(saved.json.data.subscription).toMatchObject({ topics: ["*"], status: "disabled", disabledReason: "manual", version: 2 });

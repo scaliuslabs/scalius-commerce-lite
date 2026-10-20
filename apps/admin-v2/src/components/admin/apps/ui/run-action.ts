@@ -57,7 +57,7 @@ export function hasActionEffect(result: PluginUiActionResult): boolean {
 export function appErrorMessage(error: unknown, fallback: "actionFailed" | "loadFailedBody" = "actionFailed"): string {
   if (error instanceof UndeclaredAppRouteError) return translate(appUiMessages, "notDeclared");
   const code = (error as { code?: unknown } | null)?.code;
-  if (code === ADMIN_API_READ_TIMEOUT_CODE || code === "APP_TIMEOUT") return translate(appUiMessages, "timeout");
+  if (code === ADMIN_API_READ_TIMEOUT_CODE || code === "app_timeout") return translate(appUiMessages, "timeout");
   if (error instanceof AdminApiResponseError && error.message.trim() !== "") return error.message;
   return translate(appUiMessages, fallback);
 }

@@ -788,7 +788,7 @@ const assetRoute = createRoute({
 app.openapi(assetRoute, async (c) => {
   const { id, asset } = c.req.valid("param");
   const version = c.req.valid("query").v ?? "";
-  const missing = () => new Response(JSON.stringify({ success: false, error: { code: "NOT_FOUND", message: "Image not found" } }), {
+  const missing = () => new Response(JSON.stringify({ success: false, error: { code: "not_found", message: "Image not found" } }), {
     status: 404,
     headers: { "Content-Type": "application/json", "Cache-Control": "private, no-store" },
   });

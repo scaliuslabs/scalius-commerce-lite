@@ -312,13 +312,13 @@ export type ReviewAccess = { kind: "account" } | { kind: "receipt"; orderId: str
 export function reviewFlagForApi(status: number, code: string | null, field: string | null, access: ReviewAccess): ReviewNoticeFlag {
   if (status === 400) return field === "rating" ? "rating" : "invalid";
   if (status === 401) return access.kind === "account" ? "signin" : "receipt";
-  if (status === 403) return code === "REVIEWS_DISABLED" ? "disabled" : access.kind === "account" ? "signin" : "receipt";
+  if (status === 403) return code === "reviews_disabled" ? "disabled" : access.kind === "account" ? "signin" : "receipt";
   // A receipt 404 is a proof the API no longer accepts (the page rendered with it).
   if (status === 404) return access.kind === "receipt" ? "receipt" : "not_eligible";
   if (status === 409) {
-    if (code === "REVIEW_EXISTS") return "exists";
-    if (code === "REVIEW_NOT_ELIGIBLE") return "not_eligible";
-    if (code === "REVIEW_NOT_EDITABLE") return "not_editable";
+    if (code === "review_exists") return "exists";
+    if (code === "review_not_eligible") return "not_eligible";
+    if (code === "review_not_editable") return "not_editable";
     return "changed";
   }
   if (status === 429) return "rate_limited";

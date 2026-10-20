@@ -132,7 +132,7 @@ describe("admin app routes", () => {
     actor = { id: "owner", isSuperAdmin: true };
     const stale = await call("POST", "/apps/acme.order-tagger/activate", { expectedRevision: detail.revision, grantKey: "{}" });
     expect(stale.status).toBe(409);
-    expect(stale.json.error.details.code).toBe("installation.grant_changed");
+    expect(stale.json.error.details.code).toBe("installation_grant_changed");
 
     const activated = await call("POST", "/apps/acme.order-tagger/activate", { expectedRevision: detail.revision, grantKey: detail.grantKey });
     expect(activated.status).toBe(200);
@@ -162,7 +162,7 @@ describe("admin app routes", () => {
 
     const invalid = await call("PUT", "/apps/acme.hello/settings", { expectedRevision: cleared.json.data.app.revision, values: { discount_percent: 99 } });
     expect(invalid.status).toBe(400);
-    expect(invalid.json.error.details.code).toBe("settings.invalid");
+    expect(invalid.json.error.details.code).toBe("settings_invalid");
     const stale = await call("PUT", "/apps/acme.hello/settings", { expectedRevision: 1, values: {} });
     expect(stale.status).toBe(409);
   });

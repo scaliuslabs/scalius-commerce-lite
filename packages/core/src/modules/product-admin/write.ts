@@ -156,7 +156,7 @@ export class ProductMediaSkuReferenceConflictError extends AppError {
     }) {
         super(
             409,
-            "PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT",
+            "product_media_sku_reference_conflict",
             "One or more removed images are still assigned to SKUs. Confirm that those SKUs should use the featured fallback.",
             details,
         );
@@ -951,7 +951,7 @@ async function planProductSaveSections(
     return statements;
 }
 
-const SKU_COST_CHANGED_GUARD = "PRODUCT_SAVE_SKU_COST_CHANGED";
+const SKU_COST_CHANGED_GUARD = "product_save_sku_cost_changed";
 
 /**
  * The costs per item a Save changed, as two statements for the product's

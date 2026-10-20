@@ -167,7 +167,7 @@ describe("ReceiveMode", () => {
     await openOrder();
     await scan("8901234567890");
     await scan("8901234567890");
-    mocks.receiveOrder.mockRejectedValueOnce(new AdminApiResponseError("Changed", 409, "CONFLICT"));
+    mocks.receiveOrder.mockRejectedValueOnce(new AdminApiResponseError("Changed", 409, "conflict"));
     mocks.getOrder.mockResolvedValueOnce({
       id: "po_1", displayNumber: "PO1001", supplier: { name: "Dhaka Textiles" }, revision: 4,
       lines: [orderLine("pol_1", "PANJABI-M", "8901234567890", 1)],

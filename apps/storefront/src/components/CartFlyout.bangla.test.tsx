@@ -52,7 +52,7 @@ beforeEach(async () => {
     return new Response(JSON.stringify({
       data: {
         issues: [{
-          index: 1, cartKey: sareeKey, productId: "saree", variantId: "var_saree", code: "QUANTITY_UNAVAILABLE", action: "reduce_quantity",
+          index: 1, cartKey: sareeKey, productId: "saree", variantId: "var_saree", code: "quantity_unavailable", action: "reduce_quantity",
           message: "জামদানি শাড়ি মাত্র ১টি বাকি।", productName: saree.name, variantLabel: null, requestedQuantity: 3, availableQuantity: 1,
         }],
       },

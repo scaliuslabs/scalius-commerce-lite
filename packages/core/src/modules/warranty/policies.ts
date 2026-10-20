@@ -24,7 +24,7 @@ import { ConflictError, NotFoundError, ValidationError } from "../../errors";
 import { codePoints, nowSeconds, type BatchStatement } from "./shared";
 import { formatNumber } from "@scalius/shared/locale-format";
 
-const POLICY_CONFLICT = "WARRANTY_POLICY_CHANGED";
+const POLICY_CONFLICT = "warranty_policy_changed";
 /** Stores keep a handful of policies; the list is bounded all the same. */
 const POLICY_LIST_MAX = 200;
 

@@ -53,7 +53,7 @@ export type { AppDiscountTarget, AppliedAppDiscount, AppObjectCommit, CheckoutRa
 // ── The runner checkout is given ────────────────────────────────────────────
 
 /** Checkout refused because an app registered with `onError: "block"` could not answer. */
-export const CHECKOUT_APP_UNAVAILABLE_REASON = "CHECKOUT_APP_UNAVAILABLE";
+export const CHECKOUT_APP_UNAVAILABLE_REASON = "checkout_app_unavailable";
 
 export interface CheckoutAppFunctionResult<P extends PluginFunctionPoint> {
   pluginId: string;

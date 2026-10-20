@@ -1085,7 +1085,7 @@ describe("admin auth management user permissions", () => {
     const body = await response.json() as { error?: { code?: string; message?: string } };
 
     expect(response.status).toBe(400);
-    expect(body.error?.code).toBe("VALIDATION_ERROR");
+    expect(body.error?.code).toBe("validation_error");
     expect(db.__deleteWhere).not.toHaveBeenCalled();
   });
 
@@ -1243,7 +1243,7 @@ describe("admin auth management team invites", () => {
     const body = await response.json() as { error?: { code?: string; message?: string } };
 
     expect(response.status).toBe(400);
-    expect(body.error?.code).toBe("VALIDATION_ERROR");
+    expect(body.error?.code).toBe("validation_error");
     expect(mocks.prepareCredentialIdentity).not.toHaveBeenCalled();
     expect(mocks.createInvitedAdminCredentialAccount).not.toHaveBeenCalled();
     expect(requestPasswordReset).not.toHaveBeenCalled();
@@ -2060,7 +2060,7 @@ describe("admin account session lifecycle", () => {
     const body = (await response.json()) as { error?: { code?: string } };
 
     expect(response.status).toBe(401);
-    expect(body.error?.code).toBe("UNAUTHORIZED");
+    expect(body.error?.code).toBe("unauthorized");
   });
 
   it("revokes an owned non-current session", async () => {
@@ -2093,7 +2093,7 @@ describe("admin account session lifecycle", () => {
     const body = (await response.json()) as { error?: { code?: string } };
 
     expect(response.status).toBe(400);
-    expect(body.error?.code).toBe("VALIDATION_ERROR");
+    expect(body.error?.code).toBe("validation_error");
     expect(db.__deleteWhere).not.toHaveBeenCalled();
   });
 
@@ -2112,7 +2112,7 @@ describe("admin account session lifecycle", () => {
     const body = (await response.json()) as { error?: { code?: string } };
 
     expect(response.status).toBe(404);
-    expect(body.error?.code).toBe("NOT_FOUND");
+    expect(body.error?.code).toBe("not_found");
     expect(db.__deleteWhere).not.toHaveBeenCalled();
   });
 
@@ -2129,7 +2129,7 @@ describe("admin account session lifecycle", () => {
     const body = (await response.json()) as { error?: { code?: string } };
 
     expect(response.status).toBe(401);
-    expect(body.error?.code).toBe("UNAUTHORIZED");
+    expect(body.error?.code).toBe("unauthorized");
     expect(db.__deleteWhere).not.toHaveBeenCalled();
   });
 
@@ -2180,7 +2180,7 @@ describe("admin account session lifecycle", () => {
     const body = (await response.json()) as { error?: { code?: string } };
 
     expect(response.status).toBe(503);
-    expect(body.error?.code).toBe("SERVICE_UNAVAILABLE");
+    expect(body.error?.code).toBe("service_unavailable");
   });
 });
 
@@ -2206,7 +2206,7 @@ describe("admin auth management password changes", () => {
     const body = await response.json() as { error?: { code?: string } };
 
     expect(response.status).toBe(401);
-    expect(body.error?.code).toBe("UNAUTHORIZED");
+    expect(body.error?.code).toBe("unauthorized");
     expect(changePassword).not.toHaveBeenCalled();
   });
 });
@@ -2254,7 +2254,7 @@ describe("admin auth management legacy 2FA verification", () => {
     const body = await response.json() as { error?: { code?: string } };
 
     expect(response.status).toBe(400);
-    expect(body.error?.code).toBe("VALIDATION_ERROR");
+    expect(body.error?.code).toBe("validation_error");
     expect(mocks.createAuth).not.toHaveBeenCalled();
     expect(verifyTOTP).not.toHaveBeenCalled();
     expect(db.__updateSet).not.toHaveBeenCalled();
@@ -2278,7 +2278,7 @@ describe("admin auth management legacy 2FA verification", () => {
     const body = await response.json() as { error?: { code?: string } };
 
     expect(response.status).toBe(400);
-    expect(body.error?.code).toBe("VALIDATION_ERROR");
+    expect(body.error?.code).toBe("validation_error");
     expect(mocks.createAuth).not.toHaveBeenCalled();
     expect(verifyTwoFactorOTP).not.toHaveBeenCalled();
     expect(db.__updateSet).not.toHaveBeenCalled();
@@ -2301,7 +2301,7 @@ describe("admin auth management legacy 2FA verification", () => {
     const body = await response.json() as { error?: { code?: string } };
 
     expect(response.status).toBe(400);
-    expect(body.error?.code).toBe("VALIDATION_ERROR");
+    expect(body.error?.code).toBe("validation_error");
     expect(db.__updateSet).not.toHaveBeenCalled();
   });
 
@@ -2322,7 +2322,7 @@ describe("admin auth management legacy 2FA verification", () => {
     const body = await response.json() as { error?: { code?: string } };
 
     expect(response.status).toBe(401);
-    expect(body.error?.code).toBe("UNAUTHORIZED");
+    expect(body.error?.code).toBe("unauthorized");
     expect(db.__updateSet).not.toHaveBeenCalled();
   });
 });
@@ -2426,7 +2426,7 @@ describe("first-admin setup recovery", () => {
     const body = await response.json() as { error?: { code?: string } };
 
     expect(response.status).toBe(409);
-    expect(body.error?.code).toBe("CONFLICT");
+    expect(body.error?.code).toBe("conflict");
     expect(mocks.prepareCredentialIdentity).not.toHaveBeenCalled();
     expect(mocks.completeAdminSetupClaimWithCredentialIdentity).not.toHaveBeenCalled();
     expect(mocks.markAdminSetupClaimCompleted).not.toHaveBeenCalled();
@@ -2477,7 +2477,7 @@ describe("first-admin setup recovery", () => {
     const body = await response.json() as { error?: { code?: string; message?: string } };
 
     expect(response.status, JSON.stringify(body)).toBe(409);
-    expect(body.error?.code).toBe("CONFLICT");
+    expect(body.error?.code).toBe("conflict");
     expect(body.error?.message).toContain("existing password");
     expect(mocks.completeAdminSetupClaimWithUserPromotion).not.toHaveBeenCalled();
     expect(db.__updateSet).not.toHaveBeenCalled();
@@ -2506,7 +2506,7 @@ describe("first-admin setup recovery", () => {
     const body = await response.json() as { error?: { code?: string; message?: string } };
 
     expect(response.status, JSON.stringify(body)).toBe(409);
-    expect(body.error?.code).toBe("CONFLICT");
+    expect(body.error?.code).toBe("conflict");
     expect(body.error?.message).toContain("existing password");
     expect(db.__deleteWhere).not.toHaveBeenCalled();
     expect(mocks.completeAdminSetupClaimWithUserPromotion).not.toHaveBeenCalled();

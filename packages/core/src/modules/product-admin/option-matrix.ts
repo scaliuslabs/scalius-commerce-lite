@@ -921,7 +921,7 @@ export async function planProductOptionMatrix(
                   AND ${productVariants.stockVersion} = ${existing.stockVersion}
                   AND ${productVariants.reservedStock} <= ${variant.stock}
                   AND ${productVariants.deletedAt} IS NULL
-            )`, "OPTION_MATRIX_STOCK_CONFLICT"));
+            )`, "option_matrix_stock_conflict"));
     }
     for (const restored of restoredVariantById.values()) {
         statements.push(buildBatchGuard(db, sql`EXISTS (
@@ -933,7 +933,7 @@ export async function planProductOptionMatrix(
                   AND ${productVariants.reservedStock} = 0
                   AND ${productVariants.preorderStock} = 0
                   AND ${productVariants.deletedAt} IS NOT NULL
-            )`, "OPTION_MATRIX_RESTORE_CONFLICT"));
+            )`, "option_matrix_restore_conflict"));
     }
     if (retiringVariants.length > 0) {
         const retiringIds = JSON.stringify(retiringVariants.map((variant) => variant.id));
@@ -956,7 +956,7 @@ export async function planProductOptionMatrix(
                 )
                   AND ${sql.raw('"orders"."deleted_at"')} IS NULL
                   AND ${not(inArray(orders.status, CLOSED_ORDER_STATUSES))}
-            )`, "OPTION_MATRIX_RETIRE_CONFLICT"));
+            )`, "option_matrix_retire_conflict"));
     }
     if (defaultSku) {
         statements.push(buildBatchGuard(db, sql`EXISTS (
@@ -968,7 +968,7 @@ export async function planProductOptionMatrix(
                   AND ${productVariants.reservedStock} = 0
                   AND ${productVariants.preorderStock} = 0
                   AND ${productVariants.deletedAt} IS NULL
-            )`, "OPTION_MATRIX_DEFAULT_RETIRE_CONFLICT"));
+            )`, "option_matrix_default_retire_conflict"));
     }
     for (const variant of normalizedVariants) {
         const existing = variantById.get(variant.id);
@@ -1120,13 +1120,13 @@ const OPTION_MATRIX_CHANGED_MESSAGE = "This product changed while you were editi
  * changed after the plan read them), or null when the error is not theirs.
  */
 export function optionMatrixBatchConflict(error: unknown): ConflictError | null {
-    if (isBatchGuardError(error, "OPTION_MATRIX_STOCK_CONFLICT")) {
+    if (isBatchGuardError(error, "option_matrix_stock_conflict")) {
         return new ConflictError(STOCK_CHANGED_MESSAGE);
     }
     if (
-        isBatchGuardError(error, "OPTION_MATRIX_RESTORE_CONFLICT")
-        || isBatchGuardError(error, "OPTION_MATRIX_RETIRE_CONFLICT")
-        || isBatchGuardError(error, "OPTION_MATRIX_DEFAULT_RETIRE_CONFLICT")
+        isBatchGuardError(error, "option_matrix_restore_conflict")
+        || isBatchGuardError(error, "option_matrix_retire_conflict")
+        || isBatchGuardError(error, "option_matrix_default_retire_conflict")
     ) {
         return new ConflictError(OPTION_MATRIX_CHANGED_MESSAGE);
     }

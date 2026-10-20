@@ -44,15 +44,15 @@ export type CartValidationIssue = {
   productId: string;
   variantId: string | null;
   code:
-    | "PRODUCT_UNAVAILABLE"
-    | "VARIANT_REQUIRED"
-    | "VARIANT_UNAVAILABLE"
-    | "VARIANT_MISMATCH"
-    | "QUANTITY_UNAVAILABLE"
-    | "PRICE_CHANGED"
-    | "PROPERTIES_REQUIRED"
-    | "PROPERTIES_INVALID"
-    | "FULFILMENT_UNAVAILABLE";
+    | "product_unavailable"
+    | "variant_required"
+    | "variant_unavailable"
+    | "variant_mismatch"
+    | "quantity_unavailable"
+    | "price_changed"
+    | "properties_required"
+    | "properties_invalid"
+    | "fulfilment_unavailable";
   action: "remove" | "select_variant" | "reduce_quantity" | "refresh_item" | "edit_properties";
   message: string;
   productName: string | null;
@@ -349,7 +349,7 @@ export async function createOrder(
             return {
               success: false,
               status: 409,
-              errorCode: "CHECKOUT_ATTEMPT_EXPIRED",
+              errorCode: "checkout_attempt_expired",
               error: "This checkout has ended. Please review your cart before placing a new order.",
             };
           } else if (statusData.status === "failed") {

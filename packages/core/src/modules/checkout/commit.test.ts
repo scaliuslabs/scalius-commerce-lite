@@ -797,7 +797,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
         itemIssues: [
           {
             cartKey: "line_1",
-            code: "QUANTITY_UNAVAILABLE",
+            code: "quantity_unavailable",
             productName: "Discounted Product",
             message: "Discounted Product is no longer available in the requested quantity.",
             requestedQuantity: 2,

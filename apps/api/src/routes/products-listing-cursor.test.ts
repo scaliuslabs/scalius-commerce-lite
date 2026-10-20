@@ -82,7 +82,7 @@ describe("GET /api/v1/products cursor contract", () => {
     for (const query of queries) {
       const result = await list({ limit: "5", ...query });
       expect(result.status, JSON.stringify(query)).toBe(400);
-      expect(result.body.error?.code).toBe("INVALID_CURSOR");
+      expect(result.body.error?.code).toBe("invalid_cursor");
     }
   });
 

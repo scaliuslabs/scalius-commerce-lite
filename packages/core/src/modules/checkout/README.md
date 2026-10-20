@@ -54,7 +54,7 @@ Any app that throws, times out (1.5 s) or answers invalid output is skipped
 and logged on its page (fail-open); a semantic problem (an unknown line or
 rate) is logged the same way. An app registered with `onError: "block"`
 (cart.validate and checkout.payment_methods only) instead stops checkout on
-every channel: `400 details.reason = "CHECKOUT_APP_UNAVAILABLE"` with the
+every channel: `400 details.reason = "checkout_app_unavailable"` with the
 store's `checkoutAppUnavailableText` (`store-copy.ts`, the active checkout
 language with the merchant's edits).
 
@@ -88,7 +88,7 @@ language with the merchant's edits).
   commits of apps whose discounts applied; the order payload carries them as
   `appObjectCommits` and `commitStorefrontOrderPayload` writes them in the
   same batch behind revision guards (`plugins/storage.ts`). A record changed
-  since pricing fails the whole order with `APP_OFFER_CHANGED` and the store's
+  since pricing fails the whole order with `app_offer_changed` and the store's
   `checkoutAppOfferChangedText`: a balance is never spent twice. Staff orders
   price without a signed-in buyer, so no commit can arise there.
 - **Persistence**: no schema change. Line `discount_amount_minor` is the
@@ -144,7 +144,7 @@ language with the merchant's edits).
   product's `is_gift_card`; the delivery preflight turns physical lines into
   `ship` (a delivery rate) or `pickup` (a pickup rate). A cart with nothing
   physical has no method, no fee and no address. A line whose type has no
-  fulfiller (`fulfilment/registry.ts`) fails closed with `FULFILMENT_UNAVAILABLE`.
+  fulfiller (`fulfilment/registry.ts`) fails closed with `fulfilment_unavailable`.
 - **Address.** Required only when a line ships (`orders.requires_shipping`,
   also a trigger). Without one the tax destination is null: only store-wide
   rates apply. Cash on delivery needs a line handed over in person.

@@ -56,23 +56,23 @@ const fieldsOf = (entry: string | readonly string[]): string[] => (typeof entry 
 
 export function requireRecordId(id: unknown): string {
   if (typeof id !== "string" || id.length < 1 || id.length > OBJECT_RECORD_ID_MAX_LENGTH || /\p{Cc}/u.test(id)) {
-    throw new ObjectError("object.invalid_id", `Record ids are 1 to ${OBJECT_RECORD_ID_MAX_LENGTH} printable characters.`);
+    throw new ObjectError("object_invalid_id", `Record ids are 1 to ${OBJECT_RECORD_ID_MAX_LENGTH} printable characters.`);
   }
   return id;
 }
 
 function requireRecord(record: unknown): { data: Record<string, unknown>; json: string } {
   if (typeof record !== "object" || record === null || Array.isArray(record)) {
-    throw new ObjectError("object.invalid_record", "A record is a plain JSON object.");
+    throw new ObjectError("object_invalid_record", "A record is a plain JSON object.");
   }
   let json: string;
   try {
     json = JSON.stringify(record);
   } catch {
-    throw new ObjectError("object.invalid_record", "A record must be JSON-serializable.");
+    throw new ObjectError("object_invalid_record", "A record must be JSON-serializable.");
   }
   if (new TextEncoder().encode(json).byteLength > OBJECT_RECORD_MAX_BYTES) {
-    throw new ObjectError("object.record_too_large", `A record is at most ${OBJECT_RECORD_MAX_BYTES} bytes of JSON.`);
+    throw new ObjectError("object_record_too_large", `A record is at most ${OBJECT_RECORD_MAX_BYTES} bytes of JSON.`);
   }
   return { data: JSON.parse(json) as Record<string, unknown>, json };
 }
@@ -82,7 +82,7 @@ function indexedValue(declaration: ObjectTypeDeclaration, field: string, value: 
   const type = declaration.fields.find((entry) => entry.key === field)?.type;
   if (type !== "decimal" || value === undefined || value === null) return indexScalar(value, field);
   const text = String(value);
-  if (!/^-?\d+(?:\.\d+)?$/.test(text)) throw new ObjectError("object.invalid_index_value", `${field} must be a decimal.`);
+  if (!/^-?\d+(?:\.\d+)?$/.test(text)) throw new ObjectError("object_invalid_index_value", `${field} must be a decimal.`);
   const negative = text.startsWith("-");
   const [whole = "0", fraction = ""] = text.replace(/^-/, "").split(".");
   const combined = whole + fraction;
@@ -114,11 +114,11 @@ function uniqueViolation(error: unknown, declaration: ObjectTypeDeclaration): Ob
   for (let current: unknown = error, hops = 0; current && hops < 5; hops += 1) {
     const message = current instanceof Error ? current.message : String(current);
     const match = /object_records[._](u[12])/i.exec(message);
-    if (/object_records[._]handle|object_records\.type_id, object_records\.handle/i.test(message)) return new ObjectError("object.unique_violation", "Another record has this handle.");
+    if (/object_records[._]handle|object_records\.type_id, object_records\.handle/i.test(message)) return new ObjectError("object_unique_violation", "Another record has this handle.");
     if (match) {
       const slot = match[1]!.toLowerCase() === "u1" ? 0 : 1;
       const fields = fieldsOf(declaration.unique[slot] ?? []);
-      return new ObjectError("object.unique_violation", `Another record already has this ${fields.join(" + ")}.`, { fields });
+      return new ObjectError("object_unique_violation", `Another record already has this ${fields.join(" + ")}.`, { fields });
     }
     current = current instanceof Error ? (current as Error & { cause?: unknown }).cause : undefined;
   }
@@ -210,12 +210,12 @@ export type ObjectOperation =
   | { op: "delete"; object: string; id: string; expectedRevision?: number | null }
   | { op: "check"; object: string; id: string; expectedRevision: number | null };
 
-const CONFLICT_MARKER = "OBJECT_CONFLICT";
+const CONFLICT_MARKER = "object_conflict";
 
 function requireExpectedRevision(value: unknown, required: boolean): ObjectExpectedRevision {
   if (value === undefined && !required) return undefined;
   if (value === null || (typeof value === "number" && Number.isSafeInteger(value) && value >= 1)) return value;
-  throw new ObjectError("object.invalid_batch", "expectedRevision is a revision you read (a whole number from 1), or null for a record that must not exist.");
+  throw new ObjectError("object_invalid_batch", "expectedRevision is a revision you read (a whole number from 1), or null for a record that must not exist.");
 }
 
 /** The statements of one atomic write and how to read its result back. */
@@ -237,12 +237,12 @@ function planRecordWrites(
   const planned: PlannedWrite = { guards: [], writes: [], writeIndex: [] };
   operations.forEach((operation, index) => {
     if (typeof operation !== "object" || operation === null || !["put", "delete", "check"].includes(operation.op)) {
-      throw new ObjectError("object.invalid_batch", "Each operation is { op: \"put\" | \"delete\" | \"check\", object, id, … }.");
+      throw new ObjectError("object_invalid_batch", "Each operation is { op: \"put\" | \"delete\" | \"check\", object, id, … }.");
     }
     const declaration = objects(operation.object);
     const recordId = requireRecordId(operation.id);
     const key = `${operation.object}\u0000${recordId}`;
-    if (seen.has(key)) throw new ObjectError("object.invalid_batch", "A batch writes each record once.");
+    if (seen.has(key)) throw new ObjectError("object_invalid_batch", "A batch writes each record once.");
     seen.add(key);
     const expected = requireExpectedRevision(operation.expectedRevision, operation.op === "check");
     const target = and(owned(namespace, operation.object), eq(objectRecords.id, recordId));
@@ -265,11 +265,11 @@ function planRecordWrites(
     }
     const raw = requireRecord(operation.record);
     const checked = prepareObjectData(declaration, raw.data, context, operation.status ?? (declaration.storefront ? "draft" : "active"));
-    if (!checked.ok) throw new ObjectError("object.invalid", "Check the object fields.", checked.issues);
+    if (!checked.ok) throw new ObjectError("object_invalid", "Check the object fields.", checked.issues);
     const { data, json } = requireRecord(checked.data);
     const status = operation.status ?? (declaration.storefront ? "draft" : "active");
-    if (!declaration.storefront && status !== "active" || declaration.storefront && status === "active") throw new ObjectError("object.invalid", "Only storefront objects have draft or published status.");
-    if (operation.handle !== undefined && (!declaration.handle || (operation.handle !== null && !OBJECT_HANDLE_PATTERN.test(operation.handle)))) throw new ObjectError("object.invalid", "This object does not accept that handle.");
+    if (!declaration.storefront && status !== "active" || declaration.storefront && status === "active") throw new ObjectError("object_invalid", "Only storefront objects have draft or published status.");
+    if (operation.handle !== undefined && (!declaration.handle || (operation.handle !== null && !OBJECT_HANDLE_PATTERN.test(operation.handle)))) throw new ObjectError("object_invalid", "This object does not accept that handle.");
     // A write advances the record's revision and (cdep trigger, 0110) the
     // object's storefront key.
     planned.writes.push(db.insert(objectRecords).values({
@@ -312,7 +312,7 @@ function conflictIndex(error: unknown): number | null {
   if (!isBatchGuardError(error, CONFLICT_MARKER)) return null;
   for (let current: unknown = error, hops = 0; current && hops < 5; hops += 1) {
     const message = current instanceof Error ? current.message : String(current);
-    const match = new RegExp(`${CONFLICT_MARKER}_(\\d+)`).exec(message);
+    const match = new RegExp(`${CONFLICT_MARKER}_(\\d+)`, "i").exec(message);
     if (match) return Number(match[1]);
     current = current instanceof Error ? (current as Error & { cause?: unknown }).cause : undefined;
   }
@@ -323,7 +323,7 @@ function conflictError(index: number, operations: readonly ObjectOperation[]): O
   const operation = operations[index];
   const what = operation ? `${operation.object}/${operation.id}` : "a record";
   return new ObjectError(
-    "object.conflict",
+    "object_conflict",
     `${what} changed since it was read (or exists when it must not): read it again and retry.`,
     { index },
   );
@@ -332,7 +332,7 @@ function conflictError(index: number, operations: readonly ObjectOperation[]): O
 /**
  * Writes the operations all-or-nothing in one provider batch: every
  * condition is checked first, and one that fails aborts the whole batch with
- * `object.conflict` (details.index names the operation). Returns each
+ * `object_conflict` (details.index names the operation). Returns each
  * operation's new revision (null for a delete or a check).
  */
 export async function writeObjectRecords(
@@ -342,9 +342,9 @@ export async function writeObjectRecords(
   operations: readonly ObjectOperation[],
 ): Promise<Array<number | null>> {
   if (!Array.isArray(operations) || operations.length < 1 || operations.length > OBJECT_BATCH_MAX_OPS) {
-    throw new ObjectError("object.invalid_batch", `A batch has 1 to ${OBJECT_BATCH_MAX_OPS} operations.`);
+    throw new ObjectError("object_invalid_batch", `A batch has 1 to ${OBJECT_BATCH_MAX_OPS} operations.`);
   }
-  if (operations.some((operation) => !operation || typeof operation !== "object" || !["put", "delete", "check"].includes(operation.op))) throw new ObjectError("object.invalid_batch", "Each operation must name its action, object and id.");
+  if (operations.some((operation) => !operation || typeof operation !== "object" || !["put", "delete", "check"].includes(operation.op))) throw new ObjectError("object_invalid_batch", "Each operation must name its action, object and id.");
   const implicitStatus = operations.filter((operation) => operation.op === "put" && operation.status === undefined && objects(operation.object).storefront);
   if (implicitStatus.length) {
     const keys = implicitStatus.map((operation) => ({ typeId: objectTypeId(namespace, operation.object), id: requireRecordId(operation.id) }));
@@ -431,10 +431,10 @@ export function prepareAppObjectCommit(input: {
   record: unknown;
   context?: CustomFieldCodecContext;
 }): AppObjectCommit {
-  if (!input.context && input.declaration.fields.some((field) => field.type === "money" || field.type === "list.money")) throw new ObjectError("object.invalid", "Money fields require the checkout currency context.");
+  if (!input.context && input.declaration.fields.some((field) => field.type === "money" || field.type === "list.money")) throw new ObjectError("object_invalid", "Money fields require the checkout currency context.");
   const raw = requireRecord(input.record);
   const checked = prepareObjectData(input.declaration, raw.data, input.context ?? { currencyCode: "USD", decimalPlaces: 2 });
-  if (!checked.ok) throw new ObjectError("object.invalid", "Check the object fields.", checked.issues);
+  if (!checked.ok) throw new ObjectError("object_invalid", "Check the object fields.", checked.issues);
   const { data, json } = requireRecord(checked.data);
   return {
     pluginId: input.pluginId,
@@ -448,7 +448,7 @@ export function prepareAppObjectCommit(input: {
   };
 }
 
-const APP_OBJECT_COMMIT_CONFLICT = "APP_OBJECT_COMMIT_CONFLICT";
+const APP_OBJECT_COMMIT_CONFLICT = "app_object_commit_conflict";
 
 /**
  * The statements of app record commits for a caller's own atomic batch
@@ -508,7 +508,8 @@ export function appObjectCommitStatements(db: Database, commits: readonly AppObj
 export function isAppObjectCommitConflict(error: unknown): boolean {
   for (let current: unknown = error, hops = 0; current && hops < 5; hops += 1) {
     const message = current instanceof Error ? current.message : String(current);
-    if (message.includes(APP_OBJECT_COMMIT_CONFLICT) || /object_records[._]u[12]/i.test(message)) return true;
+    // The batch guard spells its marker upper-case in SQL (buildBatchGuard).
+    if (message.includes(APP_OBJECT_COMMIT_CONFLICT.toUpperCase()) || /object_records[._]u[12]/i.test(message)) return true;
     current = current instanceof Error ? (current as Error & { cause?: unknown }).cause : undefined;
   }
   return false;
@@ -596,7 +597,7 @@ export function planObjectRecordQuery(
     ...declaration.unique.map((entry) => `unique ${fieldsOf(entry).join("+")}`),
   ].join(", ") || "none";
   throw new ObjectError(
-    "object.unindexed_query",
+    "object_unindexed_query",
     `Query by the leading fields of a declared index and order by its next field (declared indexes: ${declared}).`,
   );
 }
@@ -621,7 +622,7 @@ function decodeCursor(value: string, fingerprint: string): Cursor {
   } catch {
     // Fall through to the refusal.
   }
-  throw new ObjectError("object.invalid_cursor", "The cursor does not belong to this query.");
+  throw new ObjectError("object_invalid_cursor", "The cursor does not belong to this query.");
 }
 
 async function storedWhere(db: Database, declaration: ObjectTypeDeclaration, where: ObjectWhere | undefined): Promise<ObjectWhere | undefined> {
@@ -634,7 +635,7 @@ async function storedWhere(db: Database, declaration: ObjectTypeDeclaration, whe
   const asMoney = (value: unknown) => isCustomFieldMoney(value) ? value
     : typeof value === "number" || (typeof value === "string" && /^\d{1,16}$/.test(value)) ? customFieldMoney(Number(value), context) : value;
   const checked = prepareObjectData({ fields: money.map((field) => ({ ...field, required: false })) }, Object.fromEntries(money.map((field) => [field.key, asMoney(where[field.key])])), context);
-  if (!checked.ok) throw new ObjectError("object.invalid", "Check the object filter.", checked.issues);
+  if (!checked.ok) throw new ObjectError("object_invalid", "Check the object filter.", checked.issues);
   return { ...where, ...checked.data } as ObjectWhere;
 }
 
@@ -656,7 +657,7 @@ export async function queryObjectRecords(
   const plan = planObjectRecordQuery(declaration, { ...input, where: await storedWhere(db, declaration, input.where) });
   const fingerprint = `${plan.fingerprint}:${input.orderBy?.direction === "desc" ? "desc" : "asc"}`;
   const limit = Math.min(Math.max(1, Math.floor(input.limit ?? OBJECT_DEFAULT_LIMIT)), OBJECT_MAX_LIMIT);
-  if (!Number.isFinite(limit)) throw new ObjectError("object.invalid_cursor", "The limit must be a number.");
+  if (!Number.isFinite(limit)) throw new ObjectError("object_invalid_cursor", "The limit must be a number.");
   const descending = input.orderBy?.direction === "desc";
   const sortColumn = plan.orderByIndex && plan.column ? objectRecords[plan.column] : null;
   const after = descending ? lt : gt;
@@ -740,7 +741,7 @@ export async function reindexObjectType(
       for (const [slot, key] of UNIQUE_COLUMNS.entries()) {
         const value = columns[key];
         if (value !== null && value !== undefined) {
-          if (unique[slot]!.has(value)) throw new ObjectError("object.unique_violation", "Existing records share a value required to be unique.");
+          if (unique[slot]!.has(value)) throw new ObjectError("object_unique_violation", "Existing records share a value required to be unique.");
           unique[slot]!.add(value);
         }
       }
@@ -752,7 +753,7 @@ export async function reindexObjectType(
   const versions = JSON.stringify(prepared.map(({ id, revision }) => ({ id, revision })));
   const guard = buildBatchGuard(db, sql`(SELECT count(*) FROM ${objectRecords} WHERE ${objectRecords.typeId} = ${typeId}) = ${prepared.length}
     AND NOT EXISTS (SELECT 1 FROM json_each(${versions}) AS expected WHERE NOT EXISTS (SELECT 1 FROM ${objectRecords}
-      WHERE ${objectRecords.typeId} = ${typeId} AND ${objectRecords.id} = json_extract(expected.value, '$.id') AND ${objectRecords.revision} = json_extract(expected.value, '$.revision')))`, "OBJECT_REINDEX_CONFLICT");
+      WHERE ${objectRecords.typeId} = ${typeId} AND ${objectRecords.id} = json_extract(expected.value, '$.id') AND ${objectRecords.revision} = json_extract(expected.value, '$.revision')))`, "object_reindex_conflict");
   const writes: unknown[] = [guard, ...before];
   if (prepared.length) {
     // Clear only inside the same transaction: new unique fields may swap the old slot values.
@@ -779,6 +780,6 @@ export async function reindexObjectType(
     }).where(eq(objectRecords.typeId, typeId)));
   }
   try { await safeBatch(db, writes as never); }
-  catch (error) { if (isBatchGuardError(error, "OBJECT_REINDEX_CONFLICT")) throw new ObjectError("object.conflict", "Records changed while updating the type. Retry the update."); throw uniqueViolation(error, declaration) ?? error; }
+  catch (error) { if (isBatchGuardError(error, "object_reindex_conflict")) throw new ObjectError("object_conflict", "Records changed while updating the type. Retry the update."); throw uniqueViolation(error, declaration) ?? error; }
   return prepared.length;
 }

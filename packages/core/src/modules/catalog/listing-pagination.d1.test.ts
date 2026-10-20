@@ -131,7 +131,7 @@ describe.each(PLANS)("storefront listing cursors on the %s plan", (plan) => {
         const { db } = await setup(20);
         const cursor = (await getStorefrontProducts(db, { limit: 5, sort: "price-asc" })).pageInfo.endCursor!;
         const bad = async (params: Parameters<typeof getStorefrontProducts>[1]) =>
-            expect(getStorefrontProducts(db, params)).rejects.toMatchObject({ status: 400, code: "INVALID_CURSOR" });
+            expect(getStorefrontProducts(db, params)).rejects.toMatchObject({ status: 400, code: "invalid_cursor" });
         await bad({ sort: "price-desc", cursor });
         await bad({ sort: "newest", cursor });
         await bad({ sort: "name-asc", cursor });

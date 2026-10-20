@@ -255,7 +255,7 @@ describe("useProductSubmit", () => {
   it("leaves the variant draft unsaved when the save that carried it is refused", async () => {
     renderHarness({ isEdit: true, aggregateRevision: 4 });
     mocks.serverMutation.mockRejectedValueOnce(new AdminApiResponseError(
-      "Allocate exactly 5 on-hand units across the new combinations. Currently allocated: 3.", 400, "VALIDATION_ERROR",
+      "Allocate exactly 5 on-hand units across the new combinations. Currently allocated: 3.", 400, "validation_error",
     ));
 
     await expect(requireResult(result).submit(productValues(), 4, { defaultSku: { sku: "EID-1", trackInventory: true, weight: null, barcode: null, barcodeType: null } }))
@@ -268,7 +268,7 @@ describe("useProductSubmit", () => {
     const conflict = { expectedRevision: 6, currentRevision: 7 };
     renderHarness({ isEdit: true, aggregateRevision: 6 });
     mocks.serverMutation.mockRejectedValueOnce(
-      new AdminApiResponseError("This product changed.", 409, "PRODUCT_REVISION_CONFLICT", conflict),
+      new AdminApiResponseError("This product changed.", 409, "product_revision_conflict", conflict),
     );
 
     await expect(requireResult(result).submit(productValues())).rejects.toMatchObject({
@@ -297,7 +297,7 @@ describe("useProductSubmit", () => {
     mocks.serverMutation.mockRejectedValueOnce(new AdminApiResponseError(
       "SKU TEE-M is already used by Cotton tee.",
       409,
-      "SKU_TAKEN",
+      "sku_taken",
       { field: "optionMatrix.variants.1.sku", sku: "TEE-M", productId: "prod_x", productName: "Cotton tee" },
     ));
     await expect(requireResult(result).submit(productValues())).rejects.toMatchObject({ lines: ["M / White: taken"] });
@@ -321,7 +321,7 @@ describe("useProductSubmit", () => {
   it("requires explicit SKU fallback acknowledgement before removing assigned media", async () => {
     renderHarness({ isEdit: true, aggregateRevision: 4 });
     mocks.serverMutation.mockRejectedValueOnce(
-      new AdminApiResponseError("Removed images are assigned to SKUs.", 409, "PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT", {
+      new AdminApiResponseError("Removed images are assigned to SKUs.", 409, "product_media_sku_reference_conflict", {
         affectedCount: 2,
         affectedAssociationIds: ["pmed_assigned_1"],
         affectedSkus: [{ id: "var_white", sku: "TEA-WHITE", imageId: "pmed_assigned_1" }],

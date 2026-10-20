@@ -162,9 +162,9 @@ export async function retryAppDelivery(id: string, deliveryId: string) {
   return delivery;
 }
 
-/** The app platform's own refusal code (`installation.grant_changed`), or null. */
+/** The app platform's own refusal code (`installation_grant_changed`), or null. */
 export function appErrorCode(error: unknown): string | null {
-  if (!(error instanceof AdminApiResponseError) || error.code !== "PLUGIN_ERROR") return null;
+  if (!(error instanceof AdminApiResponseError) || error.code !== "plugin_error") return null;
   const code = (error.details as { code?: unknown } | null | undefined)?.code;
   return typeof code === "string" ? code : null;
 }
@@ -172,12 +172,12 @@ export function appErrorCode(error: unknown): string | null {
 /** The app changed after the page loaded it (another tab, another person, or an update). */
 export function isAppChangedError(error: unknown): boolean {
   const code = appErrorCode(error);
-  return code === "installation.revision_conflict" || code === "installation.grant_changed";
+  return code === "installation_revision_conflict" || code === "installation_grant_changed";
 }
 
-/** Settings the API refused, one per key (`settings.invalid`). */
+/** Settings the API refused, one per key (`settings_invalid`). */
 export function appSettingErrors(error: unknown): Array<{ key: string; message: string }> | null {
-  if (appErrorCode(error) !== "settings.invalid") return null;
+  if (appErrorCode(error) !== "settings_invalid") return null;
   const errors = (error as AdminApiResponseError).details as { errors?: unknown };
   if (!Array.isArray(errors.errors)) return null;
   const list = errors.errors.flatMap((item: unknown) => {

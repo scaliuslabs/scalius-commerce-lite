@@ -49,7 +49,7 @@ describe("admin product aggregate revision OpenAPI contract", () => {
             );
             expect(json, `${method.toUpperCase()} ${path}`).toContain('"409"');
             expect(json, `${method.toUpperCase()} ${path}`).toContain(
-                "PRODUCT_REVISION_CONFLICT",
+                "product_revision_conflict",
             );
         }
     });

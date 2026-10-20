@@ -18,7 +18,7 @@ const input = {
 };
 
 const refusal = (details: Record<string, unknown>) =>
-  new Response(JSON.stringify({ success: false, error: { code: "VALIDATION_ERROR", message: "No.", details } }), { status: 400 });
+  new Response(JSON.stringify({ success: false, error: { code: "validation_error", message: "No.", details } }), { status: 400 });
 
 beforeEach(() => mocks.apiFetch.mockReset());
 

@@ -18,7 +18,7 @@ function fakeStore(options: { failAt?: number; status?: number } = {}) {
       const call = input as ImportCall;
       calls.push(call);
       if (options.failAt === calls.length) {
-        return { ok: false, status: options.status ?? 503, data: null, error: { code: "service.unavailable", message: "busy" } };
+        return { ok: false, status: options.status ?? 503, data: null, error: { code: "service_unavailable", message: "busy" } };
       }
       let created = 0;
       for (const place of call.body.places) {

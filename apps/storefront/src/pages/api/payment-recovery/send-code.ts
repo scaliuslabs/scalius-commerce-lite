@@ -9,12 +9,12 @@ import {
 
 export const POST: APIRoute = async ({ request }) => {
   if (shouldRejectCrossOriginCookieRequest(request)) {
-    return orderCodeJsonResponse({ success: false, errorCode: "PAYMENT_RECOVERY_REQUEST_DENIED" }, 403);
+    return orderCodeJsonResponse({ success: false, errorCode: "payment_recovery_request_denied" }, 403);
   }
 
   const fields = await readOrderCodeFields(request);
   if (!fields) {
-    return orderCodeJsonResponse({ success: false, errorCode: "PAYMENT_RECOVERY_INVALID_REQUEST" }, 400);
+    return orderCodeJsonResponse({ success: false, errorCode: "payment_recovery_invalid_request" }, 400);
   }
   // Same neutral answer as an ineligible order: the link alone reveals nothing.
   if (!fields.orderId) return orderCodeJsonResponse({ success: true, sent: false });

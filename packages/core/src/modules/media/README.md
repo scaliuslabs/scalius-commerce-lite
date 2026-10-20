@@ -43,7 +43,7 @@ Product photos are `product_media` rows that point at `media` with `restrict`. O
 - Metadata, poster, folder moves, trash and restore need the current `version`. Renditions are derived storage and do not advance it.
 - A trashed file still shows everywhere it is used (projections accept `ready` and `trashed`).
 - A video poster must be a ready image. Image-only buyer and discovery surfaces use an image or a poster, never a video URL.
-- Permanent delete needs the file in trash, no usage and no order-line image snapshot. Otherwise it answers `409 MEDIA_DEPENDENCY_CONFLICT` with the usage. It claims `deleting` behind the `noMediaUsage` guard, deletes the original and renditions from R2, then commits `deleted`. A retry on a `deleting` row finishes the job.
+- Permanent delete needs the file in trash, no usage and no order-line image snapshot. Otherwise it answers `409 media_dependency_conflict` with the usage. It claims `deleting` behind the `noMediaUsage` guard, deletes the original and renditions from R2, then commits `deleted`. A retry on a `deleting` row finishes the job.
 - Deleting a folder moves its files to the root.
 
 ## Renditions

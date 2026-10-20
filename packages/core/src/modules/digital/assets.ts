@@ -438,7 +438,7 @@ export async function completeDigitalAssetUpload(
         const parts: R2UploadedPart[] = [];
         for (let partNumber = 1; partNumber <= count; partNumber += 1) {
             const etag = manifest.parts[String(partNumber)];
-            if (!etag) throw new AppError(409, "UPLOAD_INCOMPLETE", `Part ${partNumber} of ${count} is missing. Resume the upload.`);
+            if (!etag) throw new AppError(409, "upload_incomplete", `Part ${partNumber} of ${count} is missing. Resume the upload.`);
             parts.push({ partNumber, etag });
         }
         try {
@@ -450,7 +450,7 @@ export async function completeDigitalAssetUpload(
         }
         const head = await storage.head(upload.r2Key);
         if (!head || head.size !== manifest.sizeBytes) {
-            throw new AppError(409, "UPLOAD_SIZE_MISMATCH", "The uploaded file isn't the declared size. Start the upload again.");
+            throw new AppError(409, "upload_size_mismatch", "The uploaded file isn't the declared size. Start the upload again.");
         }
     }
     await safeBatch(db, [
@@ -507,7 +507,7 @@ export async function updateDigitalAsset(db: Database, assetId: string, input: U
         updatedAt: sql`unixepoch()`,
     }).where(and(eq(digitalAssets.id, assetId), eq(digitalAssets.version, input.version)))
         .returning({ id: digitalAssets.id });
-    if (updated.length === 0) throw new AppError(409, "DIGITAL_ASSET_CHANGED", "Someone else changed this item. Reload and try again.");
+    if (updated.length === 0) throw new AppError(409, "digital_asset_changed", "Someone else changed this item. Reload and try again.");
     return getDigitalAsset(db, assetId);
 }
 
@@ -523,7 +523,7 @@ export async function deleteDigitalAsset(db: Database, bucket: R2Bucket | undefi
     }).from(digitalAssets).where(eq(digitalAssets.id, assetId)).get();
     if (!asset) throw new NotFoundError("Digital item not found");
     if (Number(asset.entitlements) > 0 || Number(asset.keys) > 0) {
-        throw new AppError(409, "DIGITAL_ASSET_IN_USE", "Customers received this item or it holds keys. Archive it instead.");
+        throw new AppError(409, "digital_asset_in_use", "Customers received this item or it holds keys. Archive it instead.");
     }
     const uploads = await db.select({ r2Key: digitalAssetUploads.r2Key, r2UploadId: digitalAssetUploads.r2UploadId, status: digitalAssetUploads.status })
         .from(digitalAssetUploads).where(eq(digitalAssetUploads.assetId, assetId)).all();
@@ -531,7 +531,7 @@ export async function deleteDigitalAsset(db: Database, bucket: R2Bucket | undefi
         eq(digitalAssets.id, assetId),
         sql`NOT EXISTS (SELECT 1 FROM ${digitalEntitlements} e WHERE e.asset_id = ${assetId})`,
     )).returning({ id: digitalAssets.id });
-    if (removed.length === 0) throw new AppError(409, "DIGITAL_ASSET_IN_USE", "Customers received this item. Archive it instead.");
+    if (removed.length === 0) throw new AppError(409, "digital_asset_in_use", "Customers received this item. Archive it instead.");
     if (bucket) {
         for (const upload of uploads) {
             if (upload.status === "uploading") {

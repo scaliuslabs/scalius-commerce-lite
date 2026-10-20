@@ -154,7 +154,7 @@ describe("policies", () => {
   it("takes the next free page address when an earlier policy page (even one in trash) holds it", async () => {
     sdk.postApiV1AdminPages
       .mockImplementationOnce(() => Promise.resolve({
-        error: { success: false, error: { code: "CONFLICT", message: "A page with this slug already exists, including in trash." } },
+        error: { success: false, error: { code: "conflict", message: "A page with this slug already exists, including in trash." } },
         response: { status: 409 },
       }))
       .mockImplementation(() => envelope({ id: "page_new", revision: 1 }));

@@ -19,7 +19,7 @@ export const SDK_CONTRACT_GEN = join(root, "packages/plugin-sdk/src/testing-cont
 /** Every operation the host knows, with its stability (generated from the OpenAPI contract). */
 export const AGENT_OPERATIONS_MANIFEST = join(root, "apps/api/src/generated/agent-operations.gen.txt");
 
-/** The ids of operations that exist but are not stable: the host refuses an app's call to one with 403 `api.operation_not_stable`. */
+/** The ids of operations that exist but are not stable: the host refuses an app's call to one with 403 `api_operation_not_stable`. */
 export function nonStableOperationIds(manifestText) {
   const { operations } = JSON.parse(manifestText);
   return [...new Set(operations.filter((operation) => operation.stability !== "stable").map((operation) => operation.operationId))].sort();
@@ -37,7 +37,7 @@ export function renderContractModule(snapshotText, manifestText) {
     "",
     `export const STABLE_CONTRACT: StableContract = JSON.parse(${JSON.stringify(compact)});`,
     "",
-    "/** Operations that exist but are not stable (beta or internal): an app's call is refused with 403 `api.operation_not_stable`. */",
+    "/** Operations that exist but are not stable (beta or internal): an app's call is refused with 403 `api_operation_not_stable`. */",
     `export const NON_STABLE_OPERATION_IDS: readonly string[] = JSON.parse(${JSON.stringify(JSON.stringify(nonStableOperationIds(manifestText)))});`,
     "",
   ].join("\n");

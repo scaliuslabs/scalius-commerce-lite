@@ -121,7 +121,7 @@ export function plain(value: unknown, max = 120): string {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, max) : "";
 }
 
-/** The error code a platform refusal carries (`object.conflict`). */
+/** The error code a platform refusal carries (`object_conflict`). */
 export const errorCode = (error: unknown) => (typeof error === "object" && error !== null && "code" in error ? String((error as { code: unknown }).code) : "");
 
 /** Formats integer minor units for an email or a portal page, in the store's decimals (no locale: the portal formats with the SDK). */

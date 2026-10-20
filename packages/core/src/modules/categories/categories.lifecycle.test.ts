@@ -96,6 +96,6 @@ describe("category lifecycle authority", () => {
       image: { url: "https://media.example/media/media_category_1.png" },
       expectedRevision: 1,
       status: "published",
-    } as never)).rejects.toMatchObject({ code: "CATEGORY_REVISION_CONFLICT" });
+    } as never)).rejects.toMatchObject({ code: "category_revision_conflict" });
   });
 });

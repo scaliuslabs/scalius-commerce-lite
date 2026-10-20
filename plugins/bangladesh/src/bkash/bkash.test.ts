@@ -26,7 +26,7 @@ interface Call { environment: string; path: string; headers: Record<string, stri
 interface FakePayment { amount: string; invoice: string; status: string; trxID: string | null; authorized: boolean }
 
 const fail = (statusCode: string, statusMessage: string): Reply => ({ body: { statusCode, statusMessage } });
-const timeout = () => new Error("[http.timeout] The request timed out.");
+const timeout = () => new Error("[http_timeout] The request timed out.");
 
 class FakeBkash {
   readonly calls: Call[] = [];
@@ -237,31 +237,31 @@ describe("bKash: sessions", () => {
     const declined = setup();
     declined.bank.script("create", fail("2006", "Invalid Amount"));
     expect((await declined.run("createSession", sessionInput())).error)
-      .toMatchObject({ category: "declined", uncertain: false, code: "bkash.2006", message: "bKash did not start the payment (bKash code 2006: Invalid Amount)." });
+      .toMatchObject({ category: "declined", uncertain: false, code: "bkash_2006", message: "bKash did not start the payment (bKash code 2006: Invalid Amount)." });
     // Nothing was stored, so a retry creates the payment.
     expect(declined.harness.records.get("bkash_payments")?.size).toBe(0);
 
     const badCredentials = setup();
     badCredentials.bank.script("token/grant", fail("2079", "Invalid username and password"));
     expect((await badCredentials.run("createSession", sessionInput())).error)
-      .toMatchObject({ category: "misconfigured", code: "bkash.credentials", message: "bKash rejected the app key, app secret, username or password." });
+      .toMatchObject({ category: "misconfigured", code: "bkash_credentials", message: "bKash rejected the app key, app secret, username or password." });
     expect(badCredentials.bank.paths()).toEqual(["token/grant"]);
 
     const unauthorized = setup();
     unauthorized.bank.script("token/grant", { status: 403, body: { message: "Forbidden" } });
-    expect((await unauthorized.run("createSession", sessionInput())).error).toMatchObject({ category: "misconfigured", code: "bkash.credentials" });
+    expect((await unauthorized.run("createSession", sessionInput())).error).toMatchObject({ category: "misconfigured", code: "bkash_credentials" });
 
     const unset = setup({ bkash_password: "" });
-    expect((await unset.run("createSession", sessionInput())).error).toMatchObject({ category: "misconfigured", code: "bkash.settings" });
+    expect((await unset.run("createSession", sessionInput())).error).toMatchObject({ category: "misconfigured", code: "bkash_settings" });
     expect(unset.bank.calls).toHaveLength(0);
   });
 
   it("raises an uncertain retryable error when bKash's answer to a create is lost", async () => {
     const { bank, harness, run } = setup();
     bank.script("create", timeout());
-    expect((await run("createSession", sessionInput())).error).toMatchObject({ category: "retryable", uncertain: true, code: "bkash.timeout" });
+    expect((await run("createSession", sessionInput())).error).toMatchObject({ category: "retryable", uncertain: true, code: "bkash_timeout" });
     bank.script("create", { status: 502, body: "<html>Bad gateway</html>" });
-    expect((await run("createSession", sessionInput())).error).toMatchObject({ category: "retryable", uncertain: true, code: "bkash.unavailable" });
+    expect((await run("createSession", sessionInput())).error).toMatchObject({ category: "retryable", uncertain: true, code: "bkash_unavailable" });
     expect(harness.records.get("bkash_payments")?.size).toBe(0);
   });
 });
@@ -356,7 +356,7 @@ describe("bKash: buyer returns", () => {
 
   it("asks for a retry while bKash is unreachable or busy", async () => {
     const { bank, run, paymentID } = await createdPayment();
-    bank.script("payment/status", new Error("[http.failed] The request to tokenized.sandbox.bka.sh failed."));
+    bank.script("payment/status", new Error("[http_failed] The request to tokenized.sandbox.bka.sh failed."));
     expect((await run("verifyReturn", buyerReturn(paymentID, "cancel"))).value)
       .toEqual({ status: "retry", reason: "bKash could not be reached." });
     bank.script("execute", fail("9999", "System Error"));
@@ -372,7 +372,7 @@ describe("bKash: buyer returns", () => {
       .toEqual({ status: "invalid", reason: "bKash reports another amount than this payment's." });
     bank.script("payment/status", { body: { statusCode: "0000", paymentID, trxID: "TRX9", transactionStatus: "Completed", amount: "125.50", currency: "USD" } });
     expect((await run("queryPayment", { providerRef: paymentID, orderId: "ORD1", requestTimeoutMs: 5_000 })).error)
-      .toMatchObject({ category: "declined", code: "bkash.mismatch" });
+      .toMatchObject({ category: "declined", code: "bkash_mismatch" });
     expect(harness.logs).toContainEqual({ level: "error", message: "bKash reports another amount than this payment's.", fields: { paymentId: paymentID } });
   });
 
@@ -392,7 +392,7 @@ describe("bKash: status queries", () => {
 
     const returned = (await run("verifyReturn", buyerReturn(paymentID, "success"))).value as { event: unknown };
     expect((await run("queryPayment", query)).value).toEqual({ providerStatus: "Completed", event: returned.event });
-    expect((await run("queryPayment", { ...query, orderId: "ORD2" })).error).toMatchObject({ category: "declined", code: "bkash.unknown_payment" });
+    expect((await run("queryPayment", { ...query, orderId: "ORD2" })).error).toMatchObject({ category: "declined", code: "bkash_unknown_payment" });
   });
 });
 
@@ -435,7 +435,7 @@ describe("bKash: refunds", () => {
     const input = refundInput({ providerRef: paymentID, secondaryRef: trxID });
     // bKash makes the refund, but its answer is lost on the way back.
     bank.script("payment/refund", "lost");
-    expect((await run("refund", input)).error).toMatchObject({ category: "retryable", uncertain: true, code: "bkash.timeout" });
+    expect((await run("refund", input)).error).toMatchObject({ category: "retryable", uncertain: true, code: "bkash_timeout" });
 
     // bKash's refund status settles it, and the same refund asked for again is never sent twice.
     const probe ={ providerRefundId: null, sourceRef: trxID, amountMinor: 12_550, currency: "BDT", reference: "RF-ORD1-1", idempotencyKey: input.idempotencyKey };
@@ -461,17 +461,17 @@ describe("bKash: refunds", () => {
     expect(unmatched).toMatchObject({ outcome: "unknown", manualReview: true });
     expect(unmatched).not.toHaveProperty("providerRefundId");
     // Asked again, the refund is still not sent a second time.
-    expect((await run("refund", lost)).error).toMatchObject({ category: "retryable", uncertain: true, code: "bkash.refund_pending" });
+    expect((await run("refund", lost)).error).toMatchObject({ category: "retryable", uncertain: true, code: "bkash_refund_pending" });
 
     // bKash unreachable: unknown, asked again later.
-    bank.script("payment/refund", new Error("[http.failed] The request failed."));
+    bank.script("payment/refund", new Error("[http_failed] The request failed."));
     expect((await run("refundStatus", probe("lost"))).value).toEqual({ outcome: "unknown", error: "bKash could not be reached." });
     expect(bank.calls.filter((call) => call.path === "payment/refund" && "amount" in call.body)).toHaveLength(1);
 
     // A business refusal is final and nothing is recorded, so the key may be sent again.
     bank.script("payment/refund", fail("2023", "Insufficient Balance"));
     expect((await run("refund", refundInput({ providerRef: paymentID, secondaryRef: trxID, idempotencyKey: "refused" }))).error)
-      .toMatchObject({ category: "declined", code: "bkash.2023", message: "bKash refused the refund (bKash code 2023: Insufficient Balance)." });
+      .toMatchObject({ category: "declined", code: "bkash_2023", message: "bKash refused the refund (bKash code 2023: Insufficient Balance)." });
     expect(harness.records.get("bkash_refunds")?.size).toBe(1);
   });
 });

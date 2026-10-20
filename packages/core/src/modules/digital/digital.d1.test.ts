@@ -176,8 +176,8 @@ describe("digital goods", () => {
             { item: "i_file", product: "p_book", variant: "v_book", quantity: 1 },
             { item: "i_keys", product: "p_app", variant: "v_app", quantity: 2 },
         ]);
-        await expect(autoFulfilOrder(db, "o_short")).rejects.toThrow(/DIGITAL_KEYS_EXHAUSTED/);
-        await expect(autoFulfilOrder(db, "o_short")).rejects.toThrow(/DIGITAL_KEYS_EXHAUSTED/);
+        await expect(autoFulfilOrder(db, "o_short")).rejects.toThrow(/digital_keys_exhausted/);
+        await expect(autoFulfilOrder(db, "o_short")).rejects.toThrow(/digital_keys_exhausted/);
         expect(one("SELECT count(*) AS n FROM order_fulfillments")).toEqual({ n: 0 });
         expect(one("SELECT count(*) AS n FROM digital_entitlements")).toEqual({ n: 0 });
         expect(one("SELECT count(*) AS n FROM digital_licence_keys WHERE status = 'assigned'")).toEqual({ n: 0 });
@@ -197,12 +197,12 @@ describe("digital goods", () => {
             (await validateStorefrontCartItems(db, [{ productId: product, variantId: variant, quantity: 1 }])).issues.map((issue) => issue.code);
         expect(await codes("v_book", "p_book")).toEqual([]);
         // An empty key pool: not deliverable (and out of stock).
-        expect(await codes("v_app", "p_app")).toContain("FULFILMENT_UNAVAILABLE");
+        expect(await codes("v_app", "p_app")).toContain("fulfilment_unavailable");
         await importKeys(["READY-0001"]);
         expect(await codes("v_app", "p_app")).toEqual([]);
         // An archived file: nothing to deliver.
         await updateDigitalAsset(db, "dga_book_file_01", { status: "archived", version: 1 });
-        expect(await codes("v_book", "p_book")).toEqual(["FULFILMENT_UNAVAILABLE"]);
+        expect(await codes("v_book", "p_book")).toEqual(["fulfilment_unavailable"]);
     });
 
     it("D4: ten concurrent mints on a limit of 5 count exactly five downloads", async () => {
@@ -213,7 +213,7 @@ describe("digital goods", () => {
             mintDownloadTicket(db, ENV, { entitlementId, access: { kind: "receipt", orderId: "o_dl" }, proof: PROOF })));
         expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(5);
         expect(results.filter((result) => result.status === "rejected").every((result) =>
-            (result as PromiseRejectedResult).reason.code === "DOWNLOAD_LIMIT_REACHED")).toBe(true);
+            (result as PromiseRejectedResult).reason.code === "download_limit_reached")).toBe(true);
         expect(one("SELECT download_count FROM digital_entitlements")).toEqual({ download_count: 5 });
 
         await resetDigitalEntitlement(db, entitlementId);
@@ -243,7 +243,7 @@ describe("digital goods", () => {
         await revokeDigitalEntitlement(db, entitlementId);
         await expect(open(PROOF)).rejects.toMatchObject({ status: 404 });
         await expect(mintDownloadTicket(db, ENV, { entitlementId, access: { kind: "customer", customerId: "cus_1" }, proof: PROOF }))
-            .rejects.toMatchObject({ code: "DOWNLOAD_REVOKED" });
+            .rejects.toMatchObject({ code: "download_revoked" });
     });
 
     it("a cancelled or refunded order ends access to its downloads and keys", async () => {
@@ -264,7 +264,7 @@ describe("digital goods", () => {
         await expect(openDownloadTicket(db, ENV, { entitlementId, expiresAt: Number(exp), signature: sig!, proof: PROOF }, now + 5))
             .rejects.toMatchObject({ status: 404 });
         await expect(mintDownloadTicket(db, ENV, { entitlementId, access: { kind: "receipt", orderId: "o_end" }, proof: PROOF }))
-            .rejects.toMatchObject({ code: "DOWNLOAD_REVOKED" });
+            .rejects.toMatchObject({ code: "download_revoked" });
         await expect(revealLicenceKey(db, CREDENTIAL_KEY, { keyId, access: { kind: "receipt", orderId: "o_end" } }))
             .rejects.toMatchObject({ status: 404 });
         expect(await countBuyerDownloads(db, "cus_1")).toBe(0);

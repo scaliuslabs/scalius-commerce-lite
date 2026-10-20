@@ -387,7 +387,7 @@ async function checkoutOne(rng: Rng): Promise<string | null> {
         } catch (error) {
             const issue = (error as { details?: { itemIssues?: Array<{ code: string; currentPrice?: number }> } })
                 .details?.itemIssues?.[0];
-            if (issue?.code === "PRICE_CHANGED" && typeof issue.currentPrice === "number") {
+            if (issue?.code === "price_changed" && typeof issue.currentPrice === "number") {
                 price = issue.currentPrice;
                 continue;
             }

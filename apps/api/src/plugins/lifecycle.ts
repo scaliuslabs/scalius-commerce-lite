@@ -56,7 +56,7 @@ export async function activatePluginWithHooks(
   try {
     installation = await activatePlugin(context.db, pluginId, options);
   } catch (error) {
-    if (!(error instanceof PluginError) || error.pluginCode !== "installation.objects_invalid") throw error;
+    if (!(error instanceof PluginError) || error.pluginCode !== "installation_objects_invalid") throw error;
     const failed = await requirePluginInstallation(context.db, pluginId);
     const restored = pluginNeedsApproval(before) && before.source !== "bundled"
       ? await rollBackApprovedUpdate(context, failed, error.message) : null;
@@ -155,7 +155,7 @@ export async function updatePluginToRelease(
   options: { expectedRevision: number },
 ): Promise<{ installation: PluginInstallation; rolledBack: boolean; error: string | null }> {
   if (current.source === "bundled") {
-    throw new PluginError("installation.source_conflict", `${current.manifest.name} is compiled into this deployment: update it with pnpm plugin add, then deploy.`);
+    throw new PluginError("installation_source_conflict", `${current.manifest.name} is compiled into this deployment: update it with pnpm plugin add, then deploy.`);
   }
   let updated: PluginInstallation;
   try {
@@ -167,7 +167,7 @@ export async function updatePluginToRelease(
       signerKeyId: release.signerKeyId,
     });
   } catch (error) {
-    if (!(error instanceof PluginError) || error.pluginCode !== "installation.objects_invalid") throw error;
+    if (!(error instanceof PluginError) || error.pluginCode !== "installation_objects_invalid") throw error;
     const latest = await requirePluginInstallation(context.db, current.pluginId);
     const restored = await restorePluginRelease(context.db, current, {
       expectedRevision: latest.revision,

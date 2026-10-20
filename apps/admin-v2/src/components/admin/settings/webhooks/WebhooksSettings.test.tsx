@@ -304,7 +304,7 @@ describe("Settings › Webhooks", () => {
 
   it("refuses a stale edit and saves it on the newer version after reloading", async () => {
     sdk.patchApiV1AdminWebhooksById
-      .mockImplementationOnce(() => refused(409, "WEBHOOK_VERSION_CONFLICT", "This webhook changed."))
+      .mockImplementationOnce(() => refused(409, "webhook_version_conflict", "This webhook changed."))
       .mockImplementation(({ body }: { body: Record<string, unknown> }) =>
         ok({ subscription: subscription({ ...body, version: 3 }) }));
     sdk.getApiV1AdminWebhooksById.mockImplementation(() =>

@@ -191,14 +191,14 @@ export async function getOrderLookupStatus(
       ok: false,
       failure: {
         status: response.ok ? 502 : response.status,
-        errorCode: trimmedString(error.code) || "ORDER_LOOKUP_FAILED",
+        errorCode: trimmedString(error.code) || "order_lookup_failed",
         ...(message ? { message } : {}),
         ...(retryAfterSeconds ? { retryAfterSeconds } : {}),
       },
     };
   } catch (error) {
     console.error("[order-lookup] status request failed:", error instanceof Error ? error.name : typeof error);
-    return { ok: false, failure: { status: 502, errorCode: "ORDER_LOOKUP_FAILED" } };
+    return { ok: false, failure: { status: 502, errorCode: "order_lookup_failed" } };
   }
 }
 
@@ -207,7 +207,7 @@ export async function sendOrderLookupCode(input: { reference: string; channel?: 
   return sentResult(await postOrderCodeApi(
     "/orders/lookup/send-otp",
     { reference: input.reference, ...(input.channel ? { channel: input.channel } : {}) },
-    { auth: false, fallbackCode: "ORDER_LOOKUP_SEND_FAILED" },
+    { auth: false, fallbackCode: "order_lookup_send_failed" },
   ));
 }
 
@@ -215,11 +215,11 @@ export async function verifyOrderLookupCode(input: { reference: string; code: st
   return verifiedResult(
     await postOrderCodeApi("/orders/lookup/verify-otp", input, {
       auth: true,
-      fallbackCode: "ORDER_LOOKUP_VERIFICATION_FAILED",
+      fallbackCode: "order_lookup_verification_failed",
     }),
     null,
     trackedReceiptUrl,
-    "ORDER_LOOKUP_RECEIPT_UNAVAILABLE",
+    "order_lookup_receipt_unavailable",
   );
 }
 
@@ -228,7 +228,7 @@ export async function sendPaymentRecoveryCode(input: { orderId: string }) {
   return sentResult(await postOrderCodeApi(
     "/orders/payment-recovery/send-otp",
     { orderId: input.orderId },
-    { auth: false, fallbackCode: "PAYMENT_RECOVERY_SEND_FAILED" },
+    { auth: false, fallbackCode: "payment_recovery_send_failed" },
   ));
 }
 
@@ -236,11 +236,11 @@ export async function verifyPaymentRecoveryCode(input: { orderId: string; code: 
   return verifiedResult(
     await postOrderCodeApi("/orders/payment-recovery/verify-otp", input, {
       auth: true,
-      fallbackCode: "PAYMENT_RECOVERY_VERIFICATION_FAILED",
+      fallbackCode: "payment_recovery_verification_failed",
     }),
     input.orderId,
     (orderId, data) => paymentRecoveryReceiptUrl(orderId, isRecord(data.redirectParams) ? data.redirectParams : {}),
-    "PAYMENT_RECOVERY_RECEIPT_UNAVAILABLE",
+    "payment_recovery_receipt_unavailable",
   );
 }
 

@@ -21,7 +21,7 @@ describe("createContractApi", () => {
     handlers: {
       "dashboard.brands.get": ({ path }) => ({ ...brand, id: String(path.id) }),
       "dashboard.resources.products.list": () => ({ products: [], nextCursor: null }),
-      "dashboard.inventory.adjust": () => ({ ok: false, status: 409, data: null, error: { code: "CONFLICT", message: "Stock changed." } }),
+      "dashboard.inventory.adjust": () => ({ ok: false, status: 409, data: null, error: { code: "conflict", message: "Stock changed." } }),
       "dashboard.brands.update": ({ body }) => ({ ...brand, name: (body as { name: string }).name, revision: 4 }),
     },
     checkOutput: true,
@@ -29,25 +29,25 @@ describe("createContractApi", () => {
 
   it("refuses an operation outside the stable app API", async () => {
     // As the host (apps/api/src/plugins/api-call.ts): a beta or internal operation exists, so it is refused, not unknown.
-    expect(await api()("dashboard.orders.list", undefined)).toMatchObject({ ok: false, status: 403, error: { code: "api.operation_not_stable" } });
-    expect(await api()("dashboard.apps.stop", undefined)).toMatchObject({ ok: false, status: 403, error: { code: "api.operation_not_stable" } });
-    expect(await api()("dashboard.apps.nonexistent", undefined)).toMatchObject({ ok: false, status: 404, error: { code: "api.unknown_operation" } });
-    expect(await api()("Brands.Get", undefined)).toMatchObject({ status: 404, error: { code: "api.unknown_operation" } });
+    expect(await api()("dashboard.orders.list", undefined)).toMatchObject({ ok: false, status: 403, error: { code: "api_operation_not_stable" } });
+    expect(await api()("dashboard.apps.stop", undefined)).toMatchObject({ ok: false, status: 403, error: { code: "api_operation_not_stable" } });
+    expect(await api()("dashboard.apps.nonexistent", undefined)).toMatchObject({ ok: false, status: 404, error: { code: "api_unknown_operation" } });
+    expect(await api()("Brands.Get", undefined)).toMatchObject({ status: 404, error: { code: "api_unknown_operation" } });
     expect(() => createContractApi({ handlers: { "dashboard.brands.fetch": () => null } })).toThrow(/not a stable app API operation/);
   });
 
   it("checks path and query values the way the route does (DX-2)", async () => {
     const result = await api()("dashboard.resources.products.list", { query: { status: "archived" } });
-    expect(result).toMatchObject({ ok: false, status: 400, error: { code: "VALIDATION_ERROR" } });
+    expect(result).toMatchObject({ ok: false, status: 400, error: { code: "validation_error" } });
     expect(result.error?.message).toContain('"active", "draft", "trashed"');
     expect(await api()("dashboard.brands.get", {})).toMatchObject({ error: { code: "missing_path_parameter" } });
     expect(await api()("dashboard.brands.get", { path: { id: "b", extra: 1 } })).toMatchObject({ error: { code: "unknown_path_parameter" } });
-    expect(await api()("dashboard.resources.products.list", { query: { limit: "x" } })).toMatchObject({ error: { code: "VALIDATION_ERROR" } });
+    expect(await api()("dashboard.resources.products.list", { query: { limit: "x" } })).toMatchObject({ error: { code: "validation_error" } });
     expect(await api()("dashboard.resources.products.list", { query: { limit: 10, status: "draft" } })).toMatchObject({ ok: true });
   });
 
   it("refuses malformed input, a GET body and unknown body fields", async () => {
-    expect(await api()("dashboard.brands.get", { path: { id: "b" }, headers: {} } as never)).toMatchObject({ status: 400, error: { code: "api.invalid_input" } });
+    expect(await api()("dashboard.brands.get", { path: { id: "b" }, headers: {} } as never)).toMatchObject({ status: 400, error: { code: "api_invalid_input" } });
     expect(await api()("dashboard.brands.get", { path: { id: "b" }, body: {} })).toMatchObject({ error: { code: "body_not_allowed" } });
     expect(await api()("dashboard.brands.update", { path: { id: "b" }, body: { name: "N", slug: "n", status: "draft", expectedRevision: 3, colour: "red" } }))
       .toMatchObject({ error: { code: "unknown_body_property" } });
@@ -55,15 +55,15 @@ describe("createContractApi", () => {
 
   it("requires the revision precondition and the Idempotency-Key where the contract does", async () => {
     const missing = await api()("dashboard.brands.update", { path: { id: "b" }, body: { name: "N", slug: "n", status: "draft" } });
-    expect(missing).toMatchObject({ status: 400, error: { code: "VALIDATION_ERROR" } });
+    expect(missing).toMatchObject({ status: 400, error: { code: "validation_error" } });
     expect(missing.error?.message).toMatch(/expectedRevision is required\. This operation is revision-checked/);
     expect(await api()("dashboard.inventory.adjust", { path: { variantId: "v1" }, body: { delta: 1, reason: "received" } }))
       .toMatchObject({ status: 400, error: { code: "idempotency_key_required" } });
     expect(await api()("dashboard.brands.get", { path: { id: "b" }, idempotencyKey: "retry-key-1" })).toMatchObject({ error: { code: "idempotency_not_supported" } });
     expect(await api()("dashboard.inventory.adjust", { path: { variantId: "v1" }, body: { delta: 1, reason: "found" }, idempotencyKey: "retry-key-1" }))
-      .toMatchObject({ error: { code: "VALIDATION_ERROR" } });
+      .toMatchObject({ error: { code: "validation_error" } });
     expect(await api()("dashboard.inventory.adjust", { path: { variantId: "v1" }, body: { delta: 1, reason: "received" }, idempotencyKey: "retry-key-1" }))
-      .toMatchObject({ ok: false, status: 409, error: { code: "CONFLICT" } });
+      .toMatchObject({ ok: false, status: 409, error: { code: "conflict" } });
   });
 
   it("replays a repeat with the same key and refuses the key for another request", async () => {
@@ -78,7 +78,7 @@ describe("createContractApi", () => {
   });
 
   it("refuses a call no granted scope covers", async () => {
-    expect(await api()("dashboard.brands.update", { path: { id: "b" } }, { scopes: ["read_orders"] })).toMatchObject({ status: 403, error: { code: "api.operation_forbidden" } });
+    expect(await api()("dashboard.brands.update", { path: { id: "b" } }, { scopes: ["read_orders"] })).toMatchObject({ status: 403, error: { code: "api_operation_forbidden" } });
   });
 
   it("fails the test when a handler answers a shape the platform never returns", async () => {
@@ -115,6 +115,6 @@ describe("createContractApi in the harness", () => {
     const harness = createPluginTestHarness(plugin, { api });
     expect((await harness.event("order.created", { type: "order", id: "o1" })).ok).toBe(true);
     expect(results[0]).toMatchObject({ ok: true, data: { id: "brand_1" } });
-    expect(results[1]).toMatchObject({ ok: false, status: 403, error: { code: "api.operation_forbidden" } });
+    expect(results[1]).toMatchObject({ ok: false, status: 403, error: { code: "api_operation_forbidden" } });
   });
 });

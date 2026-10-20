@@ -95,7 +95,7 @@ describe("admin product mutation OpenAPI responses", () => {
         expect(detail).toContain('"posterUrl"');
         expect(detail).not.toContain('"images"');
         expect(update).toContain('"acknowledgedSkuImageRemovalIds"');
-        expect(update).toContain("PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT");
+        expect(update).toContain("product_media_sku_reference_conflict");
         expect(update).toContain('"affectedSkus"');
     });
 
@@ -180,6 +180,6 @@ describe("admin product mutation OpenAPI responses", () => {
         expect(write).toContain('"deleteCount"');
         expect(write).toContain('"maxLength":12000');
         expect(write).toContain('"409"');
-        expect(write).toContain("PRODUCT_REVISION_CONFLICT");
+        expect(write).toContain("product_revision_conflict");
     });
 });

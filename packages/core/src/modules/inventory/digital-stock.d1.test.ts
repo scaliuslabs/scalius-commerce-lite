@@ -111,7 +111,7 @@ describe("digital stock rules on inventory paths", () => {
         const line = (quantity: number) => [{ productId: "prod_var_app", variantId: "var_app", quantity }];
 
         const over = await validateStorefrontCartItems(db, line(3));
-        expect(over.issues).toEqual([expect.objectContaining({ code: "QUANTITY_UNAVAILABLE", availableQuantity: 2 })]);
+        expect(over.issues).toEqual([expect.objectContaining({ code: "quantity_unavailable", availableQuantity: 2 })]);
         expect((await validateStorefrontCartItems(db, line(2))).valid).toBe(true);
 
         // The reservation itself refuses a third key (the batch guard), and takes two.

@@ -184,7 +184,7 @@ describe("drafts", () => {
 
 describe("purchasing problems", () => {
   it("reads a conflict about a changed document as stale", () => {
-    expect(readPurchasingProblem(new AdminApiResponseError("This purchase order changed. Reload to see the latest.", 409, "CONFLICT")))
+    expect(readPurchasingProblem(new AdminApiResponseError("This purchase order changed. Reload to see the latest.", 409, "conflict")))
       .toEqual({ kind: "stale" });
     expect(readPurchasingProblem(new AdminApiResponseError("Stock changed while this was being saved. Reload and try again.", 409)))
       .toEqual({ kind: "stale" });
@@ -192,7 +192,7 @@ describe("purchasing problems", () => {
 
   it("shows what the API refused in its own words", () => {
     const message = "SKU TEE-M has 2 units free to move: 1 of its 3 on hand are committed to orders.";
-    expect(readPurchasingProblem(new AdminApiResponseError(message, 409, "INVENTORY_LOCATION_SHORTFALL")))
+    expect(readPurchasingProblem(new AdminApiResponseError(message, 409, "inventory_location_shortfall")))
       .toEqual({ kind: "refused", message });
   });
 

@@ -52,14 +52,14 @@ describe("digital readiness in cart validation", () => {
     const codes = async () => (await validateStorefrontCartItems(db, digitalLine)).issues.map((issue) => issue.code);
 
     it("fails closed without a fulfiller or without something to deliver", async () => {
-        expect(await codes()).toEqual(["FULFILMENT_UNAVAILABLE"]);
+        expect(await codes()).toEqual(["fulfilment_unavailable"]);
 
         seams.digitalFulfiller = true;
-        expect(await codes()).toEqual(["FULFILMENT_UNAVAILABLE"]);
+        expect(await codes()).toEqual(["fulfilment_unavailable"]);
 
         seams.digitalFulfiller = false;
         seams.deliverable = true;
-        expect(await codes()).toEqual(["FULFILMENT_UNAVAILABLE"]);
+        expect(await codes()).toEqual(["fulfilment_unavailable"]);
 
         seams.digitalFulfiller = true;
         const validation = await validateStorefrontCartItems(db, digitalLine);

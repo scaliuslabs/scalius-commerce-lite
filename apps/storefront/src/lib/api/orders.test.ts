@@ -183,7 +183,7 @@ describe("storefront orders API client", () => {
       }), { status: 200 }));
     try {
       expect(await createOrder(buildOrderPayload())).toMatchObject({
-        success: false, status: 409, errorCode: "CHECKOUT_ATTEMPT_EXPIRED",
+        success: false, status: 409, errorCode: "checkout_attempt_expired",
       });
       expect(mocks.apiFetch).toHaveBeenCalledTimes(2);
       expect(mocks.apiFetch.mock.calls[1]?.[0]).toBe("/orders/status/cst_expired");
@@ -192,7 +192,7 @@ describe("storefront orders API client", () => {
     }
   });
 
-  it.each(["CHECKOUT_ATTEMPT_EXPIRED", "CHECKOUT_ATTEMPT_CONFLICT"])("preserves %s from a raced receipt replay", async (errorCode) => {
+  it.each(["checkout_attempt_expired", "checkout_attempt_conflict"])("preserves %s from a raced receipt replay", async (errorCode) => {
     const timers = mockImmediatePollingTimers();
     const details = { orderId: "old_order", paymentMethod: "cod" };
     mocks.apiFetch

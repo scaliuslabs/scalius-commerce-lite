@@ -299,7 +299,7 @@ describe("local pickup", () => {
         const { revision } = (await listDeliveryZones(db, BDT.decimalPlaces)).pickup;
         await updatePickupRates(db, [{ ...pickup, fee: 20 }], revision, BDT);
         await expect(updatePickupRates(db, [{ ...pickup, fee: 30 }], revision, BDT))
-            .rejects.toMatchObject({ status: 409, code: "SETTINGS_REVISION_CONFLICT" });
+            .rejects.toMatchObject({ status: 409, code: "settings_revision_conflict" });
         expect((await listDeliveryZones(db, BDT.decimalPlaces)).pickup.rates).toMatchObject([{ name: pickup.name, fee: 20 }]);
     });
 });
@@ -337,7 +337,7 @@ describe("shipping zone editing", () => {
         const { id } = await createDeliveryZone(db, { name: "Inside Dhaka", locationIds: ["dhaka"], rates: [rate("Inside Dhaka", 60)] }, BDT);
         await updateDeliveryZone(db, id, { name: "Dhaka", locationIds: ["dhaka"], rates: [rate("Inside Dhaka", 70)] }, 1, BDT);
         await expect(updateDeliveryZone(db, id, { name: "Stale", locationIds: ["dhaka"], rates: [rate("Inside Dhaka", 50)] }, 1, BDT))
-            .rejects.toMatchObject({ status: 409, code: "SETTINGS_REVISION_CONFLICT" });
+            .rejects.toMatchObject({ status: 409, code: "settings_revision_conflict" });
         const [zone] = (await listDeliveryZones(db, BDT.decimalPlaces)).zones;
         expect(zone).toMatchObject({ name: "Dhaka", revision: 2, rates: [{ name: "Inside Dhaka", fee: 70 }] });
     });

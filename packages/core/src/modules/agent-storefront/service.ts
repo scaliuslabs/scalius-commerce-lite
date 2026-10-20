@@ -65,7 +65,7 @@ export class AgentStorefrontContextRevisionConflictError extends AppError {
   constructor(contextId: string, expectedRevision: number, currentRevision: number | null) {
     super(
       409,
-      "AGENT_STOREFRONT_CONTEXT_REVISION_CONFLICT",
+      "agent_storefront_context_revision_conflict",
       "This storefront context changed. Reload it and retry with the current revision.",
       { contextId, expectedRevision, currentRevision },
     );
@@ -176,7 +176,7 @@ export function presentAgentStorefrontCartIssues(
   issues: readonly StorefrontCartItemIssue[],
 ): AgentStorefrontCartIssue[] {
   return issues.map((issue) => {
-    if (issue.code !== "PROPERTIES_REQUIRED") return issue;
+    if (issue.code !== "properties_required") return issue;
     const name = issue.productName ?? "This product";
     return {
       ...issue,

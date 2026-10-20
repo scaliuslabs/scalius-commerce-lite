@@ -260,7 +260,7 @@ describe("form posts", () => {
   });
 
   it("tells a guest whose receipt proof was refused that the thread isn't available here, not to sign in", async () => {
-    api.fetch.mockResolvedValue(Response.json({ success: false, error: { code: "UNAUTHORIZED", message: "Invalid receipt" } }, { status: 401 }));
+    api.fetch.mockResolvedValue(Response.json({ success: false, error: { code: "unauthorized", message: "Invalid receipt" } }, { status: 401 }));
     const response = await postOrderMessage({
       request: request(`/api/conversations/orders/${ORDER}/messages`, {
         method: "POST",
@@ -301,7 +301,7 @@ describe("form posts", () => {
   });
 
   it("turns a rate limit into the buyer's sentence (JSON) or the rate flag (redirect)", async () => {
-    const limited = () => Response.json({ success: false, error: { code: "RATE_LIMITED", message: "You're sending too quickly. Please wait a moment and try again." } }, { status: 429 });
+    const limited = () => Response.json({ success: false, error: { code: "rate_limited", message: "You're sending too quickly. Please wait a moment and try again." } }, { status: 429 });
     api.fetch.mockImplementation(async () => limited());
     const fields = { body: "hi", clientMessageKey: "cmk_0123456789abcdef", returnTo: `/account/inbox/${CNV}` };
     const json = await postThreadMessage({
@@ -354,7 +354,7 @@ describe("form posts", () => {
     expect(started.headers.get("Location")).toBe(`/account/inbox/${CNV}?conversation=started#conversation`);
     expect(JSON.parse(String(calls()[0]?.init.body))).toEqual({ subject: "Sizes", body: "Do you have XL?", clientMessageKey: "cmk_0123456789abcdef" });
 
-    api.fetch.mockResolvedValueOnce(Response.json({ success: false, error: { code: "FORBIDDEN", message: "Verify first" } }, { status: 403 }));
+    api.fetch.mockResolvedValueOnce(Response.json({ success: false, error: { code: "forbidden", message: "Verify first" } }, { status: 403 }));
     const refused = await postStoreThread({
       request: request("/api/conversations/store", { method: "POST", cookie: SESSION, body: form({ subject: "Sizes", body: "Do you have XL?", clientMessageKey: "cmk_0123456789abcdef" }) }),
     } as never);

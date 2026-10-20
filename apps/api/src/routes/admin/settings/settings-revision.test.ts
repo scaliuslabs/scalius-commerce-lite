@@ -1,5 +1,5 @@
 // Two staff members editing the same settings: the second, stale save is
-// refused with 409 SETTINGS_REVISION_CONFLICT and overwrites nothing.
+// refused with 409 settings_revision_conflict and overwrites nothing.
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
@@ -54,7 +54,7 @@ describe("settings revision contract", () => {
     const tabB = await request("POST", "/business", { legalName: "Tab B Ltd", expectedRevision: 0 });
     expect(tabB.status).toBe(409);
     expect(tabB.body.error).toMatchObject({
-      code: "SETTINGS_REVISION_CONFLICT",
+      code: "settings_revision_conflict",
       details: { document: "business", expectedRevision: 0, currentRevision: 1 },
     });
 
@@ -104,7 +104,7 @@ describe("settings revision contract", () => {
     });
     expect(tabB.status).toBe(409);
     expect(tabB.body.error).toMatchObject({
-      code: "SETTINGS_REVISION_CONFLICT",
+      code: "settings_revision_conflict",
       details: { document: "whatsapp", expectedRevision: 0, currentRevision: 1 },
     });
     // The policy, whose own revision still matched, was not written either.

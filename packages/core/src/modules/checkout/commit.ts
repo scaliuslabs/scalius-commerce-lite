@@ -135,14 +135,14 @@ export const ORDER_ITEM_INSERT_PARAMETERS_PER_ROW = 19;
 // tax_region_id (the order's flag, country and provider are SQL literals).
 const ORDER_ITEM_TAX_INSERT_PARAMETERS_PER_ROW = ORDER_ITEM_TAX_SNAPSHOT_PARAMETERS_PER_ROW;
 const ORDER_DISCOUNT_ALLOCATION_INSERT_PARAMETERS_PER_ROW = 18;
-const CHECKOUT_AUTHORITY_CHANGED = "CHECKOUT_AUTHORITY_CHANGED";
+const CHECKOUT_AUTHORITY_CHANGED = "checkout_authority_changed";
 /** An app's offer (a record its function read) changed between the quote and the commit. */
-export const APP_OFFER_CHANGED_REASON = "APP_OFFER_CHANGED";
+export const APP_OFFER_CHANGED_REASON = "app_offer_changed";
 const CHECKOUT_AUTHORITY_CHANGED_MESSAGE =
     "Checkout details changed while the order was being placed. Return to your cart to review them and try again.";
 // Checked before the inventory classifier, whose Turso matcher treats any
 // "conflict" text as a retryable write conflict.
-const AGENT_CONTEXT_CHECKOUT_CONFLICT = "AGENT_STOREFRONT_CONTEXT_CHECKOUT_CONFLICT";
+const AGENT_CONTEXT_CHECKOUT_CONFLICT = "agent_storefront_context_checkout_conflict";
 
 function checkoutGuardError(error: unknown): Error | null {
     if (isBatchGuardError(error, CHECKOUT_AUTHORITY_CHANGED)) {
@@ -271,7 +271,7 @@ function buildReservationItemIssues(
                 cartKey: item?.cartKey ?? null,
                 productId: item?.productId ?? "",
                 variantId: result.variantId,
-                code: "QUANTITY_UNAVAILABLE",
+                code: "quantity_unavailable",
                 action: "remove",
                 message: `${productName}${variantLabel ? ` (${variantLabel})` : ""} is no longer available in the requested quantity.`,
                 productName,
@@ -317,7 +317,7 @@ async function prepareOrderInventory(
                     index: 0,
                     productId: "",
                     variantId: null,
-                    code: "QUANTITY_UNAVAILABLE",
+                    code: "quantity_unavailable",
                     action: "remove",
                     message: "One or more items are no longer available in the requested quantity.",
                     productName: null,

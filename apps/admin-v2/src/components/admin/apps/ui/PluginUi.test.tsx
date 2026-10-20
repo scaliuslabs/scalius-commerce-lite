@@ -70,7 +70,7 @@ const fetchMock = vi.fn(async (input: string, init: RequestInit = {}) => {
   const url = new URL(input, "https://admin.test");
   const key = `${init.method ?? "GET"} ${url.pathname}`;
   const handler = routes.get(key);
-  if (!handler) return new Response(JSON.stringify({ success: false, error: { code: "NOT_FOUND", message: "Not found." } }), { status: 404 });
+  if (!handler) return new Response(JSON.stringify({ success: false, error: { code: "not_found", message: "Not found." } }), { status: 404 });
   const { status = 200, body } = await handler(url, init);
   return new Response(JSON.stringify(body), { status });
 });
@@ -487,7 +487,7 @@ describe("app surfaces", () => {
   });
 
   it("shows the app's masked reason when it fails, and tries again", async () => {
-    route("GET", "dashboard", () => ({ status: 502, body: { success: false, error: { code: "APP_FAILED", message: "Points service is down" } } }));
+    route("GET", "dashboard", () => ({ status: 502, body: { success: false, error: { code: "app_failed", message: "Points service is down" } } }));
     await render(<PluginSurface app={app} route="dashboard" query={{}} variant="embedded" />);
     await vi.waitFor(() => expect(text()).toContain("Points service is down"));
     route("GET", "dashboard", () => ({ body: doc({ type: "text", text: "Back up" }) }));
@@ -501,7 +501,7 @@ describe("app surfaces", () => {
 describe("app resource cards", () => {
   it("draws each app card with one request, keeping a failing card to itself", async () => {
     route("GET", "order-card", (url) => ({ body: doc({ type: "stack", children: [{ type: "text", text: `Summary for ${url.searchParams.get("id")}` }, { type: "button", label: "Greet", action: { kind: "route", route: "save", body: { kind: "greet" } } }] }) }));
-    route("GET", "risk-card", () => ({ status: 504, body: { success: false, error: { code: "APP_TIMEOUT", message: "The app took too long to answer." } } }));
+    route("GET", "risk-card", () => ({ status: 504, body: { success: false, error: { code: "app_timeout", message: "The app took too long to answer." } } }));
     route("POST", "save", () => ({ body: { toast: { message: "Greeted." } } }));
     await render(
       <div>

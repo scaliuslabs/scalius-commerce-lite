@@ -155,8 +155,8 @@ describe("theme restore points", () => {
     const [point] = await listThemeRestorePoints(db);
     const before = points();
 
-    await expect(restoreThemeRestorePoint(db, point!.id, 2, 1)).rejects.toMatchObject({ status: 409, code: "CONFLICT" });
-    await expect(restoreThemeRestorePoint(db, point!.id, 3, 2)).rejects.toMatchObject({ status: 409, code: "CONFLICT" });
+    await expect(restoreThemeRestorePoint(db, point!.id, 2, 1)).rejects.toMatchObject({ status: 409, code: "conflict" });
+    await expect(restoreThemeRestorePoint(db, point!.id, 3, 2)).rejects.toMatchObject({ status: 409, code: "conflict" });
     expect(points()).toEqual(before);
     expect((await getThemeWorkspace(db)).draft.revision).toBe(3);
 
@@ -176,7 +176,7 @@ describe("theme restore points", () => {
     const [point] = await listThemeRestorePoints(db);
     sqlite.exec("UPDATE media SET status = 'deleted', trashed_at = unixepoch(), deleted_at = unixepoch() WHERE id = 'media_gone'");
     await expect(restoreThemeRestorePoint(db, point!.id, 3, 1)).rejects.toMatchObject({
-      status: 400, code: "THEME_VERSION_IMAGES_MISSING", details: { missingImages: 1 },
+      status: 400, code: "theme_version_images_missing", details: { missingImages: 1 },
     });
     await expect(restoreThemeRestorePoint(db, point!.id, 3, 1, null, { withoutMissingImages: true })).resolves.toMatchObject({ draft: { revision: 4 } });
     expect((await getThemeWorkspace(db)).draft.theme.brand.logo).toBeNull();

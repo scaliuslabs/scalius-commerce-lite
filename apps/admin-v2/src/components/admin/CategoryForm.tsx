@@ -145,7 +145,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
     },
     onError: (error, message) => {
       if (readCategoryRevisionConflict(error)) throw new SaveConflict(t("conflict"));
-      if (readAdminApiErrorCode(error) === "CATEGORY_PLACEMENT_REFUSED") {
+      if (readAdminApiErrorCode(error) === "category_placement_refused") {
         form.setError("parentId", { type: "server", message: t("placementRefused") });
         return t("placementRefused");
       }

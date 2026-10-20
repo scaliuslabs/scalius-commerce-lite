@@ -34,7 +34,7 @@ describe("public buyer runtime auth boundaries", () => {
     const response = await request(publicBuyerApp, "/storefront/agent-contexts", { method: "POST" });
 
     expect(response.status).toBe(401);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: "UNAUTHORIZED" } });
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "unauthorized" } });
   });
 
   it("requires service JWT auth for hosted continuations and keeps authenticated responses private", async () => {

@@ -175,7 +175,7 @@ describe("useMediaUpload", () => {
   });
 
   it("maps a server rejection to plain copy, never the server's text", async () => {
-    api.initiateUpload.mockRejectedValue(new AdminApiResponseError("File content is text/plain", 400, "VALIDATION_ERROR"));
+    api.initiateUpload.mockRejectedValue(new AdminApiResponseError("File content is text/plain", 400, "validation_error"));
     await act(async () => { await latest.uploadFiles([fileOf(PNG, "photo.png", "image/png")]); });
     await flush();
     expect(latest.queue[0]).toMatchObject({ status: "failed", error: "notMedia" });

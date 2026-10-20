@@ -67,7 +67,7 @@ import {
 } from "./navigation.resolver";
 import { searchMatch, searchRank } from "../../search";
 
-const NAVIGATION_REVISION_GUARD = "NAVIGATION_REVISION_CONFLICT";
+const NAVIGATION_REVISION_GUARD = "navigation_revision_conflict";
 const NAVIGATION_PAGE_LIMIT = 100;
 
 export interface NavigationMenuCursor {
@@ -1877,7 +1877,7 @@ export class NavigationAuthorityUnavailableError extends AppError {
     constructor() {
         super(
             503,
-            "NAVIGATION_AUTHORITY_UNAVAILABLE",
+            "navigation_authority_unavailable",
             "Navigation is still using the validated presentation bridge because normalized menu parity is not proven.",
         );
         this.name = "NavigationAuthorityUnavailableError";

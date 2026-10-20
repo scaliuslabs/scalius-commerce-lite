@@ -304,7 +304,7 @@ describe("tax quote client contract", () => {
           cartKey: "line:v2:prod_1:variant:var_1",
           productId: "prod_1",
           variantId: "var_1",
-          code: "PRICE_CHANGED",
+          code: "price_changed",
           action: "refresh_item",
           message: "The price changed.",
           productName: "Cotton Panjabi",
@@ -323,7 +323,7 @@ describe("tax quote client contract", () => {
     expect((error as TaxQuoteCartChangedError).issues).toEqual([
       expect.objectContaining({
         cartKey: "line:v2:prod_1:variant:var_1",
-        code: "PRICE_CHANGED",
+        code: "price_changed",
         currentPrice: 150,
       }),
     ]);
@@ -332,14 +332,14 @@ describe("tax quote client contract", () => {
   });
 
   it.each([
-    ["FULFILMENT_UNAVAILABLE", "remove", undefined],
-    ["PROPERTIES_REQUIRED", "edit_properties", "player_uid"],
-    ["PROPERTIES_INVALID", "edit_properties", "player_uid"],
+    ["fulfilment_unavailable", "remove", undefined],
+    ["properties_required", "edit_properties", "player_uid"],
+    ["properties_invalid", "edit_properties", "player_uid"],
   ])("sends a %s line back to the cart instead of reporting the taxes as unverified", async (code, action, propertyKey) => {
     // The API's own answer (a key pool that ran out, a missing buyer input).
     const fetcher = vi.fn(async () => new Response(JSON.stringify({
       success: false,
-      error: { code: "VALIDATION_ERROR", message: "Some items in your cart need attention.", details: { itemIssues: [{
+      error: { code: "validation_error", message: "Some items in your cart need attention.", details: { itemIssues: [{
         index: 0, cartKey: "k1", productId: "prod_1", variantId: "var_1", requestedQuantity: 1,
         code, action, message: "PUBG MOBILE UC PACK (60) needs \"Player UID\" before checkout.",
         productName: "PUBG MOBILE UC PACK", variantLabel: "60", ...(propertyKey ? { propertyKey } : {}),

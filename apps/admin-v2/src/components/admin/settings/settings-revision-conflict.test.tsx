@@ -31,7 +31,7 @@ const flow = (revision: number, overrides: Record<string, unknown> = {}) => ({
 const staleRevision = () =>
   Promise.reject(Object.assign(new Error("These settings changed in another session."), {
     status: 409,
-    code: "SETTINGS_REVISION_CONFLICT",
+    code: "settings_revision_conflict",
     details: { document: "checkout", expectedRevision: 1, currentRevision: 2 },
   }));
 

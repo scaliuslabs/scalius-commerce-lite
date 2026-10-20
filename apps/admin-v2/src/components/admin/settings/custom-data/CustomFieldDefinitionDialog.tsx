@@ -207,7 +207,7 @@ export function CustomFieldDefinitionDialog({ ownerType, definition, open, onOpe
           await save.mutateAsync({ id: null, body });
         } catch (error) {
           // This dialog's own earlier create (its answer lost) made the field: that is a success.
-          if (!sentBefore || readAdminApiErrorCode(error) !== "CUSTOM_FIELD_KEY_TAKEN" || !await createdAlready(body)) throw error;
+          if (!sentBefore || readAdminApiErrorCode(error) !== "custom_field_key_taken" || !await createdAlready(body)) throw error;
           save.reset();
         }
         onSuccess();
@@ -240,7 +240,7 @@ export function CustomFieldDefinitionDialog({ ownerType, definition, open, onOpe
     }
   };
 
-  const keyTaken = save.error !== null && readAdminApiErrorCode(save.error) === "CUSTOM_FIELD_KEY_TAKEN";
+  const keyTaken = save.error !== null && readAdminApiErrorCode(save.error) === "custom_field_key_taken";
   const serverError = save.error && !keyTaken
     ? isAdminApiConflictError(save.error) ? t("conflict") : getServerFnError(save.error, t("saveFailed"))
     : null;

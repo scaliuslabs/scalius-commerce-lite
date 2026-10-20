@@ -181,7 +181,7 @@ describe("an app courier (bundled loader) implements the courier port", () => {
     }, CREDENTIAL_KEY);
     const call = { settings: setup.settings, signal: new AbortController().signal, db };
     await expect(courier.createShipment(booking("ORD-UNAPPROVED"), call)).rejects.toMatchObject({
-      category: "misconfigured", code: "provider.customer_data_not_approved",
+      category: "misconfigured", code: "provider_customer_data_not_approved",
     });
     // Nothing reached the app: its log has no booking attempt.
     expect(sqlite.prepare("SELECT count(*) AS count FROM plugin_log_entries WHERE plugin_id = ? AND source = 'provider:parcel.createShipment'").get(PARCEL_FIXTURE_ID))

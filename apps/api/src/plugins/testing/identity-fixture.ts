@@ -64,13 +64,13 @@ export default {
         return { url: "https://accounts.acme.test/authorize?" + query.toString() };
       },
       async exchange(input, ctx) {
-        if (input.code === "refused") throw providerError("declined", "The code was refused.", { code: "acme.refused" });
+        if (input.code === "refused") throw providerError("declined", "The code was refused.", { code: "acme_refused" });
         const seen = await ctx.objects.challenges.get(input.nonce);
-        if (!seen) throw providerError("declined", "Unknown sign-in.", { code: "acme.unknown" });
+        if (!seen) throw providerError("declined", "Unknown sign-in.", { code: "acme_unknown" });
         const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input.codeVerifier));
-        if (base64Url(new Uint8Array(digest)) !== seen.challenge) throw providerError("declined", "The PKCE verifier does not match.", { code: "acme.pkce" });
+        if (base64Url(new Uint8Array(digest)) !== seen.challenge) throw providerError("declined", "The PKCE verifier does not match.", { code: "acme_pkce" });
         const person = PEOPLE[input.code];
-        if (!person) throw providerError("declined", "Unknown code.", { code: "acme.code" });
+        if (!person) throw providerError("declined", "Unknown code.", { code: "acme_code" });
         return person;
       },
     },

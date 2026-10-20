@@ -80,7 +80,7 @@ describe("promotion aggregate revision batches", () => {
             4,
             [{ kind: "parent" } as never],
         )).rejects.toMatchObject({
-            code: "PROMOTION_REVISION_CONFLICT",
+            code: "promotion_revision_conflict",
             details: {
                 promotionId: "promo_1",
                 expectedRevision: 4,

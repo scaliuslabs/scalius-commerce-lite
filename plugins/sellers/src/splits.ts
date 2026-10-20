@@ -104,7 +104,7 @@ export async function splitOrder(ctx: PluginContext, event: PluginEvent): Promis
       // Split on an earlier delivery: its notice is sent again below under the
       // same key, so a run that died between the write and the send still
       // notifies the seller, and one that sent it sends nothing.
-      if (errorCode(error) !== "object.conflict") throw error;
+      if (errorCode(error) !== "object_conflict") throw error;
     }
     if (seller?.email) {
       const number = order.orderNumber ?? order.id;
@@ -203,7 +203,7 @@ export async function draftPayouts(ctx: PluginContext, periodEnd: number, run: s
       ]);
       drafted.push(payout);
     } catch (error) {
-      if (errorCode(error) !== "object.conflict") throw error;
+      if (errorCode(error) !== "object_conflict") throw error;
       ctx.log.info("A payout was drafted meanwhile", { sellerId: seller.id });
     }
   }

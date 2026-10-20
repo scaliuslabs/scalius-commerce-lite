@@ -202,7 +202,7 @@ export async function createCredentialGrant(
                 AND parent_grant.status = 'active'
                 AND parent_grant.expires_at > unixepoch()
             )`,
-        "AGENT_PARENT_AUTHORITY_INACTIVE",
+        "agent_parent_authority_inactive",
       )
     : null;
   await safeBatch(db, [
@@ -586,7 +586,7 @@ export async function approveAuthorizationRequest(
   const guard = buildBatchGuard(
     db,
     sql`EXISTS (SELECT 1 FROM agent_authorization_requests WHERE id = ${input.requestId} AND status = 'pending' AND expires_at > unixepoch())`,
-    "AGENT_AUTHORIZATION_NOT_PENDING",
+    "agent_authorization_not_pending",
   );
   await safeBatch(db, [
     guard,
@@ -705,7 +705,7 @@ export async function commitAgentGrantNarrowing(
     eq(agentGrants.authorityRevision, input.expectedAuthorityRevision),
   )).returning({ id: agentGrants.id });
   if (!updated[0]) {
-    throw new ConflictError("AGENT_GRANT_AUTHORITY_CHANGED");
+    throw new ConflictError("agent_grant_authority_changed");
   }
   return { authorityRevision: input.expectedAuthorityRevision + 1 };
 }
@@ -740,7 +740,7 @@ export async function rotateAgentCredential(
   const guard = buildBatchGuard(
     db,
     sql`EXISTS (SELECT 1 FROM agent_credentials WHERE id = ${input.credentialId} AND revoked_at IS NULL AND expires_at > unixepoch())`,
-    "AGENT_CREDENTIAL_NOT_ACTIVE",
+    "agent_credential_not_active",
   );
   await safeBatch(db, [
     guard,
@@ -807,7 +807,7 @@ export async function approveDeviceAuthorization(
   const guard = buildBatchGuard(
     db,
     sql`EXISTS (SELECT 1 FROM agent_device_authorizations WHERE id = ${input.deviceId} AND status = 'pending' AND expires_at > unixepoch())`,
-    "AGENT_DEVICE_NOT_PENDING",
+    "agent_device_not_pending",
   );
   await safeBatch(db, [
     guard,

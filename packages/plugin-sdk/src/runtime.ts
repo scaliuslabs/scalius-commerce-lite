@@ -99,7 +99,7 @@ export interface PluginRuntimeBridge {
 const MAX_LOGS = 100;
 const MAX_ERROR_MESSAGE = 300;
 
-/** A refusal from the platform, as plugin code sees it: `error.code` is stable (`object.unique_violation`). */
+/** A refusal from the platform, as plugin code sees it: `error.code` is stable (`object_unique_violation`). */
 export class PluginPlatformError extends Error {
   readonly code: string;
 
@@ -124,7 +124,7 @@ const ttlOf = (options: unknown): { ttlSeconds?: number } =>
     ? { ttlSeconds: (options as { ttlSeconds?: number }).ttlSeconds }
     : {};
 
-const isConflict = (error: unknown): boolean => error instanceof PluginPlatformError && error.code === "object.conflict";
+const isConflict = (error: unknown): boolean => error instanceof PluginPlatformError && error.code === "object_conflict";
 
 /**
  * One object over the bridge. `update` and `increment` are loops of a
@@ -164,14 +164,14 @@ function objectOf(name: string, bridge: PluginRuntimeBridge, call: <T>(work: () 
     },
     async update(id: string, patch: unknown, options?: unknown) {
       if (typeof patch !== "object" || patch === null || Array.isArray(patch)) {
-        throw new PluginPlatformError("object.invalid_record", "A patch is a plain object of top-level fields.");
+        throw new PluginPlatformError("object_invalid_record", "A patch is a plain object of top-level fields.");
       }
       const pinned = condition(options);
       for (let attempt = 1; ; attempt += 1) {
         const current = await getVersion(id);
-        if (!current) throw new PluginPlatformError("object.not_found", `${name}/${id} does not exist.`);
+        if (!current) throw new PluginPlatformError("object_not_found", `${name}/${id} does not exist.`);
         if ("expectedRevision" in pinned && current.revision !== pinned.expectedRevision) {
-          throw new PluginPlatformError("object.conflict", `${name}/${id} changed since it was read: read it again and retry.`);
+          throw new PluginPlatformError("object_conflict", `${name}/${id} changed since it was read: read it again and retry.`);
         }
         const data = { ...current.data, ...(patch as Record<string, unknown>) };
         try {
@@ -184,15 +184,15 @@ function objectOf(name: string, bridge: PluginRuntimeBridge, call: <T>(work: () 
     async increment(id: string, field: string, delta: number, options: { min?: number; max?: number } = {}) {
       const whole = (value: unknown) => typeof value === "number" && Number.isSafeInteger(value);
       if (typeof field !== "string" || !whole(delta) || (options.min !== undefined && !whole(options.min)) || (options.max !== undefined && !whole(options.max))) {
-        throw new PluginPlatformError("object.invalid_record", "increment takes a field name, a whole-number delta and whole-number bounds.");
+        throw new PluginPlatformError("object_invalid_record", "increment takes a field name, a whole-number delta and whole-number bounds.");
       }
       for (let attempt = 1; ; attempt += 1) {
         const current = await getVersion(id);
         const before = current?.data[field] ?? 0;
-        if (!whole(before)) throw new PluginPlatformError("object.invalid_record", `${name}/${id}.${field} is not a whole number.`);
+        if (!whole(before)) throw new PluginPlatformError("object_invalid_record", `${name}/${id}.${field} is not a whole number.`);
         const value = (before as number) + delta;
         if (!Number.isSafeInteger(value) || (options.min !== undefined && value < options.min) || (options.max !== undefined && value > options.max)) {
-          throw new PluginPlatformError("object.out_of_range", `${field} would be ${value}, outside its bounds; nothing changed.`);
+          throw new PluginPlatformError("object_out_of_range", `${field} would be ${value}, outside its bounds; nothing changed.`);
         }
         try {
           const revision = await write({ op: "put", id, record: { ...(current?.data ?? {}), [field]: value }, expectedRevision: current?.revision ?? null });
@@ -268,13 +268,13 @@ function createContext(seed: PluginContextSeed, bridge: PluginRuntimeBridge, log
       sms: (input: unknown) => call(() => bridge.messagingSms(input)),
       notifyStaff: (input: unknown) => call(() => bridge.messagingNotifyStaff(input)),
       pushCustomer: (input: unknown) => call(() => {
-        if (!bridge.messagingPush) throw new Error("[messaging.unavailable] This platform does not send pushes to buyers yet.");
+        if (!bridge.messagingPush) throw new Error("[messaging_unavailable] This platform does not send pushes to buyers yet.");
         return bridge.messagingPush(input);
       }),
     }),
     timeline: Object.freeze({
       add: (input: unknown) => call(() => {
-        if (!bridge.timelineAdd) throw new Error("[timeline.not_allowed] This platform does not take order timeline entries yet.");
+        if (!bridge.timelineAdd) throw new Error("[timeline_not_allowed] This platform does not take order timeline entries yet.");
         return bridge.timelineAdd(input);
       }),
     }),
@@ -332,12 +332,12 @@ export async function invokePluginDefinition(
   const definition = pluginDefinitionOf(module);
   const issues = checkPluginHandlers(seed.inventory, module);
   if (!definition || issues.length > 0) {
-    return result(false, null, { code: "plugin.handlers_mismatch", message: (issues[0] ?? "No plugin definition.").slice(0, MAX_ERROR_MESSAGE) });
+    return result(false, null, { code: "plugin_handlers_mismatch", message: (issues[0] ?? "No plugin definition.").slice(0, MAX_ERROR_MESSAGE) });
   }
   const manifest = definition.manifest as { id?: unknown; version?: unknown } | undefined;
   if (manifest && (manifest.id !== seed.plugin.id || manifest.version !== seed.plugin.version)) {
     return result(false, null, {
-      code: "plugin.identity_mismatch",
+      code: "plugin_identity_mismatch",
       message: `The module is ${String(manifest.id)}@${String(manifest.version)}, not ${seed.plugin.id}@${seed.plugin.version}.`,
     });
   }
@@ -351,14 +351,14 @@ export async function invokePluginDefinition(
           ? handlerIn((definition.providers as Record<string, unknown> | undefined)?.[invocation.provider], invocation.operation)
           : null;
         if (!handler) {
-          return result(false, null, { code: "plugin.no_handler", message: `No ${invocation.operation} operation on provider ${invocation.provider}.` });
+          return result(false, null, { code: "plugin_no_handler", message: `No ${invocation.operation} operation on provider ${invocation.provider}.` });
         }
         return result(true, await handler(invocation.input, createContext(seed, requireBridge(bridge), logs)), null);
       }
       case "function": {
         // Only a live point runs: a feature that is off runs nothing.
         const handler = seed.inventory.functions.includes(invocation.point) ? handlerIn(definition.functions, invocation.point) : null;
-        if (!handler) return result(false, null, { code: "plugin.no_handler", message: `No function handler for ${invocation.point}.` });
+        if (!handler) return result(false, null, { code: "plugin_no_handler", message: `No function handler for ${invocation.point}.` });
         return result(true, await handler(invocation.input, Object.freeze({ ...seed.settings })), null);
       }
       case "event": {
@@ -372,12 +372,12 @@ export async function invokePluginDefinition(
         const routes = definition.routes as Record<string, unknown> | undefined;
         const live = (seed.inventory.routes[invocation.surface] ?? []).includes(invocation.name);
         const handler = live ? handlerIn(routes?.[invocation.surface], invocation.name) : null;
-        if (!handler) return result(false, null, { code: "plugin.no_handler", message: `No ${invocation.surface} route ${invocation.name}.` });
+        if (!handler) return result(false, null, { code: "plugin_no_handler", message: `No ${invocation.surface} route ${invocation.name}.` });
         return result(true, await handler(invocation.request, createContext(seed, requireBridge(bridge), logs)), null);
       }
       case "cron": {
         const handler = seed.inventory.cron.includes(invocation.name) ? handlerIn(definition.cron, invocation.name) : null;
-        if (!handler) return result(false, null, { code: "plugin.no_handler", message: `No cron handler ${invocation.name}.` });
+        if (!handler) return result(false, null, { code: "plugin_no_handler", message: `No cron handler ${invocation.name}.` });
         await handler(createContext(seed, requireBridge(bridge), logs), { name: invocation.name, scheduledAt: invocation.scheduledAt });
         return result(true, null, null);
       }
@@ -395,7 +395,7 @@ export async function invokePluginDefinition(
       case "migration": {
         const key = String(invocation.version);
         const handler = (seed.inventory.migrations ?? []).includes(key) ? handlerIn(definition.migrations, key) : null;
-        if (!handler) return result(false, null, { code: "plugin.no_handler", message: `No migration ${key}.` });
+        if (!handler) return result(false, null, { code: "plugin_no_handler", message: `No migration ${key}.` });
         await handler(createContext(seed, requireBridge(bridge), logs));
         return result(true, null, null);
       }

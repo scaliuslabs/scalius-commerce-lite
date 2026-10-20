@@ -16,7 +16,7 @@
 //   * writes     - always compare-and-swap on the revision that was read, so a
 //                  concurrent save can never be silently overwritten. Editors
 //                  send the revision they loaded (`expectedRevision`); a stale
-//                  one is a 409 SETTINGS_REVISION_CONFLICT. Several documents
+//                  one is a 409 settings_revision_conflict. Several documents
 //                  saved by one request commit all-or-nothing through
 //                  `writeSettingsDocuments()`.
 //   * cache      - an optional per-colo mirror (never for documents with secrets) for
@@ -45,7 +45,7 @@ type SQLiteBatchItem = BatchItem<"sqlite">;
 /** The `settings.key` value every document row uses. */
 export const SETTINGS_DOCUMENT_ROW_KEY = "document";
 
-export const SETTINGS_REVISION_CONFLICT = "SETTINGS_REVISION_CONFLICT";
+export const SETTINGS_REVISION_CONFLICT = "settings_revision_conflict";
 
 /** A save based on a revision that is no longer current. Nothing was written. */
 export class SettingsRevisionConflictError extends AppError {
@@ -281,7 +281,7 @@ function decodeRecord(raw: string): Record<string, unknown> | null {
 }
 
 const WRITE_ATTEMPTS = 3;
-const REVISION_GUARD_MARKER = "SETTINGS_REVISION_CONFLICT";
+const REVISION_GUARD_MARKER = "settings_revision_conflict";
 
 /** Fails the batch unless the document is still at `revision` (0 = absent). */
 function revisionGuard(db: Database, key: string, revision: number): SQLiteBatchItem {

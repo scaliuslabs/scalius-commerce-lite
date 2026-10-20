@@ -257,21 +257,21 @@ describe("plugins in the sandbox loader (Miniflare workerLoaders)", () => {
     expect((await provider("verifyWebhook", webhook)).value).toMatchObject({ status: "event", event: { kind: "confirmed", amountMinor: 12_550 } });
 
     expect(await provider("createSession", walletSessionInput(1300)))
-      .toEqual({ ok: false, error: { name: "ProviderError", category: "declined", uncertain: false, code: "wallet.declined", message: "The wallet declined the payment." } });
+      .toEqual({ ok: false, error: { name: "ProviderError", category: "declined", uncertain: false, code: "wallet_declined", message: "The wallet declined the payment." } });
     const timeout = await provider("createSession", walletSessionInput(1400));
-    expect(timeout.error).toMatchObject({ category: "retryable", uncertain: true, code: "wallet.timeout" });
+    expect(timeout.error).toMatchObject({ category: "retryable", uncertain: true, code: "wallet_timeout" });
     expect(timeout.error.message).not.toContain(WALLET_FIXTURE_SECRET);
-    expect((await provider("createSession", walletSessionInput(1500))).error).toMatchObject({ category: "retryable", uncertain: true, code: "provider.invalid_response" });
-    expect((await provider("createSession", walletSessionInput(1600))).error).toMatchObject({ category: "retryable", uncertain: true, code: "provider.error" });
+    expect((await provider("createSession", walletSessionInput(1500))).error).toMatchObject({ category: "retryable", uncertain: true, code: "provider_invalid_response" });
+    expect((await provider("createSession", walletSessionInput(1600))).error).toMatchObject({ category: "retryable", uncertain: true, code: "provider_error" });
     expect((await provider("listRefunds", { sourceRef: "W-1" })).error)
-      .toMatchObject({ category: "misconfigured", code: "provider.unsupported" });
+      .toMatchObject({ category: "misconfigured", code: "provider_unsupported" });
   });
 
   it("gives the isolate no network: direct fetch fails and the bridge refuses undeclared hosts", async () => {
     const outcome = await send({ action: "route", pluginId: "acme.probe", surface: "public", name: "probe", request: { method: "GET", subpath: "", query: {}, headers: {}, body: null, rawBody: null, staffId: null } });
     expect(outcome.ok).toBe(true);
     expect(outcome.value.body.fetch).toMatch(/not permitted to access the internet/);
-    expect(outcome.value.body.http).toBe("http.not_allowed");
+    expect(outcome.value.body.http).toBe("http_not_allowed");
     expect(outcome.value.body.globals).toBe("none");
   });
 

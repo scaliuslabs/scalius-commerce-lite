@@ -14,7 +14,7 @@ export class CollectionRevisionConflictError extends AppError {
     constructor(collectionId: string, expectedVersion: number, currentVersion: number | null) {
         super(
             409,
-            "COLLECTION_REVISION_CONFLICT",
+            "collection_revision_conflict",
             "Collection changed while you were editing it. Reload and try again.",
             { collectionId, expectedVersion, currentVersion },
         );

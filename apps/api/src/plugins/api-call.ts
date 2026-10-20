@@ -3,7 +3,7 @@
 // as the plugin principal. The result is the route's own response, unwrapped
 // from the `{ success, data }` envelope; refusals are results, not throws.
 // A third-party app reaches the stable app API only (`x-scalius-agent.stability`);
-// anything else refuses with `api.operation_not_stable`. Buyer contact fields
+// anything else refuses with `api_operation_not_stable`. Buyer contact fields
 // the grant does not reveal read null (protected-response.ts, H5). The input's
 // `idempotencyKey` is sent as the Idempotency-Key header: the one retry key
 // every stable mutation takes.
@@ -111,14 +111,14 @@ function unwrap(status: number, ok: boolean, body: unknown): PluginApiResult {
         // name it as the MCP and the SDK's createContractApi do.
         code: typeof error.code === "string"
           ? error.code
-          : error.name === "ZodError" ? "VALIDATION_ERROR" : "ERROR",
+          : error.name === "ZodError" ? "validation_error" : "internal_error",
         message: typeof error.message === "string" ? error.message : "The operation failed.",
       },
     };
   }
   return ok
     ? { ok, status, data: body ?? null, error: null }
-    : { ok, status, data: null, error: { code: "ERROR", message: "The operation failed." } };
+    : { ok, status, data: null, error: { code: "internal_error", message: "The operation failed." } };
 }
 
 /**
@@ -174,15 +174,15 @@ export async function callPluginOperation(options: {
   ctx: ExecutionContext;
 }): Promise<PluginApiResult> {
   if (typeof options.operationId !== "string" || !OPERATION_ID.test(options.operationId)) {
-    return refusal(404, "api.unknown_operation", "Plugins call dashboard or objects operations by their reviewed id.");
+    return refusal(404, "api_unknown_operation", "Plugins call dashboard or objects operations by their reviewed id.");
   }
   const operation = resolveAgentOperationById(options.operationId);
-  if (!operation) return refusal(404, "api.unknown_operation", `Unknown operation ${options.operationId}.`);
+  if (!operation) return refusal(404, "api_unknown_operation", `Unknown operation ${options.operationId}.`);
   const input = normalizePluginApiInput(options.input);
-  if (typeof input === "string") return refusal(400, "api.invalid_input", input);
+  if (typeof input === "string") return refusal(400, "api_invalid_input", input);
   const principal = await resolvePluginPrincipal(options.db, options.pluginId);
   if (!principal || principal.version !== options.version) {
-    return refusal(401, "installation.inactive", "The plugin is not active.");
+    return refusal(401, "installation_inactive", "The plugin is not active.");
   }
   try {
     const result = await dispatchOperationAs(createPluginDispatchAuthority(options.db), {
@@ -199,9 +199,9 @@ export async function callPluginOperation(options: {
   } catch (error) {
     if (error instanceof AgentDispatchError) {
       if (error.code === "operation_forbidden" && !pluginTierAllows(principal.firstParty, operation.stability)) {
-        return refusal(403, "api.operation_not_stable", `${operation.operationId} is not part of the stable app API.`);
+        return refusal(403, "api_operation_not_stable", `${operation.operationId} is not part of the stable app API.`);
       }
-      const code = error.code === "operation_forbidden" ? "api.operation_forbidden" : error.code;
+      const code = error.code === "operation_forbidden" ? "api_operation_forbidden" : error.code;
       return refusal(error.status, code, error.message);
     }
     return refusal(500, "internal", "The operation could not be completed.");

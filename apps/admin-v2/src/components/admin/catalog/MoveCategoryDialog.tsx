@@ -50,7 +50,7 @@ export function MoveCategoryDialog({ target, onClose }: { target: MoveTarget | n
     },
     onError: (failure) => {
       if (readCategoryRevisionConflict(failure)) setError(t("moveConflict"));
-      else if (readAdminApiErrorCode(failure) === "CATEGORY_PLACEMENT_REFUSED") setError(t("placementRefused"));
+      else if (readAdminApiErrorCode(failure) === "category_placement_refused") setError(t("placementRefused"));
       else setError(getServerFnError(failure));
     },
     onSettled: () => void queryClient.invalidateQueries({ queryKey: queryKeys.categories.all }),

@@ -50,7 +50,7 @@ type Statement = BatchItem<"sqlite">;
 
 /** Bound values per fulfilment line row (id, fulfilment, order, line, quantity); created_at is SQL. */
 export const FULFILMENT_LINE_INSERT_PARAMETERS_PER_ROW = 5;
-const FULFILMENT_CLAIM_GUARD = "ORDER_FULFILMENT_CONFLICT";
+const FULFILMENT_CLAIM_GUARD = "order_fulfilment_conflict";
 
 export type ManualFulfilmentKind = "ship" | "pickup" | "service";
 

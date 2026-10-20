@@ -432,8 +432,8 @@ describe("account order detail", () => {
     const validation = {
       valid: false,
       issues: [
-        { index: 1, productId: "prod_gone", variantId: "sku_gone", code: "PRODUCT_UNAVAILABLE", action: "remove", message: "Gone", productName: "Old Tee", variantLabel: null },
-        { index: 2, productId: "prod_3", variantId: "sku_red_m", code: "QUANTITY_UNAVAILABLE", action: "reduce_quantity", message: "Only 1 left", productName: "Polo", variantLabel: "Red / M" },
+        { index: 1, productId: "prod_gone", variantId: "sku_gone", code: "product_unavailable", action: "remove", message: "Gone", productName: "Old Tee", variantLabel: null },
+        { index: 2, productId: "prod_3", variantId: "sku_red_m", code: "quantity_unavailable", action: "reduce_quantity", message: "Only 1 left", productName: "Polo", variantLabel: "Red / M" },
       ],
       items: [
         { index: 0, cartKey: "0", productId: "prod_1", variantId: "sku_default", quantity: 2, unitPrice: 550, productName: "BB Tee", variantLabel: null, freeDelivery: false, availableQuantity: null, productImageMediaId: null, productImage: null },

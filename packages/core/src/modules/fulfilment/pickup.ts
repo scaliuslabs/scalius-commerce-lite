@@ -18,7 +18,7 @@ import {
 } from "../notifications";
 import { assertNoActiveShipmentClaim, noActiveShipmentClaimCondition } from "../order-kernel";
 
-const PICKUP_READY_GUARD = "ORDER_PICKUP_READY_CONFLICT";
+const PICKUP_READY_GUARD = "order_pickup_ready_conflict";
 const OPEN_PICKUP_STATUSES = [OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.CONFIRMED] as const;
 
 export interface MarkReadyForPickupResult {

@@ -78,7 +78,7 @@ app.openapi(createRoute({
   path: "/theme/restore-point",
   tags: ["Admin - Settings"],
   summary: "Put a restore point back in the draft (it goes live only when the draft is published)",
-  description: "The draft it replaces becomes a restore point too, so the restore can be undone. A point that names images deleted from Files since is refused with THEME_VERSION_IMAGES_MISSING; send withoutMissingImages to restore it without them.",
+  description: "The draft it replaces becomes a restore point too, so the restore can be undone. A point that names images deleted from Files since is refused with theme_version_images_missing; send withoutMissingImages to restore it without them.",
   operationId: "dashboard.theme.draft_snapshot_restore",
   request: {
     body: {
@@ -248,13 +248,13 @@ app.openapi(createRoute({
       signal: c.req.raw.signal,
     });
   } catch (error) {
-    if (error instanceof AiGenerateError) throw new ValidationError(error.message, { code: `ai.${error.reason}` });
+    if (error instanceof AiGenerateError) throw new ValidationError(error.message, { code: `ai_${error.reason}` });
     throw error;
   }
   // Every section is checked against the theme's own schemas; one that fails is left out and counted.
   const accepted = acceptDraftedSections(value.sections.slice(0, input.limit), []);
   if (accepted.sections.length === 0) {
-    throw new ValidationError(`${choice.provider.label} returned nothing this theme can show. Try other words.`, { code: "ai.invalid_output" });
+    throw new ValidationError(`${choice.provider.label} returned nothing this theme can show. Try other words.`, { code: "ai_invalid_output" });
   }
   return ok(c, { sections: accepted.sections, rejected: accepted.rejected, note: value.note ?? null });
 });

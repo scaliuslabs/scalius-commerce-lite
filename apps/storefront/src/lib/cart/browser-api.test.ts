@@ -120,7 +120,7 @@ describe("previewCartDiscounts", () => {
 
   it("reads the message out of the API error envelope instead of printing an object", async () => {
     fetchMock.mockResolvedValue(new Response(
-      JSON.stringify({ success: false, error: { code: "VALIDATION_ERROR", message: "Use up to 5 discount codes." } }),
+      JSON.stringify({ success: false, error: { code: "validation_error", message: "Use up to 5 discount codes." } }),
       { status: 400 },
     ));
     await expect(previewCartDiscounts(["A1A"], [])).resolves.toEqual({

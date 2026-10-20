@@ -2,7 +2,7 @@
 // hand over, and how. `ship`, `pickup` and `service` are manual (staff act);
 // `digital` and `gift_card` are automatic once payment settles, and have no
 // fulfiller until Wave B registers one. A line whose type has no fulfiller
-// fails closed at cart validation and commit (FULFILMENT_UNAVAILABLE).
+// fails closed at cart validation and commit (fulfilment_unavailable).
 //
 // The registry is a frozen constant: no request state, no mutation at runtime.
 import type { Database } from "@scalius/database/client";

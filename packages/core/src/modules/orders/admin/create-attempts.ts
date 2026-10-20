@@ -31,8 +31,8 @@ export type AdminOrderCreateAttemptResult<TResponse> =
 
 const ADMIN_CREATE_ATTEMPT_LEASE_SECONDS = 5 * 60;
 const MAX_ATTEMPT_ERROR_LENGTH = 500;
-const ADMIN_CREATE_ATTEMPT_GUARD_MARKER = "ADMIN_ORDER_CREATE_ATTEMPT_CONFLICT";
-export const ADMIN_ORDER_CREATE_REQUEST_MISMATCH = "ADMIN_ORDER_CREATE_REQUEST_MISMATCH";
+const ADMIN_CREATE_ATTEMPT_GUARD_MARKER = "admin_order_create_attempt_conflict";
+export const ADMIN_ORDER_CREATE_REQUEST_MISMATCH = "admin_order_create_request_mismatch";
 
 export type AdminOrderCreateRequestMismatchDetails =
   | {

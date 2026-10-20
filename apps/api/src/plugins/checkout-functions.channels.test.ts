@@ -341,10 +341,10 @@ describe("checkout app functions on the agent and admin channels", () => {
     answers["acme.optional"] = () => thrown("Error: also down");
     const refusal = {
       status: 400,
-      body: { error: { message: "We can't confirm your order right now. Please try again in a few minutes.", details: { reason: "CHECKOUT_APP_UNAVAILABLE" } } },
+      body: { error: { message: "We can't confirm your order right now. Please try again in a few minutes.", details: { reason: "checkout_app_unavailable" } } },
     };
 
-    await expect(onlineStore(await apps())).rejects.toMatchObject({ details: { reason: "CHECKOUT_APP_UNAVAILABLE" } });
+    await expect(onlineStore(await apps())).rejects.toMatchObject({ details: { reason: "checkout_app_unavailable" } });
     expect(await agentQuote()).toMatchObject(refusal);
     expect(await agentSubmit("taxq_abcdefghijklmnopqrstuv")).toMatchObject(refusal);
     expect(await adminQuote()).toMatchObject(refusal);

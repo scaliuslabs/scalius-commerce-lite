@@ -115,10 +115,10 @@ describe("order code form", () => {
     const notFound = "We couldn't find an order with that number. Check it and try again.";
     const noChannel = "This order has no email address, and this store can't send text messages.";
     vi.stubGlobal("fetch", vi.fn()
-      .mockResolvedValueOnce(reply({ success: false, errorCode: "NOT_FOUND", message: notFound }, 404))
-      .mockResolvedValueOnce(reply({ success: false, errorCode: "NO_CODE_CHANNEL", message: noChannel }, 409))
-      .mockResolvedValueOnce(reply({ success: false, errorCode: "NOT_FOUND", message: notFound }, 404))
-      .mockResolvedValueOnce(reply({ success: false, errorCode: "SERVICE_UNAVAILABLE", message: "Unavailable." }, 503)));
+      .mockResolvedValueOnce(reply({ success: false, errorCode: "not_found", message: notFound }, 404))
+      .mockResolvedValueOnce(reply({ success: false, errorCode: "no_code_channel", message: noChannel }, 409))
+      .mockResolvedValueOnce(reply({ success: false, errorCode: "not_found", message: notFound }, 404))
+      .mockResolvedValueOnce(reply({ success: false, errorCode: "service_unavailable", message: "Unavailable." }, 503)));
     const view = renderForm();
 
     await submitWith(view.form, view.submit);
@@ -194,8 +194,8 @@ describe("order code form", () => {
   it("says how many attempts are left, and offers a new code when none are", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(reply({ success: true, resendAfterSeconds: 60 }))
-      .mockResolvedValueOnce(reply({ success: false, errorCode: "VALIDATION_ERROR", attemptsLeft: 1 }, 400))
-      .mockResolvedValueOnce(reply({ success: false, errorCode: "VALIDATION_ERROR", attemptsLeft: 0 }, 400));
+      .mockResolvedValueOnce(reply({ success: false, errorCode: "validation_error", attemptsLeft: 1 }, 400))
+      .mockResolvedValueOnce(reply({ success: false, errorCode: "validation_error", attemptsLeft: 0 }, 400));
     vi.stubGlobal("fetch", fetchMock);
     const view = renderForm();
     await submitWith(view.form, view.submit);
@@ -216,7 +216,7 @@ describe("order code form", () => {
     // A buyer who reloads the page (or comes back from their inbox) and asks
     // again is refused, but still has the code: it must be enterable.
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(reply({ success: false, errorCode: "RATE_LIMIT", message: "Too many codes. Enter the latest code we sent.", retryAfterSeconds: 120 }, 429))
+      .mockResolvedValueOnce(reply({ success: false, errorCode: "rate_limited", message: "Too many codes. Enter the latest code we sent.", retryAfterSeconds: 120 }, 429))
       .mockResolvedValueOnce(reply({ success: true, redirectUrl: "/order-success?orderId=JJEHCFQ3C1JJ35GX" }));
     vi.stubGlobal("fetch", fetchMock);
     const assign = vi.fn();
@@ -244,7 +244,7 @@ describe("order code form", () => {
   it("counts a rate-limited resend down on the resend button", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(reply({ success: true, resendAfterSeconds: 1 }))
-      .mockResolvedValueOnce(reply({ success: false, errorCode: "RATE_LIMIT", message: "Too many codes.", retryAfterSeconds: 120 }, 429));
+      .mockResolvedValueOnce(reply({ success: false, errorCode: "rate_limited", message: "Too many codes.", retryAfterSeconds: 120 }, 429));
     vi.stubGlobal("fetch", fetchMock);
     const view = renderForm();
     await submitWith(view.form, view.submit);

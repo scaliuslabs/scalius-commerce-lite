@@ -217,7 +217,7 @@ function OrderTimeline({ order }: { order: Order }) {
         <div className="flex flex-wrap items-center gap-2">
           {windows.length > 1 ? historyButton("newer", historyError?.action === "newer" ? r("retry") : t("timeline.newer"),
             historyError?.action === "newer" ? historyError.windows : windows.slice(0, -1)) : null}
-          {windows.length > 2 || historyError?.action === "newest" || busy === "newest" || readAdminApiErrorCode(historyError?.error ?? query.error) === "INVALID_CURSOR"
+          {windows.length > 2 || historyError?.action === "newest" || busy === "newest" || readAdminApiErrorCode(historyError?.error ?? query.error) === "invalid_cursor"
             ? historyButton("newest", historyError?.action === "newest" ? r("retry") : t("timeline.newest"), [null]) : null}
           {historyError?.action === "append" || historyError?.action === "older" ? historyButton(historyError.action, r("retry"), historyError.windows)
             : nextCursor ? historyButton(canAppend ? "append" : "older", t(canAppend ? "timeline.loadOlder" : "timeline.older"), canAppend ? undefined : [...windows, nextCursor]) : null}

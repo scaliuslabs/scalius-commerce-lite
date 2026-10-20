@@ -43,7 +43,7 @@ const DEFAULT_SETTINGS = {
 /** Longest postal prefix a tax region may hold (as shipping zones). */
 export const MAX_TAX_POSTAL_PREFIX_LENGTH = 10;
 
-const TAX_CONFIGURATION_READINESS_CONFLICT = "TAX_CONFIGURATION_READINESS_CONFLICT";
+const TAX_CONFIGURATION_READINESS_CONFLICT = "tax_configuration_readiness_conflict";
 const TAX_CONFIGURATION_READINESS_MESSAGE =
     "Tax is enabled. Keep an active rate on each taxable default or shipping class, or mark the class exempt, before saving this change.";
 

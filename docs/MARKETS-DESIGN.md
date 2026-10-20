@@ -1058,7 +1058,7 @@ rebuild.
   value): the online store, or AI agents for a buyer agent. Cart
   validation, the checkout authority read and the reservation guard use that
   channel: a SKU of a product the channel does not publish is
-  `PRODUCT_UNAVAILABLE`. Unpublishing a product or switching a channel off
+  `product_unavailable`. Unpublishing a product or switching a channel off
   advances the checkout authority fence.
 - Staff orders take `salesChannelId` (an active channel; the online store by
   default). Staff may sell any product, published or not (Shopify's draft
@@ -1156,7 +1156,7 @@ converted at the rate, adjusted, rounded to the step and the ending. A
 market's price increment in its own currency is the currency's default (whole
 taka for BDT, else the minor unit); the step and ending round further. A
 market without a usable rate refuses its prices
-(`MARKET_PRICES_UNAVAILABLE`), never shows them unconverted.
+(`market_prices_unavailable`), never shows them unconverted.
 
 **Shop amounts** (Shopify's rule, `@scalius/shared/presentment`). Every
 amount the store keeps in the shop currency converts at the locked rate and

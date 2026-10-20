@@ -136,10 +136,10 @@ The contract (`@scalius/shared/pagination`, `@scalius/core/utils/keyset`):
 
 - `after` and `before` cursors, and `pageInfo` built from `limit + 1` rows.
 - `total` is exact up to `planLimits().lists.countCap`. Above it, `total` is the cap and `totalIsCapped` is true.
-- A numbered page works only below `maxOffset`. A deeper page is a typed 400 (`PAGE_TOO_DEEP`).
+- A numbered page works only below `maxOffset`. A deeper page is a typed 400 (`page_too_deep`).
 - Both plans use the same logic. Only the two numbers differ.
 
-A cursor travels in a URL, so it never carries personal data. A sort on personal values (orders by customer name, customers by name) issues a reference cursor: sort, direction and row id, no value. `resolveReferencedBoundary` reads the boundary row's value by id when the cursor returns. A cursor for a row that no longer exists is a typed 400 (`INVALID_CURSOR`), and a cursor that carries a name for such a sort is refused. Other sorts carry their value.
+A cursor travels in a URL, so it never carries personal data. A sort on personal values (orders by customer name, customers by name) issues a reference cursor: sort, direction and row id, no value. `resolveReferencedBoundary` reads the boundary row's value by id when the cursor returns. A cursor for a row that no longer exists is a typed 400 (`invalid_cursor`), and a cursor that carries a name for such a sort is refused. Other sorts carry their value.
 
 ### Worker size
 

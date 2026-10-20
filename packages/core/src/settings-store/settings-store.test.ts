@@ -78,7 +78,7 @@ describe("settings documents", () => {
     await expect(demo.write(db, { label: "Late" }, {}, { expectedRevision: 0 }))
       .rejects.toMatchObject({
         status: 409,
-        code: "SETTINGS_REVISION_CONFLICT",
+        code: "settings_revision_conflict",
         details: { document: "demo", expectedRevision: 0, currentRevision: 1 },
       });
     expect((await demo.readDetailed(db)).value.label).toBe("Shop");
@@ -116,7 +116,7 @@ describe("settings documents", () => {
       { document: demo, patch: { label: "Mine" }, expectedRevision: 1 },
       { document: cached, patch: { origin: "https://mine.example" }, expectedRevision: 1 },
     ])).rejects.toMatchObject({
-      code: "SETTINGS_REVISION_CONFLICT",
+      code: "settings_revision_conflict",
       details: { document: "cached", expectedRevision: 1, currentRevision: 2 },
     });
     expect((await demo.readDetailed(db)).value.label).toBe("Shop");

@@ -140,7 +140,7 @@ describe("OrderSuccessButtons customer request policy rendering", () => {
     const reason = "This order was placed with a different phone number and email, so it can't be added to your account.";
     stubAccount(
       { email: "rahim@example.test" },
-      new Response(JSON.stringify({ success: false, error: { code: "FORBIDDEN", message: reason } }), { status: 403 }),
+      new Response(JSON.stringify({ success: false, error: { code: "forbidden", message: reason } }), { status: 403 }),
     );
 
     await renderReceipt(false);

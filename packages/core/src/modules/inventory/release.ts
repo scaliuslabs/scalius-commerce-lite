@@ -67,7 +67,7 @@ export interface ReleaseReservedStockBatchResult {
 }
 
 const DEFAULT_RELEASE_KEY = "inventory-release:v1";
-const INVENTORY_RELEASE_PLAN_CONFLICT = "INVENTORY_RELEASE_PLAN_CONFLICT";
+const INVENTORY_RELEASE_PLAN_CONFLICT = "inventory_release_plan_conflict";
 
 export function isPreparedReservedStockReleaseConflictError(error: unknown): boolean {
   return isBatchGuardError(error, INVENTORY_RELEASE_PLAN_CONFLICT);

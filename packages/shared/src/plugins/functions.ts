@@ -318,11 +318,11 @@ export type PluginFunctionOutput<P extends PluginFunctionPoint> = z.infer<(typeo
 export type PluginFunctionAnswer<P extends PluginFunctionPoint> = z.input<(typeof PLUGIN_FUNCTION_SCHEMAS)[P]["output"]>;
 
 /** The refusal code of an answer that fails its point's schema; the host skips the app (or blocks, `onError`). */
-export const PLUGIN_FUNCTION_INVALID_OUTPUT = "function.invalid_output";
+export const PLUGIN_FUNCTION_INVALID_OUTPUT = "function_invalid_output";
 
 /**
  * A function's answer checked the way the host checks it: the parsed output,
- * or `function.invalid_output` with the first issue's path. The host and the
+ * or `function_invalid_output` with the first issue's path. The host and the
  * SDK test harness both use this, so a test sees what production does.
  */
 export function checkPluginFunctionOutput<P extends PluginFunctionPoint>(

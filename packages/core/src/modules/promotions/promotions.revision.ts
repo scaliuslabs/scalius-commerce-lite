@@ -9,7 +9,7 @@ import { AppError, ConflictError } from "@scalius/core/errors";
 import { eq, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 
-export const PROMOTION_REVISION_CONFLICT = "PROMOTION_REVISION_CONFLICT";
+export const PROMOTION_REVISION_CONFLICT = "promotion_revision_conflict";
 
 export class PromotionRevisionConflictError extends AppError {
     constructor(
@@ -31,7 +31,7 @@ export class PromotionStateConflictError extends AppError {
     constructor(promotionId: string) {
         super(
             409,
-            "PROMOTION_STATE_CONFLICT",
+            "promotion_state_conflict",
             "This promotion is no longer editable. Return to promotions and reload.",
             { promotionId },
         );

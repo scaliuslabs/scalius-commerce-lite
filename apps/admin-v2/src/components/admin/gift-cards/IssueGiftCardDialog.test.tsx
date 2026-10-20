@@ -106,7 +106,7 @@ describe("IssueGiftCardDialog", () => {
 
   it("shows the API's refusal of a recipient phone at the contact field", async () => {
     mocks.issue.mockResolvedValueOnce({
-      error: { success: false, error: { code: "VALIDATION_ERROR", message: "Enter a valid recipient phone number.", details: { field: "recipient.phone" } } },
+      error: { success: false, error: { code: "validation_error", message: "Enter a valid recipient phone number.", details: { field: "recipient.phone" } } },
       response: { status: 400 },
     });
     await render(true);

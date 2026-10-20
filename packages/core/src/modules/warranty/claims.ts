@@ -69,8 +69,8 @@ import {
 } from "./shared";
 import { formatNumber } from "@scalius/shared/locale-format";
 
-const WARRANTY_INACTIVE_GUARD = "WARRANTY_NOT_ACTIVE";
-const CLAIM_VERSION_GUARD = "WARRANTY_CLAIM_CHANGED";
+const WARRANTY_INACTIVE_GUARD = "warranty_not_active";
+const CLAIM_VERSION_GUARD = "warranty_claim_changed";
 const APPEND_ATTEMPTS = 3;
 const CLAIM_LIST_PAGE = 25;
 

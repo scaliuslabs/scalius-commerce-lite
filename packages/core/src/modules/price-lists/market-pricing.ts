@@ -71,7 +71,7 @@ export function isNeutralMarketPricing(context: MarketPriceContext | null | unde
 /** Thrown when a market in its own currency has no usable rate: its prices are refused, never shown unconverted. */
 export class MarketPricesUnavailableError extends AppError {
     constructor() {
-        super(503, "MARKET_PRICES_UNAVAILABLE", "Prices in this market are unavailable right now. Try the store's main site.");
+        super(503, "market_prices_unavailable", "Prices in this market are unavailable right now. Try the store's main site.");
         this.name = "MarketPricesUnavailableError";
     }
 }

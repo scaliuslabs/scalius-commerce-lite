@@ -470,7 +470,7 @@ export interface ReviewSettingsView extends ReviewSettings {
 /** The reviews settings for the dashboard (a 503 when the stored document is unreadable). */
 export async function getReviewSettingsForAdmin(db: Database): Promise<ReviewSettingsView> {
   const read = await readSettingsDocumentStrict(reviewsDocument, db);
-  if (!read.ok) throw new AppError(503, "REVIEW_SETTINGS_UNREADABLE", "Review settings could not be read. Save them again to repair them.");
+  if (!read.ok) throw new AppError(503, "review_settings_unreadable", "Review settings could not be read. Save them again to repair them.");
   return { ...read.value, revision: read.revision };
 }
 

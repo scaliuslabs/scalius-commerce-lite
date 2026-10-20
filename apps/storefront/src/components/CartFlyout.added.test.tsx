@@ -90,7 +90,7 @@ describe("cart drawer after an add", () => {
       return new Response(JSON.stringify({
         data: {
           issues: asked > 40
-            ? [{ index: 0, cartKey: mugKey, productId: "mug", variantId: "var_mug", code: "QUANTITY_UNAVAILABLE", action: "reduce_quantity",
+            ? [{ index: 0, cartKey: mugKey, productId: "mug", variantId: "var_mug", code: "quantity_unavailable", action: "reduce_quantity",
                 message: "Only 40 left for Mug.", productName: "Mug", variantLabel: null, requestedQuantity: asked, availableQuantity: 40 }]
             : [],
         },

@@ -40,8 +40,8 @@ import { z } from "zod";
 import { planLimits } from "./plan-limits";
 
 export const LIST_CURSOR_VERSION = 1;
-export const LIST_CURSOR_ERROR_CODE = "INVALID_CURSOR";
-export const LIST_OFFSET_ERROR_CODE = "PAGE_TOO_DEEP";
+export const LIST_CURSOR_ERROR_CODE = "invalid_cursor";
+export const LIST_OFFSET_ERROR_CODE = "page_too_deep";
 
 const MAX_CURSOR_LENGTH = 1_024;
 const MAX_CURSOR_TEXT_LENGTH = 512;

@@ -194,7 +194,7 @@ describe("checkout tax quote proxy", () => {
     mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
       success: false,
       error: {
-        code: "VALIDATION_ERROR",
+        code: "validation_error",
         message: "Phone +8801700000000 saw a stale price",
         details: {
           itemIssues: [{
@@ -202,7 +202,7 @@ describe("checkout tax quote proxy", () => {
             cartKey: "line_1",
             productId: "prod_1",
             variantId: "var_1",
-            code: "PRICE_CHANGED",
+            code: "price_changed",
             action: "refresh_item",
             message: "The price changed.",
             productName: "Cotton Panjabi",
@@ -228,7 +228,7 @@ describe("checkout tax quote proxy", () => {
       details: {
         itemIssues: [expect.objectContaining({
           cartKey: "line_1",
-          code: "PRICE_CHANGED",
+          code: "price_changed",
           currentPrice: 150,
         })],
       },
@@ -241,7 +241,7 @@ describe("checkout tax quote proxy", () => {
     mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
       success: false,
       error: {
-        code: "VALIDATION_ERROR",
+        code: "validation_error",
         message: "This delivery option isn't available for the selected address.",
         details: { reason: "delivery_rate_unavailable", zoneId: "zone_internal" },
       },
@@ -263,7 +263,7 @@ describe("checkout tax quote proxy", () => {
     mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
       success: false,
       error: {
-        code: "VALIDATION_ERROR",
+        code: "validation_error",
         message: "Phone +8801700000000 blocked by app",
         details: {
           reason: "cart_rules",
@@ -295,7 +295,7 @@ describe("checkout tax quote proxy", () => {
     const shippingRates = [{ id: "ship_2", name: "Standard", kind: "delivery", amount: 60, amountMinor: 6_000 }];
     mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
       success: false,
-      error: { code: "VALIDATION_ERROR", details: { reason: "delivery_rate_unavailable", shippingRates } },
+      error: { code: "validation_error", details: { reason: "delivery_rate_unavailable", shippingRates } },
     }), { status: 400 }));
 
     const response = await POST({ request: storefrontRequest(requestPayload()) } as never);

@@ -694,7 +694,7 @@ export const MERCHANT_TASKS: readonly MerchantTask[] = [
         JOIN permissions p ON p.id = rp.permission_id WHERE ur.user_id = ?`, invited.id).map((row) => row.name);
       return permissions.length > 0 && permissions.every((name) => name.startsWith("orders.")) ? [] : [`invited user permissions ${permissions.join()}`];
     },
-    knownGap: "team.users.invite answers 500 INTERNAL_ERROR on the seeded store (the role is created fine); the invite path depends on auth/email wiring the in-process store does not provide, so the staff invite is unproven.",
+    knownGap: "team.users.invite answers 500 internal_error on the seeded store (the role is created fine); the invite path depends on auth/email wiring the in-process store does not provide, so the staff invite is unproven.",
   },
   {
     n: 27,

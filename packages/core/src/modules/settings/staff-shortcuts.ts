@@ -90,7 +90,7 @@ export async function readStaffShortcuts(db: Database, userId: string): Promise<
 
 /**
  * Replaces the whole map. A stale `expectedRevision` is the store's 409
- * SETTINGS_REVISION_CONFLICT; an invalid map is a 400 with a readable reason.
+ * settings_revision_conflict; an invalid map is a 400 with a readable reason.
  */
 export async function writeStaffShortcuts(
   db: Database,

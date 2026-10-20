@@ -13,7 +13,7 @@ function api(totalMinor = 150_000) {
     answer: async (operationId: string, input: PluginApiCallInput | undefined) => {
       calls.push({ operationId, input });
       if (operationId === "dashboard.resources.orders.get") return { ok: true, status: 200, data: { id: input?.path?.id, currency: "BDT", totalMinor }, error: null };
-      return { ok: false, status: 404, data: null, error: { code: "api.unknown_operation", message: operationId } };
+      return { ok: false, status: 404, data: null, error: { code: "api_unknown_operation", message: operationId } };
     },
   };
 }

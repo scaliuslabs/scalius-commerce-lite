@@ -353,7 +353,7 @@ export async function retryPluginEventDelivery(
   deliveryId: string,
 ): Promise<PluginEventDeliveryView> {
   if (!(await getActivePluginInstallation(db, pluginId))) {
-    throw new PluginError("installation.inactive", "Activate the app before retrying its deliveries.");
+    throw new PluginError("installation_inactive", "Activate the app before retrying its deliveries.");
   }
   const rows = await db.update(pluginEventDeliveries).set({
     status: "pending",
@@ -375,8 +375,8 @@ export async function retryPluginEventDelivery(
       .from(pluginEventDeliveries)
       .where(and(eq(pluginEventDeliveries.id, deliveryId), eq(pluginEventDeliveries.pluginId, pluginId)))
       .get();
-    if (!existing) throw new PluginError("delivery.not_found", "Delivery not found.");
-    throw new PluginError("delivery.not_retryable", existing.eventId === null
+    if (!existing) throw new PluginError("delivery_not_found", "Delivery not found.");
+    throw new PluginError("delivery_not_retryable", existing.eventId === null
       ? "Its event was pruned; it cannot be delivered again."
       : "Only failed, exhausted or cancelled deliveries can be retried.");
   }

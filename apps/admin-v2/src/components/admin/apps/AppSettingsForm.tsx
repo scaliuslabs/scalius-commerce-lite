@@ -154,7 +154,7 @@ export function useAppSettingsDraft(app: AppDetail, options: { canManage: boolea
         const refused = appSettingErrors(error);
         if (refused) {
           // Marked on the fields themselves by the save bar.
-          throw new AdminApiResponseError(t("settingsRefused"), 400, "VALIDATION_ERROR", {
+          throw new AdminApiResponseError(t("settingsRefused"), 400, "validation_error", {
             issues: refused.map((issue) => ({ path: issue.key, message: issue.message === "Required." ? t("problem_required") : issue.message })),
           });
         }

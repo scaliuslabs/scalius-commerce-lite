@@ -163,6 +163,6 @@ describe("app quotas and data updates", () => {
     sqlite.prepare("UPDATE plugin_installations SET storage_bytes = ? WHERE plugin_id = 'acme.points'").run(10 * 1024 * 1024 * 1024);
     const full = await requirePluginInstallation(db, "acme.points");
     expect((await host().invokeEvent(full, event)).ok).toBe(true);
-    expect(results).toEqual(["put quota.storage", "delete ok"]);
+    expect(results).toEqual(["put quota_storage", "delete ok"]);
   });
 });

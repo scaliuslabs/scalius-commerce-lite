@@ -29,8 +29,8 @@ import { truthfulUpdatedAt } from "../../utils/truthful-updated-at";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
-export const BRAND_REVISION_CONFLICT = "BRAND_REVISION_CONFLICT";
-const BRAND_LOGO_UNAVAILABLE = "BRAND_LOGO_UNAVAILABLE";
+export const BRAND_REVISION_CONFLICT = "brand_revision_conflict";
+const BRAND_LOGO_UNAVAILABLE = "brand_logo_unavailable";
 export const BRAND_OPTIONS_LIMIT = 50;
 const SLUG_LOOKUP_LIMIT = 1000;
 const INSERT_ATTEMPTS = 3;
@@ -51,7 +51,7 @@ export class BrandStateConflictError extends AppError {
     constructor(brandId: string, requiredState: "active" | "trashed") {
         super(
             409,
-            "BRAND_STATE_CONFLICT",
+            "brand_state_conflict",
             requiredState === "active"
                 ? "This brand is in trash. Restore it before changing it."
                 : "This brand is not in trash. Return to brands and reload.",

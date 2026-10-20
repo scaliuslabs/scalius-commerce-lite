@@ -108,7 +108,7 @@ describe("admin order create idempotency boundary", () => {
     it("preserves typed recovery details for the authenticated admin client", async () => {
         mocks.createOrder.mockRejectedValueOnce(new AppError(
             409,
-            "ADMIN_ORDER_CREATE_REQUEST_MISMATCH",
+            "admin_order_create_request_mismatch",
             "The earlier manual-order submission already created an order.",
             {
                 state: "committed",
@@ -127,7 +127,7 @@ describe("admin order create idempotency boundary", () => {
         await expect(response.json()).resolves.toMatchObject({
             success: false,
             error: {
-                code: "ADMIN_ORDER_CREATE_REQUEST_MISMATCH",
+                code: "admin_order_create_request_mismatch",
                 details: {
                     state: "committed",
                     canRetryWithNewKey: false,

@@ -598,7 +598,7 @@ app.openapi(extensionFileRoute, async (c) => {
   const { readPluginStorefrontFile } = await import("../plugins/storefront-files");
   const file = await readPluginStorefrontFile(c.env, c.get("db"), pluginId, release, c.req.valid("query").path);
   if (!file) {
-    return new Response(JSON.stringify({ success: false, error: { code: "NOT_FOUND", message: "File not found" } }), {
+    return new Response(JSON.stringify({ success: false, error: { code: "not_found", message: "File not found" } }), {
       status: 404,
       headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
     }) as never;

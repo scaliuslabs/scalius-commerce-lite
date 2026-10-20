@@ -35,7 +35,7 @@ The trigger `product_reviews_line_eligible` refuses a line that was not handed o
 
 - A reviewable line is a reviewable fulfilment type, handed over, on a live order with status `delivered` or `completed`, and within 365 days of its first active fulfilment.
 - The buyer is the verified account that owns the order, or a guest holding the order's receipt proof.
-- A retry on the same line returns the same review. A repeat purchase of the same product gets `409 REVIEW_EXISTS` naming the review to edit.
+- A retry on the same line returns the same review. A repeat purchase of the same product gets `409 review_exists` naming the review to edit.
 - Moderation uses `checkReviewContent` (links, emails, Bangladesh phone numbers, repeated characters, merchant block words). It never sees the rating. Mode `auto` publishes clean reviews. Mode `hold` holds all.
 - A held review writes a staff `review_pending` outbox row in the same batch (ids only). Rejection needs a content reason. "Low rating" is not one.
 - Buyers edit rating, title, text and display name at most 10 times a day. Buyers withdraw pending or published reviews. Staff never write buyer text: they set status, reason, reply and settings only.

@@ -103,7 +103,7 @@ describe("plugin bridge", () => {
     ["a wildcard apex", "https://cdn.acme.example/"],
   ])("refuses %s before any request", async (_label, url) => {
     const bridge = createInProcessBridge(host);
-    await expect(bridge.httpFetch(url)).rejects.toThrow(/^\[http\.not_allowed\] /);
+    await expect(bridge.httpFetch(url)).rejects.toThrow(/^\[http_not_allowed\] /);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -123,21 +123,21 @@ describe("plugin bridge", () => {
 
     fetchMock.mockReset();
     fetchMock.mockResolvedValueOnce(new Response(null, { status: 301, headers: { Location: "https://10.0.0.5/internal" } }));
-    await expect(createInProcessBridge(host).httpFetch("https://api.acme.example/")).rejects.toThrow(/^\[http\.not_allowed\] /);
+    await expect(createInProcessBridge(host).httpFetch("https://api.acme.example/")).rejects.toThrow(/^\[http_not_allowed\] /);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("refuses platform-owned headers, oversized responses and plugins without allowedHosts", async () => {
     await expect(createInProcessBridge(host).httpFetch("https://api.acme.example/", { headers: { Host: "evil.example" } }))
-      .rejects.toThrow(/^\[http\.invalid_request\] /);
+      .rejects.toThrow(/^\[http_invalid_request\] /);
     fetchMock.mockResolvedValueOnce(new Response("x".repeat(1024 * 1024 + 1)));
-    await expect(createInProcessBridge(host).httpFetch("https://api.acme.example/big")).rejects.toThrow(/^\[http\.failed\] /);
+    await expect(createInProcessBridge(host).httpFetch("https://api.acme.example/big")).rejects.toThrow(/^\[http_failed\] /);
     const offline = new PluginBridgeHost({
       pluginId: "acme.bridge",
       version: "1.0.0",
       authority: { permissions: [], allowedHosts: [], objects: {}, customFields: [] },
     }, environment);
-    await expect(createInProcessBridge(offline).httpFetch("https://api.acme.example/")).rejects.toThrow(/^\[http\.not_allowed\] /);
+    await expect(createInProcessBridge(offline).httpFetch("https://api.acme.example/")).rejects.toThrow(/^\[http_not_allowed\] /);
   });
 
   it("limits the app's own outbound requests, but not a provider operation's calls to its provider", async () => {
@@ -148,24 +148,24 @@ describe("plugin bridge", () => {
     const provider = new PluginBridgeHost({ ...host["props"], provider: { kind: "sms" } }, environment);
     await expect(createInProcessBridge(provider).httpFetch("https://api.acme.example/send", { method: "POST", body: "x" })).resolves.toMatchObject({ status: 200 });
     // The store's messaging stays refused inside a provider operation.
-    await expect(createInProcessBridge(provider).messagingSms({ to: "+8801711111111", text: "hi" })).rejects.toThrow(/^\[messaging\.not_allowed\] /);
+    await expect(createInProcessBridge(provider).messagingSms({ to: "+8801711111111", text: "hi" })).rejects.toThrow(/^\[messaging_not_allowed\] /);
     limiter.limit.mockResolvedValue({ success: true });
   });
 
   it("only reaches declared objects and returns copies", async () => {
     const bridge = createInProcessBridge(host);
-    await expect(bridge.objectsGet("secrets", "x")).rejects.toThrow(/^\[object\.undeclared_type\] /);
-    await expect(bridge.objectsWrite([{ object: "secrets", op: "put", id: "x", record: {} }])).rejects.toThrow(/^\[object\.undeclared_type\] /);
+    await expect(bridge.objectsGet("secrets", "x")).rejects.toThrow(/^\[object_undeclared_type\] /);
+    await expect(bridge.objectsWrite([{ object: "secrets", op: "put", id: "x", record: {} }])).rejects.toThrow(/^\[object_undeclared_type\] /);
     const record = { owner: "c1", tags: ["a"] };
     expect(await bridge.objectsWrite([{ object: "notes", op: "put", id: "n1", record, expectedRevision: null }])).toEqual([1]);
     record.tags.push("mutated");
     expect(await bridge.objectsGet("notes", "n1")).toEqual({ data: { owner: "c1", tags: ["a"] }, revision: 1, handle: null, status: "active" });
-    await expect(bridge.objectsWrite([{ object: "notes", op: "put", id: "n1", record, expectedRevision: null }])).rejects.toThrow(/^\[object\.conflict\] /);
+    await expect(bridge.objectsWrite([{ object: "notes", op: "put", id: "n1", record, expectedRevision: null }])).rejects.toThrow(/^\[object_conflict\] /);
     expect(await bridge.kvSet("k", { n: 1 }, { expectedRevision: null })).toEqual({ revision: 1 });
-    await expect(bridge.kvSet("k", { n: 2 }, { expectedRevision: null })).rejects.toThrow(/^\[kv\.conflict\] /);
+    await expect(bridge.kvSet("k", { n: 2 }, { expectedRevision: null })).rejects.toThrow(/^\[kv_conflict\] /);
     expect(await bridge.kvGet("k")).toEqual({ value: { n: 1 }, revision: 1 });
     expect(await bridge.objectsQuery("notes", { where: { owner: "c1" } })).toMatchObject({ records: [{ id: "n1" }], nextCursor: null });
-    await expect(bridge.objectsQuery("notes", { where: { tags: "a" } })).rejects.toThrow(/^\[object\.unindexed_query\] /);
+    await expect(bridge.objectsQuery("notes", { where: { tags: "a" } })).rejects.toThrow(/^\[object_unindexed_query\] /);
   });
 
   it("writes and reads only its own namespace's declared custom fields", async () => {
@@ -177,8 +177,8 @@ describe("plugin bridge", () => {
       .toEqual([{ namespace: "acme.bridge", key: "points", type: "integer" }]);
     await bridge.customFieldsSet("product", "p_cf", { points: 30 });
     expect(await bridge.customFieldsGet("product", "p_cf")).toEqual({ points: 30 });
-    await expect(bridge.customFieldsSet("product", "p_cf", { tier: "gold" })).rejects.toThrow(/^\[custom_fields\.undeclared\] /);
-    await expect(bridge.customFieldsGet("customer", "c1")).rejects.toThrow(/^\[custom_fields\.undeclared\] /);
+    await expect(bridge.customFieldsSet("product", "p_cf", { tier: "gold" })).rejects.toThrow(/^\[custom_fields_undeclared\] /);
+    await expect(bridge.customFieldsGet("customer", "c1")).rejects.toThrow(/^\[custom_fields_undeclared\] /);
   });
 
   it("keeps internals out of errors", async () => {
@@ -223,10 +223,10 @@ describe("plugin messaging", () => {
   ])("refuses every messaging capability after %s during an invocation", async (_reason, change) => {
     const bridge = bridgeWith(["customers.view", "marketing.send"]);
     sqlite.exec(change);
-    await expect(bridge.messagingEmail({ customerId: "cus_1", subject: "Hi", html: "Hi" })).rejects.toThrow(/^\[installation\.inactive\]/);
-    await expect(bridge.messagingSms({ customerId: "cus_1", text: "Hi" })).rejects.toThrow(/^\[installation\.inactive\]/);
-    await expect(bridge.messagingPush!({ customerId: "cus_1", title: "Hi" })).rejects.toThrow(/^\[installation\.inactive\]/);
-    await expect(bridge.messagingNotifyStaff({ title: "Hi" })).rejects.toThrow(/^\[installation\.inactive\]/);
+    await expect(bridge.messagingEmail({ customerId: "cus_1", subject: "Hi", html: "Hi" })).rejects.toThrow(/^\[installation_inactive\]/);
+    await expect(bridge.messagingSms({ customerId: "cus_1", text: "Hi" })).rejects.toThrow(/^\[installation_inactive\]/);
+    await expect(bridge.messagingPush!({ customerId: "cus_1", title: "Hi" })).rejects.toThrow(/^\[installation_inactive\]/);
+    await expect(bridge.messagingNotifyStaff({ title: "Hi" })).rejects.toThrow(/^\[installation_inactive\]/);
     expect(messaging.sendEmail).not.toHaveBeenCalled();
     expect(messaging.sendAdminPushNotice).not.toHaveBeenCalled();
   });
@@ -244,11 +244,11 @@ describe("plugin messaging", () => {
 
   it("sends to customers only with customers.view, resolving the address itself", async () => {
     await expect(bridgeWith([]).messagingEmail({ customerId: "cus_1", subject: "Hi", html: "<p>Hi</p>" }))
-      .rejects.toThrow(/^\[messaging\.not_allowed\] /);
+      .rejects.toThrow(/^\[messaging_not_allowed\] /);
     expect(await bridgeWith(["customers.view"]).messagingEmail({ customerId: "cus_1", subject: "Hi", html: "<p>Hi</p>" })).toEqual({ queued: true });
     expect(messaging.sendEmail).toHaveBeenCalledWith(expect.objectContaining({ to: "rahim@example.com", subject: "Hi" }), expect.anything());
     await expect(bridgeWith(["customers.view"]).messagingEmail({ customerId: "cus_1", to: "x@example.com", subject: "Hi", html: "x" }))
-      .rejects.toThrow(/^\[messaging\.invalid\] /);
+      .rejects.toThrow(/^\[messaging_invalid\] /);
   });
 
   it("sends an email once per idempotency key, and again after a failed send", async () => {
@@ -263,7 +263,7 @@ describe("plugin messaging", () => {
     // Another key is another message.
     expect(await send("split-notice-2")).toEqual({ queued: true });
     expect(messaging.sendEmail).toHaveBeenCalledTimes(3);
-    await expect(send("short")).rejects.toThrow(/^\[messaging\.invalid\] idempotencyKey/);
+    await expect(send("short")).rejects.toThrow(/^\[messaging_invalid\] idempotencyKey/);
   });
 
   it("sends `to` only a staff member, an address its declared recipient fields hold, or anyone with send_messages_any", async () => {
@@ -282,8 +282,8 @@ describe("plugin messaging", () => {
     const bridge = createInProcessBridge(new PluginBridgeHost({ pluginId: "acme.letters", version: "1.0.0", authority: pluginBridgeAuthority(installation) }, environment));
     const email = (to: string) => bridge.messagingEmail({ to, subject: "News", html: "<p>News</p>" });
     // read_customers reaches customers by id, never an arbitrary address from the store's sender.
-    await expect(email("stranger@example.com")).rejects.toThrow(/^\[messaging\.recipient_not_allowed\] /);
-    await expect(bridge.messagingSms({ to: "+8801722222222", text: "Hi" })).rejects.toThrow(/^\[messaging\.recipient_not_allowed\] /);
+    await expect(email("stranger@example.com")).rejects.toThrow(/^\[messaging_recipient_not_allowed\] /);
+    await expect(bridge.messagingSms({ to: "+8801722222222", text: "Hi" })).rejects.toThrow(/^\[messaging_recipient_not_allowed\] /);
     expect(messaging.sendEmail).not.toHaveBeenCalled();
     // The store's staff.
     expect(await email("OWNER@shop.test")).toEqual({ queued: true });
@@ -293,12 +293,12 @@ describe("plugin messaging", () => {
     expect(messaging.sendEmail).toHaveBeenLastCalledWith(expect.objectContaining({ to: "reader@example.com" }), expect.anything());
     // A revoked recipient field applies at once.
     sqlite.exec("UPDATE plugin_installations SET grant_json = json_set(grant_json, '$.messageRecipients', json('[]')) WHERE plugin_id = 'acme.letters'");
-    await expect(email("reader@example.com")).rejects.toThrow(/^\[messaging\.recipient_not_allowed\] /);
+    await expect(email("reader@example.com")).rejects.toThrow(/^\[messaging_recipient_not_allowed\] /);
     // send_messages_any (sensitive) reaches any address.
     sqlite.exec("UPDATE plugin_installations SET grant_json = json_set(grant_json, '$.scopes', json('[\"read_customers\",\"send_messages_any\"]')) WHERE plugin_id = 'acme.letters'");
     expect(await email("stranger@example.com")).toEqual({ queued: true });
     // Size limits: HTML is measured in UTF-8 bytes.
-    await expect(bridge.messagingEmail({ to: "stranger@example.com", subject: "Big", html: "অ".repeat(40_000) })).rejects.toThrow(/^\[messaging\.invalid\] html is text of at most 102400 bytes/);
+    await expect(bridge.messagingEmail({ to: "stranger@example.com", subject: "Big", html: "অ".repeat(40_000) })).rejects.toThrow(/^\[messaging_invalid\] html is text of at most 102400 bytes/);
   });
 
   it("requires marketing.send for marked marketing without weakening transactional access", async () => {
@@ -315,7 +315,7 @@ describe("plugin messaging", () => {
     expect(await bridge.messagingEmail({ customerId: "cus_1", subject: "Eid sale", html: "<p>20% off</p>", marketing: true })).toEqual({ queued: false });
     expect(messaging.sendEmail).not.toHaveBeenCalled();
     await expect(bridge.messagingEmail({ to: "rahim@example.com", subject: "Eid", html: "x", marketing: true }))
-      .rejects.toThrow(/^\[messaging\.invalid\] /);
+      .rejects.toThrow(/^\[messaging_invalid\] /);
     sqlite.prepare(`INSERT INTO customer_marketing_consents (customer_id, channel, state, contact, source, actor, subscribed_at)
       VALUES ('cus_1', 'email', 'subscribed', 'rahim@example.com', 'newsletter', 'buyer', 1)`).run();
     expect(await bridge.messagingEmail({ customerId: "cus_1", subject: "Eid sale", html: "<p>20% off</p>", marketing: true })).toEqual({ queued: true });
@@ -338,7 +338,7 @@ describe("plugin messaging", () => {
       link: "https://admin.shop.test/admin/apps/acme",
       data: { pluginId: "acme.bridge", notificationType: "plugin_notice" },
     });
-    await expect(bridgeWith([]).messagingNotifyStaff({ title: "x", url: "https://evil.example/" })).rejects.toThrow(/^\[messaging\.invalid\] /);
+    await expect(bridgeWith([]).messagingNotifyStaff({ title: "x", url: "https://evil.example/" })).rejects.toThrow(/^\[messaging_invalid\] /);
   });
 });
 

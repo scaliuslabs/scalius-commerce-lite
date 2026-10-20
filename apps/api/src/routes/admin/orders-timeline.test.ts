@@ -83,7 +83,7 @@ describe("order timeline cursor HTTP contract", () => {
     for (const [orderId, cursor] of [["order_a", "bad"], ["order_a", ""], ["order_b", good], ["order_a", fractional], ["order_a", wrongSort]]) {
       const response = await app.request(`/api/v1/admin/orders/${orderId}/timeline?cursor=${encodeURIComponent(cursor!)}`, {}, env);
       expect(response.status).toBe(400);
-      expect(await response.json()).toMatchObject({ error: { code: "INVALID_CURSOR" } });
+      expect(await response.json()).toMatchObject({ error: { code: "invalid_cursor" } });
     }
   });
 

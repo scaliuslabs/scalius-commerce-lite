@@ -231,7 +231,7 @@ if (Astro.request.method === "POST" && codOnly) {
         return response;
       } else {
         const errorCode = "errorCode" in result ? result.errorCode : undefined;
-        if (errorCode === "CHECKOUT_ATTEMPT_CONFLICT") {
+        if (errorCode === "checkout_attempt_conflict") {
           const href = checkoutAttemptRecoveryHref("details" in result ? result.details : undefined);
           if (href) {
             const response = Astro.redirect(href, 303);
@@ -244,7 +244,7 @@ if (Astro.request.method === "POST" && codOnly) {
             return response;
           }
         }
-        if (errorCode === "CHECKOUT_ATTEMPT_EXPIRED") {
+        if (errorCode === "checkout_attempt_expired") {
           const checkoutId = formData.get("checkoutId");
           if (typeof checkoutId === "string") expiredCheckoutId = checkoutId.trim();
         }
@@ -256,11 +256,11 @@ if (Astro.request.method === "POST" && codOnly) {
         });
         const quoteConflict =
           "errorCode" in result &&
-          result.errorCode === "STOREFRONT_CHECKOUT_QUOTE_CONFLICT";
+          result.errorCode === "storefront_checkout_quote_conflict";
         errorMessage =
-          (errorCode === "CHECKOUT_ATTEMPT_EXPIRED"
+          (errorCode === "checkout_attempt_expired"
             ? copy.checkoutAttemptExpiredText
-            : errorCode === "CHECKOUT_ATTEMPT_CONFLICT"
+            : errorCode === "checkout_attempt_conflict"
               ? copy.checkoutAttemptConflictText
               : ruleErrors
                 ? copy.cartRulesBlockedText

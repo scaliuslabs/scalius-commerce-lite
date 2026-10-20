@@ -291,7 +291,7 @@ describe("checkout payment with gift cards", () => {
           success: true,
           data: quote({
             ...partialTender,
-            giftCardIssues: [{ handle: handle("b"), code: "GIFT_CARD_UNUSABLE", message: "This gift card can't be used." }],
+            giftCardIssues: [{ handle: handle("b"), code: "gift_card_unusable", message: "This gift card can't be used." }],
           }),
         }),
         () => json({ success: true, data: quote(partialTender) }),
@@ -311,7 +311,7 @@ describe("checkout payment with gift cards", () => {
       "/api/checkout/tax-quote": () => json({ success: true, data: quote(partialTender) }),
       "/api/checkout/create-order": () => json({
         success: false,
-        errorCode: "GIFT_CARD_CHANGED",
+        errorCode: "gift_card_changed",
         error: "Your gift card balance changed; review and place the order again.",
       }, 409),
     });

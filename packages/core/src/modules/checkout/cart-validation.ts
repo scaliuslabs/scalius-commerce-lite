@@ -57,18 +57,18 @@ import {
 } from "@scalius/shared/gift-card-tender";
 
 export type StorefrontCartIssueCode =
-    | "PRODUCT_UNAVAILABLE"
-    | "VARIANT_REQUIRED"
-    | "VARIANT_UNAVAILABLE"
-    | "VARIANT_MISMATCH"
-    | "QUANTITY_UNAVAILABLE"
-    | "PRICE_CHANGED"
+    | "product_unavailable"
+    | "variant_required"
+    | "variant_unavailable"
+    | "variant_mismatch"
+    | "quantity_unavailable"
+    | "price_changed"
     /** A required buyer input (engraving, fit…) is missing. */
-    | "PROPERTIES_REQUIRED"
+    | "properties_required"
     /** A buyer input is unknown, too long, or not one of the choices. */
-    | "PROPERTIES_INVALID"
+    | "properties_invalid"
     /** The store cannot hand this kind of item over yet (e.g. digital before Wave B). */
-    | "FULFILMENT_UNAVAILABLE";
+    | "fulfilment_unavailable";
 
 export type StorefrontCartIssueAction =
     | "remove"
@@ -536,7 +536,7 @@ export function resolveStorefrontCartValidationFromRows(
         if (isPersistedVariantId(item.variantId)) return;
         const productName = displayProductName(item);
         addIssue(malformedVariantIssues, item, index, {
-            code: "VARIANT_REQUIRED",
+            code: "variant_required",
             action: "select_variant",
             message: `${productName ?? "This item"} needs a saved option selection before checkout.`,
             productName,
@@ -589,7 +589,7 @@ export function resolveStorefrontCartValidationFromRows(
 
         if (!product) {
             addIssue(issues, item, index, {
-                code: "PRODUCT_UNAVAILABLE",
+                code: "product_unavailable",
                 action: "remove",
                 message: `${productName ?? "This item"} is no longer available.`,
                 productName,
@@ -612,7 +612,7 @@ export function resolveStorefrontCartValidationFromRows(
 
         if (!requestedVariant) {
             addIssue(issues, item, index, {
-                code: "VARIANT_UNAVAILABLE",
+                code: "variant_unavailable",
                 action: "remove",
                 message: `${product.name}${requestedVariantLabel ? ` (${requestedVariantLabel})` : ""} is no longer available.`,
                 productName: product.name,
@@ -623,7 +623,7 @@ export function resolveStorefrontCartValidationFromRows(
 
         if (requestedVariant.productId !== product.id) {
             addIssue(issues, item, index, {
-                code: "VARIANT_MISMATCH",
+                code: "variant_mismatch",
                 action: "remove",
                 message: `${product.name} has changed. Please remove it and add the option again.`,
                 productName: product.name,
@@ -640,7 +640,7 @@ export function resolveStorefrontCartValidationFromRows(
         if (!buyerResolvableVariants.some((variant) => variant.id === requestedVariant.id)) {
             const hasInvalidOptionTopology = hasInvalidNoOptionSku;
             addIssue(issues, item, index, {
-                code: hasCustomerOptions && !hasInvalidOptionTopology ? "VARIANT_REQUIRED" : "PRODUCT_UNAVAILABLE",
+                code: hasCustomerOptions && !hasInvalidOptionTopology ? "variant_required" : "product_unavailable",
                 action: hasCustomerOptions && !hasInvalidOptionTopology ? "select_variant" : "remove",
                 message: hasCustomerOptions && !hasInvalidOptionTopology
                     ? `${product.name} needs an option selection before checkout.`
@@ -665,7 +665,7 @@ export function resolveStorefrontCartValidationFromRows(
         const deliverable = knownType !== "digital" || variant.digitalDeliverable === true;
         if (knownType !== null && (!hasFulfiller(knownType) || !deliverable)) {
             addIssue(issues, item, index, {
-                code: "FULFILMENT_UNAVAILABLE",
+                code: "fulfilment_unavailable",
                 action: "remove",
                 message: `${displayName} can't be ordered online right now.`,
                 productName: product.name,
@@ -683,7 +683,7 @@ export function resolveStorefrontCartValidationFromRows(
             if (!lineAllowed || !isGiftCardOrderUnitsAllowed(unitsBefore + item.quantity)) {
                 const allowed = Math.min(GIFT_CARD_MAX_QUANTITY_PER_LINE, orderRoom);
                 addIssue(issues, item, index, {
-                    code: "QUANTITY_UNAVAILABLE",
+                    code: "quantity_unavailable",
                     action: allowed > 0 ? "reduce_quantity" : "remove",
                     message: lineAllowed
                         ? `One order can hold at most ${GIFT_CARD_MAX_UNITS_PER_ORDER} gift cards.`
@@ -701,7 +701,7 @@ export function resolveStorefrontCartValidationFromRows(
         if (availableQuantity < requestedForVariant) {
             const inSeveralLines = requestedForVariant > item.quantity;
             addIssue(issues, item, index, {
-                code: "QUANTITY_UNAVAILABLE",
+                code: "quantity_unavailable",
                 action: availableQuantity > 0 ? "reduce_quantity" : "remove",
                 message: availableQuantity > 0
                     ? `Only ${availableQuantity} left for ${displayName}${inSeveralLines ? " across your cart" : ""}.`
@@ -721,7 +721,7 @@ export function resolveStorefrontCartValidationFromRows(
         if (!schemaRead.ok) {
             // A malformed stored schema is a product error, never "no inputs".
             addIssue(issues, item, index, {
-                code: "PRODUCT_UNAVAILABLE",
+                code: "product_unavailable",
                 action: "remove",
                 message: `${product.name} is not available for checkout right now.`,
                 productName: product.name,
@@ -739,7 +739,7 @@ export function resolveStorefrontCartValidationFromRows(
             addIssue(issues, item, index, {
                 code: resolvedProperties.code,
                 action: "edit_properties",
-                message: resolvedProperties.code === "PROPERTIES_REQUIRED"
+                message: resolvedProperties.code === "properties_required"
                     ? `${displayName} needs "${field?.label ?? "a required detail"}" before checkout.`
                     : `Check the details you entered for ${displayName}${field ? ` ("${field.label}")` : ""}.`,
                 productName: product.name,
@@ -755,7 +755,7 @@ export function resolveStorefrontCartValidationFromRows(
             const recipientIssue = giftCardLineRecipientIssue(resolvedProperties.properties);
             if (recipientIssue) {
                 addIssue(issues, item, index, {
-                    code: "PROPERTIES_INVALID",
+                    code: "properties_invalid",
                     action: "edit_properties",
                     message: `${displayName}: ${recipientIssue.message}`,
                     productName: product.name,
@@ -786,7 +786,7 @@ export function resolveStorefrontCartValidationFromRows(
             : undefined;
         if (!options.deferSubmittedPriceCheck && submittedPriceMinor !== undefined && submittedPriceMinor !== unitPriceMinor) {
             addIssue(issues, item, index, {
-                code: "PRICE_CHANGED",
+                code: "price_changed",
                 action: "refresh_item",
                 message: `The price for ${product.name}${requestedVariantLabel ? ` (${requestedVariantLabel})` : ""} changed. Please review the updated cart total.`,
                 productName: product.name,
@@ -800,7 +800,7 @@ export function resolveStorefrontCartValidationFromRows(
         // A line's amount must stay exact money (a wholesale quantity of an expensive item).
         if (!isLineAmountInRange(unitPriceMinor, item.quantity)) {
             addIssue(issues, item, index, {
-                code: "QUANTITY_UNAVAILABLE",
+                code: "quantity_unavailable",
                 action: "reduce_quantity",
                 message: `That many of ${displayName} is more than one order can hold.`,
                 productName: product.name,

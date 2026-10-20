@@ -1204,11 +1204,11 @@ function renderCartItemIssues(cartKey: string): string {
 
 /** Codes that leave a line with nothing a buyer can buy now (sold out, gone, unavailable). */
 const UNBUYABLE_ISSUE_CODES = new Set<CartValidationIssue["code"]>([
-  "PRODUCT_UNAVAILABLE",
-  "VARIANT_UNAVAILABLE",
-  "VARIANT_REQUIRED",
-  "VARIANT_MISMATCH",
-  "FULFILMENT_UNAVAILABLE",
+  "product_unavailable",
+  "variant_unavailable",
+  "variant_required",
+  "variant_mismatch",
+  "fulfilment_unavailable",
 ]);
 
 /**
@@ -1227,7 +1227,7 @@ export function estimableCartLines(
     const lineIssues = issues[cartKey] ?? [];
     const available = lineIssues.reduce<number | null>((limit, issue) => {
       if (UNBUYABLE_ISSUE_CODES.has(issue.code)) return 0;
-      if (issue.code === "QUANTITY_UNAVAILABLE" && typeof issue.availableQuantity === "number") {
+      if (issue.code === "quantity_unavailable" && typeof issue.availableQuantity === "number") {
         const units = Math.max(0, Math.floor(issue.availableQuantity));
         return limit === null ? units : Math.min(limit, units);
       }

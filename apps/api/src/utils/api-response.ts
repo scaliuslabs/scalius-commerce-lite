@@ -106,7 +106,7 @@ export function errorResponseFromError(err: unknown): {
     body: {
       success: false,
       error: {
-        code: "INTERNAL_ERROR",
+        code: "internal_error",
         message: INTERNAL_ERROR_MESSAGE,
       },
     },
@@ -141,7 +141,7 @@ export function logApiError(
 
   logOpsEvent("error", "api.error", {
     status: 500,
-    code: "INTERNAL_ERROR",
+    code: "internal_error",
     message: "Unexpected API error",
     method: request?.method,
     path: request?.path,

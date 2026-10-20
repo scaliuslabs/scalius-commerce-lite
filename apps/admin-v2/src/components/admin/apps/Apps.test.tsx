@@ -53,7 +53,7 @@ const VIEWER = ["apps.view"];
 const MANAGER = ["apps.view", "apps.manage"];
 const ok = <T,>(data: T) => Promise.resolve({ data: { success: true, data }, response: { status: 200 } });
 const refused = (status: number, details: Record<string, unknown>) =>
-  Promise.resolve({ error: { success: false, error: { code: "PLUGIN_ERROR", message: "Refused.", details } }, response: { status } });
+  Promise.resolve({ error: { success: false, error: { code: "plugin_error", message: "Refused.", details } }, response: { status } });
 
 const grant = (overrides: Record<string, unknown> = {}) => ({
   scopes: ["read_customers", "read_orders"],
@@ -665,7 +665,7 @@ describe("App page", () => {
   });
 
   it("refetches and asks to review again when the request changed meanwhile", async () => {
-    sdk.postApiV1AdminAppsByIdActivate.mockImplementation(() => refused(409, { code: "installation.grant_changed" }));
+    sdk.postApiV1AdminAppsByIdActivate.mockImplementation(() => refused(409, { code: "installation_grant_changed" }));
     await renderApp(detail(), [], true);
     await click(button("Review and activate"));
     sdk.getApiV1AdminAppsById.mockClear();
@@ -1411,7 +1411,7 @@ describe("Upload and emergency stop on the Apps list", () => {
   it("stops at a warning for a developer the store does not trust; a Super Admin can trust and install", async () => {
     sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST()));
     sdk.postApiV1AdminAppsUpload
-      .mockImplementationOnce(() => refused(422, { code: "signature.untrusted", keyId: "key_new", developer: "Newcomer Ltd" }))
+      .mockImplementationOnce(() => refused(422, { code: "signature_untrusted", keyId: "key_new", developer: "Newcomer Ltd" }))
       .mockImplementationOnce(() => ok({ app: detail({ id: "acme.wrap" }), updated: false, rolledBack: false, error: null }));
     await render(<AppsList />, MANAGER, true);
     await vi.waitFor(() => expect(hasButton("Upload app")).toBe(true));
@@ -1429,7 +1429,7 @@ describe("Upload and emergency stop on the Apps list", () => {
 
   it("tells anyone else to ask a Super Admin instead of offering the choice", async () => {
     sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST()));
-    sdk.postApiV1AdminAppsUpload.mockImplementation(() => refused(422, { code: "signature.untrusted", keyId: "key_new", developer: "Newcomer Ltd" }));
+    sdk.postApiV1AdminAppsUpload.mockImplementation(() => refused(422, { code: "signature_untrusted", keyId: "key_new", developer: "Newcomer Ltd" }));
     await render(<AppsList />, MANAGER);
     await vi.waitFor(() => expect(hasButton("Upload app")).toBe(true));
     await click(button("Upload app"));
@@ -1444,7 +1444,7 @@ describe("Upload and emergency stop on the Apps list", () => {
   it("warns that an unsigned app could have been changed, and a Super Admin can install it anyway", async () => {
     sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST()));
     sdk.postApiV1AdminAppsUpload
-      .mockImplementationOnce(() => refused(422, { code: "signature.missing" }))
+      .mockImplementationOnce(() => refused(422, { code: "signature_missing" }))
       .mockImplementationOnce(() => ok({ app: detail({ id: "acme.wrap", signer: null }), updated: false, rolledBack: false, error: null }));
     await render(<AppsList />, MANAGER, true);
     await vi.waitFor(() => expect(hasButton("Upload app")).toBe(true));

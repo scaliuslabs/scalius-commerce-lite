@@ -53,7 +53,7 @@ export class AgentStorefrontCheckoutQuoteConflictError extends AppError {
   constructor() {
     super(
       409,
-      "AGENT_STOREFRONT_CHECKOUT_QUOTE_CONFLICT",
+      "agent_storefront_checkout_quote_conflict",
       "Checkout totals or terms changed after review. Request a fresh quote and confirm it before submitting again.",
     );
     this.name = "AgentStorefrontCheckoutQuoteConflictError";

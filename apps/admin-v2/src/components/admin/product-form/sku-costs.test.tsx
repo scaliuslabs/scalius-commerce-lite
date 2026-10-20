@@ -138,7 +138,7 @@ describe("useSkuCostDraft", () => {
   });
 
   it("refuses a cost changed elsewhere, shows the latest one and says so", async () => {
-    mocks.putCosts.mockRejectedValue(new AdminApiResponseError("A SKU's cost changed", 409, "CONFLICT"));
+    mocks.putCosts.mockRejectedValue(new AdminApiResponseError("A SKU's cost changed", 409, "conflict"));
     mocks.getProduct.mockResolvedValue({ id: "prod_1", variants: [variant("var_a", "MUG-S", 111), variant("var_b", "MUG-M", 80)] });
     await render([variant("var_a", "MUG-S", 100), variant("var_b", "MUG-M", 80)]);
     store.rows.current = [

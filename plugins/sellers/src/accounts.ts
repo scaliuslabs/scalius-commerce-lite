@@ -64,7 +64,7 @@ export async function createSeller(ctx: PluginContext, input: Application, statu
     await sellers(ctx).put(id, seller, { expectedRevision: null });
   } catch (error) {
     const code = errorCode(error);
-    if (code === "object.conflict" || code === "object.unique_violation") return { ok: false, errors: { handle: "That shop address is taken. Choose another." } };
+    if (code === "object_conflict" || code === "object_unique_violation") return { ok: false, errors: { handle: "That shop address is taken. Choose another." } };
     throw error;
   }
   if (status === "approved") await publishProfile(ctx, id, seller);

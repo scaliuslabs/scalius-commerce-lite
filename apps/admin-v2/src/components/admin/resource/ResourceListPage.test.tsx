@@ -235,7 +235,7 @@ describe("ResourceListPage", () => {
     });
 
     it("starts again from the first page when the API refuses the cursor", async () => {
-      const router = await renderCursorList({ after: "stale-cursor" }, { code: "INVALID_CURSOR" });
+      const router = await renderCursorList({ after: "stale-cursor" }, { code: "invalid_cursor" });
       await act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
       });

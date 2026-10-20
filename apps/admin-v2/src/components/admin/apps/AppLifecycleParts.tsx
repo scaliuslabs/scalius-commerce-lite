@@ -100,9 +100,9 @@ function UpdateNotice({ app }: { app: AppDetail }) {
       }
       const code = appErrorCode(error);
       toast.error(
-        code === "installation.sandbox_required" ? t("sandboxRequired")
-          : code === "signature.untrusted" ? t("updateUntrusted")
-            : code === "signature.invalid" || code === "signature.missing" || code === "package.invalid" ? t("updateUnverified")
+        code === "installation_sandbox_required" ? t("sandboxRequired")
+          : code === "signature_untrusted" ? t("updateUntrusted")
+            : code === "signature_invalid" || code === "signature_missing" || code === "package_invalid" ? t("updateUnverified")
               : t("updateFailed"),
       );
     },

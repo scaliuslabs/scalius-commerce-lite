@@ -57,22 +57,22 @@ function productRedirectWithStatus(slug: string, error: string, status: 303 | 30
 function issueToQuickBuyError(issue: CartValidationIssue | undefined): string {
   if (!issue) return "validation_unavailable";
   switch (issue.code) {
-    case "PRODUCT_UNAVAILABLE":
+    case "product_unavailable":
       return "product_unavailable";
-    case "VARIANT_REQUIRED":
+    case "variant_required":
       return "variant_required";
-    case "VARIANT_UNAVAILABLE":
-    case "VARIANT_MISMATCH":
+    case "variant_unavailable":
+    case "variant_mismatch":
       return "variant_not_found";
-    case "QUANTITY_UNAVAILABLE":
+    case "quantity_unavailable":
       return issue.availableQuantity && issue.availableQuantity > 0
         ? "quantity_unavailable"
         : "out_of_stock";
-    case "PRICE_CHANGED":
+    case "price_changed":
       return "price_changed";
-    case "PROPERTIES_REQUIRED":
+    case "properties_required":
       return "customization_required";
-    case "PROPERTIES_INVALID":
+    case "properties_invalid":
       return "customization_invalid";
     default:
       return "validation_unavailable";
@@ -195,7 +195,7 @@ async function quickBuy({
     if (!resolvedProperties.ok) {
       return productRedirect(
         slug,
-        resolvedProperties.code === "PROPERTIES_REQUIRED" ? "customization_required" : "customization_invalid",
+        resolvedProperties.code === "properties_required" ? "customization_required" : "customization_invalid",
       );
     }
     const buyerVariantResolution = resolveBuyerVariants(variants);

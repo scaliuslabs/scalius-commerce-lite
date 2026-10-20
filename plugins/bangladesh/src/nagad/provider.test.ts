@@ -177,11 +177,11 @@ describe("createSession", () => {
     const { server, harness } = await setup();
     server.faults.initialize = "bad_signature";
     const unsigned = await harness.provider("nagad", "createSession", sessionInput());
-    expect(unsigned.error).toMatchObject({ category: "misconfigured", code: "nagad.bad_signature", uncertain: false });
+    expect(unsigned.error).toMatchObject({ category: "misconfigured", code: "nagad_bad_signature", uncertain: false });
 
     server.faults.initialize = "wrong_challenge";
     const replayed = await harness.provider("nagad", "createSession", sessionInput());
-    expect(replayed.error).toMatchObject({ category: "misconfigured", code: "nagad.challenge_mismatch", uncertain: false });
+    expect(replayed.error).toMatchObject({ category: "misconfigured", code: "nagad_challenge_mismatch", uncertain: false });
     expect(server.callsOf("complete")).toHaveLength(0);
 
     // Each refused answer left its Nagad order behind: the retry never reuses an order id.
@@ -194,11 +194,11 @@ describe("createSession", () => {
     const { server, harness } = await setup();
     server.faults.initialize = "timeout";
     const lostInitialize = await harness.provider("nagad", "createSession", sessionInput());
-    expect(lostInitialize.error).toMatchObject({ category: "retryable", uncertain: true, code: "nagad.timeout" });
+    expect(lostInitialize.error).toMatchObject({ category: "retryable", uncertain: true, code: "nagad_timeout" });
 
     server.faults.complete = "timeout";
     const lostComplete = await harness.provider("nagad", "createSession", sessionInput());
-    expect(lostComplete.error).toMatchObject({ category: "retryable", uncertain: true, code: "nagad.timeout" });
+    expect(lostComplete.error).toMatchObject({ category: "retryable", uncertain: true, code: "nagad_timeout" });
 
     // Initialize went through the second time: the retry only completes that order.
     const session = await startSession(harness);
@@ -212,7 +212,7 @@ describe("createSession", () => {
       const fresh = await setup();
       fresh.server.faults.initialize = fault;
       const result = await fresh.harness.provider("nagad", "createSession", sessionInput());
-      expect(result.error).toMatchObject({ category: "retryable", uncertain: true, code: fault === "unreachable" ? "nagad.unreachable" : "nagad.server_error" });
+      expect(result.error).toMatchObject({ category: "retryable", uncertain: true, code: fault === "unreachable" ? "nagad_unreachable" : "nagad_server_error" });
     }
   });
 
@@ -220,7 +220,7 @@ describe("createSession", () => {
     const { server, harness } = await setup();
     server.faults.complete = "decline";
     const declined = await harness.provider("nagad", "createSession", sessionInput());
-    expect(declined.error).toMatchObject({ category: "declined", code: "nagad.transaction_limit", uncertain: false });
+    expect(declined.error).toMatchObject({ category: "declined", code: "nagad_transaction_limit", uncertain: false });
     expect(declined.error?.message).not.toContain(BUYER_MOBILE);
 
     const session = await startSession(harness);
@@ -229,13 +229,13 @@ describe("createSession", () => {
 
     server.faults.initialize = "reject_signature";
     const rejected = await harness.provider("nagad", "createSession", sessionInput({ attemptKey: "payment_session:scalius.bangladesh:nagad:99" }));
-    expect(rejected.error).toMatchObject({ category: "misconfigured", code: "nagad.invalid_signature" });
+    expect(rejected.error).toMatchObject({ category: "misconfigured", code: "nagad_invalid_signature" });
   });
 
   it("charges only BDT", async () => {
     const { server, harness } = await setup();
     const result = await harness.provider("nagad", "createSession", sessionInput({ currency: "USD" }));
-    expect(result.error).toMatchObject({ category: "declined", code: "nagad.currency" });
+    expect(result.error).toMatchObject({ category: "declined", code: "nagad_currency" });
     expect(server.calls).toHaveLength(0);
   });
 });
@@ -332,7 +332,7 @@ describe("buyer returns and status queries", () => {
     expect(server.calls).toHaveLength(0);
 
     const unknown = await harness.provider("nagad", "queryPayment", query(foreign.providerRef));
-    expect(unknown.error).toMatchObject({ category: "declined", code: "nagad.unknown_payment" });
+    expect(unknown.error).toMatchObject({ category: "declined", code: "nagad_unknown_payment" });
   });
 
   it("answers retry when Nagad cannot be reached, and a query fails retryable without uncertainty", async () => {
@@ -345,7 +345,7 @@ describe("buyer returns and status queries", () => {
     }
     server.faults.verify = "timeout";
     const status = await harness.provider("nagad", "queryPayment", query(session.providerRef));
-    expect(status.error).toMatchObject({ category: "retryable", uncertain: false, code: "nagad.timeout" });
+    expect(status.error).toMatchObject({ category: "retryable", uncertain: false, code: "nagad_timeout" });
   });
 
   it("refuses a capture whose amount, order or merchant differ from what this store created", async () => {
@@ -364,10 +364,10 @@ describe("buyer returns and status queries", () => {
       const result = await harness.provider("nagad", "verifyReturn", buyerReturn(session.providerRef));
       expect(result.value, reason).toEqual({ status: "invalid", reason });
       const status = await harness.provider("nagad", "queryPayment", query(session.providerRef));
-      expect(status.error, reason).toMatchObject({ category: "declined", code: "nagad.payment_mismatch" });
+      expect(status.error, reason).toMatchObject({ category: "declined", code: "nagad_payment_mismatch" });
     }
     const otherOrder = await harness.provider("nagad", "queryPayment", query(session.providerRef, "ORD2"));
-    expect(otherOrder.error).toMatchObject({ category: "declined", code: "nagad.unknown_payment" });
+    expect(otherOrder.error).toMatchObject({ category: "declined", code: "nagad_unknown_payment" });
   });
 });
 

@@ -29,7 +29,7 @@ function harness(reply: (call: Call) => Reply, settings: Record<string, string> 
 }
 
 const json = (body: unknown, status = 200): Reply => ({ status, body: JSON.stringify(body) });
-const timeout = () => Object.assign(new Error("[http.timeout] The request timed out."), { code: "http.timeout" });
+const timeout = () => Object.assign(new Error("[http_timeout] The request timed out."), { code: "http_timeout" });
 const post = (rawBody: string, query: Record<string, string> = {}) => ({ method: "POST", rawBody, headers: {}, query });
 
 const VALIDATION = {

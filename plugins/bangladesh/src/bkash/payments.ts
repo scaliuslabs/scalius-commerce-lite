@@ -94,7 +94,7 @@ function returnStatusOf(value: string | undefined): ReturnStatus | null {
 // ── createSession ───────────────────────────────────────────────────────────
 
 export async function createSession(input: PaymentSessionInput, ctx: PluginContext): Promise<PaymentSession> {
-  if (input.currency !== "BDT") throw new ProviderError("declined", "bKash charges only BDT.", { code: "bkash.currency" });
+  if (input.currency !== "BDT") throw new ProviderError("declined", "bKash charges only BDT.", { code: "bkash_currency" });
   const attemptHash = await sha256Hex(input.attemptKey);
   const { records } = await payments(ctx).query(attemptHash);
   const existing = records[0];
@@ -117,7 +117,7 @@ export async function createSession(input: PaymentSessionInput, ctx: PluginConte
   const paymentId = field(reply.answer, "paymentID");
   const redirectUrl = field(reply.answer, "bkashURL");
   if (!BKASH_ID.test(paymentId) || !isPaymentPage(redirectUrl)) {
-    throw new ProviderError("retryable", "bKash's answer did not include its payment page.", { uncertain: true, code: "bkash.unreadable" });
+    throw new ProviderError("retryable", "bKash's answer did not include its payment page.", { uncertain: true, code: "bkash_unreadable" });
   }
   await payments(ctx).put(paymentId, {
     attemptHash,
@@ -209,14 +209,14 @@ async function close(payment: KnownPayment, kind: UnpaidKind, answer: BkashAnswe
 export async function queryPayment(input: PaymentQueryInput, ctx: PluginContext): Promise<PaymentQuery> {
   const record = await payments(ctx).get(input.providerRef);
   if (!record || record.orderId !== input.orderId) {
-    throw new ProviderError("declined", "This bKash payment was not created for this order.", { code: "bkash.unknown_payment" });
+    throw new ProviderError("declined", "This bKash payment was not created for this order.", { code: "bkash_unknown_payment" });
   }
   const payment: KnownPayment = { ctx, client: createBkashClient(ctx, input.requestTimeoutMs), paymentId: input.providerRef, record };
   const answer = await paymentStatus(payment.client, payment.paymentId);
   const providerStatus = (field(answer, "transactionStatus") || "Unknown").slice(0, 100);
   if (!isCompleted(answer)) return { providerStatus };
   const mismatch = mismatchOf(payment, answer);
-  if (mismatch) throw new ProviderError("declined", mismatch, { code: "bkash.mismatch" });
+  if (mismatch) throw new ProviderError("declined", mismatch, { code: "bkash_mismatch" });
   return { providerStatus, event: confirmedEvent(payment, answer) };
 }
 
