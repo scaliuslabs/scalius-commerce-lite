@@ -120,14 +120,14 @@ function EntryFormPage({ definition, initial }: { definition: ObjectType; initia
       const sent = form;
       try {
         if (!saved) {
-          await createObjectRecord(definition.handle, createEntryBody(definition, sent), recordId);
+          await createObjectRecord(definition.handle, createEntryBody(definition, sent, context), recordId);
           void queryClient.invalidateQueries({ queryKey: objectKeys.all });
           // The leave guard stands down while the save runs.
           setBase(sent);
           await navigate({ to: "/admin/objects/$type", params: { type: definition.handle }, replace: true });
           return;
         }
-        const next = await saveObjectRecord(definition.handle, saved.id, updateEntryBody(definition, sent, base, saved.revision));
+        const next = await saveObjectRecord(definition.handle, saved.id, updateEntryBody(definition, sent, base, saved.revision, context));
         const fresh = entryFormOf(definition, next);
         setSaved(next);
         setBase(fresh);

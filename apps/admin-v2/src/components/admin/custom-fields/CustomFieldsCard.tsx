@@ -142,7 +142,7 @@ export function CustomFieldsEditor({ ownerType, ownerId, canEdit }: EditorProps)
     if (Object.keys(problems).length > 0) throw new SaveNotCompleted(t("cardSaveFailed"), Object.values(problems));
     const values = changedIds.map((id) => {
       const field = fields.find((entry) => entry.definition.id === id)!;
-      return { definitionId: id, value: valueFromDraft(field.definition.type, drafts[id] ?? "")?.value ?? null };
+      return { definitionId: id, value: valueFromDraft(field.definition.type, drafts[id] ?? "", context)?.value ?? null };
     });
     sentRef.current = values.map((value) => value.definitionId);
     try {

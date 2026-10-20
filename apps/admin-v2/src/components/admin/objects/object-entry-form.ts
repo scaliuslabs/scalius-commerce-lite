@@ -88,15 +88,16 @@ export function entryProblems(definition: ObjectType, form: EntryForm, context: 
 export const hasEntryProblems = (problems: EntryProblems) => Boolean(problems.handle) || Object.keys(problems.fields).length > 0;
 
 /** The value to send for a draft: null clears it. */
-function valueOf(type: CustomFieldType, draft: CustomFieldDraft): unknown {
+function valueOf(type: CustomFieldType, draft: CustomFieldDraft, context: CustomFieldCodecContext): unknown {
   if (isEmptyDraft(draft)) return null;
-  return valueFromDraft(type, draft)?.value ?? null;
+  return valueFromDraft(type, draft, context)?.value ?? null;
 }
 
-export function createEntryBody(definition: ObjectType, form: EntryForm): CreateObjectRecordBody {
+/** The record to send; money drafts become { amountMinor, currency } in the store currency. */
+export function createEntryBody(definition: ObjectType, form: EntryForm, context: CustomFieldCodecContext): CreateObjectRecordBody {
   const data: Record<string, unknown> = {};
   for (const field of definition.fields) {
-    const value = valueOf(objectFieldInputType(field.type), form.fields[field.key] ?? "");
+    const value = valueOf(objectFieldInputType(field.type), form.fields[field.key] ?? "", context);
     if (value !== null) data[field.key] = value;
   }
   return { data, expectedRevision: null, status: form.status, ...(definition.handleEnabled && form.handle.trim() ? { handle: form.handle.trim() } : {}) };
@@ -108,6 +109,7 @@ export function updateEntryBody(
   form: EntryForm,
   _base: EntryForm,
   expectedRevision: number,
+  context: CustomFieldCodecContext,
 ): UpdateObjectRecordBody {
-  return { ...createEntryBody(definition, form), expectedRevision };
+  return { ...createEntryBody(definition, form, context), expectedRevision };
 }

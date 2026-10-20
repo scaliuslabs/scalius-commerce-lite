@@ -38,7 +38,7 @@ const entry: ObjectRecord = {
   handle: "gulshan",
   displayName: "Gulshan",
   status: "published",
-  data: { title: "Gulshan", seats: 12, open_now: true, phones: ["017", "018"] },
+  data: { title: "Gulshan", seats: 12, open_now: true, phones: ["017", "018"], deposit: { amountMinor: 50000, currency: "BDT" } },
   position: 0,
   revision: 3,
   createdAt: "2026-10-01T00:00:00.000Z",
@@ -53,12 +53,12 @@ describe("entry form model", () => {
     const form = entryFormOf(privateType, null);
     expect(form.status).toBe("active");
     expect(entryProblems(privateType, form, context).fields.title).toEqual({ kind: "required" });
-    expect(createEntryBody(privateType, { ...form, handle: "ignored" })).not.toHaveProperty("handle");
+    expect(createEntryBody(privateType, { ...form, handle: "ignored" }, context)).not.toHaveProperty("handle");
   });
   it("shows stored values as drafts of each field's type", () => {
     const form = entryFormOf(definition, entry);
     expect(form).toMatchObject({ handle: "gulshan", status: "published" });
-    expect(form.fields).toMatchObject({ title: "Gulshan", opens: "", seats: "12", open_now: "true", phones: ["017", "018"], deposit: "" });
+    expect(form.fields).toMatchObject({ title: "Gulshan", opens: "", seats: "12", open_now: "true", phones: ["017", "018"], deposit: "500" });
     expect(entryFormOf(definition, null)).toMatchObject({ handle: "", status: "draft" });
   });
 
@@ -70,7 +70,7 @@ describe("entry form model", () => {
     form.fields.phones = ["019", "", "016"];
     form.fields.deposit = "250.5";
     form.fields.opens = "2026-11-01T10:30";
-    const body = createEntryBody(definition, form);
+    const body = createEntryBody(definition, form, context);
     expect(body).toEqual({
       status: "draft",
       expectedRevision: null,
@@ -80,23 +80,23 @@ describe("entry form model", () => {
         seats: "40",
         open_now: false,
         phones: ["019", "016"],
-        deposit: "250.5",
+        deposit: { amountMinor: 25050, currency: "BDT" },
       },
     });
-    // Text-typed numbers go to the API's codec, which reads them; the handle is sent only when typed.
-    expect(createEntryBody(definition, { ...form, handle: " dhanmondi " })).toMatchObject({ handle: "dhanmondi" });
+    // Text-typed numbers go to the API's codec, which reads them; money is sent in minor units; the handle only when typed.
+    expect(createEntryBody(definition, { ...form, handle: " dhanmondi " }, context)).toMatchObject({ handle: "dhanmondi" });
   });
 
   it("replaces the complete data at the revision read and omits cleared values", () => {
     const base = entryFormOf(definition, entry);
     const form = { ...base, status: "draft" as const, fields: { ...base.fields, title: "Gulshan 2", seats: "", phones: ["017"] } };
-    expect(updateEntryBody(definition, form, base, entry.revision)).toEqual({
+    expect(updateEntryBody(definition, form, base, entry.revision, context)).toEqual({
       expectedRevision: 3,
-      data: { title: "Gulshan 2", open_now: true, phones: ["017"] },
+      data: { title: "Gulshan 2", open_now: true, phones: ["017"], deposit: { amountMinor: 50000, currency: "BDT" } },
       handle: "gulshan",
       status: "draft",
     });
-    expect(updateEntryBody(definition, base, base, 3)).toEqual({ ...createEntryBody(definition, base), expectedRevision: 3 });
+    expect(updateEntryBody(definition, base, base, 3, context)).toEqual({ ...createEntryBody(definition, base, context), expectedRevision: 3 });
     expect(sameEntryForm(definition, base, entryFormOf(definition, entry))).toBe(true);
     expect(sameEntryForm(definition, form, base)).toBe(false);
   });

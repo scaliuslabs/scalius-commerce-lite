@@ -11,6 +11,7 @@ import { customFieldMessages } from "~/i18n/custom-fields";
 import { collectionsByIdsQueryOptions } from "~/lib/api-query-options/collections";
 import type { CustomFieldEntry } from "~/lib/api-query-options/custom-fields";
 import { productsByIdsQueryOptions } from "~/lib/api-query-options/products";
+import { moneyMajor } from "./custom-field-draft";
 
 // Older Intl engines coerce strings to Number; retain exact saved digits there.
 const exactDecimals = numberFormatter("en", { useGrouping: false, maximumFractionDigits: 9 })
@@ -49,7 +50,10 @@ export function SavedCustomFieldValue({ field, label, help }: { field: CustomFie
         const format = numberFormatter(dashboardNumberLocale(), { maximumFractionDigits: 9 }).format as unknown as (value: string) => string;
         return exactDecimals ? format(saved as string) : saved as string;
       }
-      case "money": return fmt(saved as number);
+      case "money": {
+        const major = moneyMajor(saved);
+        return major === null ? null : fmt(major);
+      }
       case "date": return formatDateTime(new Date(`${saved}T00:00:00Z`), { dateStyle: "medium", timeZone: "UTC" });
       case "date_time": return formatDateTime(new Date(saved as string), { dateStyle: "medium", timeStyle: "medium" });
       case "variant_reference":
