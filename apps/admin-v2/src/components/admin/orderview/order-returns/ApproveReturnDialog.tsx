@@ -12,7 +12,7 @@ import {
 import { NumberInput } from "~/components/ui/number-input";
 import { Textarea } from "~/components/ui/textarea";
 import { useMessages } from "~/i18n";
-import { orderDetailMessages } from "~/i18n/order-detail";
+import { orderReturnMessages } from "~/i18n/order-returns";
 import { resourceMessages } from "~/i18n/resource";
 import { orderErrorMessage, useApproveOrderReturn } from "~/lib/api-mutations/orders";
 import { StableReturnCommandKey, type OrderReturnDto } from "~/lib/order-return-workflow";
@@ -33,7 +33,7 @@ export function ApproveReturnDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const t = useMessages(orderDetailMessages);
+  const t = useMessages(orderReturnMessages);
   const r = useMessages(resourceMessages);
   const [approved, setApproved] = useState<Record<string, number>>(() =>
     Object.fromEntries((orderReturn?.lines ?? []).map((line) => [line.id, line.requestedQuantity])),

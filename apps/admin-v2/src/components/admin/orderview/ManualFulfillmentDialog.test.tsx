@@ -4,6 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { orderDetailMessages } from "~/i18n/order-detail";
+import { orderFulfillmentDialogMessages } from "~/i18n/order-fulfillment-dialog";
 import type { Order } from "./types";
 import { ManualFulfillmentDialog } from "./ManualFulfillmentDialog";
 
@@ -19,6 +20,7 @@ vi.mock("~/hooks/use-currency", () => ({ useCurrency: () => ({ code: "BDT", symb
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const en = orderDetailMessages.en;
+const dialogEn = orderFulfillmentDialogMessages.en;
 
 const item = (id: string, name: string, quantity: number, fulfilledQuantity: number, fulfillmentType = "ship", extra = {}) => ({
   id, productId: `p_${id}`, variantId: null, quantity, fulfilledQuantity, fulfillmentType, price: 800,
@@ -66,7 +68,7 @@ describe("ManualFulfillmentDialog", () => {
   const button = (label: string) => [...document.querySelectorAll("button")].find((element) => element.textContent === label)!;
   const submit = () => button(en["fulfill.submit"]);
   const quantity = (name: string, key: "fulfill.quantity" | "pickup.quantity" | "service.quantity" = "fulfill.quantity") =>
-    document.querySelector<HTMLInputElement>(`input[aria-label="${en[key].replace("{name}", name)}"]`);
+    document.querySelector<HTMLInputElement>(`input[aria-label="${dialogEn[key].replace("{name}", name)}"]`);
 
   describe("ship: own rider", () => {
     it("defaults each line to what is left and sends part of a line", async () => {
@@ -127,7 +129,7 @@ describe("ManualFulfillmentDialog", () => {
       await act(async () => root.render(<ManualFulfillmentDialog order={order} open onOpenChange={() => undefined} />));
       await act(async () => setValue(quantity("Kurta")!, "0"));
       await act(async () => submit().click());
-      expect(document.querySelector("#fulfill-items-error")?.textContent).toBe(en["fulfill.selectItem"]);
+      expect(document.querySelector("#fulfill-items-error")?.textContent).toBe(dialogEn["fulfill.selectItem"]);
 
       await act(async () => setValue(quantity("Kurta")!, "2"));
       expect(document.querySelector("#fulfill-items-error")).toBeNull();
@@ -138,14 +140,14 @@ describe("ManualFulfillmentDialog", () => {
       await act(async () => setValue(document.querySelector<HTMLInputElement>("#fulfill-trackingUrl")!, "not a url"));
       await act(async () => submit().click());
       expect(mocks.mutate).not.toHaveBeenCalled();
-      expect(document.querySelector("#fulfill-trackingUrl-error")?.textContent).toBe(en["fulfill.trackingUrlInvalid"]);
+      expect(document.querySelector("#fulfill-trackingUrl-error")?.textContent).toBe(dialogEn["fulfill.trackingUrlInvalid"]);
     });
   });
 
   describe("pickup: at the counter", () => {
     it("hands over only pickup lines, shows their buyer inputs, and records the cash taken", async () => {
       await act(async () => root.render(<ManualFulfillmentDialog order={pickupOrder} kind="pickup" open onOpenChange={() => undefined} />));
-      expect(document.body.textContent).toContain(en["pickup.title"]);
+      expect(document.body.textContent).toContain(dialogEn["pickup.title"]);
       expect(quantity("Lighter", "pickup.quantity")?.value).toBe("2");
       expect(quantity("Setup visit", "service.quantity")).toBeNull();
       expect(document.querySelector("#fulfill-courier")).toBeNull();
@@ -162,7 +164,7 @@ describe("ManualFulfillmentDialog", () => {
     it("leaves the cash for later when the box is cleared", async () => {
       await act(async () => root.render(<ManualFulfillmentDialog order={pickupOrder} kind="pickup" open onOpenChange={() => undefined} />));
       await act(async () => document.querySelector<HTMLButtonElement>("#fulfill-cash")!.click());
-      expect(document.body.textContent).toContain(en["handover.cashLaterHelp"]);
+      expect(document.body.textContent).toContain(dialogEn["handover.cashLaterHelp"]);
       await act(async () => button(en["pickup.submit"]).click());
       expect(mocks.mutate.mock.calls[0]![0].cashReceived).toBeUndefined();
     });

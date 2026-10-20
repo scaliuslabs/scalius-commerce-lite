@@ -1,0 +1,83 @@
+import { defineMessages } from "./index";
+import { orderDetailMessages } from "./order-detail";
+
+/**
+ * The order page's payment dialogs' own copy (cash on delivery, refund, record
+ * a payment): they load when first opened, so their words do too.
+ */
+const paymentDialogCopy = defineMessages({
+  en: {
+    "refund.issueAmount": "Refund {amount}",
+    "refund.recordCashAmount": "Record {amount} cash refund",
+    "cod.collectAmount": "Mark {amount} collected",
+    "netTerms.recordTitle": "Record a payment",
+    "netTerms.recordHelp": "Money received for this invoice: a bank transfer, cheque or cash. It counts toward the balance due.",
+    "netTerms.amount": "Amount received",
+    "netTerms.amountHelp": "Up to the balance due, {amount}. Part payments are fine.",
+    "netTerms.amountRequired": "Enter the amount received.",
+    "netTerms.amountTooHigh": "That is more than the balance due, {amount}.",
+    "netTerms.via": "Received by",
+    "netTerms.reference": "Reference",
+    "netTerms.referenceHelp": "The transfer, cheque or receipt number, if any.",
+    "netTerms.note": "Note",
+    "netTerms.save": "Record {amount}",
+    "cod.collectHelp": "This marks the order paid and delivered.",
+    "cod.balanceHelp": "This completes payment and marks the order delivered.",
+    "cod.failureHelp": "The order stays unpaid until cash is collected or it's returned.",
+    "cod.returnTitle": "Mark {count, plural, one {# item} other {# items}} returned by the courier?",
+    "cod.returnHelp": "Receive the items into stock when they arrive.",
+    "cod.collectorPlaceholder": "Courier or rider name",
+    "cod.collectorRequired": "Enter who collected the cash.",
+    "refund.help": "Money goes back to the original payment. Items aren't restocked.",
+    "refund.manualHelp": "Scalius can't send cash. Pay the customer back first, then record it.",
+    "refund.amount": "Amount",
+    "refund.max": "Up to {amount}",
+    "refund.reason": "Reason",
+    "refund.manualConfirm": "I've already given this money back to the customer.",
+    "refund.amountInvalid": "Enter an amount up to {amount}.",
+    "cod.amountToCollect": "Cash to collect",
+    "cod.returnTitleOne": "Mark 1 item returned by the courier?",
+    "cod.returnBalance": "The {amount} balance is cleared.",
+    "refund.maxOwed": "{owed} is owed for returned items. Up to {amount}.",
+  },
+  bn: {
+    "refund.issueAmount": "{amount} রিফান্ড করুন",
+    "refund.recordCashAmount": "{amount} ক্যাশ রিফান্ড রেকর্ড করুন",
+    "cod.collectAmount": "{amount} পাওয়া গেছে",
+    "netTerms.recordTitle": "একটি পেমেন্ট রেকর্ড করুন",
+    "netTerms.recordHelp": "এই ইনভয়েসের জন্য পাওয়া টাকা: ব্যাংক ট্রান্সফার, চেক বা ক্যাশ। এটি বাকি টাকা থেকে কমবে।",
+    "netTerms.amount": "পাওয়া টাকা",
+    "netTerms.amountHelp": "বাকি {amount} পর্যন্ত। আংশিক পেমেন্টও চলবে।",
+    "netTerms.amountRequired": "পাওয়া টাকার পরিমাণ দিন।",
+    "netTerms.amountTooHigh": "এটি বাকি {amount}-এর চেয়ে বেশি।",
+    "netTerms.via": "কীভাবে পাওয়া গেছে",
+    "netTerms.reference": "রেফারেন্স",
+    "netTerms.referenceHelp": "ট্রান্সফার, চেক বা রসিদ নম্বর, যদি থাকে।",
+    "netTerms.note": "নোট",
+    "netTerms.save": "{amount} রেকর্ড করুন",
+    "cod.collectHelp": "অর্ডারটি পরিশোধিত ও ডেলিভারি হয়েছে হিসেবে দেখাবে।",
+    "cod.balanceHelp": "পেমেন্ট পূর্ণ হবে এবং অর্ডার ডেলিভারি হয়েছে দেখাবে।",
+    "cod.failureHelp": "টাকা পাওয়া বা ফেরত আসা পর্যন্ত অর্ডার অপরিশোধিত থাকবে।",
+    "cod.returnTitle": "কুরিয়ার {count}টি প্রোডাক্ট ফেরত দিয়েছে হিসেবে চিহ্নিত করবেন?",
+    "cod.returnHelp": "প্রোডাক্ট হাতে পেলে গ্রহণ করে স্টকে তুলুন।",
+    "cod.collectorPlaceholder": "কুরিয়ার বা রাইডারের নাম",
+    "cod.collectorRequired": "কে টাকা নিয়েছেন লিখুন।",
+    "refund.help": "টাকা আগের পেমেন্ট মাধ্যমে ফেরত যাবে। স্টক ফেরত যাবে না।",
+    "refund.manualHelp": "Scalius ক্যাশ পাঠাতে পারে না। আগে কাস্টমারকে টাকা দিন, তারপর রেকর্ড করুন।",
+    "refund.amount": "পরিমাণ",
+    "refund.max": "সর্বোচ্চ {amount}",
+    "refund.reason": "কারণ",
+    "refund.manualConfirm": "আমি এই টাকা কাস্টমারকে ফেরত দিয়েছি।",
+    "refund.amountInvalid": "{amount} পর্যন্ত টাকা লিখুন।",
+    "cod.amountToCollect": "যত টাকা নিতে হবে",
+    "cod.returnTitleOne": "কুরিয়ার ১টি প্রোডাক্ট ফেরত দিয়েছে হিসেবে চিহ্নিত করবেন?",
+    "cod.returnBalance": "{amount} বাকি মুছে যাবে।",
+    "refund.maxOwed": "ফেরত আসা প্রোডাক্টের জন্য {owed} বাকি। সর্বোচ্চ {amount}।",
+  },
+});
+
+/** The order page catalog plus the payment dialogs' own copy, for those dialogs. */
+export const orderPaymentDialogMessages = defineMessages({
+  en: { ...orderDetailMessages.en, ...paymentDialogCopy.en },
+  bn: { ...orderDetailMessages.bn, ...paymentDialogCopy.bn },
+});

@@ -5,7 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { translate } from "~/i18n";
-import { orderDetailMessages } from "~/i18n/order-detail";
+import { orderTimelineMessages } from "~/i18n/order-timeline";
 import { orderMessages } from "~/i18n/orders";
 import { describeTimelineEvent } from "~/lib/order-timeline-display";
 import type { Order } from "./types";
@@ -27,8 +27,8 @@ vi.mock("~/lib/api-mutations/orders", () => ({
 }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-const en = orderDetailMessages.en;
-const t = (key: keyof typeof en, vars?: Record<string, string | number>) => translate(orderDetailMessages, key, vars);
+const en = orderTimelineMessages.en;
+const t = (key: keyof typeof en, vars?: Record<string, string | number>) => translate(orderTimelineMessages, key, vars);
 const o = (key: keyof typeof orderMessages.en, vars?: Record<string, string | number>) => translate(orderMessages, key, vars);
 const money = (amount: number) => `৳${amount}`;
 

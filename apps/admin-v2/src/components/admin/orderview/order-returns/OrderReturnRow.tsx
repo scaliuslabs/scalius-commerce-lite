@@ -4,7 +4,7 @@ import { AppResourceCards } from "~/components/admin/apps/ui/AppResourceCards";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { useMessages } from "~/i18n";
-import { orderDetailMessages } from "~/i18n/order-detail";
+import { orderReturnMessages } from "~/i18n/order-returns";
 import { useReconcileOrderReturn } from "~/lib/api-mutations/orders";
 import { hasSeveralLocations, inventoryLocationsQueryOptions } from "~/lib/api-query-options/inventory-locations";
 import { getOutstandingReceiptQuantity, type OrderReturnDto } from "~/lib/order-return-workflow";
@@ -29,7 +29,7 @@ export function OrderReturnRow({
   canManage: boolean;
   onAction: (state: ReturnDialogAction) => void;
 }) {
-  const t = useMessages(orderDetailMessages);
+  const t = useMessages(orderReturnMessages);
   const resumeMutation = useReconcileOrderReturn();
   const canCancel = (orderReturn.status === "requested" || orderReturn.status === "approved")
     && orderReturn.lines.every((line) => line.receivedQuantity === 0);

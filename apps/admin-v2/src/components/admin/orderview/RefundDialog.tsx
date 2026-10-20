@@ -17,7 +17,8 @@ import { SearchableSelect } from "~/components/ui/searchable-select";
 import { MoneyInput } from "~/components/admin/shared/MoneyInput";
 import { useMessages } from "~/i18n";
 import { giftCardOrderMessages } from "~/i18n/gift-card-orders";
-import { orderDetailLabel, orderDetailMessages } from "~/i18n/order-detail";
+import { orderDetailLabel } from "~/i18n/order-detail";
+import { orderPaymentDialogMessages } from "~/i18n/order-payment-dialogs";
 import { resourceMessages } from "~/i18n/resource";
 import { orderErrorMessage, useRefundOrder } from "~/lib/api-mutations/orders";
 import { RefundSettlementField, refundSettlementBody, type RefundSettlement } from "./RefundSettlementField";
@@ -48,7 +49,7 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
   /** Cash changed hands (cash on delivery): an original-method refund is recorded, not sent. */
   hasCashPayment: boolean;
 }) {
-  const t = useMessages(orderDetailMessages);
+  const t = useMessages(orderPaymentDialogMessages);
   const r = useMessages(resourceMessages);
   const g = useMessages(giftCardOrderMessages);
   const owed = initialRefundAmount(order);

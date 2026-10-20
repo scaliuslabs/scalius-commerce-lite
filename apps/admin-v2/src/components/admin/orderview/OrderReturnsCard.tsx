@@ -9,7 +9,7 @@ import { useCurrency } from "~/hooks/use-currency";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { useOpenedOnce } from "~/hooks/use-opened-once";
 import { useMessages } from "~/i18n";
-import { orderDetailMessages } from "~/i18n/order-detail";
+import { orderReturnMessages } from "~/i18n/order-returns";
 import { orderReturnsQueryOptions } from "~/lib/api-query-options/orders";
 import { ORDER_DETAIL_PREFETCH_STALE_MS } from "~/lib/order-detail-prefetch";
 import { formatSavedMajorAmount, resolveSavedOrderMoneySummary } from "~/lib/order-tax-presentation";
@@ -33,7 +33,7 @@ const EMPTY_RETURNS: readonly OrderReturnDto[] = [];
 const RETURNABLE_ORDER_STATUSES = new Set(["delivered", "completed"]);
 
 export function OrderReturnsCard({ order, onRefund }: { order: Order; onRefund: () => void }) {
-  const t = useMessages(orderDetailMessages);
+  const t = useMessages(orderReturnMessages);
   const { fmt } = useCurrency();
   const hydrated = useHydrated();
   const actions = useOrderActionPermissions();

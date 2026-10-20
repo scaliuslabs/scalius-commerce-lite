@@ -10,6 +10,9 @@ import { FULFILLMENT_STATUSES as FULFILMENT, ORDER_STATUSES, PAYMENT_STATUSES as
 import { setLocale, translate } from "~/i18n";
 import { inboxMessages } from "~/i18n/inbox";
 import { orderDetailMessages } from "~/i18n/order-detail";
+import { orderNotificationMessages } from "~/i18n/order-notifications";
+import { orderReturnMessages } from "~/i18n/order-returns";
+import { orderTimelineMessages } from "~/i18n/order-timeline";
 import { fulfillmentStatusLabel, orderMessages, orderStatusLabel, paymentStatusLabel } from "~/i18n/orders";
 import { hasDeliveryCard, hasHoldCard, hasReturnsCard } from "./card-rules";
 import { fulfilledGroups, returnedByGroup } from "./fulfilment-groups";
@@ -142,10 +145,10 @@ describe("order page cards that may not apply", () => {
         translate(orderDetailMessages, "status.title"),
         translate(orderDetailMessages, "shipments.title"),
         translate(orderDetailMessages, "payment.title"),
-        translate(orderDetailMessages, "returns.title"),
+        translate(orderReturnMessages, "returns.title"),
         translate(inboxMessages, "card.title"),
-        translate(orderDetailMessages, "messages.title"),
-        translate(orderDetailMessages, "timeline.title"),
+        translate(orderNotificationMessages, "messages.title"),
+        translate(orderTimelineMessages, "timeline.title"),
         translate(orderDetailMessages, "customer.title"),
         translate(orderDetailMessages, "notes.title"),
         translate(orderDetailMessages, "holds.title"),

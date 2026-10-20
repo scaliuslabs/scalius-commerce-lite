@@ -14,7 +14,8 @@ import { Input } from "~/components/ui/input";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Textarea } from "~/components/ui/textarea";
 import { useMessages } from "~/i18n";
-import { orderDetailLabel, orderDetailMessages } from "~/i18n/order-detail";
+import { orderDetailLabel } from "~/i18n/order-detail";
+import { orderPaymentDialogMessages } from "~/i18n/order-payment-dialogs";
 import { resourceMessages } from "~/i18n/resource";
 import { isOrderConflict, orderErrorMessage, useUpdateOrderCod } from "~/lib/api-mutations/orders";
 import type { postApiV1AdminOrdersByIdCod } from "@scalius/api-client/sdk";
@@ -61,7 +62,7 @@ export function CodDialogs({
   canFail: boolean;
   canReturn: boolean;
 }) {
-  const t = useMessages(orderDetailMessages);
+  const t = useMessages(orderPaymentDialogMessages);
   const r = useMessages(resourceMessages);
   const mutation = useUpdateOrderCod();
   const [collectedBy, setCollectedBy] = useState(initialCollector);

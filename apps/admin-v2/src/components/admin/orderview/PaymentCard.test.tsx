@@ -8,6 +8,7 @@ import type { OrderPaymentsPayload } from "~/lib/api-query-options/orders";
 import { PermissionProvider } from "~/contexts/PermissionContext";
 import { setLocale } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
+import { orderPaymentDialogMessages } from "~/i18n/order-payment-dialogs";
 import type { Order } from "./types";
 import { PaymentCard } from "./PaymentCard";
 // The refund dialog loads on first open; load it up front so a click shows it at once.
@@ -42,6 +43,7 @@ vi.mock("~/lib/api-mutations/orders", () => ({
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const en = orderDetailMessages.en;
 const bn = orderDetailMessages.bn;
+const dialogEn = orderPaymentDialogMessages.en;
 
 const order: Order = {
   id: "order_history", version: 1, channel: "online_store", channelSource: null, customerName: "Test buyer", customerPhone: "+8801700000000",
@@ -278,9 +280,9 @@ describe("PaymentCard", () => {
       await act(async () => button(en["refund.recordCash"])!.click());
 
       const submit = [...document.querySelectorAll('[role="dialog"] button')]
-        .find((candidate) => candidate.textContent === en["refund.recordCashAmount"].replace("{amount}", "৳600")) as HTMLButtonElement;
+        .find((candidate) => candidate.textContent === dialogEn["refund.recordCashAmount"].replace("{amount}", "৳600")) as HTMLButtonElement;
       expect(submit.disabled).toBe(true);
-      expect(document.body.textContent).toContain(en["refund.manualConfirm"]);
+      expect(document.body.textContent).toContain(dialogEn["refund.manualConfirm"]);
 
       await act(async () => document.querySelector<HTMLButtonElement>("#manualSettlementConfirmed")!.click());
       expect(submit.disabled).toBe(false);
@@ -362,11 +364,11 @@ describe("PaymentCard", () => {
       const submit = [...document.querySelectorAll('[role="dialog"] button')]
         .find((candidate) => candidate.textContent === en["refund.recordCash"]) as HTMLButtonElement;
       // An invalid amount is never echoed on the button (R3-ORD-16).
-      expect(document.body.textContent).not.toContain(en["refund.recordCashAmount"].replace("{amount}", "৳3000"));
+      expect(document.body.textContent).not.toContain(dialogEn["refund.recordCashAmount"].replace("{amount}", "৳3000"));
       await act(async () => submit.click());
       expect(mocks.refund).not.toHaveBeenCalled();
       expect(amount.getAttribute("aria-invalid")).toBe("true");
-      expect(document.querySelector("#refundAmount-error")?.textContent).toBe(en["refund.amountInvalid"].replace("{amount}", "৳1800"));
+      expect(document.querySelector("#refundAmount-error")?.textContent).toBe(dialogEn["refund.amountInvalid"].replace("{amount}", "৳1800"));
     });
 
     it("takes a cash refund typed in Bangla digits", async () => {
@@ -386,7 +388,7 @@ describe("PaymentCard", () => {
       expect(amount.value).toBe("\u09eb\u09e6\u09e6");
       await act(async () => document.querySelector<HTMLButtonElement>("#manualSettlementConfirmed")!.click());
       const submit = [...document.querySelectorAll('[role="dialog"] button')]
-        .find((candidate) => candidate.textContent === en["refund.recordCashAmount"].replace("{amount}", "৳500")) as HTMLButtonElement;
+        .find((candidate) => candidate.textContent === dialogEn["refund.recordCashAmount"].replace("{amount}", "৳500")) as HTMLButtonElement;
       await act(async () => submit.click());
       expect(mocks.refund).toHaveBeenCalledWith(
         { orderId: "order_cod", requestKey: expect.any(String), amount: 500, reason: "requested_by_customer", manualSettlementConfirmed: true },
@@ -428,10 +430,10 @@ describe("PaymentCard", () => {
       await render({ ...codOrder, status: "shipped", paymentStatus: "unpaid", paidAmount: 0, balanceDue: 1800 });
       await openCollectDialog();
       expect(document.querySelector("#collectedAmount")).toBeNull();
-      const submit = button(en["cod.collectAmount"].replace("{amount}", "৳1800"))!;
+      const submit = button(dialogEn["cod.collectAmount"].replace("{amount}", "৳1800"))!;
       await act(async () => submit.click());
       expect(mocks.mutate).not.toHaveBeenCalled();
-      expect(document.querySelector("#collectedBy-error")?.textContent).toBe(en["cod.collectorRequired"]);
+      expect(document.querySelector("#collectedBy-error")?.textContent).toBe(dialogEn["cod.collectorRequired"]);
 
       const input = document.querySelector<HTMLInputElement>("#collectedBy")!;
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
@@ -462,7 +464,7 @@ describe("PaymentCard", () => {
       const input = document.querySelector<HTMLInputElement>("#collectedBy")!;
       expect(input.value).toBe("R3 Rider Kamal");
       expect(input.disabled).toBe(false);
-      await act(async () => button(en["cod.collectAmount"].replace("{amount}", "৳1800"))!.click());
+      await act(async () => button(dialogEn["cod.collectAmount"].replace("{amount}", "৳1800"))!.click());
       expect(mocks.mutate).toHaveBeenCalledWith(
         { orderId: "order_cod", action: "collected", collectedBy: "R3 Rider Kamal", collectedAmount: 1800 },
         expect.anything(),
@@ -481,7 +483,7 @@ describe("PaymentCard", () => {
       });
       await openCollectDialog();
       expect(document.querySelector('[role="dialog"]')).not.toBeNull();
-      await act(async () => button(en["cod.collectAmount"].replace("{amount}", "৳1800"))!.click());
+      await act(async () => button(dialogEn["cod.collectAmount"].replace("{amount}", "৳1800"))!.click());
       expect(document.querySelector('[role="dialog"]')).toBeNull();
     });
 

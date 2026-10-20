@@ -16,7 +16,8 @@ import { Input } from "~/components/ui/input";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Textarea } from "~/components/ui/textarea";
 import { useMessages } from "~/i18n";
-import { orderDetailLabel, orderDetailMessages } from "~/i18n/order-detail";
+import { orderDetailLabel } from "~/i18n/order-detail";
+import { orderPaymentDialogMessages } from "~/i18n/order-payment-dialogs";
 import { resourceMessages } from "~/i18n/resource";
 import { isOrderConflict, orderErrorMessage, useRecordOrderPayment } from "~/lib/api-mutations/orders";
 import { MoneyInput } from "../shared/MoneyInput";
@@ -46,7 +47,7 @@ export function RecordPaymentDialog({
   balanceDue: number;
   money: (major: number) => string;
 }) {
-  const t = useMessages(orderDetailMessages);
+  const t = useMessages(orderPaymentDialogMessages);
   const r = useMessages(resourceMessages);
   const mutation = useRecordOrderPayment();
   const [requestKey] = useState(() => `record-payment-${crypto.randomUUID()}`);

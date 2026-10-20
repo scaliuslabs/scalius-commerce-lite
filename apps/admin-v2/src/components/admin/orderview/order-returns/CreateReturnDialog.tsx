@@ -13,7 +13,7 @@ import { Input } from "~/components/ui/input";
 import { NumberInput } from "~/components/ui/number-input";
 import { Textarea } from "~/components/ui/textarea";
 import { useMessages } from "~/i18n";
-import { orderDetailMessages } from "~/i18n/order-detail";
+import { orderReturnMessages } from "~/i18n/order-returns";
 import { resourceMessages } from "~/i18n/resource";
 import { orderErrorMessage, useCreateOrderReturn } from "~/lib/api-mutations/orders";
 import {
@@ -37,7 +37,7 @@ export function CreateReturnDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const t = useMessages(orderDetailMessages);
+  const t = useMessages(orderReturnMessages);
   const r = useMessages(resourceMessages);
   const remaining = useMemo(() => getRemainingReturnableQuantities(order.items, returns), [order.items, returns]);
   const eligibleItems = order.items.filter((item) => (remaining.get(item.id) ?? 0) > 0);

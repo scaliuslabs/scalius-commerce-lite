@@ -14,7 +14,7 @@ import { NumberInput } from "~/components/ui/number-input";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Textarea } from "~/components/ui/textarea";
 import { formatNumber, useMessages } from "~/i18n";
-import { orderDetailMessages } from "~/i18n/order-detail";
+import { orderReturnMessages } from "~/i18n/order-returns";
 import { resourceMessages } from "~/i18n/resource";
 import { orderErrorMessage, useReceiveOrderReturn } from "~/lib/api-mutations/orders";
 import { inventoryQueryOptions, type InventoryMovement } from "~/lib/api-query-options/inventory";
@@ -100,7 +100,7 @@ export function ReceiveReturnDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const t = useMessages(orderDetailMessages);
+  const t = useMessages(orderReturnMessages);
   const r = useMessages(resourceMessages);
   // Pre-filled with what is expected back; the merchant lowers it for anything missing or damaged.
   const [draft, setDraft] = useState<Record<string, ReceiptDraft>>(() => defaultReceiptDraft(orderReturn?.lines ?? []));

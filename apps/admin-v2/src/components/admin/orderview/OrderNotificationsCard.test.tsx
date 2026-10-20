@@ -4,7 +4,7 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { orderDetailMessages } from "~/i18n/order-detail";
+import { orderNotificationMessages } from "~/i18n/order-notifications";
 import type { Order } from "./types";
 import { OrderNotificationsCard } from "./OrderNotificationsCard";
 
@@ -24,7 +24,7 @@ vi.mock("~/lib/api-mutations/orders", () => ({
 }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-const en = orderDetailMessages.en;
+const en = orderNotificationMessages.en;
 
 const outbox = (overrides: Record<string, unknown>) => ({
   id: "out_1", notificationType: "order_confirmed", status: "sent", lastError: null,

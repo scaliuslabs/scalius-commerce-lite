@@ -1,9 +1,10 @@
-import { orderDetailLabel, type OrderDetailMessageKey } from "~/i18n/order-detail";
+import { orderDetailLabel } from "~/i18n/order-detail";
+import type { OrderTimelineMessageKey } from "~/i18n/order-timeline";
 import { orderStatusLabel, type OrderMessageKey } from "~/i18n/orders";
 import type { OrderTimelineEvent } from "./api-query-options/orders";
 
 type Vars = Record<string, string | number>;
-type DetailT = (key: OrderDetailMessageKey, vars?: Vars) => string;
+type DetailT = (key: OrderTimelineMessageKey, vars?: Vars) => string;
 type OrderT = (key: OrderMessageKey, vars?: Vars) => string;
 
 export interface TimelineLine {

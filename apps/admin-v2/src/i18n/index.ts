@@ -137,6 +137,19 @@ export function translate<K extends string>(catalog: MessageCatalog<K>, key: K, 
   return interpolate(catalog[current][key] ?? catalog.en[key], vars);
 }
 
+/** Catalog label for `${prefix}${value}`, or the raw value made readable ("dead_lettered" → "Dead lettered"). */
+export function catalogLabel<K extends string>(
+  catalog: MessageCatalog<K>,
+  t: (key: K) => string,
+  prefix: string,
+  value: string,
+): string {
+  const key = `${prefix}${value.toLowerCase()}`;
+  if (key in catalog.en) return t(key as K);
+  const text = value.replace(/[_-]+/g, " ").trim();
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 /** Returns `t(key, vars)` for one catalog; re-renders when the locale changes. */
 export function useMessages<K extends string>(catalog: MessageCatalog<K>): (key: K, vars?: Vars) => string {
   const locale = useLocale();

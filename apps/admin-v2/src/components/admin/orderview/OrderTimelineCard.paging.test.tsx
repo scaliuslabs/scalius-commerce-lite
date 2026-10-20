@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setLocale } from "~/i18n";
-import { orderDetailMessages } from "~/i18n/order-detail";
+import { orderTimelineMessages } from "~/i18n/order-timeline";
 import { resourceMessages } from "~/i18n/resource";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { OrderTimelineCard } from "./OrderTimelineCard";
@@ -72,7 +72,7 @@ describe("bounded order timeline history", () => {
   }
 
   it.each(["en", "bn"] as const)("keeps every one of 205 events reachable in bounded windows (%s)", async (locale) => {
-    setLocale(locale); const t = orderDetailMessages[locale];
+    setLocale(locale); const t = orderTimelineMessages[locale];
     await render();
     expect(rows()).toHaveLength(50); expect(ids()).not.toContain("placed_A");
     const observed = new Set(ids());
@@ -96,7 +96,7 @@ describe("bounded order timeline history", () => {
   it("keeps the busy trigger named/focused, blocks duplicate loads, and respects later composer focus", async () => {
     await render();
     const pending = deferred<ReturnType<typeof page>>(); mocks.read.mockImplementationOnce(() => pending.promise);
-    const trigger = await click(orderDetailMessages.en["timeline.loadOlder"]);
+    const trigger = await click(orderTimelineMessages.en["timeline.loadOlder"]);
     expect(trigger.disabled).toBe(false); expect(trigger.getAttribute("aria-busy")).toBe("true");
     expect(trigger.getAttribute("aria-label")).toBe("Load older"); expect(document.activeElement).toBe(trigger);
     await act(async () => trigger.click()); expect(mocks.read).toHaveBeenCalledTimes(1);
@@ -117,7 +117,7 @@ describe("bounded order timeline history", () => {
   });
 
   it.each(["en", "bn"] as const)("shows one recovery action during a delayed append retry (%s)", async (locale) => {
-    setLocale(locale); const t = orderDetailMessages[locale]; const retryLabel = resourceMessages[locale].retry;
+    setLocale(locale); const t = orderTimelineMessages[locale]; const retryLabel = resourceMessages[locale].retry;
     await render();
     mocks.read.mockRejectedValueOnce(new Error("temporary"));
     await click(t["timeline.loadOlder"]);

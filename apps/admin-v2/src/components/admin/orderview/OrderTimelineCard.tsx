@@ -19,7 +19,7 @@ import { useCurrency } from "~/hooks/use-currency";
 import { useHydrated } from "~/hooks/use-hydrated";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { useMessages } from "~/i18n";
-import { orderDetailMessages } from "~/i18n/order-detail";
+import { orderTimelineMessages } from "~/i18n/order-timeline";
 import { orderMessages } from "~/i18n/orders";
 import { resourceMessages } from "~/i18n/resource";
 import { orderErrorMessage, useAddOrderComment, useDeleteOrderComment } from "~/lib/api-mutations/orders";
@@ -42,7 +42,7 @@ export function OrderTimelineCard({ order }: { order: Order }) {
 type HistoryAction = "append" | "older" | "newer" | "newest";
 
 function OrderTimeline({ order }: { order: Order }) {
-  const t = useMessages(orderDetailMessages);
+  const t = useMessages(orderTimelineMessages);
   const o = useMessages(orderMessages);
   const r = useMessages(resourceMessages);
   const { fmt } = useCurrency();

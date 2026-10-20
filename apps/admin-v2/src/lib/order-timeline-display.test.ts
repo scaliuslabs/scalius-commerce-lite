@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { translate } from "~/i18n";
-import { orderDetailMessages } from "~/i18n/order-detail";
+import { orderTimelineMessages } from "~/i18n/order-timeline";
 import { orderMessages } from "~/i18n/orders";
 import { describeTimelineEvent } from "./order-timeline-display";
 
-const t = (key: keyof typeof orderDetailMessages.en, vars?: Record<string, string | number>) =>
-  translate(orderDetailMessages, key, vars);
+const t = (key: keyof typeof orderTimelineMessages.en, vars?: Record<string, string | number>) =>
+  translate(orderTimelineMessages, key, vars);
 const o = (key: keyof typeof orderMessages.en, vars?: Record<string, string | number>) =>
   translate(orderMessages, key, vars);
 const money = (amount: number) => `৳${amount}`;

@@ -11,7 +11,7 @@ import {
 } from "~/components/ui/dialog";
 import { Textarea } from "~/components/ui/textarea";
 import { useMessages } from "~/i18n";
-import { orderDetailMessages } from "~/i18n/order-detail";
+import { orderReturnMessages } from "~/i18n/order-returns";
 import { orderErrorMessage, useCancelOrderReturn } from "~/lib/api-mutations/orders";
 import { StableReturnCommandKey, type OrderReturnDto } from "~/lib/order-return-workflow";
 import { createReturnCommandKey } from "./shared";
@@ -27,7 +27,7 @@ export function CancelReturnDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const t = useMessages(orderDetailMessages);
+  const t = useMessages(orderReturnMessages);
   const [notes, setNotes] = useState("");
   const mutation = useCancelOrderReturn();
   const commandKey = useRef(new StableReturnCommandKey(createReturnCommandKey));

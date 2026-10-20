@@ -5,8 +5,8 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { useHydrated } from "~/hooks/use-hydrated";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
-import { useMessages } from "~/i18n";
-import { orderDetailLabel, orderDetailMessages } from "~/i18n/order-detail";
+import { catalogLabel, useMessages } from "~/i18n";
+import { orderNotificationMessages } from "~/i18n/order-notifications";
 import { resourceMessages } from "~/i18n/resource";
 import { ORDER_DETAIL_PREFETCH_STALE_MS } from "~/lib/order-detail-prefetch";
 import {
@@ -34,17 +34,18 @@ function MessageRow({ orderId, message, canRetry }: {
   message: OrderNotificationOutboxDto;
   canRetry: boolean;
 }) {
-  const t = useMessages(orderDetailMessages);
+  const t = useMessages(orderNotificationMessages);
   const r = useMessages(resourceMessages);
+  const label = (prefix: string, value: string) => catalogLabel(orderNotificationMessages, t, prefix, value);
   const retryMutation = useRetryOrderNotification();
   const resendMutation = useResendOrderNotification();
   const status = summarizeNotificationDelivery(message);
   const lines = notificationChannelLines(message.receipts);
   const outboxIssue = notificationOutboxIssue(message);
-  const statusLabel = orderDetailLabel(t, "messages.status.", status);
+  const statusLabel = label("messages.status.", status);
   // One channel whose outcome is the badge: don't say "Sent" twice.
   const repeatsBadge = lines.length === 1 && !lines[0]!.issue
-    && orderDetailLabel(t, "messages.status.", lines[0]!.status) === statusLabel;
+    && label("messages.status.", lines[0]!.status) === statusLabel;
   const sendable = canSendNotificationAgain(message);
   const turnedOff = notificationTurnedOff(message);
   const retrying = retryMutation.isPending && retryMutation.variables?.outboxId === message.id;
@@ -55,7 +56,7 @@ function MessageRow({ orderId, message, canRetry }: {
     <li className="space-y-1 py-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="font-medium">{orderDetailLabel(t, "messages.type.", message.notificationType)}</span>
+          <span className="font-medium">{label("messages.type.", message.notificationType)}</span>
           <Badge variant={statusBadgeVariant(status)}>{statusLabel}</Badge>
           {sentAt ? <span className="text-muted-foreground">{sentAt}</span> : null}
         </div>
@@ -88,9 +89,9 @@ function MessageRow({ orderId, message, canRetry }: {
       {lines.map((line) => (
         <p key={line.key} className={line.issue ? "text-destructive" : "text-muted-foreground"}>
           {[
-            orderDetailLabel(t, "messages.channel.", line.channel),
+            label("messages.channel.", line.channel),
             line.recipient ? line.recipient : line.count > 1 ? t("messages.recipients", { count: line.count }) : null,
-            repeatsBadge ? null : orderDetailLabel(t, "messages.status.", line.status),
+            repeatsBadge ? null : label("messages.status.", line.status),
             line.issue ? t(`messages.issue.${line.issue}`) : null,
           ].filter(Boolean).join(" · ")}
         </p>
@@ -102,7 +103,7 @@ function MessageRow({ orderId, message, canRetry }: {
 
 /** Messages sent to the customer about this order, with retry and resend. */
 export function OrderNotificationsCard({ order }: { order: Order }) {
-  const t = useMessages(orderDetailMessages);
+  const t = useMessages(orderNotificationMessages);
   const r = useMessages(resourceMessages);
   const isHydrated = useHydrated();
   const canRetry = useOrderActionPermissions().canRetryOrderNotifications;
@@ -120,7 +121,7 @@ export function OrderNotificationsCard({ order }: { order: Order }) {
       </CardHeader>
       <CardContent>
         {!isHydrated || query.isLoading ? (
-          <p className="text-muted-foreground">{t("read.loading")}</p>
+          <p className="text-muted-foreground">{r("loading")}</p>
         ) : query.isError ? (
           <InlineError title={t("messages.loadFailed")} error={query.error} onRetry={() => void query.refetch()} />
         ) : messages.length === 0 ? (

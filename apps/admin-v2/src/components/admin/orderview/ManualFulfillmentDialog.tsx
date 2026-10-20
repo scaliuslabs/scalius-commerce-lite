@@ -16,7 +16,7 @@ import { MoneyInput } from "~/components/admin/shared/MoneyInput";
 import { Textarea } from "~/components/ui/textarea";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { useMessages } from "~/i18n";
-import { orderDetailMessages } from "~/i18n/order-detail";
+import { orderFulfillmentDialogMessages } from "~/i18n/order-fulfillment-dialog";
 import { resourceMessages } from "~/i18n/resource";
 import { orderErrorMessage, useCreateFulfillment } from "~/lib/api-mutations/orders";
 import { formatSavedMajorAmount, resolveSavedOrderMoneySummary } from "~/lib/order-tax-presentation";
@@ -52,7 +52,7 @@ export function ManualFulfillmentDialog({ order, kind = "ship", open, onOpenChan
   /** Everything was handed over but money is still due: the next step is recording the payment. */
   onAwaitingPayment?: () => void;
 }) {
-  const t = useMessages(orderDetailMessages);
+  const t = useMessages(orderFulfillmentDialogMessages);
   const r = useMessages(resourceMessages);
   const copy = COPY[kind];
   const canRecordCash = useOrderActionPermissions().canUpdateOrderCod;
