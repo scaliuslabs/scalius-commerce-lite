@@ -52,3 +52,5 @@ minor units. Storage is unchanged (minor units), so there is no migration.
 - `AGENT_MCP_INSTRUCTIONS` (`apps/api/src/agent-access/mcp/server.ts`) says "money is decimal major units"; stable
   resource reads and now custom-field/object values are minor. Wording belongs to the MCP owner (< 500 bytes test).
 - `increment` cannot add to a money field (the runtime does not know field types); README says to `update` it.
+
+Typecheck: `tsc --build apps/api` (shared, database, core, plugin-sdk, api) exits 0. `apps/admin-v2` not typechecked.
