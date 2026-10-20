@@ -16,7 +16,7 @@ import { encodeListCursorOrNull, type ListCursorShape } from "@scalius/shared/pa
 import { fromMinor } from "@scalius/shared/money";
 import { keysetCondition, keysetOrderBy, readListCursor, type KeysetOrder } from "@scalius/core/utils/keyset";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
-import { createOrderSchema, manualOrderPaymentMethodSchema, overdueOrderCondition, recordOrderEvent } from "@scalius/core/modules/orders";
+import { buildOrderEventInsert, createOrderSchema, manualOrderPaymentMethodSchema, orderEventIdForRequest, overdueOrderCondition } from "@scalius/core/modules/orders";
 import { recordOrderPayment } from "@scalius/core/modules/payments";
 import { paymentTermsSchema, RECORDED_PAYMENT_VIAS } from "@scalius/shared/payment-terms";
 import { placeManualOrder } from "./orders/create";
@@ -423,25 +423,25 @@ app.openapi(createRoute({
     recordedBy,
     requestKey: await scopedRequestKey(c, "dashboard.resources.payments.create", c.req.valid("header")["idempotency-key"]),
     ...(body.expectedVersion !== undefined ? { expectedVersion: body.expectedVersion } : {}),
-  });
-  const payment = await readPaymentRepresentation(db, result.paymentId);
-  if (!payment) throw new NotFoundError("Payment not found");
-  if (!result.replayed) {
-    // The timeline shows it in the order's currency (the dashboard words it, like a cash collection).
-    await recordOrderEvent(db, {
+    // The timeline line commits with the payment, once per payment: in the
+    // order's currency (the dashboard words it, like a cash collection).
+    timelineLine: async ({ paymentId, currency, landed }) => ({ statement: buildOrderEventInsert(db, {
+      id: await orderEventIdForRequest(orderId, "payment_recorded", paymentId),
       orderId,
       kind: "payment_recorded",
       actorId: user?.id ?? null,
       data: {
-        amount: fromMinor(body.amountMinor, getDecimalPlaces(payment.currency)),
+        amount: fromMinor(body.amountMinor, currency.decimalPlaces),
         via: body.via,
         reference: body.reference ?? null,
         ...(appPrincipal ? { appId: appPrincipal.pluginId } : {}),
       },
-    });
-    // Paid in full settles the order: hand over its automatic lines (downloads, gift cards).
-    if (result.paymentStatus === "paid") await autoFulfilAfterResponse(c, db, orderId, "recorded-payment");
-  }
+    }, landed) }),
+  });
+  const payment = await readPaymentRepresentation(db, result.paymentId);
+  if (!payment) throw new NotFoundError("Payment not found");
+  // Paid in full settles the order: hand over its automatic lines (downloads, gift cards).
+  if (!result.replayed && result.paymentStatus === "paid") await autoFulfilAfterResponse(c, db, orderId, "recorded-payment");
   return created(c, { payment });
 });
 

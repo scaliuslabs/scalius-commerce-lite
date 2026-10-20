@@ -152,10 +152,20 @@ describe("the stable app API's resources", () => {
       body: { amountMinor, via: "bank_transfer", reference: "TRX-77" },
       headers: { "Idempotency-Key": key },
     });
+    // The payment and its timeline line commit together: a line that cannot be
+    // written leaves no payment, so the retry records both, once.
+    sqlite.exec("CREATE TEMP TRIGGER fail_timeline BEFORE INSERT ON order_events BEGIN SELECT RAISE(ABORT, 'timeline down'); END");
+    expect((await record(40_000, "payment po-7781 #1")).status).toBeGreaterThanOrEqual(500);
+    sqlite.exec("DROP TRIGGER fail_timeline");
+    expect(sqlite.prepare("SELECT count(*) AS n FROM order_payments WHERE order_id = ?").get(order.id)).toEqual({ n: 0 });
     const first = await record(40_000, "payment po-7781 #1");
     expect({ status: first.status, error: first.body.error }).toEqual({ status: 201, error: undefined });
+    const lines = () => sqlite.prepare("SELECT data FROM order_events WHERE order_id = ? AND kind = 'payment_recorded'").all(order.id)
+      .map((row) => JSON.parse(String((row as { data: string }).data)));
+    expect(lines()).toEqual([expect.objectContaining({ amount: 400, via: "bank_transfer", reference: "TRX-77" })]);
     expect(first.body.data.payment).toMatchObject({ orderId: order.id, method: "manual", status: "succeeded", amountMinor: 40_000, currency: "BDT" });
     expect((await record(40_000, "payment po-7781 #1")).body.data.payment.id).toBe(first.body.data.payment.id);
+    expect(lines()).toHaveLength(1);
     expect((await record(70_000, "payment po-7781 #2")).status).toBe(400);
     expect((await record(60_000, "payment po-7781 #3")).status).toBe(201);
     const paid = await call("GET", `/resources/orders/${order.id}`);
