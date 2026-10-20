@@ -30,7 +30,9 @@ const encoder = new TextEncoder();
  */
 export function isConfirmGated(operation: Pick<AgentOperationManifestEntry, "risk">): boolean {
   if ((operation as { confirmation?: unknown }).confirmation === "required") return true;
-  return operation.risk === "destructive" || operation.risk === "financial";
+  // Security changes (access keys, roles, webhooks, platform origins) are as
+  // consequential as deletes and money: a person confirms them too.
+  return operation.risk === "destructive" || operation.risk === "financial" || operation.risk === "security";
 }
 
 /**
