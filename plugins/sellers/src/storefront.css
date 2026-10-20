@@ -11,7 +11,7 @@
 .sellers-directory li a { font-weight: 700; color: var(--foreground, #111); }
 .sellers-directory li p { margin: 0.35rem 0 0; font-size: 0.875rem; color: var(--muted-foreground, #565959); }
 
-.sellers-page { max-inline-size: 64rem; margin-inline: auto; padding: 1.5rem 1rem; }
+.sellers-page { max-inline-size: 64rem; }
 .sellers-nav ul { display: flex; flex-wrap: wrap; gap: 0.5rem; list-style: none; margin: 1rem 0; padding: 0; }
 .sellers-nav a { display: inline-block; padding: 0.4rem 0.8rem; border-radius: 100px; border: 1px solid var(--border, #ddd); text-decoration: none; color: inherit; }
 .sellers-nav a[aria-current="page"] { background: var(--foreground, #111); color: var(--background, #fff); }
