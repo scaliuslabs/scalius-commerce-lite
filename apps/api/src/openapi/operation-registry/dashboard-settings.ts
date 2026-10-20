@@ -264,7 +264,10 @@ export const DASHBOARD_SETTINGS_OPERATIONS = {
   },
   "dashboard.settings.media_delivery_get": { limits: { request: 16_384, response: 16_384 } },
   "dashboard.settings.media_delivery_update": { revision: "required", limits: { request: 16_384, response: 16_384 } },
-  "dashboard.settings.platform_get": { stability: "stable", limits: { request: 16_384, response: 16_384 } },
+  // Internal: CORS origins, the customer cookie domain, identity handoff and
+  // setup readiness are the dashboard's own wiring, not app data. Apps read the
+  // store's public address through `ctx.store.url`.
+  "dashboard.settings.platform_get": { stability: "internal", limits: { request: 16_384, response: 16_384 } },
   // Public origins, CORS, cookie domain and identity handoff decide who can
   // sign in: the same tier as email delivery and the team.
   "dashboard.settings.platform_update": {

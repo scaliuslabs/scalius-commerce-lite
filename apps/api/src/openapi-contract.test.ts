@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { finalizeOpenApiContract, type OpenApiDocument } from "./openapi-contract";
+import { finalizeOpenApiContract, stripRegexFlagsFromPatterns, type OpenApiDocument } from "./openapi-contract";
 
 type TestOperation = {
   operationId?: string;
@@ -358,5 +358,24 @@ describe("finalizeOpenApiContract", () => {
         exclusionReason: expect.stringContaining("raw OTP"),
       },
     });
+  });
+});
+
+describe("OpenAPI patterns", () => {
+  it("carry the bare regex source, never the trailing /flags zod-to-openapi leaves", () => {
+    const schema = {
+      properties: {
+        currency: { type: "string", pattern: "^[A-Z]{3}$/u" },
+        slug: { type: "string", pattern: "^[a-z]+$/giu" },
+        escaped: { type: "string", pattern: "^a\\/u" },
+        plain: { type: "string", pattern: "^x$" },
+        pattern: { type: "string" },
+      },
+    };
+    stripRegexFlagsFromPatterns(schema);
+    expect(schema.properties.currency.pattern).toBe("^[A-Z]{3}$");
+    expect(schema.properties.slug.pattern).toBe("^[a-z]+$");
+    expect(schema.properties.escaped.pattern).toBe("^a\\/u");
+    expect(schema.properties.plain.pattern).toBe("^x$");
   });
 });

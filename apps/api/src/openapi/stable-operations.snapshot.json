@@ -7553,7 +7553,7 @@
          "budgetCurrencyCode": {
           "type": "string",
           "nullable": true,
-          "pattern": "^[A-Z]{3}$/u",
+          "pattern": "^[A-Z]{3}$",
           "default": null
          },
          "codes": {
@@ -7565,7 +7565,7 @@
              "type": "string",
              "minLength": 3,
              "maxLength": 50,
-             "pattern": "^[A-Za-z0-9_-]+$/u"
+             "pattern": "^[A-Za-z0-9_-]+$"
             },
             "isActive": {
              "type": "boolean",
@@ -7604,7 +7604,7 @@
                 },
                 "currencyCode": {
                  "type": "string",
-                 "pattern": "^[A-Z]{3}$/u"
+                 "pattern": "^[A-Z]{3}$"
                 },
                 "productIds": {
                  "type": "array",
@@ -7766,7 +7766,7 @@
                   },
                   "currencyCode": {
                    "type": "string",
-                   "pattern": "^[A-Z]{3}$/u"
+                   "pattern": "^[A-Z]{3}$"
                   },
                   "productIds": {
                    "type": "array",
@@ -7851,7 +7851,7 @@
                 },
                 "currencyCode": {
                  "type": "string",
-                 "pattern": "^[A-Z]{3}$/u"
+                 "pattern": "^[A-Z]{3}$"
                 },
                 "productIds": {
                  "type": "array",
@@ -8940,7 +8940,7 @@
          "budgetCurrencyCode": {
           "type": "string",
           "nullable": true,
-          "pattern": "^[A-Z]{3}$/u",
+          "pattern": "^[A-Z]{3}$",
           "default": null
          },
          "codes": {
@@ -8952,7 +8952,7 @@
              "type": "string",
              "minLength": 3,
              "maxLength": 50,
-             "pattern": "^[A-Za-z0-9_-]+$/u"
+             "pattern": "^[A-Za-z0-9_-]+$"
             },
             "isActive": {
              "type": "boolean",
@@ -8991,7 +8991,7 @@
                 },
                 "currencyCode": {
                  "type": "string",
-                 "pattern": "^[A-Z]{3}$/u"
+                 "pattern": "^[A-Z]{3}$"
                 },
                 "productIds": {
                  "type": "array",
@@ -9153,7 +9153,7 @@
                   },
                   "currencyCode": {
                    "type": "string",
-                   "pattern": "^[A-Z]{3}$/u"
+                   "pattern": "^[A-Z]{3}$"
                   },
                   "productIds": {
                    "type": "array",
@@ -9238,7 +9238,7 @@
                 },
                 "currencyCode": {
                  "type": "string",
-                 "pattern": "^[A-Z]{3}$/u"
+                 "pattern": "^[A-Z]{3}$"
                 },
                 "productIds": {
                  "type": "array",
@@ -11013,14 +11013,14 @@
           "nullable": true,
           "minLength": 8,
           "maxLength": 160,
-          "pattern": "^[A-Za-z0-9_-]+$/u"
+          "pattern": "^[A-Za-z0-9_-]+$"
          },
          "folderId": {
           "type": "string",
           "nullable": true,
           "minLength": 8,
           "maxLength": 160,
-          "pattern": "^[A-Za-z0-9_-]+$/u"
+          "pattern": "^[A-Za-z0-9_-]+$"
          }
         },
         "required": [
@@ -13044,7 +13044,7 @@
      {
       "schema": {
        "type": "string",
-       "pattern": "^bulk_[a-f0-9]{32}$/u",
+       "pattern": "^bulk_[a-f0-9]{32}$",
        "description": "The `nextCursor` of the page before."
       },
       "required": false,
@@ -13311,7 +13311,7 @@
      {
       "schema": {
        "type": "string",
-       "pattern": "^\\+[1-9]\\d{6,14}$/u",
+       "pattern": "^\\+[1-9]\\d{6,14}$",
        "description": "The customer's phone in E.164, matched whole. Needs read_customer_phones."
       },
       "required": false,
@@ -14607,7 +14607,7 @@
      {
       "schema": {
        "type": "string",
-       "pattern": "^\\+[1-9]\\d{6,14}$/u",
+       "pattern": "^\\+[1-9]\\d{6,14}$",
        "description": "The buyer's phone in E.164, matched whole. Needs read_customer_phones."
       },
       "required": false,
@@ -15829,7 +15829,7 @@
           "type": "string",
           "minLength": 3,
           "maxLength": 100,
-          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$/u",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
           "description": "Omit to derive the web address from the name; a taken one gets a -2, -3… suffix."
          },
          "status": {
@@ -16291,7 +16291,7 @@
           "type": "string",
           "minLength": 3,
           "maxLength": 100,
-          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$/u"
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
          },
          "status": {
           "type": "string",
@@ -17676,193 +17676,6 @@
        "invoiceLogoUrl",
        "socialLinks",
        "revision"
-      ]
-     }
-    },
-    "required": [
-     "success",
-     "data"
-    ]
-   }
-  },
-  "dashboard.settings.platform_get": {
-   "method": "GET",
-   "path": "/api/v1/admin/settings/platform",
-   "risk": "read",
-   "idempotency": "none",
-   "revision": "none",
-   "scopes": [
-    "read_settings"
-   ],
-   "input": {},
-   "output": {
-    "type": "object",
-    "properties": {
-     "success": {
-      "type": "boolean",
-      "enum": [
-       true
-      ]
-     },
-     "data": {
-      "type": "object",
-      "properties": {
-       "storefrontUrl": {
-        "type": "string",
-        "maxLength": 2048
-       },
-       "apiUrl": {
-        "type": "string",
-        "maxLength": 2048
-       },
-       "dashboardUrl": {
-        "type": "string",
-        "maxLength": 2048
-       },
-       "mediaUrl": {
-        "type": "string",
-        "maxLength": 2048
-       },
-       "customerAuthCookieDomain": {
-        "type": "string",
-        "maxLength": 253
-       },
-       "corsAllowedOrigins": {
-        "type": "array",
-        "items": {
-         "type": "string",
-         "maxLength": 2048
-        },
-        "maxItems": 20
-       },
-       "setupTokenRequired": {
-        "type": "boolean"
-       },
-       "identityHandoff": {
-        "type": "object",
-        "properties": {
-         "enabled": {
-          "type": "boolean"
-         },
-         "issuer": {
-          "type": "string",
-          "maxLength": 512
-         },
-         "audience": {
-          "type": "string",
-          "maxLength": 512
-         },
-         "jwksUrl": {
-          "type": "string",
-          "maxLength": 2048
-         },
-         "localLoginDisabled": {
-          "type": "boolean"
-         }
-        },
-        "required": [
-         "enabled",
-         "issuer",
-         "audience",
-         "jwksUrl",
-         "localLoginDisabled"
-        ]
-       },
-       "revision": {
-        "type": "integer",
-        "minimum": 0
-       },
-       "readiness": {
-        "type": "object",
-        "properties": {
-         "status": {
-          "type": "string",
-          "enum": [
-           "ready",
-           "incomplete",
-           "error"
-          ]
-         },
-         "issues": {
-          "type": "array",
-          "items": {
-           "type": "object",
-           "properties": {
-            "code": {
-             "type": "string"
-            },
-            "message": {
-             "type": "string"
-            },
-            "fix": {
-             "type": "string"
-            }
-           },
-           "required": [
-            "code",
-            "message"
-           ]
-          }
-         },
-         "missing": {
-          "type": "array",
-          "items": {
-           "type": "string",
-           "enum": [
-            "storefrontUrl",
-            "apiUrl",
-            "dashboardUrl",
-            "mediaUrl"
-           ]
-          }
-         }
-        },
-        "required": [
-         "status",
-         "issues",
-         "missing"
-        ]
-       },
-       "effective": {
-        "type": "object",
-        "properties": {
-         "storefrontUrl": {
-          "type": "string"
-         },
-         "apiUrl": {
-          "type": "string"
-         },
-         "dashboardUrl": {
-          "type": "string"
-         },
-         "mediaUrl": {
-          "type": "string"
-         }
-        },
-        "required": [
-         "storefrontUrl",
-         "apiUrl",
-         "dashboardUrl",
-         "mediaUrl"
-        ]
-       },
-       "dashboardBasePath": {
-        "type": "string"
-       }
-      },
-      "required": [
-       "storefrontUrl",
-       "apiUrl",
-       "dashboardUrl",
-       "mediaUrl",
-       "customerAuthCookieDomain",
-       "corsAllowedOrigins",
-       "setupTokenRequired",
-       "identityHandoff",
-       "revision",
-       "readiness",
-       "effective",
-       "dashboardBasePath"
       ]
      }
     },

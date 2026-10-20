@@ -76545,7 +76545,7 @@
           {
             "schema": {
               "type": "string",
-              "pattern": "^\\+[1-9]\\d{6,14}$/u",
+              "pattern": "^\\+[1-9]\\d{6,14}$",
               "description": "The buyer's phone in E.164, matched whole. Needs read_customer_phones."
             },
             "required": false,
@@ -78977,7 +78977,7 @@
                     "type": "string",
                     "minLength": 3,
                     "maxLength": 100,
-                    "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$/u",
+                    "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
                     "description": "Omit to derive the web address from the name; a taken one gets a -2, -3… suffix."
                   },
                   "status": {
@@ -79502,7 +79502,7 @@
                     "type": "string",
                     "minLength": 3,
                     "maxLength": 100,
-                    "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$/u"
+                    "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
                   },
                   "status": {
                     "type": "string",
@@ -80073,7 +80073,7 @@
           {
             "schema": {
               "type": "string",
-              "pattern": "^\\+[1-9]\\d{6,14}$/u",
+              "pattern": "^\\+[1-9]\\d{6,14}$",
               "description": "The customer's phone in E.164, matched whole. Needs read_customer_phones."
             },
             "required": false,
@@ -83356,7 +83356,7 @@
           {
             "schema": {
               "type": "string",
-              "pattern": "^bulk_[a-f0-9]{32}$/u",
+              "pattern": "^bulk_[a-f0-9]{32}$",
               "description": "The `nextCursor` of the page before."
             },
             "required": false,
@@ -108877,7 +108877,7 @@
                   "budgetCurrencyCode": {
                     "type": "string",
                     "nullable": true,
-                    "pattern": "^[A-Z]{3}$/u",
+                    "pattern": "^[A-Z]{3}$",
                     "default": null
                   },
                   "codes": {
@@ -108889,7 +108889,7 @@
                           "type": "string",
                           "minLength": 3,
                           "maxLength": 50,
-                          "pattern": "^[A-Za-z0-9_-]+$/u"
+                          "pattern": "^[A-Za-z0-9_-]+$"
                         },
                         "isActive": {
                           "type": "boolean",
@@ -108928,7 +108928,7 @@
                                 },
                                 "currencyCode": {
                                   "type": "string",
-                                  "pattern": "^[A-Z]{3}$/u"
+                                  "pattern": "^[A-Z]{3}$"
                                 },
                                 "productIds": {
                                   "type": "array",
@@ -109090,7 +109090,7 @@
                                     },
                                     "currencyCode": {
                                       "type": "string",
-                                      "pattern": "^[A-Z]{3}$/u"
+                                      "pattern": "^[A-Z]{3}$"
                                     },
                                     "productIds": {
                                       "type": "array",
@@ -109175,7 +109175,7 @@
                                 },
                                 "currencyCode": {
                                   "type": "string",
-                                  "pattern": "^[A-Z]{3}$/u"
+                                  "pattern": "^[A-Z]{3}$"
                                 },
                                 "productIds": {
                                   "type": "array",
@@ -109976,7 +109976,7 @@
                   "budgetCurrencyCode": {
                     "type": "string",
                     "nullable": true,
-                    "pattern": "^[A-Z]{3}$/u",
+                    "pattern": "^[A-Z]{3}$",
                     "default": null
                   },
                   "codes": {
@@ -109988,7 +109988,7 @@
                           "type": "string",
                           "minLength": 3,
                           "maxLength": 50,
-                          "pattern": "^[A-Za-z0-9_-]+$/u"
+                          "pattern": "^[A-Za-z0-9_-]+$"
                         },
                         "isActive": {
                           "type": "boolean",
@@ -110027,7 +110027,7 @@
                                 },
                                 "currencyCode": {
                                   "type": "string",
-                                  "pattern": "^[A-Z]{3}$/u"
+                                  "pattern": "^[A-Z]{3}$"
                                 },
                                 "productIds": {
                                   "type": "array",
@@ -110189,7 +110189,7 @@
                                     },
                                     "currencyCode": {
                                       "type": "string",
-                                      "pattern": "^[A-Z]{3}$/u"
+                                      "pattern": "^[A-Z]{3}$"
                                     },
                                     "productIds": {
                                       "type": "array",
@@ -110274,7 +110274,7 @@
                                 },
                                 "currencyCode": {
                                   "type": "string",
-                                  "pattern": "^[A-Z]{3}$/u"
+                                  "pattern": "^[A-Z]{3}$"
                                 },
                                 "productIds": {
                                   "type": "array",
@@ -110734,7 +110734,7 @@
                     "properties": {
                       "currencyCode": {
                         "type": "string",
-                        "pattern": "^[A-Z]{3}$/u"
+                        "pattern": "^[A-Z]{3}$"
                       },
                       "priceIncrementMinor": {
                         "type": "integer",
@@ -111864,7 +111864,7 @@
                     "nullable": true,
                     "minLength": 8,
                     "maxLength": 160,
-                    "pattern": "^[A-Za-z0-9_-]+$/u"
+                    "pattern": "^[A-Za-z0-9_-]+$"
                   }
                 },
                 "required": [
@@ -113587,14 +113587,14 @@
                     "nullable": true,
                     "minLength": 8,
                     "maxLength": 160,
-                    "pattern": "^[A-Za-z0-9_-]+$/u"
+                    "pattern": "^[A-Za-z0-9_-]+$"
                   },
                   "folderId": {
                     "type": "string",
                     "nullable": true,
                     "minLength": 8,
                     "maxLength": 160,
-                    "pattern": "^[A-Za-z0-9_-]+$/u"
+                    "pattern": "^[A-Za-z0-9_-]+$"
                   }
                 },
                 "required": [
@@ -115576,7 +115576,7 @@
                           "type": "string",
                           "minLength": 8,
                           "maxLength": 160,
-                          "pattern": "^[A-Za-z0-9_-]+$/u"
+                          "pattern": "^[A-Za-z0-9_-]+$"
                         },
                         "expectedVersion": {
                           "type": "integer",
@@ -115596,7 +115596,7 @@
                     "nullable": true,
                     "minLength": 8,
                     "maxLength": 160,
-                    "pattern": "^[A-Za-z0-9_-]+$/u"
+                    "pattern": "^[A-Za-z0-9_-]+$"
                   }
                 },
                 "required": [
@@ -123102,7 +123102,7 @@
           {
             "schema": {
               "type": "string",
-              "pattern": "^[\\x20-\\x7E]{8,200}$/u",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
               "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice."
             },
             "required": false,
@@ -153139,7 +153139,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "internal",
           "principals": [
             "admin"
           ],
@@ -195603,13 +195603,13 @@
                           "type": "string",
                           "minLength": 10,
                           "maxLength": 80,
-                          "pattern": "^pmed_[A-Za-z0-9_-]+$/u"
+                          "pattern": "^pmed_[A-Za-z0-9_-]+$"
                         },
                         "mediaId": {
                           "type": "string",
                           "minLength": 8,
                           "maxLength": 160,
-                          "pattern": "^[A-Za-z0-9_-]+$/u"
+                          "pattern": "^[A-Za-z0-9_-]+$"
                         },
                         "altText": {
                           "type": "string",
@@ -195786,7 +195786,7 @@
                     "nullable": true,
                     "minLength": 1,
                     "maxLength": 80,
-                    "pattern": "^wrp_[A-Za-z0-9_-]+$/u",
+                    "pattern": "^wrp_[A-Za-z0-9_-]+$",
                     "description": "A live warranty policy id (wrp_…). Omit to keep the current warranty; null removes it."
                   },
                   "optionMatrix": {
@@ -195873,7 +195873,7 @@
                               "nullable": true,
                               "minLength": 10,
                               "maxLength": 80,
-                              "pattern": "^pmed_[A-Za-z0-9_-]+$/u"
+                              "pattern": "^pmed_[A-Za-z0-9_-]+$"
                             },
                             "sku": {
                               "type": "string",
@@ -199946,13 +199946,13 @@
                               "type": "string",
                               "minLength": 10,
                               "maxLength": 80,
-                              "pattern": "^pmed_[A-Za-z0-9_-]+$/u"
+                              "pattern": "^pmed_[A-Za-z0-9_-]+$"
                             },
                             "mediaId": {
                               "type": "string",
                               "minLength": 8,
                               "maxLength": 160,
-                              "pattern": "^[A-Za-z0-9_-]+$/u"
+                              "pattern": "^[A-Za-z0-9_-]+$"
                             },
                             "altText": {
                               "type": "string",
@@ -199978,7 +199978,7 @@
                           "type": "string",
                           "minLength": 10,
                           "maxLength": 80,
-                          "pattern": "^pmed_[A-Za-z0-9_-]+$/u"
+                          "pattern": "^pmed_[A-Za-z0-9_-]+$"
                         },
                         "maxItems": 250
                       }
@@ -200057,7 +200057,7 @@
                         "type": "string",
                         "minLength": 10,
                         "maxLength": 180,
-                        "pattern": "^prc_[A-Za-z0-9_-]+$/u"
+                        "pattern": "^prc_[A-Za-z0-9_-]+$"
                       },
                       "title": {
                         "type": "string",
@@ -200097,7 +200097,7 @@
                         "type": "string",
                         "minLength": 10,
                         "maxLength": 180,
-                        "pattern": "^prc_[A-Za-z0-9_-]+$/u"
+                        "pattern": "^prc_[A-Za-z0-9_-]+$"
                       },
                       "field": {
                         "type": "string",
@@ -200155,7 +200155,7 @@
                                   "type": "string",
                                   "minLength": 8,
                                   "maxLength": 120,
-                                  "pattern": "^pcb_[A-Za-z0-9_-]+$/u"
+                                  "pattern": "^pcb_[A-Za-z0-9_-]+$"
                                 },
                                 "placement": {
                                   "type": "string",
@@ -200187,7 +200187,7 @@
                                   "type": "string",
                                   "minLength": 8,
                                   "maxLength": 120,
-                                  "pattern": "^pcb_[A-Za-z0-9_-]+$/u"
+                                  "pattern": "^pcb_[A-Za-z0-9_-]+$"
                                 },
                                 "placement": {
                                   "type": "string",
@@ -201380,13 +201380,13 @@
                           "type": "string",
                           "minLength": 10,
                           "maxLength": 80,
-                          "pattern": "^pmed_[A-Za-z0-9_-]+$/u"
+                          "pattern": "^pmed_[A-Za-z0-9_-]+$"
                         },
                         "mediaId": {
                           "type": "string",
                           "minLength": 8,
                           "maxLength": 160,
-                          "pattern": "^[A-Za-z0-9_-]+$/u"
+                          "pattern": "^[A-Za-z0-9_-]+$"
                         },
                         "altText": {
                           "type": "string",
@@ -201563,7 +201563,7 @@
                     "nullable": true,
                     "minLength": 1,
                     "maxLength": 80,
-                    "pattern": "^wrp_[A-Za-z0-9_-]+$/u",
+                    "pattern": "^wrp_[A-Za-z0-9_-]+$",
                     "description": "A live warranty policy id (wrp_…). Omit to keep the current warranty; null removes it."
                   },
                   "id": {
@@ -201579,7 +201579,7 @@
                       "type": "string",
                       "minLength": 10,
                       "maxLength": 80,
-                      "pattern": "^pmed_[A-Za-z0-9_-]+$/u"
+                      "pattern": "^pmed_[A-Za-z0-9_-]+$"
                     },
                     "maxItems": 250
                   },
@@ -201667,7 +201667,7 @@
                               "nullable": true,
                               "minLength": 10,
                               "maxLength": 80,
-                              "pattern": "^pmed_[A-Za-z0-9_-]+$/u"
+                              "pattern": "^pmed_[A-Za-z0-9_-]+$"
                             },
                             "sku": {
                               "type": "string",
@@ -201850,7 +201850,7 @@
                               "type": "string",
                               "minLength": 8,
                               "maxLength": 120,
-                              "pattern": "^pcb_[A-Za-z0-9_-]+$/u"
+                              "pattern": "^pcb_[A-Za-z0-9_-]+$"
                             },
                             "placement": {
                               "type": "string",
@@ -201882,7 +201882,7 @@
                               "type": "string",
                               "minLength": 8,
                               "maxLength": 120,
-                              "pattern": "^pcb_[A-Za-z0-9_-]+$/u"
+                              "pattern": "^pcb_[A-Za-z0-9_-]+$"
                             },
                             "placement": {
                               "type": "string",
@@ -202726,7 +202726,7 @@
                     "nullable": true,
                     "minLength": 10,
                     "maxLength": 80,
-                    "pattern": "^pmed_[A-Za-z0-9_-]+$/u"
+                    "pattern": "^pmed_[A-Za-z0-9_-]+$"
                   },
                   "weight": {
                     "type": "number",
@@ -203515,7 +203515,7 @@
                     "nullable": true,
                     "minLength": 10,
                     "maxLength": 80,
-                    "pattern": "^pmed_[A-Za-z0-9_-]+$/u"
+                    "pattern": "^pmed_[A-Za-z0-9_-]+$"
                   },
                   "weight": {
                     "type": "number",
@@ -204217,7 +204217,7 @@
                           "nullable": true,
                           "minLength": 10,
                           "maxLength": 80,
-                          "pattern": "^pmed_[A-Za-z0-9_-]+$/u"
+                          "pattern": "^pmed_[A-Za-z0-9_-]+$"
                         },
                         "sku": {
                           "type": "string",
