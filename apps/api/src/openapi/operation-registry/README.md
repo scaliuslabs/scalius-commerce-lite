@@ -52,7 +52,8 @@ mirror a dashboard screen, an editor section or a summary card.
   SKUs (prices in minor units, stock at 0: quantities move through
   `variants.bulk_set_stock` under `write_inventory`); `products.update`
   patches its fields under `expectedRevision` in one write. Gift cards
-  (`gift_cards.*`, `read_gift_cards` / the Sensitive `write_gift_cards`)
+  (`gift_cards.*`, `read_gift_cards` / the Sensitive `write_gift_cards`, within the
+  merchant's daily app limit; an app never re-owns a funded card)
   issue, adjust under `expectedVersion` and disable; the code never reaches
   an app (`notify` has the store send it). `webhook_subscriptions.*`
   (`write_webhooks`, Sensitive) reach only the calling app's own
@@ -121,8 +122,9 @@ Routing and gating fields (`x-scalius-agent`, every manifest entry):
 - `confirmation`: `required` for destructive and financial risk, and for any
   row that adds the gate (gift-card writes). Both agent lanes pass one gate
   at the admin boundary (`agent-access/confirm-gate.ts`): MCP settles it with
-  the confirm token or a client dialog, direct REST with the
-  `Scalius-Confirm-Token` header from a 428 `confirmation_required` answer.
+  the owner's dashboard approval or a client dialog, direct REST with the
+  `Scalius-Approval` header naming the approval its owner gave at the
+  `approvalUrl` of a 428 `confirmation_required` answer.
 - `grantScope`: `customer_conversations` (the inbox) or `review_moderation`.
   No preset grant reaches them; a Custom grant that selected their permissions
   does (`agent-access/grant-scopes.ts`, checked on both lanes).

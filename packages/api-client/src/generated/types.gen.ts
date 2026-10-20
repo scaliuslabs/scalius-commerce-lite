@@ -4680,7 +4680,7 @@ export type AppDetail = AppSummary & {
      * The requested scopes, for the consent screen.
      */
     scopes: Array<{
-        name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_places';
+        name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_places';
         /**
          * The highest risk among the operations the scope lets this app call.
          */
@@ -4888,7 +4888,7 @@ export type AppGrant = {
     /**
      * Access scopes: store data and actions the app may read or change.
      */
-    scopes: Array<'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_places'>;
+    scopes: Array<'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_places'>;
     allowedHosts: Array<string>;
     events: Array<string>;
     functions: Array<string>;
@@ -4936,7 +4936,7 @@ export type AppFeature = {
          * Store access this feature adds, for its consent dialog.
          */
         scopes: Array<{
-            name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_places';
+            name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_places';
             /**
              * The highest risk among the operations the scope lets this app call.
              */
@@ -19404,6 +19404,10 @@ export type PostApiV1OrdersLookupStatusData = {
          * Order number ("#1001") or order id
          */
         reference: string;
+        /**
+         * The last 4 digits of the phone number on the order, or its email
+         */
+        contact: string;
     };
     path?: never;
     query?: never;
@@ -19522,6 +19526,10 @@ export type PostApiV1OrdersLookupSendOtpData = {
          * Order number ("#1001") or order id
          */
         reference: string;
+        /**
+         * The last 4 digits of the phone number on the order, or its email
+         */
+        contact: string;
         channel?: 'email' | 'sms' | 'whatsapp';
     };
     path?: never;
@@ -26592,7 +26600,7 @@ export type PostApiV1AdminResourcesGiftCardsData = {
         message?: string | null;
         note?: string | null;
         /**
-         * Send the code to the recipient (else the owning customer) now.
+         * Send the code to the recipient (else the owning customer) now. From an app: to the owning customer's own contact only.
          */
         notify?: boolean;
     };
@@ -66896,6 +66904,116 @@ export type PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses = {
 
 export type PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponse = PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses[keyof PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses];
 
+export type GetApiV1AdminAgentAccessApprovalsByApprovalIdData = {
+    body?: never;
+    path: {
+        approvalId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/agent-access/approvals/{approvalId}';
+};
+
+export type GetApiV1AdminAgentAccessApprovalsByApprovalIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminAgentAccessApprovalsByApprovalIdError = GetApiV1AdminAgentAccessApprovalsByApprovalIdErrors[keyof GetApiV1AdminAgentAccessApprovalsByApprovalIdErrors];
+
+export type GetApiV1AdminAgentAccessApprovalsByApprovalIdResponses = {
+    /**
+     * The change to approve
+     */
+    200: {
+        success: true;
+        data: {
+            approvalId: string;
+            status: 'pending' | 'approved';
+            summary: string;
+            operationIds: Array<string>;
+            expiresAt: string;
+        };
+    };
+};
+
+export type GetApiV1AdminAgentAccessApprovalsByApprovalIdResponse = GetApiV1AdminAgentAccessApprovalsByApprovalIdResponses[keyof GetApiV1AdminAgentAccessApprovalsByApprovalIdResponses];
+
+export type PostApiV1AdminAgentAccessApprovalsByApprovalIdData = {
+    body?: {
+        decision: 'approve' | 'decline';
+    };
+    path: {
+        approvalId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/agent-access/approvals/{approvalId}';
+};
+
+export type PostApiV1AdminAgentAccessApprovalsByApprovalIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminAgentAccessApprovalsByApprovalIdError = PostApiV1AdminAgentAccessApprovalsByApprovalIdErrors[keyof PostApiV1AdminAgentAccessApprovalsByApprovalIdErrors];
+
+export type PostApiV1AdminAgentAccessApprovalsByApprovalIdResponses = {
+    /**
+     * The answer was recorded
+     */
+    200: {
+        success: true;
+        data: {
+            decision: 'approve' | 'decline';
+        };
+    };
+};
+
+export type PostApiV1AdminAgentAccessApprovalsByApprovalIdResponse = PostApiV1AdminAgentAccessApprovalsByApprovalIdResponses[keyof PostApiV1AdminAgentAccessApprovalsByApprovalIdResponses];
+
 export type GetApiV1AdminWebhooksData = {
     body?: never;
     path?: never;
@@ -71822,6 +71940,139 @@ export type GetApiV1AdminGiftCardsSummaryResponses = {
 };
 
 export type GetApiV1AdminGiftCardsSummaryResponse = GetApiV1AdminGiftCardsSummaryResponses[keyof GetApiV1AdminGiftCardsSummaryResponses];
+
+export type GetApiV1AdminGiftCardsSettingsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/gift-cards/settings';
+};
+
+export type GetApiV1AdminGiftCardsSettingsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type GetApiV1AdminGiftCardsSettingsError = GetApiV1AdminGiftCardsSettingsErrors[keyof GetApiV1AdminGiftCardsSettingsErrors];
+
+export type GetApiV1AdminGiftCardsSettingsResponses = {
+    /**
+     * The settings
+     */
+    200: {
+        success: true;
+        data: {
+            /**
+             * The most one app may add to gift cards per UTC date (cards it issues plus top-ups), in the store currency. 0: apps add no value.
+             */
+            appDailyLimit: number;
+            appDailyLimitMinor: number;
+            currencyCode: string;
+            revision: number;
+        };
+    };
+};
+
+export type GetApiV1AdminGiftCardsSettingsResponse = GetApiV1AdminGiftCardsSettingsResponses[keyof GetApiV1AdminGiftCardsSettingsResponses];
+
+export type PutApiV1AdminGiftCardsSettingsData = {
+    body: {
+        /**
+         * In the store currency; 0 stops apps adding value.
+         */
+        appDailyLimit: number;
+        /**
+         * The `revision` you read; a newer one is refused with 409.
+         */
+        expectedRevision: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/gift-cards/settings';
+};
+
+export type PutApiV1AdminGiftCardsSettingsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PutApiV1AdminGiftCardsSettingsError = PutApiV1AdminGiftCardsSettingsErrors[keyof PutApiV1AdminGiftCardsSettingsErrors];
+
+export type PutApiV1AdminGiftCardsSettingsResponses = {
+    /**
+     * The saved settings
+     */
+    200: {
+        success: true;
+        data: {
+            /**
+             * The most one app may add to gift cards per UTC date (cards it issues plus top-ups), in the store currency. 0: apps add no value.
+             */
+            appDailyLimit: number;
+            appDailyLimitMinor: number;
+            currencyCode: string;
+            revision: number;
+        };
+    };
+};
+
+export type PutApiV1AdminGiftCardsSettingsResponse = PutApiV1AdminGiftCardsSettingsResponses[keyof PutApiV1AdminGiftCardsSettingsResponses];
 
 export type GetApiV1AdminGiftCardsByGiftCardIdData = {
     body?: never;

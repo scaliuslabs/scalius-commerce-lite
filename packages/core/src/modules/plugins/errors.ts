@@ -77,6 +77,8 @@ export type PluginErrorCode =
   | "signature.missing"
   | "signature.untrusted"
   | "signature.invalid"
+  /** An update signed by another key than the one the app was installed with. */
+  | "signature.signer_changed"
   | "installation.incompatible"
   | "installation.sandbox_required"
   | "installation.source_conflict"
@@ -124,6 +126,7 @@ const STATUS: Partial<Record<PluginErrorCode, number>> = {
   "signature.missing": 409,
   "signature.untrusted": 409,
   "signature.invalid": 422,
+  "signature.signer_changed": 409,
   "installation.incompatible": 409,
   "installation.sandbox_required": 409,
   "installation.source_conflict": 409,

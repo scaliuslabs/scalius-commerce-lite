@@ -11,19 +11,15 @@ import { getRoutePermission } from "@scalius/core/auth/rbac/route-permissions";
 import { resolveDirectAgentOperation } from "../agent-access/direct-operation";
 import { isAgentRiskAllowed, type PluginPrincipal } from "../agent-access/types";
 import { ForbiddenError, UnauthorizedError } from "../utils/api-error";
+import { routedApiPath } from "../utils/routed-path";
 import { isOperationAvailableToPlugin, resolvePluginPrincipal } from "./authority";
-
-function adminPathname(url: string): string {
-  const pathname = new URL(url).pathname;
-  return pathname.startsWith("/api/v1") ? pathname : `/api/v1${pathname}`;
-}
 
 export async function authorizePluginAdminRequest(c: Context, dispatched: PluginPrincipal): Promise<void> {
   const principal = await resolvePluginPrincipal(c.get("db"), dispatched.pluginId);
   if (!principal || principal.version !== dispatched.version || principal.actorUserId !== dispatched.actorUserId) {
     throw new UnauthorizedError("Plugin authority is no longer active");
   }
-  const pathname = adminPathname(c.req.url);
+  const pathname = routedApiPath(c);
   const method = c.req.method as "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   const operation = resolveDirectAgentOperation(method, pathname);
   if (!operation || !isOperationAvailableToPlugin(operation, principal.firstParty) || !isAgentRiskAllowed(principal.riskCeiling, operation.risk)) {

@@ -32,6 +32,13 @@ export async function responseError(response: Response, fallback: string): Promi
       const candidateCode = nested?.code ?? parsed.code;
       if (typeof candidate === "string" && candidate.length <= 1_000) message = redact(candidate);
       if (typeof candidateCode === "string" && candidateCode.length <= 100) code = candidateCode;
+      // A gated change on the REST lane: the merchant's approval link (not a secret: only they can open it).
+      const details = nested?.details as { confirmation?: { approvalUrl?: unknown; approvalId?: unknown } } | undefined;
+      const approvalUrl = details?.confirmation?.approvalUrl;
+      const approvalId = details?.confirmation?.approvalId;
+      if (response.status === 428 && typeof approvalUrl === "string" && /^https?:\/\/\S{1,400}$/.test(approvalUrl) && typeof approvalId === "string" && /^abh_[A-Za-z0-9_-]{20}$/.test(approvalId)) {
+        message = `${message} Approve it at ${approvalUrl}, then run the same command again with --approval ${approvalId}.`;
+      }
     }
   } catch {
     // Fall back to a bounded local message; do not echo arbitrary response text.

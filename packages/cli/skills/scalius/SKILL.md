@@ -19,7 +19,7 @@ The store's live contract is the authority. Never invent ids, revisions, prices 
 3. `scalius_describe` only the ids you will call: inputs (`!` = required), rules, an example.
 4. Read the facts: ids, current revision, amounts. Ask the merchant for anything missing.
 5. `scalius_write` with `dryRun:true`. A destructive or financial change returns `confirmation.summary`: show it to the merchant as written and wait for a yes.
-6. Write again with its `confirmToken` (CLI: `--yes` once they agree). Never approve for the merchant.
+6. Give the merchant `confirmation.approvalUrl`; once they approve there, write again with `approvalId` (CLI: `--approval <id>`; a terminal asks instead). Never approve for the merchant.
 7. Verify with a read and say what changed.
 
 Failures carry `code`, `hint`, `retryable` and, on a conflict, `current`: follow the hint, reread and retry once. Codes and exit codes: [references/troubleshooting.md](references/troubleshooting.md).

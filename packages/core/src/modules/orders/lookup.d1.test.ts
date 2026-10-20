@@ -1,5 +1,6 @@
-// Public "Track your order" on the real schema: the order number alone finds
-// the order; a code goes only through a channel the store chose in Customer
+// Public "Track your order" on the real schema: the order number with the
+// last 4 phone digits or the email finds the order (the number alone finds
+// nothing, audit R2 F5); a code goes only through a channel the store chose in Customer
 // accounts, to the contact saved on the order; a correct code issues a normal
 // private receipt proof. A chosen channel that can't send fails closed.
 import type { DatabaseSync } from "node:sqlite";
@@ -14,7 +15,13 @@ import {
   listOrderCodeOptions,
 } from "../customers/customer-code-channels";
 import { customerAuthDocument } from "../settings/documents";
-import { findOrderByReference, sendOrderLookupOtp, verifyOrderLookupOtp } from "./lookup";
+import {
+  findOrderByReference,
+  findOrderByReferenceAndContact,
+  orderLookupContactMatches,
+  sendOrderLookupOtp,
+  verifyOrderLookupOtp,
+} from "./lookup";
 import { validateOrderReceiptProof } from "./receipts";
 
 const KEY = Buffer.alloc(32, 9).toString("base64");
@@ -36,8 +43,12 @@ beforeEach(() => {
 });
 afterEach(() => sqlite.close());
 
-const send = (reference: string, channel?: "email" | "sms" | "whatsapp") => sendOrderLookupOtp(db, {
-  reference, channel, ip: `203.0.113.${++ip}`, emailEnv, encryptionKey: KEY, credentialEncryptionKey: KEY,
+/** The last 4 digits of the phone saved on each seeded order. */
+const PHONE_LAST4: Record<string, string> = { ORDERWITHEMAIL01: "0001", ORDERNOEMAIL0001: "0002" };
+const send = (reference: string, channel?: "email" | "sms" | "whatsapp", contact?: string) => sendOrderLookupOtp(db, {
+  reference,
+  contact: contact ?? PHONE_LAST4[reference.replace(/^#/, "").toUpperCase()] ?? "0000",
+  channel, ip: `203.0.113.${++ip}`, emailEnv, encryptionKey: KEY, credentialEncryptionKey: KEY,
 });
 const challenges = () => Number(sqlite.prepare("SELECT COUNT(*) AS n FROM order_payment_recovery_challenges").get()?.n);
 
@@ -96,5 +107,20 @@ describe("track your order", () => {
     }
     await expect(send("NOSUCHORDER00001")).rejects.toBeInstanceOf(RateLimitError);
     await expect(send("#abc")).rejects.toThrow("Enter your order number");
+  });
+
+  it("finds an order only with a contact saved on it, and sends nothing without one", async () => {
+    for (const contact of ["0001", "+880 1712-000001", "01712000001", "buyer@example.TEST", " Buyer@Example.test "]) {
+      expect(await findOrderByReferenceAndContact(db, "#orderwithemail01", contact), contact).toMatchObject({ id: "ORDERWITHEMAIL01" });
+    }
+    // The WhatsApp number saved on the order counts as a phone.
+    expect(await findOrderByReferenceAndContact(db, "ORDERNOEMAIL0001", "0002")).toMatchObject({ id: "ORDERNOEMAIL0001" });
+    for (const contact of ["", "1", "001", "9999", "0002", "other@example.test", "buyer", "12ab", "0001; DROP"]) {
+      expect(await findOrderByReferenceAndContact(db, "ORDERWITHEMAIL01", contact), contact).toBeNull();
+    }
+    // An order placed without a phone or email has nothing to match.
+    expect(orderLookupContactMatches({ customerPhone: "NO_PHONE", customerEmail: null, customerWhatsapp: null }, "0000")).toBe(false);
+    await expect(send("ORDERWITHEMAIL01", "email", "9999")).rejects.toBeInstanceOf(NotFoundError);
+    expect(challenges()).toBe(0);
   });
 });

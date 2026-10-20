@@ -11,7 +11,7 @@
 
 import type { Database } from "@scalius/database/client";
 import { safeBatch } from "@scalius/database/client";
-import { objectRecords, objectTypes, pluginInstallations, pluginKv, pluginMigrations, salesChannels } from "@scalius/database/schema";
+import { objectRecords, objectTypes, pluginInstallations, pluginKv, pluginMigrations, salesChannels, type PluginInstallationSource } from "@scalius/database/schema";
 import { FIRST_PARTY_PLUGIN_VENDOR } from "@scalius/shared/plugins";
 import { and, asc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { writePluginLogs } from "./logs";
@@ -34,9 +34,14 @@ const BREACH_LABEL: Record<PluginBreachKind, string> = {
   invocations: "runs per minute",
 };
 
-/** Whether an app id is third-party (not under the first-party vendor). */
-export function isThirdPartyPlugin(pluginId: string): boolean {
-  return !pluginId.startsWith(`${FIRST_PARTY_PLUGIN_VENDOR}.`);
+/**
+ * Whether an app is third-party: anything but a first-party app bundled with
+ * the deployment. The id prefix alone is not enough (audit R2 F6): only a
+ * bundled app may hold a `scalius.*` id, and a row that holds one from any
+ * other source is treated as third-party.
+ */
+export function isThirdPartyPlugin(installation: { pluginId: string; source: PluginInstallationSource }): boolean {
+  return !(installation.source === "bundled" && installation.pluginId.startsWith(`${FIRST_PARTY_PLUGIN_VENDOR}.`));
 }
 
 function trimReason(reason: string): string {
@@ -73,9 +78,9 @@ export async function stopPlugin(db: Database, pluginId: string, reason: string)
 
 /** The emergency stop of every running third-party app; first-party apps keep running. Returns the ids it stopped. */
 export async function stopThirdPartyPlugins(db: Database, reason: string): Promise<string[]> {
-  const rows = await db.select({ pluginId: pluginInstallations.pluginId }).from(pluginInstallations)
+  const rows = await db.select({ pluginId: pluginInstallations.pluginId, source: pluginInstallations.source }).from(pluginInstallations)
     .where(eq(pluginInstallations.status, "active")).all();
-  const ids = rows.map((row) => row.pluginId).filter(isThirdPartyPlugin).sort();
+  const ids = rows.filter(isThirdPartyPlugin).map((row) => row.pluginId).sort();
   // Plugin ids are short; 40 a statement stays far under D1's 100 bound parameters.
   for (let start = 0; start < ids.length; start += 40) {
     await safeBatch(db, stopStatements(db, ids.slice(start, start + 40), reason) as never);

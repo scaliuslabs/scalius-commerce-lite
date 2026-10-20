@@ -589,8 +589,9 @@ export function checkoutPaymentMethodName(methodId: string, providers: PaymentPr
  * The payment methods to offer after the apps (`checkout.payment_methods`):
  * the methods checkout already allows, narrowed, renamed and reordered.
  * `changed` is false when no app changed anything (then show the list as is).
- * A `gated` method (net terms whose merchant lets apps decide) is shown only
- * when an app allows it; with no app answering it stays hidden.
+ * A `gated` method (net terms whose merchant lets apps decide, an app's own
+ * deferred method) is shown only when an app allows it (an app's method:
+ * its own app); with no app answering it stays hidden.
  */
 export async function resolveAppPaymentMethods(
   apps: CheckoutAppFunctions | undefined,
@@ -623,7 +624,7 @@ export async function assertStorefrontAppPaymentMethod(
   chosen: string,
   methodIds: readonly string[],
   providers: PaymentProviders = BUILT_IN_PAYMENT_PROVIDERS,
-  /** Methods an app must allow (gated net terms); the chosen one is refused unless one did. */
+  /** Methods an app must allow (gated net terms, app deferred methods); the chosen one is refused unless one did. */
   gated: ReadonlySet<string> = NO_GATED_METHODS,
 ): Promise<void> {
   if (chosen === GIFT_CARD_PAYMENT_METHOD || !methodIds.includes(chosen)) return;

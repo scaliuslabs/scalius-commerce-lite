@@ -42,8 +42,11 @@ export interface AgentOperationResult {
   replayed?: true;
 }
 
-/** How a destructive or financial agent call was confirmed (audit metadata only). */
-export type AgentConfirmation = "token" | "elicitation";
+/**
+ * How a gated agent call was approved (audit metadata only): the grant
+ * owner's dashboard approval, or a native client dialog (never for a PAT).
+ */
+export type AgentConfirmation = "approval" | "elicitation";
 
 export interface AgentRequiredClientActionResult {
   operationId: string;

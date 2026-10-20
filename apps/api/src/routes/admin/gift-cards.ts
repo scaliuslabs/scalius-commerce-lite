@@ -22,7 +22,7 @@ import {
   buildNotificationOutboxInsert,
   recordAndSendNotification,
 } from "@scalius/core/modules/notifications";
-import { priceIncrementForCurrency, readGiftCardSettings } from "@scalius/core/modules/settings";
+import { GIFT_CARD_APP_DAILY_LIMIT_MAX_MINOR, giftCardsDocument, priceIncrementForCurrency, readGiftCardSettings } from "@scalius/core/modules/settings";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { customers } from "@scalius/database/schema";
 import { and, eq, isNull } from "drizzle-orm";
@@ -36,6 +36,7 @@ import { ok, created } from "../../utils/api-response";
 import { ServiceUnavailableError, UnauthorizedError, ValidationError } from "../../utils/api-error";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { conflictResponse, errorResponses, serviceUnavailableResponse, successEnvelope } from "../../schemas/responses";
+import { protectedField as pii } from "../../schemas/protected";
 import { notificationSender } from "../../background/notification-sender";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -65,8 +66,8 @@ const giftCardSummarySchema = z.object({
   expiresAt: isoTimestamp.nullable(),
   expired: z.boolean(),
   source: z.enum(["purchase", "manual", "refund"]),
-  customer: z.object({ id: z.string(), name: z.string() }).nullable(),
-  recipientName: z.string().nullable(),
+  customer: z.object({ id: z.string(), name: pii("name", z.string()) }).nullable(),
+  recipientName: pii("name", z.string().nullable()),
   recipientContactMasked: z.string().nullable(),
   createdAt: isoTimestamp,
   version: z.number().int(),
@@ -75,8 +76,8 @@ const giftCardSummarySchema = z.object({
 const giftCardDetailSchema = giftCardSummarySchema.extend({
   note: z.string().nullable(),
   message: z.string().nullable(),
-  recipientEmail: z.string().nullable(),
-  recipientPhone: z.string().nullable(),
+  recipientEmail: pii("email", z.string().nullable()),
+  recipientPhone: pii("phone", z.string().nullable()),
   sourceOrder: z.object({ id: z.string(), orderNumber: z.string() }).nullable(),
   issuedBy: z.object({ id: z.string(), name: z.string() }).nullable(),
 }).openapi("AdminGiftCardDetail");
@@ -211,6 +212,79 @@ app.openapi(createRoute({
       cards: row.cards,
     })),
   });
+});
+
+// ── Settings: what apps may add (security audit S2) ──
+
+const giftCardSettingsSchema = z.object({
+  appDailyLimit: z.number().openapi({ description: "The most one app may add to gift cards per UTC date (cards it issues plus top-ups), in the store currency. 0: apps add no value." }),
+  appDailyLimitMinor: z.number().int(),
+  currencyCode: z.string(),
+  revision: z.number().int().min(0),
+});
+
+async function giftCardSettingsView(c: { get: (key: "db") => never }) {
+  const db = c.get("db");
+  const [currency, settings] = await Promise.all([readStoreCurrency(db), readGiftCardSettings(db)]);
+  if (!settings.ok) throw new ServiceUnavailableError("Gift-card settings can't be read right now. Try again.");
+  return {
+    appDailyLimit: fromMinor(settings.value.appDailyLimitMinor, currency.decimalPlaces),
+    appDailyLimitMinor: settings.value.appDailyLimitMinor,
+    currencyCode: currency.code,
+    revision: settings.revision,
+  };
+}
+
+app.openapi(createRoute({
+  operationId: "dashboard.gift_cards.settings_get",
+  method: "get",
+  path: "/settings",
+  tags: ["Admin - Gift cards"],
+  summary: "Gift card settings",
+  description: "How much value one app may add to gift cards per UTC date, in the store currency.",
+  responses: {
+    200: { description: "The settings", content: { "application/json": { schema: successEnvelope(giftCardSettingsSchema) } } },
+    ...errorResponses,
+    503: serviceUnavailableResponse,
+  },
+}), async (c) => {
+  noStore(c);
+  return ok(c, await giftCardSettingsView(c as never));
+});
+
+app.openapi(createRoute({
+  operationId: "dashboard.gift_cards.settings_update",
+  method: "put",
+  path: "/settings",
+  tags: ["Admin - Gift cards"],
+  summary: "Change gift card settings",
+  description: "Sets the most one app may add to gift cards per UTC date (issued cards and top-ups together), in the store currency. Staff are never limited.",
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: z.object({
+        appDailyLimit: z.number().min(0).openapi({ description: "In the store currency; 0 stops apps adding value." }),
+        expectedRevision: z.number().int().min(0).openapi({ description: "The `revision` you read; a newer one is refused with 409." }),
+      }).strict() } },
+    },
+  },
+  responses: {
+    200: { description: "The saved settings", content: { "application/json": { schema: successEnvelope(giftCardSettingsSchema) } } },
+    ...errorResponses,
+    409: conflictResponse,
+    503: serviceUnavailableResponse,
+  },
+}), async (c) => {
+  noStore(c);
+  const db = c.get("db");
+  const body = c.req.valid("json");
+  const currency = await readStoreCurrency(db);
+  const limitMinor = toMinor(body.appDailyLimit, currency.decimalPlaces);
+  if (!Number.isSafeInteger(limitMinor) || limitMinor < 0 || limitMinor > GIFT_CARD_APP_DAILY_LIMIT_MAX_MINOR) {
+    throw new ValidationError("Enter a daily limit from 0 up to the largest gift card value.", { field: "appDailyLimit" });
+  }
+  await giftCardsDocument.write(db, { appDailyLimitMinor: limitMinor }, {}, { expectedRevision: body.expectedRevision });
+  return ok(c, await giftCardSettingsView(c as never));
 });
 
 // ── Detail ──

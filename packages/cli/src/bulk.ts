@@ -66,7 +66,7 @@ export interface BulkOptions {
   action?: string;
   dryRun: boolean;
   yes: boolean;
-  confirmToken?: string;
+  approval?: string;
   wait: boolean;
 }
 
@@ -262,7 +262,7 @@ export async function bulk(runtime: Runtime, output: OutputOptions, kind: BulkKi
     input,
     dryRun: options.dryRun,
     yes: options.yes,
-    confirmToken: options.confirmToken,
+    approval: options.approval,
     print: !options.wait || options.dryRun,
     ...(options.dryRun && kind === "prices" ? { preview: pricePreview(input, money) } : {}),
   });

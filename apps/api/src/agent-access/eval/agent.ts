@@ -79,31 +79,38 @@ export class ScriptedAgent {
   }
 
   /**
+   * The write; when it needs the merchant's approval, the refusal carries an
+   * approval link (the eval's merchant approves it in the dashboard) and the
+   * same write is repeated with its approval id.
+   */
+  private async writeApproved(args: Record<string, unknown>, step: string): Promise<Record<string, unknown>> {
+    const first = await this.session.call("scalius_write", args);
+    const refused = first.structuredContent ?? {};
+    const approvalId = (refused.confirmation as { approvalId?: unknown } | undefined)?.approvalId;
+    if ((refused.error as { code?: string } | undefined)?.code === "confirmation_required" && typeof approvalId === "string") {
+      return this.structured(await this.session.call("scalius_write", { ...args, approvalId }), step);
+    }
+    return this.structured(first, step);
+  }
+
+  /**
    * A change the way the instructions ask for it: dry run first, then the
-   * write, carrying the confirm token when the dry run returned one (a
-   * destructive or financial step the merchant approved).
+   * write, approved by the merchant when the dry run said it needs approval
+   * (a destructive or financial step).
    */
   async change(operationId: string, input: Input): Promise<{ data: Record<string, unknown>; preview: Record<string, unknown> }> {
     const preview = this.structured(
       await this.session.call("scalius_write", { operationId, input, dryRun: true }),
       `${operationId} dryRun`,
     );
-    const token = (preview.confirmation as { confirmToken?: string } | undefined)?.confirmToken;
-    const value = this.structured(
-      await this.session.call("scalius_write", { operationId, input, ...(token ? { confirmToken: token } : {}) }),
-      operationId,
-    );
+    const value = await this.writeApproved({ operationId, input }, operationId);
     return { data: (value.data ?? value) as Record<string, unknown>, preview };
   }
 
   /** Several changes in order (later steps may reference earlier results): one dry run, then one write. */
   async changeSteps(steps: Array<{ id: string; operationId: string; input?: Record<string, unknown> }>) {
-    const preview = this.structured(await this.session.call("scalius_write", { steps, dryRun: true }), "scalius_write steps dryRun");
-    const token = (preview.confirmation as { confirmToken?: string } | undefined)?.confirmToken;
-    const value = this.structured(
-      await this.session.call("scalius_write", { steps, ...(token ? { confirmToken: token } : {}) }),
-      "scalius_write steps",
-    );
+    this.structured(await this.session.call("scalius_write", { steps, dryRun: true }), "scalius_write steps dryRun");
+    const value = await this.writeApproved({ steps }, "scalius_write steps");
     return Object.fromEntries(((value.steps ?? []) as Array<{ id: string; data: unknown }>).map((step) => [step.id, step.data])) as Record<string, Record<string, unknown>>;
   }
 

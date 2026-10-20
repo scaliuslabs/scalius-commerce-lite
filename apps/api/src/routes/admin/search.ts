@@ -9,6 +9,7 @@ import { ok } from "../../utils/api-response";
 import { GLOBAL_SEARCH_KINDS, GLOBAL_SEARCH_LIMIT, globalSearch, type GlobalSearchKind } from "./global-search";
 import { ServiceUnavailableError } from "../../utils/api-error";
 import { successEnvelope, messageResponse, errorResponses, serviceUnavailableResponse } from "../../schemas/responses";
+import { protectedField as pii } from "../../schemas/protected";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // ── Search ──
@@ -128,8 +129,15 @@ const globalSearchRoute = createRoute({
                 "application/json": {
                     schema: successEnvelope(z.object({
                         query: z.string(),
-                        orders: z.array(z.object({ id: z.string(), orderNumber: z.number().int().nullable(), customerName: z.string(), status: z.string() })).max(GLOBAL_SEARCH_LIMIT),
-                        customers: z.array(z.object({ id: z.string(), name: z.string(), phone: z.string().nullable(), email: z.string().nullable(), origin: z.string(), latestOrderName: z.string().nullable() })).max(GLOBAL_SEARCH_LIMIT),
+                        orders: z.array(z.object({ id: z.string(), orderNumber: z.number().int().nullable(), customerName: pii("name", z.string()), status: z.string() })).max(GLOBAL_SEARCH_LIMIT),
+                        customers: z.array(z.object({
+                            id: z.string(),
+                            name: pii("name", z.string()),
+                            phone: pii("phone", z.string().nullable()),
+                            email: pii("email", z.string().nullable()),
+                            origin: z.string(),
+                            latestOrderName: pii("name", z.string().nullable()),
+                        })).max(GLOBAL_SEARCH_LIMIT),
                         products: z.array(z.object({ id: z.string(), name: z.string(), isActive: z.boolean(), matchedSku: z.string().nullable() })).max(GLOBAL_SEARCH_LIMIT),
                         discounts: z.array(z.object({ id: z.string(), name: z.string(), code: z.string().nullable(), status: z.string() })).max(GLOBAL_SEARCH_LIMIT),
                         collections: z.array(z.object({ id: z.string(), name: z.string() })).max(GLOBAL_SEARCH_LIMIT),

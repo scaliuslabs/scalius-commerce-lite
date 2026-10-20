@@ -39,7 +39,28 @@ export function normalizeOrderReference(raw: string | null | undefined): string 
   return /^[A-Za-z0-9]{4,32}$/.test(reference) ? reference : null;
 }
 
-/** The lookup form's one field, checked the same way with or without JavaScript. */
+/**
+ * What Track your order asks with the number (audit R2 F5): the last 4 digits
+ * of the phone on the order, or its email. Null when it can't be either.
+ */
+export function normalizeOrderLookupContact(raw: string | null | undefined): string | null {
+  const contact = toLatinDigits(raw ?? "").trim();
+  if (!contact || contact.length > 254) return null;
+  if (contact.includes("@")) return /^[^\s@]+@[^\s@]+$/.test(contact) ? contact : null;
+  if (/[^\d\s()+.-]/.test(contact)) return null;
+  const digits = contact.replace(/\D/g, "");
+  return digits.length >= 4 && digits.length <= 15 ? digits.slice(-4) : null;
+}
+
+/** The contact field, checked the same way with or without JavaScript. */
+export function getOrderLookupContactError(
+  copy: Pick<CheckoutLanguageData, "trackOrderContactInvalidText">,
+  contact: string,
+): Partial<Record<"contact", string>> {
+  return normalizeOrderLookupContact(contact) ? {} : { contact: copy.trackOrderContactInvalidText };
+}
+
+/** The lookup form's order number field, checked the same way with or without JavaScript. */
 export function getOrderLookupFieldErrors(
   copy: Pick<CheckoutLanguageData, "trackOrderNumberInvalidText">,
   reference: string,

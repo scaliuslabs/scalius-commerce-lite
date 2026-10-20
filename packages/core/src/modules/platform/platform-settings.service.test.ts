@@ -33,7 +33,7 @@ const PRODUCTION_PATCH = {
 const STORE_DEFAULTS = { timeZone: "Asia/Dhaka", unitSystem: "metric", weightUnit: "g" } as const;
 
 const AUTOMATION_DEFAULTS = {
-  setupTokenRequired: false,
+  setupTokenRequired: true,
   identityHandoff: {
     enabled: false,
     issuer: "",

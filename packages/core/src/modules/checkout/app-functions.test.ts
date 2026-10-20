@@ -184,6 +184,36 @@ describe("app delivery and payment operations", () => {
     });
     expect(report).toHaveBeenCalledWith("acme.pay", "checkout.payment_methods", expect.stringContaining("polar"));
   });
+
+  // Security audit S4: an app's pay-later method fails closed.
+  it("payment methods: an app's deferred method is offered only when its own app allows it", () => {
+    const report = vi.fn();
+    const methods = [{ methodId: "stripe", name: "Card" }, { methodId: "acme.credit:invoice", name: "Pay in 30 days" }];
+    const gated = new Set(["acme.credit:invoice"]);
+    // The app timed out or failed: no answer, so nothing offers credit.
+    expect(applyAppPaymentMethodOperations(methods, [], { report }, gated).methods.map((method) => method.methodId)).toEqual(["stripe"]);
+    // Another app cannot open someone else's credit line.
+    const foreign = applyAppPaymentMethodOperations(methods, [
+      result<"checkout.payment_methods">("other.app", { operations: [{ op: "allow", methodId: "acme.credit:invoice" }] }),
+    ], { report }, gated);
+    expect(foreign.methods.map((method) => method.methodId)).toEqual(["stripe"]);
+    expect(report).toHaveBeenCalledWith("other.app", "checkout.payment_methods", expect.stringContaining("only its own app"));
+    // Its own app's allow offers it; a hide from any app still wins.
+    const own = result<"checkout.payment_methods">("acme.credit", { operations: [{ op: "allow", methodId: "acme.credit:invoice" }] });
+    expect(applyAppPaymentMethodOperations(methods, [own], { report }, gated).methods.map((method) => method.methodId))
+      .toEqual(["stripe", "acme.credit:invoice"]);
+    expect(applyAppPaymentMethodOperations(methods, [own, result<"checkout.payment_methods">("other.app", {
+      operations: [{ op: "hide", methodId: "acme.credit:invoice" }],
+    })], { report }, gated).methods.map((method) => method.methodId)).toEqual(["stripe"]);
+  });
+
+  it("payment methods: any app may allow the built-in invoice the merchant lets apps decide", () => {
+    const methods = [{ methodId: "net_terms", name: "Invoice" }];
+    const allowed = applyAppPaymentMethodOperations(methods, [
+      result<"checkout.payment_methods">("acme.b2b", { operations: [{ op: "allow", methodId: "net_terms" }] }),
+    ], undefined, new Set(["net_terms"]));
+    expect(allowed.methods.map((method) => method.methodId)).toEqual(["net_terms"]);
+  });
 });
 
 describe("cart rule errors", () => {

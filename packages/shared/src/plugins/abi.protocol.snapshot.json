@@ -13225,6 +13225,14 @@
    ],
    "staff": "orders.edit"
   },
+  "write_payments": {
+   "rbac": [
+    "orders.view",
+    "orders.record_payment"
+   ],
+   "staff": "orders.record_payment",
+   "sensitive": true
+  },
   "write_fulfillments": {
    "rbac": [
     "orders.view",

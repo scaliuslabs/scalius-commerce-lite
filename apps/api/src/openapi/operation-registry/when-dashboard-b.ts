@@ -367,6 +367,7 @@ export const DASHBOARD_WHEN_B: Readonly<Record<string, string>> = {
   "dashboard.gift_cards.adjust": "Use when adding to or taking from a gift card's balance.",
   "dashboard.gift_cards.create": "Use when issuing a gift card of an amount to a customer or recipient; the code is shown to staff and sent to the recipient.",
   "dashboard.gift_cards.resend": "Use when a gift card's recipient needs its message again.",
+  "dashboard.gift_cards.settings_update": "Use when changing how much value one app may add to gift cards per UTC date.",
   "dashboard.gift_cards.update": "Use when changing a gift card's expiry, note or recipient, or disabling it.",
   "dashboard.search.global": "Use when finding any record by name, number or code across orders, customers, products, discounts, collections and pages.",
   "dashboard.setup.checklist": "Use when asked what is left to set up before launch: the store-wide setup checklist and what each open step needs.",

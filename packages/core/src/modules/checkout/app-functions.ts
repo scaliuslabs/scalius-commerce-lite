@@ -41,6 +41,7 @@ import {
   type PluginFunctionOutput,
   type PluginFunctionPoint,
 } from "@scalius/shared/plugins";
+import { parseQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { floorToIncrementMinor, percentOfMinor, roundToIncrementMinor } from "@scalius/shared/money";
 import { and, eq, isNull, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import { collectionMembershipForConfig } from "../collections";
@@ -600,9 +601,10 @@ export function applyAppPaymentMethodOperations(
   results: ReadonlyArray<CheckoutAppFunctionResult<"checkout.payment_methods">>,
   apps?: Pick<CheckoutAppFunctions, "report">,
   /**
-   * Methods offered only if an app allows them (net terms whose merchant
-   * lets apps decide); an `allow` of any other method is skipped and logged.
-   * A hide always wins over an allow.
+   * Methods offered only if an app allows them: net terms whose merchant
+   * lets apps decide (any app may allow it), and an app's own deferred
+   * method (only that app may allow it). An `allow` of any other method is
+   * skipped and logged. A hide always wins over an allow.
    */
   gated: ReadonlySet<string> = new Set(),
 ): { methods: CheckoutPaymentMethodOption[]; changed: boolean } {
@@ -622,6 +624,12 @@ export function applyAppPaymentMethodOperations(
       if (operation.op === "allow") {
         if (!gated.has(operation.methodId)) {
           apps?.report(result.pluginId, "checkout.payment_methods", `Operation allow names payment method ${operation.methodId}, which the merchant does not let apps decide; it was skipped.`);
+          continue;
+        }
+        // An app's own method (pay later on its terms) answers to that app alone.
+        const owner = parseQualifiedProviderId(operation.methodId)?.pluginId;
+        if (owner && owner !== result.pluginId) {
+          apps?.report(result.pluginId, "checkout.payment_methods", `Operation allow names payment method ${operation.methodId}, which only its own app may allow; it was skipped.`);
           continue;
         }
         allowed.add(operation.methodId);

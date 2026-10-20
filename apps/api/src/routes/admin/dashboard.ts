@@ -28,6 +28,7 @@ import { requestAppProviders } from "../../plugins/providers/app-providers";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { ok } from "../../utils/api-response";
 import { successEnvelope } from "../../schemas/responses";
+import { protectedField as pii } from "../../schemas/protected";
 import { timestampSchema } from "../../schemas/timestamps";
 import { storeTimeZoneOf } from "../../utils/store-time-zone";
 
@@ -81,7 +82,7 @@ const dashboardStatsSchema = z.object({
 const recentOrderSchema = z.object({
     id: z.string().max(DASHBOARD_ORDER_ID_MAX_LENGTH),
     orderNumber: z.number().int().nullable(),
-    customerName: z.string().max(DASHBOARD_CUSTOMER_NAME_MAX_LENGTH),
+    customerName: pii("name", z.string().max(DASHBOARD_CUSTOMER_NAME_MAX_LENGTH)),
     totalAmount: z.number(),
     status: z.string().max(DASHBOARD_ORDER_STATUS_MAX_LENGTH),
     createdAt: timestampSchema,

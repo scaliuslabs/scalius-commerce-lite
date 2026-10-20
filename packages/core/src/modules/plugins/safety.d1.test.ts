@@ -24,6 +24,7 @@ import {
   restorePluginRelease,
   setPluginKv,
   stopPlugin,
+  isThirdPartyPlugin,
   stopThirdPartyPlugins,
   uninstallPlugin,
   updatePluginInstallation,
@@ -97,6 +98,15 @@ describe("app safety", () => {
       { plugin_id: "gamma.idle", status: "installed" },
       { plugin_id: "scalius.bkash", status: "active" },
     ]);
+  });
+
+  it("treats a scalius.* app that did not ship with the deployment as third-party (audit R2 F6)", async () => {
+    // Installs refuse this now; a row from before that rule is still stopped.
+    await installActive(db, { id: "scalius.helper", name: "Helper" }, "bundled");
+    sqlite.prepare("UPDATE plugin_installations SET source = 'registry' WHERE plugin_id = 'scalius.helper'").run();
+    expect(isThirdPartyPlugin({ pluginId: "scalius.helper", source: "registry" })).toBe(true);
+    expect(isThirdPartyPlugin({ pluginId: "scalius.bkash", source: "bundled" })).toBe(false);
+    expect(await stopThirdPartyPlugins(db, "Stopped.")).toEqual(["scalius.helper"]);
   });
 
   it("counts one breach a minute, stops the app at the threshold and logs each one", async () => {

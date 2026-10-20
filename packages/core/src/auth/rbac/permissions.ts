@@ -72,6 +72,7 @@ export const PERMISSIONS = {
   ORDERS_CHANGE_STATUS: "orders.change_status",
   ORDERS_MANAGE_SHIPMENTS: "orders.manage_shipments",
   ORDERS_REFUND: "orders.refund",
+  ORDERS_RECORD_PAYMENT: "orders.record_payment",
   ORDERS_ISSUE_INVOICE: "orders.issue_invoice",
 
   // =============================================

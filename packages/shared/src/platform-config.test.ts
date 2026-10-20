@@ -81,7 +81,7 @@ describe("platform config constants", () => {
       mediaUrl: "",
       customerAuthCookieDomain: "",
       corsAllowedOrigins: [],
-      setupTokenRequired: false,
+      setupTokenRequired: true,
       identityHandoff: {
         enabled: false,
         issuer: "",
@@ -492,7 +492,18 @@ describe("withLocalDevelopmentDefaults", () => {
     expect(config).toEqual({
       ...PRODUCTION_CONFIG,
       mediaUrl: LOCAL_DEVELOPMENT_PLATFORM_CONFIG.mediaUrl,
+      // Local development creates its first admin without a setup key.
+      setupTokenRequired: false,
     });
+  });
+
+  it("requires a first-admin setup key for a new store everywhere but local development (audit R2 F9)", () => {
+    expect(EMPTY_PLATFORM_CONFIG.setupTokenRequired).toBe(true);
+    expect(emptyPlatformConfig().setupTokenRequired).toBe(true);
+    expect(withLocalDevelopmentDefaults(emptyPlatformConfig(), "https://api.example.com").setupTokenRequired).toBe(true);
+    expect(withLocalDevelopmentDefaults(emptyPlatformConfig(), "http://localhost:8787").setupTokenRequired).toBe(false);
+    // A saved document keeps its own choice: an existing store is unaffected.
+    expect(normalizePlatformConfig({ setupTokenRequired: false }).setupTokenRequired).toBe(false);
   });
 
   it("never guesses origins for non-loopback, service-binding, or missing request origins", () => {

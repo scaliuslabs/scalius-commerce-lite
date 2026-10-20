@@ -8,6 +8,8 @@ import { ValidationError } from "@scalius/core/errors";
 
 import {
   checkoutDocument,
+  GIFT_CARD_APP_DAILY_LIMIT_DEFAULT_MINOR,
+  GIFT_CARD_APP_DAILY_LIMIT_MAX_MINOR,
   giftCardsDocument,
   readGiftCardSettings,
   readReviewSettings,
@@ -73,11 +75,21 @@ describe("Wave B settings documents", () => {
   });
 
   it("never expires gift cards by default and bounds the default expiry", async () => {
-    expect(await readGiftCardSettings(db)).toEqual({ ok: true, revision: 0, value: { defaultExpiryMonths: null } });
+    expect(await readGiftCardSettings(db)).toEqual({ ok: true, revision: 0, value: { defaultExpiryMonths: null, appDailyLimitMinor: GIFT_CARD_APP_DAILY_LIMIT_DEFAULT_MINOR } });
     await giftCardsDocument.write(db, { defaultExpiryMonths: 12 });
     expect(await readGiftCardSettings(db)).toMatchObject({ ok: true, value: { defaultExpiryMonths: 12 } });
     for (const months of [0, 121, 2.5]) {
       await expect(giftCardsDocument.write(db, { defaultExpiryMonths: months })).rejects.toBeInstanceOf(ValidationError);
+    }
+  });
+
+  it("caps what apps add to gift cards a day by default, and a document saved before the cap gets it", async () => {
+    store("gift_cards", '{"defaultExpiryMonths":6}');
+    expect(await readGiftCardSettings(db)).toMatchObject({ ok: true, value: { defaultExpiryMonths: 6, appDailyLimitMinor: GIFT_CARD_APP_DAILY_LIMIT_DEFAULT_MINOR } });
+    await giftCardsDocument.write(db, { appDailyLimitMinor: 0 });
+    expect(await readGiftCardSettings(db)).toMatchObject({ ok: true, value: { defaultExpiryMonths: 6, appDailyLimitMinor: 0 } });
+    for (const limit of [-1, 1.5, GIFT_CARD_APP_DAILY_LIMIT_MAX_MINOR + 1]) {
+      await expect(giftCardsDocument.write(db, { appDailyLimitMinor: limit })).rejects.toBeInstanceOf(ValidationError);
     }
   });
 

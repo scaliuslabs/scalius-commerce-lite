@@ -189,7 +189,7 @@ Better Auth e-mail sign-up is not atomic on the one-shot proxy adapters. Create 
 
 - `GET /api/v1/setup` returns `{ adminExists, setupTokenRequired }`. `POST /api/v1/setup` creates the first super admin and seeds RBAC.
 - D1 decides concurrency: the singleton row `admin_setup_claims` (`first_admin`, 60-second lease) and 5 attempts per hour per IP in `admin_setup_rate_limits`. Do not move this lock out of the database.
-- When the Platform setting `setupTokenRequired` is on, the request needs the header `X-Scalius-Setup-Token` with the derived `ADMIN_SETUP_TOKEN`. See `docs/AUTOMATED-DEPLOYMENTS.md`.
+- When the Platform setting `setupTokenRequired` is on (the default for a new store; `pnpm run deploy` prints the key), the request needs the header `X-Scalius-Setup-Token` with the derived `ADMIN_SETUP_TOKEN`. See `docs/AUTOMATED-DEPLOYMENTS.md`.
 
 ## Scanner pairing
 

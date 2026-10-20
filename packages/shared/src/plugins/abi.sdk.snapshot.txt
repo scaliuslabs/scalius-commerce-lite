@@ -1092,7 +1092,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
         };
         categories: ("checkout" | "shipping" | "payments" | "orders" | "inventory" | "returns" | "pricing" | "marketing" | "loyalty" | "store-design" | "content" | "notifications" | "analytics" | "finances" | "support" | "operations" | "compliance")[];
         screenshots: string[];
-        scopes: ("read_products" | "write_products" | "read_inventory" | "write_inventory" | "read_orders" | "write_orders" | "write_fulfillments" | "read_customers" | "write_customers" | "write_marketing" | "send_messages_any" | "read_customer_names" | "read_customer_emails" | "read_customer_phones" | "read_customer_addresses" | "read_discounts" | "write_discounts" | "read_content" | "write_content" | "read_objects" | "write_objects" | "read_files" | "write_files" | "read_gift_cards" | "write_gift_cards" | "write_webhooks" | "read_settings" | "write_places")[];
+        scopes: ("read_products" | "write_products" | "read_inventory" | "write_inventory" | "read_orders" | "write_orders" | "write_payments" | "write_fulfillments" | "read_customers" | "write_customers" | "write_marketing" | "send_messages_any" | "read_customer_names" | "read_customer_emails" | "read_customer_phones" | "read_customer_addresses" | "read_discounts" | "write_discounts" | "read_content" | "write_content" | "read_objects" | "write_objects" | "read_files" | "write_files" | "read_gift_cards" | "write_gift_cards" | "write_webhooks" | "read_settings" | "write_places")[];
         allowedHosts: string[];
         events: import("@scalius/shared/events").EventTopicFilter[];
         functions: {
@@ -1122,7 +1122,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
                 name: string;
                 methods: ("POST" | "PUT" | "PATCH" | "DELETE" | "GET")[];
                 description?: string | undefined;
-                scope?: "read_products" | "write_products" | "read_inventory" | "write_inventory" | "read_orders" | "write_orders" | "write_fulfillments" | "read_customers" | "write_customers" | "write_marketing" | "send_messages_any" | "read_customer_names" | "read_customer_emails" | "read_customer_phones" | "read_customer_addresses" | "read_discounts" | "write_discounts" | "read_content" | "write_content" | "read_objects" | "write_objects" | "read_files" | "write_files" | "read_gift_cards" | "write_gift_cards" | "write_webhooks" | "read_settings" | "write_places" | undefined;
+                scope?: "read_products" | "write_products" | "read_inventory" | "write_inventory" | "read_orders" | "write_orders" | "write_payments" | "write_fulfillments" | "read_customers" | "write_customers" | "write_marketing" | "send_messages_any" | "read_customer_names" | "read_customer_emails" | "read_customer_phones" | "read_customer_addresses" | "read_discounts" | "write_discounts" | "read_content" | "write_content" | "read_objects" | "write_objects" | "read_files" | "write_files" | "read_gift_cards" | "write_gift_cards" | "write_webhooks" | "read_settings" | "write_places" | undefined;
             }[];
             public: {
                 name: string;
@@ -1407,7 +1407,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
             name: string;
             description: string;
             recommended: boolean;
-            scopes: ("read_products" | "write_products" | "read_inventory" | "write_inventory" | "read_orders" | "write_orders" | "write_fulfillments" | "read_customers" | "write_customers" | "write_marketing" | "send_messages_any" | "read_customer_names" | "read_customer_emails" | "read_customer_phones" | "read_customer_addresses" | "read_discounts" | "write_discounts" | "read_content" | "write_content" | "read_objects" | "write_objects" | "read_files" | "write_files" | "read_gift_cards" | "write_gift_cards" | "write_webhooks" | "read_settings" | "write_places")[];
+            scopes: ("read_products" | "write_products" | "read_inventory" | "write_inventory" | "read_orders" | "write_orders" | "write_payments" | "write_fulfillments" | "read_customers" | "write_customers" | "write_marketing" | "send_messages_any" | "read_customer_names" | "read_customer_emails" | "read_customer_phones" | "read_customer_addresses" | "read_discounts" | "write_discounts" | "read_content" | "write_content" | "read_objects" | "write_objects" | "read_files" | "write_files" | "read_gift_cards" | "write_gift_cards" | "write_webhooks" | "read_settings" | "write_places")[];
             allowedHosts: string[];
             providers: string[];
             settingsGroups: string[];

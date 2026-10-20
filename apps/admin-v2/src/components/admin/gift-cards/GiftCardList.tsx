@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { RowLink } from "~/components/admin/data-table/RowLink";
 import { createDateColumn } from "~/components/admin/data-table/columns/column-factories";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
@@ -28,6 +28,9 @@ import { IssueGiftCardDialog } from "./IssueGiftCardDialog";
 import { GiftCardStatusBadge } from "./gift-card-fields";
 import { formatGiftCardLastDay, formatGiftCardMoney, maskedGiftCard } from "./gift-card-format";
 import { GIFT_CARD_LIST, GIFT_CARD_TABS, giftCardListQuery, giftCardPageSize, giftCardSearchTerm, type GiftCardTab } from "./gift-card-list-state";
+
+// Opened rarely: its copy and query load with the first opening.
+const GiftCardSettingsDialog = lazy(() => import("./GiftCardSettingsDialog").then((module) => ({ default: module.GiftCardSettingsDialog })));
 
 const TAB_LABEL = {
   all: "tabAll",
@@ -79,6 +82,8 @@ export function GiftCardList({ tab, onTabChange }: {
   const { hasPermission } = usePermissions();
   const canManage = hasPermission(PERMISSIONS.GIFT_CARDS_MANAGE);
   const [issueOpen, setIssueOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
   // The search lives in this tab's session, reduced to last 4 if a whole code is pasted.
   const [term, setTerm] = useListSearch("giftCards");
   // Keyset pages: the cursors that opened each page so far ("" is the first).
@@ -176,12 +181,15 @@ export function GiftCardList({ tab, onTabChange }: {
   };
 
   const issueButton = canManage ? <Button type="button" onClick={() => setIssueOpen(true)}>{t("issueGiftCard")}</Button> : null;
+  const settingsButton = canManage ? (
+    <Button type="button" variant="outline" onClick={() => { setSettingsLoaded(true); setSettingsOpen(true); }}>{t("settingsButton")}</Button>
+  ) : null;
   // No card issued yet: the first-run card alone, no tabs, search or balance (E1).
   const nothingYet = !filtered && !query.isPending && !query.isError && total === 0 && items.length === 0;
 
   return (
     <div className="mx-auto max-w-7xl space-y-4">
-      <PageHeader title={t("pageTitle")} actions={nothingYet ? undefined : issueButton} />
+      <PageHeader title={t("pageTitle")} actions={settingsButton ?? undefined} primaryAction={nothingYet ? undefined : issueButton ?? undefined} />
       {nothingYet ? (
         <EmptyState icon={Gift} title={t("emptyTitle")} description={t("emptyBody")} action={issueButton ?? undefined} />
       ) : (
@@ -230,6 +238,11 @@ export function GiftCardList({ tab, onTabChange }: {
       </>
       )}
       <IssueGiftCardDialog open={issueOpen} onOpenChange={setIssueOpen} />
+      {settingsLoaded ? (
+        <Suspense fallback={null}>
+          <GiftCardSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

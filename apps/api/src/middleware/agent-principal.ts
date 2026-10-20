@@ -10,6 +10,7 @@ import {
 } from "./agent-request-boundary";
 import { getAgentDispatchPrincipal } from "../agent-access/dispatch-context";
 import { enforceDirectAgentRequestBodyLimit } from "./direct-agent-request-body";
+import { routedApiPath } from "../utils/routed-path";
 
 function hasAnyCookie(cookieHeader: string | null | undefined): boolean {
   return Boolean(cookieHeader?.trim());
@@ -50,7 +51,7 @@ export const agentPrincipalMiddleware: MiddlewareHandler = async (c, next) => {
 
   const startedAt = Date.now();
   const { resolveDirectAgentOperation } = await import("../agent-access/direct-operation");
-  const operation = resolveDirectAgentOperation(c.req.method, new URL(c.req.url).pathname);
+  const operation = resolveDirectAgentOperation(c.req.method, routedApiPath(c));
   if (!dispatchPrincipal) await enforceAgentRateLimit(c, principal);
   try {
     if (

@@ -15,7 +15,7 @@ interface PromptDefinition {
   body: (args: Record<string, string | undefined>) => string;
 }
 
-const SAFE_WRITE = "For every change run scalius_write with dryRun:true first, show me the summary, and send the confirmToken only after I approve. Verify each change with scalius_read.";
+const SAFE_WRITE = "For every change run scalius_write with dryRun:true first, show me the summary, and when a change needs approval give me its approval link and continue only after I approve it there. Verify each change with scalius_read.";
 
 export const AGENT_PROMPTS: readonly PromptDefinition[] = [
   {

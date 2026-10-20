@@ -450,7 +450,7 @@ if [ "$HAS_FILTERS" = "1" ]; then
     echo ""
     echo "API dev server running. Ctrl+C to stop."
     echo "  API:     http://localhost:$API_PORT"
-    echo "  Swagger: http://localhost:$API_PORT/api/v1/docs"
+    echo "  OpenAPI: http://localhost:$API_PORT/api/v1/openapi.json"
     echo "  Mailbox: http://127.0.0.1:8025"
     echo ""
     wait
@@ -498,7 +498,7 @@ echo "All dev servers starting. Ctrl+C to stop all."
 echo "  API:        http://localhost:$API_PORT"
 echo "  Admin:      http://localhost:$ADMIN_PORT"
 echo "  Storefront: http://localhost:$STOREFRONT_PORT"
-echo "  Swagger:    http://localhost:$API_PORT/api/v1/docs"
+echo "  OpenAPI:    http://localhost:$API_PORT/api/v1/openapi.json"
 echo "  Mailbox:    http://127.0.0.1:8025"
 echo ""
 wait

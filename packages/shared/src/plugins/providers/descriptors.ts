@@ -87,7 +87,9 @@ export const paymentProviderDescriptorSchema = z.object({
    * the order commits unpaid, due in `dueInDays`, and is paid later (an
    * invoice, a purchase order): its payments reach the order as the
    * provider's verified events, or staff record them. Offered to signed-in
-   * buyers only; the app's own `checkout.payment_methods` decides further.
+   * buyers only, and only when the app's own `checkout.payment_methods`
+   * answers `allow` for this buyer: an app that fails or does not answer
+   * leaves it hidden. The manifest declares that function.
    */
   flow: z.enum(["hosted", "deferred"]).default("hosted"),
   /** A `deferred` method's terms: the order is due this many days after placement. */

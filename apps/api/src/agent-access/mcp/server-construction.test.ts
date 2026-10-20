@@ -67,7 +67,7 @@ describe("MCP server construction", () => {
       expect(AGENT_MCP_INSTRUCTIONS).toContain(tool);
     }
     expect(AGENT_MCP_INSTRUCTIONS).toContain("dryRun:true");
-    expect(AGENT_MCP_INSTRUCTIONS).toContain("confirmToken");
+    expect(AGENT_MCP_INSTRUCTIONS).toContain("approvalUrl");
     expect(bytes(AGENT_MCP_INSTRUCTIONS)).toBeLessThan(500);
   });
 
