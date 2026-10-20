@@ -25,6 +25,7 @@
 import { toHandle } from "./handle";
 import { fromMinor, isIncrementMultipleMinor, MAX_MINOR_AMOUNT, priceIncrementMessage, toMinor } from "./money";
 import { PLUGIN_ID_PATTERN } from "./plugins/ids";
+import { CUSTOM_FIELD_KEY_MAX_LENGTH, CUSTOM_FIELD_MERCHANT_NAMESPACE, isCustomFieldKey } from "./custom-field-keys";
 
 // ---------------------------------------------------------------------------
 // Vocabulary
@@ -134,30 +135,20 @@ export function customFieldReferenceTarget(type: CustomFieldType): CustomFieldRe
 // Identity: namespace, key, name
 // ---------------------------------------------------------------------------
 
-/** The merchant's own namespace; a plugin writes under its plugin id (`vendor.name`). */
-export const CUSTOM_FIELD_MERCHANT_NAMESPACE = "custom";
+export {
+  CUSTOM_FIELD_KEY_MAX_LENGTH,
+  CUSTOM_FIELD_KEY_PATTERN,
+  CUSTOM_FIELD_MERCHANT_NAMESPACE,
+  isCustomFieldKey,
+  isCustomFieldNamespace,
+} from "./custom-field-keys";
 export const CUSTOM_FIELD_ID_PREFIX = "cfd_";
 /** A plugin id's longest form (`PLUGIN_ID_PATTERN`: 40-character vendor, dot, 60-character name). */
 export const CUSTOM_FIELD_NAMESPACE_MAX_LENGTH = 101;
-export const CUSTOM_FIELD_KEY_MAX_LENGTH = 64;
-/** snake_case starting with a letter, so `custom.care_guide` binds in templates. */
-export const CUSTOM_FIELD_KEY_PATTERN = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 export const CUSTOM_FIELD_NAME_MAX_LENGTH = 80;
 export const CUSTOM_FIELD_DESCRIPTION_MAX_LENGTH = 300;
 /** Definitions per owner type, all namespaces together. */
 export const CUSTOM_FIELD_DEFINITIONS_PER_OWNER_MAX = 100;
-
-/** `custom` (the merchant) or a plugin id (`PLUGIN_ID_PATTERN`, e.g. `acme.loyalty`). */
-export function isCustomFieldNamespace(value: unknown): value is string {
-  return value === CUSTOM_FIELD_MERCHANT_NAMESPACE || (typeof value === "string" && PLUGIN_ID_PATTERN.test(value));
-}
-
-export function isCustomFieldKey(value: unknown): value is string {
-  return typeof value === "string"
-    && value.length >= 2
-    && value.length <= CUSTOM_FIELD_KEY_MAX_LENGTH
-    && CUSTOM_FIELD_KEY_PATTERN.test(value);
-}
 
 /**
  * A key from free text (usually the field's name): Bangla is transliterated,

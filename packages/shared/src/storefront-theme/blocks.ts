@@ -23,7 +23,7 @@ import {
 import { storefrontProductAppBlocksSchema } from "./apps";
 import { storefrontLinkSchema } from "./links";
 import { storefrontSettingBindingsSchema, type StorefrontSettingBindings } from "./bindings";
-import { isCustomFieldKey, isCustomFieldNamespace } from "../custom-fields";
+import { isCustomFieldKey, isCustomFieldNamespace } from "../custom-field-keys";
 
 // ─── Primitives ───────────────────────────────────────────────────────────
 

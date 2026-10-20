@@ -7,7 +7,7 @@ import { storefrontAppKeySchema, storefrontAppValuesSchema, storefrontSkinRefSch
 import { atLeast, type FitCondition } from "./fit";
 import { storefrontLinkSchema } from "./links";
 import { storefrontSettingBindingsSchema } from "./bindings";
-import { isCustomFieldKey, isCustomFieldNamespace } from "../custom-fields";
+import { isCustomFieldKey, isCustomFieldNamespace } from "../custom-field-keys";
 
 const sectionIdSchema = z.string().regex(/^[a-z0-9][a-z0-9_-]{0,39}$/);
 
