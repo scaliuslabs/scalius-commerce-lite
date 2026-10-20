@@ -67,6 +67,7 @@ describe("promotion aggregate revision batches", () => {
             "guard",
             "retire-effects",
             "insert-codes",
+            "guard",
             "revision",
         ]);
         expect(result.revision).toBe(5);

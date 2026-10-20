@@ -9,6 +9,8 @@ import { AppError, ConflictError } from "@scalius/core/errors";
 import { eq, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 
+import { MAX_ACTIVE_AUTOMATIC_PROMOTIONS } from "./promotions.evaluator";
+
 export const PROMOTION_REVISION_CONFLICT = "PROMOTION_REVISION_CONFLICT";
 
 export class PromotionRevisionConflictError extends AppError {
@@ -55,6 +57,24 @@ export function buildPromotionRevisionGuard(
     `, PROMOTION_REVISION_CONFLICT);
 }
 
+export const PROMOTION_AUTOMATIC_CAP = "PROMOTION_AUTOMATIC_CAP";
+
+/**
+ * After the mutation: when this promotion is an automatic one that is on
+ * (active, not ended), at most `MAX_ACTIVE_AUTOMATIC_PROMOTIONS` such
+ * promotions exist. Inside the write batch, so two concurrent activations
+ * cannot both pass.
+ */
+function buildAutomaticPromotionCapGuard(db: Database, promotionId: string): BatchItem<"sqlite"> {
+    const onAutomatic = sql`${promotions.method} = 'automatic' AND ${promotions.status} = 'active'
+        AND ${promotions.deletedAt} IS NULL
+        AND (${promotions.endsAt} IS NULL OR ${promotions.endsAt} > unixepoch())`;
+    return buildBatchGuard(db, sql`
+        NOT EXISTS (SELECT 1 FROM ${promotions} WHERE ${promotions.id} = ${promotionId} AND ${onAutomatic})
+        OR (SELECT count(*) FROM ${promotions} WHERE ${onAutomatic}) <= ${MAX_ACTIVE_AUTOMATIC_PROMOTIONS}
+    `, PROMOTION_AUTOMATIC_CAP);
+}
+
 function buildPromotionRevisionBump(
     db: Database,
     promotionId: string,
@@ -70,7 +90,8 @@ function buildPromotionRevisionBump(
 }
 
 function isPromotionRevisionGuardError(error: unknown): boolean {
-    return isBatchGuardError(error, PROMOTION_REVISION_CONFLICT);
+    return isBatchGuardError(error, PROMOTION_REVISION_CONFLICT)
+        || isBatchGuardError(error, PROMOTION_AUTOMATIC_CAP);
 }
 
 async function rethrowPromotionRevisionConflictIfStale(
@@ -99,6 +120,15 @@ async function rethrowPromotionRevisionConflictIfStale(
         if (current.deletedAt !== null || current.status === "archived") {
             throw new PromotionStateConflictError(promotionId);
         }
+        // The revision guard held (D1 reports every guard alike), so the cap guard failed.
+        if (isBatchGuardError(error, PROMOTION_AUTOMATIC_CAP)) {
+            throw new AppError(
+                409,
+                PROMOTION_AUTOMATIC_CAP,
+                `Up to ${MAX_ACTIVE_AUTOMATIC_PROMOTIONS} automatic discounts can be on at once. Turn one off or end it, then try again.`,
+                { limit: MAX_ACTIVE_AUTOMATIC_PROMOTIONS },
+            );
+        }
     }
     throw error;
 }
@@ -126,10 +156,11 @@ export async function executePromotionRuleMutationBatch(
         const results = await safeBatch(db, [
             buildPromotionRevisionGuard(db, promotionId, expectedRevision),
             ...mutationStatements,
+            buildAutomaticPromotionCapGuard(db, promotionId),
             buildPromotionRevisionBump(db, promotionId),
         ] as never) as unknown[];
         return {
-            mutationResults: results.slice(1, -1),
+            mutationResults: results.slice(1, -2),
             revision: readRevisionResult(results.at(-1)),
         };
     } catch (error) {
