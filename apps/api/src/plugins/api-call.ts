@@ -9,6 +9,7 @@
 // every stable mutation takes.
 
 import type { Database } from "@scalius/database/client";
+import { appResourceOwners, type AppOwnedResourceType } from "@scalius/database/schema";
 import type { PluginApiCallInput, PluginApiResult } from "@scalius/plugin-sdk";
 import {
   AgentDispatchError,
@@ -120,6 +121,48 @@ function unwrap(status: number, ok: boolean, body: unknown): PluginApiResult {
     : { ok, status, data: null, error: { code: "ERROR", message: "The operation failed." } };
 }
 
+/**
+ * The resources a successful create operation made, by operation: the id
+ * paths in its `{ success, data }` body. Recorded as the app's own
+ * (`app_resource_owners`) so `dashboard.resources.app_content.delete` can let
+ * it permanently delete them later. A replayed create answers the same ids.
+ */
+const APP_CREATE_OPERATIONS: Readonly<Record<string, { type: AppOwnedResourceType; ids: (data: unknown) => unknown[] }>> = {
+  "dashboard.resources.products.create": { type: "product", ids: (data) => [dataPath(data, "product", "id")] },
+  "dashboard.resources.products.bulk_create": { type: "product", ids: (data) => createdItemIds(data, "product") },
+  "dashboard.products.create": { type: "product", ids: (data) => [dataPath(data, "product", "id") ?? dataPath(data, "id")] },
+  "dashboard.categories.create": { type: "category", ids: (data) => [dataPath(data, "id")] },
+  "dashboard.resources.categories.bulk_create": { type: "category", ids: (data) => createdItemIds(data, "category") },
+  "dashboard.brands.create": { type: "brand", ids: (data) => [dataPath(data, "id") ?? dataPath(data, "brand", "id")] },
+  "dashboard.resources.brands.bulk_create": { type: "brand", ids: (data) => createdItemIds(data, "brand") },
+  "dashboard.collections.create": { type: "collection", ids: (data) => [dataPath(data, "id")] },
+  "dashboard.media.import_url": { type: "media", ids: (data) => [dataPath(data, "file", "id")] },
+};
+
+function dataPath(value: unknown, ...keys: string[]): unknown {
+  let current: unknown = isRecord(value) && "data" in value ? value.data : value;
+  for (const key of keys) current = isRecord(current) ? current[key] : undefined;
+  return current;
+}
+
+function createdItemIds(value: unknown, key: string): unknown[] {
+  const items = dataPath(value, "items");
+  return Array.isArray(items) ? items.map((item) => (isRecord(item) && isRecord(item[key]) ? item[key].id : undefined)) : [];
+}
+
+async function recordAppCreatedResources(db: Database, pluginId: string, operationId: string, body: unknown): Promise<void> {
+  const spec = APP_CREATE_OPERATIONS[operationId];
+  if (!spec) return;
+  const ids = [...new Set(spec.ids(body).filter((id): id is string => typeof id === "string" && id.length > 0 && id.length <= 160))];
+  // Insert-or-ignore: an id already recorded keeps its first owner.
+  for (let index = 0; index < ids.length; index += 25) {
+    await db.insert(appResourceOwners)
+      .values(ids.slice(index, index + 25).map((resourceId) => ({ resourceType: spec.type, resourceId, pluginId })))
+      .onConflictDoNothing()
+      .run();
+  }
+}
+
 export async function callPluginOperation(options: {
   pluginId: string;
   version: string;
@@ -149,6 +192,7 @@ export async function callPluginOperation(options: {
       env: options.env,
       ctx: options.ctx,
     });
+    if (result.ok) await recordAppCreatedResources(options.db, options.pluginId, operation.operationId, result.data);
     // Buyer contact fields the grant does not reveal read as null (H5).
     const body = result.ok ? redactOperationResponse(operation, result.data, principal.protectedData) : result.data;
     return unwrap(result.status, result.ok, body);

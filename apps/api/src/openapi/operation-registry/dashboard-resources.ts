@@ -41,6 +41,15 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   // base-section writes in minor units; stock stays with inventory.
   "dashboard.resources.products.create": { stability: "stable", batch: "forbidden", uncurated: true },
   "dashboard.resources.products.update": { stability: "stable", revision: "required", batch: "forbidden", uncurated: true },
+  // An app permanently deletes the trashed content it created itself
+  // (routes/admin/resources-app-content.ts); ownership is the platform's record.
+  "dashboard.resources.app_content.delete": {
+    stability: "stable",
+    risk: "destructive",
+    batch: "forbidden",
+    principals: ["admin"],
+    uncurated: true,
+  },
   "dashboard.resources.variants.get": { stability: "stable", uncurated: true },
   "dashboard.resources.variants.lookup": { stability: "stable", risk: "read", uncurated: true },
   "dashboard.resources.customers.list": { stability: "stable", uncurated: true },

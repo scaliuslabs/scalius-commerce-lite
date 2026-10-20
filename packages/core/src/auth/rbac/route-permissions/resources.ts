@@ -26,6 +26,10 @@ export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   // PIM sync creates and edits products as the editor does; stock stays with inventory.
   "/api/v1/admin/resources/products": { GET: products, POST: { permission: PERMISSIONS.PRODUCTS_CREATE } },
   "/api/v1/admin/resources/products/*": { GET: products, PATCH: productsEdit },
+  // An app's own trashed content; each item re-checks its type's delete permission.
+  "/api/v1/admin/resources/app-content/delete": {
+    POST: { anyOf: [PERMISSIONS.PRODUCTS_DELETE, PERMISSIONS.CATEGORIES_DELETE, PERMISSIONS.COLLECTIONS_DELETE, PERMISSIONS.MEDIA_DELETE] },
+  },
   "/api/v1/admin/resources/variants/lookup": { POST: { anyOf: [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.INVENTORY_VIEW] } },
   "/api/v1/admin/resources/variants/*": { GET: { anyOf: [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.INVENTORY_VIEW] } },
   "/api/v1/admin/resources/customers": { GET: customers },
