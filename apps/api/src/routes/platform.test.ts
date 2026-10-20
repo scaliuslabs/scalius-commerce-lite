@@ -85,7 +85,7 @@ describe("GET /api/v1/platform", () => {
         apiUrl: "",
         dashboardUrl: "",
         mediaUrl: "",
-        setupTokenRequired: false,
+        setupTokenRequired: true,
         identityHandoff: {
           enabled: false,
           issuer: "",

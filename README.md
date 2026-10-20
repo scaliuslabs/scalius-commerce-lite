@@ -230,7 +230,7 @@ Without an API origin, the deploy succeeds but skips live `/health` and `/readyz
 
 ### 4. Complete Platform settings
 
-1. Open the dashboard and create the first admin at `/auth/setup`.
+1. Open the dashboard and create the first admin at `/auth/setup` with the setup key the deploy printed (or `pnpm secret:derive --purpose admin-setup`). A new store asks for it, so nobody else can claim the store first.
 2. Fill the four web addresses in Settings > Store details.
 
 Until you do, `/api/v1/readyz` reports a `platform_config` problem. The storefront's credentialed features (cart, customer sign-in) fail, because CORS and cookie settings derive from these origins.

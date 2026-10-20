@@ -16,6 +16,7 @@ vi.mock("~/lib/route-error", () => ({ RouteErrorComponent: () => null }));
 
 import { requireFreshAgentApprovalAuthority } from "./agent-access.authorize.$requestId";
 import { requireFreshBrowserHandoffAuthority } from "./agent-access.continue.$handoffId";
+import { requireFreshChangeApprovalAuthority } from "./agent-access.approve.$approvalId";
 
 function context(input: { isSuperAdmin: boolean; permissions: string[] }) {
   return {
@@ -56,5 +57,16 @@ describe("AI access route authority", () => {
     const superAdmin = context({ isSuperAdmin: true, permissions: [] });
     mocks.getFreshAdminRouteContext.mockResolvedValue(superAdmin);
     await expect(requireFreshBrowserHandoffAuthority()).resolves.toBe(superAdmin);
+  });
+
+  it("keeps the approval of an agent's change to a fresh Super Admin session", async () => {
+    mocks.getFreshAdminRouteContext.mockResolvedValue(
+      context({ isSuperAdmin: false, permissions: ["agent_access.view", "agent_access.manage"] }),
+    );
+    expect(isRedirect(await outcome(requireFreshChangeApprovalAuthority))).toBe(true);
+
+    const superAdmin = context({ isSuperAdmin: true, permissions: [] });
+    mocks.getFreshAdminRouteContext.mockResolvedValue(superAdmin);
+    await expect(requireFreshChangeApprovalAuthority()).resolves.toBe(superAdmin);
   });
 });

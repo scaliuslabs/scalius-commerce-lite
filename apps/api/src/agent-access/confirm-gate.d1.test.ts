@@ -1,7 +1,9 @@
 // The direct REST lane (a PAT or CLI credential calling /api/v1/admin itself)
-// passes the same confirmation gate as MCP: a refund without the merchant's
-// confirm token writes nothing and answers 428 with a token, the token runs it
-// exactly once, and a replay is refused. Opt-in grant scopes hold here too.
+// passes the same confirmation gate as MCP: a refund nobody approved writes
+// nothing and answers 428 with an approval link for the grant's owner (never a
+// token the caller could redeem itself); after the owner approves in the
+// dashboard the retry with the approval id runs exactly once, and a replay or
+// a declined approval never runs (audit R2 F3). Opt-in grant scopes hold here too.
 import "@hono/zod-openapi";
 import { Buffer } from "node:buffer";
 import type { DatabaseSync } from "node:sqlite";
@@ -19,11 +21,12 @@ vi.mock("./principal", () => ({
 
 import { createOrder } from "@scalius/core/modules/orders";
 import { fetchRuntimeApiApp } from "../runtime/fetch-runtime-app";
-import { CONFIRM_TOKEN_HEADER } from "./confirm-gate";
+import { APPROVAL_HEADER, decideAgentApproval } from "./approvals";
 
 const OWNER = "00000000-0000-4000-8000-000000000043";
 const GRANT = "agr_restconfirmrefund001";
-const TOKEN = `sc_pat_agc_restconfirm000000001_${"A".repeat(43)}`;
+const CREDENTIAL = "agc_restconfirm000000001";
+const TOKEN = `sc_pat_${CREDENTIAL}_${"A".repeat(43)}`;
 
 describe("the confirmation gate on the direct REST lane", () => {
   let sqlite: DatabaseSync;
@@ -71,6 +74,9 @@ describe("the confirmation gate on the direct REST lane", () => {
       authority_revision, status, expires_at, created_at, updated_at)
       VALUES (?, 'pat', ?, 'dashboard', 'CI', 'full', '["conversations.view","orders.refund","orders.view","settings.general.view"]', 'security', 1, 'active', ?, ?, ?)`)
       .run(GRANT, OWNER, now + 3_600, now - 60, now - 60);
+    sqlite.prepare(`INSERT INTO agent_credentials (id, grant_id, kind, token_hash, token_hint, expires_at, created_at, updated_at)
+      VALUES (?, ?, 'pat', ?, 'sc_pat_agc_restconf', ?, ?, ?)`)
+      .run(CREDENTIAL, GRANT, "h".repeat(64), now + 3_600, now - 60, now - 60);
     sqlite.exec(`
       INSERT INTO places (id, name, country_code, level, parent_id, external_ids, metadata, is_active)
       VALUES ('city_1', 'Dhaka', 'BD', 1, NULL, '{}', '{}', 1), ('zone_1', 'North', 'BD', 2, 'city_1', '{}', '{}', 1);
@@ -115,30 +121,65 @@ describe("the confirmation gate on the direct REST lane", () => {
   const attempts = () => (sqlite.prepare("SELECT COUNT(*) AS count FROM refund_attempts WHERE order_id = ?").get(orderId) as { count: number }).count;
   const refundBody = { amount: 500, reason: "requested_by_customer", manualSettlementConfirmed: true, requestKey: "rest-confirm-refund-0001" };
 
-  it("refuses an unconfirmed refund, runs it once with the token, and refuses a replay", async () => {
+  it("hands out an approval link, runs the refund once after the owner approves, and refuses a replay", async () => {
     const refused = await call("POST", `/orders/${orderId}/refund`, refundBody);
     expect(refused.status, JSON.stringify(refused.body)).toBe(428);
     expect(refused.body.error).toMatchObject({
       code: "confirmation_required",
-      details: { confirmation: { summary: expect.stringContaining("amount=500"), confirmToken: expect.stringMatching(/^sct_/), header: CONFIRM_TOKEN_HEADER } },
+      details: { confirmation: {
+        summary: expect.stringContaining("amount=500"),
+        approvalId: expect.stringMatching(/^abh_/),
+        approvalUrl: expect.stringMatching(/^https:\/\/dashboard\.example\.test\/admin\/settings\/agent-access\/approve\/abh_/),
+        header: APPROVAL_HEADER,
+      } },
     });
+    expect(JSON.stringify(refused.body)).not.toMatch(/sct_|confirmToken/);
     expect(attempts()).toBe(0);
-    const token = refused.body.error.details.confirmation.confirmToken as string;
+    const approvalId = refused.body.error.details.confirmation.approvalId as string;
 
-    // A token for another input does not open this one.
-    const otherInput = await call("POST", `/orders/${orderId}/refund`, { ...refundBody, amount: 900 }, { [CONFIRM_TOKEN_HEADER]: token });
+    // Before the owner answers, the retry gets the same link and runs nothing.
+    const early = await call("POST", `/orders/${orderId}/refund`, refundBody, { [APPROVAL_HEADER]: approvalId });
+    expect(early.status).toBe(428);
+    expect(early.body.error.details.confirmation).toMatchObject({ approvalId, header: APPROVAL_HEADER });
+    expect(attempts()).toBe(0);
+
+    // Someone else cannot approve it; the owner can, once.
+    expect(await decideAgentApproval(db, approvalId, "00000000-0000-4000-8000-000000000099", "approve")).toBe(false);
+    expect(await decideAgentApproval(db, approvalId, OWNER, "approve")).toBe(true);
+    expect(await decideAgentApproval(db, approvalId, OWNER, "approve")).toBe(false);
+
+    // The approval covers exactly the approved input.
+    const otherInput = await call("POST", `/orders/${orderId}/refund`, { ...refundBody, amount: 900 }, { [APPROVAL_HEADER]: approvalId });
     expect(otherInput.status).toBe(400);
-    expect(otherInput.body.error.code).toBe("confirm_token_invalid");
+    expect(otherInput.body.error.code).toBe("approval_invalid");
     expect(attempts()).toBe(0);
 
-    const confirmed = await call("POST", `/orders/${orderId}/refund`, refundBody, { [CONFIRM_TOKEN_HEADER]: token });
+    const confirmed = await call("POST", `/orders/${orderId}/refund`, refundBody, { [APPROVAL_HEADER]: approvalId });
     expect(confirmed.status, JSON.stringify(confirmed.body)).toBe(200);
     expect(attempts()).toBe(1);
 
-    const replay = await call("POST", `/orders/${orderId}/refund`, refundBody, { [CONFIRM_TOKEN_HEADER]: token });
-    expect(replay.status).toBe(409);
-    expect(replay.body.error.code).toBe("confirm_token_used");
+    const replay = await call("POST", `/orders/${orderId}/refund`, refundBody, { [APPROVAL_HEADER]: approvalId });
+    expect(replay.status).toBe(400);
+    expect(replay.body.error.code).toBe("approval_invalid");
     expect(attempts()).toBe(1);
+  }, 60_000);
+
+  it("never runs a change its owner declined", async () => {
+    const refused = await call("POST", `/orders/${orderId}/refund`, refundBody);
+    const approvalId = refused.body.error.details.confirmation.approvalId as string;
+    expect(await decideAgentApproval(db, approvalId, OWNER, "decline")).toBe(true);
+    expect(await decideAgentApproval(db, approvalId, OWNER, "approve")).toBe(false);
+    const retry = await call("POST", `/orders/${orderId}/refund`, refundBody, { [APPROVAL_HEADER]: approvalId });
+    expect(retry.status).toBe(400);
+    expect(retry.body.error.code).toBe("approval_invalid");
+    expect(attempts()).toBe(0);
+  });
+
+  it("never accepts a self-made approval id", async () => {
+    const forged = await call("POST", `/orders/${orderId}/refund`, refundBody, { [APPROVAL_HEADER]: `abh_${"x".repeat(20)}` });
+    expect(forged.status).toBe(400);
+    expect(forged.body.error.code).toBe("approval_invalid");
+    expect(attempts()).toBe(0);
   });
 
   it("runs a security read (a GET tagged security) without asking anyone", async () => {

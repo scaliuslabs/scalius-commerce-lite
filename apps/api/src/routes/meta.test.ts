@@ -109,7 +109,7 @@ describe("GET /api/v1/meta", () => {
       },
     });
     expect(body.data.automation).toEqual({
-      setupTokenRequired: false,
+      setupTokenRequired: true,
       identityHandoffEnabled: false,
       localLoginDisabled: false,
       dashboardBasePath: "",

@@ -42,6 +42,7 @@ export const appsLifecycleMessages = defineMessages({
     updateChanged: "This app changed while you were looking. Check it and try again.",
     updateUnverified: "The new version couldn't be verified, so it wasn't installed.",
     updateUntrusted: "The new version is signed by a developer this store does not trust.",
+    signerChanged: "This version is signed by a different developer than the one this app was installed from. To switch developers, uninstall the app (keep its data) and install this version.",
     updateUnreachable: "The registry couldn't be reached. Try again later.",
     sandboxRequired: "Installing and updating from the dashboard needs the paid plan. Ask your developer to run the command and deploy.",
 
@@ -170,6 +171,7 @@ export const appsLifecycleMessages = defineMessages({
     updateChanged: "আপনি দেখার সময় অ্যাপটি বদলে গেছে। দেখে নিয়ে আবার চেষ্টা করুন।",
     updateUnverified: "নতুন ভার্সন যাচাই করা যায়নি, তাই ইনস্টল হয়নি।",
     updateUntrusted: "নতুন ভার্সন এমন ডেভেলপারের সই করা, যাকে এই স্টোর বিশ্বাস করে না।",
+    signerChanged: "এই ভার্সন অন্য একজন ডেভেলপারের সই করা, অ্যাপটি যার কাছ থেকে ইনস্টল হয়েছিল তার নয়। ডেভেলপার বদলাতে অ্যাপটি আনইনস্টল করুন (ডেটা রেখে) এবং এই ভার্সনটি ইনস্টল করুন।",
     updateUnreachable: "রেজিস্ট্রিতে পৌঁছানো যায়নি। পরে আবার চেষ্টা করুন।",
     sandboxRequired: "ড্যাশবোর্ড থেকে ইনস্টল ও আপডেট করতে পেইড প্ল্যান লাগে। আপনার ডেভেলপারকে কমান্ডটি চালিয়ে ডিপ্লয় করতে বলুন।",
 

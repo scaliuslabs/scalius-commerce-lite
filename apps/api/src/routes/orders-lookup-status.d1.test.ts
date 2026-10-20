@@ -1,6 +1,8 @@
-// Track your order by number alone: a status-only view with no personal data,
-// the same 404 for every miss, a strict per-IP limit, and only the storefront
-// server may ask (it forwards the buyer's IP).
+// Track your order: the number alone shows nothing (audit R2 F5); with the
+// last 4 phone digits or the email it opens a status view with no address,
+// phone, email or surname. The same 404 for every miss (number or contact), a
+// strict per-IP and per-order limit, and only the storefront server may ask
+// (it forwards the buyer's IP).
 import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
@@ -44,14 +46,18 @@ const env = () => new Proxy({
 }) as unknown as Env;
 const service = () => `Bearer ${generateToken({ id: "storefront", role: "service" }, "5m", { JWT_SECRET })}`;
 
-const lookup = (reference: string, headers: Record<string, string> = { Authorization: service() }) =>
+const lookup = (
+  reference: string,
+  headers: Record<string, string> = { Authorization: service() },
+  contact: string | null = "0001",
+) =>
   publicBuyerApp.request("https://api.example.test/api/v1/orders/lookup/status", {
     method: "POST",
     headers: { "Content-Type": "application/json", "cf-connecting-ip": "198.51.100.7", ...headers },
-    body: JSON.stringify({ reference }),
+    body: JSON.stringify(contact === null ? { reference } : { reference, contact }),
   }, env());
 
-describe("track your order by number", () => {
+describe("track your order by number and contact", () => {
   it("shows where the order is without any personal data", async () => {
     const response = await lookup("#1057");
     expect(response.status, await response.clone().text()).toBe(200);
@@ -75,12 +81,29 @@ describe("track your order by number", () => {
     }
   });
 
-  it("answers every miss the same way", async () => {
+  it("shows nothing for the order number alone", async () => {
+    const alone = await lookup("#1057", undefined, null);
+    expect(alone.status).toBe(400);
+    const text = await alone.text();
+    for (const secret of ["Rahima", "Cotton Tee", "560", "Inside Dhaka", "r•••"]) expect(text).not.toContain(secret);
+  });
+
+  it("opens with the email or the last 4 digits of the phone or WhatsApp number", async () => {
+    for (const contact of ["0001", "RAHIMA@example.test", "+880 1711-000001"]) {
+      expect((await lookup("#1057", undefined, contact)).status, contact).toBe(200);
+    }
+  });
+
+  it("answers every miss, a wrong contact included, the same way", async () => {
     const missing = await lookup("#9999");
     const byId = await lookup("NOSUCHORDER00001");
-    expect(missing.status).toBe(404);
-    expect(byId.status).toBe(404);
-    expect(await missing.json()).toEqual(await byId.json());
+    const wrongContact = await lookup("#1057", undefined, "9999");
+    const wrongEmail = await lookup("#1057", undefined, "someone@example.test");
+    for (const response of [missing, byId, wrongContact, wrongEmail]) expect(response.status).toBe(404);
+    const body = await missing.json();
+    expect(await byId.json()).toEqual(body);
+    expect(await wrongContact.json()).toEqual(body);
+    expect(await wrongEmail.json()).toEqual(body);
   });
 
   it("is limited per buyer IP and open only to the storefront server", async () => {

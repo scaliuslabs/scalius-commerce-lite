@@ -29,6 +29,12 @@ import type { AgentOAuthProps, AgentPrincipal, AgentResource } from "../types";
 import { isAgentOAuthProps } from "./auth";
 import { createAgentBrowserHandoff } from "../browser-handoffs";
 import {
+  AgentApprovalPendingError,
+  APPROVAL_ID_PATTERN,
+  redeemAgentApproval,
+  requestAgentApproval,
+} from "../approvals";
+import {
   confirmBinding,
   confirmSummary,
   consumeConfirmToken,
@@ -76,7 +82,7 @@ export const AGENT_MCP_PROTOCOL_VERSIONS = ["2026-07-28", ...SUPPORTED_PROTOCOL_
 const LIST_CACHE = { ttlMs: 3_600_000, cacheScope: "private" as const };
 const INSTRUCTIONS_MAX_BYTES = 600;
 
-export const AGENT_MCP_INSTRUCTIONS = "Scalius tools: scalius_search a goal, scalius_describe ids, then scalius_read or scalius_write; verify with a read. scalius_answer handles common data questions. Changes: dryRun:true first; destructive or financial ones need the merchant's approval (confirmToken). Use only ids, revisions and amounts read from the store; money is decimal major units.";
+export const AGENT_MCP_INSTRUCTIONS = "Scalius tools: scalius_search a goal, scalius_describe ids, then scalius_read or scalius_write; verify with a read. scalius_answer handles common data questions. Changes: dryRun:true first; destructive or financial ones need a person's approval (approvalUrl, then approvalId). Use only ids, revisions and amounts read from the store; money is decimal major units.";
 
 /** The static loop plus one live store line, within 600 bytes. */
 export function buildAgentInstructions(storeLine = ""): string {
@@ -653,25 +659,41 @@ type ConfirmOutcome =
   | { kind: "respond"; result: unknown };
 
 /**
- * Resolves the confirmation for gated steps: a valid one-use token, or an
- * accepted native dialog (whose request state carries the token). Without
- * either, nothing is dispatched: the call answers `confirmation_required`
- * (audited) with the summary and a token, or asks the client's dialog.
+ * Resolves the confirmation for gated steps (audit R2 F3): an approval the
+ * grant's owner gave in the dashboard (redeemed once, for exactly these
+ * steps), or an accepted native client dialog. A dialog counts only for an
+ * OAuth app or the paired CLI, whose client shows it to a person; a personal
+ * access key always gets the dashboard link. Without either, nothing is
+ * dispatched: the call answers `confirmation_required` (audited) with the
+ * summary and an approval link for the owner, never anything the agent could
+ * redeem by itself.
  */
 async function resolveConfirmation(
   deps: McpServerDependencies,
   principal: AgentPrincipal,
   steps: readonly ConfirmStep[],
-  confirmToken: string | undefined,
+  approvalId: string | undefined,
   ctx: ToolContextLike | undefined,
 ): Promise<ConfirmOutcome> {
   const binding = await confirmBinding(steps);
-  if (confirmToken) {
-    await consumeConfirmToken(deps.env, principal, binding, confirmToken);
-    return { kind: "confirmed", by: "token", token: confirmToken };
-  }
   const summary = confirmSummary(steps);
-  if (supportsFormElicitation(ctx)) {
+  if (approvalId) {
+    try {
+      await redeemAgentApproval(getDb(deps.env), deps.env, principal, approvalId, binding);
+    } catch (error) {
+      if (!(error instanceof AgentApprovalPendingError)) throw error;
+      return {
+        kind: "respond",
+        result: agentErrorResult(
+          buildAgentToolError({ code: "confirmation_required", status: 428, message: error.message }),
+          { confirmation: error.confirmation },
+        ),
+      };
+    }
+    return { kind: "confirmed", by: "approval", token: approvalId };
+  }
+  const trustsClientDialog = principal.grantKind !== "pat" && supportsFormElicitation(ctx);
+  if (trustsClientDialog) {
     const state = ctx?.mcpReq?.requestState?.();
     const answer = acceptedContent(ctx?.mcpReq?.inputResponses, "confirm", confirmAnswerSchema);
     if (typeof state === "string" && answer?.confirm === true) {
@@ -690,6 +712,7 @@ async function resolveConfirmation(
       };
     }
     await chargeRateLimit(deps, principal);
+    // The dialog's request state: the client returns it with the person's answer.
     const minted = await mintConfirmToken(deps.env, principal, binding);
     return {
       kind: "respond",
@@ -710,16 +733,20 @@ async function resolveConfirmation(
   }
   await chargeRateLimit(deps, principal);
   await auditConfirmationRequired(deps, principal, steps);
-  const minted = await mintConfirmToken(deps.env, principal, binding);
+  const link = await requestAgentApproval(getDb(deps.env), deps.env, principal, {
+    binding,
+    summary,
+    operationIds: steps.filter((step) => isConfirmGated(step.operation)).map((step) => step.operation.operationId),
+  });
   return {
     kind: "respond",
     result: agentErrorResult(
       buildAgentToolError({
         code: "confirmation_required",
         status: 428,
-        message: "This change needs the merchant's approval before it runs.",
+        message: "This change needs the merchant's approval before it runs. Ask them to open confirmation.approvalUrl, then repeat the same call with approvalId.",
       }),
-      { confirmation: { summary, ...minted } },
+      { confirmation: { summary, ...link } },
     ),
   };
 }
@@ -791,7 +818,7 @@ const writeArgsSchema = z.object({
   input: inputArgSchema.optional(),
   steps: z.array(stepArgSchema).max(AGENT_MAX_BATCH_STEPS).optional(),
   dryRun: z.boolean().optional(),
-  confirmToken: z.string().max(200).optional(),
+  approvalId: z.string().regex(APPROVAL_ID_PATTERN).optional(),
   idempotencyKey: z.string().min(8).max(200).optional(),
 });
 const READ_ARGS_JSON: JsonSchema = {
@@ -813,7 +840,7 @@ const WRITE_ARGS_JSON: JsonSchema = {
     input: INPUT_JSON,
     steps: stepsJson("Instead of operationId: up to 20 writes in order; stops at the first failure"),
     dryRun: { type: "boolean", description: "Validate and preview; writes nothing" },
-    confirmToken: { type: "string" },
+    approvalId: { type: "string", description: "confirmation.approvalId, after the merchant approved the change at confirmation.approvalUrl" },
     idempotencyKey: { type: "string" },
   },
 };
@@ -882,7 +909,7 @@ async function runWrite(deps: McpServerDependencies, args: WriteArgs, ctx: ToolC
       }
     }
     const confirmation = gated && policy !== "none"
-      ? { summary: confirmSummary(confirmSteps), ...(await mintConfirmToken(deps.env, principal, await confirmBinding(confirmSteps))) }
+      ? { summary: confirmSummary(confirmSteps), approvalRequired: true }
       : null;
     return toolResult({
       ok: true,
@@ -895,7 +922,7 @@ async function runWrite(deps: McpServerDependencies, args: WriteArgs, ctx: ToolC
 
   let confirmation: { by: AgentConfirmation; token: string } | null = null;
   if (gated && policy !== "none") {
-    const outcome = await resolveConfirmation(deps, principal, confirmSteps, args.confirmToken, ctx);
+    const outcome = await resolveConfirmation(deps, principal, confirmSteps, args.approvalId, ctx);
     if (outcome.kind === "respond") return outcome.result;
     confirmation = { by: outcome.by, token: outcome.token };
   }
@@ -923,8 +950,9 @@ export function createAgentMcpServer(deps: McpServerDependencies, options: Agent
     instructions: options.instructions ?? AGENT_MCP_INSTRUCTIONS,
     supportedProtocolVersions: AGENT_MCP_PROTOCOL_VERSIONS,
     // A stateless 2025-era request cannot hold a server-to-client dialog open,
-    // so confirmation falls back to the token there; 2026-07-28 clients get
-    // the native dialog through input_required.
+    // so confirmation falls back to the dashboard approval link there;
+    // 2026-07-28 clients (not personal access keys) get the native dialog
+    // through input_required.
     inputRequired: { legacyShim: false },
     cacheHints: {
       "tools/list": LIST_CACHE,
@@ -1035,7 +1063,7 @@ export function createAgentMcpServer(deps: McpServerDependencies, options: Agent
   });
 
   server.registerTool("scalius_write", {
-    description: "Run changes: operationId + input, or steps in order. dryRun:true validates and previews. Destructive or financial changes need the merchant's approval: send the confirmToken it returns.",
+    description: "Run changes: operationId + input, or steps in order. dryRun:true validates and previews. Destructive or financial changes need the merchant's approval: they open confirmation.approvalUrl, then repeat the call with approvalId.",
     inputSchema: listed(writeArgsSchema, WRITE_ARGS_JSON),
     outputSchema: sharedOutputSchema,
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },

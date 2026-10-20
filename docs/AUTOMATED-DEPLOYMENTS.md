@@ -4,7 +4,7 @@ This page is for operators who run a control plane that installs, upgrades and o
 
 Every contract:
 
-- is off by default, so an existing store behaves as before;
+- is off by default, so an existing store behaves as before (the setup key, contract 1, is on for a new store);
 - works on D1, TursoDB and PostgreSQL;
 - adds no Wrangler `vars` and no installed secret. Every key is HKDF-derived from `SCALIUS_SECRET`, and every flag lives in the Platform settings document;
 - never logs, echoes or returns a derived secret from a Worker.
@@ -41,7 +41,7 @@ printf %s "$SCALIUS_SECRET" | pnpm secret:derive --purpose admin-setup --stdin
 
 ## 1. Gated first-admin setup
 
-A new store has no administrator, and `POST /api/v1/setup` claims the first account. To close that window, turn on `setupTokenRequired`. The endpoint then also requires the derived token:
+A new store has no administrator, and `POST /api/v1/setup` claims the first account. A new store (no saved Platform settings) has `setupTokenRequired` on, so the endpoint also requires the derived token; a saved setting keeps its own value, and local development (a loopback request origin) never asks for it. `pnpm run deploy` prints the token after the API deploy while the store has no admin, derived from `SCALIUS_SECRET` in its environment or typed at a hidden prompt:
 
 ```text
 POST /api/v1/setup

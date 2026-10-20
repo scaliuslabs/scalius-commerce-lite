@@ -534,6 +534,8 @@ export interface RunOperationOptions {
   files: string[];
   idempotencyKey?: string;
   yes: boolean;
+  /** The approval the merchant gave in the dashboard for exactly this request (`Scalius-Approval`). */
+  approval?: string;
   save?: string;
   overwrite: boolean;
 }
@@ -588,6 +590,7 @@ export async function executeOperation(
   }
   const headers = bearerHeaders(profile.token);
   if (options.idempotencyKey) headers.set("Idempotency-Key", options.idempotencyKey);
+  if (options.approval) headers.set("Scalius-Approval", options.approval);
   let body: BodyInit | undefined;
   let response: Response;
   if (options.files.length > 0 || operation.agent.transport === "multipart") {

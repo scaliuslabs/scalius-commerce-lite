@@ -4,6 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { autoSeedRbacIfNeeded, rbacSeedMarker } from "@scalius/core/auth/rbac/auto-seed";
 import { getUserPermissions } from "@scalius/core/auth/rbac/helpers";
 import { getRoutePermission } from "@scalius/core/auth/rbac/route-permissions";
+import { routedApiPath } from "../utils/routed-path";
 import { retryTransientD1 } from "@scalius/core/utils/transient-d1";
 import { session as sessionTable, user as userTable } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
@@ -199,11 +200,6 @@ export async function getAdminSessionFromCookieHeader(
     };
 }
 
-function normalizeAdminPath(url: string): string {
-    const pathname = new URL(url).pathname;
-    return pathname.startsWith("/api/v1") ? pathname : `/api/v1${pathname}`;
-}
-
 function hasNamedCookie(
     cookieHeader: string | undefined,
     name: string,
@@ -345,7 +341,7 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
             c.set("adminPermissions", agentPrincipal.permissions);
             c.header("Cache-Control", "private, no-store");
 
-            const pathname = normalizeAdminPath(c.req.url);
+            const pathname = routedApiPath(c);
             const method = c.req.method as "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
             const { resolveDirectAgentOperation } = await import("../agent-access/direct-operation");
             operation = resolveDirectAgentOperation(method, pathname);
@@ -475,7 +471,7 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
         );
     }
 
-    const pathname = normalizeAdminPath(c.req.url);
+    const pathname = routedApiPath(c);
     const method = c.req.method as "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
     // Scanner session — restrict to the exact scanner workflow endpoints only.

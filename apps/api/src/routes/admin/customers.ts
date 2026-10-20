@@ -3,6 +3,7 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { assertContactSearchAllowed } from "./contact-access";
+import { protectedField as pii } from "../../schemas/protected";
 import {
     listCustomers,
     createCustomer,
@@ -79,9 +80,9 @@ const listRoute = createRoute({
 
 const customerHistoryEntrySchema = z.object({
     id: z.string(),
-    name: z.string(),
-    email: z.string().nullable(),
-    phone: z.string().nullable(),
+    name: pii("name", z.string()),
+    email: pii("email", z.string().nullable()),
+    phone: pii("phone", z.string().nullable()),
     changeType: z.string().openapi({
         description: "created, updated, deleted, signed_up, order_linked, or order_moved_in / order_moved_out (see `order`, `relatedCustomer` and `verifiedContact`)",
     }),
@@ -97,8 +98,8 @@ const customerHistoryEntrySchema = z.object({
     /** The other record in the move: the guest record it came from, or the account it went to. */
     relatedCustomer: z.object({
         id: z.string(),
-        name: z.string(),
-        phone: z.string().nullable(),
+        name: pii("name", z.string()),
+        phone: pii("phone", z.string().nullable()),
         kind: z.enum(["account", "guest", "merchant"]),
     }).nullable(),
     createdAt: timestampSchema,
@@ -110,7 +111,7 @@ const customerHistoryOrderSchema = z.object({
     id: z.string(),
     orderNumber: z.number().int().nullable(),
     /** The name the order was placed with (a guest record can hold several people's orders). */
-    customerName: z.string(),
+    customerName: pii("name", z.string()),
     totalAmount: z.number(),
     status: z.string(),
     createdAt: timestampSchema,
@@ -122,7 +123,11 @@ const customerHistoryCustomerSchema = customerDetailSchema.omit({ tags: true, ma
     updatedAt: timestampSchema,
     deletedAt: optionalNullableTimestampSchema,
     /** Other active customers with the same phone (shared or family phones); links only, never a merge. */
-    samePhone: z.array(customerLinkSchema.extend({ phone: z.string(), kind: z.enum(["account", "guest", "merchant"]) })),
+    samePhone: z.array(customerLinkSchema.extend({
+        name: pii("name", z.string()),
+        phone: pii("phone", z.string()),
+        kind: z.enum(["account", "guest", "merchant"]),
+    })),
 });
 
 const customerHistoryPayloadSchema = z.object({

@@ -14,7 +14,7 @@ import { buyerOrderShippingAddressShape } from "../../schemas/entities";
 import { getBuyerOrderTracking, getCustomerVisibleBalanceDueMinor, presentBuyerPaymentTerms } from "@scalius/core/modules/orders";
 import { buyerOrderTrackingSchema } from "../../schemas/order-tracking";
 import {
-  findOrderByReference,
+  findOrderByReferenceAndContact,
   ORDER_LOOKUP_NOT_FOUND_MESSAGE,
   sendOrderLookupOtp,
   verifyOrderLookupOtp,
@@ -166,14 +166,18 @@ const orderReceiptSchema = z.object({
 });
 
 // ─── Track your order (public lookup) ──────────────────────────────────────
-// The order number alone opens a status-only view: no address, phone, email
-// or surname. Order numbers are guessable, so every miss is the same 404 and
-// each buyer IP gets a strict budget. Full details, requests, downloads and
-// messages need a code through a channel the merchant chose, sent to a
-// contact saved on the order.
+// The order number alone shows nothing (audit R2 F5). With the last 4 digits
+// of the order's phone, or its email, it opens a status view: first name,
+// items, totals and tracking; no address, phone, email or surname. Order
+// numbers are guessable, so every miss (number or contact) is the same 404,
+// and each buyer IP and each order get a strict budget. Full details,
+// requests, downloads and messages need a code through a channel the merchant
+// chose, sent to a contact saved on the order.
 
 const orderLookupReferenceSchema = z.string().trim().min(1).max(64)
   .openapi({ description: 'Order number ("#1001") or order id' });
+const orderLookupContactSchema = z.string().trim().min(1).max(254)
+  .openapi({ description: "The last 4 digits of the phone number on the order, or its email" });
 
 const orderCodeOptionSchema = z.object({
   channel: z.enum(CUSTOMER_AUTH_OTP_CHANNELS),
@@ -210,12 +214,15 @@ const orderLookupStatusSchema = z.object({
   codeOptions: z.array(orderCodeOptionSchema),
 });
 
-async function enforceOrderLookupRateLimit(env: Env, ip: string): Promise<void> {
-  const [strict, standard] = await Promise.all([
+async function enforceOrderLookupRateLimit(env: Env, ip: string, reference: string): Promise<void> {
+  // Per order as well as per IP: guessing an order's contact from many IPs stays slow.
+  const orderKey = reference.replace(/^#\s*/, "").trim().toUpperCase();
+  const [strict, standard, perOrder] = await Promise.all([
     isWithinRateLimit(env, "RL_STRICT", "order-lookup-ip", ip),
     isWithinRateLimit(env, "RL_STANDARD", "order-lookup-ip-minute", ip),
+    isWithinRateLimit(env, "RL_STRICT", "order-lookup-order", orderKey),
   ]);
-  if (!strict || !standard) {
+  if (!strict || !standard || !perOrder) {
     throw new RateLimitError("Too many order lookups.", 60);
   }
 }
@@ -229,11 +236,15 @@ const orderLookupStatusRoute = createRoute({
   method: "post",
   path: "/lookup/status",
   tags: ["Orders"],
-  summary: "Status-only view of an order by its number (no personal data)",
+  summary: "Status view of an order by its number and the last 4 phone digits or email",
   request: {
     body: {
       required: true,
-      content: { "application/json": { schema: z.object({ reference: orderLookupReferenceSchema }).strict() } },
+      content: {
+        "application/json": {
+          schema: z.object({ reference: orderLookupReferenceSchema, contact: orderLookupContactSchema }).strict(),
+        },
+      },
     },
   },
   responses: {
@@ -250,9 +261,10 @@ app.use("/lookup/status", authMiddleware);
 app.openapi(orderLookupStatusRoute, async (c) => {
   const db = c.get("db");
   c.header("Cache-Control", "private, no-cache, no-store, must-revalidate");
-  await enforceOrderLookupRateLimit(c.env, getTrustedClientIp(c));
+  const { reference, contact } = c.req.valid("json");
+  await enforceOrderLookupRateLimit(c.env, getTrustedClientIp(c), reference);
 
-  const found = await findOrderByReference(db, c.req.valid("json").reference);
+  const found = await findOrderByReferenceAndContact(db, reference, contact);
   if (!found) throw new NotFoundError(ORDER_LOOKUP_NOT_FOUND_MESSAGE);
   const order = await db
     .select({
@@ -343,6 +355,7 @@ const sendOrderLookupOtpRoute = createRoute({
         "application/json": {
           schema: z.object({
             reference: orderLookupReferenceSchema,
+            contact: orderLookupContactSchema,
             channel: z.enum(CUSTOMER_AUTH_OTP_CHANNELS).optional(),
           }).strict(),
         },
@@ -377,6 +390,7 @@ app.openapi(sendOrderLookupOtpRoute, async (c) => {
 
   const result = await sendOrderLookupOtp(db, {
     reference: body.reference,
+    contact: body.contact,
     channel: body.channel,
     ip: getTrustedClientIp(c),
     emailEnv: env,

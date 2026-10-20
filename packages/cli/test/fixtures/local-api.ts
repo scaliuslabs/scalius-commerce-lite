@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { McpServer, createMcpHandler, fromJsonSchema } from "@modelcontextprotocol/server";
+import { McpServer, createMcpHandler, fromJsonSchema, inputRequired } from "@modelcontextprotocol/server";
 
 // A local Scalius API for CLI tests: CLI device pairing, the protected
 // resource metadata, the OpenAPI contract, and a real MCP endpoint (the
@@ -25,11 +25,16 @@ export interface LocalApi {
   state: {
     refunds: Array<{ input: unknown; idempotencyKey?: string }>;
     products: Array<{ input: unknown; idempotencyKey?: string }>;
-    usedTokens: Set<string>;
+    /** Approval requests the server sent (the merchant answers them by setting "approved"). */
+    approvals: Map<string, "pending" | "approved" | "used">;
+    /** Native dialogs the server asked a terminal client for. */
+    dialogs: number;
+    /** The grant's owner turned approval off: gated changes run directly. */
+    approvalOff: boolean;
     failNextProductCreate: number;
     orders: Array<{ id: string; number: number }>;
     /** Every bulk write the server accepted (not dry runs): what it got, with the Idempotency-Key and confirm token. */
-    bulkWrites: Array<{ operationId: string; input: Value; idempotencyKey?: string; confirmToken?: string }>;
+    bulkWrites: Array<{ operationId: string; input: Value; idempotencyKey?: string; approvalId?: string }>;
     /** Bulk dry runs the server saw. */
     bulkDryRuns: Array<{ operationId: string; input: Value }>;
     /** Times bulk_runs.get was read; the second read finds the run done. */
@@ -183,41 +188,61 @@ function buildMcpServer(api: LocalApi): McpServer {
       meta: { operationId: args.operationId, requestId: `req_${page}`, status: 200, total: ORDERS.length, hasMore, nextCursor: hasMore ? encodeCursor(page + 1) : null },
     });
   });
-  server.registerTool("scalius_write", { description: "write", inputSchema: anyObject }, async (args) => {
+  server.registerTool("scalius_write", { description: "write", inputSchema: anyObject }, async (args, ctx) => {
     const bulkRuns = new Set(["dashboard.resources.variants.bulk_set_prices", "dashboard.resources.variants.bulk_set_stock", "dashboard.resources.customers.bulk_tag"]);
     const steps = Array.isArray(args.steps) ? args.steps as Array<{ id: string; operationId: string; input?: Value }> : undefined;
     const gated = args.operationId === "dashboard.orders.refund" || args.operationId === "dashboard.resources.variants.bulk_set_prices"
       || (steps?.some((step) => step.operationId === "dashboard.orders.refund") ?? false);
-    const confirmation = { summary: "Process order refund: id=ord_1, amount=500", confirmToken: `sct_${api.state.usedTokens.size + 1}`, expiresAt: "2026-08-13T00:10:00.000Z" };
+    const confirmation = { summary: "Process order refund: id=ord_1, amount=500" };
+    // A person approves a gated change: a terminal client's dialog, or the dashboard link.
+    const request = (ctx as { mcpReq?: { envelope?: Value; inputResponses?: Record<string, unknown>; requestState?: () => unknown } }).mcpReq;
+    const gate = (summary: string) => {
+      if (api.state.approvalOff) return null;
+      const capabilities = request?.envelope?.["io.modelcontextprotocol/clientCapabilities"] as Value | undefined;
+      if (capabilities?.elicitation && typeof args.approvalId !== "string") {
+        const answer = request?.inputResponses?.confirm as { action?: string; content?: { confirm?: unknown } } | undefined;
+        if (request?.requestState?.() === "dialog-state" && answer?.action === "accept" && answer.content?.confirm === true) return null;
+        if (request?.inputResponses) return failure({ code: "confirmation_declined", status: 403, message: "The merchant did not approve this change.", retryable: false, hint: "Do not retry" });
+        api.state.dialogs += 1;
+        return inputRequired({
+          inputRequests: { confirm: inputRequired.elicit({ message: `Approve: ${summary}`, requestedSchema: { type: "object", properties: { confirm: { type: "boolean" } }, required: ["confirm"] } }) },
+          requestState: "dialog-state",
+        });
+      }
+      const pending = (approvalId: string) => failure(
+        { code: "confirmation_required", status: 428, message: "This change needs a person's approval before it runs.", retryable: true, hint: "Give the merchant the link" },
+        { confirmation: { summary, approvalId, approvalUrl: `${api.origin}/admin/settings/agent-access/approve/${approvalId}`, expiresAt: "2026-08-13T00:10:00.000Z" } },
+      );
+      if (typeof args.approvalId !== "string") {
+        const approvalId = `abh_${String(api.state.approvals.size + 1).padStart(20, "0")}`;
+        api.state.approvals.set(approvalId, "pending");
+        return pending(approvalId);
+      }
+      const status = api.state.approvals.get(args.approvalId);
+      if (status === "pending") return pending(args.approvalId);
+      if (status !== "approved") return failure({ code: "approval_invalid", status: 400, message: "This approval is not valid", retryable: false, hint: "Repeat without it" });
+      api.state.approvals.set(args.approvalId, "used");
+      return null;
+    };
     if (args.dryRun === true) {
       if (typeof args.operationId === "string" && bulkRuns.has(args.operationId)) {
         const body = (args.input as Value | undefined)?.body as Value | undefined;
         api.state.bulkDryRuns.push({ operationId: args.operationId, input: body ?? {} });
-        return result({ ok: true, dryRun: true, written: false, id: null, status: "preview", total: 2, changed: 2, ...(gated ? { confirmation } : {}) });
+        return result({ ok: true, dryRun: true, written: false, id: null, status: "preview", total: 2, changed: 2, ...(gated ? { confirmation: { ...confirmation, approvalRequired: true } } : {}) });
       }
-      return result({ ok: true, dryRun: true, written: false, operationId: args.operationId, support: "none", validated: true, ...(gated ? { confirmation } : {}) });
+      return result({ ok: true, dryRun: true, written: false, operationId: args.operationId, support: "none", validated: true, ...(gated ? { confirmation: { ...confirmation, approvalRequired: true } } : {}) });
     }
     const input = args.input as Value | undefined;
     if (steps && gated) {
-      if (typeof args.confirmToken !== "string") {
-        return failure({ code: "confirmation_required", status: 428, message: "This change needs the merchant's approval before it runs.", retryable: false, hint: "Show the summary" }, { confirmation: { ...confirmation, summary: "Process order refund: id=ord_1, amount=500" } });
-      }
-      if (api.state.usedTokens.has(args.confirmToken)) {
-        return failure({ code: "confirm_token_used", status: 409, message: "This confirmToken was already used", retryable: false, hint: "Read to verify" });
-      }
-      api.state.usedTokens.add(args.confirmToken);
+      const refused = gate("Process order refund: id=ord_1, amount=500");
+      if (refused) return refused;
       api.state.batchWrites += 1;
       return result({ ok: true, steps: steps.map((step) => ({ id: step.id, ok: true, data: { operationId: step.operationId } })) });
     }
     if (typeof args.operationId === "string" && bulkRuns.has(args.operationId)) {
       if (gated) {
-        if (typeof args.confirmToken !== "string") {
-          return failure({ code: "confirmation_required", status: 428, message: "This change needs the merchant's approval before it runs.", retryable: false, hint: "Show the summary" }, { confirmation: { ...confirmation, summary: "Change the price of 2 SKUs by 5%" } });
-        }
-        if (api.state.usedTokens.has(args.confirmToken)) {
-          return failure({ code: "confirm_token_used", status: 409, message: "This confirmToken was already used", retryable: false, hint: "Read to verify" });
-        }
-        api.state.usedTokens.add(args.confirmToken);
+        const refused = gate("Change the price of 2 SKUs by 5%");
+        if (refused) return refused;
       }
       const body = (input?.body ?? {}) as Value;
       // One run per Idempotency-Key: a repeat gets the first run back.
@@ -227,7 +252,7 @@ function buildMcpServer(api: LocalApi): McpServer {
           operationId: args.operationId,
           input: body,
           ...(typeof args.idempotencyKey === "string" ? { idempotencyKey: args.idempotencyKey } : {}),
-          ...(typeof args.confirmToken === "string" ? { confirmToken: args.confirmToken } : {}),
+          ...(typeof args.approvalId === "string" ? { approvalId: args.approvalId } : {}),
         });
       }
       // A filter selects an unknown number of SKUs: this store's run is over 250, so it runs on after the response (202).
@@ -239,13 +264,8 @@ function buildMcpServer(api: LocalApi): McpServer {
       });
     }
     if (gated) {
-      if (typeof args.confirmToken !== "string") {
-        return failure({ code: "confirmation_required", status: 428, message: "This change needs the merchant's approval before it runs.", retryable: false, hint: "Show the summary" }, { confirmation });
-      }
-      if (api.state.usedTokens.has(args.confirmToken)) {
-        return failure({ code: "confirm_token_used", status: 409, message: "This confirmToken was already used", retryable: false, hint: "Read to verify" });
-      }
-      api.state.usedTokens.add(args.confirmToken);
+      const refused = gate(confirmation.summary);
+      if (refused) return refused;
       api.state.refunds.push({ input });
       return result({ ok: true, data: { refundId: "rfd_1", amount: 500 }, meta: { operationId: args.operationId, requestId: "req_refund", status: 200 } });
     }
@@ -277,7 +297,7 @@ export async function startLocalApi(): Promise<LocalApi> {
     origin: "",
     token: LOCAL_TOKEN,
     requests: [] as RecordedRequest[],
-    state: { refunds: [], products: [], usedTokens: new Set<string>(), failNextProductCreate: 0, orders: ORDERS, bulkWrites: [], bulkDryRuns: [], bulkRunReads: 0, batchWrites: 0, store: { ...DEFAULT_STORE } },
+    state: { refunds: [], products: [], approvals: new Map(), dialogs: 0, approvalOff: false, failNextProductCreate: 0, orders: ORDERS, bulkWrites: [], bulkDryRuns: [], bulkRunReads: 0, batchWrites: 0, store: { ...DEFAULT_STORE } },
     close: async () => undefined,
   } as LocalApi;
   const handler = createMcpHandler(() => buildMcpServer(api));

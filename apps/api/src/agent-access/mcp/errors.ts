@@ -131,18 +131,18 @@ export function recoveryFor(input: {
   if (code === "confirmation_required") {
     return {
       retryable: true,
-      hint: "Show confirmation.summary to the merchant. After they approve, call scalius_write again with the same input and confirmToken.",
+      hint: "Ask the merchant to open confirmation.approvalUrl and approve confirmation.summary. After they approve, call scalius_write again with the same input and approvalId.",
     };
   }
   if (code === "confirmation_declined") {
     return { retryable: false, hint: "The merchant did not approve. Do not retry unless they ask for the change again." };
   }
-  if (code.startsWith("confirm_token")) {
+  if (code.startsWith("approval_")) {
     return {
       retryable: false,
-      hint: code === "confirm_token_used"
-        ? "A confirmToken works once. Run scalius_write with dryRun:true for a new one."
-        : "The confirmToken does not match this grant, operation and input, or expired. Run scalius_write with dryRun:true for a new one.",
+      hint: code === "approval_used"
+        ? "An approval works once. Repeat the change without approvalId for a new approval link."
+        : "The approval does not match this connection, operation and input, was declined, or expired. Repeat the change without approvalId for a new approval link.",
       ...(status === 409 ? { current: null } : {}),
     };
   }

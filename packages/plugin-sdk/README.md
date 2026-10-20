@@ -40,6 +40,8 @@ How a new app reaches a store you run with `pnpm dev` (the same steps work on a 
 
 On Workers Paid with the sandbox on, skip steps 2 and 3: upload the ZIP that `pnpm plugin pack` wrote on the Apps page. An unsigned upload, or one signed by a developer the store does not trust yet, installs only after a Super Admin chooses to trust the developer or to install the unsigned app.
 
+The developer key an app was installed with stays its signer: a registry or uploaded update signed by another key is refused (an app installed unsigned takes the key of its first signed update). To move an app to another developer, uninstall it keeping its data and install the new release. App ids under `scalius.*` are reserved for apps bundled with Scalius; a registry or upload install of one is refused.
+
 Real apps in `plugins/`: `bangladesh` (bKash, Nagad and SSLCommerz payments, SMS, courier history, couriers and place seeding, one feature per service) and `noor` (a theme of skins). Three more first-party apps in `plugins/` are reference apps, not bundled; add one with `pnpm plugin add plugins/<dir>`, restart, then activate it as above:
 
 - `volt` (`scalius.volt`): a theme with no backend (category mega-menu header, footer, card, product page with a specification table, listing, home-section skins, a template). Its off-by-default `demo_content` feature imports a complete demo store in bounded slices from `demo-pack/` (a minute cron continues it), records what it made in its Objects and removes exactly that.

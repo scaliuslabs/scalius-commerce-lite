@@ -23950,7 +23950,8 @@
                 "type": "string"
               },
               "name": {
-                "type": "string"
+                "type": "string",
+                "x-scalius-protected": "name"
               }
             },
             "required": [
@@ -23960,7 +23961,8 @@
           },
           "recipientName": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "x-scalius-protected": "name"
           },
           "recipientContactMasked": {
             "type": "string",
@@ -24011,11 +24013,13 @@
               },
               "recipientEmail": {
                 "type": "string",
-                "nullable": true
+                "nullable": true,
+                "x-scalius-protected": "email"
               },
               "recipientPhone": {
                 "type": "string",
-                "nullable": true
+                "nullable": true,
+                "x-scalius-protected": "phone"
               },
               "sourceOrder": {
                 "type": "object",
@@ -72861,7 +72865,7 @@
         "tags": [
           "Orders"
         ],
-        "summary": "Status-only view of an order by its number (no personal data)",
+        "summary": "Status view of an order by its number and the last 4 phone digits or email",
         "requestBody": {
           "required": true,
           "content": {
@@ -72874,10 +72878,17 @@
                     "minLength": 1,
                     "maxLength": 64,
                     "description": "Order number (\"#1001\") or order id"
+                  },
+                  "contact": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 254,
+                    "description": "The last 4 digits of the phone number on the order, or its email"
                   }
                 },
                 "required": [
-                  "reference"
+                  "reference",
+                  "contact"
                 ],
                 "additionalProperties": false
               }
@@ -73273,7 +73284,7 @@
           "maxRequestBytes": 1048576,
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
-          "exclusionReason": "Service-authenticated storefront proxy for the Track-your-order status view; guessable order numbers stay behind the storefront's per-IP limit.",
+          "exclusionReason": "Service-authenticated storefront proxy for the Track-your-order status view; it needs the order number plus the last 4 phone digits or the email, behind per-IP and per-order limits.",
           "dryRun": "none",
           "confirmation": "none"
         },
@@ -73302,6 +73313,12 @@
                     "maxLength": 64,
                     "description": "Order number (\"#1001\") or order id"
                   },
+                  "contact": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 254,
+                    "description": "The last 4 digits of the phone number on the order, or its email"
+                  },
                   "channel": {
                     "type": "string",
                     "enum": [
@@ -73312,7 +73329,8 @@
                   }
                 },
                 "required": [
-                  "reference"
+                  "reference",
+                  "contact"
                 ],
                 "additionalProperties": false
               }
@@ -121948,10 +121966,12 @@
                                     "type": "string"
                                   },
                                   "name": {
-                                    "type": "string"
+                                    "type": "string",
+                                    "x-scalius-protected": "name"
                                   },
                                   "phone": {
-                                    "type": "string"
+                                    "type": "string",
+                                    "x-scalius-protected": "phone"
                                   },
                                   "kind": {
                                     "type": "string",
@@ -121997,15 +122017,18 @@
                                 "type": "string"
                               },
                               "name": {
-                                "type": "string"
+                                "type": "string",
+                                "x-scalius-protected": "name"
                               },
                               "email": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "x-scalius-protected": "email"
                               },
                               "phone": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "x-scalius-protected": "phone"
                               },
                               "changeType": {
                                 "type": "string",
@@ -122067,11 +122090,13 @@
                                     "type": "string"
                                   },
                                   "name": {
-                                    "type": "string"
+                                    "type": "string",
+                                    "x-scalius-protected": "name"
                                   },
                                   "phone": {
                                     "type": "string",
-                                    "nullable": true
+                                    "nullable": true,
+                                    "x-scalius-protected": "phone"
                                   },
                                   "kind": {
                                     "type": "string",
@@ -122127,7 +122152,8 @@
                                 "nullable": true
                               },
                               "customerName": {
-                                "type": "string"
+                                "type": "string",
+                                "x-scalius-protected": "name"
                               },
                               "totalAmount": {
                                 "type": "number"
@@ -148725,7 +148751,8 @@
                                 "nullable": true
                               },
                               "customerName": {
-                                "type": "string"
+                                "type": "string",
+                                "x-scalius-protected": "name"
                               },
                               "status": {
                                 "type": "string"
@@ -148749,22 +148776,26 @@
                                 "type": "string"
                               },
                               "name": {
-                                "type": "string"
+                                "type": "string",
+                                "x-scalius-protected": "name"
                               },
                               "phone": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "x-scalius-protected": "phone"
                               },
                               "email": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "x-scalius-protected": "email"
                               },
                               "origin": {
                                 "type": "string"
                               },
                               "latestOrderName": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "x-scalius-protected": "name"
                               }
                             },
                             "required": [
@@ -152444,7 +152475,8 @@
                               },
                               "customerName": {
                                 "type": "string",
-                                "maxLength": 256
+                                "maxLength": 256,
+                                "x-scalius-protected": "name"
                               },
                               "totalAmount": {
                                 "type": "number"
@@ -189175,16 +189207,19 @@
                               "exclusiveMinimum": true
                             },
                             "customerName": {
-                              "type": "string"
+                              "type": "string",
+                              "x-scalius-protected": "name"
                             },
                             "customerPhone": {
                               "type": "string",
                               "nullable": true,
-                              "description": "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in)."
+                              "description": "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in).",
+                              "x-scalius-protected": "phone"
                             },
                             "customerEmail": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "email"
                             },
                             "customerId": {
                               "type": "string",
@@ -189192,11 +189227,13 @@
                             },
                             "shippingAddress": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "shippingAddressLine2": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "shippingCountryCode": {
                               "type": "string",
@@ -189204,7 +189241,8 @@
                             },
                             "shippingDependentLocality": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "shippingLocality": {
                               "type": "string",
@@ -189220,34 +189258,41 @@
                             },
                             "shippingCompany": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "shippingName": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "name"
                             },
                             "shippingPhone": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "phone"
                             },
                             "billingSameAsShipping": {
                               "type": "boolean"
                             },
                             "billingName": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "name"
                             },
                             "billingCompany": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "billingAddress": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "billingAddressLine2": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "billingCountryCode": {
                               "type": "string",
@@ -189255,7 +189300,8 @@
                             },
                             "billingDependentLocality": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "billingLocality": {
                               "type": "string",
@@ -189897,16 +189943,19 @@
                               "exclusiveMinimum": true
                             },
                             "customerName": {
-                              "type": "string"
+                              "type": "string",
+                              "x-scalius-protected": "name"
                             },
                             "customerPhone": {
                               "type": "string",
                               "nullable": true,
-                              "description": "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in)."
+                              "description": "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in).",
+                              "x-scalius-protected": "phone"
                             },
                             "customerEmail": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "email"
                             },
                             "customerId": {
                               "type": "string",
@@ -189914,11 +189963,13 @@
                             },
                             "shippingAddress": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "shippingAddressLine2": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "shippingCountryCode": {
                               "type": "string",
@@ -189926,7 +189977,8 @@
                             },
                             "shippingDependentLocality": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "shippingLocality": {
                               "type": "string",
@@ -189942,34 +189994,41 @@
                             },
                             "shippingCompany": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "shippingName": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "name"
                             },
                             "shippingPhone": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "phone"
                             },
                             "billingSameAsShipping": {
                               "type": "boolean"
                             },
                             "billingName": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "name"
                             },
                             "billingCompany": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "billingAddress": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "billingAddressLine2": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "billingCountryCode": {
                               "type": "string",
@@ -189977,7 +190036,8 @@
                             },
                             "billingDependentLocality": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "billingLocality": {
                               "type": "string",
@@ -205845,7 +205905,8 @@
                               },
                               "customerName": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "x-scalius-protected": "name"
                               },
                               "assigneeUserId": {
                                 "type": "string",
@@ -207056,7 +207117,8 @@
                               },
                               "customerName": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "x-scalius-protected": "name"
                               },
                               "assigneeUserId": {
                                 "type": "string",
@@ -207661,15 +207723,18 @@
                               "type": "string"
                             },
                             "name": {
-                              "type": "string"
+                              "type": "string",
+                              "x-scalius-protected": "name"
                             },
                             "email": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "email"
                             },
                             "phone": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "phone"
                             }
                           },
                           "required": [
@@ -208416,7 +208481,8 @@
                             },
                             "customerName": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "name"
                             },
                             "assigneeUserId": {
                               "type": "string",
@@ -209010,7 +209076,8 @@
                             },
                             "customerName": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "name"
                             },
                             "assigneeUserId": {
                               "type": "string",
@@ -209569,7 +209636,8 @@
                             },
                             "customerName": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "name"
                             },
                             "assigneeUserId": {
                               "type": "string",
@@ -210131,7 +210199,8 @@
                             },
                             "customerName": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "name"
                             },
                             "assigneeUserId": {
                               "type": "string",
@@ -210734,7 +210803,8 @@
                             },
                             "customerName": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "name"
                             },
                             "assigneeUserId": {
                               "type": "string",
@@ -239134,7 +239204,8 @@
           "confirmation": "none"
         },
         "x-scalius-rbac": {
-          "type": "unmapped"
+          "type": "permission",
+          "permission": "agent_access.manage"
         }
       },
       "post": {
@@ -239302,7 +239373,346 @@
           "confirmation": "none"
         },
         "x-scalius-rbac": {
-          "type": "unmapped"
+          "type": "permission",
+          "permission": "agent_access.manage"
+        }
+      }
+    },
+    "/api/v1/admin/agent-access/approvals/{approvalId}": {
+      "get": {
+        "operationId": "dashboard.agent_access.approval.get",
+        "tags": [
+          "Admin - Agent Access"
+        ],
+        "summary": "Read a change an agent asks to make",
+        "description": "Browser-only: the summary of one gated agent change waiting for (or given) its owner's approval.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^abh_[A-Za-z0-9_-]{20}$"
+            },
+            "required": true,
+            "name": "approvalId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The change to approve",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "approvalId": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "pending",
+                            "approved"
+                          ]
+                        },
+                        "summary": {
+                          "type": "string"
+                        },
+                        "operationIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "expiresAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "approvalId",
+                        "status",
+                        "summary",
+                        "operationIds",
+                        "expiresAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "excluded",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "security",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 8192,
+          "maxRequestBytes": 4096,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Browser-only view of a gated agent change waiting for its owner's approval; agents receive only the approval link.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "agent_access.manage"
+        }
+      },
+      "post": {
+        "operationId": "dashboard.agent_access.approval.decide",
+        "tags": [
+          "Admin - Agent Access"
+        ],
+        "summary": "Approve or decline a change an agent asks to make",
+        "description": "Browser-only: the grant's owner approves (the agent's retry then runs once) or declines one gated agent change.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^abh_[A-Za-z0-9_-]{20}$"
+            },
+            "required": true,
+            "name": "approvalId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "decision": {
+                    "type": "string",
+                    "enum": [
+                      "approve",
+                      "decline"
+                    ]
+                  }
+                },
+                "required": [
+                  "decision"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The answer was recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "decision": {
+                          "type": "string",
+                          "enum": [
+                            "approve",
+                            "decline"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "decision"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "excluded",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "security",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 4096,
+          "maxRequestBytes": 4096,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "The grant owner's approval of a gated agent change; only that owner's 2FA-verified browser session may answer it, never an agent.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "agent_access.manage"
         }
       }
     },

@@ -59,7 +59,7 @@ function isPluginPrincipal(value: unknown): value is PluginPrincipal {
 
 /**
  * What the dispatcher already settled for a confirmation-gated step: the
- * merchant approved it (a consumed confirm token or a client dialog), or it
+ * merchant approved it (a redeemed dashboard approval or a client dialog), or it
  * is a native dry run that writes nothing. The admin boundary's confirm gate
  * (agent-access/confirm-gate.ts) reads it; nothing outside the dispatcher can
  * set it.

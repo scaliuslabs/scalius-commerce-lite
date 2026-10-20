@@ -102,8 +102,9 @@ function UpdateNotice({ app }: { app: AppDetail }) {
       toast.error(
         code === "installation.sandbox_required" ? t("sandboxRequired")
           : code === "signature.untrusted" ? t("updateUntrusted")
-            : code === "signature.invalid" || code === "signature.missing" || code === "package.invalid" ? t("updateUnverified")
-              : t("updateFailed"),
+            : code === "signature.signer_changed" ? t("signerChanged")
+              : code === "signature.invalid" || code === "signature.missing" || code === "package.invalid" ? t("updateUnverified")
+                : t("updateFailed"),
       );
     },
   });

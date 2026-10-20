@@ -122,8 +122,9 @@ Routing and gating fields (`x-scalius-agent`, every manifest entry):
 - `confirmation`: `required` for destructive and financial risk, and for any
   row that adds the gate (gift-card writes). Both agent lanes pass one gate
   at the admin boundary (`agent-access/confirm-gate.ts`): MCP settles it with
-  the confirm token or a client dialog, direct REST with the
-  `Scalius-Confirm-Token` header from a 428 `confirmation_required` answer.
+  the owner's dashboard approval or a client dialog, direct REST with the
+  `Scalius-Approval` header naming the approval its owner gave at the
+  `approvalUrl` of a 428 `confirmation_required` answer.
 - `grantScope`: `customer_conversations` (the inbox) or `review_moderation`.
   No preset grant reaches them; a Custom grant that selected their permissions
   does (`agent-access/grant-scopes.ts`, checked on both lanes).

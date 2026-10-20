@@ -2,6 +2,7 @@
 // revision receipts, history pages stay under the 64 KiB result ceiling at
 // their worst case, and whole documents arrive only as an encrypted artifact.
 import "@hono/zod-openapi";
+import { Buffer } from "node:buffer";
 import type { DatabaseSync } from "node:sqlite";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
@@ -26,6 +27,8 @@ import app from "../app";
 import { finalizeOpenApiContract } from "../openapi-contract";
 import { createAgentMcpServer } from "./mcp/server";
 import { openAgentArtifact } from "./artifacts";
+import { decideAgentApproval } from "./approvals";
+import { getDb } from "@scalius/database/client";
 
 const OWNER = "00000000-0000-4000-8000-000000000001";
 const GRANT = "agr_0123456789abcdefghij";
@@ -86,7 +89,7 @@ describe("theme operations through real MCP dispatch and D1", () => {
     for (let revision = 1; revision <= 20; revision += 1) insertVersion.run(`themev_${"v".repeat(120)}_${revision}`, revision, snapshot, OWNER);
     objects = new Map();
     env = {
-      DB: harness.binding, PUBLIC_API_BASE_URL: "https://api.example.test", STOREFRONT_URL: "https://storefront.example.test", SCALIUS_SECRET: "theme-mcp-test-master-secret-0123456789", AGENT_TOKEN_PEPPER: "test-pepper", RL_STANDARD: { limit: vi.fn(async () => ({ success: true })) },
+      DB: harness.binding, PUBLIC_API_BASE_URL: "https://api.example.test", STOREFRONT_URL: "https://storefront.example.test", SCALIUS_SECRET: "theme-mcp-test-master-secret-0123456789", AGENT_TOKEN_PEPPER: "test-pepper", BETTER_AUTH_URL: "https://dashboard.example.test", CREDENTIAL_ENCRYPTION_KEY: Buffer.alloc(32, 3).toString("base64"), RL_STANDARD: { limit: vi.fn(async () => ({ success: true })) },
       BUCKET: { put: vi.fn(async (key: string, value: BodyInit) => { objects.set(key, await new Response(value).arrayBuffer()); return { key }; }), get: vi.fn(async (key: string) => { const value = objects.get(key); return value ? { arrayBuffer: async () => value, size: value.byteLength } : null; }), delete: vi.fn(async (key: string) => { objects.delete(key); }) },
     } as unknown as Env;
     server = createAgentMcpServer({ surface: "dashboard", env, ctx: { props: state.props, waitUntil: vi.fn(), passThroughOnException: vi.fn() } as unknown as ExecutionContext });
@@ -99,9 +102,11 @@ describe("theme operations through real MCP dispatch and D1", () => {
     // Reads take the whole 64 KiB budget here: these pages are measured against the hard ceiling.
     const args = mode === "read" ? { operationId, input, maxBytes: 65_536 } : { operationId, input };
     let result = await handler(args);
-    // A destructive write (discard) runs only with the confirmation it answers first.
+    // A destructive write (discard) runs only after the owner approves the link it answers first.
     if (result.structuredContent?.error?.code === "confirmation_required") {
-      result = await handler({ ...args, confirmToken: result.structuredContent.confirmation.confirmToken });
+      const { approvalId } = result.structuredContent.confirmation;
+      expect(await decideAgentApproval(getDb(env), approvalId, OWNER, "approve")).toBe(true);
+      result = await handler({ ...args, approvalId });
     }
     expect(result, operationId).not.toHaveProperty("isError");
     expect(result.structuredContent, operationId).toMatchObject({ ok: true });

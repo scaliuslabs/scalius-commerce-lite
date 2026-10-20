@@ -28,6 +28,7 @@ import {
 import { CONVERSATION_LIMITS, CONVERSATION_SUBJECT_TYPES } from "@scalius/shared/conversation";
 import { created, ok } from "../../utils/api-response";
 import { conflictResponse, errorResponses, serviceUnavailableResponse, successEnvelope } from "../../schemas/responses";
+import { protectedField as pii } from "../../schemas/protected";
 import {
   attachmentUploadRequest,
   attachmentUploadResponseSchema,
@@ -147,7 +148,12 @@ app.openapi(createRoute({
   operationId: "dashboard.conversations.context", method: "get", path: "/{id}/context", tags: ["Admin - Conversations"],
   summary: "Permission-gated buyer history and explicitly shared cart", request: { params: conversationParam },
   responses: { 200: { description: "Context", content: { "application/json": { schema: successEnvelope(z.object({
-    customer: z.object({ id: z.string(), name: z.string(), email: z.string().nullable(), phone: z.string().nullable() }).nullable(),
+    customer: z.object({
+      id: z.string(),
+      name: pii("name", z.string()),
+      email: pii("email", z.string().nullable()),
+      phone: pii("phone", z.string().nullable()),
+    }).nullable(),
     customerDenied: z.boolean(), ordersDenied: z.boolean(), cartShare: cartShareSchema.nullable(),
     recentOrders: z.array(z.object({ id: z.string(), orderNumber: z.string(), status: z.string(), paymentStatus: z.string(), total: z.object({ amount: z.number(), currency: z.string() }).nullable(), createdAt: z.number().int() })).nullable(),
   })) } } }, ...errorResponses },
