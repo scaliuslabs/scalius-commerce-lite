@@ -195,7 +195,7 @@ Better Auth e-mail sign-up is not atomic on the one-shot proxy adapters. Create 
 
 1. `POST /api/v1/admin/auth/scanner-link` stores the SHA-256 of a one-time token (`sct_...`) in `scanner_token_claims`. It lives 15 minutes.
 2. The scanner page (`/scanner`) reads the token from the URL fragment and posts it to `<dashboard>/api/scanner-token`. Tokens in URLs are refused.
-3. The exchange consumes the claim atomically. The claim row is the session: `consumed_session_hash` (SHA-256 of the cookie value) and `session_expires_at` (6 hours, slid by each refresh of `<dashboard>/api/scanner-token`). It sets `scanner_sid` (`HttpOnly`, `SameSite=Strict`). Deleting the admin deletes the row and the session.
+3. The exchange consumes the claim atomically. The claim row is the session: `consumed_session_hash` (SHA-256 of the cookie value) and `session_expires_at` (6 hours, slid by each refresh of `<dashboard>/api/scanner-token`). It sets `scanner_sid` (`HttpOnly`, `SameSite=Strict`). Every read of the session also requires the pairing staff member to be unbanned and to still hold `products.adjust_stock` (`staffPermissionSql`); suspending, removing or deleting them deletes the rows.
 4. The middleware lets a scanner session call only the allowlist in `packages/shared/src/scanner-auth.ts` (inventory lookup, locations, stock adjust and set, purchase order and transfer reads and receiving). It never inherits the minting admin's permissions.
 
 Scheduled maintenance deletes expired claims and claims whose session has expired.

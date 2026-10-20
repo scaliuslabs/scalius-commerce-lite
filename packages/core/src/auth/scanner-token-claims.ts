@@ -7,6 +7,8 @@ import {
 import { sha256Hex } from "@scalius/shared/hash";
 import { and, eq, gt, inArray, isNotNull, isNull, lte, or } from "drizzle-orm";
 import { ConflictError, UnauthorizedError } from "../errors";
+import { staffPermissionSql } from "./rbac/helpers";
+import { PERMISSIONS } from "./rbac/permissions";
 
 interface ScannerTokenClaimOptions {
   nowMs?: number;
@@ -105,8 +107,11 @@ export interface ScannerSession {
 
 /**
  * The live scanner session behind a `scanner_sid` cookie: the claim row that
- * session consumed, until `session_expires_at`. With `refresh`, the session
- * slides another full lifetime from now. Deleting the admin deletes the row.
+ * session consumed, until `session_expires_at`, while the staff member who
+ * paired it is not suspended and still may adjust stock (checked fresh on
+ * every read, like a dashboard session). With `refresh`, the session slides
+ * another full lifetime from now. Deleting or suspending the staff member
+ * deletes the row.
  */
 export async function readScannerSession(
   db: Database,
@@ -117,6 +122,7 @@ export async function readScannerSession(
   const live = and(
     eq(scannerTokenClaims.consumedSessionHash, await sha256Hex(sessionId)),
     gt(scannerTokenClaims.sessionExpiresAt, nowSeconds),
+    staffPermissionSql(scannerTokenClaims.adminId, PERMISSIONS.PRODUCTS_ADJUST_STOCK),
   );
   const session = { adminId: scannerTokenClaims.adminId, adminName: scannerTokenClaims.adminName };
   const rows = options.refresh
