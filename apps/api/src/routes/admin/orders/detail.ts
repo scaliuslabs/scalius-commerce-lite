@@ -17,6 +17,7 @@ import {
     orderBillingAddressSelection,
     orderShippingAddressSelection,
     previewOrderPaymentRecoveryLink,
+    appOrderHoldId,
     releaseOrderHold,
     recordOrderEvent,
     restoreOrder,
@@ -99,6 +100,7 @@ import {
     adminOrderResourceMutationErrorResponses,
 } from "./shared";
 import { notificationSender } from "../../../background/notification-sender";
+import { autoFulfilAfterResponse } from "../../../background/auto-fulfil";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -419,10 +421,17 @@ app.openapi(releaseHoldRoute, async (c) => {
         const placed = await c.get("db").select({ pluginId: orderHolds.pluginId }).from(orderHolds)
             .where(and(eq(orderHolds.id, holdId), eq(orderHolds.orderId, id))).get();
         if (!placed) throw new NotFoundError("Hold not found");
-        if (placed.pluginId !== plugin.pluginId) throw new ForbiddenError("An app can release only the holds it placed.");
+        // The platform's review of a payment the app recorded carries the app's
+        // name but is not the app's own hold: only staff release it.
+        if (placed.pluginId !== plugin.pluginId || holdId !== await appOrderHoldId(id, plugin.pluginId)) {
+            throw new ForbiddenError("An app can release only the holds it placed.");
+        }
     }
     const user = c.get("user") as { id?: string } | undefined;
     const hold = await releaseOrderHold(c.get("db"), id, holdId, user?.id ?? null);
+    // A settled order's gift cards and downloads go out now, not at the next sweep
+    // (a no-op while another hold is open or nothing is owed).
+    await autoFulfilAfterResponse(c, c.get("db"), id, "hold-released");
     return ok(c, {
         id: hold.id,
         appId: hold.pluginId,

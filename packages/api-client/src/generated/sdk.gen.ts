@@ -1888,7 +1888,7 @@ export const getApiV1AdminResourcesOrdersByIdPayments = <ThrowOnError extends bo
 /**
  * Record a payment against an invoice order
  *
- * Records money received for a deferred (net terms) order: a bank transfer, cheque or cash against its invoice. No provider is called. The order's paid amount and payment status advance in the same write, `payment.updated` (and `order.paid` once nothing is due) follow, and a refund of it is a manual settlement. Send an Idempotency-Key: a repeat returns the first payment.
+ * Records money received for a deferred (net terms) order: a bank transfer, cheque or cash against its invoice. No provider is called. The order's paid amount and payment status advance in the same write, `payment.updated` (and `order.paid` once nothing is due) follow, and a refund of it is a manual settlement. When an app records it on an order with gift cards or downloads still owed, the order is held for staff review in the same write: they are handed over once staff release the hold. Send an Idempotency-Key: a repeat returns the first payment.
  */
 export const postApiV1AdminResourcesOrdersByIdPayments = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminResourcesOrdersByIdPaymentsData, ThrowOnError>): RequestResult<PostApiV1AdminResourcesOrdersByIdPaymentsResponses, PostApiV1AdminResourcesOrdersByIdPaymentsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminResourcesOrdersByIdPaymentsResponses, PostApiV1AdminResourcesOrdersByIdPaymentsErrors, ThrowOnError>({
     url: '/api/v1/admin/resources/orders/{id}/payments',

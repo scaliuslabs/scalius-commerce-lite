@@ -52,6 +52,12 @@ export interface RecordOrderPaymentInput {
    * promise resolved with it bare would run it on its own.
    */
   timelineLine?: (payment: RecordedPaymentLine) => Promise<{ statement: unknown }>;
+  /**
+   * A review hold written in the same batch (an app recorded the payment:
+   * the orders module's `buildAppPaymentReviewHoldInsert`), so no automatic
+   * hand-over can run between the payment landing and the hold.
+   */
+  reviewHold?: (payment: RecordedPaymentLine) => Promise<{ statement: unknown }>;
 }
 
 export interface RecordedPaymentLine {
@@ -194,6 +200,9 @@ export async function recordOrderPayment(
   const timelineLine = input.timelineLine
     ? (await input.timelineLine({ paymentId, currency, landed })).statement
     : undefined;
+  const reviewHold = input.reviewHold
+    ? (await input.reviewHold({ paymentId, currency, landed })).statement
+    : undefined;
 
   const settlement = presentedSettlement(input.amountMinor, currency.code);
   const orderUnchanged = and(
@@ -241,6 +250,7 @@ export async function recordOrderPayment(
       sql`EXISTS (SELECT 1 FROM ${orderPayments} WHERE ${orderPayments.id} = ${paymentId} AND ${orderPayments.amountMinor} = ${input.amountMinor})`,
     )) as unknown as SQLiteBatchItem,
     ...(timelineLine ? [timelineLine as SQLiteBatchItem] : []),
+    ...(reviewHold ? [reviewHold as SQLiteBatchItem] : []),
     buildBatchGuard(db, landed, RECORDED_PAYMENT_BATCH_GUARD) as SQLiteBatchItem,
   ];
 

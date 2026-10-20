@@ -21889,6 +21889,7 @@
                         "write_inventory",
                         "read_orders",
                         "write_orders",
+                        "write_payments",
                         "write_fulfillments",
                         "read_customers",
                         "write_customers",
@@ -22733,6 +22734,7 @@
                 "write_inventory",
                 "read_orders",
                 "write_orders",
+                "write_payments",
                 "write_fulfillments",
                 "read_customers",
                 "write_customers",
@@ -22888,6 +22890,7 @@
                         "write_inventory",
                         "read_orders",
                         "write_orders",
+                        "write_payments",
                         "write_fulfillments",
                         "read_customers",
                         "write_customers",
@@ -94085,7 +94088,7 @@
           "App API - Orders"
         ],
         "summary": "Record a payment against an invoice order",
-        "description": "Records money received for a deferred (net terms) order: a bank transfer, cheque or cash against its invoice. No provider is called. The order's paid amount and payment status advance in the same write, `payment.updated` (and `order.paid` once nothing is due) follow, and a refund of it is a manual settlement. Send an Idempotency-Key: a repeat returns the first payment.",
+        "description": "Records money received for a deferred (net terms) order: a bank transfer, cheque or cash against its invoice. No provider is called. The order's paid amount and payment status advance in the same write, `payment.updated` (and `order.paid` once nothing is due) follow, and a refund of it is a manual settlement. When an app records it on an order with gift cards or downloads still owed, the order is held for staff review in the same write: they are handed over once staff release the hold. Send an Idempotency-Key: a repeat returns the first payment.",
         "parameters": [
           {
             "schema": {
@@ -94297,7 +94300,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "orders.edit"
+          "permission": "orders.record_payment"
         }
       },
       "get": {
@@ -158849,6 +158852,7 @@
             "orders.edit",
             "orders.issue_invoice",
             "orders.manage_shipments",
+            "orders.record_payment",
             "orders.refund",
             "orders.restore",
             "orders.view",
@@ -162163,6 +162167,7 @@
             "orders.edit",
             "orders.issue_invoice",
             "orders.manage_shipments",
+            "orders.record_payment",
             "orders.refund",
             "orders.restore",
             "orders.view",
@@ -163272,6 +163277,7 @@
             "orders.edit",
             "orders.issue_invoice",
             "orders.manage_shipments",
+            "orders.record_payment",
             "orders.refund",
             "orders.restore",
             "orders.view",
@@ -170710,6 +170716,7 @@
             "orders.edit",
             "orders.issue_invoice",
             "orders.manage_shipments",
+            "orders.record_payment",
             "orders.refund",
             "orders.restore",
             "orders.view",
@@ -241373,6 +241380,7 @@
             "orders.edit",
             "orders.issue_invoice",
             "orders.manage_shipments",
+            "orders.record_payment",
             "orders.refund",
             "orders.restore",
             "orders.view",

@@ -343,6 +343,15 @@ describe("route permissions", () => {
       .toEqual({ permission: PERMISSIONS.ORDERS_ISSUE_INVOICE });
   });
 
+  // Security audit S3: recording an invoice payment settles the order, so
+  // editing orders is not enough (nor an app's write_orders scope).
+  it("records invoice payments behind their own permission, never orders.edit", () => {
+    const path = "/api/v1/admin/resources/orders/order_1/payments";
+    expect(allowed([PERMISSIONS.ORDERS_VIEW, PERMISSIONS.ORDERS_EDIT], path, "POST")).toBe(false);
+    expect(allowed([PERMISSIONS.ORDERS_RECORD_PAYMENT], path, "POST")).toBe(true);
+    expect(allowed([PERMISSIONS.ORDERS_VIEW], path)).toBe(true);
+  });
+
   it("separates tax reads and previews from tax mutations", () => {
     expect(getRoutePermission("/api/v1/admin/taxes", "GET"))
       .toEqual({ permission: PERMISSIONS.TAXES_VIEW });
