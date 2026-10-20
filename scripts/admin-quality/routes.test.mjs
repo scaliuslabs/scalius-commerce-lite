@@ -100,11 +100,17 @@ describe("param resolution", () => {
 
   it("covers every param name the route tree uses", () => {
     const source = readFileSync(fileURLToPath(new URL("../../apps/admin-v2/src/routeTree.gen.ts", import.meta.url)), "utf8");
-    const names = new Set(parseLeafRoutes(source).flatMap(paramNames));
-    const skippedOnly = new Set(["requestId", "handoffId", "pageId"]);
+    const paths = parseLeafRoutes(source);
+    const names = new Set(paths.flatMap(paramNames));
+    // Live one-time ids with no list endpoint; every route using one is in SKIPPED_ROUTES.
+    const skippedOnly = new Set(["requestId", "handoffId", "approvalId", "pageId"]);
     for (const name of names) {
       if (skippedOnly.has(name)) continue;
       expect(PARAM_SOURCES, `no data source for :${name}`).toHaveProperty(name);
+    }
+    for (const path of paths) {
+      const unsourced = paramNames(path).filter((name) => !(name in PARAM_SOURCES));
+      if (unsourced.length) expect(skipReason(path), `${path} needs :${unsourced[0]} but is not skipped`).not.toBeNull();
     }
   });
 
