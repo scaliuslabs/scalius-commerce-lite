@@ -37,7 +37,7 @@ import {
 } from "@scalius/core/modules/plugins";
 import { pluginDefinitionOf } from "@scalius/shared/plugins/handlers";
 import { BUNDLED_PLUGINS } from "./bundled.gen";
-import { loadBundledPlugin, type BundledPluginEntry } from "./loaders/bundled";
+import type { BundledPluginEntry } from "./loaders/bundled";
 
 export type BundledPluginRegistry = Readonly<Record<string, BundledPluginEntry>>;
 
@@ -54,7 +54,10 @@ export interface BundledSyncResult {
   pending: boolean;
 }
 
+// The loader reaches the plugin bridge and its operation catalog, so it loads on
+// use: the admin Apps routes import this module without paying for either.
 async function bundledManifest(pluginId: string, entry: BundledPluginEntry): Promise<unknown> {
+  const { loadBundledPlugin } = await import("./loaders/bundled");
   const definition = pluginDefinitionOf(await loadBundledPlugin(pluginId, entry));
   return definition?.manifest;
 }
