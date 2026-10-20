@@ -275,10 +275,10 @@ export type CustomFieldWireValue = CustomFieldJson;
  * Money as every app boundary carries it: integer minor units of `currency`
  * (ISO 4217). A custom field or object field holds the store currency.
  */
-export interface CustomFieldMoney {
+export type CustomFieldMoney = {
   amountMinor: number;
   currency: string;
-}
+};
 
 /** Whether a value has the money wire shape (exactly `amountMinor` and `currency`). */
 export function isCustomFieldMoney(value: unknown): value is CustomFieldMoney {
@@ -867,7 +867,7 @@ function scalarWire(type: CustomFieldScalarType, stored: string, context: Custom
     case "json":
       return JSON.parse(stored) as CustomFieldJson;
     case "money":
-      return majorMoney ? fromMinor(Number(stored), context.decimalPlaces) : { ...customFieldMoney(Number(stored), context) };
+      return majorMoney ? fromMinor(Number(stored), context.decimalPlaces) : customFieldMoney(Number(stored), context);
     default:
       return stored;
   }
