@@ -142,7 +142,7 @@ export const installedAppsMessages = defineMessages({
     access_hosts: "Websites it connects to",
     access_fields: "Adds its own fields to",
     access_messages: "Email and text messages",
-    messageRecipientsIn: "Emails and texts the addresses in its {field} records",
+    messageRecipientsIn: "Can email or text any address it stores in its {field} records (the app writes those records itself)",
 
     functionsTitle: "Checkout functions",
     functionsDescription: "Where this app takes part in checkout. At each step, the app with the lowest priority number runs first.",
@@ -416,7 +416,7 @@ export const installedAppsMessages = defineMessages({
     access_hosts: "যে ওয়েবসাইটগুলোর সাথে যোগাযোগ করে",
     access_fields: "যেখানে নিজের ফিল্ড যোগ করে",
     access_messages: "ইমেইল ও টেক্সট মেসেজ",
-    messageRecipientsIn: "এর {field} রেকর্ডের ঠিকানায় ইমেইল ও টেক্সট পাঠায়",
+    messageRecipientsIn: "এর {field} রেকর্ডে নিজে রাখা যেকোনো ঠিকানায় ইমেইল বা টেক্সট পাঠাতে পারে (রেকর্ডগুলো অ্যাপ নিজেই লেখে)",
 
     functionsTitle: "চেকআউট ফাংশন",
     functionsDescription: "চেকআউটের যে ধাপগুলোতে এই অ্যাপ কাজ করে। প্রতিটি ধাপে যে অ্যাপের প্রায়োরিটি নম্বর সবচেয়ে কম, সেটি আগে চলে।",
