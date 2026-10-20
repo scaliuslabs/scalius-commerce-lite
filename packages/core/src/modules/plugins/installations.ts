@@ -821,7 +821,7 @@ export function requirePinnedSigner(
   if (update.signerKeyId === current.signerKeyId) return;
   const name = current.manifest?.name ?? current.pluginId;
   throw new PluginError(
-    "signature.signer_changed",
+    "signature_signer_changed",
     update.signerKeyId === null
       ? `${name} was installed from a signed release; an update must be signed by the same developer.`
       : `${name} was installed from a release signed by another developer. To move it to this developer, uninstall it (keeping its data) and install this release.`,

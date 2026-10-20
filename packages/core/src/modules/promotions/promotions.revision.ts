@@ -57,7 +57,7 @@ export function buildPromotionRevisionGuard(
     `, PROMOTION_REVISION_CONFLICT);
 }
 
-export const PROMOTION_AUTOMATIC_CAP = "PROMOTION_AUTOMATIC_CAP";
+export const PROMOTION_AUTOMATIC_CAP = "promotion_automatic_cap";
 
 /**
  * After the mutation: when this promotion is an automatic one that is on

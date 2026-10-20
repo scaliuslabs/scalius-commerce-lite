@@ -152,7 +152,7 @@ function cartStockError(payload: StorefrontOrderCommitPayload, reservation: Prep
                 index: 0,
                 productId: "",
                 variantId: null,
-                code: "QUANTITY_UNAVAILABLE",
+                code: "quantity_unavailable",
                 action: "remove",
                 message: "One or more items are no longer available in the requested quantity.",
                 productName: null,
