@@ -119,9 +119,20 @@ the presentment currency. No built-in adapter reports settlement yet.
 | Webhook | `POST /api/v1/webhooks/{provider}` → adapter verification → `claimAndApplyPaymentEvent` (claims a `webhook_events` row holding the verified event) |
 | Hosted return | `GET|POST /api/v1/payment/{provider}/success|fail|cancel` |
 | Buyer reconcile | `POST /api/v1/payment/{provider}/reconcile` (gateways with `query`) |
-| Apply | after the response, retried by the cron's `payment_event_drain` (6 attempts) → `processPaymentConfirmed` / `processPaymentFailed` / `releaseOrderInventory` |
+| Apply | after the response, retried by the cron's `payment_event_drain` (6 attempts) → `processPaymentConfirmed` / `processPaymentFailed` (failed and cancelled alike) |
 | Refund | `processRefund` → allocation claim → `gateway.refund` |
 | Reconcile | `reconcileDueRefundAttempts` (`gateway.refundStatus`), `reconcileExternalRefundWebhooks` (`gateway.listRefunds`, `refund.observed` events) |
+
+A failed or cancelled event ends one attempt and never touches stock. It
+applies only when its provider is the order's payment method, it names the
+order's newest session attempt (by correlation id or provider session
+reference), and the order is open (`incomplete`/`pending`) and unpaid; any
+other is recorded as `*_ignored`. The open order keeps its reservation for
+the buyer's retry until it is cancelled (staff or the stale-checkout sweep).
+A confirmed payment on an open order whose stock was released reserves it
+again first; when the units are gone the payment is still recorded and the
+event goes to manual reconciliation (`confirmed_stock_unavailable`, no
+automatic fulfilment).
 
 COD is not a gateway: collection is recorded in `cod.ts` and COD refunds are
 confirmed manual settlements.

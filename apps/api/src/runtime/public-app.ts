@@ -1,4 +1,4 @@
-export type PublicRuntimeGroup = "config" | "catalog" | "content" | "buyer" | "proxy";
+export type PublicRuntimeGroup = "config" | "catalog" | "content" | "buyer";
 
 function matchesPrefix(pathname: string, prefix: string): boolean {
   return pathname === prefix || pathname.startsWith(`${prefix}/`);
@@ -9,7 +9,6 @@ export function classifyPublicRuntimePath(pathname: string): PublicRuntimeGroup 
     matchesPrefix(pathname, "/api/v1/storefront/agent-contexts") ||
     matchesPrefix(pathname, "/api/v1/storefront/agent-continuations")
   ) return "buyer";
-  if (matchesPrefix(pathname, "/api/v1/__ptproxy")) return "proxy";
   if (
     pathname === "/api/v1" || pathname === "/api/v1/" ||
     ["navigation", "storefront", "platform", "checkout", "checkout-languages", "locations", "address-rules", "shipping-methods", "seo"]
@@ -49,10 +48,6 @@ export async function fetchPublicApiApp(
     }
     case "buyer": {
       const { default: app } = await import("./public-buyer-app");
-      return app.fetch(request, env, ctx);
-    }
-    case "proxy": {
-      const { default: app } = await import("./public-proxy-app");
       return app.fetch(request, env, ctx);
     }
     default:

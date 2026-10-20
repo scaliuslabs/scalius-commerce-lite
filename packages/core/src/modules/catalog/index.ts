@@ -47,4 +47,5 @@ export * from "./card-fields";
 export * from "./home-lists";
 export { planHomeBrands, type HomeBrand } from "./home-brands";
 export * from "./recommendation-refresh";
+export * from "./recommendation-queue";
 export * from "./collections";

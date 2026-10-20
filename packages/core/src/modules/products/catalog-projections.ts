@@ -164,29 +164,41 @@ export function selectLiveCatalogBuyerState(db: Database, scope: SQL, pricingSco
         .where(scope);
 }
 
+/** The buyer-state columns a refresh writes (`refreshed_at` keeps its insert default; nothing reads it). */
+const BUYER_STATE_COLUMNS = [
+    ["isPublic", "is_public"],
+    ["categoryId", "category_id"],
+    ["brandId", "brand_id"],
+    ["productCreatedAt", "product_created_at"],
+    ["skuId", "sku_id"],
+    ["fromMinor", "from_minor"],
+    ["toMinor", "to_minor"],
+    ["baseMinor", "base_minor"],
+    ["discountDepthBps", "discount_depth_bps"],
+    ["hasDiscount", "has_discount"],
+    ["availableForSale", "available_for_sale"],
+    ["hasCustomerOptions", "has_customer_options"],
+    ["availabilityBand", "availability_band"],
+] as const;
+
+/**
+ * Inserts or updates the scoped products' buyer state, writing a row only
+ * when a column differs (null-safe `IS NOT`; `IS DISTINCT FROM` on
+ * PostgreSQL): an unchanged product costs a read, not a billed row write.
+ */
 function buyerStateUpsert(db: Database, scope: ProductScope): SQLiteBatchItem {
     const excluded = (column: string) => sql.raw(`excluded.${column}`);
+    const changed = sql.join(
+        BUYER_STATE_COLUMNS.map(([, column]) => sql.raw(`product_buyer_state.${column} IS NOT excluded.${column}`)),
+        sql` OR `,
+    );
     return db
         .insert(productBuyerState)
         .select(selectLiveCatalogBuyerState(db, scope.on(sql`${products.id}`), scope.pricing) as never)
         .onConflictDoUpdate({
             target: productBuyerState.productId,
-            set: {
-                isPublic: excluded("is_public"),
-                categoryId: excluded("category_id"),
-                brandId: excluded("brand_id"),
-                productCreatedAt: excluded("product_created_at"),
-                skuId: excluded("sku_id"),
-                fromMinor: excluded("from_minor"),
-                toMinor: excluded("to_minor"),
-                baseMinor: excluded("base_minor"),
-                discountDepthBps: excluded("discount_depth_bps"),
-                hasDiscount: excluded("has_discount"),
-                availableForSale: excluded("available_for_sale"),
-                hasCustomerOptions: excluded("has_customer_options"),
-                availabilityBand: excluded("availability_band"),
-                refreshedAt: excluded("refreshed_at"),
-            },
+            set: Object.fromEntries(BUYER_STATE_COLUMNS.map(([key, column]) => [key, excluded(column)])),
+            setWhere: sql`${changed}`,
         });
 }
 

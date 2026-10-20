@@ -17,16 +17,24 @@
 // Ties break by newest then id, so the order is deterministic. Every read is
 // an index range with a fixed cap, the same SQL on D1, Turso and PostgreSQL.
 //
-// Precomputed (Design B): a single product's list (the product page) is read
-// from its stored `product_recommendations` rows (up to 24, written off the
-// request path by recommendation-refresh.ts), filtered to products still
-// public and buyable. The live ranking runs on the request path only for a
-// product never computed and for multi-product sources (cart, order
-// confirmation) or none (404, search dead ends).
+// Precomputed (Design B): the live ranking runs only off the request path
+// (recommendation-refresh.ts stores each product's top 24 in
+// `product_recommendations`). A request reads stored lists only:
+//   - one source product (the product page) reads its list, filtered to
+//     products still public and buyable;
+//   - several (cart, cart drawer, order confirmation) merge their sources'
+//     stored lists by position;
+//   - a source without a stored list is queued for the refresh
+//     (recommendation-queue.ts), and the list, or a request without sources
+//     (cart page, 404, search dead ends), is filled by an index-bounded
+//     fallback: the sources' categories' newest products, the 30-day best
+//     sellers (`product_sales_stats`) and the newest products, ranked same
+//     category, then units sold, then newest.
 //
-// Freshness: stored lists declare rec:<source>; live fallback declares the
-// recommendation-signals key and the moment its oldest sampled order leaves
-// a window. No arbitrary age limit applies to a quiet store's recommendations.
+// Freshness: stored lists declare rec:<source> (so a queued product's page
+// changes when its list is stored); the fallback declares its windows' list
+// membership (`lm:cat:<id>`, `lm:all`), `popular` and every product it read.
+// None of these advances on an order: only the refresh jobs move them.
 import {
     translationScopeOf,
     PRODUCT_CARD_FIELDS,
@@ -56,7 +64,8 @@ import {
     buyerStateCardSkuJoin,
     buyerStatePricingSelection,
 } from "./buyer-state";
-import { declareProductCards, declareRequestedProducts, deps } from "./declare-deps";
+import { categoryScope, declareProductCards, declareRequestedProducts, deps } from "./declare-deps";
+import { requestRecommendationRefresh } from "./recommendation-queue";
 
 export const MAX_RECOMMENDATION_SOURCE_IDS = 20;
 export const MAX_RECOMMENDATION_LIMIT = 12;
@@ -583,10 +592,222 @@ async function readStoredRecommendations(
 }
 
 /**
+ * Source categories the fallback reads (D1 allows five terms in a compound
+ * SELECT: three category windows, the best sellers and the newest), and the
+ * newest products it reads from each.
+ */
+const FALLBACK_CATEGORY_LIMIT = 3;
+const FALLBACK_CATEGORY_WINDOW = 48;
+/** Units sold in 30 days (`product_sales_stats`) before the fallback calls a product popular (home-lists.ts). */
+const FALLBACK_MIN_POPULAR_UNITS = 2;
+
+type FallbackRow = {
+    kind: "source" | "category" | "candidate";
+    productId: string;
+    inCategory: number;
+    soldUnits: number;
+    createdAt: number;
+    available: number;
+};
+
+/**
+ * The fallback ranking, one statement of fixed-size index ranges: the newest
+ * public products of up to three source categories (48 each), the public best
+ * sellers and the newest public products (`window` each). It never reads
+ * orders, so an order never changes it; ranked same category, then units sold
+ * in 30 days, then newest, then id. `publicSources` are the sources that are
+ * public products (the ones worth queueing for a stored list).
+ */
+async function rankFallbackRows(
+    db: Database,
+    sourceIds: readonly string[],
+    exclude: ReadonlySet<string>,
+    limit: number,
+): Promise<{ rows: RankedRecommendationRow[]; publicSources: string[] }> {
+    declareRequestedProducts(sourceIds);
+    const n = (value: number) => sql.raw(String(value));
+    const window = n(limit + exclude.size + sourceIds.length);
+    const categoryWindow = (slot: number) => sql`SELECT product_id FROM (
+            SELECT peer.product_id FROM product_buyer_state AS peer
+            WHERE peer.is_public = 1
+              AND peer.category_id = (SELECT id FROM fb_categories ORDER BY id LIMIT 1 OFFSET ${n(slot)})
+            ORDER BY peer.product_created_at DESC, peer.product_id LIMIT ${n(FALLBACK_CATEGORY_WINDOW)}
+        ) AS category_${n(slot)}`;
+    const rows = await db.all<FallbackRow>(sql`
+        WITH fb_source AS MATERIALIZED (
+            SELECT DISTINCT CAST(value AS TEXT) AS product_id FROM json_each(${JSON.stringify(sourceIds)})
+        ),
+        fb_source_state AS MATERIALIZED (
+            SELECT source_state.product_id, source_state.category_id, source_state.is_public
+            FROM product_buyer_state AS source_state
+            WHERE source_state.product_id IN (SELECT product_id FROM fb_source)
+        ),
+        fb_categories AS MATERIALIZED (
+            SELECT DISTINCT category_id AS id FROM fb_source_state WHERE category_id IS NOT NULL
+            ORDER BY category_id LIMIT ${n(FALLBACK_CATEGORY_LIMIT)}
+        ),
+        fb_window AS (
+            ${sql.join(Array.from({ length: FALLBACK_CATEGORY_LIMIT }, (_, slot) => categoryWindow(slot)), sql` UNION `)}
+            -- The popularity index drives; the public flag stays a filter (home-lists.ts).
+            UNION SELECT product_id FROM (
+                SELECT stats.product_id FROM product_sales_stats AS stats
+                INNER JOIN product_buyer_state AS popular_state ON popular_state.product_id = stats.product_id
+                WHERE stats.sold_30d >= ${n(FALLBACK_MIN_POPULAR_UNITS)} AND +popular_state.is_public = 1
+                ORDER BY stats.sold_30d DESC, stats.product_id LIMIT ${window}
+            ) AS best_sellers
+            UNION SELECT product_id FROM (
+                SELECT newest.product_id FROM product_buyer_state AS newest WHERE newest.is_public = 1
+                ORDER BY newest.product_created_at DESC, newest.product_id LIMIT ${window}
+            ) AS newest_window
+        )
+        SELECT 'category' AS "kind", id AS "productId", 0 AS "inCategory", 0 AS "soldUnits",
+            0 AS "createdAt", 0 AS "available"
+        FROM fb_categories
+        UNION ALL
+        SELECT 'source', product_id, 0, 0, 0, 0 FROM fb_source_state WHERE is_public = 1
+        UNION ALL
+        SELECT 'candidate', candidate.product_id,
+            CASE WHEN candidate.category_id IN (SELECT id FROM fb_categories) THEN 1 ELSE 0 END,
+            CASE WHEN stats.sold_30d >= ${n(FALLBACK_MIN_POPULAR_UNITS)} THEN stats.sold_30d ELSE 0 END,
+            CAST(candidate.product_created_at AS INTEGER),
+            CASE WHEN candidate.is_public = 1 AND candidate.available_for_sale = 1 THEN 1 ELSE 0 END
+        FROM fb_window AS pool
+        INNER JOIN product_buyer_state AS candidate ON candidate.product_id = pool.product_id
+        LEFT JOIN product_sales_stats AS stats ON stats.product_id = pool.product_id
+    `);
+    // Which products each window holds (the source categories', the public
+    // newest) and their order by units sold; every product read, shown or
+    // not, since a change to it alone can show it.
+    for (const row of rows) if (row.kind === "category") deps.listMembership(categoryScope(row.productId));
+    deps.listMembership("all");
+    deps.popular();
+    const candidates = rows.filter((row) => row.kind === "candidate");
+    deps.products(candidates.map((row) => row.productId));
+    const publicSources = rows.filter((row) => row.kind === "source").map((row) => row.productId);
+    const ranked = candidates
+        .filter((row) => Number(row.available) === 1 && !exclude.has(row.productId))
+        .sort((a, b) => Number(b.inCategory) - Number(a.inCategory)
+            || Number(b.soldUnits) - Number(a.soldUnits)
+            || Number(b.createdAt) - Number(a.createdAt)
+            || (a.productId < b.productId ? -1 : a.productId > b.productId ? 1 : 0))
+        .slice(0, limit)
+        .map((row) => ({
+            id: row.productId,
+            alsoBoughtBuyers: 0,
+            relatedScore: Number(row.inCategory) === 1 ? 40 : 0,
+            popularBuyers: Number(row.soldUnits),
+            popularOrdering: Number(row.soldUnits),
+        }));
+    return { rows: ranked, publicSources };
+}
+
+type PickedRecommendation = { id: string; reason: ProductRecommendationReason };
+
+/**
+ * The sources' stored lists merged by position (each source's first row,
+ * then each one's second...), without the sources themselves, to products
+ * still public and buyable. One statement by primary key, at most 24 rows a
+ * source; `missing` are sources without a stored list.
+ */
+async function readStoredRecommendationIds(
+    db: Database,
+    sourceIds: readonly string[],
+    limit: number,
+): Promise<{ picked: PickedRecommendation[]; missing: string[] }> {
+    for (const id of sourceIds) deps.recommendations(id);
+    const stored = await db
+        .select({
+            source: productRecommendations.productId,
+            position: productRecommendations.position,
+            id: productRecommendations.recommendedProductId,
+            reason: productRecommendations.reason,
+            isPublic: buyerState.isPublic,
+            availableForSale: buyerState.availableForSale,
+        })
+        .from(productRecommendations)
+        .leftJoin(buyerState, eq(buyerState.productId, productRecommendations.recommendedProductId))
+        .where(sql`${productRecommendations.productId} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(sourceIds)}))`)
+        .all();
+    // A stored product hidden now shows again when its own buyer state changes.
+    deps.products(stored.map((row) => row.id));
+    const order = new Map(sourceIds.map((id, index) => [id, index]));
+    const sources = new Set(sourceIds);
+    const seen = new Set<string>();
+    const picked: PickedRecommendation[] = [];
+    for (const row of [...stored].sort((a, b) => a.position - b.position
+        || (order.get(a.source) ?? 0) - (order.get(b.source) ?? 0))) {
+        if (picked.length >= limit) break;
+        if (sources.has(row.id) || seen.has(row.id) || !row.isPublic || !row.availableForSale) continue;
+        seen.add(row.id);
+        picked.push({ id: row.id, reason: row.reason as ProductRecommendationReason });
+    }
+    const withRows = new Set(stored.map((row) => row.source));
+    return { picked, missing: sourceIds.filter((id) => !withRows.has(id)) };
+}
+
+/**
+ * Fills a list short of `limit` from the fallback (a source without a list,
+ * a cart of its own peers, or no sources), and queues the `missing` sources
+ * that are public products for the stored refresh.
+ */
+async function withFallback(
+    db: Database,
+    sourceIds: readonly string[],
+    picked: PickedRecommendation[],
+    limit: number,
+    missing: readonly string[],
+): Promise<PickedRecommendation[]> {
+    const exclude = new Set([...sourceIds, ...picked.map((row) => row.id)]);
+    const fill = await rankFallbackRows(db, sourceIds, exclude, limit - picked.length);
+    const publicSources = new Set(fill.publicSources);
+    requestRecommendationRefresh(missing.filter((id) => publicSources.has(id)));
+    return [...picked, ...fill.rows.map((row) => ({ id: row.id, reason: recommendationRowReason(row) }))];
+}
+
+/** The list reason of picked rows, by the live ranking's "at least half" rules. */
+function pickedReason(picked: readonly PickedRecommendation[], hasSources: boolean): ProductRecommendationReason {
+    return recommendationReason(picked.map((row) => ({
+        id: row.id,
+        alsoBoughtBuyers: row.reason === "also_bought" ? MIN_ALSO_BOUGHT_BUYERS : 0,
+        relatedScore: row.reason === "similar" ? 1 : 0,
+        popularBuyers: 0,
+        popularOrdering: row.reason === "popular" ? 1 : 0,
+    })), hasSources);
+}
+
+/**
+ * Which products to recommend (ids and reason, no cards): stored lists, then
+ * the fallback for sources without one (queued for the refresh) or for no
+ * sources. Never the live ranking.
+ */
+export async function recommendedProductIds(
+    db: Database,
+    input: ProductRecommendationInput,
+): Promise<{ reason: ProductRecommendationReason; ids: string[] }> {
+    const sourceIds = normalizeRecommendationSourceIds(input.productIds);
+    const limit = normalizeLimit(input.limit);
+    let picked: PickedRecommendation[] = [];
+    let missing: string[] = [];
+    if (sourceIds.length > 0) {
+        const stored = await readStoredRecommendationIds(db, sourceIds, limit);
+        picked = stored.picked;
+        missing = stored.missing;
+        // The stored lists fill it: the fallback is not read (nor declared).
+        if (picked.length >= limit) {
+            // Sources without a list are queued (the queue keeps only public products).
+            requestRecommendationRefresh(missing);
+            return { reason: pickedReason(picked, true), ids: picked.map((row) => row.id) };
+        }
+    }
+    picked = await withFallback(db, sourceIds, picked, limit, missing);
+    return { reason: pickedReason(picked, sourceIds.length > 0), ids: picked.map((row) => row.id) };
+}
+
+/**
  * Recommendations as product cards. One source product reads its stored
- * list and then its card media (two statements, two waves); anything else,
- * or a product never computed, runs the live ranking and then reads the
- * kept rows' cards and media together (three statements, two waves).
+ * list and then its card media (two statements, two waves). Several sources
+ * read their stored ids; a source without a list, or no source, adds the
+ * fallback; then the kept rows' cards and media are read together.
  */
 export async function getStorefrontProductRecommendations(
     db: Database,
@@ -612,10 +833,17 @@ export async function getStorefrontProductRecommendations(
             marketPriceContextOf(input.pricing).then((market) => priceProductCards(db, market, storedRows)),
         ]);
     } else {
-        const ranked = await rankProductRecommendations(db, { productIds: sourceIds, limit });
-        reason = ranked.reason;
-        if (ranked.rows.length === 0) return { reason, products: [] };
-        const ids = ranked.rows.map((row) => row.id);
+        let ids: string[];
+        if (sourceIds.length === 1) {
+            // Never computed: serve the fallback until its list is stored
+            // (rec:<id>), and queue it when it is a public product.
+            const picked = await withFallback(db, sourceIds, [], limit, sourceIds);
+            reason = pickedReason(picked, true);
+            ids = picked.map((row) => row.id);
+        } else {
+            ({ reason, ids } = await recommendedProductIds(db, { productIds: sourceIds, limit }));
+        }
+        if (ids.length === 0) return { reason, products: [] };
         const [cards, media] = await Promise.all([
             loadRecommendationCards(db, ids, translation),
             loadProductMediaProjections(db, ids),

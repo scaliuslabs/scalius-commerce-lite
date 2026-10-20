@@ -121,6 +121,26 @@ describe.each(["free", "paid"] as const satisfies readonly WorkersPlan[])("catal
     expect(JSON.parse(kv(RECOMMENDATION_ROTATION_CURSOR_KEY)!)).toEqual({ lapStartedAt: now + RECOMMENDATION_LAP_SECONDS, after: publicIds[perRun - 1], done: false });
   }, 60_000); // A Paid lap ranks about seventy products.
 
+  it("refreshes products a buyer read queued before the lap, even on a resting day", async () => {
+    const { enqueueRecommendationRefresh, queuedRecommendationRefresh } = await import("@scalius/core/modules/catalog");
+    const perRun = limits.recommendationRotationPerRun;
+    const { db, kv, sqlite } = seeded(perRun + 2);
+    await project(db);
+    const now = 1_900_000_000;
+    // Today's lap is done: the rotation rests.
+    while (await rotateRecommendations(db, now) > 0);
+    sqlite.exec("DELETE FROM product_recommendations");
+    const lap = kv(RECOMMENDATION_ROTATION_CURSOR_KEY);
+    const last = (sqlite.prepare("SELECT max(product_id) AS id FROM product_buyer_state").get() as { id: string }).id;
+    await enqueueRecommendationRefresh(db, [last]);
+    expect(await rotateRecommendations(db, now + 60)).toBe(1);
+    expect(sqlite.prepare("SELECT count(DISTINCT product_id) AS n FROM product_recommendations").get()).toEqual({ n: 1 });
+    expect(await queuedRecommendationRefresh(db, 10)).toEqual([]);
+    // The lap's cursor is untouched, and with nothing queued the rotation rests again.
+    expect(kv(RECOMMENDATION_ROTATION_CURSOR_KEY)).toBe(lap);
+    expect(await rotateRecommendations(db, now + 120)).toBe(0);
+  }, 60_000);
+
   it("refreshes a write's recommendation targets after the response, as many as the plan allows, and never fails the write", async () => {
     const { db, sqlite } = seeded(3);
     await project(db);

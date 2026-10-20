@@ -107,8 +107,22 @@ export const STRUCTURAL_OP_GAPS: Readonly<Record<string, string>> = {
  * `categories.parent_id`. The generator never writes them directly (a raw
  * clone or delete of a closure row is a store no write path can produce);
  * they change only through parent_id writes, category inserts and deletes.
+ *
+ * The same holds for the derived projections the registry exempts because
+ * their sources' keys cover them: `product_facet_public_counts` (0138: kept
+ * by triggers on product_facet_values and product_buyer_state, rebuilt only
+ * by `rebuildCatalogProjections`, which advances `store`) and
+ * `recommendation_order_products` (kept by triggers on orders and
+ * order_items). A raw write to either changes what a public read shows with
+ * no source change: a store no write path produces, reported as a stale part
+ * of every reader (shop-all facets: `/api/v1/products <-
+ * product_facet_public_counts`). Their sources are written instead.
  */
-export const TRIGGER_OWNED_TABLES: ReadonlySet<string> = new Set(["category_closure"]);
+export const TRIGGER_OWNED_TABLES: ReadonlySet<string> = new Set([
+  "category_closure",
+  "product_facet_public_counts",
+  "recommendation_order_products",
+]);
 export const TRIGGER_OWNED_COLUMNS: ReadonlySet<string> = new Set([
   "categories.depth",
   "categories.path",

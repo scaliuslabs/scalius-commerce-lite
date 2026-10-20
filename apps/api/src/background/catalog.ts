@@ -3,7 +3,9 @@
 // - Recommendation refresh after a catalogue write: the written products and
 //   their bounded peers are recomputed right after the response, as many as
 //   the plan profile allows; the rotation heals the rest.
-// - The recommendation rotation: each run refreshes the next public products
+// - The recommendation rotation: each run first refreshes the products a
+//   buyer read queued (catalog/recommendation-queue.ts: a page found no
+//   stored list and was served the fallback), then the next public products
 //   after a persisted cursor (`system_kv`). A lap visits every public product
 //   once, and the next lap starts a day after this one started, so a small
 //   catalogue is not re-ranked all day and a large one still gets a lap a day
@@ -55,18 +57,32 @@ function readRotationCursor(raw: string | null): RotationCursor | null {
   }
 }
 
-/** One rotation step: the next public products of the lap. Returns how many were refreshed (0 while the day's lap is done). */
+/**
+ * One rotation step: first the products a buyer read queued (no stored list
+ * yet), then the next public products of the lap, up to the plan's per-run
+ * size in all. Returns how many were refreshed (0 while nothing is queued
+ * and the day's lap is done).
+ */
 export async function rotateRecommendations(db: Database, nowSeconds = Math.floor(Date.now() / 1000)): Promise<number> {
-  let cursor = readRotationCursor(await getSystemKv(db, RECOMMENDATION_ROTATION_CURSOR_KEY));
-  if (cursor?.done && nowSeconds - cursor.lapStartedAt < RECOMMENDATION_LAP_SECONDS) return 0;
-  if (!cursor || cursor.done) cursor = { lapStartedAt: nowSeconds, after: null, done: false };
-  const { recommendationRotationBatch, refreshProductRecommendations } = await import("@scalius/core/modules/catalog");
+  const catalog = await import("@scalius/core/modules/catalog");
   const limit = planLimits().background.recommendationRotationPerRun;
-  const ids = await recommendationRotationBatch(db, { after: cursor.after, limit });
-  if (ids.length > 0) await refreshProductRecommendations(db, ids);
-  const next: RotationCursor = { lapStartedAt: cursor.lapStartedAt, after: ids.at(-1) ?? cursor.after, done: ids.length < limit };
+  // The cursor and the queue in one read.
+  const state = await catalog.readRecommendationRotation(db, RECOMMENDATION_ROTATION_CURSOR_KEY, limit);
+  const queued = state.queued;
+  if (queued.length > 0) {
+    await catalog.refreshProductRecommendations(db, queued);
+    await catalog.dequeueRecommendationRefresh(db, queued);
+  }
+  const room = limit - queued.length;
+  if (room <= 0) return queued.length;
+  let cursor = readRotationCursor(state.cursor);
+  if (cursor?.done && nowSeconds - cursor.lapStartedAt < RECOMMENDATION_LAP_SECONDS) return queued.length;
+  if (!cursor || cursor.done) cursor = { lapStartedAt: nowSeconds, after: null, done: false };
+  const ids = await catalog.recommendationRotationBatch(db, { after: cursor.after, limit: room });
+  if (ids.length > 0) await catalog.refreshProductRecommendations(db, ids);
+  const next: RotationCursor = { lapStartedAt: cursor.lapStartedAt, after: ids.at(-1) ?? cursor.after, done: ids.length < room };
   await putSystemKv(db, RECOMMENDATION_ROTATION_CURSOR_KEY, JSON.stringify(next));
-  return ids.length;
+  return queued.length + ids.length;
 }
 
 /** Starts (or restarts) the projection rebuild; the next drain runs it. */

@@ -256,9 +256,11 @@ describe("catalogue dependency declarations", () => {
     ]));
     expect(page.softMaxAgeSeconds).toBeNull();
 
-    // Live multi-product ranking depends on committed order signals, not an age limit.
+    // A cart's list reads its products' stored lists (and the fallback), never
+    // order signals: an order does not expire it. No age limit either.
     const recommendations = await keysOf("/api/v1/products/recommendations?productIds=p_linen,p_cotton");
-    expect(recommendations.keys).toContain("recommendation-signals");
+    expect(recommendations.keys).toEqual(expect.arrayContaining(["rec:p_linen", "rec:p_cotton"]));
+    expect(recommendations.keys).not.toContain("recommendation-signals");
     expect(recommendations.softMaxAgeSeconds).toBeNull();
 
     // Brand page and wall: the brand, its logo file.

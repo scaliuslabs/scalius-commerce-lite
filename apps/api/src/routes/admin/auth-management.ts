@@ -18,6 +18,7 @@ import {
     permissions,
     rolePermissions,
     roles,
+    scannerTokenClaims,
     session as sessionTable,
     twoFactor as twoFactorTable,
     user,
@@ -903,6 +904,8 @@ app.openapi(setAdminSuspensionRoute, async (c) => {
                 })
                 .where(and(eq(user.id, userId), eq(user.banned, false))),
             db.delete(sessionTable).where(eq(sessionTable.userId, userId)),
+            // Phones they paired as scanners stop with their sign-in.
+            db.delete(scannerTokenClaims).where(eq(scannerTokenClaims.adminId, userId)),
         ]);
     } catch (error) {
         if (isBatchGuardError(error, "ADMIN_SUSPENSION_CONFLICT")) {

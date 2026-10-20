@@ -14,7 +14,6 @@ import publicBuyerApp from "./public-buyer-app";
 import publicCatalogApp from "./public-catalog-app";
 import publicConfigApp from "./public-config-app";
 import publicContentApp from "./public-content-app";
-import publicProxyApp from "./public-proxy-app";
 import systemApp from "./system-app";
 
 type HonoRoute = { method: string; path: string };
@@ -33,7 +32,6 @@ const runtimeApps: ReadonlyArray<readonly [RuntimeAppName, { routes: HonoRoute[]
   ["public", publicCatalogApp],
   ["public", publicContentApp],
   ["public", publicBuyerApp],
-  ["public", publicProxyApp],
   ["admin", adminDashboardApp],
   ["admin", adminCatalogApp],
   ["admin", adminSalesApp],
@@ -48,7 +46,6 @@ const publicGroups: ReadonlyArray<readonly [PublicRuntimeGroup, { routes: HonoRo
   ["catalog", publicCatalogApp],
   ["content", publicContentApp],
   ["buyer", publicBuyerApp],
-  ["proxy", publicProxyApp],
 ];
 
 const adminGroups: ReadonlyArray<readonly [AdminRuntimeGroup, { routes: HonoRoute[] }]> = [

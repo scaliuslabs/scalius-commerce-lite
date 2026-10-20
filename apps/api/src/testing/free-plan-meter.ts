@@ -32,7 +32,8 @@ export interface FreePlanCounters {
   d1RowsChanged: number;
   /**
    * Rows read, an estimate (SQLite reports none): the rows each statement returns plus, for every full scan
-   * its query plan shows (triggers included), the scanned table's row count. It ignores LIMIT, so it can
+   * its query plan shows and every full scan in the plans of the triggers a write can fire (an upper
+   * bound: guards are not evaluated), the scanned table's row count. It ignores LIMIT, so it can
    * overstate a capped scan; the scale proof (scripts/scale-proof.mjs) measures D1's own `rows_read`.
    */
   d1RowsRead: number;
@@ -96,10 +97,109 @@ function rowsReturned(value: unknown): number {
 }
 
 export interface ScanEstimator {
-  /** Full scans in the statement's plan and the rows they read (the scanned tables' row counts). */
-  estimate(query: string): { scans: number; rows: number };
+  /**
+   * Full scans in the statement's plan and the rows they read (the scanned tables' row counts). A write
+   * that changed rows (`changed` > 0) also counts the plans of the triggers its event can fire on the
+   * written table (and on the tables their bodies write, three levels deep): each trigger's WHEN guard
+   * and body statements, once per statement. Guards are not evaluated, so it is an upper bound.
+   */
+  estimate(query: string, changed?: number): { scans: number; rows: number };
   /** Forget the row counts (they change as the operations write). */
   reset(): void;
+}
+
+type WriteEvent = "INSERT" | "UPDATE" | "DELETE";
+
+/** The table a write statement targets, its trigger events and (for an update) the columns it sets. */
+export interface WriteTarget {
+  table: string;
+  events: ReadonlySet<WriteEvent>;
+  /** Columns an UPDATE (or an upsert's DO UPDATE) sets; null when unknown. */
+  columns: readonly string[] | null;
+}
+
+interface ParsedTrigger {
+  event: WriteEvent;
+  /** `UPDATE OF` columns; null for any column. */
+  columns: readonly string[] | null;
+  /** The WHEN guard as a SELECT, then the body statements, with NEW/OLD references unbound. */
+  statements: readonly string[];
+}
+
+const IDENT = String.raw`[\`"\[]?(\w+)[\`"\]]?`;
+
+/** Splits on `;` and `,` outside parentheses and quotes. */
+function splitTopLevel(text: string, separator: ";" | ","): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let quote: string | null = null;
+  let start = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index]!;
+    if (quote) {
+      if (char === quote) quote = null;
+    } else if (char === "'" || char === '"' || char === "`") {
+      quote = char;
+    } else if (char === "(") {
+      depth += 1;
+    } else if (char === ")") {
+      depth -= 1;
+    } else if (char === separator && depth === 0) {
+      parts.push(text.slice(start, index));
+      start = index + 1;
+    }
+  }
+  parts.push(text.slice(start));
+  return parts.map((part) => part.trim()).filter(Boolean);
+}
+
+function setColumns(clause: string): string[] {
+  return splitTopLevel(clause, ",").flatMap((assignment) => {
+    const name = new RegExp(`^${IDENT}\\s*=`).exec(assignment)?.[1];
+    return name ? [name.toLowerCase()] : [];
+  });
+}
+
+/** The target of a write statement (null for a read). Exported for the meter's tests. */
+export function writeTarget(query: string, known: ReadonlySet<string>): WriteTarget | null {
+  const pattern = new RegExp(String.raw`\b(INSERT\s+(?:OR\s+\w+\s+)?INTO|REPLACE\s+INTO|DELETE\s+FROM|UPDATE(?:\s+OR\s+\w+)?)\s+${IDENT}`, "gi");
+  for (let match = pattern.exec(query); match; match = pattern.exec(query)) {
+    const table = match[2]!;
+    if (!known.has(table)) continue; // `DO UPDATE SET`, a CTE name
+    const verb = match[1]!.toUpperCase();
+    const rest = query.slice(match.index + match[0].length);
+    if (verb.startsWith("DELETE")) return { table, events: new Set(["DELETE"]), columns: [] };
+    if (verb.startsWith("UPDATE")) {
+      const clause = /^\s*SET\s+([\s\S]*?)(?:\bFROM\b|\bWHERE\b|\bRETURNING\b|$)/i.exec(rest)?.[1];
+      return { table, events: new Set(["UPDATE"]), columns: clause ? setColumns(clause) : null };
+    }
+    const upsert = /\bDO\s+UPDATE\s+SET\s+([\s\S]*?)(?:\bWHERE\b|\bRETURNING\b|$)/i.exec(rest);
+    return {
+      table,
+      events: new Set<WriteEvent>(upsert ? ["INSERT", "UPDATE"] : ["INSERT"]),
+      columns: upsert ? setColumns(upsert[1]!) : [],
+    };
+  }
+  return null;
+}
+
+/** One trigger's event, `UPDATE OF` columns and plannable statements. Exported for the meter's tests. */
+export function parseTrigger(sql: string): ParsedTrigger | null {
+  const head = new RegExp(String.raw`\b(?:BEFORE|AFTER|INSTEAD\s+OF)\s+(INSERT|DELETE|UPDATE)(?:\s+OF\s+([\s\S]+?))?\s+ON\s+${IDENT}(?:\s+FOR\s+EACH\s+ROW)?`, "i").exec(sql);
+  const begin = /\bBEGIN\b/i.exec(sql);
+  const end = sql.search(/\bEND\s*;?\s*$/i);
+  if (!head || !begin || end < begin.index) return null;
+  const unbind = (text: string) => text
+    .replace(/\bRAISE\s*\([^)]*\)/gi, "NULL")
+    .replace(/\b(?:NEW|OLD)\.(?:`[^`]*`|"[^"]*"|\w+)/gi, "?");
+  const between = sql.slice(head.index + head[0].length, begin.index);
+  const when = /^\s*WHEN\b([\s\S]*)$/i.exec(between)?.[1];
+  const body = splitTopLevel(sql.slice(begin.index + begin[0].length, end), ";");
+  return {
+    event: head[1]!.toUpperCase() as WriteEvent,
+    columns: head[2] ? splitTopLevel(head[2], ",").map((column) => column.replace(/[`"[\]]/g, "").toLowerCase()) : null,
+    statements: [...(when ? [`SELECT 1 WHERE ${unbind(when)}`] : []), ...body.map(unbind)],
+  };
 }
 
 /** Reads each statement's `EXPLAIN QUERY PLAN` (cached per SQL text) for `SCAN <table>` steps. */
@@ -108,6 +208,8 @@ export function createScanEstimator(sqlite: DatabaseSync): ScanEstimator {
   const counts = new Map<string, number>();
   const tables = () => new Set((sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as Array<{ name: string }>).map((row) => row.name));
   let known: Set<string> | undefined;
+  let triggers: Map<string, ParsedTrigger[]> | undefined;
+  const firedScans = new Map<string, string[]>();
   const scannedTables = (query: string): string[] => {
     let plan = plans.get(query);
     if (plan) return plan;
@@ -127,9 +229,46 @@ export function createScanEstimator(sqlite: DatabaseSync): ScanEstimator {
     plans.set(query, plan);
     return plan;
   };
+  const triggersOn = (table: string): ParsedTrigger[] => {
+    if (!triggers) {
+      triggers = new Map();
+      for (const row of sqlite.prepare("SELECT tbl_name AS tableName, sql FROM sqlite_master WHERE type = 'trigger' AND sql IS NOT NULL").all() as Array<{ tableName: string; sql: string }>) {
+        const parsed = parseTrigger(row.sql);
+        if (!parsed) continue;
+        const list = triggers.get(row.tableName) ?? [];
+        list.push(parsed);
+        triggers.set(row.tableName, list);
+      }
+    }
+    return triggers.get(table) ?? [];
+  };
+  /** Tables scanned by the triggers one write can fire, nested writes included (depth-bounded). */
+  const triggerScans = (target: WriteTarget, depth: number): string[] => {
+    const key = `${depth}|${target.table}|${[...target.events].join(",")}|${target.columns?.join(",") ?? "*"}`;
+    const cached = firedScans.get(key);
+    if (cached) return cached;
+    const scanned: string[] = [];
+    firedScans.set(key, scanned); // a trigger that writes its own table recurses no further
+    for (const trigger of triggersOn(target.table)) {
+      if (!target.events.has(trigger.event)) continue;
+      if (trigger.event === "UPDATE" && trigger.columns && target.columns
+        && !trigger.columns.some((column) => target.columns!.includes(column))) continue;
+      for (const statement of trigger.statements) {
+        scanned.push(...scannedTables(statement));
+        const nested = depth < 3 ? writeTarget(statement, known!) : null;
+        if (nested) scanned.push(...triggerScans(nested, depth + 1));
+      }
+    }
+    return scanned;
+  };
   return {
-    estimate(query) {
-      const scanned = scannedTables(query);
+    estimate(query, changed = 0) {
+      const scanned = [...scannedTables(query)];
+      if (changed > 0) {
+        known ??= tables();
+        const target = writeTarget(query, known);
+        if (target) scanned.push(...triggerScans(target, 0));
+      }
       let rows = 0;
       for (const table of scanned) {
         let count = counts.get(table);
@@ -157,7 +296,7 @@ export function meterD1(
     c.d1RowsReturned += returned;
     c.d1RowsRead += returned;
     if (!scan || !query) return;
-    const { scans, rows } = timedEngine(clock, () => scan.estimate(query));
+    const { scans, rows } = timedEngine(clock, () => scan.estimate(query, rowsChanged(result)));
     c.d1FullScans += scans;
     c.d1RowsRead += rows;
   };

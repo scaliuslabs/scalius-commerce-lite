@@ -1155,7 +1155,8 @@ describe("admin auth management suspension lifecycle", () => {
       banReason: "Store access suspended by an administrator",
       banExpires: null,
     }));
-    expect(db.__deleteWhere).toHaveBeenCalledOnce();
+    // Their dashboard sessions and their paired scanner phones, in the same batch.
+    expect(db.__deleteWhere).toHaveBeenCalledTimes(2);
     expect(db.__batch).toHaveBeenCalledOnce();
   });
 

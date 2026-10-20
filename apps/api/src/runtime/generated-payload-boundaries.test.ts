@@ -13,7 +13,6 @@ describe("generated runtime payload boundaries", () => {
     publicCatalog: () => import("./public-catalog-app"),
     publicContent: () => import("./public-content-app"),
     publicBuyer: () => import("./public-buyer-app"),
-    publicProxy: () => import("./public-proxy-app"),
     adminDashboard: () => import("./admin-dashboard-app"),
     adminCatalog: () => import("./admin-catalog-app"),
     adminSales: () => import("./admin-sales-app"),

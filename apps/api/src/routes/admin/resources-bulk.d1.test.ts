@@ -1,7 +1,7 @@
 // Bulk runs on the test D1 (routes/admin/resources-bulk.ts): a dry run plans
 // every item and writes nothing; a real run is one bulk_runs row whose chunks
 // commit with their writes, finishes on the cron's drain, and advances the
-// cache dependencies of what it changed; stock writes ledger-v2 movements.
+// cache clock coarsely (`store`) for what it changed; stock writes ledger-v2 movements.
 import type { DatabaseSync } from "node:sqlite";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -124,9 +124,11 @@ describe("bulk set prices", () => {
     expect(sqlite.prepare("SELECT id, aggregate_revision AS revision FROM products ORDER BY id").all()).toEqual(revisions);
     expect(sqlite.prepare("SELECT from_minor AS fromMinor FROM product_buyer_state WHERE product_id = 'p_o00'").get()).toEqual({ fromMinor: 210_000 });
 
+    // Coarse cache clock: the chunks advanced `store` (every public entry
+    // depends on it), not each product's keys.
     const deps = depsSince(seq);
-    for (const productId of ["p_s000", "p_s149", "p_o00", "p_o14"]) expect(deps.has(`p:${productId}`), productId).toBe(true);
-    expect(deps.has("p:p_bag")).toBe(false);
+    expect([...deps]).toEqual(["store"]);
+    expect(sqlite.prepare("SELECT coarse FROM cache_clock").get()).toEqual({ coarse: 0 });
   });
 
   it("refuses a SKU whose price changed since it was read and finishes the rest in the request", async () => {

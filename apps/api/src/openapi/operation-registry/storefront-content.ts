@@ -48,12 +48,5 @@ export const STOREFRONT_CONTENT_OPERATIONS = {
       "Storefront render-helper duplicate; use storefront.pages.get_by_slug as the canonical page-content authority.",
   },
   "storefront.platform.get": { limits: { request: 16_384, response: 8_192 } },
-  "storefront.ptproxy.get_ptproxy": {
-    exposure: "excluded",
-    principals: ["internal"],
-    openWorld: true,
-    reason:
-      "Allowlisted Partytown script reverse proxy is browser transport infrastructure, not a semantic agent operation.",
-  },
   "storefront.seo.get": { limits: { request: 16_384, response: 32_768 } },
 } satisfies Record<string, OperationRegistryEntry>;

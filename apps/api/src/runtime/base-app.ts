@@ -9,6 +9,7 @@ import { RateLimitError } from "../utils/api-error";
 import { withTrackedPlatformEnv } from "./runtime-env";
 import { withStoreTimeZone } from "@scalius/core/utils/store-time-zone";
 import { eventDispatchMiddleware } from "../middleware/event-dispatch";
+import { recommendationQueueMiddleware } from "../middleware/recommendation-queue";
 import {
   getRequestCorrelation,
   requestCorrelationMiddleware,
@@ -75,6 +76,8 @@ function configureApiApp(app: Hono<{ Bindings: Env }>): void {
   // A mutating request that wrote an evented table dispatches its outbox rows
   // after the response (COMMERCE-HOOKS H3).
   app.use("*", eventDispatchMiddleware);
+  // A read that found a product without stored recommendations queues it.
+  app.use("*", recommendationQueueMiddleware);
 
   app.use("*", async (c, next) => {
     const origin = c.req.header("Origin");

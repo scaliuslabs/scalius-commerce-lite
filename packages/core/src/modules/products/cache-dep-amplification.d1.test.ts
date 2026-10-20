@@ -10,7 +10,7 @@ import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { bulkUpdateProducts } from "../product-admin/lifecycle";
 import { catalogProjectionRefreshStatements, rebuildCatalogProjections } from "./catalog-projections";
-import { safeBatch } from "@scalius/database/client";
+import { safeBatch, withCoarseCacheClock } from "@scalius/database/client";
 
 const PRODUCTS = 90;
 
@@ -37,6 +37,7 @@ describe("cache dependency write amplification", () => {
             CREATE TRIGGER amp_dep_ins AFTER INSERT ON cache_dep BEGIN INSERT INTO amp VALUES ('dep', 1) ON CONFLICT (k) DO UPDATE SET n = n + 1; END;
             CREATE TRIGGER amp_dep_upd AFTER UPDATE ON cache_dep BEGIN INSERT INTO amp VALUES ('dep', 1) ON CONFLICT (k) DO UPDATE SET n = n + 1; END;
             CREATE TRIGGER amp_clock AFTER UPDATE ON cache_clock BEGIN INSERT INTO amp VALUES ('clock', 1) ON CONFLICT (k) DO UPDATE SET n = n + 1; END;
+            CREATE TRIGGER amp_state AFTER UPDATE ON product_buyer_state BEGIN INSERT INTO amp VALUES ('state', 1) ON CONFLICT (k) DO UPDATE SET n = n + 1; END;
         `);
         await rebuildCatalogProjections(db);
         // Saved long ago: a write's own lastmod always moves.
@@ -53,7 +54,7 @@ describe("cache dependency write amplification", () => {
             .map((row) => [row.k, row.n]));
         const keys = (sqlite.prepare("SELECT dep FROM cache_dep WHERE seq > ? ORDER BY dep").all(seq) as Array<{ dep: string }>)
             .map((row) => row.dep);
-        const result = { keys, depWrites: counts.dep ?? 0, clockWrites: counts.clock ?? 0, ms };
+        const result = { keys, depWrites: counts.dep ?? 0, clockWrites: counts.clock ?? 0, stateWrites: counts.state ?? 0, ms };
         if (process.env.CACHE_DEP_AMPLIFICATION_REPORT) {
             console.log(`[cache-dep amplification] ${expect.getState().currentTestName}: ${JSON.stringify({ ...result, keys: result.keys.length, ms: Math.round(ms) })}`);
         }
@@ -75,6 +76,18 @@ describe("cache dependency write amplification", () => {
         expect(result.clockWrites).toBe(4 * PRODUCTS);
         expect(result.depWrites).toBe(13 * PRODUCTS);
         expect(result.ms).toBeLessThan(2_000);
+    });
+
+    it("a 90-product unpublish in a bulk run's coarse mode advances `store` once per fire, not each product's keys", async () => {
+        const result = await measure(() => withCoarseCacheClock(() => bulkUpdateProducts(db, claims(), { isActive: false })));
+        expect(sqlite.prepare("SELECT count(*) AS n FROM products WHERE is_active = 0").get()).toEqual({ n: PRODUCTS });
+        expect(result.keys).toEqual(["store"]);
+        // Four fires a product, each one `store` write and one clock step
+        // (the precise mode above writes 13 dependency rows a product), plus
+        // the coarse flag's own set and reset.
+        expect(result.depWrites).toBe(4 * PRODUCTS);
+        expect(result.clockWrites).toBe(4 * PRODUCTS + 2);
+        expect(sqlite.prepare("SELECT coarse FROM cache_clock").get()).toEqual({ coarse: 0 });
     });
 
     it("a bulk change to values the products already have is a no-op: no revision, no lastmod, no key", async () => {
@@ -103,7 +116,8 @@ describe("cache dependency write amplification", () => {
 
     it("a refresh with no change (a save of unchanged facts) and a rebuild with no drift write nothing", async () => {
         const refresh = await measure(() => safeBatch(db, catalogProjectionRefreshStatements(db, claims().map((claim) => claim.id)) as never));
-        expect(refresh).toMatchObject({ keys: [], depWrites: 0, clockWrites: 0 });
+        // No buyer-state row is rewritten either: D1 bills a row write even when nothing changed.
+        expect(refresh).toMatchObject({ keys: [], depWrites: 0, clockWrites: 0, stateWrites: 0 });
         const rebuild = await measure(() => rebuildCatalogProjections(db));
         expect(rebuild).toMatchObject({ keys: [], depWrites: 0 });
         // Only the coarse flag's own set and reset touch the clock row.

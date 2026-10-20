@@ -4,7 +4,7 @@ import { writeAgentAuditEvent } from "./audit";
 describe("safe agent audit metadata", () => {
   it("persists only code-owned non-sensitive metadata keys", async () => {
     const auditStatement = { kind: "audit" };
-    const values = vi.fn(() => auditStatement);
+    const values = vi.fn(() => ({ onConflictDoNothing: () => auditStatement }));
     const grantStatement = { kind: "grant" };
     const credentialStatement = { kind: "credential" };
     const where = vi.fn()
@@ -42,7 +42,8 @@ describe("safe agent audit metadata", () => {
     });
 
     expect(values).toHaveBeenCalledWith(expect.objectContaining({
-      metadataJson: JSON.stringify({ resultCount: 2, transport: "json" }),
+      id: expect.stringMatching(/^aae_[0-9a-f]{20}$/),
+      metadataJson: JSON.stringify({ resultCount: 2, transport: "json", rollup: "hour" }),
       resourceIdsJson: JSON.stringify(["prod_0123456789abcdefghij"]),
     }));
     const serialized = JSON.stringify(values.mock.calls[0]);
@@ -80,5 +81,39 @@ describe("safe agent audit metadata", () => {
 
     expect(batch).toHaveBeenCalledWith([auditStatement]);
     expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it("records every write as its own row and rolls successful reads up per principal, operation and hour", async () => {
+    const inserted: Array<{ id: string; ignored: boolean }> = [];
+    const db = {
+      insert: vi.fn(() => ({
+        values: vi.fn((row: { id: string }) => {
+          const statement = { id: row.id, ignored: false };
+          inserted.push(statement);
+          return Object.assign(statement, { onConflictDoNothing: () => Object.assign(statement, { ignored: true }) });
+        }),
+      })),
+      update: vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn(() => ({})) })) })),
+      batch: vi.fn().mockResolvedValue([]),
+    };
+    const call = (operationId: string, risk: "read" | "write", outcome: "success" | "denied" = "success", grantId = "agr_0123456789abcdefghij") =>
+      writeAgentAuditEvent(db as never, { grantId, operationId, risk, outcome });
+    await call("dashboard.products.list", "read");
+    await call("dashboard.products.list", "read");
+    await call("dashboard.products.list", "read", "success", "agr_other0123456789abcd");
+    await call("dashboard.products.list", "read", "denied");
+    await call("dashboard.products.update", "write");
+    await call("dashboard.products.update", "write");
+    const [first, again, otherGrant, denied, write, secondWrite] = inserted;
+    // The hour's reads share one row id (insert-or-ignore); another principal has its own.
+    expect(first!.ignored && again!.ignored).toBe(true);
+    expect(again!.id).toBe(first!.id);
+    expect(otherGrant!.id).not.toBe(first!.id);
+    // Denials and writes are recorded one row per call.
+    for (const row of [denied, write, secondWrite]) {
+      expect(row!.ignored).toBe(false);
+      expect(row!.id).toMatch(/^aae_/);
+    }
+    expect(secondWrite!.id).not.toBe(write!.id);
   });
 });
