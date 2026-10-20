@@ -411,7 +411,9 @@ export async function applyOrderStatusChange(
     await assertNoActivePaymentSessionAttempt(db, orderId);
     const isDeliveredOrCompleted = nextStatus === OrderStatus.DELIVERED || nextStatus === OrderStatus.COMPLETED;
     // An invoice (net terms) is delivered before it is paid; it completes once paid.
-    const deliveredOnTerms = nextStatus === OrderStatus.DELIVERED && existingOrder.paymentTermsDays !== null;
+    // Only recorded terms open this: a missing value keeps the money-due guard.
+    const onTerms = typeof existingOrder.paymentTermsDays === "number";
+    const deliveredOnTerms = nextStatus === OrderStatus.DELIVERED && onTerms;
     if (nextStatus === OrderStatus.DELIVERED && currentStatus !== nextStatus) {
         // Delivered only once every line that is handed over by a real
         // action was (F7); digital and gift-card lines never block.
@@ -430,7 +432,7 @@ export async function applyOrderStatusChange(
             throw new ValidationError(
                 existingOrder.paymentMethod === PaymentMethod.COD
                     ? "Mark the cash as collected first."
-                    : existingOrder.paymentTermsDays !== null
+                    : onTerms
                     ? "Record the invoice payment first."
                     : existingOrder.paymentStatus === PaymentStatus.PARTIAL
                     ? "Record the rest of the payment first."
