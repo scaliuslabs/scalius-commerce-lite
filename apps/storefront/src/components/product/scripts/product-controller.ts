@@ -180,6 +180,11 @@ export function init() {
   bindOptions();
   bindActions();
   refresh(true);
+  // The pre-paint hold of a `?variant=` link (VARIANT_PREPAINT_SCRIPT) ends in
+  // the frame that paints the linked SKU.
+  requestAnimationFrame(() => {
+    delete document.documentElement.dataset.variantPending;
+  });
 }
 
 /** Offers end on their own schedule: hide one that ended while the page was cached. */
@@ -464,10 +469,14 @@ function updateStockAndActions() {
       unavailableText: copy?.unavailableText ?? "",
     },
   });
-  cache.unavailableNotice?.classList.toggle(
-    "hidden",
-    !state.unavailableRequestedVariant,
-  );
+  if (cache.unavailableNotice) {
+    // A link to a sold-out SKU names it: "Size M / Colour Red: Sold out".
+    const linked = state.unavailableRequestedVariant;
+    cache.unavailableNotice.textContent = linked
+      ? `${linked.selectedOptions.map((option) => `${option.name} ${option.value}`).join(" / ")}: ${copy?.unavailableText ?? ""}`
+      : "";
+    cache.unavailableNotice.classList.toggle("hidden", !linked);
+  }
   if (cache.stockBadge) {
     cache.stockBadge.classList.toggle("text-primary", summary.tone === "available");
     cache.stockBadge.classList.toggle("text-destructive", summary.tone !== "available");

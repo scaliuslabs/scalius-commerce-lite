@@ -2,7 +2,7 @@
 import { Window } from "happy-dom";
 import { describe, expect, it, vi } from "vitest";
 
-import { AD_CLICK_ID_SCRIPT, STALE_ASSET_RECOVERY_SCRIPT } from "./inline-boot-scripts";
+import { AD_CLICK_ID_SCRIPT, STALE_ASSET_RECOVERY_SCRIPT, VARIANT_PREPAINT_SCRIPT } from "./inline-boot-scripts";
 
 function page(url: string, preview = false): Window {
   // Build files never load here: the error events below are dispatched by hand.
@@ -87,5 +87,33 @@ describe("stale asset recovery script", () => {
     expect(reloadAgain).not.toHaveBeenCalled();
     window.close();
     again.close();
+  });
+});
+
+describe("variant pre-paint script", () => {
+  it("holds the buy box's choice on a ?variant= link until the controller selects it, at most 3 s", () => {
+    vi.useFakeTimers();
+    try {
+      const linked = page("https://shop.test/products/a?variant=sku_2&gclid=x");
+      linked.eval(VARIANT_PREPAINT_SCRIPT);
+      expect(linked.document.documentElement.dataset.variantPending).toBe("");
+      linked.close();
+
+      const plain = page("https://shop.test/products/a?size=m");
+      plain.eval(VARIANT_PREPAINT_SCRIPT);
+      expect(plain.document.documentElement.hasAttribute("data-variant-pending")).toBe(false);
+      plain.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("lets the page paint by itself when no controller runs", async () => {
+    const linked = page("https://shop.test/products/a?variant=sku_2");
+    linked.eval(VARIANT_PREPAINT_SCRIPT);
+    expect(linked.document.documentElement.hasAttribute("data-variant-pending")).toBe(true);
+    await linked.happyDOM.waitUntilComplete();
+    expect(linked.document.documentElement.hasAttribute("data-variant-pending")).toBe(false);
+    linked.close();
   });
 });

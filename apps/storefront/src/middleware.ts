@@ -1,5 +1,4 @@
 import { defineMiddleware, sequence } from "astro:middleware";
-import { hasStorefrontProductVariantSelectionParams } from "@scalius/shared/storefront-cache-path";
 import { redirectPlaintextRequest } from "@scalius/shared/http-security";
 import { applyTransportSecurityHeaders, withPageCsp } from "@/lib/middleware-helper/private-download-security";
 
@@ -111,7 +110,6 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
   }
   response.headers.set("X-Storefront-Build", BUILD_ID);
   const isGet = request.method === "GET" || request.method === "HEAD";
-  const hasVariantSelection = hasStorefrontProductVariantSelectionParams(url);
   const hasPrivateSession = requestHasPrivateSession(request.headers);
   const bypassesPublicCache = requestBypassesPublicStorefrontCache(
     request.headers,
@@ -119,9 +117,7 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
   // The cart and checkout are private but cacheable shells; the rest are not.
   const explicitlyPrivatePath = isUncachedPrivateStorefrontPathname(url.pathname);
 
-  if (isGet && hasVariantSelection) {
-    setPrivateResponse(response, "BYPASS_VARIANT_SELECTION");
-  } else if (isGet && (bypassesPublicCache || explicitlyPrivatePath)) {
+  if (isGet && (bypassesPublicCache || explicitlyPrivatePath)) {
     setPrivateResponse(
       response,
       hasPrivateSession

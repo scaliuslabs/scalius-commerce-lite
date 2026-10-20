@@ -10,6 +10,7 @@ import {
   type ProductPricing,
 } from "./lib/pricing-engine";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
+import { VARIANT_PREPAINT_SCRIPT } from "@/lib/inline-boot-scripts";
 import { DEFAULT_CURRENCY, formatMoney } from "@/lib/currency";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
@@ -47,8 +48,6 @@ interface Props {
   currencyCode?: string;
   /** The store's price increment (server renders have no page globals). */
   priceIncrementMinor?: number;
-  initialVariant?: ProductVariant | null;
-  initialUnavailableVariant?: ProductVariant | null;
   quickBuyNotice?: string | null;
   /**
    * What the page sells is paid only online (digital items, gift cards) and
@@ -83,8 +82,6 @@ const {
   currencyDecimalPlaces = DEFAULT_CURRENCY.decimalPlaces,
   currencyCode = DEFAULT_CURRENCY.code,
   priceIncrementMinor,
-  initialVariant = null,
-  initialUnavailableVariant = null,
   quickBuyNotice = null,
   onlinePaymentUnavailable = false,
   actionCopy: providedCopy = {},
@@ -113,13 +110,15 @@ const catalogWords = catalogCopy((await currentRequestTheme(Astro.locals)).langu
 const actionCopy: ProductActionCopy = pageCopy;
 const formatPrice = (price: number) => formatMoney(price, { code: currencyCode, symbol: currencySymbol });
 
-// A link to a sold-out combination still shows that combination, marked sold out.
+// The opening choice. A `?variant=` link is the same cached page: the
+// pre-paint script below holds the choice-dependent parts until
+// product-controller.ts selects that SKU (a sold-out one shows, marked).
 const {
   selection: initialSelection,
   selectedVariant: initialSelectedVariant,
   stockVariant,
   pricingVariants,
-} = initialVariantPresentation(options, variants, initialVariant, initialUnavailableVariant);
+} = initialVariantPresentation(options, variants);
 // A product code must identify the same SKU after every buyer choice.
 const stableSku = options.length === 0 && variants.length === 1 ? initialSelectedVariant?.sku.trim() : null;
 const buyerStockSummary = getBuyerStockSummary(stockVariant ? [stockVariant] : variants);
@@ -232,9 +231,6 @@ const optionsJson = serializeJsonForInlineScript(options.map((option) => ({
   name: option.name,
   values: option.values.map((value) => ({ id: value.id })),
 })));
-const unavailableLabel = initialUnavailableVariant?.selectedOptions
-  .map((option) => `${option.name} ${option.value}`)
-  .join(" / ");
 const offers = (product.offers ?? []).map((offer) => ({
   ...offer,
   text: describeBuyGetOffer(offer, actionCopy, formatPrice),
@@ -258,6 +254,9 @@ function optionAriaLabel(
   data-cta-layout={look.cta.layout}
   data-facts-column={factsColumn ? "" : undefined}
 >
+  {/* Before first paint: a `?variant=` link holds the choice-dependent parts
+      (VARIANT_PREPAINT_SCRIPT) until product-controller.ts selects its SKU. */}
+  <script is:inline set:html={VARIANT_PREPAINT_SCRIPT} />
   <div class="buy-box-body flex h-full flex-col">
     <div
       id="product-actions"
@@ -331,9 +330,7 @@ function optionAriaLabel(
     <script is:inline type="application/json" id="product-options-data" set:html={optionsJson} />
 
     <div class="space-y-3 pt-1 lg:pt-2">
-      <div id="variant-unavailable-query-notice" class:list={["rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive", { hidden: !initialUnavailableVariant }]} role="alert">
-        {initialUnavailableVariant ? `${unavailableLabel}: ${stockLabel(buyerStockSummary.text)}` : ""}
-      </div>
+      <div id="variant-unavailable-query-notice" class="hidden rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert"></div>
 
       {options.length > 0 && <div class="variant-option-panels">
         {options.map((option) => {
@@ -506,6 +503,12 @@ function optionAriaLabel(
 </div>
 
 <style is:global>
+  /* A `?variant=` link before product-controller.ts selects its SKU: the
+     parts that depend on the choice keep their space and stay unpainted. */
+  html[data-variant-pending] :is(.product-price, .product-original-price, .discount-badge, #product-stock-badge, .variant-option-values, [data-sticky-buy-price]) {
+    visibility: hidden;
+  }
+
   /* An option value's button, once here instead of the same utilities on
      every value: Tailwind's values at zero specificity (every rule that won
      over them still wins). Its state colours stay utility classes, which

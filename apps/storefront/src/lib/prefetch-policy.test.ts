@@ -25,20 +25,15 @@ describe("storefront navigation prefetch policy", () => {
     "/",
     "/products/example-product",
     "/products/example-product?variant=sku_123",
+    // Retired option links are the product's one cached page too.
+    "/products/example-product?size=large",
+    "https://shop.example/products/example-product?size=large&color=blue",
     "/categories/shoes?sort=price-asc",
     "/collections/featured",
     "/search?q=shoe",
     "/blog/new-arrivals",
   ])("leaves public catalog/content destination %s eligible", (href) => {
     expect(getStorefrontPrefetchAttribute(href)).toBeUndefined();
-  });
-
-  it.each([
-    "/products/example-product?size=large",
-    "/products/example-product?color=blue",
-    "https://shop.example/products/example-product?size=large&color=blue",
-  ])("does not prefetch uncached product option destination %s", (href) => {
-    expect(getStorefrontPrefetchAttribute(href)).toBe("false");
   });
 
   it("matches private route segments without swallowing public lookalikes", () => {
@@ -61,12 +56,13 @@ describe("storefront navigation prefetch policy", () => {
         "https://shop.example/categories/shoes",
       ),
     ).toBeUndefined();
+    // A product's option link is its one cached page.
     expect(
       getStorefrontPrefetchAttribute(
         "?size=large",
         "https://shop.example/products/example-product",
       ),
-    ).toBe("false");
+    ).toBeUndefined();
     expect(
       getStorefrontPrefetchAttribute(
         "?step=delivery",
@@ -103,7 +99,7 @@ describe("storefront navigation prefetch policy", () => {
         '<a class="catalog" href="/products/example-product">Product</a>',
         '<a href="/cart" data-astro-prefetch="false">Cart</a>',
         '<a href="/payment-recovery?orderId=order_123" data-astro-prefetch="false">Recover</a>',
-        '<a href="/products/example-product?variant=sku_123&amp;color=blue" data-astro-prefetch="false">Blue</a>',
+        '<a href="/products/example-product?variant=sku_123&amp;color=blue">Blue</a>',
       ].join(""),
     );
   });
@@ -121,7 +117,7 @@ describe("storefront navigation prefetch policy", () => {
         "https://shop.example/products/example-product",
       ),
     ).toBe(
-      '<a href="?size=large" data-astro-prefetch="false">Large</a>',
+      '<a href="?size=large">Large</a>',
     );
   });
 

@@ -152,7 +152,7 @@ The reader gives the storefront a proof per part: the API version, `status` (`hi
    - A frontier call longer than 1.5 seconds renders the page live.
 4. The slow path (`POST /api/v1/storefront/frontier/check`) sends the key hashes. The API scans at most 4,000 changes after `s0` and answers "changed" beyond that. One check runs per entry and isolate; concurrent requests join it.
 5. `GET /api/v1/storefront/frontier` and the check route answer 404 without the `X-Scalius-Frontier-Key` header. Both Workers derive the key as an HKDF of `SCALIUS_SECRET` (purpose `cache-frontier`). A frontier answer holds at most 4,000 changes: the newest ones, with the horizon raised to the first change left out (an entry older than that takes the slow path). An answer always reaches the clock: a key row holds its latest change, so a cut below the clock could miss a key that changed again after it.
-6. Private requests (checkout, account, a session cookie, variant selections) always render.
+6. Private requests (checkout, account, a session cookie) always render. A product's variant links are its one cached page.
 
 ### Read your writes
 

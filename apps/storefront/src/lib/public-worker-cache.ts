@@ -1,6 +1,5 @@
 import {
   canonicalizeStorefrontHtmlCachePath,
-  hasStorefrontProductVariantSelectionParams,
   isStorefrontTrackingQueryParam,
   readStorefrontSeenSeq,
 } from "@scalius/shared/storefront-cache-path";
@@ -220,7 +219,6 @@ export function getPublicStorefrontCachePolicy(
   const presence = presenceOfPath(url.pathname);
   const logical = logicalUrl(url);
   if (!hasBoundedPublicQuery(logical)) return null;
-  if (hasStorefrontProductVariantSelectionParams(logical)) return null;
   if (!isPublicCachePath(logical.pathname)) return null;
   const normalizedPathname = logical.pathname.replace(/\/$/, "") || "/";
   // A buyer shell reads no query parameter on the server, so every /cart (or

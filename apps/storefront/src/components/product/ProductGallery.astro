@@ -24,11 +24,6 @@ interface Props {
   media: ProductMedia[];
   /** Theme -> Layout -> Product page: gallery placement and thumbnails. */
   layout?: ProductGalleryLayout;
-  /**
-   * The exact SKU image of a `?variant=` link (a product media id). It is
-   * rendered first so the LCP photo is the one the buyer asked for.
-   */
-  initialProductMediaId?: string | null;
   /** "Play video: {title}" in the store's language. */
   playVideoLabel?: string;
   /** The words of the computer zoom button, and of the stacked list's "show all" control. */
@@ -46,7 +41,6 @@ const {
   product,
   media,
   layout = { gallery: "beside", thumbnails: "beside", stageRatio: 1, thumbnailSize: null },
-  initialProductMediaId = null,
   playVideoLabel = "Play video: {title}",
   zoomLabel = "Zoom photo",
   zoomOfLabel = (position: number | string, total: number | string) => `Zoom photo ${position} of ${total}`,
@@ -63,7 +57,9 @@ const desktopThumb = GALLERY_CONFIG.thumbnails.desktop;
 const mobileThumb = GALLERY_CONFIG.thumbnails.mobile;
 
 const galleryMedia = productGalleryItems(product, media);
-const featuredMedia = featuredGalleryItem(galleryMedia, initialProductMediaId);
+// One page per product: a `?variant=` link's SKU photo is selected in the
+// browser (product-controller.ts), the page's cached first paint is the primary.
+const featuredMedia = featuredGalleryItem(galleryMedia, null);
 const hasMultipleMedia = galleryMedia.length > 1;
 const mainSlot = productGalleryMainSlot(layout, hasMultipleMedia);
 // Both rails share one slot, so the hidden rail's thumbnail names the

@@ -66,12 +66,11 @@ A request uses the shared page cache (`getPublicStorefrontCachePolicy`) when all
 - The method is GET or HEAD.
 - The request has no `Authorization` or `X-API-Token` header and no `cs_tok`, `cs_auth` or `stp_theme_preview` cookie. Other cookies do not matter: the render drops every cookie.
 - After tracking parameters leave, the query has at most 30 entries, each key at most 64 characters and each value at most 512.
-- The URL is not a product page with a `size` or `color` query (a variant selection).
 - The path is public (`isPublicCachePath`): pages, feeds, sitemaps, `/robots.txt`, `/llms.txt`, `/.well-known/ucp` and the buyer shells (cart and checkout).
 
 The public and private path lists and the browser `Cache-Control` values are in [apps/storefront/README.md](../apps/storefront/README.md#public-cache-and-private-pages).
 
-`X-Cache-Status` reports the lane: `HIT`, `MISS`, `BYPASS`, `BYPASS_AUTH`, `BYPASS_VARIANT_SELECTION`, `BYPASS_DEGRADED` (the page rendered from a failed read and called `markRenderUncacheable`) and `NO_CACHE`. A stored page is also a `MISS` on the request that renders it. Direct API reads report `HIT`, `MISS`, `REFRESH` or `BYPASS`.
+`X-Cache-Status` reports the lane: `HIT`, `MISS`, `BYPASS`, `BYPASS_AUTH`, `BYPASS_DEGRADED` (the page rendered from a failed read and called `markRenderUncacheable`, or drew the default theme because the API sent a theme document this storefront cannot read) and `NO_CACHE`. A stored page is also a `MISS` on the request that renders it. Direct API reads report `HIT`, `MISS`, `REFRESH` or `BYPASS`.
 
 ### Key
 
@@ -81,6 +80,7 @@ The public and private path lists and the browser `Cache-Control` values are in 
 
 - A market presence page keeps its subfolder in the key (`/en-in/products/<slug>`). The gateway renders the root page for it and stores the page after it rewrites the links (MARKETS-DESIGN step 2), so a hit costs no rewrite. The `localization` cookie never bypasses the cache. A presence page's `checkout/config` part carries `?presence=`; every other part is the root page's part.
 - The path and query are canonical: sorted query, empty values removed, no tracking parameters or `_sv`, `q` and `search` whitespace collapsed, and default `page=1` and `sortBy=newest` removed on category, collection, blog and search paths. The gateway renders this URL without cookies, so every anonymous visitor gets the same bytes.
+- A product page is one entry whatever its variant link says: `variant=<sku id>` (feed rows, shared links) and the retired `size`/`color` links leave the key and never reach the render. The buy box's pre-paint script (`VARIANT_PREPAINT_SCRIPT`) holds the price, stock and option states of a `?variant=` link unpainted until `product-controller.ts` selects that SKU, so every ad click on a variant row is an edge hit. Crawlers get the same page; nothing redirects.
 - Tracking parameters (`utm_*`, `fbclid`, `gclid`, `ref` and the other click and campaign keys in `isStorefrontTrackingQueryParam`, `packages/shared/src/storefront-cache-path.ts`) do not count toward the query bounds. The browser URL keeps them for client analytics. An unknown parameter stays, because it may change the page.
 - `BUILD_ID` comes from `apps/storefront/scripts/generate-build-id.js`. The page reports it in `X-Storefront-Build`, and deploy verification compares it.
 - The Worker version is `CF_VERSION_METADATA.id`, read through `readWorkerVersion` (`packages/shared/src/cache-generation.ts`) at no D1 cost. Without the binding it returns null and nothing is cached. `pnpm check:env` fails when a Wrangler config lacks `"version_metadata": { "binding": "CF_VERSION_METADATA" }`.
