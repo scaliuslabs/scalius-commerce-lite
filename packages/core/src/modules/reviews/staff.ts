@@ -1,9 +1,7 @@
 // Staff review moderation (Wave B §2.1, §7.2): the moderation queue, one
 // review, bulk publish / reject / restore, the merchant's public reply and
 // the private "Message the reviewer" thread. Staff never author or edit the
-// buyer's text: the only staff writes are status, reason and reply. The
-// routes bump the cache generation once per request that changed anything a
-// buyer can see.
+// buyer's text: the only staff writes are status, reason and reply.
 import { nanoid } from "nanoid";
 import { and, desc, eq, inArray, lt, or, sql, type SQL } from "drizzle-orm";
 import { searchMatch } from "../../search";

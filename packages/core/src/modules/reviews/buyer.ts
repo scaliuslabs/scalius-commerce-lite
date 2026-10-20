@@ -5,9 +5,8 @@
 // delivered or completed order the buyer owns (account) or holds the receipt
 // of (guest). The database trigger enforces the same fact against raw writes.
 // One review per line; one live review per product per buyer (a repeat
-// purchase edits). Moderation is the rating-blind content check. Buyer
-// auto-publishes never bump the cache generation inline: the 15-minute cron
-// does once (`reviewsChangedSince`). Review text never enters logs.
+// purchase edits). Moderation is the rating-blind content check. Review
+// text never enters logs.
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { orders, productReviews, products } from "@scalius/database/schema";

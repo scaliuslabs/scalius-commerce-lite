@@ -216,8 +216,8 @@ export async function acknowledgeLowStockAlert(
 /**
  * Save the store-wide alert level used by SKUs without their own (`null`
  * turns it off). The Low stock list reads live stock against it, so no SKU
- * is rewritten; the caller bumps the public cache generation because the
- * level shapes buyer availability bands.
+ * is rewritten. The level shapes buyer availability bands; its route
+ * requests a catalog projection rebuild.
  */
 export async function setDefaultLowStockThreshold(
   db: Database,
@@ -235,10 +235,8 @@ export async function setDefaultLowStockThreshold(
 
 /**
  * Set a tracked SKU's alert level (`null` uses the store default, 0 turns it
- * off) and re-check its alert
- * at once. This is not a stock mutation: no movement row, no stockVersion.
- * The level shapes the buyer availability band, so the caller bumps the
- * public cache generation after this commits.
+ * off) and re-check its alert at once. This is not a stock mutation: no
+ * movement row, no stockVersion.
  */
 export async function setLowStockThreshold(
   db: Database,
