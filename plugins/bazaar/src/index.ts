@@ -482,8 +482,8 @@ export default definePlugin({
             title: "Bazaar demo content",
             description: "Sample products for the Bazaar theme. They are ordinary products while imported; removal moves exactly these to the trash.",
             actions: [
-              ui.button("Import demo content", { route: "demo-import" }, { tone: "primary" }),
-              ui.button("Remove demo content", { route: "demo-remove" }, {
+              ui.button("Import demo content", ui.route("demo-import"), { tone: "primary" }),
+              ui.button("Remove demo content", ui.route("demo-remove"), {
                 tone: "critical",
                 confirm: { title: "Remove the demo content?", text: "The imported demo products and their photos move to the trash. Your own products are not touched.", confirmLabel: "Remove", destructive: true },
               }),
