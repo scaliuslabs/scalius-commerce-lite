@@ -222,7 +222,7 @@ export const DASHBOARD_WHEN_A: Readonly<Record<string, string>> = {
   "dashboard.digital_entitlements.revoke": "Use when a buyer's access to a delivered file or licence key must be taken away.",
   "dashboard.discounts.activate": "Use when turning a draft or paused discount or coupon code on.",
   "dashboard.discounts.archive": "Use when deleting a discount or coupon code (orders keep their history).",
-  "dashboard.discounts.create": "Use when creating a coupon code or automatic discount: percent or amount off, minimum order, dates, products or customers it applies to.",
+  "dashboard.discounts.create": "Use when creating a coupon or automatic discount. Code: method code, codes [{code}], effects [{target order, allocation once, kind percentage_off {basisPoints} | fixed_amount_off {amountMinor,currencyCode}}]; minimum_merchandise_subtotal.",
   "dashboard.discounts.get": "Use when reading one discount's rules, codes and usage.",
   "dashboard.discounts.list": "Use when listing or searching discounts and coupon codes, active, scheduled or expired.",
   "dashboard.discounts.pause": "Use when turning an active discount or coupon code off.",
