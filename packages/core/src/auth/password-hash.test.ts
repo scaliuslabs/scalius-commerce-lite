@@ -71,7 +71,11 @@ describe("self-describing password hashes", () => {
 
   it("rejects a tampered hash, a truncated one, and unknown formats without throwing", async () => {
     const stored = await hashPassword(PASSWORD, { spec: FREE, pepperKey: KEY });
-    const flipped = `${stored.slice(0, -1)}${stored.endsWith("A") ? "B" : "A"}`;
+    // Tamper the hash's first character: all six of its bits are hash bits. The
+    // last character of 32 bytes in base64url carries two padding bits, so
+    // changing it (A <-> B, or B/C/D -> A) decodes to the very same bytes.
+    const hashStart = stored.lastIndexOf("$") + 1;
+    const flipped = `${stored.slice(0, hashStart)}${stored[hashStart] === "A" ? "B" : "A"}${stored.slice(hashStart + 1)}`;
     for (const bad of [flipped, stored.slice(0, -10), "", "plaintext", "$sc1$", "$sc1$md5$i=1$AAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAA", "$sc2$pbkdf2-sha256$i=30000$AAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAA"]) {
       expect(await verifyPassword(bad, PASSWORD, { spec: FREE, pepperKey: KEY })).toEqual({ valid: false, needsRehash: false });
     }
