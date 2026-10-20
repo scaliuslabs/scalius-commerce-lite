@@ -10,7 +10,7 @@ import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { bulkUpdateProducts } from "../product-admin/lifecycle";
 import { catalogProjectionRefreshStatements, rebuildCatalogProjections } from "./catalog-projections";
-import { safeBatch } from "@scalius/database/client";
+import { safeBatch, withCoarseCacheClock } from "@scalius/database/client";
 
 const PRODUCTS = 90;
 
@@ -75,6 +75,18 @@ describe("cache dependency write amplification", () => {
         expect(result.clockWrites).toBe(4 * PRODUCTS);
         expect(result.depWrites).toBe(13 * PRODUCTS);
         expect(result.ms).toBeLessThan(2_000);
+    });
+
+    it("a 90-product unpublish in a bulk run's coarse mode advances `store` once per fire, not each product's keys", async () => {
+        const result = await measure(() => withCoarseCacheClock(() => bulkUpdateProducts(db, claims(), { isActive: false })));
+        expect(sqlite.prepare("SELECT count(*) AS n FROM products WHERE is_active = 0").get()).toEqual({ n: PRODUCTS });
+        expect(result.keys).toEqual(["store"]);
+        // Four fires a product, each one `store` write and one clock step
+        // (the precise mode above writes 13 dependency rows a product), plus
+        // the coarse flag's own set and reset.
+        expect(result.depWrites).toBe(4 * PRODUCTS);
+        expect(result.clockWrites).toBe(4 * PRODUCTS + 2);
+        expect(sqlite.prepare("SELECT coarse FROM cache_clock").get()).toEqual({ coarse: 0 });
     });
 
     it("a bulk change to values the products already have is a no-op: no revision, no lastmod, no key", async () => {

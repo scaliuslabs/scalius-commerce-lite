@@ -19,7 +19,7 @@
 // A dry run reads the same selection and plans every item without a write.
 import { and, asc, eq, gt, isNull, lt, or, sql, type SQL } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
-import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
+import { buildBatchGuard, isBatchGuardError, safeBatch, withCoarseCacheClock, type Database } from "@scalius/database/client";
 import { bulkRuns, customerTagLinks, customers, inventoryLevels, productVariants, products, type BulkRunKind } from "@scalius/database/schema";
 import { roundToIncrementMinor } from "@scalius/shared/money";
 import { AppError, ConflictError, ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
@@ -726,7 +726,11 @@ export async function advanceBulkRun(db: Database, id: string, maxChunks: number
   let races = 0;
   for (let chunk = 0; row && row.status === "running" && chunk < maxChunks;) {
     try {
-      await runChunk(db, row);
+      // Coarse cache clock (as the projection rebuild): a chunk of 90 items
+      // advances `store` a few times instead of every row's keys, so a
+      // 5,000-item run fits Free's daily writes.
+      const current = row;
+      await withCoarseCacheClock(() => runChunk(db, current));
       chunk += 1;
       races = 0;
     } catch (error) {

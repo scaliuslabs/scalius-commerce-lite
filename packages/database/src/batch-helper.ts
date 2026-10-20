@@ -1,9 +1,11 @@
 // packages/database/src/batch-helper.ts
 // Type-safe wrapper around D1's db.batch().
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { Database } from "./types";
 import type { BatchItem, BatchResponse } from "drizzle-orm/batch";
-import { sql, type SQL } from "drizzle-orm";
+import { eq, sql, type SQL } from "drizzle-orm";
+import { cacheClock } from "./schema/system";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 type DynamicBatchDatabase = Database & {
@@ -14,6 +16,33 @@ type DynamicBatchDatabase = Database & {
 
 const BATCH_GUARD_MARKER = /^[A-Z_][A-Z0-9_]*$/;
 
+const coarseCacheClock = new AsyncLocalStorage<true>();
+const WRITE_STATEMENT = /^\s*(?:WITH\b[\s\S]*?\b)?(?:INSERT|UPDATE|DELETE|REPLACE)\b/i;
+
+function writes(statement: SQLiteBatchItem): boolean {
+  try {
+    const query = (statement as unknown as { toSQL?: () => { sql: string } }).toSQL?.();
+    // A statement whose text cannot be read is treated as a write (coarse is never wrong, only coarser).
+    return query ? WRITE_STATEMENT.test(query.sql) : true;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Runs `work` with every write batch it sends through `safeBatch` in coarse
+ * cache-clock mode (migration 0100): inside such a batch each cache
+ * dependency trigger advances only `store`, once per fire, instead of each
+ * row's keys. A bulk change of thousands of products (bulk runs) then writes
+ * a few clock rows per chunk instead of about 17 dependency rows a product;
+ * every public entry depends on `store`, so it is coarser, never stale. The
+ * flag is set and cleared inside each batch's own transaction, so no other
+ * write sees it. Read-only batches are sent as they are.
+ */
+export function withCoarseCacheClock<T>(work: () => Promise<T>): Promise<T> {
+  return coarseCacheClock.run(true, work);
+}
+
 /**
  * Type-safe wrapper around D1's db.batch() that centralises the dynamic batch cast.
  * Drizzle's D1 batch() has an overly narrow tuple type that doesn't accept
@@ -23,7 +52,11 @@ export function safeBatch<T extends readonly SQLiteBatchItem[]>(
   db: Database,
   statements: T,
 ): Promise<BatchResponse<T>> {
-  return (db as DynamicBatchDatabase).batch(statements);
+  const batch = db as DynamicBatchDatabase;
+  if (!coarseCacheClock.getStore() || !statements.some(writes)) return batch.batch(statements);
+  const coarse = (value: number) => db.update(cacheClock).set({ coarse: value }).where(eq(cacheClock.id, 1)) as unknown as SQLiteBatchItem;
+  return batch.batch([coarse(1), ...statements, coarse(0)] as unknown as T)
+    .then((results) => (results as unknown as unknown[]).slice(1, -1) as unknown as BatchResponse<T>);
 }
 
 /**

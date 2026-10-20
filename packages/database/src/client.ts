@@ -119,4 +119,5 @@ export {
   D1_ID_CHUNK_SIZE,
   isBatchGuardError,
   safeBatch,
+  withCoarseCacheClock,
 } from "./batch-helper";
