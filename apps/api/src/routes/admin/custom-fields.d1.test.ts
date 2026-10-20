@@ -58,8 +58,10 @@ describe("custom field definition routes", () => {
     const care = await call("POST", "/custom-field-definitions", { ownerType: "product", name: "Care guide", type: "multi_line_text", storefrontVisible: true });
     expect(care.status).toBe(201);
     expect(care.body.data.definition).toMatchObject({ key: "care_guide", namespace: "custom", revision: 1, position: 0 });
-    const msrp = await call("POST", "/custom-field-definitions", { ownerType: "product", name: "MSRP", type: "money", validations: { min: 1 } });
-    expect(msrp.body.data.definition.validations).toEqual({ min: 1, max: null, regex: null, choices: null });
+    const msrp = await call("POST", "/custom-field-definitions", { ownerType: "product", name: "MSRP", type: "money", validations: { min: 100 } });
+    // Money bounds are integer minor units of the store currency.
+    expect(msrp.body.data.definition.validations).toEqual({ min: 100, max: null, regex: null, choices: null });
+    expect((await call("POST", "/custom-field-definitions", { ownerType: "product", name: "Floor", type: "money", validations: { min: 1.5 } })).status).toBe(400);
 
     const taken = await call("POST", "/custom-field-definitions", { ownerType: "product", name: "Other", key: "care_guide", type: "url" });
     expect(taken.status).toBe(409);
@@ -105,17 +107,21 @@ describe("custom field value routes", () => {
     expect(empty.body.data.fields.map((field: { value: unknown }) => field.value)).toEqual([null, null]);
 
     const refused = await call("PUT", "/custom-fields/product/prod_a", {
-      values: [{ definitionId: care.id, value: "Hand wash cold only" }, { definitionId: msrp.id, value: 1500 }],
+      values: [{ definitionId: care.id, value: "Hand wash cold only" }, { definitionId: msrp.id, value: { amountMinor: 150000, currency: "BDT" } }],
     });
     expect(refused.status).toBe(400);
     expect(refused.body.error.details.issues).toEqual([expect.objectContaining({ path: ["values", 0, "value"], code: "too_long" })]);
     expect((await call("GET", "/custom-fields/product/prod_a")).body.data.fields[1].value).toBeNull();
 
+    // Money is one format: a decimal or a bare number is refused.
+    const decimal = await call("PUT", "/custom-fields/product/prod_a", { values: [{ definitionId: msrp.id, value: 1500 }] });
+    expect(decimal.status).toBe(400);
+    expect(decimal.body.error.details.issues).toEqual([expect.objectContaining({ path: ["values", 0, "value"], code: "invalid" })]);
     const saved = await call("PUT", "/custom-fields/product/prod_a", {
-      values: [{ definitionId: care.id, value: "Hand wash" }, { definitionId: msrp.id, value: 1500 }],
+      values: [{ definitionId: care.id, value: "Hand wash" }, { definitionId: msrp.id, value: { amountMinor: 150000, currency: "BDT" } }],
     });
     expect(saved.status).toBe(200);
-    expect(saved.body.data.fields.map((field: { value: unknown }) => field.value)).toEqual(["Hand wash", 1500]);
+    expect(saved.body.data.fields.map((field: { value: unknown }) => field.value)).toEqual(["Hand wash", { amountMinor: 150000, currency: "BDT" }]);
 
     expect((await call("GET", "/custom-fields/product/prod_nope")).status).toBe(404);
     // Another owner type's route never reaches product fields.

@@ -24,7 +24,7 @@ beforeEach(async () => {
     sqlite.prepare("INSERT INTO object_types (id,namespace,type,name,fields_json,indexes_json,unique_json) VALUES (?,?,?,?,?,?,?)")
       .run(objectTypeId(APP, name), APP, name, "Type", JSON.stringify(declaration.fields), "[]", "[]");
   }
-  await putObjectRecord(db, APP, "companies", OBJECTS.companies!, "co_1", { name: "Acme Ltd", credit: "1500" });
+  await putObjectRecord(db, APP, "companies", OBJECTS.companies!, "co_1", { name: "Acme Ltd", credit: { amountMinor: 150000, currency: "BDT" } });
   await putObjectRecord(db, APP, "members", OBJECTS.members!, "cust_1", { company_id: "co_1" });
   await putObjectRecord(db, APP, "moq", OBJECTS.moq!, "v_1", { min_qty: 3 });
   sqlite.exec(`
@@ -47,8 +47,8 @@ describe("declared reads", () => {
       ok: true,
       reads: {
         member: { revision: 1, data: { company_id: "co_1" } },
-        // Money in the SDK's wire form, as ctx.objects reads it.
-        company: { revision: 1, data: { name: "Acme Ltd", credit: 1500 } },
+        // Money in the one app wire form, as ctx.objects reads it.
+        company: { revision: 1, data: { name: "Acme Ltd", credit: { amountMinor: 150000, currency: "BDT" } } },
         moq: { v_1: { revision: 1, data: { min_qty: 3 } } },
         fields: { p_1: { revision: 0, data: { min_qty: 6 } } },
       },
