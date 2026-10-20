@@ -118,7 +118,7 @@ describe("storefront app proxy", () => {
 });
 
 describe("storefront app proxy pages", () => {
-  const page = { page: { title: "Your wishlist", html: "<p>Saved</p>", index: false } };
+  const page = { page: { title: "Your wishlist", component: "wishlist_page", props: { productIds: ["p1"] }, index: false } };
 
   it("treats HTML GETs and plain form posts as navigations, never JSON or script calls", () => {
     const at = "https://shop.test/apps/acme.wishlist/toggle";
@@ -139,6 +139,9 @@ describe("storefront app proxy pages", () => {
     expect(answer).toEqual({ kind: "page", page: page.page, status: 200 });
     const missing = await resolveAppProxyAnswer(navigation, json(page, { status: 404 }));
     expect(missing.kind === "page" && missing.status).toBe(404);
+    // Raw HTML is not a page: only the app's own component draws one.
+    const html = await resolveAppProxyAnswer(navigation, json({ page: { title: "Your wishlist", html: "<p>Saved</p>" } }));
+    expect(html.kind).toBe("response");
   });
 
   it("turns a redirect answer into a 303 to a path on this store only", async () => {
