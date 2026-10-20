@@ -1,12 +1,10 @@
 // The wishlist app over the SDK harness: the same runtime as the platform,
 // and an in-memory bridge.
 import { describe, expect, it } from "vitest";
-import {
-  createPluginTestHarness,
-  parsePluginUiDocument,
-  sanitizePluginHtml,
-} from "@scalius/plugin-sdk/testing";
+import { createPluginTestHarness, parsePluginUiDocument } from "@scalius/plugin-sdk/testing";
+import { renderComponent, storefrontShown } from "@scalius/plugin-sdk/storefront/testing";
 import wishlist from "./index";
+import storefront from "./storefront";
 
 // The product as dashboard.resources.products.get returns it.
 const productApi = async (operationId: string, input: unknown) => {
@@ -63,14 +61,21 @@ describe("acme.wishlist", () => {
     const customer = { id: "cust_1" };
     await harness.route("public", "toggle", { method: "POST", headers: json, body: { productId: "p_linen" }, customer });
     await harness.route("public", "toggle", { method: "POST", headers: json, body: { productId: "p_cotton" }, customer });
-    const page = (await harness.route("public", "wishlist", { headers: html, customer })).value as { body: { page: { title: string; html: string } } };
-    expect(page.body.page.title).toBe("Your wishlist");
-    expect(page.body.page.html).toContain('href="/products/linen-panjabi"');
-    expect(page.body.page.html).toContain("Cotton Panjabi");
-    const clean = sanitizePluginHtml(page.body.page.html, { pluginId: "acme.wishlist", forms: true });
-    expect(clean.ok).toBe(true);
-    const guest = (await harness.route("public", "wishlist", { headers: html })).value as { body: { page: { html: string } } };
-    expect(guest.body.page.html).toContain("Sign in to see your wishlist");
+    type Page = { body: { page: { title: string; component: string; props: Record<string, unknown> } } };
+    const page = (await harness.route("public", "wishlist", { headers: html, customer })).value as Page;
+    expect(page.body.page).toMatchObject({ title: "Your wishlist", component: "wishlist_page" });
+    // The store draws the page with the app's own component, from the props.
+    const drawn = renderComponent(storefront, "wishlist_page", "page", {}, { props: page.body.page.props });
+    expect(drawn).toContain('href="/products/linen-panjabi"');
+    expect(drawn).toContain("Cotton Panjabi");
+    expect(drawn).toContain('action="/apps/acme.wishlist/toggle"');
+    expect(storefrontShown(drawn, "acme.wishlist").dropped).toBe(0);
+    // A product name is text, however it is written.
+    const hostile = renderComponent(storefront, "wishlist_page", "page", {}, { props: { signedIn: true, items: [{ productId: "p", name: "<script>alert(1)</script>", url: "/products/p", imageUrl: null }] } });
+    expect(hostile).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+    expect(hostile).not.toContain("<script>");
+    const guest = (await harness.route("public", "wishlist", { headers: html })).value as Page;
+    expect(renderComponent(storefront, "wishlist_page", "page", {}, { props: guest.body.page.props })).toContain("Sign in to see your wishlist");
     const items = ((await harness.route("public", "wishlist", { headers: json, customer })).value as { body: { items: Array<{ productId: string }> } }).body.items;
     expect(items.map((item) => item.productId).sort()).toEqual(["p_cotton", "p_linen"]);
   });

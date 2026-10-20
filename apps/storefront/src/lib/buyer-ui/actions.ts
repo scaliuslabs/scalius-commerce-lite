@@ -1,4 +1,6 @@
-import type { BuyerUiAction, BuyerUiBlock } from "@scalius/shared/plugins/buyer-ui";
+import type { BuyerUiBlock } from "@scalius/shared/plugins/buyer-ui";
+import type { PluginUiAction } from "@scalius/shared/plugins/ui";
+import { isCheckoutSlot } from "./state";
 import { PLUGIN_ID_PATTERN } from "@scalius/shared/plugins/ids";
 import type { ProductPageData } from "@/lib/api/products";
 import { browserApiUrl } from "@/lib/api/browser-url";
@@ -23,7 +25,10 @@ async function publicRead<T>(path: string, query = new URLSearchParams()): Promi
   return data;
 }
 
-async function addLine(action: Extract<BuyerUiAction, { kind: "add_line" }>): Promise<void> {
+/** A route or cart action (`set_attribute` and `navigate` run in the renderer). */
+export type RunnableAction = Exclude<PluginUiAction, { kind: "navigate" } | { op: "set_attribute" }>;
+
+async function addLine(action: Extract<PluginUiAction, { op: "add_line" }>): Promise<void> {
   if (!action.variantId || action.variantId.length > 128 || !Number.isInteger(action.quantity)
     || action.quantity < 1 || action.quantity > 10) throw new Error(UNAVAILABLE);
   // Resolve through the online store, independent of feed/agent channel publication.
@@ -58,22 +63,23 @@ function message(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 && value.length <= 120 ? value.trim() : undefined;
 }
 
-/** Only explicit buyer clicks run these actions; the renderer sets attributes locally. */
-export async function runBuyerUiAction(action: BuyerUiAction, block: BuyerUiBlock): Promise<{ message?: string }> {
-  if (action.kind !== "app_route" && !block.target.startsWith("purchase.checkout.")) throw new Error(FAILED);
-  if (action.kind === "add_line") {
-    await addLine(action);
-    return { message: "Item added to your cart." };
-  }
-  if (action.kind === "apply_code") {
+/** Only explicit buyer clicks run these actions; the renderer sets attributes and opens pages itself. */
+export async function runBuyerUiAction(action: RunnableAction, block: BuyerUiBlock): Promise<{ message?: string }> {
+  if (action.kind === "cart") {
+    if (!isCheckoutSlot(block.target)) throw new Error(FAILED);
+    if (action.op === "add_line") {
+      await addLine(action);
+      return { message: "Item added to your cart." };
+    }
     if (!addDiscountCode(action.code)) throw new Error("This code could not be added, or is already in your cart.");
     return { message: "Code added. Your cart will check whether it applies." };
   }
-  if (action.kind !== "app_route" || !PLUGIN_ID_PATTERN.test(block.appId) || !/^[a-z][a-z0-9_-]{0,47}$/.test(action.route)) {
+  if (action.kind !== "route" || !PLUGIN_ID_PATTERN.test(block.appId) || !/^[a-z][a-z0-9_-]{0,47}$/.test(action.route)
+    || (action.subpath !== undefined && !/^[A-Za-z0-9_~-][A-Za-z0-9._~-]*(?:\/[A-Za-z0-9_~-][A-Za-z0-9._~-]*)*$/.test(action.subpath))) {
     throw new Error(FAILED);
   }
-  const response = await fetch(`/apps/${block.appId}/${action.route}`, {
-    method: "POST", credentials: "same-origin", redirect: "error",
+  const response = await fetch(`/apps/${block.appId}/${action.route}${action.subpath ? `/${action.subpath}` : ""}`, {
+    method: action.method ?? "POST", credentials: "same-origin", redirect: "error",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify(action.body ?? {}), signal: AbortSignal.timeout(35_000),
   }).catch(() => { throw new Error(FAILED); });

@@ -673,7 +673,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
             </div>
           </div>
         </section>
-        <div data-buyer-ui-target="purchase.checkout.cart-line-list.render-after" class="mt-4"></div>
+        <div data-buyer-ui-target="cart.page.summary" class="mt-4"></div>
         </div>
         {/* An empty cart still leads somewhere: the store's categories and popular products, shown while the cart is empty. */}
         <div class="mx-auto mt-8 hidden max-w-3xl space-y-8 group-data-[cart-state=empty]:block" data-cart-empty-extras>
@@ -848,7 +848,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
                 }
               </div>
             </section>
-            <div data-buyer-ui-target="purchase.checkout.contact.render-after"></div>
+            <div data-buyer-ui-target="checkout.contact.after"></div>
 
             {/* Nothing physical in the cart (services): no delivery section. */}
             <p
@@ -976,7 +976,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
                 goneText={copy.deliveryOptionGoneText}
               />
             </section>
-            <div data-buyer-ui-target="purchase.checkout.shipping-option-list.render-after"></div>
+            <div data-buyer-ui-target="checkout.delivery.after"></div>
 
             {/* The billing address (Shopify's rule): asked when nothing ships, or when the merchant requires one. */}
             <BillingAddressFields

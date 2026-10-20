@@ -2,8 +2,9 @@
 /**
  * Installed apps' storefront surfaces through the real pages (Astro container
  * API through a Vite dev server in middleware mode, API stubbed): app scripts
- * on the pages they name, and proxy pages drawn inside the store layout.
- * Component sections, blocks and skins have their own render tests.
+ * on the pages they name, and proxy pages drawn inside the store layout by
+ * the app's own page component (the SDK's runtime, through the real render
+ * host). Component sections, slots and skins have their own render tests.
  */
 import { fileURLToPath } from "node:url";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -65,6 +66,25 @@ beforeAll(async () => {
   ProductPage = (await server.ssrLoadModule("/src/pages/products/[slug].astro")).default;
   ProxyPage = (await server.ssrLoadModule("/src/pages/apps/[pluginId]/[...path].astro")).default;
   runtimeModule = (await server.ssrLoadModule("/src/lib/api/runtime.ts")) as RuntimeModule;
+  // The apps' page components, built with the SDK and served as bundled modules.
+  const sdk = await server.ssrLoadModule(fileURLToPath(new URL("../../../../../packages/plugin-sdk/src/storefront/index.ts", import.meta.url))) as {
+    defineStorefront(definition: unknown): unknown;
+    html(strings: TemplateStringsArray, ...values: unknown[]): unknown;
+    raw(value: string): unknown;
+  };
+  const { html, raw } = sdk;
+  const bundled = (await server.ssrLoadModule("/src/extensions/bundled.gen.ts")).BUNDLED_STOREFRONT_EXTENSIONS as Record<string, unknown>;
+  const register = (pluginId: string, components: Record<string, (props: { props: Record<string, unknown> }) => unknown>) => {
+    const module = sdk.defineStorefront({ components });
+    bundled[pluginId] = { release: RELEASE, module: async () => ({ default: module }), files: async () => ({}) };
+  };
+  register("acme.wishlist", {
+    wishlist_page: ({ props }) => html`<ul>${(props.items as Array<{ name: string }>).map((item) => html`<li class="wishlist-item">${item.name}</li>`)}</ul>
+      <form action="/apps/acme.wishlist/toggle" method="post" data-app-form><button type="submit">Remove</button></form>
+      <form action="/cart/add" method="post"><input name="variant" value="v1"></form>`,
+  });
+  register("acme.sizes", { guide: () => html`<p>Sizes</p><script type="application/ld+json">${raw(JSON.stringify({ "@context": "https://schema.org", "@type": "Thing", name: "Guide" }))}</script>` });
+  register("acme.big", { big: ({ props }) => html`<p>${String(props.text)}</p>` });
 }, 120_000);
 
 afterAll(async () => {
@@ -91,6 +111,12 @@ const APP_SCRIPTS = [
   { pluginId: "acme.listing", src: "https://list.example/listing.js", placement: "body-end", pages: ["listing"] },
 ];
 
+const RELEASE = "e".repeat(64);
+const pageExtension = (pluginId: string, type: string) => ({
+  pluginId, version: "1.0.0", source: "bundled", release: RELEASE, sections: [], sectionSettings: {}, skins: [],
+  components: [{ type, targets: ["page"], settings: [] }], islands: [], stylesheet: false, connect: [],
+});
+
 function theme(): StorefrontThemeDocument {
   return storefrontTemplateTheme("boutique");
 }
@@ -106,6 +132,7 @@ function layout() {
     currency: { code: "BDT", symbol: "৳", decimalPlaces: 0 },
     policies: [],
     appScripts: APP_SCRIPTS,
+    appExtensions: [pageExtension("acme.wishlist", "wishlist_page"), pageExtension("acme.sizes", "guide"), pageExtension("acme.big", "big")],
   };
 }
 
@@ -241,7 +268,7 @@ describe("app scripts on public pages", () => {
     const page = parse(await response.text());
     expect(appScriptSources(page)).toEqual(["https://chat.example/all.js"]);
     expect(page.head.querySelector('script[data-app-script="acme.chat"]')?.hasAttribute("async")).toBe(true);
-    expect(page.querySelector("[data-app-blocks]")).toBeNull();
+    expect(page.querySelector("[data-app-slot]")).toBeNull();
     // One API call: the page's batch.
     expect(calls).toHaveLength(1);
   });
@@ -256,7 +283,7 @@ describe("app scripts on public pages", () => {
     expect(calls).toHaveLength(1);
     expect(new URL(calls[0]!, "https://api.shop.test").searchParams.getAll("r").join(" ")).not.toContain("product-apps");
     expect(appScriptSources(page)).toEqual(["https://chat.example/all.js", "https://cdn.acme.example/product.js"]);
-    expect(html).not.toContain("data-app-blocks");
+    expect(html).not.toContain("data-app-slot");
     expect(html).not.toContain("AppSurface.astro?astro&type=script");
   });
 });
@@ -269,13 +296,14 @@ describe("app proxy pages", () => {
     headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
   });
 
-  it("draws a page answer inside the store layout, sanitized, noindex and uncached", async () => {
+  it("draws a page answer inside the store layout with the app's component, escaped, noindex and uncached", async () => {
     const { pluginCalls } = stubApi({
       app: appJson({
         page: {
           title: "Your wishlist",
           description: "Products you saved",
-          html: '<h1>Fake</h1><script>alert(1)</script><p onclick="steal()" style="color:red" id="x">Saved items</p><a href="javascript:alert(1)">bad</a><form action="https://evil.example/x" method="post"><input name="a"></form><form action="/apps/acme.wishlist/toggle" method="post" data-app-form><button type="submit">Remove</button></form>',
+          component: "wishlist_page",
+          props: { items: [{ name: "Saved items" }, { name: '<img src=x onerror="steal()"><script>alert(1)</script>' }] },
           head: { meta: [{ name: "wishlist-verify", content: "v1" }, { name: "robots", content: "index" }], jsonLd: [thing("List")] },
         },
       }),
@@ -297,15 +325,16 @@ describe("app proxy pages", () => {
     // Not indexed: no app JSON-LD.
     expect(page.querySelector('script[type="application/ld+json"][data-app-head]')).toBeNull();
 
-    const surface = page.querySelector('[data-app-page="acme.wishlist"] [data-app-surface="acme.wishlist"]')!;
+    const body = page.querySelector('[data-app-page="acme.wishlist"] [data-app-page-body] [data-sx-app="acme.wishlist"]')!;
     expect(page.querySelectorAll("h1")).toHaveLength(1);
     expect(page.querySelector("h1")?.textContent).toBe("Your wishlist");
-    expect(surface.textContent).toContain("Saved items");
-    expect(html).not.toContain("alert(1)");
-    expect(html).not.toContain("steal()");
-    expect(html).not.toContain("evil.example");
-    expect(surface.querySelector("[style], [id], [onclick]")).toBeNull();
-    expect(surface.querySelector('form[action="/apps/acme.wishlist/toggle"][data-app-form]')).not.toBeNull();
+    // The buyer's text is text: the component's runtime escaped it.
+    const items = [...body.querySelectorAll(".wishlist-item")].map((item) => item.textContent);
+    expect(items).toEqual(["Saved items", '<img src=x onerror="steal()"><script>alert(1)</script>']);
+    expect(body.querySelector("img, script")).toBeNull();
+    // Forms post only to the app's own routes.
+    expect(body.querySelector('form[action="/apps/acme.wishlist/toggle"][data-app-form]')).not.toBeNull();
+    expect(body.querySelector('form[action="/cart/add"]')).toBeNull();
     // The store's chrome around it, and the "all" app script.
     expect(page.querySelector("header, #main-content")).not.toBeNull();
     expect(appScriptSources(page)).toEqual(["https://chat.example/all.js"]);
@@ -316,7 +345,7 @@ describe("app proxy pages", () => {
   });
 
   it("states JSON-LD and a canonical link only for a page the app marks indexable", async () => {
-    stubApi({ app: appJson({ page: { title: "Size guide", html: "<p>Sizes</p>", index: true, head: { jsonLd: [thing("Guide")] } } }) });
+    stubApi({ app: appJson({ page: { title: "Size guide", component: "guide", index: true, head: { jsonLd: [thing("Guide")] } } }) });
     const response = await render(
       ProxyPage,
       new Request("https://shop.test/apps/acme.sizes/guide", { headers: { Accept: "text/html" } }),
@@ -353,15 +382,22 @@ describe("app proxy pages", () => {
     expect(await response.json()).toEqual({ pressed: true, message: "Saved to your wishlist." });
   });
 
-  it("renders the page shell without the app's HTML when it is over its bound", async () => {
-    stubApi({ app: appJson({ page: { title: "Huge", html: `<p>${"x".repeat(140 * 1024)}</p>` } }) });
+  it("renders the page shell without the app's markup when its component is missing, and a large answer whole", async () => {
+    stubApi({ app: appJson({ page: { title: "Gone", component: "nothing_here" } }) });
+    const missing = parse(await (await render(
+      ProxyPage,
+      new Request("https://shop.test/apps/acme.big/page", { headers: { Accept: "text/html" } }),
+      { pluginId: "acme.big", path: "page" },
+    )).text());
+    expect(missing.querySelector("[data-app-page-body]")).toBeNull();
+    expect(missing.querySelector("[data-app-page-unavailable]")).not.toBeNull();
+    stubApi({ app: appJson({ page: { title: "Huge", component: "big", props: { text: "x".repeat(60 * 1024) } } }) });
     const response = await render(
       ProxyPage,
       new Request("https://shop.test/apps/acme.big/page", { headers: { Accept: "text/html" } }),
       { pluginId: "acme.big", path: "page" },
     );
     const page = parse(await response.text());
-    expect(page.querySelector("[data-app-surface]")).toBeNull();
-    expect(page.querySelector("[data-app-page-unavailable]")).not.toBeNull();
+    expect(page.querySelector("[data-app-page-body] p")?.textContent).toHaveLength(60 * 1024);
   });
 });

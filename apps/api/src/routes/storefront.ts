@@ -5,7 +5,7 @@ import { parseBindingResourceSelector } from "@scalius/shared/storefront-theme/b
 // Storefront API — thin HTTP layer.
 // All query logic lives in src/modules/storefront/storefront.service.ts.
 
-import { STOREFRONT_BLOCK_TARGETS } from "@scalius/shared/plugins/storefront-protocol";
+import { STOREFRONT_COMPONENT_TARGETS } from "@scalius/shared/plugins/storefront-protocol";
 import { PLUGIN_STOREFRONT_SCRIPT_PAGES } from "@scalius/shared/plugins/manifest";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
@@ -420,16 +420,16 @@ const layoutDataSchema = z.object({
       target: z.string().openapi({ description: "The unit the skin draws: header, footer, product-card, product-main, listing-main or section:<core section type>." }),
       settings: z.array(z.record(z.string(), z.unknown())),
     })),
-    blocks: z.array(z.object({
+    components: z.array(z.object({
       type: z.string(),
-      target: z.enum(STOREFRONT_BLOCK_TARGETS),
+      targets: z.array(z.enum(STOREFRONT_COMPONENT_TARGETS)).openapi({ description: "Where it renders: component slots (storefront-protocol.ts) or page (the app's proxy pages)." }),
       settings: z.array(z.record(z.string(), z.unknown())),
     })),
     islands: z.array(z.string()),
     stylesheet: z.boolean(),
     connect: z.array(z.string()),
   })).openapi({
-    description: "Active apps with storefront components (docs/STOREFRONT-COMPONENTS.md): the component sections, component product blocks and skins their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts.",
+    description: "Active apps with storefront components (docs/STOREFRONT-COMPONENTS.md): the sections, components and skins their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts.",
   }),
   appServices: z.object({
     search: z.string().nullable().openapi({ description: "The search app predictive search passes as `provider` to /search; null: built-in search." }),

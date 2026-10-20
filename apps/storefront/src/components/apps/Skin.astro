@@ -7,11 +7,14 @@
 // embed. The projection is built only when a skin will draw (`data` is
 // called lazily), and the core unit renders only when it is needed. Slot
 // `drawn` renders after the skin only when it drew (what core adds to it).
+// A skin's `<Slot name="…" />` (its unit's slots only) renders the slot
+// as the core unit would.
 import type { StorefrontSkinRef } from "@scalius/shared/storefront-theme";
 import type { StorefrontSkinTarget } from "@scalius/shared/plugins/storefront-protocol";
 import AppComponent from "./AppComponent.astro";
+import AppSlot from "./AppSlot.astro";
 import { appSkin, renderAppSkin } from "@/lib/extensions";
-import type { EmbedRenderers } from "@/lib/extensions/embeds";
+import type { EmbedRender, EmbedRenderers } from "@/lib/extensions/embeds";
 
 interface Props {
   target: StorefrontSkinTarget;
@@ -25,7 +28,9 @@ interface Props {
   editorMark?: string | undefined;
 }
 
-const { target, skin: ref, data, instanceId, embeds, editorMark } = Astro.props;
+const { target, skin: ref, data, instanceId, embeds: pageEmbeds, editorMark } = Astro.props;
+// The embed rule already holds a slot to the unit's own slot names.
+const embeds: EmbedRenderers = { slot: ({ data: slot }) => ({ component: AppSlot as EmbedRender["component"], props: { name: slot.name } }), ...pageEmbeds };
 // A section without a skin of its own never looks up the theme's skins.
 const skin = ref === null ? null : await appSkin(Astro.locals, Astro.url, target, ref);
 const markup = skin

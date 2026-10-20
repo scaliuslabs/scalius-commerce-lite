@@ -3,7 +3,7 @@
 // with the payment methods it takes. A landing page in campaign mode gets
 // only the legal line.
 
-import { Image, editable, t, type FooterProps } from "@scalius/plugin-sdk/storefront";
+import { Image, Slot, editable, t, type FooterProps } from "@scalius/plugin-sdk/storefront";
 import { MenuLinks } from "./header";
 import { Icon, SocialIcon } from "./icons";
 import { choice, cx, text } from "./ui";
@@ -79,6 +79,7 @@ export function Footer({ data, settings, context }: FooterProps<FooterSettings>)
             </nav>
           ))}
         </div>
+        <Slot name="footer.columns" />
         {legal}
       </div>
     </footer>

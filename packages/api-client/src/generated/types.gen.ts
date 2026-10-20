@@ -1352,63 +1352,530 @@ export type GiftCardBalance = {
     status: 'active' | 'disabled' | 'expired';
 };
 
-export type BuyerUiNode = {
-    type: 'stack' | 'columns';
-    children: Array<BuyerUiNode>;
+export type PluginUiJson = string | number | boolean | unknown | Array<PluginUiJson & unknown> | {
+    [key: string]: PluginUiJson & unknown;
+};
+
+export type PluginUiNode = {
+    type: 'page';
+    title?: string;
+    description?: string;
+    actions?: Array<{
+        type: 'button';
+        label: string;
+        tone?: 'primary' | 'secondary' | 'critical';
+        action: {
+            kind: 'route';
+            route: string;
+            subpath?: string;
+            method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+            body?: {
+                [key: string]: PluginUiJson;
+            };
+        } | {
+            kind: 'navigate';
+            to: {
+                kind: 'app-page';
+                page: string;
+                query?: {
+                    [key: string]: string;
+                };
+            } | {
+                kind: 'resource';
+                resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                id: string;
+            } | {
+                kind: 'external';
+                href: string;
+            } | {
+                kind: 'store';
+                path: string;
+            };
+        } | {
+            kind: 'cart';
+            op: 'add_line';
+            variantId: string;
+            quantity: number;
+        } | {
+            kind: 'cart';
+            op: 'apply_code';
+            code: string;
+        } | {
+            kind: 'cart';
+            op: 'set_attribute';
+            key: string;
+            value: string;
+        };
+        confirm?: {
+            title: string;
+            text?: string;
+            confirmLabel?: string;
+            destructive?: boolean;
+        };
+        disabled?: boolean;
+    }>;
+    children: Array<PluginUiNode>;
 } | {
-    type: 'heading' | 'text';
+    type: 'section';
+    title?: string;
+    description?: string;
+    children: Array<PluginUiNode>;
+} | {
+    type: 'card';
+    title?: string;
+    description?: string;
+    actions?: Array<{
+        type: 'button';
+        label: string;
+        tone?: 'primary' | 'secondary' | 'critical';
+        action: {
+            kind: 'route';
+            route: string;
+            subpath?: string;
+            method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+            body?: {
+                [key: string]: PluginUiJson;
+            };
+        } | {
+            kind: 'navigate';
+            to: {
+                kind: 'app-page';
+                page: string;
+                query?: {
+                    [key: string]: string;
+                };
+            } | {
+                kind: 'resource';
+                resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                id: string;
+            } | {
+                kind: 'external';
+                href: string;
+            } | {
+                kind: 'store';
+                path: string;
+            };
+        } | {
+            kind: 'cart';
+            op: 'add_line';
+            variantId: string;
+            quantity: number;
+        } | {
+            kind: 'cart';
+            op: 'apply_code';
+            code: string;
+        } | {
+            kind: 'cart';
+            op: 'set_attribute';
+            key: string;
+            value: string;
+        };
+        confirm?: {
+            title: string;
+            text?: string;
+            confirmLabel?: string;
+            destructive?: boolean;
+        };
+        disabled?: boolean;
+    }>;
+    children: Array<PluginUiNode>;
+} | {
+    type: 'stack';
+    direction?: 'vertical' | 'horizontal';
+    gap?: 'sm' | 'md' | 'lg';
+    children: Array<PluginUiNode>;
+} | {
+    type: 'columns';
+    children: Array<PluginUiNode>;
+} | {
+    type: 'heading';
     text: string;
+    level?: 2 | 3 | 4;
 } | {
-    type: 'badge' | 'banner';
+    type: 'text';
+    text: string;
     tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
+    size?: 'sm' | 'md';
+    emphasis?: 'strong' | 'mono';
+} | {
+    type: 'badge';
+    text: string;
+    tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
+} | {
+    type: 'banner';
+    tone: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
     title?: string;
     text?: string;
-} | {
-    type: 'divider';
+    actions?: Array<{
+        type: 'button';
+        label: string;
+        tone?: 'primary' | 'secondary' | 'critical';
+        action: {
+            kind: 'route';
+            route: string;
+            subpath?: string;
+            method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+            body?: {
+                [key: string]: PluginUiJson;
+            };
+        } | {
+            kind: 'navigate';
+            to: {
+                kind: 'app-page';
+                page: string;
+                query?: {
+                    [key: string]: string;
+                };
+            } | {
+                kind: 'resource';
+                resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                id: string;
+            } | {
+                kind: 'external';
+                href: string;
+            } | {
+                kind: 'store';
+                path: string;
+            };
+        } | {
+            kind: 'cart';
+            op: 'add_line';
+            variantId: string;
+            quantity: number;
+        } | {
+            kind: 'cart';
+            op: 'apply_code';
+            code: string;
+        } | {
+            kind: 'cart';
+            op: 'set_attribute';
+            key: string;
+            value: string;
+        };
+        confirm?: {
+            title: string;
+            text?: string;
+            confirmLabel?: string;
+            destructive?: boolean;
+        };
+        disabled?: boolean;
+    }>;
 } | {
     type: 'key-value';
     items: Array<{
         label: string;
-        value: string;
+        value: string | number | boolean | unknown;
+        tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
     }>;
 } | {
+    type: 'stat';
+    label: string;
+    value: string | number;
+    help?: string;
+} | {
+    type: 'table';
+    caption?: string;
+    columns: Array<{
+        key: string;
+        label: string;
+        align?: 'start' | 'end';
+    }>;
+    rows: Array<{
+        id?: string;
+        cells: {
+            [key: string]: string | number | boolean | unknown | {
+                badge: string;
+                tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
+            } | {
+                text: string;
+                to: {
+                    kind: 'app-page';
+                    page: string;
+                    query?: {
+                        [key: string]: string;
+                    };
+                } | {
+                    kind: 'resource';
+                    resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                    id: string;
+                } | {
+                    kind: 'external';
+                    href: string;
+                } | {
+                    kind: 'store';
+                    path: string;
+                };
+            } | {
+                money: number;
+                currency?: string;
+            } | {
+                date: string;
+            };
+        };
+        to?: {
+            kind: 'app-page';
+            page: string;
+            query?: {
+                [key: string]: string;
+            };
+        } | {
+            kind: 'resource';
+            resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+            id: string;
+        } | {
+            kind: 'external';
+            href: string;
+        } | {
+            kind: 'store';
+            path: string;
+        };
+    }>;
+    pagination?: {
+        previous?: string | null;
+        next?: string | null;
+        total?: number | null;
+    };
+    empty?: {
+        title: string;
+        text?: string;
+    };
+} | {
+    type: 'empty-state';
+    title: string;
+    text?: string;
+    action?: {
+        type: 'button';
+        label: string;
+        tone?: 'primary' | 'secondary' | 'critical';
+        action: {
+            kind: 'route';
+            route: string;
+            subpath?: string;
+            method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+            body?: {
+                [key: string]: PluginUiJson;
+            };
+        } | {
+            kind: 'navigate';
+            to: {
+                kind: 'app-page';
+                page: string;
+                query?: {
+                    [key: string]: string;
+                };
+            } | {
+                kind: 'resource';
+                resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                id: string;
+            } | {
+                kind: 'external';
+                href: string;
+            } | {
+                kind: 'store';
+                path: string;
+            };
+        } | {
+            kind: 'cart';
+            op: 'add_line';
+            variantId: string;
+            quantity: number;
+        } | {
+            kind: 'cart';
+            op: 'apply_code';
+            code: string;
+        } | {
+            kind: 'cart';
+            op: 'set_attribute';
+            key: string;
+            value: string;
+        };
+        confirm?: {
+            title: string;
+            text?: string;
+            confirmLabel?: string;
+            destructive?: boolean;
+        };
+        disabled?: boolean;
+    };
+} | {
     type: 'image';
-    src: {
+    src: string | {
         media: string;
     } | {
         app: string;
     };
     alt: string;
+    width?: number;
+    height?: number;
 } | {
     type: 'link';
     text: string;
-    path: string;
+    to: {
+        kind: 'app-page';
+        page: string;
+        query?: {
+            [key: string]: string;
+        };
+    } | {
+        kind: 'resource';
+        resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+        id: string;
+    } | {
+        kind: 'external';
+        href: string;
+    } | {
+        kind: 'store';
+        path: string;
+    };
 } | {
-    type: 'field';
-    attribute: string;
+    type: 'divider';
 } | {
     type: 'button';
     label: string;
+    tone?: 'primary' | 'secondary' | 'critical';
     action: {
-        kind: 'add_line';
+        kind: 'route';
+        route: string;
+        subpath?: string;
+        method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+        body?: {
+            [key: string]: PluginUiJson;
+        };
+    } | {
+        kind: 'navigate';
+        to: {
+            kind: 'app-page';
+            page: string;
+            query?: {
+                [key: string]: string;
+            };
+        } | {
+            kind: 'resource';
+            resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+            id: string;
+        } | {
+            kind: 'external';
+            href: string;
+        } | {
+            kind: 'store';
+            path: string;
+        };
+    } | {
+        kind: 'cart';
+        op: 'add_line';
         variantId: string;
         quantity: number;
     } | {
-        kind: 'set_attribute';
-        key: string;
-        value: string;
-    } | {
-        kind: 'apply_code';
+        kind: 'cart';
+        op: 'apply_code';
         code: string;
     } | {
-        kind: 'app_route';
-        route: string;
-        body?: BuyerUiJson;
+        kind: 'cart';
+        op: 'set_attribute';
+        key: string;
+        value: string;
     };
-};
-
-export type BuyerUiJson = string | number | boolean | unknown | Array<BuyerUiJson & unknown> | {
-    [key: string]: BuyerUiJson & unknown;
+    confirm?: {
+        title: string;
+        text?: string;
+        confirmLabel?: string;
+        destructive?: boolean;
+    };
+    disabled?: boolean;
+} | {
+    type: 'form';
+    action: {
+        kind: 'route';
+        route: string;
+        subpath?: string;
+        method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+        body?: {
+            [key: string]: PluginUiJson;
+        };
+    };
+    submitLabel: string;
+    confirm?: {
+        title: string;
+        text?: string;
+        confirmLabel?: string;
+        destructive?: boolean;
+    };
+    children: Array<PluginUiNode>;
+} | {
+    name: string;
+    label: string;
+    help?: string;
+    required?: boolean;
+    error?: string;
+    disabled?: boolean;
+    type: 'text-field';
+    value?: string;
+    placeholder?: string;
+    minLength?: number;
+    maxLength?: number;
+    format?: 'text' | 'email' | 'url' | 'tel';
+} | {
+    name: string;
+    label: string;
+    help?: string;
+    required?: boolean;
+    error?: string;
+    disabled?: boolean;
+    type: 'textarea';
+    value?: string;
+    placeholder?: string;
+    maxLength?: number;
+    rows?: number;
+} | {
+    name: string;
+    label: string;
+    help?: string;
+    required?: boolean;
+    error?: string;
+    disabled?: boolean;
+    type: 'number-field';
+    value?: number | null;
+    min?: number;
+    max?: number;
+    step?: number;
+    integer?: boolean;
+} | {
+    name: string;
+    label: string;
+    help?: string;
+    required?: boolean;
+    error?: string;
+    disabled?: boolean;
+    type: 'select';
+    value?: string | null;
+    options: Array<{
+        value: string;
+        label: string;
+    }>;
+    placeholder?: string;
+} | {
+    name: string;
+    label: string;
+    help?: string;
+    required?: boolean;
+    error?: string;
+    disabled?: boolean;
+    type: 'checkbox';
+    value?: boolean;
+} | {
+    name: string;
+    label: string;
+    help?: string;
+    required?: boolean;
+    error?: string;
+    disabled?: boolean;
+    type: 'date-field';
+    value?: string | null;
+    min?: string;
+    max?: string;
+} | {
+    type: 'field';
+    attribute: string;
 };
 
 export type OrderLineExtras = {
@@ -1492,60 +1959,527 @@ export type CustomerAccountSummary = {
     buyerUi: Array<{
         appId: string;
         releaseId: string;
-        target: 'purchase.checkout.contact.render-after' | 'purchase.checkout.shipping-option-list.render-after' | 'purchase.checkout.cart-line-list.render-after' | 'purchase.checkout.payment-method-list.render-after' | 'purchase.checkout.actions.render-before' | 'purchase.thank-you.customer-information.render-after' | 'customer-account.order-status.block.render' | 'customer-account.order-index.block.render' | 'customer-account.profile.block.render';
+        target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'checkout.payment.after' | 'checkout.actions.before' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
         ui: {
-            type: 'stack' | 'columns';
-            children: Array<BuyerUiNode>;
+            type: 'page';
+            title?: string;
+            description?: string;
+            actions?: Array<{
+                type: 'button';
+                label: string;
+                tone?: 'primary' | 'secondary' | 'critical';
+                action: {
+                    kind: 'route';
+                    route: string;
+                    subpath?: string;
+                    method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+                    body?: {
+                        [key: string]: PluginUiJson;
+                    };
+                } | {
+                    kind: 'navigate';
+                    to: {
+                        kind: 'app-page';
+                        page: string;
+                        query?: {
+                            [key: string]: string;
+                        };
+                    } | {
+                        kind: 'resource';
+                        resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                        id: string;
+                    } | {
+                        kind: 'external';
+                        href: string;
+                    } | {
+                        kind: 'store';
+                        path: string;
+                    };
+                } | {
+                    kind: 'cart';
+                    op: 'add_line';
+                    variantId: string;
+                    quantity: number;
+                } | {
+                    kind: 'cart';
+                    op: 'apply_code';
+                    code: string;
+                } | {
+                    kind: 'cart';
+                    op: 'set_attribute';
+                    key: string;
+                    value: string;
+                };
+                confirm?: {
+                    title: string;
+                    text?: string;
+                    confirmLabel?: string;
+                    destructive?: boolean;
+                };
+                disabled?: boolean;
+            }>;
+            children: Array<PluginUiNode>;
         } | {
-            type: 'heading' | 'text';
+            type: 'section';
+            title?: string;
+            description?: string;
+            children: Array<PluginUiNode>;
+        } | {
+            type: 'card';
+            title?: string;
+            description?: string;
+            actions?: Array<{
+                type: 'button';
+                label: string;
+                tone?: 'primary' | 'secondary' | 'critical';
+                action: {
+                    kind: 'route';
+                    route: string;
+                    subpath?: string;
+                    method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+                    body?: {
+                        [key: string]: PluginUiJson;
+                    };
+                } | {
+                    kind: 'navigate';
+                    to: {
+                        kind: 'app-page';
+                        page: string;
+                        query?: {
+                            [key: string]: string;
+                        };
+                    } | {
+                        kind: 'resource';
+                        resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                        id: string;
+                    } | {
+                        kind: 'external';
+                        href: string;
+                    } | {
+                        kind: 'store';
+                        path: string;
+                    };
+                } | {
+                    kind: 'cart';
+                    op: 'add_line';
+                    variantId: string;
+                    quantity: number;
+                } | {
+                    kind: 'cart';
+                    op: 'apply_code';
+                    code: string;
+                } | {
+                    kind: 'cart';
+                    op: 'set_attribute';
+                    key: string;
+                    value: string;
+                };
+                confirm?: {
+                    title: string;
+                    text?: string;
+                    confirmLabel?: string;
+                    destructive?: boolean;
+                };
+                disabled?: boolean;
+            }>;
+            children: Array<PluginUiNode>;
+        } | {
+            type: 'stack';
+            direction?: 'vertical' | 'horizontal';
+            gap?: 'sm' | 'md' | 'lg';
+            children: Array<PluginUiNode>;
+        } | {
+            type: 'columns';
+            children: Array<PluginUiNode>;
+        } | {
+            type: 'heading';
             text: string;
+            level?: 2 | 3 | 4;
         } | {
-            type: 'badge' | 'banner';
+            type: 'text';
+            text: string;
             tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
+            size?: 'sm' | 'md';
+            emphasis?: 'strong' | 'mono';
+        } | {
+            type: 'badge';
+            text: string;
+            tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
+        } | {
+            type: 'banner';
+            tone: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
             title?: string;
             text?: string;
-        } | {
-            type: 'divider';
+            actions?: Array<{
+                type: 'button';
+                label: string;
+                tone?: 'primary' | 'secondary' | 'critical';
+                action: {
+                    kind: 'route';
+                    route: string;
+                    subpath?: string;
+                    method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+                    body?: {
+                        [key: string]: PluginUiJson;
+                    };
+                } | {
+                    kind: 'navigate';
+                    to: {
+                        kind: 'app-page';
+                        page: string;
+                        query?: {
+                            [key: string]: string;
+                        };
+                    } | {
+                        kind: 'resource';
+                        resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                        id: string;
+                    } | {
+                        kind: 'external';
+                        href: string;
+                    } | {
+                        kind: 'store';
+                        path: string;
+                    };
+                } | {
+                    kind: 'cart';
+                    op: 'add_line';
+                    variantId: string;
+                    quantity: number;
+                } | {
+                    kind: 'cart';
+                    op: 'apply_code';
+                    code: string;
+                } | {
+                    kind: 'cart';
+                    op: 'set_attribute';
+                    key: string;
+                    value: string;
+                };
+                confirm?: {
+                    title: string;
+                    text?: string;
+                    confirmLabel?: string;
+                    destructive?: boolean;
+                };
+                disabled?: boolean;
+            }>;
         } | {
             type: 'key-value';
             items: Array<{
                 label: string;
-                value: string;
+                value: string | number | boolean | unknown;
+                tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
             }>;
         } | {
+            type: 'stat';
+            label: string;
+            value: string | number;
+            help?: string;
+        } | {
+            type: 'table';
+            caption?: string;
+            columns: Array<{
+                key: string;
+                label: string;
+                align?: 'start' | 'end';
+            }>;
+            rows: Array<{
+                id?: string;
+                cells: {
+                    [key: string]: string | number | boolean | unknown | {
+                        badge: string;
+                        tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
+                    } | {
+                        text: string;
+                        to: {
+                            kind: 'app-page';
+                            page: string;
+                            query?: {
+                                [key: string]: string;
+                            };
+                        } | {
+                            kind: 'resource';
+                            resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                            id: string;
+                        } | {
+                            kind: 'external';
+                            href: string;
+                        } | {
+                            kind: 'store';
+                            path: string;
+                        };
+                    } | {
+                        money: number;
+                        currency?: string;
+                    } | {
+                        date: string;
+                    };
+                };
+                to?: {
+                    kind: 'app-page';
+                    page: string;
+                    query?: {
+                        [key: string]: string;
+                    };
+                } | {
+                    kind: 'resource';
+                    resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                    id: string;
+                } | {
+                    kind: 'external';
+                    href: string;
+                } | {
+                    kind: 'store';
+                    path: string;
+                };
+            }>;
+            pagination?: {
+                previous?: string | null;
+                next?: string | null;
+                total?: number | null;
+            };
+            empty?: {
+                title: string;
+                text?: string;
+            };
+        } | {
+            type: 'empty-state';
+            title: string;
+            text?: string;
+            action?: {
+                type: 'button';
+                label: string;
+                tone?: 'primary' | 'secondary' | 'critical';
+                action: {
+                    kind: 'route';
+                    route: string;
+                    subpath?: string;
+                    method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+                    body?: {
+                        [key: string]: PluginUiJson;
+                    };
+                } | {
+                    kind: 'navigate';
+                    to: {
+                        kind: 'app-page';
+                        page: string;
+                        query?: {
+                            [key: string]: string;
+                        };
+                    } | {
+                        kind: 'resource';
+                        resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                        id: string;
+                    } | {
+                        kind: 'external';
+                        href: string;
+                    } | {
+                        kind: 'store';
+                        path: string;
+                    };
+                } | {
+                    kind: 'cart';
+                    op: 'add_line';
+                    variantId: string;
+                    quantity: number;
+                } | {
+                    kind: 'cart';
+                    op: 'apply_code';
+                    code: string;
+                } | {
+                    kind: 'cart';
+                    op: 'set_attribute';
+                    key: string;
+                    value: string;
+                };
+                confirm?: {
+                    title: string;
+                    text?: string;
+                    confirmLabel?: string;
+                    destructive?: boolean;
+                };
+                disabled?: boolean;
+            };
+        } | {
             type: 'image';
-            src: {
+            src: string | {
                 media: string;
             } | {
                 app: string;
             };
             alt: string;
+            width?: number;
+            height?: number;
         } | {
             type: 'link';
             text: string;
-            path: string;
+            to: {
+                kind: 'app-page';
+                page: string;
+                query?: {
+                    [key: string]: string;
+                };
+            } | {
+                kind: 'resource';
+                resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                id: string;
+            } | {
+                kind: 'external';
+                href: string;
+            } | {
+                kind: 'store';
+                path: string;
+            };
         } | {
-            type: 'field';
-            attribute: string;
+            type: 'divider';
         } | {
             type: 'button';
             label: string;
+            tone?: 'primary' | 'secondary' | 'critical';
             action: {
-                kind: 'add_line';
+                kind: 'route';
+                route: string;
+                subpath?: string;
+                method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+                body?: {
+                    [key: string]: PluginUiJson;
+                };
+            } | {
+                kind: 'navigate';
+                to: {
+                    kind: 'app-page';
+                    page: string;
+                    query?: {
+                        [key: string]: string;
+                    };
+                } | {
+                    kind: 'resource';
+                    resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                    id: string;
+                } | {
+                    kind: 'external';
+                    href: string;
+                } | {
+                    kind: 'store';
+                    path: string;
+                };
+            } | {
+                kind: 'cart';
+                op: 'add_line';
                 variantId: string;
                 quantity: number;
             } | {
-                kind: 'set_attribute';
-                key: string;
-                value: string;
-            } | {
-                kind: 'apply_code';
+                kind: 'cart';
+                op: 'apply_code';
                 code: string;
             } | {
-                kind: 'app_route';
-                route: string;
-                body?: BuyerUiJson;
+                kind: 'cart';
+                op: 'set_attribute';
+                key: string;
+                value: string;
             };
+            confirm?: {
+                title: string;
+                text?: string;
+                confirmLabel?: string;
+                destructive?: boolean;
+            };
+            disabled?: boolean;
+        } | {
+            type: 'form';
+            action: {
+                kind: 'route';
+                route: string;
+                subpath?: string;
+                method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+                body?: {
+                    [key: string]: PluginUiJson;
+                };
+            };
+            submitLabel: string;
+            confirm?: {
+                title: string;
+                text?: string;
+                confirmLabel?: string;
+                destructive?: boolean;
+            };
+            children: Array<PluginUiNode>;
+        } | {
+            name: string;
+            label: string;
+            help?: string;
+            required?: boolean;
+            error?: string;
+            disabled?: boolean;
+            type: 'text-field';
+            value?: string;
+            placeholder?: string;
+            minLength?: number;
+            maxLength?: number;
+            format?: 'text' | 'email' | 'url' | 'tel';
+        } | {
+            name: string;
+            label: string;
+            help?: string;
+            required?: boolean;
+            error?: string;
+            disabled?: boolean;
+            type: 'textarea';
+            value?: string;
+            placeholder?: string;
+            maxLength?: number;
+            rows?: number;
+        } | {
+            name: string;
+            label: string;
+            help?: string;
+            required?: boolean;
+            error?: string;
+            disabled?: boolean;
+            type: 'number-field';
+            value?: number | null;
+            min?: number;
+            max?: number;
+            step?: number;
+            integer?: boolean;
+        } | {
+            name: string;
+            label: string;
+            help?: string;
+            required?: boolean;
+            error?: string;
+            disabled?: boolean;
+            type: 'select';
+            value?: string | null;
+            options: Array<{
+                value: string;
+                label: string;
+            }>;
+            placeholder?: string;
+        } | {
+            name: string;
+            label: string;
+            help?: string;
+            required?: boolean;
+            error?: string;
+            disabled?: boolean;
+            type: 'checkbox';
+            value?: boolean;
+        } | {
+            name: string;
+            label: string;
+            help?: string;
+            required?: boolean;
+            error?: string;
+            disabled?: boolean;
+            type: 'date-field';
+            value?: string | null;
+            min?: string;
+            max?: string;
+        } | {
+            type: 'field';
+            attribute: string;
         };
         attributes: Array<{
             key: string;
@@ -2928,11 +3862,11 @@ export type ThemeAppSurfaces = {
             [key: string]: unknown;
         }>;
     }>;
-    productBlocks: Array<{
+    components: Array<{
         key: string;
         type: string;
         name: string;
-        placement: 'product.buy-box' | 'product.below';
+        targets: Array<'header.actions' | 'product.buy_box.before' | 'product.buy_box.after' | 'product.below' | 'footer.columns' | 'page'>;
         settings: Array<AppSettingField>;
     }>;
 };
@@ -3856,10 +4790,10 @@ export type AppDetail = AppSummary & {
             type: string;
             name: string;
         }>;
-        productBlocks: Array<{
+        components: Array<{
             type: string;
             name: string;
-            placement: 'product.buy-box' | 'product.below';
+            targets: Array<'header.actions' | 'product.buy_box.before' | 'product.buy_box.after' | 'product.below' | 'footer.columns' | 'page'>;
         }>;
         scripts: Array<{
             src: string;
@@ -7173,7 +8107,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 pages: Array<'all' | 'home' | 'product' | 'listing'>;
             }>;
             /**
-             * Active apps with storefront components (docs/STOREFRONT-COMPONENTS.md): the component sections, component product blocks and skins their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts.
+             * Active apps with storefront components (docs/STOREFRONT-COMPONENTS.md): the sections, components and skins their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts.
              */
             appExtensions: Array<{
                 pluginId: string;
@@ -7199,9 +8133,12 @@ export type GetApiV1StorefrontLayoutResponses = {
                         [key: string]: unknown;
                     }>;
                 }>;
-                blocks: Array<{
+                components: Array<{
                     type: string;
-                    target: 'product.buy-box' | 'product.below';
+                    /**
+                     * Where it renders: component slots (storefront-protocol.ts) or page (the app's proxy pages).
+                     */
+                    targets: Array<'header.actions' | 'product.buy_box.before' | 'product.buy_box.after' | 'product.below' | 'footer.columns' | 'page'>;
                     settings: Array<{
                         [key: string]: unknown;
                     }>;
@@ -10909,60 +11846,527 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
             buyerUi: Array<{
                 appId: string;
                 releaseId: string;
-                target: 'purchase.checkout.contact.render-after' | 'purchase.checkout.shipping-option-list.render-after' | 'purchase.checkout.cart-line-list.render-after' | 'purchase.checkout.payment-method-list.render-after' | 'purchase.checkout.actions.render-before' | 'purchase.thank-you.customer-information.render-after' | 'customer-account.order-status.block.render' | 'customer-account.order-index.block.render' | 'customer-account.profile.block.render';
+                target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'checkout.payment.after' | 'checkout.actions.before' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
                 ui: {
-                    type: 'stack' | 'columns';
-                    children: Array<BuyerUiNode>;
+                    type: 'page';
+                    title?: string;
+                    description?: string;
+                    actions?: Array<{
+                        type: 'button';
+                        label: string;
+                        tone?: 'primary' | 'secondary' | 'critical';
+                        action: {
+                            kind: 'route';
+                            route: string;
+                            subpath?: string;
+                            method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+                            body?: {
+                                [key: string]: PluginUiJson;
+                            };
+                        } | {
+                            kind: 'navigate';
+                            to: {
+                                kind: 'app-page';
+                                page: string;
+                                query?: {
+                                    [key: string]: string;
+                                };
+                            } | {
+                                kind: 'resource';
+                                resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                                id: string;
+                            } | {
+                                kind: 'external';
+                                href: string;
+                            } | {
+                                kind: 'store';
+                                path: string;
+                            };
+                        } | {
+                            kind: 'cart';
+                            op: 'add_line';
+                            variantId: string;
+                            quantity: number;
+                        } | {
+                            kind: 'cart';
+                            op: 'apply_code';
+                            code: string;
+                        } | {
+                            kind: 'cart';
+                            op: 'set_attribute';
+                            key: string;
+                            value: string;
+                        };
+                        confirm?: {
+                            title: string;
+                            text?: string;
+                            confirmLabel?: string;
+                            destructive?: boolean;
+                        };
+                        disabled?: boolean;
+                    }>;
+                    children: Array<PluginUiNode>;
                 } | {
-                    type: 'heading' | 'text';
+                    type: 'section';
+                    title?: string;
+                    description?: string;
+                    children: Array<PluginUiNode>;
+                } | {
+                    type: 'card';
+                    title?: string;
+                    description?: string;
+                    actions?: Array<{
+                        type: 'button';
+                        label: string;
+                        tone?: 'primary' | 'secondary' | 'critical';
+                        action: {
+                            kind: 'route';
+                            route: string;
+                            subpath?: string;
+                            method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+                            body?: {
+                                [key: string]: PluginUiJson;
+                            };
+                        } | {
+                            kind: 'navigate';
+                            to: {
+                                kind: 'app-page';
+                                page: string;
+                                query?: {
+                                    [key: string]: string;
+                                };
+                            } | {
+                                kind: 'resource';
+                                resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                                id: string;
+                            } | {
+                                kind: 'external';
+                                href: string;
+                            } | {
+                                kind: 'store';
+                                path: string;
+                            };
+                        } | {
+                            kind: 'cart';
+                            op: 'add_line';
+                            variantId: string;
+                            quantity: number;
+                        } | {
+                            kind: 'cart';
+                            op: 'apply_code';
+                            code: string;
+                        } | {
+                            kind: 'cart';
+                            op: 'set_attribute';
+                            key: string;
+                            value: string;
+                        };
+                        confirm?: {
+                            title: string;
+                            text?: string;
+                            confirmLabel?: string;
+                            destructive?: boolean;
+                        };
+                        disabled?: boolean;
+                    }>;
+                    children: Array<PluginUiNode>;
+                } | {
+                    type: 'stack';
+                    direction?: 'vertical' | 'horizontal';
+                    gap?: 'sm' | 'md' | 'lg';
+                    children: Array<PluginUiNode>;
+                } | {
+                    type: 'columns';
+                    children: Array<PluginUiNode>;
+                } | {
+                    type: 'heading';
                     text: string;
+                    level?: 2 | 3 | 4;
                 } | {
-                    type: 'badge' | 'banner';
+                    type: 'text';
+                    text: string;
                     tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
+                    size?: 'sm' | 'md';
+                    emphasis?: 'strong' | 'mono';
+                } | {
+                    type: 'badge';
+                    text: string;
+                    tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
+                } | {
+                    type: 'banner';
+                    tone: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                     title?: string;
                     text?: string;
-                } | {
-                    type: 'divider';
+                    actions?: Array<{
+                        type: 'button';
+                        label: string;
+                        tone?: 'primary' | 'secondary' | 'critical';
+                        action: {
+                            kind: 'route';
+                            route: string;
+                            subpath?: string;
+                            method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+                            body?: {
+                                [key: string]: PluginUiJson;
+                            };
+                        } | {
+                            kind: 'navigate';
+                            to: {
+                                kind: 'app-page';
+                                page: string;
+                                query?: {
+                                    [key: string]: string;
+                                };
+                            } | {
+                                kind: 'resource';
+                                resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                                id: string;
+                            } | {
+                                kind: 'external';
+                                href: string;
+                            } | {
+                                kind: 'store';
+                                path: string;
+                            };
+                        } | {
+                            kind: 'cart';
+                            op: 'add_line';
+                            variantId: string;
+                            quantity: number;
+                        } | {
+                            kind: 'cart';
+                            op: 'apply_code';
+                            code: string;
+                        } | {
+                            kind: 'cart';
+                            op: 'set_attribute';
+                            key: string;
+                            value: string;
+                        };
+                        confirm?: {
+                            title: string;
+                            text?: string;
+                            confirmLabel?: string;
+                            destructive?: boolean;
+                        };
+                        disabled?: boolean;
+                    }>;
                 } | {
                     type: 'key-value';
                     items: Array<{
                         label: string;
-                        value: string;
+                        value: string | number | boolean | unknown;
+                        tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                     }>;
                 } | {
+                    type: 'stat';
+                    label: string;
+                    value: string | number;
+                    help?: string;
+                } | {
+                    type: 'table';
+                    caption?: string;
+                    columns: Array<{
+                        key: string;
+                        label: string;
+                        align?: 'start' | 'end';
+                    }>;
+                    rows: Array<{
+                        id?: string;
+                        cells: {
+                            [key: string]: string | number | boolean | unknown | {
+                                badge: string;
+                                tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
+                            } | {
+                                text: string;
+                                to: {
+                                    kind: 'app-page';
+                                    page: string;
+                                    query?: {
+                                        [key: string]: string;
+                                    };
+                                } | {
+                                    kind: 'resource';
+                                    resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                                    id: string;
+                                } | {
+                                    kind: 'external';
+                                    href: string;
+                                } | {
+                                    kind: 'store';
+                                    path: string;
+                                };
+                            } | {
+                                money: number;
+                                currency?: string;
+                            } | {
+                                date: string;
+                            };
+                        };
+                        to?: {
+                            kind: 'app-page';
+                            page: string;
+                            query?: {
+                                [key: string]: string;
+                            };
+                        } | {
+                            kind: 'resource';
+                            resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                            id: string;
+                        } | {
+                            kind: 'external';
+                            href: string;
+                        } | {
+                            kind: 'store';
+                            path: string;
+                        };
+                    }>;
+                    pagination?: {
+                        previous?: string | null;
+                        next?: string | null;
+                        total?: number | null;
+                    };
+                    empty?: {
+                        title: string;
+                        text?: string;
+                    };
+                } | {
+                    type: 'empty-state';
+                    title: string;
+                    text?: string;
+                    action?: {
+                        type: 'button';
+                        label: string;
+                        tone?: 'primary' | 'secondary' | 'critical';
+                        action: {
+                            kind: 'route';
+                            route: string;
+                            subpath?: string;
+                            method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+                            body?: {
+                                [key: string]: PluginUiJson;
+                            };
+                        } | {
+                            kind: 'navigate';
+                            to: {
+                                kind: 'app-page';
+                                page: string;
+                                query?: {
+                                    [key: string]: string;
+                                };
+                            } | {
+                                kind: 'resource';
+                                resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                                id: string;
+                            } | {
+                                kind: 'external';
+                                href: string;
+                            } | {
+                                kind: 'store';
+                                path: string;
+                            };
+                        } | {
+                            kind: 'cart';
+                            op: 'add_line';
+                            variantId: string;
+                            quantity: number;
+                        } | {
+                            kind: 'cart';
+                            op: 'apply_code';
+                            code: string;
+                        } | {
+                            kind: 'cart';
+                            op: 'set_attribute';
+                            key: string;
+                            value: string;
+                        };
+                        confirm?: {
+                            title: string;
+                            text?: string;
+                            confirmLabel?: string;
+                            destructive?: boolean;
+                        };
+                        disabled?: boolean;
+                    };
+                } | {
                     type: 'image';
-                    src: {
+                    src: string | {
                         media: string;
                     } | {
                         app: string;
                     };
                     alt: string;
+                    width?: number;
+                    height?: number;
                 } | {
                     type: 'link';
                     text: string;
-                    path: string;
+                    to: {
+                        kind: 'app-page';
+                        page: string;
+                        query?: {
+                            [key: string]: string;
+                        };
+                    } | {
+                        kind: 'resource';
+                        resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                        id: string;
+                    } | {
+                        kind: 'external';
+                        href: string;
+                    } | {
+                        kind: 'store';
+                        path: string;
+                    };
                 } | {
-                    type: 'field';
-                    attribute: string;
+                    type: 'divider';
                 } | {
                     type: 'button';
                     label: string;
+                    tone?: 'primary' | 'secondary' | 'critical';
                     action: {
-                        kind: 'add_line';
+                        kind: 'route';
+                        route: string;
+                        subpath?: string;
+                        method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+                        body?: {
+                            [key: string]: PluginUiJson;
+                        };
+                    } | {
+                        kind: 'navigate';
+                        to: {
+                            kind: 'app-page';
+                            page: string;
+                            query?: {
+                                [key: string]: string;
+                            };
+                        } | {
+                            kind: 'resource';
+                            resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                            id: string;
+                        } | {
+                            kind: 'external';
+                            href: string;
+                        } | {
+                            kind: 'store';
+                            path: string;
+                        };
+                    } | {
+                        kind: 'cart';
+                        op: 'add_line';
                         variantId: string;
                         quantity: number;
                     } | {
-                        kind: 'set_attribute';
-                        key: string;
-                        value: string;
-                    } | {
-                        kind: 'apply_code';
+                        kind: 'cart';
+                        op: 'apply_code';
                         code: string;
                     } | {
-                        kind: 'app_route';
-                        route: string;
-                        body?: BuyerUiJson;
+                        kind: 'cart';
+                        op: 'set_attribute';
+                        key: string;
+                        value: string;
                     };
+                    confirm?: {
+                        title: string;
+                        text?: string;
+                        confirmLabel?: string;
+                        destructive?: boolean;
+                    };
+                    disabled?: boolean;
+                } | {
+                    type: 'form';
+                    action: {
+                        kind: 'route';
+                        route: string;
+                        subpath?: string;
+                        method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+                        body?: {
+                            [key: string]: PluginUiJson;
+                        };
+                    };
+                    submitLabel: string;
+                    confirm?: {
+                        title: string;
+                        text?: string;
+                        confirmLabel?: string;
+                        destructive?: boolean;
+                    };
+                    children: Array<PluginUiNode>;
+                } | {
+                    name: string;
+                    label: string;
+                    help?: string;
+                    required?: boolean;
+                    error?: string;
+                    disabled?: boolean;
+                    type: 'text-field';
+                    value?: string;
+                    placeholder?: string;
+                    minLength?: number;
+                    maxLength?: number;
+                    format?: 'text' | 'email' | 'url' | 'tel';
+                } | {
+                    name: string;
+                    label: string;
+                    help?: string;
+                    required?: boolean;
+                    error?: string;
+                    disabled?: boolean;
+                    type: 'textarea';
+                    value?: string;
+                    placeholder?: string;
+                    maxLength?: number;
+                    rows?: number;
+                } | {
+                    name: string;
+                    label: string;
+                    help?: string;
+                    required?: boolean;
+                    error?: string;
+                    disabled?: boolean;
+                    type: 'number-field';
+                    value?: number | null;
+                    min?: number;
+                    max?: number;
+                    step?: number;
+                    integer?: boolean;
+                } | {
+                    name: string;
+                    label: string;
+                    help?: string;
+                    required?: boolean;
+                    error?: string;
+                    disabled?: boolean;
+                    type: 'select';
+                    value?: string | null;
+                    options: Array<{
+                        value: string;
+                        label: string;
+                    }>;
+                    placeholder?: string;
+                } | {
+                    name: string;
+                    label: string;
+                    help?: string;
+                    required?: boolean;
+                    error?: string;
+                    disabled?: boolean;
+                    type: 'checkbox';
+                    value?: boolean;
+                } | {
+                    name: string;
+                    label: string;
+                    help?: string;
+                    required?: boolean;
+                    error?: string;
+                    disabled?: boolean;
+                    type: 'date-field';
+                    value?: string | null;
+                    min?: string;
+                    max?: string;
+                } | {
+                    type: 'field';
+                    attribute: string;
                 };
                 attributes: Array<{
                     key: string;
@@ -18271,60 +19675,527 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                 buyerUi: Array<{
                     appId: string;
                     releaseId: string;
-                    target: 'purchase.checkout.contact.render-after' | 'purchase.checkout.shipping-option-list.render-after' | 'purchase.checkout.cart-line-list.render-after' | 'purchase.checkout.payment-method-list.render-after' | 'purchase.checkout.actions.render-before' | 'purchase.thank-you.customer-information.render-after' | 'customer-account.order-status.block.render' | 'customer-account.order-index.block.render' | 'customer-account.profile.block.render';
+                    target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'checkout.payment.after' | 'checkout.actions.before' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
                     ui: {
-                        type: 'stack' | 'columns';
-                        children: Array<BuyerUiNode>;
+                        type: 'page';
+                        title?: string;
+                        description?: string;
+                        actions?: Array<{
+                            type: 'button';
+                            label: string;
+                            tone?: 'primary' | 'secondary' | 'critical';
+                            action: {
+                                kind: 'route';
+                                route: string;
+                                subpath?: string;
+                                method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+                                body?: {
+                                    [key: string]: PluginUiJson;
+                                };
+                            } | {
+                                kind: 'navigate';
+                                to: {
+                                    kind: 'app-page';
+                                    page: string;
+                                    query?: {
+                                        [key: string]: string;
+                                    };
+                                } | {
+                                    kind: 'resource';
+                                    resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                                    id: string;
+                                } | {
+                                    kind: 'external';
+                                    href: string;
+                                } | {
+                                    kind: 'store';
+                                    path: string;
+                                };
+                            } | {
+                                kind: 'cart';
+                                op: 'add_line';
+                                variantId: string;
+                                quantity: number;
+                            } | {
+                                kind: 'cart';
+                                op: 'apply_code';
+                                code: string;
+                            } | {
+                                kind: 'cart';
+                                op: 'set_attribute';
+                                key: string;
+                                value: string;
+                            };
+                            confirm?: {
+                                title: string;
+                                text?: string;
+                                confirmLabel?: string;
+                                destructive?: boolean;
+                            };
+                            disabled?: boolean;
+                        }>;
+                        children: Array<PluginUiNode>;
                     } | {
-                        type: 'heading' | 'text';
+                        type: 'section';
+                        title?: string;
+                        description?: string;
+                        children: Array<PluginUiNode>;
+                    } | {
+                        type: 'card';
+                        title?: string;
+                        description?: string;
+                        actions?: Array<{
+                            type: 'button';
+                            label: string;
+                            tone?: 'primary' | 'secondary' | 'critical';
+                            action: {
+                                kind: 'route';
+                                route: string;
+                                subpath?: string;
+                                method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+                                body?: {
+                                    [key: string]: PluginUiJson;
+                                };
+                            } | {
+                                kind: 'navigate';
+                                to: {
+                                    kind: 'app-page';
+                                    page: string;
+                                    query?: {
+                                        [key: string]: string;
+                                    };
+                                } | {
+                                    kind: 'resource';
+                                    resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                                    id: string;
+                                } | {
+                                    kind: 'external';
+                                    href: string;
+                                } | {
+                                    kind: 'store';
+                                    path: string;
+                                };
+                            } | {
+                                kind: 'cart';
+                                op: 'add_line';
+                                variantId: string;
+                                quantity: number;
+                            } | {
+                                kind: 'cart';
+                                op: 'apply_code';
+                                code: string;
+                            } | {
+                                kind: 'cart';
+                                op: 'set_attribute';
+                                key: string;
+                                value: string;
+                            };
+                            confirm?: {
+                                title: string;
+                                text?: string;
+                                confirmLabel?: string;
+                                destructive?: boolean;
+                            };
+                            disabled?: boolean;
+                        }>;
+                        children: Array<PluginUiNode>;
+                    } | {
+                        type: 'stack';
+                        direction?: 'vertical' | 'horizontal';
+                        gap?: 'sm' | 'md' | 'lg';
+                        children: Array<PluginUiNode>;
+                    } | {
+                        type: 'columns';
+                        children: Array<PluginUiNode>;
+                    } | {
+                        type: 'heading';
                         text: string;
+                        level?: 2 | 3 | 4;
                     } | {
-                        type: 'badge' | 'banner';
+                        type: 'text';
+                        text: string;
                         tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
+                        size?: 'sm' | 'md';
+                        emphasis?: 'strong' | 'mono';
+                    } | {
+                        type: 'badge';
+                        text: string;
+                        tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
+                    } | {
+                        type: 'banner';
+                        tone: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                         title?: string;
                         text?: string;
-                    } | {
-                        type: 'divider';
+                        actions?: Array<{
+                            type: 'button';
+                            label: string;
+                            tone?: 'primary' | 'secondary' | 'critical';
+                            action: {
+                                kind: 'route';
+                                route: string;
+                                subpath?: string;
+                                method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+                                body?: {
+                                    [key: string]: PluginUiJson;
+                                };
+                            } | {
+                                kind: 'navigate';
+                                to: {
+                                    kind: 'app-page';
+                                    page: string;
+                                    query?: {
+                                        [key: string]: string;
+                                    };
+                                } | {
+                                    kind: 'resource';
+                                    resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                                    id: string;
+                                } | {
+                                    kind: 'external';
+                                    href: string;
+                                } | {
+                                    kind: 'store';
+                                    path: string;
+                                };
+                            } | {
+                                kind: 'cart';
+                                op: 'add_line';
+                                variantId: string;
+                                quantity: number;
+                            } | {
+                                kind: 'cart';
+                                op: 'apply_code';
+                                code: string;
+                            } | {
+                                kind: 'cart';
+                                op: 'set_attribute';
+                                key: string;
+                                value: string;
+                            };
+                            confirm?: {
+                                title: string;
+                                text?: string;
+                                confirmLabel?: string;
+                                destructive?: boolean;
+                            };
+                            disabled?: boolean;
+                        }>;
                     } | {
                         type: 'key-value';
                         items: Array<{
                             label: string;
-                            value: string;
+                            value: string | number | boolean | unknown;
+                            tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                         }>;
                     } | {
+                        type: 'stat';
+                        label: string;
+                        value: string | number;
+                        help?: string;
+                    } | {
+                        type: 'table';
+                        caption?: string;
+                        columns: Array<{
+                            key: string;
+                            label: string;
+                            align?: 'start' | 'end';
+                        }>;
+                        rows: Array<{
+                            id?: string;
+                            cells: {
+                                [key: string]: string | number | boolean | unknown | {
+                                    badge: string;
+                                    tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
+                                } | {
+                                    text: string;
+                                    to: {
+                                        kind: 'app-page';
+                                        page: string;
+                                        query?: {
+                                            [key: string]: string;
+                                        };
+                                    } | {
+                                        kind: 'resource';
+                                        resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                                        id: string;
+                                    } | {
+                                        kind: 'external';
+                                        href: string;
+                                    } | {
+                                        kind: 'store';
+                                        path: string;
+                                    };
+                                } | {
+                                    money: number;
+                                    currency?: string;
+                                } | {
+                                    date: string;
+                                };
+                            };
+                            to?: {
+                                kind: 'app-page';
+                                page: string;
+                                query?: {
+                                    [key: string]: string;
+                                };
+                            } | {
+                                kind: 'resource';
+                                resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                                id: string;
+                            } | {
+                                kind: 'external';
+                                href: string;
+                            } | {
+                                kind: 'store';
+                                path: string;
+                            };
+                        }>;
+                        pagination?: {
+                            previous?: string | null;
+                            next?: string | null;
+                            total?: number | null;
+                        };
+                        empty?: {
+                            title: string;
+                            text?: string;
+                        };
+                    } | {
+                        type: 'empty-state';
+                        title: string;
+                        text?: string;
+                        action?: {
+                            type: 'button';
+                            label: string;
+                            tone?: 'primary' | 'secondary' | 'critical';
+                            action: {
+                                kind: 'route';
+                                route: string;
+                                subpath?: string;
+                                method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+                                body?: {
+                                    [key: string]: PluginUiJson;
+                                };
+                            } | {
+                                kind: 'navigate';
+                                to: {
+                                    kind: 'app-page';
+                                    page: string;
+                                    query?: {
+                                        [key: string]: string;
+                                    };
+                                } | {
+                                    kind: 'resource';
+                                    resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                                    id: string;
+                                } | {
+                                    kind: 'external';
+                                    href: string;
+                                } | {
+                                    kind: 'store';
+                                    path: string;
+                                };
+                            } | {
+                                kind: 'cart';
+                                op: 'add_line';
+                                variantId: string;
+                                quantity: number;
+                            } | {
+                                kind: 'cart';
+                                op: 'apply_code';
+                                code: string;
+                            } | {
+                                kind: 'cart';
+                                op: 'set_attribute';
+                                key: string;
+                                value: string;
+                            };
+                            confirm?: {
+                                title: string;
+                                text?: string;
+                                confirmLabel?: string;
+                                destructive?: boolean;
+                            };
+                            disabled?: boolean;
+                        };
+                    } | {
                         type: 'image';
-                        src: {
+                        src: string | {
                             media: string;
                         } | {
                             app: string;
                         };
                         alt: string;
+                        width?: number;
+                        height?: number;
                     } | {
                         type: 'link';
                         text: string;
-                        path: string;
+                        to: {
+                            kind: 'app-page';
+                            page: string;
+                            query?: {
+                                [key: string]: string;
+                            };
+                        } | {
+                            kind: 'resource';
+                            resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                            id: string;
+                        } | {
+                            kind: 'external';
+                            href: string;
+                        } | {
+                            kind: 'store';
+                            path: string;
+                        };
                     } | {
-                        type: 'field';
-                        attribute: string;
+                        type: 'divider';
                     } | {
                         type: 'button';
                         label: string;
+                        tone?: 'primary' | 'secondary' | 'critical';
                         action: {
-                            kind: 'add_line';
+                            kind: 'route';
+                            route: string;
+                            subpath?: string;
+                            method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+                            body?: {
+                                [key: string]: PluginUiJson;
+                            };
+                        } | {
+                            kind: 'navigate';
+                            to: {
+                                kind: 'app-page';
+                                page: string;
+                                query?: {
+                                    [key: string]: string;
+                                };
+                            } | {
+                                kind: 'resource';
+                                resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                                id: string;
+                            } | {
+                                kind: 'external';
+                                href: string;
+                            } | {
+                                kind: 'store';
+                                path: string;
+                            };
+                        } | {
+                            kind: 'cart';
+                            op: 'add_line';
                             variantId: string;
                             quantity: number;
                         } | {
-                            kind: 'set_attribute';
-                            key: string;
-                            value: string;
-                        } | {
-                            kind: 'apply_code';
+                            kind: 'cart';
+                            op: 'apply_code';
                             code: string;
                         } | {
-                            kind: 'app_route';
-                            route: string;
-                            body?: BuyerUiJson;
+                            kind: 'cart';
+                            op: 'set_attribute';
+                            key: string;
+                            value: string;
                         };
+                        confirm?: {
+                            title: string;
+                            text?: string;
+                            confirmLabel?: string;
+                            destructive?: boolean;
+                        };
+                        disabled?: boolean;
+                    } | {
+                        type: 'form';
+                        action: {
+                            kind: 'route';
+                            route: string;
+                            subpath?: string;
+                            method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+                            body?: {
+                                [key: string]: PluginUiJson;
+                            };
+                        };
+                        submitLabel: string;
+                        confirm?: {
+                            title: string;
+                            text?: string;
+                            confirmLabel?: string;
+                            destructive?: boolean;
+                        };
+                        children: Array<PluginUiNode>;
+                    } | {
+                        name: string;
+                        label: string;
+                        help?: string;
+                        required?: boolean;
+                        error?: string;
+                        disabled?: boolean;
+                        type: 'text-field';
+                        value?: string;
+                        placeholder?: string;
+                        minLength?: number;
+                        maxLength?: number;
+                        format?: 'text' | 'email' | 'url' | 'tel';
+                    } | {
+                        name: string;
+                        label: string;
+                        help?: string;
+                        required?: boolean;
+                        error?: string;
+                        disabled?: boolean;
+                        type: 'textarea';
+                        value?: string;
+                        placeholder?: string;
+                        maxLength?: number;
+                        rows?: number;
+                    } | {
+                        name: string;
+                        label: string;
+                        help?: string;
+                        required?: boolean;
+                        error?: string;
+                        disabled?: boolean;
+                        type: 'number-field';
+                        value?: number | null;
+                        min?: number;
+                        max?: number;
+                        step?: number;
+                        integer?: boolean;
+                    } | {
+                        name: string;
+                        label: string;
+                        help?: string;
+                        required?: boolean;
+                        error?: string;
+                        disabled?: boolean;
+                        type: 'select';
+                        value?: string | null;
+                        options: Array<{
+                            value: string;
+                            label: string;
+                        }>;
+                        placeholder?: string;
+                    } | {
+                        name: string;
+                        label: string;
+                        help?: string;
+                        required?: boolean;
+                        error?: string;
+                        disabled?: boolean;
+                        type: 'checkbox';
+                        value?: boolean;
+                    } | {
+                        name: string;
+                        label: string;
+                        help?: string;
+                        required?: boolean;
+                        error?: string;
+                        disabled?: boolean;
+                        type: 'date-field';
+                        value?: string | null;
+                        min?: string;
+                        max?: string;
+                    } | {
+                        type: 'field';
+                        attribute: string;
                     };
                     attributes: Array<{
                         key: string;
@@ -18787,60 +20658,527 @@ export type PostApiV1OrdersCartValidationResponses = {
             buyerUi: Array<{
                 appId: string;
                 releaseId: string;
-                target: 'purchase.checkout.contact.render-after' | 'purchase.checkout.shipping-option-list.render-after' | 'purchase.checkout.cart-line-list.render-after' | 'purchase.checkout.payment-method-list.render-after' | 'purchase.checkout.actions.render-before' | 'purchase.thank-you.customer-information.render-after' | 'customer-account.order-status.block.render' | 'customer-account.order-index.block.render' | 'customer-account.profile.block.render';
+                target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'checkout.payment.after' | 'checkout.actions.before' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
                 ui: {
-                    type: 'stack' | 'columns';
-                    children: Array<BuyerUiNode>;
+                    type: 'page';
+                    title?: string;
+                    description?: string;
+                    actions?: Array<{
+                        type: 'button';
+                        label: string;
+                        tone?: 'primary' | 'secondary' | 'critical';
+                        action: {
+                            kind: 'route';
+                            route: string;
+                            subpath?: string;
+                            method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+                            body?: {
+                                [key: string]: PluginUiJson;
+                            };
+                        } | {
+                            kind: 'navigate';
+                            to: {
+                                kind: 'app-page';
+                                page: string;
+                                query?: {
+                                    [key: string]: string;
+                                };
+                            } | {
+                                kind: 'resource';
+                                resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                                id: string;
+                            } | {
+                                kind: 'external';
+                                href: string;
+                            } | {
+                                kind: 'store';
+                                path: string;
+                            };
+                        } | {
+                            kind: 'cart';
+                            op: 'add_line';
+                            variantId: string;
+                            quantity: number;
+                        } | {
+                            kind: 'cart';
+                            op: 'apply_code';
+                            code: string;
+                        } | {
+                            kind: 'cart';
+                            op: 'set_attribute';
+                            key: string;
+                            value: string;
+                        };
+                        confirm?: {
+                            title: string;
+                            text?: string;
+                            confirmLabel?: string;
+                            destructive?: boolean;
+                        };
+                        disabled?: boolean;
+                    }>;
+                    children: Array<PluginUiNode>;
                 } | {
-                    type: 'heading' | 'text';
+                    type: 'section';
+                    title?: string;
+                    description?: string;
+                    children: Array<PluginUiNode>;
+                } | {
+                    type: 'card';
+                    title?: string;
+                    description?: string;
+                    actions?: Array<{
+                        type: 'button';
+                        label: string;
+                        tone?: 'primary' | 'secondary' | 'critical';
+                        action: {
+                            kind: 'route';
+                            route: string;
+                            subpath?: string;
+                            method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+                            body?: {
+                                [key: string]: PluginUiJson;
+                            };
+                        } | {
+                            kind: 'navigate';
+                            to: {
+                                kind: 'app-page';
+                                page: string;
+                                query?: {
+                                    [key: string]: string;
+                                };
+                            } | {
+                                kind: 'resource';
+                                resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                                id: string;
+                            } | {
+                                kind: 'external';
+                                href: string;
+                            } | {
+                                kind: 'store';
+                                path: string;
+                            };
+                        } | {
+                            kind: 'cart';
+                            op: 'add_line';
+                            variantId: string;
+                            quantity: number;
+                        } | {
+                            kind: 'cart';
+                            op: 'apply_code';
+                            code: string;
+                        } | {
+                            kind: 'cart';
+                            op: 'set_attribute';
+                            key: string;
+                            value: string;
+                        };
+                        confirm?: {
+                            title: string;
+                            text?: string;
+                            confirmLabel?: string;
+                            destructive?: boolean;
+                        };
+                        disabled?: boolean;
+                    }>;
+                    children: Array<PluginUiNode>;
+                } | {
+                    type: 'stack';
+                    direction?: 'vertical' | 'horizontal';
+                    gap?: 'sm' | 'md' | 'lg';
+                    children: Array<PluginUiNode>;
+                } | {
+                    type: 'columns';
+                    children: Array<PluginUiNode>;
+                } | {
+                    type: 'heading';
                     text: string;
+                    level?: 2 | 3 | 4;
                 } | {
-                    type: 'badge' | 'banner';
+                    type: 'text';
+                    text: string;
                     tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
+                    size?: 'sm' | 'md';
+                    emphasis?: 'strong' | 'mono';
+                } | {
+                    type: 'badge';
+                    text: string;
+                    tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
+                } | {
+                    type: 'banner';
+                    tone: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                     title?: string;
                     text?: string;
-                } | {
-                    type: 'divider';
+                    actions?: Array<{
+                        type: 'button';
+                        label: string;
+                        tone?: 'primary' | 'secondary' | 'critical';
+                        action: {
+                            kind: 'route';
+                            route: string;
+                            subpath?: string;
+                            method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+                            body?: {
+                                [key: string]: PluginUiJson;
+                            };
+                        } | {
+                            kind: 'navigate';
+                            to: {
+                                kind: 'app-page';
+                                page: string;
+                                query?: {
+                                    [key: string]: string;
+                                };
+                            } | {
+                                kind: 'resource';
+                                resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                                id: string;
+                            } | {
+                                kind: 'external';
+                                href: string;
+                            } | {
+                                kind: 'store';
+                                path: string;
+                            };
+                        } | {
+                            kind: 'cart';
+                            op: 'add_line';
+                            variantId: string;
+                            quantity: number;
+                        } | {
+                            kind: 'cart';
+                            op: 'apply_code';
+                            code: string;
+                        } | {
+                            kind: 'cart';
+                            op: 'set_attribute';
+                            key: string;
+                            value: string;
+                        };
+                        confirm?: {
+                            title: string;
+                            text?: string;
+                            confirmLabel?: string;
+                            destructive?: boolean;
+                        };
+                        disabled?: boolean;
+                    }>;
                 } | {
                     type: 'key-value';
                     items: Array<{
                         label: string;
-                        value: string;
+                        value: string | number | boolean | unknown;
+                        tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                     }>;
                 } | {
+                    type: 'stat';
+                    label: string;
+                    value: string | number;
+                    help?: string;
+                } | {
+                    type: 'table';
+                    caption?: string;
+                    columns: Array<{
+                        key: string;
+                        label: string;
+                        align?: 'start' | 'end';
+                    }>;
+                    rows: Array<{
+                        id?: string;
+                        cells: {
+                            [key: string]: string | number | boolean | unknown | {
+                                badge: string;
+                                tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
+                            } | {
+                                text: string;
+                                to: {
+                                    kind: 'app-page';
+                                    page: string;
+                                    query?: {
+                                        [key: string]: string;
+                                    };
+                                } | {
+                                    kind: 'resource';
+                                    resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                                    id: string;
+                                } | {
+                                    kind: 'external';
+                                    href: string;
+                                } | {
+                                    kind: 'store';
+                                    path: string;
+                                };
+                            } | {
+                                money: number;
+                                currency?: string;
+                            } | {
+                                date: string;
+                            };
+                        };
+                        to?: {
+                            kind: 'app-page';
+                            page: string;
+                            query?: {
+                                [key: string]: string;
+                            };
+                        } | {
+                            kind: 'resource';
+                            resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                            id: string;
+                        } | {
+                            kind: 'external';
+                            href: string;
+                        } | {
+                            kind: 'store';
+                            path: string;
+                        };
+                    }>;
+                    pagination?: {
+                        previous?: string | null;
+                        next?: string | null;
+                        total?: number | null;
+                    };
+                    empty?: {
+                        title: string;
+                        text?: string;
+                    };
+                } | {
+                    type: 'empty-state';
+                    title: string;
+                    text?: string;
+                    action?: {
+                        type: 'button';
+                        label: string;
+                        tone?: 'primary' | 'secondary' | 'critical';
+                        action: {
+                            kind: 'route';
+                            route: string;
+                            subpath?: string;
+                            method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+                            body?: {
+                                [key: string]: PluginUiJson;
+                            };
+                        } | {
+                            kind: 'navigate';
+                            to: {
+                                kind: 'app-page';
+                                page: string;
+                                query?: {
+                                    [key: string]: string;
+                                };
+                            } | {
+                                kind: 'resource';
+                                resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                                id: string;
+                            } | {
+                                kind: 'external';
+                                href: string;
+                            } | {
+                                kind: 'store';
+                                path: string;
+                            };
+                        } | {
+                            kind: 'cart';
+                            op: 'add_line';
+                            variantId: string;
+                            quantity: number;
+                        } | {
+                            kind: 'cart';
+                            op: 'apply_code';
+                            code: string;
+                        } | {
+                            kind: 'cart';
+                            op: 'set_attribute';
+                            key: string;
+                            value: string;
+                        };
+                        confirm?: {
+                            title: string;
+                            text?: string;
+                            confirmLabel?: string;
+                            destructive?: boolean;
+                        };
+                        disabled?: boolean;
+                    };
+                } | {
                     type: 'image';
-                    src: {
+                    src: string | {
                         media: string;
                     } | {
                         app: string;
                     };
                     alt: string;
+                    width?: number;
+                    height?: number;
                 } | {
                     type: 'link';
                     text: string;
-                    path: string;
+                    to: {
+                        kind: 'app-page';
+                        page: string;
+                        query?: {
+                            [key: string]: string;
+                        };
+                    } | {
+                        kind: 'resource';
+                        resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                        id: string;
+                    } | {
+                        kind: 'external';
+                        href: string;
+                    } | {
+                        kind: 'store';
+                        path: string;
+                    };
                 } | {
-                    type: 'field';
-                    attribute: string;
+                    type: 'divider';
                 } | {
                     type: 'button';
                     label: string;
+                    tone?: 'primary' | 'secondary' | 'critical';
                     action: {
-                        kind: 'add_line';
+                        kind: 'route';
+                        route: string;
+                        subpath?: string;
+                        method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+                        body?: {
+                            [key: string]: PluginUiJson;
+                        };
+                    } | {
+                        kind: 'navigate';
+                        to: {
+                            kind: 'app-page';
+                            page: string;
+                            query?: {
+                                [key: string]: string;
+                            };
+                        } | {
+                            kind: 'resource';
+                            resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                            id: string;
+                        } | {
+                            kind: 'external';
+                            href: string;
+                        } | {
+                            kind: 'store';
+                            path: string;
+                        };
+                    } | {
+                        kind: 'cart';
+                        op: 'add_line';
                         variantId: string;
                         quantity: number;
                     } | {
-                        kind: 'set_attribute';
-                        key: string;
-                        value: string;
-                    } | {
-                        kind: 'apply_code';
+                        kind: 'cart';
+                        op: 'apply_code';
                         code: string;
                     } | {
-                        kind: 'app_route';
-                        route: string;
-                        body?: BuyerUiJson;
+                        kind: 'cart';
+                        op: 'set_attribute';
+                        key: string;
+                        value: string;
                     };
+                    confirm?: {
+                        title: string;
+                        text?: string;
+                        confirmLabel?: string;
+                        destructive?: boolean;
+                    };
+                    disabled?: boolean;
+                } | {
+                    type: 'form';
+                    action: {
+                        kind: 'route';
+                        route: string;
+                        subpath?: string;
+                        method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+                        body?: {
+                            [key: string]: PluginUiJson;
+                        };
+                    };
+                    submitLabel: string;
+                    confirm?: {
+                        title: string;
+                        text?: string;
+                        confirmLabel?: string;
+                        destructive?: boolean;
+                    };
+                    children: Array<PluginUiNode>;
+                } | {
+                    name: string;
+                    label: string;
+                    help?: string;
+                    required?: boolean;
+                    error?: string;
+                    disabled?: boolean;
+                    type: 'text-field';
+                    value?: string;
+                    placeholder?: string;
+                    minLength?: number;
+                    maxLength?: number;
+                    format?: 'text' | 'email' | 'url' | 'tel';
+                } | {
+                    name: string;
+                    label: string;
+                    help?: string;
+                    required?: boolean;
+                    error?: string;
+                    disabled?: boolean;
+                    type: 'textarea';
+                    value?: string;
+                    placeholder?: string;
+                    maxLength?: number;
+                    rows?: number;
+                } | {
+                    name: string;
+                    label: string;
+                    help?: string;
+                    required?: boolean;
+                    error?: string;
+                    disabled?: boolean;
+                    type: 'number-field';
+                    value?: number | null;
+                    min?: number;
+                    max?: number;
+                    step?: number;
+                    integer?: boolean;
+                } | {
+                    name: string;
+                    label: string;
+                    help?: string;
+                    required?: boolean;
+                    error?: string;
+                    disabled?: boolean;
+                    type: 'select';
+                    value?: string | null;
+                    options: Array<{
+                        value: string;
+                        label: string;
+                    }>;
+                    placeholder?: string;
+                } | {
+                    name: string;
+                    label: string;
+                    help?: string;
+                    required?: boolean;
+                    error?: string;
+                    disabled?: boolean;
+                    type: 'checkbox';
+                    value?: boolean;
+                } | {
+                    name: string;
+                    label: string;
+                    help?: string;
+                    required?: boolean;
+                    error?: string;
+                    disabled?: boolean;
+                    type: 'date-field';
+                    value?: string | null;
+                    min?: string;
+                    max?: string;
+                } | {
+                    type: 'field';
+                    attribute: string;
                 };
                 attributes: Array<{
                     key: string;
@@ -19071,60 +21409,527 @@ export type PostApiV1OrdersTaxQuoteResponses = {
             buyerUi: Array<{
                 appId: string;
                 releaseId: string;
-                target: 'purchase.checkout.contact.render-after' | 'purchase.checkout.shipping-option-list.render-after' | 'purchase.checkout.cart-line-list.render-after' | 'purchase.checkout.payment-method-list.render-after' | 'purchase.checkout.actions.render-before' | 'purchase.thank-you.customer-information.render-after' | 'customer-account.order-status.block.render' | 'customer-account.order-index.block.render' | 'customer-account.profile.block.render';
+                target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'checkout.payment.after' | 'checkout.actions.before' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
                 ui: {
-                    type: 'stack' | 'columns';
-                    children: Array<BuyerUiNode>;
+                    type: 'page';
+                    title?: string;
+                    description?: string;
+                    actions?: Array<{
+                        type: 'button';
+                        label: string;
+                        tone?: 'primary' | 'secondary' | 'critical';
+                        action: {
+                            kind: 'route';
+                            route: string;
+                            subpath?: string;
+                            method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+                            body?: {
+                                [key: string]: PluginUiJson;
+                            };
+                        } | {
+                            kind: 'navigate';
+                            to: {
+                                kind: 'app-page';
+                                page: string;
+                                query?: {
+                                    [key: string]: string;
+                                };
+                            } | {
+                                kind: 'resource';
+                                resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                                id: string;
+                            } | {
+                                kind: 'external';
+                                href: string;
+                            } | {
+                                kind: 'store';
+                                path: string;
+                            };
+                        } | {
+                            kind: 'cart';
+                            op: 'add_line';
+                            variantId: string;
+                            quantity: number;
+                        } | {
+                            kind: 'cart';
+                            op: 'apply_code';
+                            code: string;
+                        } | {
+                            kind: 'cart';
+                            op: 'set_attribute';
+                            key: string;
+                            value: string;
+                        };
+                        confirm?: {
+                            title: string;
+                            text?: string;
+                            confirmLabel?: string;
+                            destructive?: boolean;
+                        };
+                        disabled?: boolean;
+                    }>;
+                    children: Array<PluginUiNode>;
                 } | {
-                    type: 'heading' | 'text';
+                    type: 'section';
+                    title?: string;
+                    description?: string;
+                    children: Array<PluginUiNode>;
+                } | {
+                    type: 'card';
+                    title?: string;
+                    description?: string;
+                    actions?: Array<{
+                        type: 'button';
+                        label: string;
+                        tone?: 'primary' | 'secondary' | 'critical';
+                        action: {
+                            kind: 'route';
+                            route: string;
+                            subpath?: string;
+                            method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+                            body?: {
+                                [key: string]: PluginUiJson;
+                            };
+                        } | {
+                            kind: 'navigate';
+                            to: {
+                                kind: 'app-page';
+                                page: string;
+                                query?: {
+                                    [key: string]: string;
+                                };
+                            } | {
+                                kind: 'resource';
+                                resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                                id: string;
+                            } | {
+                                kind: 'external';
+                                href: string;
+                            } | {
+                                kind: 'store';
+                                path: string;
+                            };
+                        } | {
+                            kind: 'cart';
+                            op: 'add_line';
+                            variantId: string;
+                            quantity: number;
+                        } | {
+                            kind: 'cart';
+                            op: 'apply_code';
+                            code: string;
+                        } | {
+                            kind: 'cart';
+                            op: 'set_attribute';
+                            key: string;
+                            value: string;
+                        };
+                        confirm?: {
+                            title: string;
+                            text?: string;
+                            confirmLabel?: string;
+                            destructive?: boolean;
+                        };
+                        disabled?: boolean;
+                    }>;
+                    children: Array<PluginUiNode>;
+                } | {
+                    type: 'stack';
+                    direction?: 'vertical' | 'horizontal';
+                    gap?: 'sm' | 'md' | 'lg';
+                    children: Array<PluginUiNode>;
+                } | {
+                    type: 'columns';
+                    children: Array<PluginUiNode>;
+                } | {
+                    type: 'heading';
                     text: string;
+                    level?: 2 | 3 | 4;
                 } | {
-                    type: 'badge' | 'banner';
+                    type: 'text';
+                    text: string;
                     tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
+                    size?: 'sm' | 'md';
+                    emphasis?: 'strong' | 'mono';
+                } | {
+                    type: 'badge';
+                    text: string;
+                    tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
+                } | {
+                    type: 'banner';
+                    tone: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                     title?: string;
                     text?: string;
-                } | {
-                    type: 'divider';
+                    actions?: Array<{
+                        type: 'button';
+                        label: string;
+                        tone?: 'primary' | 'secondary' | 'critical';
+                        action: {
+                            kind: 'route';
+                            route: string;
+                            subpath?: string;
+                            method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+                            body?: {
+                                [key: string]: PluginUiJson;
+                            };
+                        } | {
+                            kind: 'navigate';
+                            to: {
+                                kind: 'app-page';
+                                page: string;
+                                query?: {
+                                    [key: string]: string;
+                                };
+                            } | {
+                                kind: 'resource';
+                                resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                                id: string;
+                            } | {
+                                kind: 'external';
+                                href: string;
+                            } | {
+                                kind: 'store';
+                                path: string;
+                            };
+                        } | {
+                            kind: 'cart';
+                            op: 'add_line';
+                            variantId: string;
+                            quantity: number;
+                        } | {
+                            kind: 'cart';
+                            op: 'apply_code';
+                            code: string;
+                        } | {
+                            kind: 'cart';
+                            op: 'set_attribute';
+                            key: string;
+                            value: string;
+                        };
+                        confirm?: {
+                            title: string;
+                            text?: string;
+                            confirmLabel?: string;
+                            destructive?: boolean;
+                        };
+                        disabled?: boolean;
+                    }>;
                 } | {
                     type: 'key-value';
                     items: Array<{
                         label: string;
-                        value: string;
+                        value: string | number | boolean | unknown;
+                        tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                     }>;
                 } | {
+                    type: 'stat';
+                    label: string;
+                    value: string | number;
+                    help?: string;
+                } | {
+                    type: 'table';
+                    caption?: string;
+                    columns: Array<{
+                        key: string;
+                        label: string;
+                        align?: 'start' | 'end';
+                    }>;
+                    rows: Array<{
+                        id?: string;
+                        cells: {
+                            [key: string]: string | number | boolean | unknown | {
+                                badge: string;
+                                tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
+                            } | {
+                                text: string;
+                                to: {
+                                    kind: 'app-page';
+                                    page: string;
+                                    query?: {
+                                        [key: string]: string;
+                                    };
+                                } | {
+                                    kind: 'resource';
+                                    resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                                    id: string;
+                                } | {
+                                    kind: 'external';
+                                    href: string;
+                                } | {
+                                    kind: 'store';
+                                    path: string;
+                                };
+                            } | {
+                                money: number;
+                                currency?: string;
+                            } | {
+                                date: string;
+                            };
+                        };
+                        to?: {
+                            kind: 'app-page';
+                            page: string;
+                            query?: {
+                                [key: string]: string;
+                            };
+                        } | {
+                            kind: 'resource';
+                            resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                            id: string;
+                        } | {
+                            kind: 'external';
+                            href: string;
+                        } | {
+                            kind: 'store';
+                            path: string;
+                        };
+                    }>;
+                    pagination?: {
+                        previous?: string | null;
+                        next?: string | null;
+                        total?: number | null;
+                    };
+                    empty?: {
+                        title: string;
+                        text?: string;
+                    };
+                } | {
+                    type: 'empty-state';
+                    title: string;
+                    text?: string;
+                    action?: {
+                        type: 'button';
+                        label: string;
+                        tone?: 'primary' | 'secondary' | 'critical';
+                        action: {
+                            kind: 'route';
+                            route: string;
+                            subpath?: string;
+                            method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+                            body?: {
+                                [key: string]: PluginUiJson;
+                            };
+                        } | {
+                            kind: 'navigate';
+                            to: {
+                                kind: 'app-page';
+                                page: string;
+                                query?: {
+                                    [key: string]: string;
+                                };
+                            } | {
+                                kind: 'resource';
+                                resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                                id: string;
+                            } | {
+                                kind: 'external';
+                                href: string;
+                            } | {
+                                kind: 'store';
+                                path: string;
+                            };
+                        } | {
+                            kind: 'cart';
+                            op: 'add_line';
+                            variantId: string;
+                            quantity: number;
+                        } | {
+                            kind: 'cart';
+                            op: 'apply_code';
+                            code: string;
+                        } | {
+                            kind: 'cart';
+                            op: 'set_attribute';
+                            key: string;
+                            value: string;
+                        };
+                        confirm?: {
+                            title: string;
+                            text?: string;
+                            confirmLabel?: string;
+                            destructive?: boolean;
+                        };
+                        disabled?: boolean;
+                    };
+                } | {
                     type: 'image';
-                    src: {
+                    src: string | {
                         media: string;
                     } | {
                         app: string;
                     };
                     alt: string;
+                    width?: number;
+                    height?: number;
                 } | {
                     type: 'link';
                     text: string;
-                    path: string;
+                    to: {
+                        kind: 'app-page';
+                        page: string;
+                        query?: {
+                            [key: string]: string;
+                        };
+                    } | {
+                        kind: 'resource';
+                        resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                        id: string;
+                    } | {
+                        kind: 'external';
+                        href: string;
+                    } | {
+                        kind: 'store';
+                        path: string;
+                    };
                 } | {
-                    type: 'field';
-                    attribute: string;
+                    type: 'divider';
                 } | {
                     type: 'button';
                     label: string;
+                    tone?: 'primary' | 'secondary' | 'critical';
                     action: {
-                        kind: 'add_line';
+                        kind: 'route';
+                        route: string;
+                        subpath?: string;
+                        method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+                        body?: {
+                            [key: string]: PluginUiJson;
+                        };
+                    } | {
+                        kind: 'navigate';
+                        to: {
+                            kind: 'app-page';
+                            page: string;
+                            query?: {
+                                [key: string]: string;
+                            };
+                        } | {
+                            kind: 'resource';
+                            resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                            id: string;
+                        } | {
+                            kind: 'external';
+                            href: string;
+                        } | {
+                            kind: 'store';
+                            path: string;
+                        };
+                    } | {
+                        kind: 'cart';
+                        op: 'add_line';
                         variantId: string;
                         quantity: number;
                     } | {
-                        kind: 'set_attribute';
-                        key: string;
-                        value: string;
-                    } | {
-                        kind: 'apply_code';
+                        kind: 'cart';
+                        op: 'apply_code';
                         code: string;
                     } | {
-                        kind: 'app_route';
-                        route: string;
-                        body?: BuyerUiJson;
+                        kind: 'cart';
+                        op: 'set_attribute';
+                        key: string;
+                        value: string;
                     };
+                    confirm?: {
+                        title: string;
+                        text?: string;
+                        confirmLabel?: string;
+                        destructive?: boolean;
+                    };
+                    disabled?: boolean;
+                } | {
+                    type: 'form';
+                    action: {
+                        kind: 'route';
+                        route: string;
+                        subpath?: string;
+                        method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+                        body?: {
+                            [key: string]: PluginUiJson;
+                        };
+                    };
+                    submitLabel: string;
+                    confirm?: {
+                        title: string;
+                        text?: string;
+                        confirmLabel?: string;
+                        destructive?: boolean;
+                    };
+                    children: Array<PluginUiNode>;
+                } | {
+                    name: string;
+                    label: string;
+                    help?: string;
+                    required?: boolean;
+                    error?: string;
+                    disabled?: boolean;
+                    type: 'text-field';
+                    value?: string;
+                    placeholder?: string;
+                    minLength?: number;
+                    maxLength?: number;
+                    format?: 'text' | 'email' | 'url' | 'tel';
+                } | {
+                    name: string;
+                    label: string;
+                    help?: string;
+                    required?: boolean;
+                    error?: string;
+                    disabled?: boolean;
+                    type: 'textarea';
+                    value?: string;
+                    placeholder?: string;
+                    maxLength?: number;
+                    rows?: number;
+                } | {
+                    name: string;
+                    label: string;
+                    help?: string;
+                    required?: boolean;
+                    error?: string;
+                    disabled?: boolean;
+                    type: 'number-field';
+                    value?: number | null;
+                    min?: number;
+                    max?: number;
+                    step?: number;
+                    integer?: boolean;
+                } | {
+                    name: string;
+                    label: string;
+                    help?: string;
+                    required?: boolean;
+                    error?: string;
+                    disabled?: boolean;
+                    type: 'select';
+                    value?: string | null;
+                    options: Array<{
+                        value: string;
+                        label: string;
+                    }>;
+                    placeholder?: string;
+                } | {
+                    name: string;
+                    label: string;
+                    help?: string;
+                    required?: boolean;
+                    error?: string;
+                    disabled?: boolean;
+                    type: 'checkbox';
+                    value?: boolean;
+                } | {
+                    name: string;
+                    label: string;
+                    help?: string;
+                    required?: boolean;
+                    error?: string;
+                    disabled?: boolean;
+                    type: 'date-field';
+                    value?: string | null;
+                    min?: string;
+                    max?: string;
+                } | {
+                    type: 'field';
+                    attribute: string;
                 };
                 attributes: Array<{
                     key: string;

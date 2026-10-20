@@ -90,7 +90,7 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
           const installation = registrations.find((entry) => entry.installation.pluginId === result.pluginId)!.installation;
           const prefix = `${result.pluginId}.`;
           const values = Object.fromEntries(Object.entries(input.attributes ?? {}).filter(([key]) => key.startsWith(prefix)).map(([key, value]) => [key.slice(prefix.length), value]));
-          blocks.push({ appId: result.pluginId, releaseId: installation.bundleSha256, target, ui: result.output.ui, attributes: installation.manifest.checkout?.attributes ?? [], values });
+          blocks.push({ appId: result.pluginId, releaseId: installation.bundleSha256, target, ui: result.output.ui.root, attributes: installation.manifest.checkout?.attributes ?? [], values });
         }
       }
       try { return await prepareBuyerUiBlocks(options.db, blocks.slice(0, 12), registrations, options.env.CDN_DOMAIN_URL); } catch { return []; }

@@ -18,6 +18,7 @@
 // theme-header-deep). The words (tagline, about, the name after ©) are the
 // footer block's settings and the footer logo the theme's brand; identity
 // and contact facts are Business settings.
+import AppSlot from "@/components/apps/AppSlot.astro";
 import type { FooterMenu, SocialLink } from "@/lib/api";
 import type { StorefrontBusinessInfo } from "@/lib/commerce-structured-data";
 import type { StorefrontFooterRenderer } from "@scalius/shared/storefront-theme";
@@ -89,6 +90,7 @@ const TONES: Record<string, string | undefined> = { muted: "muted", header: "hea
     {variant === "columns" && <ColumnsFooter model={model} />}
     {variant === "centered-compact" && <NewsletterFooter model={model} signup={signup} />}
     {variant === "directory" && <DirectoryFooter model={model} marketplace={marketplaceDirectory} />}
+    <AppSlot name="footer.columns" />
     {!marketplaceDirectory && <FooterBottom model={model} showPolicies={variant !== "centered-compact"} />}
   </Container>
   {marketplaceDirectory && (

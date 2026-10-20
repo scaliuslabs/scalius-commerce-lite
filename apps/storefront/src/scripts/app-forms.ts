@@ -1,8 +1,7 @@
 /**
  * The storefront's app forms enhancer: platform code (never an app's) that
- * makes the forms and toggles inside app surfaces (homepage sections,
- * product blocks, proxy pages) work without a page load. Loaded by
- * AppSurface.astro, so only pages that show an app surface carry it.
+ * makes the forms and toggles inside an app's proxy page work without a page
+ * load. Loaded by the proxy page route, so only app pages carry it.
  *
  * - `form[data-app-form]` whose action is this store's `/apps/...` proxy
  *   posts its fields with `fetch` and reads a JSON answer

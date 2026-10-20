@@ -1,0 +1,66 @@
+---
+// A component slot (docs/STOREFRONT-COMPONENTS.md "Slots"): the place a core
+// unit or a skin (`<Slot name="…" />`) gives active apps' components. Each
+// component draws at the edge in the page's existing batch to its app; one
+// that draws nothing, fails or is late renders nothing (and a failed one
+// keeps the page out of the cache). A slot nobody fills renders nothing and
+// reads nothing: the components come from the layout read the page already
+// has, and the product page's projection is built only when a product slot
+// draws.
+//
+// - `product.buy_box.before` / `.after`: in the buy box, after the title and
+//   after the buttons; `product.below`: after the page's modules, each in a
+//   module container. The merchant arranges these (the product page's app blocks).
+// - `header.actions`: every active app's component, inline beside the
+//   account and cart; `footer.columns`: a row of columns after the menus.
+import type { StorefrontComponentSlot, StorefrontProductPage } from "@scalius/shared/plugins/storefront-protocol";
+import AppComponent from "./AppComponent.astro";
+import { appMarkup, appSlotComponents, requestExtensions, type AppMarkup } from "@/lib/extensions";
+
+interface Props {
+  name: StorefrontComponentSlot;
+  /** The product page's projection (product slots), built only when a component draws. */
+  data?: () => StorefrontProductPage;
+}
+
+const { name, data } = Astro.props;
+const components = await appSlotComponents(Astro.locals, Astro.url, name);
+let drawn: Array<{ key: string; markup: AppMarkup }> = [];
+if (components.length > 0) {
+  const { host } = await requestExtensions(Astro.locals, Astro.url);
+  const product = name.startsWith("product.") ? data?.() : undefined;
+  if (!name.startsWith("product.") || product) {
+    const rendered = await Promise.all(components.map(async (component) => {
+      const job = product
+        ? { kind: "component", type: component.type, target: name, instanceId: component.instanceId ?? component.type, settings: component.settings, data: product }
+        : { kind: "component", type: component.type, target: name, settings: component.settings };
+      // Product slots keep JSON-LD out: the product page's structured data is core's.
+      const html = await host.render(component.extension, job as never, { jsonLd: !product });
+      const markup = appMarkup(component.extension, "component", html);
+      return markup ? [{ key: `${component.extension.pluginId}/${component.instanceId ?? component.type}`, markup }] : [];
+    }));
+    drawn = rendered.flat();
+  }
+}
+---
+
+{drawn.length > 0 && name === "product.below" && drawn.map((component) => (
+  <section class="product-module mx-auto max-w-7xl border-t border-border px-3 py-6 sm:px-6 lg:px-8 lg:py-10" data-product-module="app" data-app-slot={name}>
+    <AppComponent markup={component.markup} />
+  </section>
+))}
+{drawn.length > 0 && name.startsWith("product.buy_box") && (
+  <div class="mt-3 flex flex-col gap-3" data-app-slot={name}>
+    {drawn.map((component) => <AppComponent markup={component.markup} />)}
+  </div>
+)}
+{drawn.length > 0 && name === "footer.columns" && (
+  <div class="mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-4" data-app-slot={name}>
+    {drawn.map((component) => <div><AppComponent markup={component.markup} /></div>)}
+  </div>
+)}
+{drawn.length > 0 && name === "header.actions" && (
+  <div class="contents" data-app-slot={name}>
+    {drawn.map((component) => <AppComponent markup={component.markup} />)}
+  </div>
+)}

@@ -47,6 +47,7 @@ function decode(value: string): string {
 export function splitStorefrontEmbeds(html: string, rule: StorefrontEmbedRule): StorefrontEmbedSplit {
   const parts: StorefrontMarkupPart[] = [];
   const counts = new Map<StorefrontEmbedKind, number>();
+  const slots = new Set<string>();
   let dropped = 0;
   let index = 0;
   let last = 0;
@@ -58,10 +59,13 @@ export function splitStorefrontEmbeds(html: string, rule: StorefrontEmbedRule): 
       const kind = attributes.get("kind") ?? "";
       const allowed = KINDS.has(kind) ? rule.allowed[kind as StorefrontEmbedKind] ?? 0 : 0;
       const used = counts.get(kind as StorefrontEmbedKind) ?? 0;
-      if (used >= allowed) {
+      // A slot embed names one of the unit's slots, each placed once.
+      const slot = kind === "slot" ? attributes.get("data-name") ?? "" : null;
+      if (used >= allowed || (slot !== null && (!(rule.slots ?? []).some((name) => name === slot) || slots.has(slot)))) {
         dropped += 1;
         continue;
       }
+      if (slot !== null) slots.add(slot);
       counts.set(kind as StorefrontEmbedKind, used + 1);
       const data: Record<string, string> = {};
       for (const [name, value] of attributes) if (name.startsWith("data-")) data[name.slice(5)] = value;

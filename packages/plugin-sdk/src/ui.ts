@@ -1,21 +1,29 @@
-// Helpers for a plugin's dashboard and storefront answers. Plain functions
-// that build the documented shapes (types only from `@scalius/shared`, so a
-// packed plugin carries no schema code); the dashboard and the platform
-// validate what arrives.
+// One builder for an app's `ui` trees (`@scalius/shared/plugins/ui`): the
+// dashboard's pages, cards and widgets (admin surface) and the UI slots of
+// the buyer's own pages (buyer surface, a `buyer.ui` function's answer).
+// Plain functions that build the documented shapes (types only from
+// `@scalius/shared`, so a packed plugin carries no schema code); the host
+// validates what arrives against its surface.
 //
 //   routes: {
 //     admin: {
 //       overview: (request, ctx) => ({ body: ui.page([ui.stat("Wishes", 12)]) }),
 //       "mark-done": (request) => ({ body: ui.result({ toast: "Done", refresh: true }) }),
 //     },
+//   },
+//   functions: {
+//     "buyer.ui": () => ({ ui: ui.view([ui.text("120 points"), ui.button("Redeem", ui.cart.applyCode("POINTS"))]) }),
 //   }
 
 import type {
   PluginAdminActionBody,
+  PluginUiAction,
   PluginUiActionResult,
   PluginUiButton,
   PluginUiDocument,
+  PluginUiImageSource,
   PluginUiNode,
+  PluginUiRouteAction,
   PluginUiTarget,
   PluginUiTone,
 } from "@scalius/shared/plugins";
@@ -24,15 +32,15 @@ import type { PluginRouteRequest } from "./context";
 type NodeOf<T extends PluginUiNode["type"]> = Extract<PluginUiNode, { type: T }>;
 type Options<T extends PluginUiNode["type"], Omitted extends string = never> = Omit<NodeOf<T>, "type" | Omitted>;
 
-/** A UI document (what admin pages, cards and widgets answer). */
+/** A UI document: what admin routes and `buyer.ui` functions answer. */
 function document(root: PluginUiNode): PluginUiDocument {
   return { version: 1, root };
 }
 
 export const ui = {
-  /** A full app page; `children` are its sections, cards and tables. */
+  /** A full app page (admin); `children` are its sections, cards and tables. */
   page: (children: PluginUiNode[], options: Options<"page", "children"> = {}) => document({ type: "page", ...options, children }),
-  /** A resource card or home widget body. */
+  /** A resource card or home widget body (admin), or a UI slot's content (buyer). */
   view: (children: PluginUiNode[]) => document({ type: "stack", children }),
   section: (title: string, children: PluginUiNode[], options: Options<"section", "children" | "title"> = {}): PluginUiNode => ({ type: "section", title, ...options, children }),
   card: (title: string, children: PluginUiNode[], options: Options<"card", "children" | "title"> = {}): PluginUiNode => ({ type: "card", title, ...options, children }),
@@ -46,16 +54,15 @@ export const ui = {
   stat: (label: string, value: string | number, help?: string): PluginUiNode => ({ type: "stat", label, value, ...(help ? { help } : {}) }),
   table: (options: Options<"table">): PluginUiNode => ({ type: "table", ...options }),
   empty: (title: string, options: Options<"empty-state", "title"> = {}): PluginUiNode => ({ type: "empty-state", title, ...options }),
-  image: (src: string, alt: string, options: Options<"image", "src" | "alt"> = {}): PluginUiNode => ({ type: "image", src, alt, ...options }),
+  /** An https URL (admin), or `{ media }` / `{ app: "public/…" }` (buyer). */
+  image: (src: PluginUiImageSource, alt: string, options: Options<"image", "src" | "alt"> = {}): PluginUiNode => ({ type: "image", src, alt, ...options }),
   link: (text: string, to: PluginUiTarget): PluginUiNode => ({ type: "link", text, to }),
   divider: (): PluginUiNode => ({ type: "divider" }),
-  /** A button that posts to one of this app's admin routes. */
-  button: (label: string, action: NonNullable<PluginUiButton["action"]>, options: Omit<PluginUiButton, "type" | "label" | "action" | "to"> = {}): PluginUiButton =>
+  /** A button: `ui.route(…)`, `ui.navigate(…)` or a `ui.cart.*` operation. */
+  button: (label: string, action: PluginUiAction, options: Omit<PluginUiButton, "type" | "label" | "action"> = {}): PluginUiButton =>
     ({ type: "button", label, action, ...options }),
-  /** A button that opens a page. */
-  linkButton: (label: string, to: PluginUiTarget, options: Omit<PluginUiButton, "type" | "label" | "action" | "to"> = {}): PluginUiButton =>
-    ({ type: "button", label, to, ...options }),
-  form: (action: NodeOf<"form">["action"], submitLabel: string, children: PluginUiNode[], options: Options<"form", "action" | "submitLabel" | "children"> = {}): PluginUiNode =>
+  /** A form (admin) that sends its values to one of this app's routes. */
+  form: (action: PluginUiRouteAction, submitLabel: string, children: PluginUiNode[], options: Options<"form", "action" | "submitLabel" | "children"> = {}): PluginUiNode =>
     ({ type: "form", action, submitLabel, ...options, children }),
   textField: (name: string, label: string, options: Options<"text-field", "name" | "label"> = {}): PluginUiNode => ({ type: "text-field", name, label, ...options }),
   textarea: (name: string, label: string, options: Options<"textarea", "name" | "label"> = {}): PluginUiNode => ({ type: "textarea", name, label, ...options }),
@@ -64,13 +71,27 @@ export const ui = {
     ({ type: "select", name, label, options, ...rest }),
   checkbox: (name: string, label: string, options: Options<"checkbox", "name" | "label"> = {}): PluginUiNode => ({ type: "checkbox", name, label, ...options }),
   dateField: (name: string, label: string, options: Options<"date-field", "name" | "label"> = {}): PluginUiNode => ({ type: "date-field", name, label, ...options }),
-  /** Links: a Scalius resource page, one of this app's pages, or an https site. */
+  /** One of the app's `checkout.attributes`, drawn as the store's own input (buyer). */
+  field: (attribute: string): PluginUiNode => ({ type: "field", attribute }),
+  /** A request to one of this app's routes: an admin route (admin), a public route through the store's proxy (buyer). */
+  route: (route: string, options: Omit<PluginUiRouteAction, "kind" | "route"> = {}): PluginUiRouteAction => ({ kind: "route", route, ...options }),
+  /** Opens a page (`ui.to.*`). */
+  navigate: (to: PluginUiTarget): PluginUiAction => ({ kind: "navigate", to }),
+  /** Cart operations (buyer, on the cart and checkout pages). */
+  cart: {
+    addLine: (variantId: string, quantity = 1): PluginUiAction => ({ kind: "cart", op: "add_line", variantId, quantity }),
+    applyCode: (code: string): PluginUiAction => ({ kind: "cart", op: "apply_code", code }),
+    /** Sets one of the app's checkout attributes. */
+    setAttribute: (key: string, value: string): PluginUiAction => ({ kind: "cart", op: "set_attribute", key, value }),
+  },
+  /** Where links go: a Scalius resource page, one of this app's pages or an https site (admin); a path on the store (buyer). */
   to: {
     resource: (resource: Extract<PluginUiTarget, { kind: "resource" }>["resource"], id: string): PluginUiTarget => ({ kind: "resource", resource, id }),
     page: (page: string, query?: Record<string, string>): PluginUiTarget => ({ kind: "app-page", page, ...(query ? { query } : {}) }),
     external: (href: string): PluginUiTarget => ({ kind: "external", href }),
+    store: (path: string): PluginUiTarget => ({ kind: "store", path }),
   },
-  /** What a button's or form's route answers. */
+  /** What a button's or form's admin route answers. */
   result: (result: Omit<PluginUiActionResult, "toast"> & { toast?: string | PluginUiActionResult["toast"] }): PluginUiActionResult => {
     const { toast, ...rest } = result;
     return { ...rest, ...(toast === undefined ? {} : { toast: typeof toast === "string" ? { message: toast, tone: "success" } : toast }) };

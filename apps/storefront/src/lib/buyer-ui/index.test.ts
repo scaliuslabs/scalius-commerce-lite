@@ -4,7 +4,7 @@ import type { BuyerUiBlock } from "@scalius/shared/plugins/buyer-ui";
 import { buyerImagePath, readBuyerAttributes, renderBuyerUi } from "./index";
 
 vi.mock("./actions", () => ({ runBuyerUiAction: vi.fn(async () => ({ message: "Done" })) }));
-const target = "purchase.checkout.contact.render-after";
+const target = "checkout.contact.after";
 const block = (ui: BuyerUiBlock["ui"], extras: Partial<BuyerUiBlock> = {}): BuyerUiBlock => ({
   appId: "acme.notes", releaseId: "release123", target, ui, attributes: [], values: {}, ...extras,
 });
@@ -20,7 +20,7 @@ describe("host-owned buyer UI", () => {
     renderBuyerUi([block({ type: "text", text: '<img src=x onerror="alert(1)">' })]);
     expect(document.querySelector("img")).toBeNull();
     expect(document.body.textContent).toContain("<img src=x");
-    renderBuyerUi([block({ type: "link", text: "Bad", path: "//other.test/" })]);
+    renderBuyerUi([block({ type: "link", text: "Bad", to: { kind: "external", href: "https://other.test/" } })]);
     expect(document.querySelector("a")).toBeNull();
     expect(document.querySelector<HTMLElement>("[data-buyer-ui-target]")?.hidden).toBe(true);
   });
@@ -43,7 +43,7 @@ describe("host-owned buyer UI", () => {
 
   it("shows the historical order value on read-only targets, ignoring another checkout draft", () => {
     sessionStorage.setItem("scalius:buyer-attributes", JSON.stringify({ "acme.notes.note": "New draft" }));
-    const orderTarget = "customer-account.order-status.block.render";
+    const orderTarget = "account.order";
     document.body.innerHTML = `<div data-buyer-ui-target="${orderTarget}"></div>`;
     renderBuyerUi([block({ type: "field", attribute: "note" }, {
       target: orderTarget, attributes: [{ key: "note", label: "Note", type: "text" }], values: { note: "Saved answer" },
@@ -73,11 +73,11 @@ describe("host-owned buyer UI", () => {
 
   it("keeps presence links and drops checkout mutations from account surfaces", () => {
     document.documentElement.dataset.marketPresence = "en-in";
-    renderBuyerUi([block({ type: "link", text: "Shop", path: "/products/gift" })]);
+    renderBuyerUi([block({ type: "link", text: "Shop", to: { kind: "store", path: "/products/gift" } })]);
     expect(document.querySelector("a")?.getAttribute("href")).toBe("/en-in/products/gift");
-    const accountTarget = "customer-account.profile.block.render";
+    const accountTarget = "account.profile";
     document.body.innerHTML = `<div data-buyer-ui-target="${accountTarget}"></div>`;
-    renderBuyerUi([block({ type: "button", label: "Apply", action: { kind: "apply_code", code: "BAD" } }, { target: accountTarget })]);
+    renderBuyerUi([block({ type: "button", label: "Apply", action: { kind: "cart", op: "apply_code", code: "BAD" } }, { target: accountTarget })]);
     expect(document.querySelector("button")).toBeNull();
   });
 });

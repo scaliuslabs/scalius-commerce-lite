@@ -986,7 +986,7 @@ describe("site settings write behavior", () => {
         id, name: id === "acme.reviews" ? "Reviews" : "Hidden", version: "1.0.0", apiVersion: "2026-10", description: "An app.", author: { name: "Acme" },
         storefront: {
           sections: [{ type: "latest", name: "Latest reviews", settings: [{ key: "heading", label: "Heading", type: "text", default: "Loved" }] }],
-          productBlocks: [{ type: "stars", name: "Stars", placement: "product.buy-box" }],
+          components: [{ type: "stars", name: "Stars", targets: ["product.buy_box.after"] }],
         },
         ...extra,
       });
@@ -1016,7 +1016,7 @@ describe("site settings write behavior", () => {
       skins: [],
       templates: [],
       pagePresets: [],
-      productBlocks: [{ key: "acme.reviews/stars", type: "stars", name: "Stars", placement: "product.buy-box", settings: [] }],
+      components: [{ key: "acme.reviews/stars", type: "stars", name: "Stars", targets: ["product.buy_box.after"], settings: [] }],
     }]);
   });
 
@@ -1051,7 +1051,7 @@ describe("site settings write behavior", () => {
         ]) }],
         skins: [{ id: "header", target: "header", name: "Header", settings: settings([{ key: "tagline", label: "Tagline", type: "text" }]) }],
         templates: [],
-        productBlocks: [],
+        components: [],
       } },
     }]);
 

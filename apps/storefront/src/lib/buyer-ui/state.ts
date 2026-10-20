@@ -1,4 +1,10 @@
 import { checkoutAttributesSchema } from "@scalius/shared/plugins/buyer-ui";
+import { STOREFRONT_UI_SLOT_PAGES, type StorefrontUiSlot } from "@scalius/shared/plugins/storefront-protocol";
+
+/** Whether a UI slot is on the cart or checkout page: cart operations and editable fields belong only there. */
+export function isCheckoutSlot(target: StorefrontUiSlot): boolean {
+  return STOREFRONT_UI_SLOT_PAGES[target] === "checkout";
+}
 
 const STORAGE_KEY = "scalius:buyer-attributes";
 

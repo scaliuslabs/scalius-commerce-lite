@@ -58,12 +58,12 @@ describe("storefront settings", () => {
 });
 
 describe("storefront manifest", () => {
-  it("accepts component sections and blocks, skins, templates and islands", () => {
+  it("accepts component sections, components, skins, templates and islands", () => {
     const parsed = parsePluginManifest({
       ...base,
       storefront: {
         sections: [{ type: "hero", name: "Hero", settings: [{ key: "image", label: "Image", type: "image" }] }],
-        productBlocks: [{ type: "size_guide", name: "Size guide", placement: "product.below" }],
+        components: [{ type: "size_guide", name: "Size guide", targets: ["product.below"] }, { type: "points", name: "Points", targets: ["header.actions", "footer.columns"] }],
         skins: [
           { id: "head", target: "header", name: "Header" },
           { id: "pdp", target: "product-main", name: "Product page" },
@@ -80,13 +80,17 @@ describe("storefront manifest", () => {
     expect(parsed.ok).toBe(true);
   });
 
-  it("keeps storefront types out of skins, blocks and the app's settings", () => {
+  it("keeps storefront types out of skins, components and the app's settings", () => {
     const issues = (input: Partial<PluginManifestInput>) => {
       const parsed = parsePluginManifest({ ...base, ...input });
       return parsed.ok ? [] : parsed.issues.map((issue) => issue.message);
     };
     expect(issues({ storefront: { skins: [{ id: "card", target: "product-card", name: "Card", settings: [{ key: "p", label: "P", type: "products" }] }] } }).join()).toMatch(/skin's settings cannot name images or products/);
-    expect(issues({ storefront: { productBlocks: [{ type: "b", name: "B", placement: "product.below", settings: [{ key: "i", label: "I", type: "image" }] }] } }).join()).toMatch(/product block's settings cannot name images/);
+    expect(issues({ storefront: { components: [{ type: "b", name: "B", targets: ["product.below"], settings: [{ key: "i", label: "I", type: "image" }] }] } }).join()).toMatch(/component's settings cannot name images/);
+    expect(issues({ storefront: { components: [{ type: "b", name: "B", targets: ["product.below", "product.buy_box.after"] }] } }).join()).toMatch(/at most one product slot/);
+    expect(issues({ storefront: { components: [{ type: "b", name: "B", targets: ["header.actions", "header.actions"] }] } }).join()).toMatch(/Each target appears once/);
+    expect(issues({ storefront: { components: [{ type: "b", name: "B", targets: ["sidebar" as never] }] } })).toHaveLength(1);
+    expect(issues({ storefront: { components: [{ type: "b", name: "B", targets: ["page"] }] } }).join()).toMatch(/turn on storefront.proxy/);
     expect(issues({ storefront: { skins: [{ id: "x", target: "section:recently-viewed", name: "X" }] } }).join()).toMatch(/section:<core section type>/);
     expect(issues({ storefront: { skins: [{ id: "x", target: "sidebar", name: "X" }] } }).join()).toMatch(/section:<core section type>/);
     expect(issues({ storefront: { skins: [{ id: "x", target: "header", name: "X" }, { id: "x", target: "footer", name: "Y" }] } }).join()).toMatch(/Skin ids must be unique/);
@@ -139,14 +143,14 @@ describe("storefront files", () => {
   it("reads the layout's extensions, leaving malformed ones out", () => {
     const release = "d".repeat(64);
     expect(readStorefrontExtensions([
-      { pluginId: "acme.theme", version: "1.0.0", source: "upload", release, sections: ["hero", "BAD"], sectionSettings: { hero: [{ key: "a", label: "A", type: "text" }] }, skins: [{ id: "head", target: "header", settings: [] }, { id: "x", target: "nope", settings: [] }, { id: "hero", target: "section:hero", settings: [] }], blocks: [{ type: "guide", target: "product.below", settings: [] }, { type: "bad", target: "product.top", settings: [] }], islands: ["carousel"], stylesheet: true, connect: ["api.acme.test", "javascript:"] },
+      { pluginId: "acme.theme", version: "1.0.0", source: "upload", release, sections: ["hero", "BAD"], sectionSettings: { hero: [{ key: "a", label: "A", type: "text" }] }, skins: [{ id: "head", target: "header", settings: [] }, { id: "x", target: "nope", settings: [] }, { id: "hero", target: "section:hero", settings: [] }], components: [{ type: "guide", targets: ["product.below", "product.top"], settings: [] }, { type: "bad", targets: ["product.top"], settings: [] }], islands: ["carousel"], stylesheet: true, connect: ["api.acme.test", "javascript:"] },
       { pluginId: "acme.bad", version: "1", source: "upload", release: "nope" },
       "junk",
     ])).toEqual([{
       pluginId: "acme.theme", version: "1.0.0", source: "upload", release,
       sections: ["hero"], sectionSettings: { hero: [{ key: "a", label: "A", type: "text", required: false, maxLength: 200 }] },
       skins: [{ id: "head", target: "header", settings: [] }, { id: "hero", target: "section:hero", settings: [] }],
-      blocks: [{ type: "guide", target: "product.below", settings: [] }],
+      components: [{ type: "guide", targets: ["product.below"], settings: [] }],
       islands: ["carousel"], stylesheet: true, connect: ["api.acme.test"],
     }]);
   });

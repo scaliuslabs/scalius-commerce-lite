@@ -4,6 +4,7 @@
 // runtime gives the data attributes their behaviour.
 
 import type {
+  StorefrontComponentSlot,
   StorefrontEmbedKind,
   StorefrontImage,
   StorefrontIslandHydration,
@@ -272,4 +273,21 @@ export function OrderForm(props: OrderFormProps): Html {
   const id = props.product?.id ?? "";
   if (!id) return EMPTY_HTML;
   return embed("order-form", { product: id, "max-quantity": props.maxQuantity, "submit-label": props.submitLabel });
+}
+
+export interface SlotProps {
+  /** One of the unit's component slots (a header skin: `header.actions`; a footer skin: `footer.columns`). */
+  name: StorefrontComponentSlot;
+}
+
+/**
+ * A component slot, in place (header and footer skins): where active apps'
+ * components that target it render, as they do in the store's own header
+ * and footer. Place each of the unit's slots once; an empty slot renders
+ * nothing.
+ *
+ *   <div class="acme-header-actions"><Slot name="header.actions" />{cart}</div>
+ */
+export function Slot(props: SlotProps): Html {
+  return embed("slot", { name: props.name });
 }

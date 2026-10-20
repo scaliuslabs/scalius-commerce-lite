@@ -23,7 +23,7 @@ import { PROVIDER_PORTS } from "./providers";
 import { PROVIDER_PORT_TIERS, type ProviderKind } from "./providers/kinds";
 import { PLUGIN_SCOPES } from "./scopes";
 import * as protocol from "./storefront-protocol";
-import { pluginUiDocumentSchema } from "./ui";
+import { PLUGIN_UI_SURFACES, pluginUiDocumentSchema } from "./ui";
 
 const schema = (value: z.ZodType, io: "input" | "output" = "input") => z.toJSONSchema(value, { io });
 const json = (value: unknown): string => `${JSON.stringify(value, null, 1)}\n`;
@@ -107,7 +107,7 @@ describe("the versioned plugin ABI", () => {
       functions: Object.fromEntries(Object.entries(PLUGIN_FUNCTION_SCHEMAS).map(([name, value]) => [name, port(value)])),
       providerTiers: PROVIDER_PORT_TIERS,
       providers: portsOfTier("stable"),
-      adminUi: schema(pluginUiDocumentSchema), scopes: PLUGIN_SCOPES,
+      ui: { document: schema(pluginUiDocumentSchema("admin")), surfaces: PLUGIN_UI_SURFACES }, scopes: PLUGIN_SCOPES,
       events: { apiVersion: EVENTS_API_VERSION, resources: EVENT_TOPIC_RESOURCE,
         facts: Object.fromEntries(Object.entries(EVENT_FACT_SCHEMAS).map(([topic, value]) => [topic, schema(value, "output")])),
       },

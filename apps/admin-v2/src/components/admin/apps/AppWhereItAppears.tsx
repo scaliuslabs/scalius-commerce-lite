@@ -86,8 +86,11 @@ export function appearsEntries(app: AppDetail): AppearsEntry[] {
   for (const section of app.storefront.sections) {
     entries.push({ key: `section:${section.type}`, group: "store", label: section.name, detail: { message: "section" }, to: live("/admin/online-store/theme") });
   }
-  for (const block of app.storefront.productBlocks) {
-    entries.push({ key: `block:${block.type}`, group: "store", label: block.name, detail: { message: "productBlock" }, to: live("/admin/online-store/theme") });
+  for (const component of app.storefront.components) {
+    for (const target of component.targets) {
+      const message: Message = target === "header.actions" || target === "footer.columns" ? `slot_${target}` : target === "page" ? "appPage" : "productBlock";
+      entries.push({ key: `component:${component.type}:${target}`, group: "store", label: component.name, detail: { message }, to: live("/admin/online-store/theme") });
+    }
   }
   return entries;
 }

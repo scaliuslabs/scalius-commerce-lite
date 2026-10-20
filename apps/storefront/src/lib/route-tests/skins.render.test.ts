@@ -1,10 +1,10 @@
 // @vitest-environment node
 /**
- * App skins and component product blocks through the real pages (Astro
+ * App skins and slot components through the real pages (Astro
  * container API through a Vite dev server in middleware mode, API stubbed,
  * the app's storefront module stubbed at the render host): a product-main
  * skin draws the main part around the store's own buy form, a skin without
- * one leaves the page to core, component blocks draw from the page's
+ * one leaves the page to core, product-slot components draw from the page's
  * projection, and a listing-main skin composes the store's filters, sort
  * and (always) page links. No skin adds an API read: the page is still one
  * batch.
@@ -96,7 +96,10 @@ const EXTENSION = {
     { id: "grid", target: "listing-main", settings: [] },
     { id: "bar", target: "header", settings: [] },
   ],
-  blocks: [{ type: "size_guide", target: "product.below", settings: [] }],
+  components: [
+    { type: "size_guide", targets: ["product.below"], settings: [] },
+    { type: "points", targets: ["header.actions"], settings: [] },
+  ],
 };
 
 function theme(skin: "pdp" | null = "pdp"): StorefrontThemeDocument {
@@ -118,7 +121,7 @@ function app(draw: Partial<Record<string, (job: Record<string, unknown>) => stri
   vi.spyOn(hostPrototype, "render").mockImplementation(async function (this: { context: Context }, _extension, job, options) {
     const record = job as unknown as Record<string, unknown>;
     jobs.push({ job: record, options, context: this.context });
-    const key = record.kind === "block" ? `block:${String(record.type)}` : String(record.target);
+    const key = record.kind === "component" ? `component:${String(record.type)}` : String(record.target);
     return draw[key]?.(record) ?? null;
   });
   return jobs;
@@ -204,7 +207,7 @@ describe("a product-main skin", () => {
   it("draws the main part from the page's projection around the store's own buy form, in the page's one batch", async () => {
     const jobs = app({
       "product-main": () => '<article class="acme-pdp"><h1>Linen, by Acme</h1><scalius-embed kind="buy-form" data-title="false"></scalius-embed><scalius-embed kind="reviews"></scalius-embed></article>',
-      "block:size_guide": (job) => `<p class="acme-guide">Sizes for ${(job.data as { product: { title: string } }).product.title}</p>`,
+      "component:size_guide": (job) => `<p class="acme-guide">Sizes for ${(job.data as { product: { title: string } }).product.title}</p>`,
     });
     const { calls, response, page } = await renderProduct(theme());
     expect(response.status).toBe(200);
@@ -235,9 +238,9 @@ describe("a product-main skin", () => {
     });
     expect(JSON.stringify(product)).not.toContain('"stock"');
 
-    // The component block below the modules, drawn from the same projection.
-    expect(page.querySelector('[data-app-blocks="below"] .acme-guide')?.textContent).toBe("Sizes for Linen shirt");
-    expect(jobs.find(({ job }) => job.kind === "block")?.options?.jsonLd).toBe(false);
+    // The component in the product.below slot, drawn from the same projection.
+    expect(page.querySelector('[data-app-slot="product.below"] .acme-guide')?.textContent).toBe("Sizes for Linen shirt");
+    expect(jobs.find(({ job }) => job.kind === "component")?.options?.jsonLd).toBe(false);
 
     // Structured data stays core's.
     const jsonLd = Array.from(page.querySelectorAll('script[type="application/ld+json"]')).map((node) => JSON.parse(node.textContent ?? "{}")["@type"]);
@@ -340,6 +343,52 @@ describe("an app header skin", () => {
     expect(page.querySelector("#mobile-tab-bar")).toBeNull();
     const data = jobs.find(({ job }) => job.target === "header")!.job.data as { phoneNavigation?: unknown };
     expect(data.phoneNavigation).toEqual({ menu: "accordion", tabBar: false });
+  });
+});
+
+describe("the header.actions slot", () => {
+  const points = () => '<a class="acme-points" href="/apps/acme.theme/points">120 points</a>';
+  const withHeader = (): StorefrontThemeDocument => {
+    const document = theme(null);
+    return { ...document, apps: { skins: { ...document.apps?.skins, header: { app: "acme.theme/bar", values: {} } } } } as StorefrontThemeDocument;
+  };
+
+  it("draws an app's points in the core header, in the page's one batch, with no new read", async () => {
+    const jobs = app({ "component:points": points });
+    const { calls, page } = await renderProduct(theme(null));
+    expect(page.querySelector('#site-header .hdr-actions [data-app-slot="header.actions"] .acme-points')?.textContent).toBe("120 points");
+    expect(jobs.filter(({ job }) => job.kind === "component" && job.target === "header.actions")).toHaveLength(1);
+    expect(calls.filter((call) => call.startsWith("/api/v1/storefront/batch"))).toHaveLength(1);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("draws them where an app header skin places the slot, and nothing where it does not", async () => {
+    app({ header: () => '<header class="acme-header"><nav><scalius-embed kind="slot" data-name="header.actions"></scalius-embed></nav></header>', "component:points": points });
+    const { page } = await renderProduct(withHeader());
+    expect(page.querySelector('.acme-header nav [data-app-slot="header.actions"] .acme-points')?.textContent).toBe("120 points");
+    expect(page.querySelector("#site-header")).toBeNull();
+    app({ header: () => '<header class="acme-header"></header>', "component:points": points });
+    expect((await renderProduct(withHeader())).page.querySelector(".acme-points")).toBeNull();
+  });
+
+  it("draws them in Noor's own header skin (the packed module)", async () => {
+    const { BUNDLED_STOREFRONT_EXTENSIONS } = await server.ssrLoadModule("/src/extensions/bundled.gen.ts") as { BUNDLED_STOREFRONT_EXTENSIONS: Record<string, { module(): Promise<{ default: { render(batch: unknown): { results: Array<{ html?: string }> } } }> }> };
+    const noor = (await BUNDLED_STOREFRONT_EXTENSIONS["scalius.noor"]!.module()).default;
+    const { NOOR_EXTENSION } = await server.ssrLoadModule("/src/gallery/noor.ts") as { NOOR_EXTENSION: { skins: Array<{ id: string; settings: never }> } };
+    const { resolveStorefrontSettings } = await server.ssrLoadModule("@scalius/shared/plugins/storefront-components") as { resolveStorefrontSettings: (schema: never, stored: unknown, data: unknown) => Record<string, unknown> };
+    const settings = resolveStorefrontSettings(NOOR_EXTENSION.skins.find((skin) => skin.id === "noor_header")!.settings, {}, { image: () => null, products: () => [] });
+    app({
+      header: (job) => noor.render({ abi: 1, context: { store: { name: "Nakshi Ghor", currency: "BDT", locale: "en-BD", language: "en", timeZone: "Asia/Dhaka" }, page: { kind: "product", path: "/products/linen" }, assets: "/_x/", preview: false }, jobs: [{ ...job, id: "h", component: "noor_header", settings }] }).results.map((result) => result.html ?? (() => { throw new Error(JSON.stringify(result)); })())[0]!,
+      "component:points": points,
+    });
+    const { page } = await renderProduct(withHeader());
+    expect(page.querySelector('.noor-header-end [data-app-slot="header.actions"] .acme-points')?.textContent).toBe("120 points");
+  });
+
+  it("renders nothing when its component draws nothing", async () => {
+    app({});
+    const { page } = await renderProduct(theme(null));
+    expect(page.querySelector('[data-app-slot="header.actions"]')).toBeNull();
   });
 });
 

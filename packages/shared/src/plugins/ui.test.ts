@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  PLUGIN_UI_LIMITS,
+  PLUGIN_UI_SURFACES,
   parsePluginUiActionResult,
   parsePluginUiDocument,
   pluginUiRouteActions,
@@ -22,7 +22,7 @@ describe("plugin UI tree", () => {
       type: "page",
       title: "Wishlist",
       description: "What buyers save",
-      actions: [{ type: "button", label: "Export", action: { route: "export" } }],
+      actions: [{ type: "button", label: "Export", action: { kind: "route", route: "export" } }],
       children: [
         { type: "section", title: "Today", children: [{ type: "stat", label: "Wishes", value: 12, help: "since midnight" }] },
         {
@@ -33,7 +33,7 @@ describe("plugin UI tree", () => {
             { type: "columns", children: [{ type: "heading", text: "One", level: 3 }, { type: "text", text: "Two", tone: "neutral", size: "sm", emphasis: "mono" }] },
           ],
         },
-        { type: "banner", tone: "warning", title: "Heads up", text: "Plain text <b>only</b>", actions: [{ type: "button", label: "Fix", to: { kind: "app-page", page: "settings" } }] },
+        { type: "banner", tone: "warning", title: "Heads up", text: "Plain text <b>only</b>", actions: [{ type: "button", label: "Fix", action: { kind: "navigate", to: { kind: "app-page", page: "settings" } } }] },
         { type: "key-value", items: [{ label: "Plan", value: "Pro" }, { label: "Active", value: true }, { label: "Seats", value: null }] },
         {
           type: "table",
@@ -53,13 +53,13 @@ describe("plugin UI tree", () => {
           pagination: { next: "c2", previous: null, total: 40 },
           empty: { title: "No wishes yet" },
         },
-        { type: "empty-state", title: "Nothing here", text: "Add one", action: { type: "button", label: "Add", action: { route: "add", method: "POST" } } },
+        { type: "empty-state", title: "Nothing here", text: "Add one", action: { type: "button", label: "Add", action: { kind: "route", route: "add", method: "POST" } } },
         { type: "image", src: "https://cdn.example.com/a.png", alt: "Chart", width: 400, height: 200 },
         { type: "link", text: "Docs", to: { kind: "external", href: "https://example.com/docs" } },
         { type: "divider" },
         {
           type: "form",
-          action: { route: "save", method: "PUT", body: { scope: "all" } },
+          action: { kind: "route", route: "save", method: "PUT", body: { scope: "all" } },
           submitLabel: "Save",
           confirm: { title: "Save?", destructive: false },
           children: [
@@ -96,30 +96,30 @@ describe("plugin UI tree", () => {
   });
 
   it("posts only to a route name with plain path segments", () => {
-    expect(issues(page({ type: "button", label: "Go", action: { route: "../../admin" } })).reason).toBe("invalid");
-    expect(issues(page({ type: "button", label: "Go", action: { route: "go", subpath: "../x" } })).reason).toBe("invalid");
-    expect(issues(page({ type: "button", label: "Go", action: { route: "go", method: "GET" } })).reason).toBe("invalid");
+    expect(issues(page({ type: "button", label: "Go", action: { kind: "route", route: "../../admin" } })).reason).toBe("invalid");
+    expect(issues(page({ type: "button", label: "Go", action: { kind: "route", route: "go", subpath: "../x" } })).reason).toBe("invalid");
+    expect(issues(page({ type: "button", label: "Go", action: { kind: "route", route: "go", method: "GET" } })).reason).toBe("invalid");
     expect(issues(page({ type: "button", label: "Go" })).reason).toBe("invalid");
-    expect(issues(page({ type: "button", label: "Go", action: { route: "go" }, to: { kind: "app-page", page: "x" } })).reason).toBe("invalid");
+    expect(issues(page({ type: "button", label: "Go", action: { kind: "route", route: "go" }, to: { kind: "app-page", page: "x" } })).reason).toBe("invalid");
   });
 
   it("keeps inputs inside forms, names unique, forms unnested and pages at the root", () => {
     expect(issues(page({ type: "text-field", name: "a", label: "A" })).issues[0]!.message).toMatch(/inside a form/);
     expect(issues(page({
-      type: "form", action: { route: "s" }, submitLabel: "Save",
+      type: "form", action: { kind: "route", route: "s" }, submitLabel: "Save",
       children: [{ type: "checkbox", name: "a", label: "A" }, { type: "checkbox", name: "a", label: "B" }],
     })).issues[0]!.message).toMatch(/Two inputs/);
     expect(issues(page({
-      type: "form", action: { route: "s" }, submitLabel: "Save",
-      children: [{ type: "form", action: { route: "t" }, submitLabel: "Inner", children: [] }],
+      type: "form", action: { kind: "route", route: "s" }, submitLabel: "Save",
+      children: [{ type: "form", action: { kind: "route", route: "t" }, submitLabel: "Inner", children: [] }],
     })).issues[0]!.message).toMatch(/do not nest/);
     expect(issues(page({ type: "page", children: [] })).issues[0]!.message).toMatch(/only ever the root/);
-    expect(issues(page({ type: "form", action: { route: "s" }, submitLabel: "S", children: [{ type: "select", name: "m", label: "M", options: [{ value: "a", label: "A" }], value: "b" }] })).reason).toBe("invalid");
+    expect(issues(page({ type: "form", action: { kind: "route", route: "s" }, submitLabel: "S", children: [{ type: "select", name: "m", label: "M", options: [{ value: "a", label: "A" }], value: "b" }] })).reason).toBe("invalid");
   });
 
   it("bounds size, depth and table shape", () => {
     let deep: unknown = { type: "text", text: "leaf" };
-    for (let level = 0; level < PLUGIN_UI_LIMITS.maxDepth + 1; level += 1) deep = { type: "stack", children: [deep] };
+    for (let level = 0; level < PLUGIN_UI_SURFACES.admin.maxDepth + 1; level += 1) deep = { type: "stack", children: [deep] };
     expect(issues(doc(deep)).issues[0]!.message).toMatch(/nests at most/);
 
     const many = Array.from({ length: 100 }, () => ({ type: "stack", children: Array.from({ length: 5 }, () => ({ type: "divider" })) }));
@@ -134,10 +134,10 @@ describe("plugin UI tree", () => {
 
   it("lists every route action for the dashboard to check against declared routes", () => {
     const tree = page(
-      { type: "button", label: "A", action: { route: "a" } },
-      { type: "card", actions: [{ type: "button", label: "B", action: { route: "b", method: "DELETE" } }], children: [] },
-      { type: "form", action: { route: "c" }, submitLabel: "C", children: [] },
-      { type: "empty-state", title: "E", action: { type: "button", label: "D", action: { route: "d" } } },
+      { type: "button", label: "A", action: { kind: "route", route: "a" } },
+      { type: "card", actions: [{ type: "button", label: "B", action: { kind: "route", route: "b", method: "DELETE" } }], children: [] },
+      { type: "form", action: { kind: "route", route: "c" }, submitLabel: "C", children: [] },
+      { type: "empty-state", title: "E", action: { type: "button", label: "D", action: { kind: "route", route: "d" } } },
     );
     const result = parsePluginUiDocument(tree);
     if (!result.ok) throw new Error("expected a valid tree");
@@ -149,5 +149,59 @@ describe("plugin UI tree", () => {
     expect(parsePluginUiActionResult({ errors: { title: "Required" } })).toEqual({ errors: { title: "Required" } });
     expect(parsePluginUiActionResult({ ok: true })).toEqual({});
     expect(parsePluginUiActionResult({ navigate: { kind: "external", href: "javascript:x" } })).toEqual({});
+  });
+});
+
+describe("one tree, two surfaces", () => {
+  const shared = (to: unknown, src: unknown, action: unknown) => doc({
+    type: "stack",
+    children: [
+      { type: "heading", text: "Points", level: 3 },
+      { type: "text", text: "120 points", tone: "success", emphasis: "strong" },
+      { type: "badge", text: "Gold", tone: "info" },
+      { type: "banner", tone: "info", title: "Earn more", text: "Every order counts." },
+      { type: "key-value", items: [{ label: "Balance", value: 120 }, { label: "Member", value: true }, { label: "Since", value: null }] },
+      { type: "image", src, alt: "Badge" },
+      { type: "link", text: "Rewards", to },
+      { type: "divider" },
+      { type: "button", label: "Act", action },
+    ],
+  });
+
+  it("draws the same nodes, with the same value types, on both surfaces", () => {
+    expect(parsePluginUiDocument(shared({ kind: "app-page", page: "rewards" }, "https://cdn.example.com/b.png", { kind: "route", route: "redeem" }), "admin").ok).toBe(true);
+    expect(parsePluginUiDocument(shared({ kind: "store", path: "/pages/rewards" }, { app: "public/badge.svg" }, { kind: "route", route: "redeem" }), "buyer").ok).toBe(true);
+    // One action union: route on both, cart on the buyer surface, navigate on both.
+    expect(parsePluginUiDocument(doc({ type: "button", label: "Redeem", action: { kind: "cart", op: "apply_code", code: "POINTS" } }), "buyer").ok).toBe(true);
+    expect(parsePluginUiDocument(doc({ type: "button", label: "Add", action: { kind: "cart", op: "add_line", variantId: "v1", quantity: 2 } }), "buyer").ok).toBe(true);
+    expect(parsePluginUiDocument(doc({ type: "button", label: "Open", action: { kind: "navigate", to: { kind: "store", path: "/cart" } } }), "buyer").ok).toBe(true);
+    expect(parsePluginUiDocument(doc({ type: "button", label: "Open", action: { kind: "navigate", to: { kind: "resource", resource: "order", id: "o1" } } }), "admin").ok).toBe(true);
+  });
+
+  it("holds each surface to its allowlist", () => {
+    // Admin-only nodes, links and images on the buyer surface.
+    expect(parsePluginUiDocument(doc({ type: "page", children: [] }), "buyer").ok).toBe(false);
+    expect(parsePluginUiDocument(doc({ type: "table", columns: [{ key: "a", label: "A" }], rows: [] }), "buyer")).toMatchObject({ ok: false, issues: [{ message: expect.stringMatching(/not shown on the buyer surface/) }] });
+    expect(parsePluginUiDocument(doc({ type: "form", action: { kind: "route", route: "s" }, submitLabel: "S", children: [] }), "buyer").ok).toBe(false);
+    expect(parsePluginUiDocument(doc({ type: "link", text: "x", to: { kind: "external", href: "https://tracker.test" } }), "buyer").ok).toBe(false);
+    expect(parsePluginUiDocument(doc({ type: "image", src: "https://tracker.test/p.gif", alt: "" }), "buyer").ok).toBe(false);
+    // Buyer-only nodes, actions and links on the admin surface.
+    expect(issues(doc({ type: "field", attribute: "gift" })).issues[0]!.message).toMatch(/not shown on the admin surface/);
+    expect(issues(doc({ type: "button", label: "Add", action: { kind: "cart", op: "apply_code", code: "X" } })).issues[0]!.message).toMatch(/cart action/);
+    expect(issues(doc({ type: "link", text: "x", to: { kind: "store", path: "/cart" } })).issues[0]!.message).toMatch(/store link/);
+    expect(issues(doc({ type: "image", src: { media: "m1" }, alt: "" })).issues[0]!.message).toMatch(/https/);
+    expect(issues(page({ type: "table", columns: [{ key: "a", label: "A" }], rows: [{ cells: { a: { text: "x", to: { kind: "store", path: "/x" } } } }] })).issues[0]!.message).toMatch(/store link/);
+    // Attached buttons are held to the surface too.
+    expect(parsePluginUiDocument(doc({ type: "banner", tone: "info", actions: [{ type: "button", label: "x", action: { kind: "navigate", to: { kind: "app-page", page: "p" } } }] }), "buyer").ok).toBe(false);
+  });
+
+  it("bounds the buyer surface tighter than the dashboard", () => {
+    let deep: unknown = { type: "text", text: "leaf" };
+    for (let level = 0; level < PLUGIN_UI_SURFACES.buyer.maxDepth; level += 1) deep = { type: "stack", children: [deep] };
+    expect(parsePluginUiDocument(doc(deep), "admin").ok).toBe(true);
+    expect(parsePluginUiDocument(doc(deep), "buyer")).toMatchObject({ ok: false, issues: [{ message: expect.stringMatching(/nests at most 8/) }] });
+    const wide = doc({ type: "stack", children: Array.from({ length: 20 }, () => ({ type: "text", text: "x".repeat(2000) })) });
+    expect(parsePluginUiDocument(wide, "admin").ok).toBe(true);
+    expect(parsePluginUiDocument(wide, "buyer")).toMatchObject({ ok: false, reason: "too_large" });
   });
 });

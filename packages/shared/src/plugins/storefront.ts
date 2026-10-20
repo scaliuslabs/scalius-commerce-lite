@@ -1,8 +1,8 @@
-// Public storefront head contributions and proxy pages, plus the targets
-// core uses for declarative Buyer UI. Components render at the edge.
+// Public storefront head contributions and proxy pages (slots: storefront-protocol.ts).
 
 import { z } from "zod";
 import { serializeSchemaJsonLd } from "./html";
+import { pluginKeySchema } from "./manifest-patterns";
 
 export { serializeJsonLd } from "./html";
 
@@ -26,36 +26,6 @@ export function pluginSurfaceKey(pluginId: string, type: string): string {
 export function parsePluginSurfaceKey(key: string): { pluginId: string; type: string } | null {
   const match = PLUGIN_SURFACE_KEY_PATTERN.exec(key);
   return match ? { pluginId: match[1]!, type: match[2]! } : null;
-}
-
-// ── Checkout and customer-account blocks ─────────────────────────────────
-
-/** Targets for declarative Buyer UI. App code never renders on these pages. */
-export const PLUGIN_BLOCK_TARGETS = [
-  // Checkout: the information step (cart page) and the payment step.
-  "purchase.checkout.contact.render-after",
-  "purchase.checkout.shipping-option-list.render-after",
-  "purchase.checkout.cart-line-list.render-after",
-  "purchase.checkout.payment-method-list.render-after",
-  "purchase.checkout.actions.render-before",
-  // The thank-you page.
-  "purchase.thank-you.customer-information.render-after",
-  // Customer accounts: the order status page, the orders list and the profile.
-  "customer-account.order-status.block.render",
-  "customer-account.order-index.block.render",
-  "customer-account.profile.block.render",
-] as const;
-export type PluginBlockTarget = (typeof PLUGIN_BLOCK_TARGETS)[number];
-
-/** Buyer UI page groups. */
-export const PLUGIN_BLOCK_PAGES = ["checkout", "order", "account"] as const;
-export type PluginBlockPage = (typeof PLUGIN_BLOCK_PAGES)[number];
-
-/** The page group a target draws on. */
-export function pluginBlockPage(target: PluginBlockTarget): PluginBlockPage {
-  if (target.startsWith("purchase.checkout.")) return "checkout";
-  if (target === "purchase.thank-you.customer-information.render-after" || target === "customer-account.order-status.block.render") return "order";
-  return "account";
 }
 
 // ── Head contributions ────────────────────────────────────────────────────
@@ -133,12 +103,26 @@ export function sanitizePluginHead(value: unknown): PluginHead {
 /** A same-store path to send the browser to (`/apps/<id>/thanks`, `/products/x`), never another origin. */
 export const pluginRedirectPathSchema = z.string().max(600).regex(/^\/(?![/\\])[^\s\\]*$/, "Use a path on this store.");
 
+/** Most JSON bytes of the props one app page hands its component. */
+export const PLUGIN_PAGE_PROPS_MAX_BYTES = 64 * 1024;
+
+/**
+ * What a proxied route answers for a browser navigation: a page the store
+ * draws in its layout, its body drawn by the app's own component (a
+ * `storefront.components` entry targeting `page`) from `props`. The
+ * component's JSX escapes every string in them; its forms post only to the
+ * app's own routes (`/apps/<plugin id>/…`).
+ */
 export const pluginPageOutputSchema = z.union([
   z.object({
     page: z.object({
       title: z.string().trim().min(1).max(120),
       description: z.string().trim().max(300).optional(),
-      html: z.string(),
+      /** The component that draws the page body (its manifest type). */
+      component: pluginKeySchema(),
+      /** What the component gets as `props` (JSON). */
+      props: z.record(z.string().max(64), z.unknown()).default({})
+        .refine((props) => new TextEncoder().encode(JSON.stringify(props)).byteLength <= PLUGIN_PAGE_PROPS_MAX_BYTES, "A page's props are at most 64 KiB."),
       head: z.unknown().optional(),
       /** Proxy pages are `noindex` unless the app says the page is public content. */
       index: z.boolean().optional(),

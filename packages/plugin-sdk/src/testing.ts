@@ -41,17 +41,18 @@ import {
 } from "./runtime";
 
 /**
- * The dashboard's own checks, for tests: whether an admin route's answer is
- * a valid UI document (and which routes its buttons and forms call), and how
- * an action's answer is read.
+ * The host's own checks, for tests: whether a route's or `buyer.ui`
+ * function's answer is a valid UI document of its surface
+ * (`parsePluginUiDocument(value, "buyer")`), which routes its buttons and
+ * forms call, and how an admin action's answer is read.
  */
 export {
   parsePluginUiActionResult,
   parsePluginUiDocument,
+  pluginUiActions,
   pluginUiRouteActions,
   sanitizePluginHead,
 } from "@scalius/shared/plugins";
-export { sanitizePluginHtml } from "@scalius/shared/plugins/html";
 export { fixtures } from "./fixtures";
 export {
   contractSchemaIssue,

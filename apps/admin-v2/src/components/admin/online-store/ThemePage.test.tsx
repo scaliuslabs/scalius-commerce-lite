@@ -234,7 +234,7 @@ describe("themes page", () => {
       name: "Acme Studio",
       sections: [],
       skins: [],
-      productBlocks: [],
+      components: [],
       pagePresets: [],
       templates: [
         { key: "acme.studio/bold", id: "bold", name: "Studio Bold", description: "Big type, quiet colours.",

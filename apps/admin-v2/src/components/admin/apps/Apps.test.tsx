@@ -146,7 +146,7 @@ function detail(overrides: Record<string, unknown> = {}) {
     cron: [],
     storage: [],
     customFields: [],
-    storefront: { proxy: false, head: false, sections: [], productBlocks: [], scripts: [], themeProblems: [] },
+    storefront: { proxy: false, head: false, sections: [], components: [], scripts: [], themeProblems: [] },
     admin: { pages: [], cards: [], actions: [], widgets: [] },
     limits: { cpuMs: 50, wallMs: 1000, subrequests: 20, invocationsPerMinute: 60, storageBytes: 10 * 1024 * 1024 },
     storageUsage: { bytes: 0, measuredAt: null },
@@ -495,7 +495,7 @@ describe("App page", () => {
   it("reports the templates and page presets the store's theme cannot use", async () => {
     await renderApp(detail({
       storefront: {
-        proxy: false, head: false, sections: [], productBlocks: [], scripts: [],
+        proxy: false, head: false, sections: [], components: [], scripts: [],
         themeProblems: [{ kind: "page-preset", id: "launch", name: "Launch page", problem: "Version 9 is older than the oldest readable version (10)." }],
       },
     }), VIEWER);

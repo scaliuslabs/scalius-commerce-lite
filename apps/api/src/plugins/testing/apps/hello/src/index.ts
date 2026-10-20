@@ -201,7 +201,7 @@ export default definePlugin({
           ], {
             title: "Hello",
             description: "What the Hello app did for this store.",
-            actions: [ui.button("Reset counters", { route: "reset" }, {
+            actions: [ui.button("Reset counters", ui.route("reset"), {
               tone: "critical",
               confirm: { title: "Reset the counters?", text: "Greetings stay; the counts start again at zero.", confirmLabel: "Reset", destructive: true },
             })],

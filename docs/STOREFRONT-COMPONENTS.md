@@ -39,7 +39,7 @@ The storefront runs the module in one of two loaders, with the same input and th
 | Point | Declare (`storefront.*`) | Implement (`defineStorefront`) | The theme stores |
 | --- | --- | --- | --- |
 | Component section | `sections: [{ type, name, settings, reads? }]` (no `route`) | `sections[type]` | a section `{ type: "app", settings: { app: "<id>/<type>", values } }` |
-| Component product block | `productBlocks: [{ type, name, placement, settings }]` (no `route`) | `blocks[type]` | `blocks.product.apps: [{ id, app: "<id>/<type>", values }]` |
+| Component (slots, app pages) | `components: [{ type, name, targets, settings }]` (no `route`) | `components[type]` | product slots: `blocks.product.apps: [{ id, app: "<id>/<type>", values }]`; other slots: nothing (every active app's component, defaults) |
 | Skin of a unit | `skins: [{ id, target, name, settings }]` (≤ 30) | `skins[id]` | `apps.skins.<target>: { app: "<id>/<skin id>", values }` |
 | Skin of a core section | `skins: [{ id, target: "section:<type>", … }]` | `skins[id]` | the core section's `skin: { app, values }` |
 | Template | `templates: [{ id, name, themeVersion?, theme }]` | | `apps.template` (a label) |
@@ -48,7 +48,13 @@ The storefront runs the module in one of two loaders, with the same input and th
 | Stylesheet | `stylesheet: true` | `src/storefront.css` | |
 | Browser hosts | `connect: ["api.example.com"]` | | |
 
-Component sections and product blocks have no render route: they run at the edge with data supplied by the existing page batch and can show product cards, images and core embeds. A section may declare bounded public object `reads`; these add data to its input, not network access to its renderer. Private buyer pages use declarative `buyer.ui` functions rendered by core. The static `storefront.blocks` and `request.render` APIs are retired; only proxy pages (`/apps/<id>/*`) accept route-returned page HTML.
+Component sections and components have no render route: they run at the edge with data supplied by the existing page batch. A section may declare bounded public object `reads`; these add data to its input, not network access to its renderer. Private buyer pages use declarative `buyer.ui` functions (the `ui` tree, buyer surface) rendered by core in their UI slots. No route returns HTML: a proxy page (`/apps/<id>/*`) answers `{ page: { title, component, props } }` and the store draws the app's `page` component from `props`.
+
+## Slots
+
+A slot is a named place where apps add their piece (`storefront-protocol.ts`). Component slots are on public pages: `header.actions`, `footer.columns` (every active app's component that targets them, with default values) and `product.buy_box.before`, `product.buy_box.after`, `product.below` (arranged by the merchant as the product page's app blocks). Core's header, footer and product page place them; a header or footer skin places its own with `<Slot name="header.actions" />` / `<Slot name="footer.columns" />`. A component gets `{ target, settings, context }`, plus `data` and `instanceId` in a product slot and `props` on `page`, and embeds nothing. UI slots are on the buyer's pages (`cart.page.summary`, `checkout.*`, `order.confirmation`, `account.*`): `buyer.ui` functions fill them with a `ui` tree. An empty slot renders nothing and costs no read.
+
+Islands on a product page get `context.product`: `state()` (`{ variantId, quantity, inputs }`) and `onChange(listener)`; `data.product.buyerInputs` lists the inputs.
 
 A **page preset** is a ready-made landing page: when the merchant makes a new landing page (`/pages/<slug>`), the editor offers "a blank page" or the presets of the active apps, and asks for a product when a preset's sections have `product` settings, which it fills in. Noor's "Product campaign" preset builds a complete Facebook-ad page (offer, promises, features, steps, reviews, questions, order form) in one step; every section stays editable and reorderable.
 
@@ -73,7 +79,7 @@ A **skin** is app markup for a core-owned unit. It gets the unit's public projec
 - `listing-main` draws the listing between the collection template's sections. The page links are numbered links on every listing, so crawlers reach every product.
 - A core section's projection is declared in the protocol, one interface per type (`StorefrontSectionSkinSettings`, `StorefrontHeroSkinSettings`, ...), each with its own version (`STOREFRONT_SECTION_SKIN_PROJECTIONS`, the `version` in `data`); core's stored settings never reach a skin directly. The host maps a section to it in one place (`coreSectionSkinSettings`): `image`, `phoneImage` and `mediaId` → `image`/`phoneImage` as `StorefrontImage | null`; a product `source` → `products` (`StorefrontProductList`: `{ title, url, cards }`, as many cards as the core section shows); `categoryIds`/`collectionIds` → `categories`/`collections` (`StorefrontTile[]`); `promotionId` → `promotion` (`{ endsAt } | null`); a Specifications custom field → `objectFields`; a delivery-facts source → the store's facts; hidden blocks and the editor's `hidden`/`bindings` keys left out. A projection only gains optional fields; when core changes a section, the host adapts it so a skin's input stays the same. A brand wall's brands arrive in `tiles`, a collections section's fallback products in `cards`. `aboveFold` is true for the homepage's lead section (the first section with photos): load its first row of photos eagerly, the likely largest at high priority, as the core section does. `recently-viewed`, `endless-grid` and `objects` have no skin.
 - JSON-LD stays core's on product and listing pages: the host strips app JSON-LD from `product-main`, `listing-main` and product blocks.
-- **Product blocks** (component `productBlocks`) draw as `block` jobs at `product.buy-box` (in the buy box, after the buttons) or `product.below` (after the modules), from the same `StorefrontProductPage`.
+- **Product slots**: a component targeting `product.buy_box.before`, `product.buy_box.after` or `product.below` draws as a `component` job there, from the same `StorefrontProductPage`.
 
 ## Settings
 

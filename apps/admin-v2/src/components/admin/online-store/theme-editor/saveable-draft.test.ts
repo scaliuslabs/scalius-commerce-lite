@@ -12,7 +12,7 @@ const STUDIO: ThemeApp = {
   name: "Acme Studio",
   sections: [],
   templates: [], pagePresets: [],
-  productBlocks: [],
+  components: [],
   skins: [{
     key: "acme.studio/header", id: "header", target: "header", name: "Studio header", description: null,
     settings: [{ key: "tagline", label: "Tagline", help: null, type: "text", required: true, options: null, default: null, min: null, max: null, integer: false, maxLength: 20 }],

@@ -4,7 +4,7 @@
 // directory section from the published seller profiles. Themes that draw
 // their own seller line (Bazaar) read the same fields.
 
-import { defineStorefront, t, type BlockProps, type SectionProps } from "@scalius/plugin-sdk/storefront";
+import { defineStorefront, t, type ComponentProps, type SectionProps } from "@scalius/plugin-sdk/storefront";
 
 const NAME = "scalius.sellers.seller_name";
 const HANDLE = "scalius.sellers.seller_handle";
@@ -17,7 +17,9 @@ function sellerOf(fields: Record<string, unknown>): { name: string; url: string 
   return { name: name.slice(0, 120), url: /^[a-z0-9-]{1,100}$/.test(handle) ? `/apps/scalius.sellers/store/${handle}` : null };
 }
 
-function SoldBy({ data, context, settings }: BlockProps<{ label: string | null }>) {
+function SoldBy(input: ComponentProps<{ label: string | null }>) {
+  if (!("data" in input)) return null;
+  const { data, context, settings } = input;
   const seller = sellerOf(data.product.fields);
   if (!seller) return null;
   const label = settings.label?.trim() || t(context, { en: "Sold by", bn: "বিক্রেতা" });
@@ -28,7 +30,9 @@ function SoldBy({ data, context, settings }: BlockProps<{ label: string | null }
   );
 }
 
-function AboutSeller({ data, context }: BlockProps) {
+function AboutSeller(input: ComponentProps) {
+  if (!("data" in input)) return null;
+  const { data, context } = input;
   const seller = sellerOf(data.product.fields);
   if (!seller) return null;
   return (
@@ -65,5 +69,5 @@ function Directory({ objects, settings, context }: SectionProps<{ heading: strin
 
 export default defineStorefront({
   sections: { seller_directory: Directory },
-  blocks: { sold_by: SoldBy, about_seller: AboutSeller },
+  components: { sold_by: SoldBy, about_seller: AboutSeller },
 });

@@ -987,7 +987,7 @@ describe("app sections", () => {
   });
   const GREETING_LAYOUT = { currency: { code: "BDT", symbol: "৳" }, appExtensions: [{
     pluginId: "acme.hello", version: "1.0.0", source: "bundled", release: "a".repeat(64),
-    sections: ["greeting"], sectionSettings: { greeting: [] }, skins: [], blocks: [], islands: [], stylesheet: false, connect: [],
+    sections: ["greeting"], sectionSettings: { greeting: [] }, skins: [], components: [], islands: [], stylesheet: false, connect: [],
   }] } as unknown as import("@/lib/api/storefront").LayoutData;
 
   async function renderWith(sections: StorefrontSection[], content: HomepageContent, extra: Record<string, unknown>): Promise<Document> {
@@ -1032,7 +1032,7 @@ describe("app sections", () => {
     try {
       const page = await requestRuntime.run({ layout: Promise.resolve({ currency: { code: "BDT", symbol: "৳" }, appExtensions: [{
         pluginId: "acme.hello", version: "1.0.0", source: "bundled", release: "a".repeat(64),
-        sections: ["greeting"], sectionSettings: { greeting: [] }, skins: [], blocks: [], islands: [], stylesheet: false, connect: [],
+        sections: ["greeting"], sectionSettings: { greeting: [] }, skins: [], components: [], islands: [], stylesheet: false, connect: [],
       }] } as unknown as import("@/lib/api/storefront").LayoutData) }, () => renderWith(sections, content, { headerLeadSectionId: "lead" }));
       expect(draw).toHaveBeenCalledOnce();
       expect(page.querySelector("template[data-scalius-lead-empty]") !== null).toBe(!html?.trim());
@@ -1064,7 +1064,7 @@ describe("app sections", () => {
     try {
       await requestRuntime.run({ layout: Promise.resolve({ currency: { code: "BDT", symbol: "৳" }, appExtensions: [{
         pluginId: "acme.skin", version: "1.0.0", source: "bundled", release: "b".repeat(64),
-        sections: [], sectionSettings: {}, skins: [{ id: "rail", target: "section:product-rail", settings: [] }], blocks: [], islands: [], stylesheet: false, connect: [],
+        sections: [], sectionSettings: {}, skins: [{ id: "rail", target: "section:product-rail", settings: [] }], components: [], islands: [], stylesheet: false, connect: [],
       }] } as unknown as import("@/lib/api/storefront").LayoutData) }, () => renderWith(sections, content, {}));
     } finally {
       draw.mockRestore();
@@ -1112,7 +1112,7 @@ describe("app sections", () => {
 describe("section skins", () => {
   const SKIN_LAYOUT = { currency: { code: "BDT", symbol: "৳" }, appExtensions: [{
     pluginId: "acme.hello", version: "1.0.0", source: "bundled", release: "b".repeat(64),
-    sections: [], sectionSettings: {}, blocks: [], islands: [], stylesheet: false, connect: [],
+    sections: [], sectionSettings: {}, components: [], islands: [], stylesheet: false, connect: [],
     skins: [{ id: "faq", target: "section:faq", settings: [] }, { id: "rail", target: "section:product-rail", settings: [] }],
   }] } as unknown as import("@/lib/api/storefront").LayoutData;
   const skinned = (each: StorefrontSection, app: string) => ({ ...each, skin: { app, values: {} } }) as StorefrontSection;

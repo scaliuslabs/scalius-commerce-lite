@@ -22,8 +22,7 @@ export const NOOR_EXTENSION: StorefrontExtension = {
   sections: storefront.sections.map((section) => section.type),
   sectionSettings: Object.fromEntries(storefront.sections.map((section) => [section.type, section.settings])),
   skins: storefront.skins.map(({ id, target, settings }) => ({ id, target: target as StorefrontSkinTarget, settings })),
-  blocks: storefront.productBlocks
-    .map((block) => ({ type: block.type, target: block.placement, settings: block.settings })),
+  components: storefront.components.map(({ type, targets, settings }) => ({ type, targets: [...targets], settings })),
   islands: storefront.islands.map((island) => island.name),
   stylesheet: storefront.stylesheet,
   connect: storefront.connect,

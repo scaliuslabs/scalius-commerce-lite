@@ -165,7 +165,7 @@ const cards = orders.map((order) => {
         {olderHref && <a href={olderHref} data-astro-prefetch="false" class={ui.secondaryButton}>{words.older}</a>}
       </div>
     )}
-    <div data-buyer-ui-target="customer-account.order-index.block.render" data-buyer-ui={JSON.stringify(summary?.buyerUi ?? [])} class="mt-8 empty:hidden"></div>
+    <div data-buyer-ui-target="account.overview" data-buyer-ui={JSON.stringify(summary?.buyerUi ?? [])} class="mt-8 empty:hidden"></div>
   </AccountShell>
 </Layout>
 

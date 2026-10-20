@@ -292,7 +292,7 @@ describe("app UI renderer", () => {
 
 const signupForm: PluginUiNode = {
   type: "form",
-  action: { route: "save", body: { step: "signup" } },
+  action: { kind: "route", route: "save", body: { step: "signup" } },
   submitLabel: "Save member",
   children: [
     { type: "text-field", name: "name", label: "Name", required: true, minLength: 3 },
@@ -359,7 +359,7 @@ describe("app forms", () => {
   });
 
   it("shows the app's own error on an input it sent with the tree", async () => {
-    await renderTree({ type: "form", action: { route: "save" }, submitLabel: "Save", children: [{ type: "text-field", name: "code", label: "Code", error: "That code expired." }] });
+    await renderTree({ type: "form", action: { kind: "route", route: "save" }, submitLabel: "Save", children: [{ type: "text-field", name: "code", label: "Code", error: "That code expired." }] });
     expect(field("Code").getAttribute("aria-invalid")).toBe("true");
     expect(text()).toContain("That code expired.");
   });
@@ -371,7 +371,7 @@ describe("app forms", () => {
       type: "button",
       label: "Reset counters",
       tone: "critical",
-      action: { route: "save" },
+      action: { kind: "route", route: "save" },
       confirm: { title: "Reset the counters?", text: "Counts start again at zero.", confirmLabel: "Reset", destructive: true },
     }, { host: surfaceHost });
 
@@ -391,26 +391,26 @@ describe("app forms", () => {
 
   it("opens the page an action names", async () => {
     route("POST", "save", () => ({ body: { navigate: { kind: "resource", resource: "order", id: "o9" } } }));
-    await renderTree({ type: "button", label: "Open order", action: { route: "save" } });
+    await renderTree({ type: "button", label: "Open order", action: { kind: "route", route: "save" } });
     await click(button("Open order"));
     await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: "/admin/orders/o9" }));
   });
 
   it("refuses a button whose route the app never declared, without calling it", async () => {
-    await renderTree({ type: "button", label: "Sneaky", action: { route: "undeclared" } });
+    await renderTree({ type: "button", label: "Sneaky", action: { kind: "route", route: "undeclared" } });
     await click(button("Sneaky"));
     expect(fetchMock).not.toHaveBeenCalled();
     expect(document.querySelector('[role="alert"]')?.textContent).toBe("This button isn't set up correctly, so nothing was sent.");
   });
 
   it("refuses a declared route with an undeclared method", async () => {
-    await renderTree({ type: "button", label: "Delete it", action: { route: "save", method: "DELETE" } });
+    await renderTree({ type: "button", label: "Delete it", action: { kind: "route", route: "save", method: "DELETE" } });
     await click(button("Delete it"));
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("disables actions for staff who may only view apps, and says why", async () => {
-    await renderTree({ type: "stack", children: [{ type: "button", label: "Run", action: { route: "save" } }, { type: "link", text: "Help", to: { kind: "external", href: "https://acme.example" } }] }, { permissions: VIEWER });
+    await renderTree({ type: "stack", children: [{ type: "button", label: "Run", action: { kind: "route", route: "save" } }, { type: "link", text: "Help", to: { kind: "external", href: "https://acme.example" } }] }, { permissions: VIEWER });
     expect(button("Run").disabled).toBe(true);
     expect(text()).toContain("Ask the store owner for access to use this app's actions.");
   });
@@ -423,9 +423,9 @@ describe("app surfaces", () => {
     let served = 0;
     route("GET", "dashboard", () => {
       served += 1;
-      return { body: doc({ type: "page", title: "Hello", children: [{ type: "text", text: `Served ${served}` }, { type: "button", label: "Swap", action: { route: "save" } }] }) };
+      return { body: doc({ type: "page", title: "Hello", children: [{ type: "text", text: `Served ${served}` }, { type: "button", label: "Swap", action: { kind: "route", route: "save" } }] }) };
     });
-    route("POST", "save", () => ({ body: { ui: doc({ type: "page", children: [{ type: "text", text: "Replaced tree" }, { type: "button", label: "Again", action: { route: "save", body: { again: true } } }] }) } }));
+    route("POST", "save", () => ({ body: { ui: doc({ type: "page", children: [{ type: "text", text: "Replaced tree" }, { type: "button", label: "Again", action: { kind: "route", route: "save", body: { again: true } } }] }) } }));
     await render(<PluginSurface app={app} route="dashboard" query={{}} variant="page" title="Overview" />);
     await vi.waitFor(() => expect(text()).toContain("Served 1"));
     expect(document.querySelector("h1")?.textContent).toBe("Hello");
@@ -443,7 +443,7 @@ describe("app surfaces", () => {
 
   it("draws one tab of a tabbed app page without a header of its own, its description and actions first", async () => {
     route("GET", "dashboard", () => ({
-      body: doc({ type: "page", title: "Tab title", description: "What this tab shows.", actions: [{ type: "button", label: "Reset", action: { route: "save" } }], children: [{ type: "text", text: "Tab body" }] }),
+      body: doc({ type: "page", title: "Tab title", description: "What this tab shows.", actions: [{ type: "button", label: "Reset", action: { kind: "route", route: "save" } }], children: [{ type: "text", text: "Tab body" }] }),
     }));
     await render(<PluginSurface app={app} route="dashboard" query={{}} variant="tab" title="Summary" />);
     await vi.waitFor(() => expect(text()).toContain("Tab body"));
@@ -500,7 +500,7 @@ describe("app surfaces", () => {
 
 describe("app resource cards", () => {
   it("draws each app card with one request, keeping a failing card to itself", async () => {
-    route("GET", "order-card", (url) => ({ body: doc({ type: "stack", children: [{ type: "text", text: `Summary for ${url.searchParams.get("id")}` }, { type: "button", label: "Greet", action: { route: "save", body: { kind: "greet" } } }] }) }));
+    route("GET", "order-card", (url) => ({ body: doc({ type: "stack", children: [{ type: "text", text: `Summary for ${url.searchParams.get("id")}` }, { type: "button", label: "Greet", action: { kind: "route", route: "save", body: { kind: "greet" } } }] }) }));
     route("GET", "risk-card", () => ({ status: 504, body: { success: false, error: { code: "APP_TIMEOUT", message: "The app took too long to answer." } } }));
     route("POST", "save", () => ({ body: { toast: { message: "Greeted." } } }));
     await render(

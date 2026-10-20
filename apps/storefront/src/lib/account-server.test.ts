@@ -15,7 +15,7 @@ beforeEach(() => api.fetch.mockReset());
 describe("account summary buyer UI", () => {
   it("keeps private UI from the existing authenticated summary read", async () => {
     const buyerUi = [{
-      appId: "example.loyalty", releaseId: "release_1", target: "customer-account.order-index.block.render",
+      appId: "example.loyalty", releaseId: "release_1", target: "account.overview",
       ui: { type: "text", text: "You have 200 points" }, attributes: [], values: {},
     }];
     api.fetch.mockResolvedValue(Response.json({ success: true, data: { unreadInbox: 2, buyerUi } }));

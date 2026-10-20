@@ -1,7 +1,7 @@
 // App storefront components in a page (docs/STOREFRONT-COMPONENTS.md): which
 // active apps ship components (the layout read's `appExtensions`), which
-// units the theme gives to an app's skin, which component product blocks it
-// places, and the request's render host. Everything here is read from what
+// units the theme gives to an app's skin, which components fill a slot,
+// and the request's render host. Everything here is read from what
 // the page already read: no extra API call.
 
 import type { StorefrontSkinRef, StorefrontThemeSkinUnit } from "@scalius/shared/storefront-theme";
@@ -11,9 +11,11 @@ import type { PluginSettingsSchema } from "@scalius/shared/plugins/settings-sche
 import {
   readStorefrontExtensions,
   resolveStorefrontSettings,
+  STOREFRONT_PRODUCT_SLOTS,
+  storefrontComponentProductSlot,
   storefrontEmbedRule,
   storefrontExtensionBase,
-  type StorefrontBlockTarget,
+  type StorefrontComponentSlot,
   type StorefrontEmbedKind,
   type StorefrontExtension,
   type StorefrontRenderContext,
@@ -152,7 +154,7 @@ export async function appSkin(locals: object, url: URL, target: StorefrontSkinTa
   return { extension, target, component: declaration.id, settings: resolveSkinSettings(declaration.settings, resolvePluginSettingBindings(declaration.settings, chosen.values, chosen.bindings, bindingContext)) };
 }
 
-/** A skin's or block's settings: no images or products (the manifest forbids them), so nothing to read. */
+/** A skin's or component's settings: no images or products (the manifest forbids them), so nothing to read. */
 export function resolveSkinSettings(schema: PluginSettingsSchema, values: unknown): StorefrontResolvedSettings {
   return resolveStorefrontSettings(schema, values, { image: () => null, products: () => [] });
 }
@@ -213,27 +215,39 @@ export async function renderAppSkin<Target extends StorefrontSkinTarget>(
   return appMarkup(skin.extension, skin.target, html);
 }
 
-/** A component product block the theme places (`blocks.product.apps`), with its settings resolved. */
-export interface AppProductBlock {
+/** A component that fills a slot, with its settings resolved. */
+export interface AppSlotComponent {
   extension: StorefrontExtension;
-  /** The theme's id of the placement. */
-  id: string;
+  /** The manifest component type. */
   type: string;
-  target: StorefrontBlockTarget;
+  /** The theme's id of the placement (product slots). */
+  instanceId?: string;
   settings: StorefrontResolvedSettings;
 }
 
-/** The theme's component product blocks whose app is active and still declares them, in the merchant's order. */
-export async function appProductBlocks(locals: object, url: URL): Promise<AppProductBlock[]> {
+const PRODUCT_SLOTS = new Set<string>(STOREFRONT_PRODUCT_SLOTS);
+
+/**
+ * The components a slot shows. A product slot: the theme's product app
+ * blocks (`blocks.product.apps`) whose component's product slot it is, in the
+ * merchant's order, with their values. Any other slot: every active app's
+ * component that targets it, in app id order, with its default values. An
+ * app that is gone, inactive or no longer declares the component shows nothing.
+ */
+export async function appSlotComponents(locals: object, url: URL, slot: StorefrontComponentSlot): Promise<AppSlotComponent[]> {
+  const { list, byId } = await requestExtensions(locals, url);
+  if (!PRODUCT_SLOTS.has(slot)) {
+    return list.flatMap((extension) => extension.components
+      .filter((component) => component.targets.includes(slot))
+      .map((component) => ({ extension, type: component.type, settings: resolveSkinSettings(component.settings, {}) })));
+  }
   const theme = await currentRequestTheme(locals);
   const placed = theme.theme.blocks.product.apps ?? [];
-  if (placed.length === 0) return [];
-  const { byId } = await requestExtensions(locals, url);
   return placed.flatMap((block) => {
     const key = parsePluginSurfaceKey(block.app);
     const extension = key ? byId.get(key.pluginId) : undefined;
-    const declaration = extension?.blocks.find((entry) => entry.type === key!.type);
-    if (!extension || !declaration) return [];
-    return [{ extension, id: block.id, type: declaration.type, target: declaration.target, settings: resolveSkinSettings(declaration.settings, resolvePluginSettingBindings(declaration.settings, block.values, block.bindings, theme.bindingContext)) }];
+    const declaration = extension?.components.find((entry) => entry.type === key!.type);
+    if (!extension || !declaration || storefrontComponentProductSlot(declaration.targets) !== slot) return [];
+    return [{ extension, instanceId: block.id, type: declaration.type, settings: resolveSkinSettings(declaration.settings, resolvePluginSettingBindings(declaration.settings, block.values, block.bindings, theme.bindingContext)) }];
   });
 }

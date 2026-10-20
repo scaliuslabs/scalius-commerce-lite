@@ -390,7 +390,7 @@ describe("order receipt route", () => {
       }),
     );
     expect(buyerUi).toHaveBeenCalledWith({
-      targets: ["purchase.thank-you.customer-information.render-after", "customer-account.order-status.block.render"],
+      targets: ["order.confirmation", "account.order"],
       language: "bn",
       locale: "bn-BD",
       currency: "BDT",

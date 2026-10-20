@@ -24,6 +24,9 @@ export const appSurfacesMessages = defineMessages({
     widget: "Home card",
     section: "Theme section",
     productBlock: "Product page block",
+    "slot_header.actions": "In the store header",
+    "slot_footer.columns": "In the store footer",
+    appPage: "Store page",
 
     target_product: "product",
     target_variant: "variant",
@@ -74,6 +77,9 @@ export const appSurfacesMessages = defineMessages({
     widget: "হোমের কার্ড",
     section: "থিমের সেকশন",
     productBlock: "পণ্য পেজের ব্লক",
+    "slot_header.actions": "স্টোরের হেডারে",
+    "slot_footer.columns": "স্টোরের ফুটারে",
+    appPage: "স্টোরের পেজ",
 
     target_product: "পণ্য",
     target_variant: "ভ্যারিয়েন্ট",

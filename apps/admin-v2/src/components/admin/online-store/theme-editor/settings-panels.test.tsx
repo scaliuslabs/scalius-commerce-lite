@@ -434,7 +434,7 @@ describe("theme settings", () => {
 });
 
 describe("product page app blocks", () => {
-  type Field = ThemeApp["productBlocks"][number]["settings"][number];
+  type Field = ThemeApp["components"][number]["settings"][number];
   const setting = (key: string, label: string, extra: Partial<Field> = {}): Field => ({
     key, label, help: null, type: "text", required: false, options: null, default: null,
     min: null, max: null, integer: false, maxLength: null, ...extra,
@@ -445,16 +445,16 @@ describe("product page app blocks", () => {
     sections: [],
     skins: [],
     templates: [], pagePresets: [],
-    productBlocks: [
+    components: [
       {
-        key: "acme.reviews/stars", type: "stars", name: "Star rating", placement: "product.buy-box",
+        key: "acme.reviews/stars", type: "stars", name: "Star rating", targets: ["product.buy_box.after"],
         settings: [
           setting("label", "Label", { maxLength: 40, default: "Rated by buyers" }),
           setting("size", "Size", { type: "select", options: [{ value: "small", label: "Small" }, { value: "large", label: "Large" }], default: "small" }),
         ],
       },
       {
-        key: "acme.reviews/list", type: "list", name: "Review list", placement: "product.below",
+        key: "acme.reviews/list", type: "list", name: "Review list", targets: ["product.below"],
         settings: [
           setting("count", "Reviews shown", { type: "number", min: 1, max: 20, integer: true, default: 5 }),
           setting("title", "Title", { required: true, maxLength: 60 }),
@@ -538,7 +538,7 @@ describe("app skins of the theme's units", () => {
     name: "Acme Studio",
     sections: [],
     templates: [], pagePresets: [],
-    productBlocks: [],
+    components: [],
     skins: [
       { key: "acme.studio/header", id: "header", target: "header", name: "Studio header", description: "A centred logo and a search bar.", settings: [
         setting("tagline", "Tagline", { maxLength: 60, default: "Free delivery in Dhaka" }),

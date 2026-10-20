@@ -20,8 +20,7 @@ import { storefrontComponentsManifestSchema } from "./storefront-components";
 import { PLUGIN_SETTING_KEY, PLUGIN_STOREFRONT_SETTING_TYPES, pluginAppSettingsSchemaSchema, pluginSettingsSchemaSchema, type PluginSettingsSchema } from "./settings-schema";
 import { pluginProvidersSchema } from "./providers/descriptors";
 import { checkoutAttributeSchema } from "./buyer-ui";
-import { PLUGIN_BLOCK_TARGETS } from "./storefront";
-import { STOREFRONT_BLOCK_TARGETS } from "./storefront-protocol";
+import { STOREFRONT_UI_SLOTS } from "./storefront-protocol";
 import { objectTypeDeclarationSchema, OBJECT_TYPE_PATTERN, type ObjectTypeDeclaration } from "./objects";
 import { FUNCTION_READS_MAX, functionReadDeclarationSchema, functionReadIssues } from "./function-reads";
 import { PROVIDER_KINDS } from "./providers/kinds";
@@ -286,18 +285,6 @@ const storefrontSchema = z.object({
       limit: z.number().int().min(1).max(24).default(24),
     }).strict()).max(2).default([]),
   }).strict()).max(32).default([]),
-  /**
-   * Blocks inside the product page's purchase area or below it: components
-   * the storefront module draws at the edge from the product page's
-   * projection (`block` jobs, storefront-components.ts).
-   */
-  productBlocks: z.array(z.object({
-    type: key,
-    name: title,
-    /** Its render target: `product.buy-box` (in the buy box, after the buttons) or `product.below` (after the page's modules). */
-    placement: z.enum(STOREFRONT_BLOCK_TARGETS),
-    settings: pluginSettingsSchemaSchema.default([]),
-  }).strict()).max(10).default([]),
   /** Meta tags and JSON-LD (sanitized) for the page head. */
   head: z.boolean().default(false),
   /**
@@ -312,26 +299,26 @@ const storefrontSchema = z.object({
   }).strict()).max(5).default([]),
   /** `/apps/<plugin id>/*` on the storefront origin proxies to the plugin's public routes. */
   proxy: z.boolean().default(false),
-  // Storefront components (storefront-components.ts): skins the storefront
-  // module draws, ready-made templates, client islands, the stylesheet and
-  // the hosts islands reach.
+  // Storefront components (storefront-components.ts): components and skins
+  // the storefront module draws, ready-made templates, client islands, the
+  // stylesheet and the hosts islands reach.
   ...storefrontComponentsManifestSchema,
 }).strict();
 
 /** The empty `storefront` part (a manifest that declares none). */
 function emptyPluginStorefront() {
   return {
-    sections: [], productBlocks: [], head: false, scripts: [], proxy: false,
+    sections: [], components: [], head: false, scripts: [], proxy: false,
     skins: [], templates: [], pagePresets: [], islands: [], stylesheet: false, connect: [],
   };
 }
 
-/** Whether the app ships a storefront module (component sections, product blocks or skins). */
-export function pluginHasStorefrontModule(storefront: Pick<PluginManifest["storefront"], "sections" | "productBlocks" | "skins">): boolean {
-  return storefront.skins.length > 0 || storefront.sections.length > 0 || storefront.productBlocks.length > 0;
+/** Whether the app ships a storefront module (component sections, components or skins). */
+export function pluginHasStorefrontModule(storefront: Pick<PluginManifest["storefront"], "sections" | "components" | "skins">): boolean {
+  return storefront.skins.length > 0 || storefront.sections.length > 0 || storefront.components.length > 0;
 }
 
-/** A setting a component cannot resolve without a read: images and products (the theme's sections read them; skins and blocks read nothing). */
+/** A setting a component cannot resolve without a read: images and products (the theme's sections read them; skins and components read nothing). */
 function settingNeedsRead(field: PluginSettingsSchema[number]): boolean {
   return field.type === "image" || field.type === "products" || field.type === "product"
     || (field.type === "list" && field.fields.some((item) => item.type === "image"));
@@ -544,7 +531,7 @@ export const pluginManifestSchema = z.object({
     .transform((topics) => topics as EventTopicFilter[]),
   functions: z.array(z.object({
     point: z.enum(PLUGIN_FUNCTION_POINTS),
-    targets: z.array(z.enum(PLUGIN_BLOCK_TARGETS)).min(1).max(9).optional(),
+    targets: z.array(z.enum(STOREFRONT_UI_SLOTS)).min(1).max(STOREFRONT_UI_SLOTS.length).optional(),
     /** Lower runs first among plugins at the same point. */
     priority: z.number().int().min(0).max(1000).default(100),
     /**
@@ -750,10 +737,10 @@ export const pluginManifestSchema = z.object({
   if (collections.has("batch")) {
     context.addIssue({ code: "custom", path: ["objects", "batch"], message: "\"batch\" is reserved: name the collection something else." });
   }
-  // Components (sections and product blocks): public settings the storefront module resolves at the edge.
+  // Sections and components: public settings the storefront module resolves at the edge.
   const components = [
     ...manifest.storefront.sections.map((surface, index) => ({ settings: surface.settings, path: ["storefront", "sections", index] as (string | number)[], reads: true })),
-    ...manifest.storefront.productBlocks.map((surface, index) => ({ settings: surface.settings, path: ["storefront", "productBlocks", index] as (string | number)[], reads: false })),
+    ...manifest.storefront.components.map((surface, index) => ({ settings: surface.settings, path: ["storefront", "components", index] as (string | number)[], reads: false })),
   ];
   const storefrontOnly = new Set<string>(PLUGIN_STOREFRONT_SETTING_TYPES);
   for (const { settings, path, reads } of components) {
@@ -764,9 +751,9 @@ export const pluginManifestSchema = z.object({
       if (field.group !== undefined) {
         context.addIssue({ code: "custom", path: [...path, "settings", fieldIndex, "group"], message: "Groups are for the app's own settings." });
       }
-      // A product block draws from the product page's projection alone: no media or catalog read.
+      // A component draws from its slot's data alone: no media or catalog read.
       if (!reads && settingNeedsRead(field)) {
-        context.addIssue({ code: "custom", path: [...path, "settings", fieldIndex, "type"], message: "A product block's settings cannot name images or products (ship images in the app's public files)." });
+        context.addIssue({ code: "custom", path: [...path, "settings", fieldIndex, "type"], message: "A component's settings cannot name images or products (ship images in the app's public files)." });
       }
     });
   }
@@ -783,6 +770,11 @@ export const pluginManifestSchema = z.object({
       // A skin draws from its unit's projection alone: its settings resolve at the edge, without a media or catalog read.
       if (settingNeedsRead(field)) context.addIssue({ code: "custom", path: [...path, "type"], message: "A skin's settings cannot name images or products (ship images in the app's public files)." });
     });
+  });
+  manifest.storefront.components.forEach((component, index) => {
+    if (component.targets.includes("page") && !manifest.storefront.proxy) {
+      context.addIssue({ code: "custom", path: ["storefront", "components", index, "targets"], message: "A page component is drawn for the app's proxy routes: turn on storefront.proxy." });
+    }
   });
   if (manifest.storefront.proxy && publicRoutes.size === 0) {
     context.addIssue({ code: "custom", path: ["storefront", "proxy"], message: "The storefront proxy needs at least one public route." });
@@ -878,7 +870,7 @@ export const pluginManifestSchema = z.object({
   unique(manifest.storefront.pagePresets.map((preset) => preset.id), ["storefront", "pagePresets"], "Page preset ids");
   unique(manifest.storefront.islands.map((island) => island.name), ["storefront", "islands"], "Island names");
   unique(manifest.storefront.connect, ["storefront", "connect"], "Connect hosts");
-  unique(manifest.storefront.productBlocks.map((block) => block.type), ["storefront", "productBlocks"], "Product block types");
+  unique(manifest.storefront.components.map((component) => component.type), ["storefront", "components"], "Component types");
   unique([...manifest.admin.pages, ...manifest.admin.cards, ...manifest.admin.actions, ...manifest.admin.widgets].map((item) => item.id), ["admin"], "Admin ids");
 });
 
@@ -947,7 +939,7 @@ export interface PluginGrantRequest {
   storefrontScripts: string[];
   storefrontSurfaces: boolean;
   customFieldOwners: string[];
-  /** Runs code on the storefront: a storefront module (component sections and product blocks, skins), client islands or a stylesheet. */
+  /** Runs code on the storefront: a storefront module (sections, components, skins), client islands or a stylesheet. */
   storefrontCode: boolean;
   /** Hosts the app's islands reach from the buyer's browser. */
   storefrontConnect: string[];
@@ -993,7 +985,7 @@ export function pluginGrantRequest(declared: PluginManifest, features: Iterable<
     providers: sorted(manifest.providers.map((provider) => provider.kind)),
     publicRoutes: manifest.routes.public.length > 0 || manifest.routes.webhooks.length > 0 || manifest.storefront.proxy,
     storefrontScripts: sorted(manifest.storefront.scripts.map((script) => new URL(script.src).host)),
-    storefrontSurfaces: manifest.storefront.sections.length > 0 || manifest.storefront.productBlocks.length > 0
+    storefrontSurfaces: manifest.storefront.sections.length > 0 || manifest.storefront.components.length > 0
       || manifest.storefront.head || manifest.storefront.skins.length > 0,
     customFieldOwners: sorted(manifest.customFields.map((field) => field.ownerType)),
     storefrontCode: pluginHasStorefrontModule(manifest.storefront) || manifest.storefront.islands.length > 0

@@ -1,9 +1,9 @@
 /** @jsxImportSource @scalius/plugin-sdk/storefront */
 import { describe, expect, it } from "vitest";
-import { BuyForm, Reviews, Toolbar } from "./components";
-import { defineStorefront, type BlockProps, type ListingMainProps, type ProductMainProps, type SectionSkinProps } from "./define";
+import { BuyForm, Reviews, Slot, Toolbar } from "./components";
+import { defineStorefront, type ComponentProps, type ListingMainProps, type ProductMainProps, type SectionSkinProps } from "./define";
 import { raw } from "./html";
-import { assertHeaderContract, checkSkinHtml, fixtureProductPage, fixtureSectionSkinData, renderBlock, renderHeader, renderSkin } from "./testing";
+import { assertHeaderContract, checkSkinHtml, fixtureProductPage, fixtureSectionSkinData, renderComponent, renderHeader, renderSkin } from "./testing";
 
 describe("header render assertions", () => {
   it("identifies the failing component and its markup error", () => {
@@ -37,8 +37,12 @@ describe("skins and blocks", () => {
         <section id={`acme-${instanceId}`}>{data.settings.slides.map((slide) => <p>{slide.alt}</p>)}</section>
       ),
     },
-    blocks: {
-      guide: ({ data, target }: BlockProps) => <aside data-target={target}>{data.product.options.map((option) => option.name).join(", ")}</aside>,
+    components: {
+      guide: (props: ComponentProps) => props.target.startsWith("product.") && "data" in props
+        ? <aside data-target={props.target}>{props.data.product.options.map((option) => option.name).join(", ")}</aside>
+        : <span data-target={props.target}>Guide</span>,
+      vendor: (props: ComponentProps<Record<string, never>, { name: string }>) => props.target === "page" ? <h2>{props.props.name}</h2> : null,
+      nested: () => <div><Slot name="header.actions" /></div>,
     },
   });
 
@@ -50,7 +54,15 @@ describe("skins and blocks", () => {
   it("renders listing and section skins and component blocks", () => {
     expect(renderSkin(app, "grid", "listing-main")).toBe('<section><scalius-embed kind="toolbar"></scalius-embed><ul><li>Linen shirt</li><li>Oxford shirt</li></ul></section>');
     expect(renderSkin(app, "hero", "section:hero", {}, fixtureSectionSkinData("hero", { slides: [{ alt: "Eid sale" }] }))).toBe('<section id="acme-hero"><p>Eid sale</p></section>');
-    expect(renderBlock(app, "guide", {}, fixtureProductPage(), { target: "product.buy-box" })).toBe('<aside data-target="product.buy-box">Size</aside>');
-    expect(checkSkinHtml("header", '<scalius-embed kind="filters"></scalius-embed>')).toEqual(["1 embed(s) render nothing here: header allows none."]);
+    expect(renderComponent(app, "guide", "product.buy_box.after", {}, { data: fixtureProductPage() })).toBe('<aside data-target="product.buy_box.after">Size</aside>');
+    expect(renderComponent(app, "guide", "header.actions")).toBe('<span data-target="header.actions">Guide</span>');
+    expect(checkSkinHtml("header", '<scalius-embed kind="filters"></scalius-embed>')).toEqual(["1 embed(s) render nothing here: header allows slot."]);
+    expect(checkSkinHtml("header", '<scalius-embed kind="slot" data-name="header.actions"></scalius-embed>')).toEqual([]);
+  });
+
+  it("renders a page component with the route's props escaped, and refuses slots inside a component", () => {
+    expect(renderComponent(app, "vendor", "page", {}, { props: { name: "<img src=x onerror=alert(1)>" } }))
+      .toBe("<h2>&lt;img src=x onerror=alert(1)&gt;</h2>");
+    expect(() => renderComponent(app, "nested", "footer.columns")).toThrow(/render nothing in a component/);
   });
 });

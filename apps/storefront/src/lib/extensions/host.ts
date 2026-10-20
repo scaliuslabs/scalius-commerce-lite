@@ -1,7 +1,7 @@
 // The storefront's render host for app components (docs/STOREFRONT-COMPONENTS.md).
 //
 // A page asks for each component as Astro reaches it (the header, every card
-// of a grid, each section, skin and product block). The host joins every ask made in the same task
+// of a grid, each section, skin and slot component). The host joins every ask made in the same task
 // into one batch per app, so a listing of 36 app cards is one call, not 36,
 // and runs each batch with the app's module (loaders.ts). Every answer:
 //
@@ -11,7 +11,7 @@
 //   footer and every card already drawn cost nothing on the next page
 //   (and pages served from the page cache run no app code at all);
 // - comes within `renderWallMs`, or the page draws without it: a section
-//   or block draws nothing, a skin leaves its unit to core. This timeout cannot
+//   or component draws nothing, a skin leaves its unit to core. This timeout cannot
 //   preempt synchronous bundled code or detect incorrect layout/interaction.
 //   A page drawn without an answer (late, failed, refused, or a release the
 //   isolate cannot load) calls `degraded`, so the page cache never keeps it.
@@ -173,7 +173,9 @@ export class ExtensionHost {
           fallBack(entry, `${extension.pluginId}:${describe(entry.job)}`, `${extension.pluginId} ${describe(entry.job)}: ${result && "error" in result ? result.error : "no result"}`);
           continue;
         }
-        const checked = sanitizePluginHtml(result.html, { pluginId: extension.pluginId, profile: "component", jsonLd: entry.jsonLd });
+        // An app page's forms post only to the app's own routes.
+        const page = entry.job.kind === "component" && entry.job.target === "page";
+        const checked = sanitizePluginHtml(result.html, { pluginId: extension.pluginId, jsonLd: entry.jsonLd, ...(page ? { formsTo: `/apps/${extension.pluginId}/` } : {}) });
         if (!checked.ok) {
           fallBack(entry, `${extension.pluginId}:size:${describe(entry.job)}`, `${extension.pluginId} ${describe(entry.job)} drew markup over its bounds (${checked.reason}).`);
           continue;
@@ -192,6 +194,6 @@ export class ExtensionHost {
 
 function describe(job: StorefrontRenderJob): string {
   if (job.kind === "section") return `section ${job.type}`;
-  if (job.kind === "block") return `block ${job.type}`;
+  if (job.kind === "component") return `component ${job.type} at ${job.target}`;
   return `${job.target} skin ${job.component}`;
 }

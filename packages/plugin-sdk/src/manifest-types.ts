@@ -112,11 +112,11 @@ type SettingsOfEntry<E> = (E extends { settings?: infer S } ? SettingsOf<NonNull
 /**
  * A storefront component's settings, from the manifest:
  * `SectionProps<StorefrontSettingsOf<typeof manifest, "section", "banner">>`
- * (`"block"` for a product block type, `"skin"` for a skin id).
+ * (`"component"` for a component type, `"skin"` for a skin id).
  */
-export type StorefrontSettingsOf<M, Kind extends "section" | "block" | "skin", Key extends string> =
+export type StorefrontSettingsOf<M, Kind extends "section" | "component" | "skin", Key extends string> =
   Kind extends "section" ? SettingsOfEntry<Declared<StorefrontOf<M> extends { sections?: infer L } ? NonNullable<L> : never, "type", Key>>
-    : Kind extends "block" ? SettingsOfEntry<Declared<StorefrontOf<M> extends { productBlocks?: infer L } ? NonNullable<L> : never, "type", Key>>
+    : Kind extends "component" ? SettingsOfEntry<Declared<StorefrontOf<M> extends { components?: infer L } ? NonNullable<L> : never, "type", Key>>
       : SettingsOfEntry<Declared<StorefrontOf<M> extends { skins?: infer L } ? NonNullable<L> : never, "id", Key>>;
 
 /**

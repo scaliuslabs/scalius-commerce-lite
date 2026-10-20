@@ -40,7 +40,7 @@ describe("customer account summary", () => {
       buyerUi: [],
     });
     expect(buyerUi).toHaveBeenCalledWith({
-      targets: ["customer-account.order-index.block.render", "customer-account.profile.block.render"],
+      targets: ["account.overview", "account.profile"],
       language: "bn",
       locale: "bn-BD",
       currency: expect.any(String),

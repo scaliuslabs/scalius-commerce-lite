@@ -1,7 +1,7 @@
 // Buyer UI dogfood: core owns the delivery input; account notes arrive as the
 // buyer's `notes` record (a declared read). Neither surface returns HTML or
 // runs browser code.
-import { definePlugin, PLUGIN_API_VERSION, readOne, type PluginManifestInput } from "@scalius/plugin-sdk";
+import { definePlugin, PLUGIN_API_VERSION, readOne, ui, type PluginManifestInput } from "@scalius/plugin-sdk";
 
 export const manifest = {
   id: "acme.notes",
@@ -15,7 +15,7 @@ export const manifest = {
   checkout: { attributes: [{ key: "delivery_instructions", label: "Delivery instructions", type: "multiline", maxLength: 500 }] },
   functions: [{
     point: "buyer.ui",
-    targets: ["purchase.checkout.contact.render-after", "customer-account.order-index.block.render"],
+    targets: ["checkout.contact.after", "account.overview"],
     reads: [{ as: "note", object: "notes", key: "customer" }],
   }],
 } satisfies PluginManifestInput;
@@ -24,14 +24,11 @@ export default definePlugin({
   manifest,
   functions: {
     "buyer.ui": ({ target, reads }, settings) => {
-      if (target === "customer-account.order-index.block.render") {
+      if (target === "account.overview") {
         const text = readOne(reads, "note")?.data.text;
-        return { ui: { type: "text", text: typeof text === "string" ? text : "Earn points on every order." } };
+        return { ui: ui.view([ui.text(typeof text === "string" ? text : "Earn points on every order.")]) };
       }
-      return { ui: { type: "stack", children: [
-        { type: "text", text: String(settings.delivery_note ?? "") },
-        { type: "field", attribute: "delivery_instructions" },
-      ] } };
+      return { ui: ui.view([ui.text(String(settings.delivery_note ?? "")), ui.field("delivery_instructions")]) };
     },
   },
 });

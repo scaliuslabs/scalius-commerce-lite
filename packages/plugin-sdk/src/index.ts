@@ -92,9 +92,11 @@ export type {
   PluginFeatureInput,
   PluginManifest,
   PluginManifestInput,
+  PluginUiAction,
   PluginUiActionResult,
   PluginUiDocument,
   PluginUiNode,
+  PluginUiSurface,
   PluginUiTarget,
 } from "@scalius/shared/plugins";
 export { adminContext, adminLocale, ui, wantsPage, type PluginAdminContext, type PluginAdminLocale } from "./ui";

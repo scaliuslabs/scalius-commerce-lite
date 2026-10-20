@@ -40,7 +40,7 @@ import {
   type StorefrontTypePairing,
 } from "@scalius/shared/storefront-theme";
 import { PLUGIN_PRODUCT_BLOCKS_MAX } from "@scalius/shared/plugins/storefront";
-import { STOREFRONT_SKIN_UNITS } from "@scalius/shared/plugins/storefront-protocol";
+import { STOREFRONT_SKIN_UNITS, storefrontComponentProductSlot } from "@scalius/shared/plugins/storefront-protocol";
 import type { ThemeApp, ThemeAppBlock, ThemeAppSkin } from "~/lib/api-query-options/online-store";
 import { appValuesInvalid, type AppSettingValues } from "./schema-form/app-settings";
 
@@ -383,7 +383,10 @@ export interface AppBlockEntry {
 
 /** The active apps' product-page blocks by key (`<plugin id>/<type>`). */
 export function appBlocksByKey(apps: readonly ThemeApp[]): ReadonlyMap<string, AppBlockEntry> {
-  return new Map(apps.flatMap((app) => app.productBlocks.map((block) => [block.key, { app, block }] as const)));
+  return new Map(apps.flatMap((app) => app.components.flatMap((component) => {
+    const placement = storefrontComponentProductSlot(component.targets);
+    return placement ? [[component.key, { app, block: { ...component, placement } }] as const] : [];
+  })));
 }
 
 /** The product page's app blocks in the merchant's order (none when the theme names none). */

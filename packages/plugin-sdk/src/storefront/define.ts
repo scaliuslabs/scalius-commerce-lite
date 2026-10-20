@@ -1,19 +1,20 @@
 // `defineStorefront`: an app's storefront module. It maps the manifest's
-// component sections, component product blocks and skins to components and
+// sections, components and skins to render functions and
 // answers the storefront's render batches (the protocol in
 // @scalius/shared/plugins/storefront-protocol). Each job renders alone: a
 // component that throws fails only its own job, and the storefront then draws
-// nothing there (a section or block) or the core unit (a skin).
+// nothing there (a section or component) or the core unit (a skin).
 
 import {
   STOREFRONT_COMPONENT_ABI,
-  type StorefrontBlockTarget,
+  type StorefrontComponentSlot,
   type StorefrontFooterData,
   type StorefrontHeaderData,
   type StorefrontListingPage,
   type StorefrontModule,
   type StorefrontProductCardData,
   type StorefrontProductPage,
+  type StorefrontProductSlot,
   type StorefrontRenderBatch,
   type StorefrontRenderContext,
   type StorefrontRenderJob,
@@ -54,15 +55,29 @@ export type SectionSkinProps<Type extends StorefrontSkinnableSection = Storefron
     instanceId: string;
   };
 
-/** A component product block: the product page's projection and where it draws. */
-export interface BlockProps<Settings = StorefrontResolvedSettings> {
-  settings: Settings;
-  data: StorefrontProductPage;
-  target: StorefrontBlockTarget;
-  /** The theme's id of this placement. */
-  instanceId: string;
-  context: StorefrontRenderContext;
-}
+/**
+ * What a component gets at one of its targets (`target` says which): its
+ * settings; in a product slot also the product page (`data`) and the
+ * placement's id; on `page` the app's proxy route's `props`.
+ */
+export type ComponentProps<Settings = StorefrontResolvedSettings, Props = Record<string, unknown>> =
+  | {
+    target: StorefrontProductSlot;
+    settings: Settings;
+    /** The product page, as a product-main skin gets it. */
+    data: StorefrontProductPage;
+    /** The theme's id of this placement. */
+    instanceId: string;
+    context: StorefrontRenderContext;
+  }
+  | { target: Exclude<StorefrontComponentSlot, StorefrontProductSlot>; settings: Settings; context: StorefrontRenderContext }
+  | {
+    target: "page";
+    settings: Settings;
+    /** What the app's proxy route answered (`{ page: { component, props } }`). */
+    props: Props;
+    context: StorefrontRenderContext;
+  };
 
 // Components take their own settings shapes; the module map is checked by
 // the manifest at pack time, so the map itself is loosely typed.
@@ -76,7 +91,7 @@ export type ListingMainComponent = (props: ListingMainProps<any>) => Renderable;
 export type SectionSkinComponent = (props: SectionSkinProps<any, any>) => Renderable;
 /** Any skin component (the manifest pairs each with its target at pack time). */
 export type SkinComponent = (props: any) => Renderable;
-export type BlockComponent = (props: BlockProps<any>) => Renderable;
+export type AppComponent = (props: ComponentProps<any, any>) => Renderable;
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 export interface StorefrontDefinition {
@@ -84,8 +99,8 @@ export interface StorefrontDefinition {
   sections?: Record<string, SectionComponent>;
   /** Skins by manifest skin id. */
   skins?: Record<string, SkinComponent>;
-  /** Component product blocks by manifest block type. */
-  blocks?: Record<string, BlockComponent>;
+  /** Components by manifest component type (`storefront.components`). */
+  components?: Record<string, AppComponent>;
 }
 
 /** What `defineStorefront` returns: the module the storefront loads, plus the definition (for the packer and tests). */
@@ -105,10 +120,11 @@ function renderJob(definition: StorefrontDefinition, job: StorefrontRenderJob, c
       if (!component) throw new Error(`No component for section ${job.type}.`);
       return toHtml(component({ settings: job.settings, instanceId: job.instanceId, objects: job.objects ?? {}, context })).value;
     }
-    case "block": {
-      const component = definition.blocks?.[job.type];
-      if (!component) throw new Error(`No component for block ${job.type}.`);
-      return toHtml(component({ settings: job.settings, data: job.data, target: job.target, instanceId: job.instanceId, context })).value;
+    case "component": {
+      const component = definition.components?.[job.type];
+      if (!component) throw new Error(`No component for ${job.type}.`);
+      const { id: _id, kind: _kind, type: _type, ...props } = job;
+      return toHtml(component({ ...props, context } as ComponentProps)).value;
     }
     case "skin": {
       const component = definition.skins?.[job.component] as ((props: SkinProps<unknown> & { instanceId?: string }) => Renderable) | undefined;

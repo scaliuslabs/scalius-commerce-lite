@@ -6,6 +6,7 @@ import {
   getApiV1AdminSettingsSeoFeedDiagnostics,
   getApiV1AdminSettingsThemeEditor,
 } from "@scalius/api-client/sdk";
+import type { StorefrontProductSlot } from "@scalius/shared/plugins/storefront-protocol";
 import { apiData, type ApiResult } from "../api";
 import { queryKeys } from "../query-keys";
 import type {
@@ -18,7 +19,10 @@ export type ThemeWorkspaceDocument = ApiResult<typeof getApiV1AdminSettingsTheme
 /** An active app with the homepage sections, theme slots, templates and product-page blocks it offers the theme. */
 export type ThemeApp = ThemeWorkspaceDocument["apps"][number];
 export type ThemeAppSection = ThemeApp["sections"][number];
-export type ThemeAppBlock = ThemeApp["productBlocks"][number];
+/** An app component, and where it renders (`targets`). */
+export type ThemeAppComponent = ThemeApp["components"][number];
+/** A component the merchant places on the product page (one with a product slot), with that slot. */
+export type ThemeAppBlock = ThemeAppComponent & { placement: StorefrontProductSlot };
 /** A theme slot (header, footer, product card) an app fills, with its settings. */
 export type ThemeAppSkin = ThemeApp["skins"][number];
 /** One setting of an app section or block, as the app's manifest declares it (labels are the app's plain text). */

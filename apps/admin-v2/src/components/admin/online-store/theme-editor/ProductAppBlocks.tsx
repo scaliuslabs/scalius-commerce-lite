@@ -32,7 +32,7 @@ import {
 
 function usePlacementName() {
   const t = useMessages(themeEditorMessages);
-  return (placement: ThemeAppBlock["placement"]) => (placement === "product.buy-box" ? t("appBlockPlacement_buyBox") : t("appBlockPlacement_below"));
+  return (placement: ThemeAppBlock["placement"]) => t(placement === "product.buy_box.before" ? "appBlockPlacement_buyBoxBefore" : placement === "product.buy_box.after" ? "appBlockPlacement_buyBox" : "appBlockPlacement_below");
 }
 
 function AppBlockItem({ block, entry, index, count, media, setDraft }: {

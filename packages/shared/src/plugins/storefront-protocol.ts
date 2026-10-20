@@ -23,9 +23,76 @@ export const STOREFRONT_SECTION_SKIN_PREFIX = "section:";
 /** What a skin redraws: a fixed unit, or one core section type. */
 export type StorefrontSkinTarget = StorefrontSkinUnit | `section:${string}`;
 
-/** Where an app's component product block draws: in the buy box after the buttons, or after the page's modules. */
-export const STOREFRONT_BLOCK_TARGETS = ["product.buy-box", "product.below"] as const;
-export type StorefrontBlockTarget = (typeof STOREFRONT_BLOCK_TARGETS)[number];
+// ── Slots ─────────────────────────────────────────────────────────────────
+//
+// A slot is a named place on a store page where apps add their own piece.
+// Core units place every slot; a skin of a unit places that unit's slots
+// (`<Slot name="…" />`). An app names the slots it fills by `targets`:
+//
+// - **Component slots** are on public pages. An app component
+//   (`storefront.components`, drawn at the edge by the app's storefront
+//   module) renders in each slot it targets. The product slots are arranged
+//   by the merchant (Online store -> Theme, the product page's app blocks,
+//   with their values); every other component slot shows each active app's
+//   component with its default values. `page` is an app page that a proxy
+//   route answers.
+// - **UI slots** are on the buyer's own pages (cart, checkout, the receipt,
+//   the account), where no app code runs: a `buyer.ui` function answers a
+//   `ui` tree (ui.ts, buyer surface) and the store draws it.
+//
+// A slot nobody fills renders nothing and costs no read.
+
+/** Slots on public pages that app components fill. */
+export const STOREFRONT_COMPONENT_SLOTS = [
+  // In the header, beside search, account and cart.
+  "header.actions",
+  // The product's buy box: before the price and options, and after the buttons.
+  "product.buy_box.before",
+  "product.buy_box.after",
+  // After the product page's modules.
+  "product.below",
+  // Footer columns, after the store's menus.
+  "footer.columns",
+] as const;
+export type StorefrontComponentSlot = (typeof STOREFRONT_COMPONENT_SLOTS)[number];
+
+/** The component slots the merchant arranges in the theme (the product page's app blocks). */
+export const STOREFRONT_PRODUCT_SLOTS = ["product.buy_box.before", "product.buy_box.after", "product.below"] as const satisfies readonly StorefrontComponentSlot[];
+export type StorefrontProductSlot = (typeof STOREFRONT_PRODUCT_SLOTS)[number];
+
+/** The product slot a component targets, if any: where its product-page placements render (a component has at most one). */
+export function storefrontComponentProductSlot(targets: readonly string[]): StorefrontProductSlot | null {
+  return (targets.find((target) => (STOREFRONT_PRODUCT_SLOTS as readonly string[]).includes(target)) as StorefrontProductSlot | undefined) ?? null;
+}
+
+/** Where an app component renders: a component slot, or `page` (an app page its proxy route answers). */
+export const STOREFRONT_COMPONENT_TARGETS = [...STOREFRONT_COMPONENT_SLOTS, "page"] as const;
+export type StorefrontComponentTarget = (typeof STOREFRONT_COMPONENT_TARGETS)[number];
+
+/** Slots on the buyer's own pages that `buyer.ui` trees fill, with the page group that draws each. */
+export const STOREFRONT_UI_SLOT_PAGES = {
+  // The cart page (checkout's information step).
+  "checkout.contact.after": "checkout",
+  "checkout.delivery.after": "checkout",
+  "cart.page.summary": "checkout",
+  // The payment step.
+  "checkout.payment.after": "checkout",
+  "checkout.actions.before": "checkout",
+  // The thank-you page.
+  "order.confirmation": "order",
+  // The order status page (signed in, or the receipt's status view).
+  "account.order": "order",
+  "account.overview": "account",
+  "account.profile": "account",
+} as const;
+export type StorefrontUiSlot = keyof typeof STOREFRONT_UI_SLOT_PAGES;
+export type StorefrontUiSlotPage = (typeof STOREFRONT_UI_SLOT_PAGES)[StorefrontUiSlot];
+export const STOREFRONT_UI_SLOTS = Object.keys(STOREFRONT_UI_SLOT_PAGES) as [StorefrontUiSlot, ...StorefrontUiSlot[]];
+
+/** The UI slots one buyer page group draws (`checkout`: the cart page and the payment step). */
+export function storefrontUiSlotsOn(page: StorefrontUiSlotPage): StorefrontUiSlot[] {
+  return STOREFRONT_UI_SLOTS.filter((slot) => STOREFRONT_UI_SLOT_PAGES[slot] === page);
+}
 
 /**
  * Core embeds: `<scalius-embed kind="…">` in a component's markup, where the
@@ -44,8 +111,11 @@ export type StorefrontBlockTarget = (typeof STOREFRONT_BLOCK_TARGETS)[number];
  * - `order-form`: the single-page order form of a landing page, for a
  *   product the section was given (`data-product`, `data-max-quantity`,
  *   `data-submit-label`).
+ * - `slot`: a component slot of the unit (`data-name`, `<Slot name="…" />`),
+ *   where active apps' components render (a header skin places
+ *   `header.actions`, a footer skin `footer.columns`).
  */
-export const STOREFRONT_EMBED_KINDS = ["buy-form", "reviews", "recommendations", "filters", "toolbar", "pagination", "order-form", "gallery"] as const;
+export const STOREFRONT_EMBED_KINDS = ["buy-form", "reviews", "recommendations", "filters", "toolbar", "pagination", "order-form", "gallery", "slot"] as const;
 export type StorefrontEmbedKind = (typeof STOREFRONT_EMBED_KINDS)[number];
 export const STOREFRONT_EMBED_TAG = "scalius-embed";
 
@@ -54,21 +124,27 @@ export const STOREFRONT_EMBED_TAG = "scalius-embed";
  * beyond render nothing, as does a kind not listed), the kinds it must place
  * (without one, core draws the unit instead), and the kinds the host appends
  * when the markup leaves them out (a listing always pages, so crawlers reach
- * every product).
+ * every product). `slots` names the component slots a `slot` embed may be
+ * (each renders once).
  */
 export interface StorefrontEmbedRule {
   allowed: Partial<Record<StorefrontEmbedKind, number>>;
   required: readonly StorefrontEmbedKind[];
   appended: readonly StorefrontEmbedKind[];
+  slots?: readonly StorefrontComponentSlot[];
 }
 
 const NO_EMBEDS: StorefrontEmbedRule = { allowed: {}, required: [], appended: [] };
 
-/** The embed rule of a render: a component section, a skin's target or a product block. */
-export function storefrontEmbedRule(unit: "section" | "block" | StorefrontSkinTarget): StorefrontEmbedRule {
+/** The embed rule of a render: a component section, a skin's target or an app component (which embeds nothing). */
+export function storefrontEmbedRule(unit: "section" | "component" | StorefrontSkinTarget): StorefrontEmbedRule {
   switch (unit) {
     case "section":
       return { allowed: { "order-form": 2 }, required: [], appended: [] };
+    case "header":
+      return { allowed: { slot: 1 }, required: [], appended: [], slots: ["header.actions"] };
+    case "footer":
+      return { allowed: { slot: 1 }, required: [], appended: [], slots: ["footer.columns"] };
     case "product-main":
       return { allowed: { "buy-form": 1, reviews: 1, recommendations: 1, gallery: 1 }, required: ["buy-form"], appended: [] };
     case "listing-main":
@@ -337,7 +413,34 @@ export interface StorefrontProductPage {
     fields: StorefrontFieldValues;
     /** Home first, the product last. */
     breadcrumbs: StorefrontLink[];
+    /**
+     * What the buyer types or picks before buying (engraving, gift wrap), in
+     * the buy form's order: an island reads the answers with
+     * `context.product.state().inputs[key]`. Absent from older stores.
+     */
+    buyerInputs?: StorefrontBuyerInput[];
   };
+}
+
+/** One buyer input of the buy form. */
+export interface StorefrontBuyerInput {
+  key: string;
+  type: "text" | "textarea" | "select" | "checkbox";
+  label: string;
+  required: boolean;
+  /** text and textarea; null without a limit. */
+  maxLength: number | null;
+  /** select choices; empty otherwise. */
+  options: Array<{ value: string; label: string }>;
+}
+
+/** The buy form as the buyer has it now (`context.product`). */
+export interface StorefrontProductState {
+  /** The chosen SKU; null until the buyer has chosen every option. */
+  variantId: string | null;
+  quantity: number;
+  /** Buyer input answers by key (`buyerInputs`); a checkbox is "true" when ticked. */
+  inputs: Record<string, string>;
 }
 
 /** What a listing-main skin gets: the listing as the core listing page shows it (this page of it). */
@@ -683,18 +786,31 @@ export type StorefrontRenderJob =
     settings: StorefrontResolvedSettings;
   }
   | StorefrontSkinJob
-  | {
-    id: string;
-    /** A product block (a `productBlocks` entry). */
-    kind: "block";
-    target: StorefrontBlockTarget;
-    /** The manifest block type. */
-    type: string;
-    /** The theme's id of this placement. */
+  | StorefrontComponentJob;
+
+interface ComponentJobBase {
+  id: string;
+  kind: "component";
+  /** The manifest component type (`storefront.components`). */
+  type: string;
+  /** The merchant's values for its placement (product slots), else its defaults; no images or products. */
+  settings: StorefrontResolvedSettings;
+}
+
+/** An app component, at one of its targets. */
+export type StorefrontComponentJob =
+  | (ComponentJobBase & {
+    target: StorefrontProductSlot;
+    /** The theme's id of this placement (the product page's app blocks). */
     instanceId: string;
-    settings: StorefrontResolvedSettings;
     data: StorefrontProductPage;
-  };
+  })
+  | (ComponentJobBase & { target: Exclude<StorefrontComponentSlot, StorefrontProductSlot> })
+  | (ComponentJobBase & {
+    target: "page";
+    /** What the app's proxy route answered as the page's `props` (JSON; escaped like any other text). */
+    props: Record<string, unknown>;
+  });
 
 export interface StorefrontRenderBatch {
   abi: typeof STOREFRONT_COMPONENT_ABI;
@@ -739,6 +855,15 @@ export interface StorefrontIslandContext {
   onCart(listener: (cart: { count: number; total: number }) => void): () => void;
   /** Calls the app's public routes through the storefront proxy (`/apps/<plugin id>/<path>`). */
   fetchApp(path: string, init?: RequestInit): Promise<Response>;
+  /**
+   * On a product page: the store's buy form, read through the store (never
+   * its markup). `onChange` calls the listener when the variant, quantity or
+   * an answer changes; it returns the unsubscribe. Absent on other pages.
+   */
+  product?: {
+    state(): StorefrontProductState;
+    onChange(listener: (state: StorefrontProductState) => void): () => void;
+  };
 }
 
 /** An island's client module (`defineIsland`): mounts on its element, may return a cleanup. */

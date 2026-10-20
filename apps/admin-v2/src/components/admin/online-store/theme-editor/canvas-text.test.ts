@@ -57,7 +57,7 @@ describe("canvas text in app sections", () => {
     min: null, max: null, integer: false, maxLength: extra.maxLength ?? null,
   });
   const apps = () => appSectionsByKey([{
-    id: "acme.studio", name: "Studio", skins: [], templates: [], pagePresets: [], productBlocks: [],
+    id: "acme.studio", name: "Studio", skins: [], templates: [], pagePresets: [], components: [],
     sections: [{ key: "acme.studio/quote", type: "quote", name: "Quote", description: null,
       settings: [setting("quote", "textarea"), setting("author", "text", { default: "A buyer", maxLength: 40 }), setting("size", "number")] }],
   }]);

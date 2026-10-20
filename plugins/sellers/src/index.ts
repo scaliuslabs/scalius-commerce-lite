@@ -221,9 +221,9 @@ export const manifest = {
       ],
       reads: [{ object: "seller_profiles", limit: 24 }],
     }],
-    productBlocks: [
-      { type: "sold_by", name: "Sold by", placement: "product.buy-box", settings: [{ key: "label", label: "Label", type: "text", default: "Sold by", maxLength: 30 }] },
-      { type: "about_seller", name: "About the seller", placement: "product.below", settings: [] },
+    components: [
+      { type: "sold_by", name: "Sold by", targets: ["product.buy_box.before"], settings: [{ key: "label", label: "Label", type: "text", default: "Sold by", maxLength: 30 }] },
+      { type: "about_seller", name: "About the seller", targets: ["product.below"], settings: [] },
     ],
     stylesheet: true,
   },
