@@ -242,13 +242,14 @@ function ActionButton({ node, size }: { node: PluginUiButton & { action: PluginU
 
 function PluginButton({ node, size }: { node: PluginUiButton; size?: "sm" }) {
   const variant = BUTTON_VARIANT[node.tone ?? "secondary"];
-  if (node.action) return <ActionButton node={{ ...node, action: node.action }} size={size} />;
-  if (!node.to || node.disabled) {
+  const { action } = node;
+  if (action.kind === "route") return <ActionButton node={{ ...node, action }} size={size} />;
+  if (action.kind !== "navigate" || node.disabled) {
     return <Button type="button" variant={variant} size={size} disabled>{node.label}</Button>;
   }
   return (
     <Button variant={variant} size={size} asChild>
-      <PluginLink to={node.to}>{node.label}</PluginLink>
+      <PluginLink to={action.to}>{node.label}</PluginLink>
     </Button>
   );
 }
@@ -781,6 +782,8 @@ function TableNode({ node }: { node: Extract<PluginUiNode, { type: "table" }> })
 }
 
 function ImageNode({ node }: { node: Extract<PluginUiNode, { type: "image" }> }) {
+  // The admin surface allows https URLs only (`{ media }`/`{ app }` are the buyer surface's).
+  if (typeof node.src !== "string") return null;
   return (
     <img
       src={node.src}
@@ -858,6 +861,9 @@ function Node({ node }: { node: PluginUiNode }) {
       return <PluginButton node={node} />;
     case "form":
       return <FormNode node={node} />;
+    case "field":
+      // Buyer surface only; an admin document never passes it.
+      return null;
     default:
       return <InputNode node={node} />;
   }

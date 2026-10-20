@@ -20,8 +20,7 @@ import { storefrontComponentsManifestSchema } from "./storefront-components";
 import { PLUGIN_SETTING_KEY, PLUGIN_STOREFRONT_SETTING_TYPES, pluginAppSettingsSchemaSchema, pluginSettingsSchemaSchema, type PluginSettingsSchema } from "./settings-schema";
 import { pluginProvidersSchema } from "./providers/descriptors";
 import { checkoutAttributeSchema } from "./buyer-ui";
-import { PLUGIN_BLOCK_TARGETS } from "./storefront";
-import { STOREFRONT_BLOCK_TARGETS } from "./storefront-protocol";
+import { STOREFRONT_BLOCK_TARGETS, STOREFRONT_UI_SLOTS } from "./storefront-protocol";
 import { objectTypeDeclarationSchema, OBJECT_TYPE_PATTERN, type ObjectTypeDeclaration } from "./objects";
 import { FUNCTION_READS_MAX, functionReadDeclarationSchema, functionReadIssues } from "./function-reads";
 import { PROVIDER_KINDS } from "./providers/kinds";
@@ -544,7 +543,7 @@ export const pluginManifestSchema = z.object({
     .transform((topics) => topics as EventTopicFilter[]),
   functions: z.array(z.object({
     point: z.enum(PLUGIN_FUNCTION_POINTS),
-    targets: z.array(z.enum(PLUGIN_BLOCK_TARGETS)).min(1).max(9).optional(),
+    targets: z.array(z.enum(STOREFRONT_UI_SLOTS)).min(1).max(STOREFRONT_UI_SLOTS.length).optional(),
     /** Lower runs first among plugins at the same point. */
     priority: z.number().int().min(0).max(1000).default(100),
     /**

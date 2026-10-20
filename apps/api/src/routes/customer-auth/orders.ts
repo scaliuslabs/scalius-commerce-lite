@@ -377,7 +377,7 @@ app.openapi(getCustomerOrderDetailRoute, async (c) => {
   });
   const buyerUi = apps.points.has("buyer.ui")
     ? await apps.buyerUi?.({
-      targets: ["customer-account.order-status.block.render"],
+      targets: ["account.order"],
       language: c.req.header("x-storefront-language"),
       locale: c.req.header("x-storefront-locale"),
       currency: order.currencyCode ?? (await readStoreCurrency(db)).code,

@@ -23,9 +23,75 @@ export const STOREFRONT_SECTION_SKIN_PREFIX = "section:";
 /** What a skin redraws: a fixed unit, or one core section type. */
 export type StorefrontSkinTarget = StorefrontSkinUnit | `section:${string}`;
 
+// ── Slots ─────────────────────────────────────────────────────────────────
+//
+// A slot is a named place on a store page where apps add their own piece.
+// Core units place every slot; a skin of a unit places that unit's slots
+// (`<Slot name="…" />`). An app names the slots it fills by `targets`:
+//
+// - **Component slots** are on public pages. An app component
+//   (`storefront.components`, drawn at the edge by the app's storefront
+//   module) renders in each slot it targets. The product slots are arranged
+//   by the merchant (Online store -> Theme, the product page's app blocks,
+//   with their values); every other component slot shows each active app's
+//   component with its default values. `page` is an app page that a proxy
+//   route answers.
+// - **UI slots** are on the buyer's own pages (cart, checkout, the receipt,
+//   the account), where no app code runs: a `buyer.ui` function answers a
+//   `ui` tree (ui.ts, buyer surface) and the store draws it.
+//
+// A slot nobody fills renders nothing and costs no read.
+
 /** Where an app's component product block draws: in the buy box after the buttons, or after the page's modules. */
 export const STOREFRONT_BLOCK_TARGETS = ["product.buy-box", "product.below"] as const;
 export type StorefrontBlockTarget = (typeof STOREFRONT_BLOCK_TARGETS)[number];
+
+/** Slots on public pages that app components fill. */
+export const STOREFRONT_COMPONENT_SLOTS = [
+  // In the header, beside search, account and cart.
+  "header.actions",
+  // The product's buy box: before the price and options, and after the buttons.
+  "product.buy-box.before",
+  "product.buy-box.after",
+  // After the product page's modules.
+  "product.below",
+  // Footer columns, after the store's menus.
+  "footer.columns",
+] as const;
+export type StorefrontComponentSlot = (typeof STOREFRONT_COMPONENT_SLOTS)[number];
+
+/** The component slots the merchant arranges in the theme (the product page's app blocks). */
+export const STOREFRONT_PRODUCT_SLOTS = ["product.buy-box.before", "product.buy-box.after", "product.below"] as const satisfies readonly StorefrontComponentSlot[];
+export type StorefrontProductSlot = (typeof STOREFRONT_PRODUCT_SLOTS)[number];
+
+/** Where an app component renders: a component slot, or `page` (an app page its proxy route answers). */
+export const STOREFRONT_COMPONENT_TARGETS = [...STOREFRONT_COMPONENT_SLOTS, "page"] as const;
+export type StorefrontComponentTarget = (typeof STOREFRONT_COMPONENT_TARGETS)[number];
+
+/** Slots on the buyer's own pages that `buyer.ui` trees fill, with the page group that draws each. */
+export const STOREFRONT_UI_SLOT_PAGES = {
+  // The cart page (checkout's information step).
+  "checkout.contact.after": "checkout",
+  "checkout.delivery.after": "checkout",
+  "cart.page.summary": "checkout",
+  // The payment step.
+  "checkout.payment.after": "checkout",
+  "checkout.actions.before": "checkout",
+  // The thank-you page.
+  "order.confirmation": "order",
+  // The order status page (signed in, or the receipt's status view).
+  "account.order": "order",
+  "account.overview": "account",
+  "account.profile": "account",
+} as const;
+export type StorefrontUiSlot = keyof typeof STOREFRONT_UI_SLOT_PAGES;
+export type StorefrontUiSlotPage = (typeof STOREFRONT_UI_SLOT_PAGES)[StorefrontUiSlot];
+export const STOREFRONT_UI_SLOTS = Object.keys(STOREFRONT_UI_SLOT_PAGES) as [StorefrontUiSlot, ...StorefrontUiSlot[]];
+
+/** The UI slots one buyer page group draws (`checkout`: the cart page and the payment step). */
+export function storefrontUiSlotsOn(page: StorefrontUiSlotPage): StorefrontUiSlot[] {
+  return STOREFRONT_UI_SLOTS.filter((slot) => STOREFRONT_UI_SLOT_PAGES[slot] === page);
+}
 
 /**
  * Core embeds: `<scalius-embed kind="…">` in a component's markup, where the

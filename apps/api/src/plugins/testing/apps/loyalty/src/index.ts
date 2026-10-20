@@ -18,7 +18,7 @@
 // in this example; the ledger keeps what each order earned for a merchant to
 // adjust by hand.
 
-import { definePlugin, PLUGIN_API_VERSION, readOne, type PluginContext, type PluginManifestInput } from "@scalius/plugin-sdk";
+import { definePlugin, PLUGIN_API_VERSION, readOne, ui, type PluginContext, type PluginManifestInput } from "@scalius/plugin-sdk";
 import { formatNumber } from "@scalius/shared/locale-format";
 
 export const manifest = {
@@ -36,7 +36,7 @@ export const manifest = {
   events: ["order.paid"],
   functions: [
     { point: "checkout.discounts", priority: 200, reads: [{ as: "balance", object: "balances", key: "customer" }] },
-    { point: "buyer.ui", targets: ["purchase.checkout.actions.render-before", "customer-account.order-index.block.render"], reads: [{ as: "balance", object: "balances", key: "customer" }] },
+    { point: "buyer.ui", targets: ["checkout.actions.before", "account.overview"], reads: [{ as: "balance", object: "balances", key: "customer" }] },
   ],
   objects: {
     // Record id: the buyer's customer id. `{ points, earned, spent }`.
@@ -168,13 +168,13 @@ export default definePlugin({
       if (!customer) return { ui: null };
       const balance = balanceOf(readOne(reads, "balance")?.data);
       const code = String(settings.code ?? "").trim().toUpperCase();
-      const canRedeem = target.startsWith("purchase.checkout.") && cart && code
+      const canRedeem = target.startsWith("checkout.") && cart && code
         && balance.points >= Math.max(1, wholeSetting(settings.min_redeem, 50))
         && !cart.discountCodes.some((value) => value.trim().toUpperCase() === code);
-      return { ui: { type: "stack", children: [
-        { type: "key-value", items: [{ label: "Loyalty points", value: formatNumber(balance.points, locale) }] },
-        ...(canRedeem ? [{ type: "button" as const, label: "Redeem points", action: { kind: "apply_code" as const, code } }] : []),
-      ] } };
+      return { ui: ui.view([
+        ui.keyValue([{ label: "Loyalty points", value: formatNumber(balance.points, locale) }]),
+        ...(canRedeem ? [ui.button("Redeem points", ui.cart.applyCode(code))] : []),
+      ]) };
     },
     "checkout.discounts": ({ cart, reads }, settings) => {
       const code = String(settings.code ?? "").trim().toUpperCase();

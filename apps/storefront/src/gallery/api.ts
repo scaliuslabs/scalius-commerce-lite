@@ -243,12 +243,12 @@ function checkoutApps(entry: GalleryEntry) {
   if (!entry.scenario.checkoutBuyerUi) return [];
   return [
     {
-      appId: "acme.notes", releaseId: "gallery", target: "purchase.checkout.contact.render-after",
+      appId: "acme.notes", releaseId: "gallery", target: "checkout.contact.after",
       attributes: [{ key: "gift_note", type: "multiline", label: "Gift message", maxLength: 500 }], values: {},
       ui: { type: "field", attribute: "gift_note" },
     },
     {
-      appId: "acme.loyalty", releaseId: "gallery", target: "purchase.checkout.cart-line-list.render-after", attributes: [], values: {},
+      appId: "acme.loyalty", releaseId: "gallery", target: "cart.page.summary", attributes: [], values: {},
       ui: { type: "banner", tone: "info", text: "You will earn 120 Nakshi points with this order." },
     },
   ];

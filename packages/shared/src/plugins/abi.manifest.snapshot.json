@@ -229,15 +229,15 @@
        "items": {
         "type": "string",
         "enum": [
-         "purchase.checkout.contact.render-after",
-         "purchase.checkout.shipping-option-list.render-after",
-         "purchase.checkout.cart-line-list.render-after",
-         "purchase.checkout.payment-method-list.render-after",
-         "purchase.checkout.actions.render-before",
-         "purchase.thank-you.customer-information.render-after",
-         "customer-account.order-status.block.render",
-         "customer-account.order-index.block.render",
-         "customer-account.profile.block.render"
+         "checkout.contact.after",
+         "checkout.delivery.after",
+         "cart.page.summary",
+         "checkout.payment.after",
+         "checkout.actions.before",
+         "order.confirmation",
+         "account.order",
+         "account.overview",
+         "account.profile"
         ]
        }
       },

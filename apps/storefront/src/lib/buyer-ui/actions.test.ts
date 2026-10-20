@@ -7,7 +7,7 @@ const { addToCart, addDiscountCode } = vi.hoisted(() => ({ addToCart: vi.fn(), a
 vi.mock("@/store/cart", () => ({ addToCart, addDiscountCode }));
 const fetchMock = vi.fn();
 const block: BuyerUiBlock = {
-  appId: "vendor.example", releaseId: "release_1", target: "purchase.checkout.actions.render-before",
+  appId: "vendor.example", releaseId: "release_1", target: "checkout.actions.before",
   ui: { type: "text", text: "Example" }, attributes: [], values: {},
 };
 const product = {
@@ -37,7 +37,7 @@ describe("buyer UI actions", () => {
   it("resolves the exact SKU on the store channel in the current market and uses host pricing", async () => {
     fetchMock.mockResolvedValueOnce(reply({ products: [{ id: "prod_1", slug: "shirt" }] }))
       .mockResolvedValueOnce(reply({ product, variants: [variant] }));
-    await expect(runBuyerUiAction({ kind: "add_line", variantId: "var_1", quantity: 2 }, block))
+    await expect(runBuyerUiAction({ kind: "cart", op: "add_line", variantId: "var_1", quantity: 2 }, block))
       .resolves.toMatchObject({ message: expect.any(String) });
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
       "https://api.example.test/api/v1/products?ids=var_1&limit=1&presence=en-in",
@@ -57,21 +57,21 @@ describe("buyer UI actions", () => {
   ])("refuses products requiring buyer choices and unavailable or mismatched SKUs", async (detail) => {
     fetchMock.mockResolvedValueOnce(reply({ products: [{ id: "prod_1", slug: "shirt" }] }))
       .mockResolvedValueOnce(reply(detail));
-    await expect(runBuyerUiAction({ kind: "add_line", variantId: "var_1", quantity: 1 }, block)).rejects.toThrow();
+    await expect(runBuyerUiAction({ kind: "cart", op: "add_line", variantId: "var_1", quantity: 1 }, block)).rejects.toThrow();
     expect(addToCart).not.toHaveBeenCalled();
   });
 
   it("keeps codes local and refuses checkout mutations from account surfaces", async () => {
-    await runBuyerUiAction({ kind: "apply_code", code: "PRIVATE" }, block);
+    await runBuyerUiAction({ kind: "cart", op: "apply_code", code: "PRIVATE" }, block);
     expect(addDiscountCode).toHaveBeenCalledWith("PRIVATE");
-    await expect(runBuyerUiAction({ kind: "add_line", variantId: "var_1", quantity: 1 },
-      { ...block, target: "customer-account.profile.block.render" })).rejects.toThrow();
+    await expect(runBuyerUiAction({ kind: "cart", op: "add_line", variantId: "var_1", quantity: 1 },
+      { ...block, target: "account.profile" })).rejects.toThrow();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("posts body-only to the app with the buyer session and treats ui.result navigation as inert", async () => {
     fetchMock.mockResolvedValue(Response.json({ toast: { message: "Saved" }, navigate: { href: "https://bad.test" }, ui: "<script>" }));
-    await expect(runBuyerUiAction({ kind: "app_route", route: "save", body: { private: "buyer value" } }, block))
+    await expect(runBuyerUiAction({ kind: "route", route: "save", body: { private: "buyer value" } }, block))
       .resolves.toEqual({ message: "Saved" });
     expect(fetchMock).toHaveBeenCalledWith("/apps/vendor.example/save", expect.objectContaining({
       method: "POST", credentials: "same-origin", redirect: "error", body: '{"private":"buyer value"}',
@@ -80,9 +80,9 @@ describe("buyer UI actions", () => {
   });
 
   it("rejects routes outside the app and surfaces bounded result errors as text", async () => {
-    await expect(runBuyerUiAction({ kind: "app_route", route: "../outside" }, block)).rejects.toThrow();
+    await expect(runBuyerUiAction({ kind: "route", route: "../outside" }, block)).rejects.toThrow();
     expect(fetchMock).not.toHaveBeenCalled();
     fetchMock.mockResolvedValue(Response.json({ errors: { note: "Choose a delivery date" } }));
-    await expect(runBuyerUiAction({ kind: "app_route", route: "save" }, block)).rejects.toThrow("Choose a delivery date");
+    await expect(runBuyerUiAction({ kind: "route", route: "save" }, block)).rejects.toThrow("Choose a delivery date");
   });
 });

@@ -70,7 +70,7 @@ app.openapi(createRoute({
   });
   const buyerUi = apps.points.has("buyer.ui")
     ? await apps.buyerUi?.({
-      targets: ["customer-account.order-index.block.render", "customer-account.profile.block.render"],
+      targets: ["account.overview", "account.profile"],
       language: c.req.header("x-storefront-language"),
       locale: c.req.header("x-storefront-locale"),
       currency: (await readStoreCurrency(db)).code,

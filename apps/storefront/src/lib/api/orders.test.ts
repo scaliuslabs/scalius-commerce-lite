@@ -257,7 +257,7 @@ describe("storefront orders API client", () => {
 
   it("fetches private receipts with header proof instead of URL proof", async () => {
     const buyerUi = [{
-      appId: "example.loyalty", releaseId: "release_1", target: "purchase.thank-you.customer-information.render-after",
+      appId: "example.loyalty", releaseId: "release_1", target: "order.confirmation",
       ui: { type: "text", text: "You earned 20 points" }, attributes: [], values: {},
     }];
     mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({

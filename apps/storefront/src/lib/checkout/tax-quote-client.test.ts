@@ -115,7 +115,7 @@ describe("tax quote client contract", () => {
     expect(buildTaxQuoteRequest({ ...checkoutData(), attributes: JSON.stringify(attributes) }).attributes).toEqual(attributes);
     expect(() => buildTaxQuoteRequest({ ...checkoutData(), attributes: { "test.gift.message": "a".repeat(501) } })).toThrow(TaxQuoteUnavailableError);
     expect(() => buildTaxQuoteRequest({ ...checkoutData(), attributes: "broken" })).toThrow(TaxQuoteUnavailableError);
-    const buyerUi = [{ appId: "test.gift", releaseId: "release_1", target: "purchase.checkout.contact.render-after" as const,
+    const buyerUi = [{ appId: "test.gift", releaseId: "release_1", target: "checkout.contact.after" as const,
       ui: { type: "field" as const, attribute: "message" }, attributes: [{ key: "message", label: "Gift message", type: "text" as const }], values: { message: "Happy birthday" } }];
     expect(parseTaxQuoteEnvelope({ success: true, data: validQuote({ buyerUi }) }).buyerUi).toEqual(buyerUi);
     expect(parseTaxQuoteEnvelope({ success: true, data: { ...validQuote(), buyerUi: [{ ui: "<script>" }] } }).buyerUi).toBeUndefined();

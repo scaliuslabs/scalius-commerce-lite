@@ -369,7 +369,7 @@ app.openapi(taxQuoteRoute, async (c) => {
     ), paymentProviders);
   const toAmount = (minor: number) => fromMinor(minor, quote.decimalPlaces);
   return ok(c, {
-    buyerUi: await apps.buyerUi?.({ language: c.req.header("x-storefront-language"), locale: c.req.header("x-storefront-locale"), targets: ["purchase.checkout.contact.render-after", "purchase.checkout.shipping-option-list.render-after", "purchase.checkout.cart-line-list.render-after", "purchase.checkout.payment-method-list.render-after", "purchase.checkout.actions.render-before"], currency: quote.currencyCode, cart: pricing.appCart, attributes, customer: sessionCustomer?.customerId ? { id: sessionCustomer.customerId } : null }) ?? [],
+    buyerUi: await apps.buyerUi?.({ language: c.req.header("x-storefront-language"), locale: c.req.header("x-storefront-locale"), targets: ["checkout.contact.after", "checkout.delivery.after", "cart.page.summary", "checkout.payment.after", "checkout.actions.before"], currency: quote.currencyCode, cart: pricing.appCart, attributes, customer: sessionCustomer?.customerId ? { id: sessionCustomer.customerId } : null }) ?? [],
     valid: true as const,
     quoteFingerprint: await buildStorefrontCheckoutQuoteFingerprint(
       quote,

@@ -858,7 +858,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
     </div>
 
     <div
-      data-buyer-ui-target={statusView ? "customer-account.order-status.block.render" : "purchase.thank-you.customer-information.render-after"}
+      data-buyer-ui-target={statusView ? "account.order" : "order.confirmation"}
       data-buyer-ui={JSON.stringify(order.buyerUi ?? [])}
       class="mt-6 empty:hidden print:hidden"
     ></div>

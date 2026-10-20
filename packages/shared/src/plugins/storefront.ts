@@ -1,5 +1,4 @@
-// Public storefront head contributions and proxy pages, plus the targets
-// core uses for declarative Buyer UI. Components render at the edge.
+// Public storefront head contributions and proxy pages (slots: storefront-protocol.ts).
 
 import { z } from "zod";
 import { serializeSchemaJsonLd } from "./html";
@@ -26,36 +25,6 @@ export function pluginSurfaceKey(pluginId: string, type: string): string {
 export function parsePluginSurfaceKey(key: string): { pluginId: string; type: string } | null {
   const match = PLUGIN_SURFACE_KEY_PATTERN.exec(key);
   return match ? { pluginId: match[1]!, type: match[2]! } : null;
-}
-
-// ── Checkout and customer-account blocks ─────────────────────────────────
-
-/** Targets for declarative Buyer UI. App code never renders on these pages. */
-export const PLUGIN_BLOCK_TARGETS = [
-  // Checkout: the information step (cart page) and the payment step.
-  "purchase.checkout.contact.render-after",
-  "purchase.checkout.shipping-option-list.render-after",
-  "purchase.checkout.cart-line-list.render-after",
-  "purchase.checkout.payment-method-list.render-after",
-  "purchase.checkout.actions.render-before",
-  // The thank-you page.
-  "purchase.thank-you.customer-information.render-after",
-  // Customer accounts: the order status page, the orders list and the profile.
-  "customer-account.order-status.block.render",
-  "customer-account.order-index.block.render",
-  "customer-account.profile.block.render",
-] as const;
-export type PluginBlockTarget = (typeof PLUGIN_BLOCK_TARGETS)[number];
-
-/** Buyer UI page groups. */
-export const PLUGIN_BLOCK_PAGES = ["checkout", "order", "account"] as const;
-export type PluginBlockPage = (typeof PLUGIN_BLOCK_PAGES)[number];
-
-/** The page group a target draws on. */
-export function pluginBlockPage(target: PluginBlockTarget): PluginBlockPage {
-  if (target.startsWith("purchase.checkout.")) return "checkout";
-  if (target === "purchase.thank-you.customer-information.render-after" || target === "customer-account.order-status.block.render") return "order";
-  return "account";
 }
 
 // ── Head contributions ────────────────────────────────────────────────────

@@ -271,7 +271,7 @@ app.openapi(cartValidationRoute, async (c) => {
   });
   const attributes = validateCheckoutAttributes(apps, data.attributes);
   let appCart: FunctionCart | null = null;
-  const buyerUi = () => apps.buyerUi?.({ language: c.req.header("x-storefront-language"), locale: c.req.header("x-storefront-locale"), targets: ["purchase.checkout.contact.render-after", "purchase.checkout.shipping-option-list.render-after", "purchase.checkout.cart-line-list.render-after", "purchase.checkout.payment-method-list.render-after", "purchase.checkout.actions.render-before"], currency: money.currencyCode, cart: appCart, attributes }) ?? [];
+  const buyerUi = () => apps.buyerUi?.({ language: c.req.header("x-storefront-language"), locale: c.req.header("x-storefront-locale"), targets: ["checkout.contact.after", "checkout.delivery.after", "cart.page.summary", "checkout.payment.after", "checkout.actions.before"], currency: money.currencyCode, cart: appCart, attributes }) ?? [];
   /** App rules, once the platform finds nothing to repair (the signed-in buyer's segments included). */
   const ruleErrorsFor = async (
     valid: boolean,

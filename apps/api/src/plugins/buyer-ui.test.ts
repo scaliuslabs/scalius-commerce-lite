@@ -6,7 +6,7 @@ import type { AppReadsCache } from "@scalius/core/modules/checkout";
 import type { PluginHost } from "./host";
 import { runPluginFunctions } from "./functions";
 import { prepareBuyerUiBlocks } from "./buyer-ui";
-const target = "purchase.checkout.actions.render-before" as const;
+const target = "checkout.actions.before" as const;
 const registration = {
   name: "buyer.ui", priority: 100,
   installation: { pluginId: "test.notes", grant: { functions: ["buyer.ui"] }, manifest: {
@@ -17,13 +17,13 @@ const registration = {
 const input = { target, language: "bn", locale: "bn-BD", currency: "BDT", cart: null, order: null, customer: { id: "cus_1" }, attributes: { "test.notes.gift": "hello", "other.app.secret": "private" } };
 describe("buyer UI runtime", () => {
   it("runs only declared targets and exposes only the app's attributes", async () => {
-    const invokeFunction = vi.fn().mockResolvedValue({ ok: true, value: { ui: { type: "text", text: "Hello" } } });
+    const invokeFunction = vi.fn().mockResolvedValue({ ok: true, value: { ui: { version: 1, root: { type: "text", text: "Hello" } } } });
     const options = { db: {} as Database, registered: [registration], host: { invokeFunction } as unknown as PluginHost };
     const results = await runPluginFunctions("buyer.ui", input, {} as Env, {} as ExecutionContext, options);
     expect(results).toHaveLength(1);
     expect(invokeFunction.mock.calls[0]![2]).toMatchObject({ attributes: { gift: "hello" }, customer: { id: "cus_1" } });
     expect(JSON.stringify(invokeFunction.mock.calls[0]![2])).not.toContain("private");
-    expect(await runPluginFunctions("buyer.ui", { ...input, target: "customer-account.profile.block.render" }, {} as Env, {} as ExecutionContext, options)).toEqual([]);
+    expect(await runPluginFunctions("buyer.ui", { ...input, target: "account.profile" }, {} as Env, {} as ExecutionContext, options)).toEqual([]);
     expect(invokeFunction).toHaveBeenCalledTimes(1);
   });
   it("passes each app only its own declared reads, and treats reads over their bounds as a failed answer", async () => {
@@ -54,9 +54,9 @@ describe("buyer UI runtime", () => {
     const block = { appId: "test.notes", releaseId: "a".repeat(64), target, attributes: [], values: {} };
     expect(await prepareBuyerUiBlocks(db, [
       { ...block, ui: { type: "field", attribute: "secret" } },
-      { ...block, ui: { type: "button", label: "Act", action: { kind: "app_route", route: "undeclared" } } },
+      { ...block, ui: { type: "button", label: "Act", action: { kind: "route", route: "undeclared" } } },
     ], [registration])).toEqual([]);
     expect(db.select).not.toHaveBeenCalled();
-    expect(await prepareBuyerUiBlocks(db, [{ ...block, ui: { type: "button", label: "Redeem", action: { kind: "app_route", route: "redeem" } } }], [registration])).toHaveLength(1);
+    expect(await prepareBuyerUiBlocks(db, [{ ...block, ui: { type: "button", label: "Redeem", action: { kind: "route", route: "redeem" } } }], [registration])).toHaveLength(1);
   });
 });

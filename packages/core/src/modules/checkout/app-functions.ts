@@ -36,7 +36,7 @@ import {
   type CheckoutAttribute,
   type BuyerUiBlock,
   type BuyerUiInput,
-  type PluginBlockTarget,
+  type StorefrontUiSlot,
   type PluginFunctionInput,
   type PluginFunctionOutput,
   type PluginFunctionPoint,
@@ -76,7 +76,7 @@ export interface CheckoutAppFunctionResult<P extends PluginFunctionPoint> {
 export interface CheckoutAppFunctions {
   readonly points: ReadonlySet<PluginFunctionPoint>;
   readonly attributes?: ReadonlyArray<{ appId: string; fields: CheckoutAttribute[] }>;
-  buyerUi?(input: Partial<Omit<BuyerUiInput, "target">> & { targets: readonly PluginBlockTarget[]; currency: string }): Promise<BuyerUiBlock[]>;
+  buyerUi?(input: Partial<Omit<BuyerUiInput, "target">> & { targets: readonly StorefrontUiSlot[]; currency: string }): Promise<BuyerUiBlock[]>;
   /** `reads` is the platform's: each app gets its own declared reads. */
   run<P extends PluginFunctionPoint>(point: P, input: Omit<PluginFunctionInput<P>, "reads">): Promise<Array<CheckoutAppFunctionResult<P>>>;
   /** The declared reads of the apps at these points (none: no read). */

@@ -1894,10 +1894,10 @@ describe("private checkout buyer fields", () => {
     installStripePaymentFixture();
     (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__.activeDefaultMethod = "cod";
     const mount = document.createElement("div");
-    mount.dataset.buyerUiTarget = "purchase.checkout.actions.render-before";
+    mount.dataset.buyerUiTarget = "checkout.actions.before";
     document.body.append(mount);
     cartStore.set({ items: { line_1: { id: "prod_1", variantId: "var_1", name: "Product", price: 100, quantity: 1 } }, totalItems: 1, totalAmount: 100, discountCodes: [] });
-    const buyerUi = [{ appId: "test.gift", releaseId: "release_1", target: "purchase.checkout.actions.render-before" as const,
+    const buyerUi = [{ appId: "test.gift", releaseId: "release_1", target: "checkout.actions.before" as const,
       ui: { type: "field" as const, attribute: "message" }, attributes: [{ key: "message", label: "Gift message", type: "text" as const, required: true }], values: {} }];
     const quoteRequests: Record<string, unknown>[] = [];
     const orderRequests: Record<string, unknown>[] = [];

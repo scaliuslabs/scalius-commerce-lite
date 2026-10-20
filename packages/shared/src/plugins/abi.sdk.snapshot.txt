@@ -355,7 +355,7 @@ export type * from "./context";
 export { PLUGIN_API_VERSION } from "@scalius/shared/plugins/api-version";
 export { ProviderError, type ProviderErrorCategory } from "@scalius/shared/plugins/providers/kinds";
 export type { CourierFind, CourierRecipient, CourierShipment, CourierShipmentInput, CourierRatesInput, CourierRates, CourierShipmentStatus, CourierTracking, CourierWebhook, CourierWebhookReply, EmailSend, EmailSendInput, FraudCheck, FraudCheckInput, MessageStatus, PaymentEvent, PaymentQuery, PaymentQueryInput, PaymentRefund, PaymentRefundInput, PaymentRefundProbe, PaymentRefundProbeInput, PaymentSession, PaymentSessionInput, PaymentSettlement, PaymentVerification, ProviderConnection, ProviderHttpRequest, ProviderImplementation, ProviderKind, ProviderOperationInput, ProviderOperationOutput, ProviderWireAmount, SmsSend, SmsSendInput, TaxAddress, TaxCalculateInput, TaxCalculation, TaxCalculationLine, } from "@scalius/shared/plugins/providers";
-export type { PluginFeature, PluginFeatureInput, PluginManifest, PluginManifestInput, PluginUiActionResult, PluginUiDocument, PluginUiNode, PluginUiTarget, } from "@scalius/shared/plugins";
+export type { PluginFeature, PluginFeatureInput, PluginManifest, PluginManifestInput, PluginUiAction, PluginUiActionResult, PluginUiDocument, PluginUiNode, PluginUiSurface, PluginUiTarget, } from "@scalius/shared/plugins";
 export { adminContext, adminLocale, ui, wantsPage, type PluginAdminContext, type PluginAdminLocale } from "./ui";
 export type PluginEventHandler<T extends EventTopic = EventTopic> = (event: PluginEvent<T>, ctx: PluginContext) => Promise<void> | void;
 export type PluginFunctionHandler<P extends PluginFunctionPoint> = (input: PluginFunctionInput<P>, settings: Readonly<Record<string, PluginSettingValue>>) => PluginFunctionAnswer<P> | Promise<PluginFunctionAnswer<P>>;
@@ -815,7 +815,7 @@ import { type PluginFunctionInputDraft, type PluginFunctionOutput, type PluginFu
 import type { EventTopic } from "@scalius/shared/events";
 import type { PluginApiCallInput, PluginApiResult, PluginEvent, PluginRouteRequest, PluginStoreInfo } from "./context";
 import { type PluginInvocationResult, type PluginLogRecord } from "./runtime";
-export { parsePluginUiActionResult, parsePluginUiDocument, pluginUiRouteActions, sanitizePluginHead, } from "@scalius/shared/plugins";
+export { parsePluginUiActionResult, parsePluginUiDocument, pluginUiActions, pluginUiRouteActions, sanitizePluginHead, } from "@scalius/shared/plugins";
 export { sanitizePluginHtml } from "@scalius/shared/plugins/html";
 export { fixtures } from "./fixtures";
 export interface PluginTestHarnessOptions {
@@ -854,7 +854,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
             url?: string | undefined;
             email?: string | undefined;
         };
-        categories: ("shipping" | "payments" | "orders" | "inventory" | "returns" | "checkout" | "pricing" | "marketing" | "loyalty" | "store-design" | "content" | "notifications" | "analytics" | "finances" | "support" | "operations" | "compliance")[];
+        categories: ("checkout" | "shipping" | "payments" | "orders" | "inventory" | "returns" | "pricing" | "marketing" | "loyalty" | "store-design" | "content" | "notifications" | "analytics" | "finances" | "support" | "operations" | "compliance")[];
         screenshots: string[];
         scopes: ("read_products" | "write_products" | "read_inventory" | "write_inventory" | "read_orders" | "write_orders" | "write_fulfillments" | "read_customers" | "write_customers" | "write_marketing" | "send_messages_any" | "read_customer_names" | "read_customer_emails" | "read_customer_phones" | "read_customer_addresses" | "read_discounts" | "write_discounts" | "read_content" | "write_content" | "read_objects" | "write_objects" | "read_files" | "write_files" | "read_settings" | "write_places")[];
         allowedHosts: string[];
@@ -878,7 +878,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
                 } | undefined;
                 max?: number | undefined;
             })[];
-            targets?: ("purchase.checkout.contact.render-after" | "purchase.checkout.shipping-option-list.render-after" | "purchase.checkout.cart-line-list.render-after" | "purchase.checkout.payment-method-list.render-after" | "purchase.checkout.actions.render-before" | "purchase.thank-you.customer-information.render-after" | "customer-account.order-status.block.render" | "customer-account.order-index.block.render" | "customer-account.profile.block.render")[] | undefined;
+            targets?: ("checkout.contact.after" | "checkout.delivery.after" | "cart.page.summary" | "checkout.payment.after" | "checkout.actions.before" | "order.confirmation" | "account.order" | "account.overview" | "account.profile")[] | undefined;
         }[];
         providers: import("@scalius/shared/plugins/providers").PluginProviderDeclaration[];
         routes: {
@@ -929,7 +929,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
             admin?: "none" | "read" | "edit" | undefined;
         }>;
         customFields: {
-            ownerType: "page" | "product" | "order" | "customer" | "category" | "collection" | "brand" | "variant";
+            ownerType: "page" | "order" | "product" | "customer" | "category" | "collection" | "brand" | "variant";
             key: string;
             name: string;
             type: "boolean" | "date" | "url" | "integer" | "decimal" | "single_line_text" | "multi_line_text" | "date_time" | "color" | "json" | "money" | "product_reference" | "variant_reference" | "collection_reference" | "media_reference" | "object_reference" | "list.date" | "list.url" | "list.integer" | "list.decimal" | "list.single_line_text" | "list.multi_line_text" | "list.date_time" | "list.color" | "list.money" | "list.product_reference" | "list.variant_reference" | "list.collection_reference" | "list.media_reference" | "list.object_reference";
@@ -1210,13 +1210,13 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
             }[];
             cards: {
                 id: string;
-                target: "page" | "product" | "order" | "customer" | "category" | "collection" | "brand" | "return" | "variant";
+                target: "page" | "order" | "product" | "customer" | "category" | "collection" | "brand" | "return" | "variant";
                 title: string;
                 route: string;
             }[];
             actions: {
                 id: string;
-                target: "page" | "product" | "order" | "customer" | "category" | "collection" | "brand" | "return" | "variant";
+                target: "page" | "order" | "product" | "customer" | "category" | "collection" | "brand" | "return" | "variant";
                 label: string;
                 route: string;
                 bulk: boolean;
@@ -1229,7 +1229,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
             }[];
             listColumns: {
                 id: string;
-                resource: "product" | "order" | "customer";
+                resource: "order" | "product" | "customer";
                 title: string;
                 type: "number" | "boolean" | "text" | "date" | "money";
                 source: {
@@ -2044,7 +2044,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
 };
 
 // packages/plugin-sdk/src/ui.d.ts
-import type { PluginUiActionResult, PluginUiButton, PluginUiDocument, PluginUiNode, PluginUiTarget, PluginUiTone } from "@scalius/shared/plugins";
+import type { PluginUiAction, PluginUiActionResult, PluginUiButton, PluginUiDocument, PluginUiImageSource, PluginUiNode, PluginUiRouteAction, PluginUiTarget, PluginUiTone } from "@scalius/shared/plugins";
 import type { PluginRouteRequest } from "./context";
 type NodeOf<T extends PluginUiNode["type"]> = Extract<PluginUiNode, {
     type: T;
@@ -2065,24 +2065,32 @@ export declare const ui: {
     stat: (label: string, value: string | number, help?: string) => PluginUiNode;
     table: (options: Options<"table">) => PluginUiNode;
     empty: (title: string, options?: Options<"empty-state", "title">) => PluginUiNode;
-    image: (src: string, alt: string, options?: Options<"image", "src" | "alt">) => PluginUiNode;
+    image: (src: PluginUiImageSource, alt: string, options?: Options<"image", "src" | "alt">) => PluginUiNode;
     link: (text: string, to: PluginUiTarget) => PluginUiNode;
     divider: () => PluginUiNode;
-    button: (label: string, action: NonNullable<PluginUiButton["action"]>, options?: Omit<PluginUiButton, "type" | "label" | "action" | "to">) => PluginUiButton;
-    linkButton: (label: string, to: PluginUiTarget, options?: Omit<PluginUiButton, "type" | "label" | "action" | "to">) => PluginUiButton;
-    form: (action: NodeOf<"form">["action"], submitLabel: string, children: PluginUiNode[], options?: Options<"form", "action" | "submitLabel" | "children">) => PluginUiNode;
+    button: (label: string, action: PluginUiAction, options?: Omit<PluginUiButton, "type" | "label" | "action">) => PluginUiButton;
+    form: (action: PluginUiRouteAction, submitLabel: string, children: PluginUiNode[], options?: Options<"form", "action" | "submitLabel" | "children">) => PluginUiNode;
     textField: (name: string, label: string, options?: Options<"text-field", "name" | "label">) => PluginUiNode;
     textarea: (name: string, label: string, options?: Options<"textarea", "name" | "label">) => PluginUiNode;
     numberField: (name: string, label: string, options?: Options<"number-field", "name" | "label">) => PluginUiNode;
     select: (name: string, label: string, options: NodeOf<"select">["options"], rest?: Options<"select", "name" | "label" | "options">) => PluginUiNode;
     checkbox: (name: string, label: string, options?: Options<"checkbox", "name" | "label">) => PluginUiNode;
     dateField: (name: string, label: string, options?: Options<"date-field", "name" | "label">) => PluginUiNode;
+    field: (attribute: string) => PluginUiNode;
+    route: (route: string, options?: Omit<PluginUiRouteAction, "kind" | "route">) => PluginUiRouteAction;
+    navigate: (to: PluginUiTarget) => PluginUiAction;
+    cart: {
+        addLine: (variantId: string, quantity?: number) => PluginUiAction;
+        applyCode: (code: string) => PluginUiAction;
+        setAttribute: (key: string, value: string) => PluginUiAction;
+    };
     to: {
         resource: (resource: Extract<PluginUiTarget, {
             kind: "resource";
         }>["resource"], id: string) => PluginUiTarget;
         page: (page: string, query?: Record<string, string>) => PluginUiTarget;
         external: (href: string) => PluginUiTarget;
+        store: (path: string) => PluginUiTarget;
     };
     result: (result: Omit<PluginUiActionResult, "toast"> & {
         toast?: string | PluginUiActionResult["toast"];
@@ -2112,6 +2120,27 @@ export declare const STOREFRONT_SECTION_SKIN_PREFIX = "section:";
 export type StorefrontSkinTarget = StorefrontSkinUnit | `section:${string}`;
 export declare const STOREFRONT_BLOCK_TARGETS: readonly ["product.buy-box", "product.below"];
 export type StorefrontBlockTarget = (typeof STOREFRONT_BLOCK_TARGETS)[number];
+export declare const STOREFRONT_COMPONENT_SLOTS: readonly ["header.actions", "product.buy-box.before", "product.buy-box.after", "product.below", "footer.columns"];
+export type StorefrontComponentSlot = (typeof STOREFRONT_COMPONENT_SLOTS)[number];
+export declare const STOREFRONT_PRODUCT_SLOTS: readonly ["product.buy-box.before", "product.buy-box.after", "product.below"];
+export type StorefrontProductSlot = (typeof STOREFRONT_PRODUCT_SLOTS)[number];
+export declare const STOREFRONT_COMPONENT_TARGETS: readonly ["header.actions", "product.buy-box.before", "product.buy-box.after", "product.below", "footer.columns", "page"];
+export type StorefrontComponentTarget = (typeof STOREFRONT_COMPONENT_TARGETS)[number];
+export declare const STOREFRONT_UI_SLOT_PAGES: {
+    readonly "checkout.contact.after": "checkout";
+    readonly "checkout.delivery.after": "checkout";
+    readonly "cart.page.summary": "checkout";
+    readonly "checkout.payment.after": "checkout";
+    readonly "checkout.actions.before": "checkout";
+    readonly "order.confirmation": "order";
+    readonly "account.order": "order";
+    readonly "account.overview": "account";
+    readonly "account.profile": "account";
+};
+export type StorefrontUiSlot = keyof typeof STOREFRONT_UI_SLOT_PAGES;
+export type StorefrontUiSlotPage = (typeof STOREFRONT_UI_SLOT_PAGES)[StorefrontUiSlot];
+export declare const STOREFRONT_UI_SLOTS: [StorefrontUiSlot, ...StorefrontUiSlot[]];
+export declare function storefrontUiSlotsOn(page: StorefrontUiSlotPage): StorefrontUiSlot[];
 export declare const STOREFRONT_EMBED_KINDS: readonly ["buy-form", "reviews", "recommendations", "filters", "toolbar", "pagination", "order-form", "gallery"];
 export type StorefrontEmbedKind = (typeof STOREFRONT_EMBED_KINDS)[number];
 export declare const STOREFRONT_EMBED_TAG = "scalius-embed";

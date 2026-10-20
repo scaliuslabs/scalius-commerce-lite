@@ -30,16 +30,16 @@ const noBalance = { balance: null };
 
 describe("acme.loyalty", () => {
   const buyer = {
-    target: "purchase.checkout.actions.render-before" as const, language: "en", locale: "en-BD", currency: "BDT",
+    target: "checkout.actions.before" as const, language: "en", locale: "en-BD", currency: "BDT",
     cart: cart({ codes: [] }), attributes: {}, order: null, customer: { id: "cust_1" }, reads: balance(300),
   };
 
   it("shows the read balance and redeems through the existing checkout discount code", async () => {
     const harness = createPluginTestHarness(loyalty);
-    expect((await harness.fn("buyer.ui", buyer)).value).toEqual({ ui: { type: "stack", children: [
+    expect((await harness.fn("buyer.ui", buyer)).value).toEqual({ ui: { version: 1, root: { type: "stack", children: [
       { type: "key-value", items: [{ label: "Loyalty points", value: "300" }] },
-      { type: "button", label: "Redeem points", action: { kind: "apply_code", code: "POINTS" } },
-    ] } });
+      { type: "button", label: "Redeem points", action: { kind: "cart", op: "apply_code", code: "POINTS" } },
+    ] } } });
     const result = await harness.fn("checkout.discounts", { cart: cart({ codes: ["POINTS"] }), reads: buyer.reads });
     expect(result.value).toMatchObject({ commit: [{ as: "balance", record: { points: 0, spent: 300 } }] });
     expect(harness.records.get("balances")!.size).toBe(0);
@@ -49,15 +49,15 @@ describe("acme.loyalty", () => {
     const harness = createPluginTestHarness(loyalty);
     expect((await harness.fn("buyer.ui", { ...buyer, customer: null, reads: noBalance })).value).toEqual({ ui: null });
     for (const input of [
-      { ...buyer, target: "customer-account.order-index.block.render" as const, cart: null },
+      { ...buyer, target: "account.overview" as const, cart: null },
       { ...buyer, reads: noBalance },
       { ...buyer, reads: balance(49) },
       { ...buyer, cart: cart({ codes: ["points"] }) },
     ]) {
       const result = await harness.fn("buyer.ui", input);
       expect(result.ok).toBe(true);
-      expect(result.value).toMatchObject({ ui: { type: "stack", children: [{ type: "key-value" }] } });
-      expect((result.value as { ui: { children: unknown[] } }).ui.children).toHaveLength(1);
+      expect(result.value).toMatchObject({ ui: { root: { type: "stack", children: [{ type: "key-value" }] } } });
+      expect((result.value as { ui: { root: { children: unknown[] } } }).ui.root.children).toHaveLength(1);
     }
   });
 

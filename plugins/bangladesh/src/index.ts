@@ -465,7 +465,7 @@ function pathaoCard(request: PluginRouteRequest, refresh: PathaoRefreshState | n
       { label: t.updated, value: String(refresh.updated) },
       { label: t.pathaoStarted, value: refresh.startedAt.slice(0, 16).replace("T", " ") },
     ])] : []),
-    ui.button(running ? t.pathaoContinue : t.pathaoRefresh, { route: "refresh-pathao-places" }),
+    ui.button(running ? t.pathaoContinue : t.pathaoRefresh, ui.route("refresh-pathao-places")),
   ]);
 }
 
@@ -493,7 +493,7 @@ function placesPage(request: PluginRouteRequest, state: PlacesState | null, refr
   ], {
     title: t.title,
     description: t.description,
-    ...(current ? {} : { actions: [ui.button(t.load, { route: "load-places" })] }),
+    ...(current ? {} : { actions: [ui.button(t.load, ui.route("load-places"))] }),
   });
 }
 

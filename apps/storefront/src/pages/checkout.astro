@@ -174,8 +174,8 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(checkoutLanguage
           <div class="h-16 animate-pulse rounded-xl border border-border bg-muted/50" aria-hidden="true"></div>
           <span class="sr-only" role="status">{copy.loadingPaymentMethodsText}</span>
         </div>
-        <div data-buyer-ui-target="purchase.checkout.payment-method-list.render-after" class="mt-4"></div>
-        <div data-buyer-ui-target="purchase.checkout.actions.render-before" class="mt-4"></div>
+        <div data-buyer-ui-target="checkout.payment.after" class="mt-4"></div>
+        <div data-buyer-ui-target="checkout.actions.before" class="mt-4"></div>
 
         <div id="paymentActionParking" class="hidden">
           <div

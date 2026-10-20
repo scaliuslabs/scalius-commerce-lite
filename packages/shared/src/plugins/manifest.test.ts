@@ -333,7 +333,7 @@ describe("storefront surfaces in the manifest", () => {
 
   it("rejects retired route-rendered buyer blocks", () => {
     const manifest = { id: "acme.notes", name: "Notes", version: "1.0.0", apiVersion: PLUGIN_API_VERSION, description: "Buyer notes", author: { name: "Acme" } };
-    const block = { type: "note", name: "Note", target: "purchase.checkout.contact.render-after", route: "draw" };
+    const block = { type: "note", name: "Note", target: "checkout.contact.after", route: "draw" };
     expect(parsePluginManifest(manifest).ok).toBe(true);
     expect(parsePluginManifest({ ...manifest, storefront: { blocks: [block] } }).ok).toBe(false);
     expect(parsePluginManifest({ ...manifest, features: [{ id: "notes", name: "Notes", description: "Buyer notes", storefront: { blocks: ["note"] } }] }).ok).toBe(false);

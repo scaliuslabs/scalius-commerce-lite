@@ -2,7 +2,8 @@ import { media } from "@scalius/database/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { resolveMediaUrl } from "@scalius/shared/media-url";
-import type { BuyerUiBlock, BuyerUiNode } from "@scalius/shared/plugins/buyer-ui";
+import type { BuyerUiBlock } from "@scalius/shared/plugins/buyer-ui";
+import { pluginUiNodes } from "@scalius/shared/plugins/ui";
 import type { RegisteredPlugin } from "@scalius/core/modules/plugins";
 
 /** Validate references against the app's approved declaration before exposing a tree. */
@@ -13,17 +14,15 @@ export async function prepareBuyerUiBlocks(db: Database, blocks: BuyerUiBlock[],
     const installation = installations.get(block.appId);
     if (!installation) return false;
     const fields = new Set(block.attributes.map((field) => field.key));
-    const pending: BuyerUiNode[] = [block.ui];
-    while (pending.length) {
-      const node = pending.pop()!;
-      if ("children" in node) pending.push(...node.children);
+    const { proxy } = installation.manifest.storefront;
+    for (const node of pluginUiNodes(block.ui)) {
       if (node.type === "field" && !fields.has(node.attribute)) return false;
       if (node.type === "button") {
         const action = node.action;
-        if (action.kind === "set_attribute" && !fields.has(action.key)) return false;
-        if (action.kind === "app_route" && (!installation.manifest.storefront.proxy || !installation.manifest.routes.public.some((route) => route.name === action.route && route.methods.includes("POST")))) return false;
+        if (action.kind === "cart" && action.op === "set_attribute" && !fields.has(action.key)) return false;
+        if (action.kind === "route" && (!proxy || !installation.manifest.routes.public.some((route) => route.name === action.route && route.methods.includes(action.method ?? "POST")))) return false;
       }
-      if (node.type === "image" && "media" in node.src) ids.add(node.src.media);
+      if (node.type === "image" && typeof node.src === "object" && "media" in node.src) ids.add(node.src.media);
     }
     return true;
   });

@@ -284,7 +284,7 @@ Which seam: a decision inside a request is a function; a provider of a capabilit
 
 ## Buyer UI
 
-Declare `functions: [{ point: "buyer.ui", targets: ["purchase.checkout.contact.render-after"] }]` and implement `functions["buyer.ui"]` as a pure function returning `{ ui }`. Core renders a bounded tree of `stack`, `columns`, `heading`, `text`, `badge`, `banner`, `divider`, `key-value`, `image`, `link`, `field` and `button` nodes. A failed function is omitted; it cannot block checkout.
+Declare `functions: [{ point: "buyer.ui", targets: ["checkout.contact.after"] }]` and implement `functions["buyer.ui"]` as a pure function returning `{ ui }`. Core renders a bounded tree of `stack`, `columns`, `heading`, `text`, `badge`, `banner`, `divider`, `key-value`, `image`, `link`, `field` and `button` nodes. A failed function is omitted; it cannot block checkout.
 
 A field names a key in `checkout.attributes`; core owns the input, validation and storage. Buttons may add a line, set an attribute, apply a code or call a declared app route. Images use store media or this app's sealed public files; links use same-store paths. No app HTML or JavaScript reaches private buyer pages.
 

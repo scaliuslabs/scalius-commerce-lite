@@ -18,7 +18,7 @@
 import { z } from "zod";
 import { buyerUiOutputSchema, checkoutAttributesSchema } from "./buyer-ui";
 import { FUNCTION_READ_AS_PATTERN, FUNCTION_READS_MAX, functionReadsSchema } from "./function-reads";
-import { PLUGIN_BLOCK_TARGETS } from "./storefront";
+import { STOREFRONT_UI_SLOTS } from "./storefront-protocol";
 import type { PluginFunctionPoint } from "./manifest";
 
 const id = z.string().min(1).max(128);
@@ -254,7 +254,7 @@ export const cartLinePricesOutputSchema = z.object({
 // ── Registry ──────────────────────────────────────────────────────────────
 
 export const buyerUiInputSchema = z.object({
-  target: z.enum(PLUGIN_BLOCK_TARGETS), language: z.string().min(1).max(35), locale: z.string().min(1).max(35), currency: z.string().length(3),
+  target: z.enum(STOREFRONT_UI_SLOTS), language: z.string().min(1).max(35), locale: z.string().min(1).max(35), currency: z.string().length(3),
   cart: functionCartSchema.nullable(), attributes: checkoutAttributesSchema,
   order: z.object({ orderId: id, status: z.string().max(64), paymentStatus: z.string().max(64), lines: z.array(z.object({ productId: id, variantId: id, quantity: z.number().int().min(1) }).strict()).max(250) }).strict().nullable(),
   customer: z.object({ id }).strict().nullable(), reads,

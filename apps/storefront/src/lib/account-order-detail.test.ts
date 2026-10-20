@@ -92,7 +92,7 @@ beforeEach(() => {
     <div id="orderContent" class="hidden">
       <h1 id="orderTitle"></h1><span id="orderStatus"></span><p id="orderSubtitle"></p>
       <div id="orderPaymentReturnNotice" class="hidden"></div><div id="orderRefundNotice" class="hidden"></div>
-      <div data-buyer-ui-target="customer-account.order-status.block.render"></div>
+      <div data-buyer-ui-target="account.order"></div>
       <div id="orderProgress"></div><p id="orderExpectedDelivery" class="hidden"></p><ol id="orderTimeline"></ol>
       <button id="orderBuyAgain">Buy again</button><p id="orderBuyAgainMessage"></p>
       <ul id="orderItems"></ul><dl id="orderSummary"></dl>
@@ -115,7 +115,7 @@ describe("account order detail", () => {
   it("renders private app content as text and removes it when the next detail has none", () => {
     const content = "<img src=x onerror=alert(1)> Points earned";
     renderOrderDetail(detail({}, { buyerUi: [{
-      appId: "example.loyalty", releaseId: "release_1", target: "customer-account.order-status.block.render",
+      appId: "example.loyalty", releaseId: "release_1", target: "account.order",
       ui: { type: "text", text: content }, attributes: [], values: {},
     }] }), null);
     const mount = document.querySelector("[data-buyer-ui-target]")!;
