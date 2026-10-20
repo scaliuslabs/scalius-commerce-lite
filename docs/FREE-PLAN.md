@@ -67,6 +67,12 @@ pnpm free-plan:budget --json out.json # keep the raw report
 
 The daily quota model charges each order with a 3-line checkout, its notifications, tax quotes, sign-in codes and 20 page views, and adds 1,440 cron ticks a day (the steady-state mean of an hour of ticks). D1 rows written count rows changed times 3, for index entries. In the 100-order run of 2026-10-14, D1 rows written ended a Free store first, at about 270 orders a day (unverified: rerun the command). The Images allowance also ends a Free store before any CPU limit does.
 
+## Catalogue ceiling
+
+Every deploy empties the public cache (each key carries the Worker version), so a crawler then misses every page. Free's 5M rows read a day must pay for at least 200 cold misses of each storefront read: a miss may read at most 25,000 D1 rows. `scripts/scale-proof.mjs` fails a run whose D1 read is over that (`FREE_MISS_ROWS_CEILING`) and prints the reads that are, with their misses a day.
+
+At 50,000 products and 156,244 SKUs (SCALE.md, 2026-10-14) three reads are over it: product page without a stored recommendation list (118,253 rows, 42 misses a day; audit R2 B1), all products by newest (183,735, 27; A9) and search (52,134, 95; A9). Home (908), category page 1 (10,210) and a feed page (12,655) fit. Until those reads are bounded, Free supports a catalogue of up to 10,000 SKUs. That figure scales the 156k-SKU reads linearly and is unverified until a scale proof runs at that size; Paid has no such ceiling.
+
 ## Rules by area
 
 ### Password hashing

@@ -48,6 +48,24 @@ export function parseArgs(argv) {
 
 const fmt = (value, digits = 0) => (typeof value === "number" && Number.isFinite(value) ? value.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits }) : "-");
 
+/**
+ * The Free catalogue ceiling (docs/FREE-PLAN.md): Free's 5M D1 rows read a day must pay for at least
+ * FREE_MISSES_PER_DAY cold misses of every storefront read, because each deploy empties the public cache and a
+ * crawler then misses every page. A D1 read above FREE_MISS_ROWS_CEILING rows fails the scale proof.
+ */
+export const FREE_DAILY_ROWS_READ = 5_000_000;
+export const FREE_MISSES_PER_DAY = 200;
+export const FREE_MISS_ROWS_CEILING = FREE_DAILY_ROWS_READ / FREE_MISSES_PER_DAY;
+
+/** The D1 reads over the Free miss ceiling, as `name: rows (misses a day)`. */
+export function missCeilingFindings(results) {
+  return results
+    .filter((r) => r.provider === "d1")
+    .flatMap((r) => r.reads ?? [])
+    .filter((read) => typeof read.rowsRead === "number" && read.rowsRead > FREE_MISS_ROWS_CEILING)
+    .map((read) => `${read.name}: ${fmt(read.rowsRead)} rows (${fmt(Math.floor(FREE_DAILY_ROWS_READ / read.rowsRead))} misses a day)`);
+}
+
 /** The markdown tables of one run's results (a result per provider, as scripts/scale-proof.test.ts writes it). */
 export function renderResults(results) {
   const lines = [];
@@ -65,6 +83,12 @@ export function renderResults(results) {
       return read ? `${fmt(read.p50)}${read.status === 200 ? "" : ` (HTTP ${read.status})`} | ${fmt(read.p95)} | ${fmt(read.rowsRead)}` : "- | - | -";
     });
     lines.push(`| ${name} | ${cells.join(" | ")} |`);
+  }
+  if (results.some((r) => r.provider === "d1")) {
+    const over = missCeilingFindings(results);
+    lines.push("", over.length === 0
+      ? `Every D1 read is within the Free miss ceiling (${fmt(FREE_MISS_ROWS_CEILING)} rows, ${fmt(FREE_MISSES_PER_DAY)} misses a day).`
+      : `Over the Free miss ceiling (${fmt(FREE_MISS_ROWS_CEILING)} rows, ${fmt(FREE_MISSES_PER_DAY)} misses a day): ${over.join("; ")}.`);
   }
   lines.push("", "Checkout (tax quote, commit and after-response work), orders per second of the orders that succeeded:", "");
   lines.push("| Engine | Scenario | Clients | Orders | Orders/s | p50 ms | p95 ms | Failed | Serialization retries |");
@@ -231,6 +255,9 @@ async function main(argv) {
     const block = docBlock([{ meta, results }]);
     console.log(`\n${block}\n`);
     if (options.writeDoc) writeFileSync(DOC, replaceDocBlock(readFileSync(DOC, "utf8"), block));
+    // Written first, so a failing run still leaves its numbers.
+    const over = missCeilingFindings(results);
+    if (over.length > 0) throw new Error(`D1 reads over the Free miss ceiling of ${fmt(FREE_MISS_ROWS_CEILING)} rows: ${over.join("; ")}`);
   } finally {
     cleanup();
   }

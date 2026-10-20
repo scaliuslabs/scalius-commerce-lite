@@ -157,12 +157,17 @@ It exits 1 when a threshold is exceeded:
 | Metric | Threshold | Flag |
 | --- | --- | --- |
 | Cache-hit TTFB | 50 ms | `--budget-ttfb-hit-ms` |
+| Sparse cache-hit TTFB (with `--sparse`) | 50 ms, the hit threshold | `--budget-ttfb-hit-ms` |
 | Cache-miss TTFB (and pages that always render) | 300 ms | `--budget-ttfb-miss-ms` |
 | Phone LCP | 1200 ms | `--budget-lcp-phone-ms` |
 | Desktop LCP | 300 ms | `--budget-lcp-desktop-ms` |
 | CLS (either profile) | 0.01 | `--budget-cls` |
 
 Other flags: `--base <origin>` (default `http://localhost:4391`), `--paths "/,/products/x"`, `--runs <n>` (default 3), `--profiles phone,desktop`, `--no-browser` (TTFB only), `--json`, `--media-url <origin>`, `--no-binding-check` and `--cdp-port <port>` (default 9395; the script starts its own headless Chrome when nothing listens there).
+
+### Sparse hits
+
+Consecutive hits share one storefront frontier, fresh for 1 s (`CACHE_FRONTIER_DELTA_MS`). A quiet store, under one request a second per data center, refreshes it on every hit: a service-binding call to the placed API and one D1 statement. `--sparse` (or `--sparse-ms <n>`, above 1000) times a second set of hits, each after a 1.5 s wait, and holds their median to the hit threshold. Pages that always render are skipped.
 
 ### Forced misses on a local stack
 
