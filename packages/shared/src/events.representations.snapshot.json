@@ -1940,7 +1940,7 @@
     "updatedAt"
    ]
   },
-  "transaction": {
+  "gift_card_transaction": {
    "type": "object",
    "properties": {
     "id": {
@@ -2146,7 +2146,7 @@
    "recipient.name=name",
    "recipient.phone=phone"
   ],
-  "transaction": [],
+  "gift_card_transaction": [],
   "object": []
  }
 }

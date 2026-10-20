@@ -1,0 +1,8 @@
+[
+ {
+  "snapshot": "events.representations.snapshot.json",
+  "from": "2215ca849929b527",
+  "change": "transaction: the representation was removed.",
+  "reason": "Pre-lock rename (audit R2 item 11): each topic's prefix names its resource, so the gift card ledger resource transaction is gift_card_transaction (topic gift_card_transaction.created) with the same fields and protection; migration 0164 rewrites stored topics, grants, registrations and subscriptions."
+ }
+]

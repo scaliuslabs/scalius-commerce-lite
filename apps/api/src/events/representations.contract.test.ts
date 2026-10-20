@@ -8,7 +8,10 @@
 //   2. the snapshot equals the current schemas exactly, so an additive change
 //      is reviewed: accept it with `vitest run -u` on this file.
 //
-// A breaking change needs a new EVENTS_API_VERSION, not an edited snapshot.
+// A breaking change needs a new EVENTS_API_VERSION, or (before the lock) an
+// entry with a reason in `events.representations.breaks.json`, keyed by the
+// committed snapshot's fingerprint the way `abi.breaks.json` is. The sealing
+// test refuses first, so `-u` cannot write past an unacknowledged break.
 
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
@@ -20,9 +23,16 @@ import {
   eventDataTruncationSchema,
   eventRepresentationProtectedPaths,
 } from "@scalius/shared/events";
+import {
+  snapshotFingerprint,
+  unacknowledgedBreaks,
+  type AbiBreakAcknowledgement,
+} from "@scalius/shared/plugins/abi-compat";
 import { schemaBreakingChanges } from "@scalius/shared/schema-compat";
+import acknowledgements from "../../../../packages/shared/src/events.representations.breaks.json";
 
 const SNAPSHOT_FILE = new URL("../../../../packages/shared/src/events.representations.snapshot.json", import.meta.url);
+const SNAPSHOT_NAME = "events.representations.snapshot.json";
 
 interface RepresentationSnapshot {
   apiVersion: string;
@@ -55,12 +65,25 @@ function currentSnapshot(): RepresentationSnapshot {
   };
 }
 
-function committedSnapshot(): RepresentationSnapshot | null {
+function committedText(): string | null {
   try {
-    return JSON.parse(readFileSync(SNAPSHOT_FILE, "utf8")) as RepresentationSnapshot;
+    return readFileSync(SNAPSHOT_FILE, "utf8");
   } catch {
     return null;
   }
+}
+
+function committedSnapshot(): RepresentationSnapshot | null {
+  const text = committedText();
+  return text === null ? null : JSON.parse(text) as RepresentationSnapshot;
+}
+
+/** The committed snapshot's breaks that no entry in the breaks file accepts. */
+async function openBreaks(): Promise<AbiBreakAcknowledgement[]> {
+  const text = committedText();
+  if (text === null) return [];
+  return unacknowledgedBreaks(SNAPSHOT_NAME, await snapshotFingerprint(text),
+    breakingChanges(JSON.parse(text) as RepresentationSnapshot, currentSnapshot()), acknowledgements as AbiBreakAcknowledgement[]);
 }
 
 function breakingChanges(before: RepresentationSnapshot, after: RepresentationSnapshot): string[] {
@@ -88,13 +111,13 @@ describe("the webhook payload contract", () => {
     expect(Object.keys(EVENT_REPRESENTATION_SCHEMAS).sort()).toEqual([...EVENT_RESOURCE_TYPES].sort());
   });
 
-  it("changes only additively within an events API version", () => {
-    const committed = committedSnapshot();
-    expect(committed, "events.representations.snapshot.json is missing: create it with vitest run -u").not.toBeNull();
-    expect(breakingChanges(committed!, currentSnapshot())).toEqual([]);
+  it("changes only additively within an events API version", async () => {
+    expect(committedSnapshot(), "events.representations.snapshot.json is missing: create it with vitest run -u").not.toBeNull();
+    expect(await openBreaks(), "Breaking payload changes: keep the old shape, bump EVENTS_API_VERSION, or add these entries with a reason to events.representations.breaks.json.").toEqual([]);
   });
 
   it("matches the committed snapshot (accept an additive change with -u)", async () => {
+    expect(await openBreaks(), "Refusing to seal past a breaking payload change.").toEqual([]);
     await expect(`${JSON.stringify(currentSnapshot(), null, 1)}\n`).toMatchFileSnapshot("../../../../packages/shared/src/events.representations.snapshot.json");
   });
 
