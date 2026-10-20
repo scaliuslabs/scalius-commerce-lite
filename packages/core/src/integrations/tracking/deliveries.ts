@@ -54,6 +54,15 @@ export const CONSENT_DENIED = "consent_denied";
 export const AWAITING_PAYMENT = "awaiting_payment";
 
 type DeliveryRow = typeof trackingDeliveries.$inferSelect;
+/** The columns an attempt's reads need, fixed for a delivery's life: read with its id, they let the claim and the reads share one round trip. */
+type DeliveryRef = Pick<DeliveryRow, "id" | "orderId" | "destination" | "eventName" | "paymentId">;
+const deliveryRefColumns = {
+  id: trackingDeliveries.id,
+  orderId: trackingDeliveries.orderId,
+  destination: trackingDeliveries.destination,
+  eventName: trackingDeliveries.eventName,
+  paymentId: trackingDeliveries.paymentId,
+};
 
 export interface TrackingRuntime {
   storefrontUrl?: string | null;
@@ -76,7 +85,7 @@ type Outcome = "sent" | "failed" | "skipped" | "deferred" | "busy";
 /** Due rows, oldest first, through the due and claim indexes (bounded walks). */
 function dueDeliveries(db: Database, limit: number) {
   return db
-    .select({ id: trackingDeliveries.id })
+    .select(deliveryRefColumns)
     .from(trackingDeliveries)
     .where(or(
       and(inArray(trackingDeliveries.status, ["pending", "failed"]), lte(trackingDeliveries.nextAttemptAt, sql`unixepoch()`)),
@@ -86,10 +95,10 @@ function dueDeliveries(db: Database, limit: number) {
     .limit(Math.max(1, Math.min(limit, MAX_FLUSH_LIMIT)));
 }
 
-async function processRows(db: Database, rows: ReadonlyArray<{ id: string }>, runtime: TrackingRuntime): Promise<TrackingFlushResult> {
+async function processRows(db: Database, rows: readonly DeliveryRef[], runtime: TrackingRuntime): Promise<TrackingFlushResult> {
   const result: TrackingFlushResult = { scanned: rows.length, sent: 0, failed: 0, skipped: 0, deferred: 0, busy: 0 };
   for (const row of rows) {
-    result[await processTrackingDelivery(db, row.id, runtime)] += 1;
+    result[await processTrackingDelivery(db, row, runtime)] += 1;
   }
   return result;
 }
@@ -132,7 +141,7 @@ export function planTrackingSweep(
       ]),
     ],
     async finish(results) {
-      const [due, signals, finished] = (results ?? []) as [Array<{ id: string }>?, unknown[]?, unknown[]?];
+      const [due, signals, finished] = (results ?? []) as [DeliveryRef[]?, unknown[]?, unknown[]?];
       const flushed = await processRows(db, due ?? [], runtime);
       return { ...flushed, signalsPurged: signals?.length ?? 0, deliveriesPurged: finished?.length ?? 0 };
     },
@@ -153,18 +162,25 @@ export async function processTrackingDeliveriesForOrder(
     .set({ nextAttemptAt: sql`unixepoch() - 1`, updatedAt: sql`unixepoch()` })
     .where(and(eq(trackingDeliveries.orderId, orderId), eq(trackingDeliveries.status, "pending")));
   const rows = await db
-    .select({ id: trackingDeliveries.id })
+    .select(deliveryRefColumns)
     .from(trackingDeliveries)
     .where(and(eq(trackingDeliveries.orderId, orderId), inArray(trackingDeliveries.status, ["pending", "failed"])))
     .all();
   const outcomes: Outcome[] = [];
-  for (const row of rows) outcomes.push(await processTrackingDelivery(db, row.id, runtime));
+  for (const row of rows) outcomes.push(await processTrackingDelivery(db, row, runtime));
   return outcomes;
 }
 
-export async function processTrackingDelivery(db: Database, deliveryId: string, runtime: TrackingRuntime): Promise<Outcome> {
+/**
+ * Claims one delivery and attempts it. Given the delivery's ref (its id and
+ * the columns its reads need), the claim and the attempt's reads go in one
+ * round trip (the reads are wasted only when another worker holds it);
+ * given an id alone, the claim comes first.
+ */
+export async function processTrackingDelivery(db: Database, delivery: string | DeliveryRef, runtime: TrackingRuntime): Promise<Outcome> {
+  const deliveryId = typeof delivery === "string" ? delivery : delivery.id;
   const claimId = `trkc_${crypto.randomUUID().replace(/-/g, "")}`;
-  const claimed = await db
+  const claim = db
     .update(trackingDeliveries)
     .set({
       status: "processing",
@@ -181,11 +197,21 @@ export async function processTrackingDelivery(db: Database, deliveryId: string, 
       ),
     ))
     .returning();
+  let claimed: DeliveryRow[];
+  let facts: FactRows | undefined;
+  if (typeof delivery === "string") {
+    claimed = await claim;
+  } else {
+    const [order, lines, signals, settings, refund] = factReads(db, delivery);
+    const [claimRows, ...reads] = await db.batch([claim, order, lines, signals, settings, refund]);
+    claimed = claimRows;
+    facts = reads as unknown as FactRows;
+  }
   const row = claimed[0];
   if (!row) return "busy";
 
   try {
-    const attempt = await attemptDelivery(db, row, runtime);
+    const attempt = await attemptDelivery(db, row, runtime, facts);
     await settle(db, row, claimId, attempt);
     return attempt.outcome;
   } catch (error) {
@@ -224,17 +250,28 @@ async function settle(db: Database, row: DeliveryRow, claimId: string, attempt: 
   }
 }
 
-async function attemptDelivery(db: Database, row: DeliveryRow, runtime: TrackingRuntime): Promise<Attempt> {
-  const now = runtime.nowSeconds?.() ?? Math.floor(Date.now() / 1000);
-  // One round trip: the order, its lines, its snapshot, the settings and the refund.
-  const [orderRows, lineRows, signalRows, settingRows, refundRows] = await db.batch([
-    db.select().from(orders).where(eq(orders.id, row.orderId)).limit(1),
-    db.select().from(orderItems).where(and(eq(orderItems.orderId, row.orderId), sql`${row.eventName === "purchase" ? 1 : 0} = 1`)),
-    db.select().from(orderTrackingSignals).where(eq(orderTrackingSignals.orderId, row.orderId)).limit(1),
-    selectSettingsDocuments(db, [trackingConsentDocument, row.destination === "ga4" ? ga4MeasurementDocument : tiktokEventsDocument]),
+/** An attempt's reads: the order, its lines, its snapshot, the settings and the refund. */
+function factReads(db: Database, ref: DeliveryRef) {
+  return [
+    db.select().from(orders).where(eq(orders.id, ref.orderId)).limit(1),
+    db.select().from(orderItems).where(and(eq(orderItems.orderId, ref.orderId), sql`${ref.eventName === "purchase" ? 1 : 0} = 1`)),
+    db.select().from(orderTrackingSignals).where(eq(orderTrackingSignals.orderId, ref.orderId)).limit(1),
+    selectSettingsDocuments(db, [trackingConsentDocument, ref.destination === "ga4" ? ga4MeasurementDocument : tiktokEventsDocument]),
     db.select({ amountMinor: orderPayments.amountMinor, status: orderPayments.status, paymentType: orderPayments.paymentType })
-      .from(orderPayments).where(eq(orderPayments.id, row.paymentId ?? "")).limit(1),
-  ]);
+      .from(orderPayments).where(eq(orderPayments.id, ref.paymentId ?? "")).limit(1),
+  ] as const;
+}
+
+function readFacts(db: Database, ref: DeliveryRef) {
+  const [order, lines, signals, settings, refund] = factReads(db, ref);
+  return db.batch([order, lines, signals, settings, refund]);
+}
+type FactRows = Awaited<ReturnType<typeof readFacts>>;
+
+async function attemptDelivery(db: Database, row: DeliveryRow, runtime: TrackingRuntime, preloaded?: FactRows): Promise<Attempt> {
+  const now = runtime.nowSeconds?.() ?? Math.floor(Date.now() / 1000);
+  // One round trip (none when the claim brought them): the order, its lines, its snapshot, the settings and the refund.
+  const [orderRows, lineRows, signalRows, settingRows, refundRows] = preloaded ?? await readFacts(db, row);
   const order = orderRows[0];
   const lines = lineRows;
   const signals = signalRows[0];

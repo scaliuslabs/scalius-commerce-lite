@@ -25,14 +25,17 @@ const encoder = new TextEncoder();
 
 /**
  * Operations the confirm policy gates: every destructive or financial one,
- * plus any the registry marks `confirmation: "required"` (a registry entry
- * can add a gate, never remove one).
+ * every security change (access keys, roles, webhooks, platform origins: as
+ * consequential as deletes and money), plus any the registry marks
+ * `confirmation: "required"` (a registry entry can add a gate, never remove
+ * one). A security read (a GET such as the masked email or SMS setup) keeps
+ * its tag, which a grant's risk ceiling must allow, but changes nothing, so
+ * it needs no approval.
  */
-export function isConfirmGated(operation: Pick<AgentOperationManifestEntry, "risk">): boolean {
+export function isConfirmGated(operation: Pick<AgentOperationManifestEntry, "risk" | "method">): boolean {
   if ((operation as { confirmation?: unknown }).confirmation === "required") return true;
-  // Security changes (access keys, roles, webhooks, platform origins) are as
-  // consequential as deletes and money: a person confirms them too.
-  return operation.risk === "destructive" || operation.risk === "financial" || operation.risk === "security";
+  if (operation.risk === "security") return operation.method !== "GET";
+  return operation.risk === "destructive" || operation.risk === "financial";
 }
 
 /**

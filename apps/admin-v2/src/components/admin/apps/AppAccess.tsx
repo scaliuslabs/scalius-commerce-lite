@@ -158,7 +158,7 @@ export function AppAccess({ app, consent }: { app: AppDetail; consent?: ReactNod
     sections.push(
       <Section key="messages" title={t("access_messages")}>
         {recipients.map((field) => {
-          // "Emails and texts the addresses in its {field} records", with the field as code.
+          // "Can email or text any address it stores in its {field} records ...", with the field as code.
           const [before, after] = t("messageRecipientsIn", { field: "\u0000" }).split("\u0000");
           return row(`recipient:${field}`, <span className="break-all">{before}<code>{field}</code>{after}</span>, isNew("messageRecipients", field));
         })}

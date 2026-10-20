@@ -62,14 +62,14 @@ describe("the confirmation gate on the direct REST lane", () => {
     state.principal = {
       kind: "agent", grantId: GRANT, credentialId: "agc_restconfirm000000001", ownerUserId: OWNER, isSuperAdmin: false,
       resource: "dashboard", grantKind: "pat", preset: "full",
-      permissions: new Set(["orders.view", "orders.refund", "conversations.view"]), riskCeiling: "financial",
+      permissions: new Set(["orders.view", "orders.refund", "conversations.view", "settings.general.view"]), riskCeiling: "security",
       authorityRevision: 1, expiresAt: new Date(Date.now() + 3_600_000),
     };
     const now = Math.floor(Date.now() / 1000);
     sqlite.prepare("INSERT INTO user (id, name, email) VALUES (?, 'Owner', 'owner@example.test')").run(OWNER);
     sqlite.prepare(`INSERT INTO agent_grants (id, kind, owner_user_id, resource, label, preset, permissions_json, risk_ceiling,
       authority_revision, status, expires_at, created_at, updated_at)
-      VALUES (?, 'pat', ?, 'dashboard', 'CI', 'full', '["conversations.view","orders.refund","orders.view"]', 'financial', 1, 'active', ?, ?, ?)`)
+      VALUES (?, 'pat', ?, 'dashboard', 'CI', 'full', '["conversations.view","orders.refund","orders.view","settings.general.view"]', 'security', 1, 'active', ?, ?, ?)`)
       .run(GRANT, OWNER, now + 3_600, now - 60, now - 60);
     sqlite.exec(`
       INSERT INTO places (id, name, country_code, level, parent_id, external_ids, metadata, is_active)
@@ -139,6 +139,11 @@ describe("the confirmation gate on the direct REST lane", () => {
     expect(replay.status).toBe(409);
     expect(replay.body.error.code).toBe("confirm_token_used");
     expect(attempts()).toBe(1);
+  });
+
+  it("runs a security read (a GET tagged security) without asking anyone", async () => {
+    const email = await call("GET", "/settings/email");
+    expect(email.status, JSON.stringify(email.body)).toBe(200);
   });
 
   it("lets reads through and keeps opt-in scopes away from preset grants", async () => {
