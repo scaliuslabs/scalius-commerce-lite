@@ -23947,7 +23947,8 @@
                 "type": "string"
               },
               "name": {
-                "type": "string"
+                "type": "string",
+                "x-scalius-protected": "name"
               }
             },
             "required": [
@@ -23957,7 +23958,8 @@
           },
           "recipientName": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "x-scalius-protected": "name"
           },
           "recipientContactMasked": {
             "type": "string",
@@ -24008,11 +24010,13 @@
               },
               "recipientEmail": {
                 "type": "string",
-                "nullable": true
+                "nullable": true,
+                "x-scalius-protected": "email"
               },
               "recipientPhone": {
                 "type": "string",
-                "nullable": true
+                "nullable": true,
+                "x-scalius-protected": "phone"
               },
               "sourceOrder": {
                 "type": "object",
@@ -121959,10 +121963,12 @@
                                     "type": "string"
                                   },
                                   "name": {
-                                    "type": "string"
+                                    "type": "string",
+                                    "x-scalius-protected": "name"
                                   },
                                   "phone": {
-                                    "type": "string"
+                                    "type": "string",
+                                    "x-scalius-protected": "phone"
                                   },
                                   "kind": {
                                     "type": "string",
@@ -122008,15 +122014,18 @@
                                 "type": "string"
                               },
                               "name": {
-                                "type": "string"
+                                "type": "string",
+                                "x-scalius-protected": "name"
                               },
                               "email": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "x-scalius-protected": "email"
                               },
                               "phone": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "x-scalius-protected": "phone"
                               },
                               "changeType": {
                                 "type": "string",
@@ -122078,11 +122087,13 @@
                                     "type": "string"
                                   },
                                   "name": {
-                                    "type": "string"
+                                    "type": "string",
+                                    "x-scalius-protected": "name"
                                   },
                                   "phone": {
                                     "type": "string",
-                                    "nullable": true
+                                    "nullable": true,
+                                    "x-scalius-protected": "phone"
                                   },
                                   "kind": {
                                     "type": "string",
@@ -122138,7 +122149,8 @@
                                 "nullable": true
                               },
                               "customerName": {
-                                "type": "string"
+                                "type": "string",
+                                "x-scalius-protected": "name"
                               },
                               "totalAmount": {
                                 "type": "number"
@@ -148736,7 +148748,8 @@
                                 "nullable": true
                               },
                               "customerName": {
-                                "type": "string"
+                                "type": "string",
+                                "x-scalius-protected": "name"
                               },
                               "status": {
                                 "type": "string"
@@ -148760,22 +148773,26 @@
                                 "type": "string"
                               },
                               "name": {
-                                "type": "string"
+                                "type": "string",
+                                "x-scalius-protected": "name"
                               },
                               "phone": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "x-scalius-protected": "phone"
                               },
                               "email": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "x-scalius-protected": "email"
                               },
                               "origin": {
                                 "type": "string"
                               },
                               "latestOrderName": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "x-scalius-protected": "name"
                               }
                             },
                             "required": [
@@ -152455,7 +152472,8 @@
                               },
                               "customerName": {
                                 "type": "string",
-                                "maxLength": 256
+                                "maxLength": 256,
+                                "x-scalius-protected": "name"
                               },
                               "totalAmount": {
                                 "type": "number"
@@ -189182,16 +189200,19 @@
                               "exclusiveMinimum": true
                             },
                             "customerName": {
-                              "type": "string"
+                              "type": "string",
+                              "x-scalius-protected": "name"
                             },
                             "customerPhone": {
                               "type": "string",
                               "nullable": true,
-                              "description": "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in)."
+                              "description": "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in).",
+                              "x-scalius-protected": "phone"
                             },
                             "customerEmail": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "email"
                             },
                             "customerId": {
                               "type": "string",
@@ -189199,11 +189220,13 @@
                             },
                             "shippingAddress": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "shippingAddressLine2": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "shippingCountryCode": {
                               "type": "string",
@@ -189211,7 +189234,8 @@
                             },
                             "shippingDependentLocality": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "shippingLocality": {
                               "type": "string",
@@ -189227,34 +189251,41 @@
                             },
                             "shippingCompany": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "shippingName": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "name"
                             },
                             "shippingPhone": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "phone"
                             },
                             "billingSameAsShipping": {
                               "type": "boolean"
                             },
                             "billingName": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "name"
                             },
                             "billingCompany": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "billingAddress": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "billingAddressLine2": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "billingCountryCode": {
                               "type": "string",
@@ -189262,7 +189293,8 @@
                             },
                             "billingDependentLocality": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "billingLocality": {
                               "type": "string",
@@ -189904,16 +189936,19 @@
                               "exclusiveMinimum": true
                             },
                             "customerName": {
-                              "type": "string"
+                              "type": "string",
+                              "x-scalius-protected": "name"
                             },
                             "customerPhone": {
                               "type": "string",
                               "nullable": true,
-                              "description": "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in)."
+                              "description": "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in).",
+                              "x-scalius-protected": "phone"
                             },
                             "customerEmail": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "email"
                             },
                             "customerId": {
                               "type": "string",
@@ -189921,11 +189956,13 @@
                             },
                             "shippingAddress": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "shippingAddressLine2": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "shippingCountryCode": {
                               "type": "string",
@@ -189933,7 +189970,8 @@
                             },
                             "shippingDependentLocality": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "shippingLocality": {
                               "type": "string",
@@ -189949,34 +189987,41 @@
                             },
                             "shippingCompany": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "shippingName": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "name"
                             },
                             "shippingPhone": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "phone"
                             },
                             "billingSameAsShipping": {
                               "type": "boolean"
                             },
                             "billingName": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "name"
                             },
                             "billingCompany": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "billingAddress": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "billingAddressLine2": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "billingCountryCode": {
                               "type": "string",
@@ -189984,7 +190029,8 @@
                             },
                             "billingDependentLocality": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "address"
                             },
                             "billingLocality": {
                               "type": "string",
@@ -205852,7 +205898,8 @@
                               },
                               "customerName": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "x-scalius-protected": "name"
                               },
                               "assigneeUserId": {
                                 "type": "string",
@@ -207063,7 +207110,8 @@
                               },
                               "customerName": {
                                 "type": "string",
-                                "nullable": true
+                                "nullable": true,
+                                "x-scalius-protected": "name"
                               },
                               "assigneeUserId": {
                                 "type": "string",
@@ -207668,15 +207716,18 @@
                               "type": "string"
                             },
                             "name": {
-                              "type": "string"
+                              "type": "string",
+                              "x-scalius-protected": "name"
                             },
                             "email": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "email"
                             },
                             "phone": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "phone"
                             }
                           },
                           "required": [
@@ -208423,7 +208474,8 @@
                             },
                             "customerName": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "name"
                             },
                             "assigneeUserId": {
                               "type": "string",
@@ -209017,7 +209069,8 @@
                             },
                             "customerName": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "name"
                             },
                             "assigneeUserId": {
                               "type": "string",
@@ -209576,7 +209629,8 @@
                             },
                             "customerName": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "name"
                             },
                             "assigneeUserId": {
                               "type": "string",
@@ -210138,7 +210192,8 @@
                             },
                             "customerName": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "name"
                             },
                             "assigneeUserId": {
                               "type": "string",
@@ -210741,7 +210796,8 @@
                             },
                             "customerName": {
                               "type": "string",
-                              "nullable": true
+                              "nullable": true,
+                              "x-scalius-protected": "name"
                             },
                             "assigneeUserId": {
                               "type": "string",

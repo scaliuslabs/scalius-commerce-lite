@@ -2,6 +2,7 @@
 // carry internal notes or staff identity (C4); staff shapes do.
 import { z } from "@hono/zod-openapi";
 import { CONVERSATION_LIMITS } from "@scalius/shared/conversation";
+import { protectedField as pii } from "./protected";
 
 export const conversationIdSchema = z.string().regex(/^cnv_[A-Za-z0-9_-]{8,64}$/);
 export const conversationAttachmentIdSchema = z.string().regex(/^att_[A-Za-z0-9_-]{8,64}$/);
@@ -79,7 +80,7 @@ export const staffConversationSummarySchema = z.object({
   orderId: z.string().nullable(),
   orderNumber: z.string().nullable(),
   customerId: z.string().nullable(),
-  customerName: z.string().nullable(),
+  customerName: pii("name", z.string().nullable()),
   assigneeUserId: z.string().nullable(),
   assigneeName: z.string().nullable(),
   assigneeEligible: z.boolean(),

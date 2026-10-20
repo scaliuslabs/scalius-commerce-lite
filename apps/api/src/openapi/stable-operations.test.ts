@@ -195,7 +195,7 @@ describe("the stable app API", () => {
     expect(idle).toEqual([]);
   });
 
-  it("marks every buyer contact field it returns as protected customer data", () => {
+  it("marks every buyer contact field it returns as protected customer data, beta operations first-party apps call included", () => {
     // Field names that carry a buyer's contact details wherever they appear,
     // and `name` under a customer or address record.
     const CONTACT_KEYS = new Set([
@@ -208,6 +208,8 @@ describe("the stable app API", () => {
     const PERSON_CONTAINERS = new Set(["customers", "customer", "customerRecord", "addresses", "address", "defaultAddress", "mergedInto", "relatedCustomer"]);
     // The store's own contact details, not a buyer's.
     const STORE_OWNED = new Set(["dashboard.inventory_locations.list", "dashboard.settings.business_get"]);
+    // The store's own details inside a buyer document (an invoice's seller block).
+    const STORE_OWNED_PATHS = ["data.businessInfo"];
     const resolve = (node: unknown): Record<string, unknown> | null => {
       if (!node || typeof node !== "object") return null;
       const ref = (node as { $ref?: unknown }).$ref;
@@ -229,7 +231,8 @@ describe("the stable app API", () => {
       const contact = key !== undefined && (CONTACT_KEYS.has(key) || (key === "name" && parent !== undefined && PERSON_CONTAINERS.has(parent))
         || (key === "name" && path.join(".") === "data" + ".name" && operationId.startsWith("dashboard.customers.")));
       // An object (an address, a contact block) is checked through its fields.
-      if (contact && !protectedMarkerCategories(schema[PROTECTED_FIELD_KEYWORD]) && schema.type !== "boolean" && schema.type !== "object") {
+      const storeOwned = STORE_OWNED_PATHS.some((prefix) => path.join(".").startsWith(`${prefix}.`));
+      if (contact && !storeOwned && !protectedMarkerCategories(schema[PROTECTED_FIELD_KEYWORD]) && schema.type !== "boolean" && schema.type !== "object") {
         unmarked.push(`${operationId} ${path.join(".")}`);
       }
       for (const [child, value] of Object.entries((schema.properties ?? {}) as Record<string, unknown>)) walk(operationId, value, [...path, child], refs);
@@ -239,7 +242,25 @@ describe("the stable app API", () => {
         walk(operationId, variant, path, refs);
       }
     };
-    for (const operation of stable) {
+    // Beta operations only first-party apps may call, which return buyer
+    // contact details (audit R2 F10): marked before any is promoted to stable.
+    const FIRST_PARTY_CONTACT_OPERATIONS = [
+      "dashboard.orders.invoice_get",
+      "dashboard.orders.invoice_issue",
+      "dashboard.customers.history",
+      "dashboard.conversations.context",
+      "dashboard.conversations.list",
+      "dashboard.conversations.get",
+      "dashboard.gift_cards.get",
+      "dashboard.search.global",
+      "dashboard.home.summary",
+    ];
+    const beta = FIRST_PARTY_CONTACT_OPERATIONS.map((operationId) => {
+      const operation = AGENT_OPERATIONS.find((candidate) => candidate.operationId === operationId);
+      expect(operation, operationId).toBeDefined();
+      return operation!;
+    });
+    for (const operation of [...stable, ...beta]) {
       if (STORE_OWNED.has(operation.operationId)) continue;
       walk(operation.operationId, operation.outputSchema, [], new Set());
     }

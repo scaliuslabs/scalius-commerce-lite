@@ -36,6 +36,7 @@ import { ok, created } from "../../utils/api-response";
 import { ServiceUnavailableError, UnauthorizedError, ValidationError } from "../../utils/api-error";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { conflictResponse, errorResponses, serviceUnavailableResponse, successEnvelope } from "../../schemas/responses";
+import { protectedField as pii } from "../../schemas/protected";
 import { notificationSender } from "../../background/notification-sender";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -65,8 +66,8 @@ const giftCardSummarySchema = z.object({
   expiresAt: isoTimestamp.nullable(),
   expired: z.boolean(),
   source: z.enum(["purchase", "manual", "refund"]),
-  customer: z.object({ id: z.string(), name: z.string() }).nullable(),
-  recipientName: z.string().nullable(),
+  customer: z.object({ id: z.string(), name: pii("name", z.string()) }).nullable(),
+  recipientName: pii("name", z.string().nullable()),
   recipientContactMasked: z.string().nullable(),
   createdAt: isoTimestamp,
   version: z.number().int(),
@@ -75,8 +76,8 @@ const giftCardSummarySchema = z.object({
 const giftCardDetailSchema = giftCardSummarySchema.extend({
   note: z.string().nullable(),
   message: z.string().nullable(),
-  recipientEmail: z.string().nullable(),
-  recipientPhone: z.string().nullable(),
+  recipientEmail: pii("email", z.string().nullable()),
+  recipientPhone: pii("phone", z.string().nullable()),
   sourceOrder: z.object({ id: z.string(), orderNumber: z.string() }).nullable(),
   issuedBy: z.object({ id: z.string(), name: z.string() }).nullable(),
 }).openapi("AdminGiftCardDetail");
