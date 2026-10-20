@@ -134,4 +134,40 @@ describe("strict public reads bypass retired Workers Cache", () => {
     expect(renderedDirectly).toHaveBeenCalledTimes(2);
   });
 
+  it("reads the Platform settings only when a part renders, never for a validated hit", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(1);
+    const { resolvePlatformConfig } = await import("@scalius/core/modules/platform");
+    const platformReads = vi.mocked(resolvePlatformConfig);
+    platformReads.mockClear();
+    const { binding } = createSqliteD1Database();
+    const entries = new Map<string, Response>();
+    vi.stubGlobal("caches", { default: {
+      match: async (key: string) => entries.get(key)?.clone(),
+      put: async (key: string, response: Response) => {
+        entries.set(key, new Response(await response.arrayBuffer(), { status: response.status, headers: response.headers }));
+      },
+    } });
+    const waits: Promise<unknown>[] = [];
+    const ctx = { waitUntil: (p: Promise<unknown>) => { waits.push(p); } } as unknown as ExecutionContext;
+    const { default: ApiWorker } = await import("./worker");
+    const worker = new ApiWorker(ctx, {
+      DB: binding,
+      SCALIUS_SECRET: "public-cache-platform-master-secret-0123456789",
+      CF_VERSION_METADATA: { id: "version-a", tag: "", timestamp: "" },
+    } as Env) as unknown as TestApiWorker;
+    const read = async () => {
+      const result = await worker.fetch(new Request("https://api.example.test/api/v1/categories"));
+      await Promise.all(waits.splice(0));
+      return result;
+    };
+
+    expect((await read()).headers.get("X-Cache-Status")).toBe("MISS");
+    expect(platformReads).toHaveBeenCalledTimes(1);
+    for (let index = 0; index < 3; index += 1) {
+      expect((await read()).headers.get("X-Cache-Status")).toBe("HIT");
+    }
+    expect(platformReads).toHaveBeenCalledTimes(1);
+    expect(renderedDirectly).toHaveBeenCalledTimes(1);
+  });
+
 });
