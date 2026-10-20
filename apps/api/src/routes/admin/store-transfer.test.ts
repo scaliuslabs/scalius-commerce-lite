@@ -174,8 +174,11 @@ describe("store transfer routes", () => {
 
   it("validates items with the shared schema and refuses oversized requests", async () => {
     const { post } = createApp();
-    const invalid = await post("/products", { mode: "create", items: [product({ title: "X" })] });
-    expect(invalid.status).toBe(400);
+    // Titles take 1 to 255 characters after trimming (PRODUCT_TITLE_MIN/MAX).
+    const blank = await post("/products", { mode: "create", items: [product({ title: "   " })] });
+    expect(blank.status).toBe(400);
+    const tooLong = await post("/products", { mode: "create", items: [product({ title: "x".repeat(256) })] });
+    expect(tooLong.status).toBe(400);
     const tooMany = await post("/products", { mode: "create", items: Array.from({ length: 51 }, (_, index) => product({ ref: `p${index}`, handle: `product-${index}` })) });
     expect(tooMany.status).toBe(400);
     const big = JSON.stringify({ mode: "create", items: Array.from({ length: 12 }, (_, index) => product({ ref: `p${index}`, handle: `product-${index}`, descriptionHtml: "x".repeat(99_000) })) });
