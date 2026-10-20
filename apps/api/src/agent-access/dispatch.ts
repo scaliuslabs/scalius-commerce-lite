@@ -1,6 +1,6 @@
 import { AGENT_COMPONENT_SCHEMAS } from "../generated/agent-operations.gen";
 import type { AgentOperationManifestEntry } from "../openapi/agent-operation-manifest";
-import { resolveComponentSchemaRef } from "../openapi/component-schema-refs";
+import { resolveComponentSchemaRef } from "@scalius/shared/openapi-schema-refs";
 import { loadAgentAccessBackend } from "./backend";
 import {
   AGENT_MAX_REQUEST_BODY_BYTES,

@@ -1,10 +1,22 @@
-// The public app ABI. Snapshot updates require an additive-contract review;
-// breaking changes require a new apiVersion, not merely `vitest -u`.
-// Stable operation compatibility has its own gate in apps/api/src/openapi.
+// The public app ABI. Each sealed snapshot is first compared with the
+// committed one under the breaking-change rules (`abi-compat.ts`); only then
+// is it written, so `vitest -u` accepts an additive change and never a
+// breaking one. A break needs an entry in `abi.breaks.json` (the failure
+// prints it, with the committed snapshot's fingerprint, ready for a reason),
+// or a new apiVersion. Stable operations have their own gate in
+// apps/api/src/openapi.
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { EVENTS_API_VERSION, EVENT_FACT_SCHEMAS, EVENT_TOPIC_RESOURCE } from "../events";
+import {
+  manifestBreakingChanges,
+  protocolBreakingChanges,
+  snapshotFingerprint,
+  unacknowledgedBreaks,
+  type AbiBreakAcknowledgement,
+} from "./abi-compat";
+import acknowledgements from "./abi.breaks.json";
 import { pluginManifestSchema, PLUGIN_API_VERSION } from "./manifest";
 import { PLUGIN_FUNCTION_SCHEMAS } from "./functions";
 import { PROVIDER_PORTS } from "./providers";
@@ -56,14 +68,41 @@ async function sdkDeclarations(): Promise<string> {
   return `// Public exports\n${json({ exports: pkg.exports, publishExports: pkg.publishConfig?.exports })}\n` + declarations.sort(([a], [b]) => a.localeCompare(b)).map(([path, output]) => `// ${path}\n${output}`).join("\n");
 }
 
+/** The committed snapshot's text, or null before the first one is written. */
+async function committedText(file: string): Promise<string | null> {
+  // A runtime specifier keeps Node types out of this Workers package (as in sdkDeclarations).
+  const [{ readFileSync }] = await Promise.all(["node:fs"].map((specifier) => import(/* @vite-ignore */ specifier))) as [
+    { readFileSync(path: URL, encoding: "utf8"): string },
+  ];
+  try {
+    return readFileSync(new URL(file, import.meta.url), "utf8");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Refuses an unacknowledged break from the committed snapshot, then seals the
+ * current one. Both happen in one test so `-u` cannot write past a refusal.
+ */
+async function sealCompatibly(file: string, current: unknown, breakingChanges: (before: unknown, after: unknown) => string[]): Promise<void> {
+  const text = json(current);
+  const committed = await committedText(file);
+  if (committed !== null && committed !== text) {
+    const open = unacknowledgedBreaks(file, await snapshotFingerprint(committed), breakingChanges(JSON.parse(committed), current),
+      acknowledgements as AbiBreakAcknowledgement[]);
+    expect(open, `Breaking ABI changes in ${file}. Keep the old shape, or add these entries with a reason to abi.breaks.json.`).toEqual([]);
+  }
+  await expect(text).toMatchFileSnapshot(file);
+}
+
 describe("the versioned plugin ABI", () => {
   it("seals the strict manifest JSON Schema", async () => {
-    await expect(json({ apiVersion: PLUGIN_API_VERSION, schema: schema(pluginManifestSchema) }))
-      .toMatchFileSnapshot("./abi.manifest.snapshot.json");
+    await sealCompatibly("./abi.manifest.snapshot.json", { apiVersion: PLUGIN_API_VERSION, schema: schema(pluginManifestSchema) }, manifestBreakingChanges);
   });
 
   it("seals functions, stable provider ports, UI, scopes, events and storefront protocol constants", async () => {
-    await expect(json({
+    await sealCompatibly("./abi.protocol.snapshot.json", {
       apiVersion: PLUGIN_API_VERSION,
       functions: Object.fromEntries(Object.entries(PLUGIN_FUNCTION_SCHEMAS).map(([name, value]) => [name, port(value)])),
       providerTiers: PROVIDER_PORT_TIERS,
@@ -74,29 +113,12 @@ describe("the versioned plugin ABI", () => {
       },
       storefront: Object.fromEntries(Object.entries(protocol).filter(([name, value]) => name === name.toUpperCase() && typeof value !== "function")
         .map(([name, value]) => [name, value instanceof RegExp ? value.source : value])),
-    })).toMatchFileSnapshot("./abi.protocol.snapshot.json");
+    }, protocolBreakingChanges);
   });
 
   it("keeps beta provider ports outside the seal, in a reviewed snapshot of their own", async () => {
     await expect(json({ apiVersion: PLUGIN_API_VERSION, providers: portsOfTier("beta") }))
       .toMatchFileSnapshot("./abi.beta.snapshot.json");
-  });
-
-  it("never moves a stable provider port back to beta (promotion is additive)", async () => {
-    // A runtime specifier keeps Node types out of this Workers package (as in sdkDeclarations).
-    const [{ readFileSync }] = await Promise.all(["node:fs"].map((specifier) => import(/* @vite-ignore */ specifier))) as [
-      { readFileSync(path: URL, encoding: "utf8"): string },
-    ];
-    let committed: { providerTiers?: Record<string, string> } = {};
-    try {
-      committed = JSON.parse(readFileSync(new URL("./abi.protocol.snapshot.json", import.meta.url), "utf8"));
-    } catch {
-      // No committed snapshot yet: the sealing test writes it.
-    }
-    const demoted = Object.entries(committed.providerTiers ?? {})
-      .filter(([kind, tier]) => tier === "stable" && PROVIDER_PORT_TIERS[kind as ProviderKind] !== "stable")
-      .map(([kind]) => kind);
-    expect(demoted).toEqual([]);
   });
 
   it("seals the SDK export map and emitted public declarations", async () => {

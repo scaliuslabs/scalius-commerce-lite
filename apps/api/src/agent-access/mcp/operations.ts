@@ -3,7 +3,7 @@ import type { AgentOperationManifestEntry } from "../../openapi/agent-operation-
 import {
   referencedComponentSchemas,
   resolveComponentSchemaRef,
-} from "../../openapi/component-schema-refs";
+} from "@scalius/shared/openapi-schema-refs";
 import { loadAgentAccessBackend } from "../backend";
 import type { AgentResource, AgentPrincipal } from "../types";
 

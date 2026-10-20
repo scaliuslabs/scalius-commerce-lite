@@ -20,7 +20,7 @@ import {
   componentSchemaRefName,
   referencedComponentSchemas,
   resolveComponentSchemaRef,
-} from "./component-schema-refs";
+} from "@scalius/shared/openapi-schema-refs";
 
 /** Every `$ref` in a value. */
 function refs(value: unknown, found: string[] = []): string[] {

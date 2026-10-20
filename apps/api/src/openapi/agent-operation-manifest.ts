@@ -4,7 +4,7 @@ import {
   inlineComponentSchemaRefs,
   referencedComponentSchemas,
   type ComponentSchemas,
-} from "./component-schema-refs";
+} from "@scalius/shared/openapi-schema-refs";
 import {
   CONTINUATION_OUTPUTS,
   DEVICE_OPERATION_IDS,
