@@ -100403,7 +100403,7 @@
           "App API - Gift cards"
         ],
         "summary": "Issue a gift card",
-        "description": "Issues a gift card in the store currency, in minor units at its price increment. The code is never returned: with `notify` the store sends it to the recipient, else the owning customer. Send an Idempotency-Key: a repeat returns the first card.",
+        "description": "Issues a gift card in the store currency, in minor units at its price increment. The code is never returned: with `notify` the store sends it to the recipient, else the owning customer. An app's `notify` reaches only the owning customer's own contact (set `customerId`, no recipient email or phone), and what one app issues and tops up per UTC date stays within the store's limit (403 `app_gift_card_limit`, Gift cards > Settings). Send an Idempotency-Key: a repeat returns the first card.",
         "parameters": [
           {
             "schema": {
@@ -100479,7 +100479,7 @@
                   "notify": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Send the code to the recipient (else the owning customer) now."
+                    "description": "Send the code to the recipient (else the owning customer) now. From an app: to the owning customer's own contact only."
                   }
                 },
                 "required": [
@@ -100794,7 +100794,7 @@
           "App API - Gift cards"
         ],
         "summary": "Disable, enable or re-date a gift card",
-        "description": "`status: disabled` stops a card being spent (its balance stays); `active` turns it back on. Also changes the expiry, the owning customer or the store's note. Fields left out keep their value.",
+        "description": "`status: disabled` stops a card being spent (its balance stays); `active` turns it back on. Also changes the expiry, the owning customer or the store's note. An app cannot change the owner of a card with a balance (403). Fields left out keep their value.",
         "parameters": [
           {
             "schema": {
@@ -101012,7 +101012,7 @@
           "App API - Gift cards"
         ],
         "summary": "Add to or take from a gift card balance",
-        "description": "One ledger movement with a reason: a positive `amountMinor` adds value, a negative one removes it (never below zero), in minor units of the card's currency. Send an Idempotency-Key: a repeat moves the balance once.",
+        "description": "One ledger movement with a reason: a positive `amountMinor` adds value, a negative one removes it (never below zero), in minor units of the card's currency. An app adds value only to cards in the store currency, within its limit per UTC date (403 `app_gift_card_limit`). Send an Idempotency-Key: a repeat moves the balance once.",
         "parameters": [
           {
             "schema": {
@@ -254383,6 +254383,365 @@
         }
       }
     },
+    "/api/v1/admin/gift-cards/settings": {
+      "get": {
+        "operationId": "dashboard.gift_cards.settings_get",
+        "tags": [
+          "Admin - Gift cards"
+        ],
+        "summary": "Gift card settings",
+        "description": "How much value one app may add to gift cards per UTC date, in the store currency.",
+        "responses": {
+          "200": {
+            "description": "The settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "appDailyLimit": {
+                          "type": "number",
+                          "description": "The most one app may add to gift cards per UTC date (cards it issues plus top-ups), in the store currency. 0: apps add no value."
+                        },
+                        "appDailyLimitMinor": {
+                          "type": "integer"
+                        },
+                        "currencyCode": {
+                          "type": "string"
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "appDailyLimit",
+                        "appDailyLimitMinor",
+                        "currencyCode",
+                        "revision"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when asked how much value an app may add to gift cards per UTC date.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "gift_cards.view"
+        }
+      },
+      "put": {
+        "operationId": "dashboard.gift_cards.settings_update",
+        "tags": [
+          "Admin - Gift cards"
+        ],
+        "summary": "Change gift card settings",
+        "description": "Sets the most one app may add to gift cards per UTC date (issued cards and top-ups together), in the store currency. Staff are never limited.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "appDailyLimit": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "In the store currency; 0 stops apps adding value."
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "The `revision` you read; a newer one is refused with 409."
+                  }
+                },
+                "required": [
+                  "appDailyLimit",
+                  "expectedRevision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The saved settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "appDailyLimit": {
+                          "type": "number",
+                          "description": "The most one app may add to gift cards per UTC date (cards it issues plus top-ups), in the store currency. 0: apps add no value."
+                        },
+                        "appDailyLimitMinor": {
+                          "type": "integer"
+                        },
+                        "currencyCode": {
+                          "type": "string"
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "appDailyLimit",
+                        "appDailyLimitMinor",
+                        "currencyCode",
+                        "revision"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "financial",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when changing how much value one app may add to gift cards per UTC date.",
+          "dryRun": "none",
+          "confirmation": "required"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "gift_cards.manage"
+        }
+      }
+    },
     "/api/v1/admin/gift-cards/{giftCardId}": {
       "get": {
         "operationId": "dashboard.gift_cards.get",
@@ -274051,6 +274410,22 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.gift_cards.resend"
+          ]
+        },
+        {
+          "operationId": "dashboard.gift_cards.settings_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.gift_cards.settings_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.gift_cards.settings_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.gift_cards.settings_update"
           ]
         },
         {

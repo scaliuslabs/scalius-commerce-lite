@@ -1,7 +1,7 @@
 // Staff gift-card reads and writes (Wave B §4.2, §7.2). Reads need
 // GIFT_CARDS_VIEW, writes GIFT_CARDS_MANAGE (checked by the route map). Staff
 // see `last4` only; the code is shown once, at manual issue.
-import { and, desc, eq, lt, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, isNull, lt, or, sql, type SQL } from "drizzle-orm";
 import { containsText } from "../../utils/text-match";
 import { searchMatch } from "../../search";
 import { COUNT_PROBE_COLUMN, cappedCountQuery } from "../../utils/keyset";
@@ -11,7 +11,7 @@ import { alias } from "drizzle-orm/sqlite-core";
 import type { Database } from "@scalius/database/client";
 import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database/client";
 import { customers, giftCards, giftCardTransactions, orders, user } from "@scalius/database/schema";
-import { ConflictError, NotFoundError, ValidationError } from "../../errors";
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../../errors";
 import type { GiftCardSource, GiftCardStatus, GiftCardTransactionKind } from "./browser";
 import { GIFT_CARD_MAX_AMOUNT_MINOR } from "./issue";
 import { giftCardIdFromRequestKey, giftCardBase64Url } from "./crypto";
@@ -331,6 +331,11 @@ export async function adjustGiftCardBalance(
         actorUserId: string;
         /** The card's `version` the caller read: a card changed since is refused (409) in the same batch, writing nothing. */
         expectedVersion?: number;
+        /**
+         * Statements committed with a new adjustment only, never on a replay
+         * (an app's daily value guard, `buildAppGiftCardValueStatements`).
+         */
+        extraStatements?: readonly BatchItem<"sqlite">[];
     },
 ): Promise<StaffGiftCardSummary> {
     const reason = input.reason.normalize("NFC").trim();
@@ -340,18 +345,24 @@ export async function adjustGiftCardBalance(
     }
     const requestKey = input.requestKey.trim();
     if (requestKey.length < 8 || requestKey.length > 128) throw new ValidationError("A request key is required.");
-    const card = await db.select({ id: giftCards.id, balanceMinor: giftCards.balanceMinor })
-        .from(giftCards).where(eq(giftCards.id, input.giftCardId)).get();
+    const idempotencyKey = `adjust:${(await giftCardIdFromRequestKey("adjust", requestKey)).slice(3)}`;
+    const [card, landedBefore] = await Promise.all([
+        db.select({ id: giftCards.id, balanceMinor: giftCards.balanceMinor })
+            .from(giftCards).where(eq(giftCards.id, input.giftCardId)).get(),
+        db.select({ id: giftCardTransactions.id }).from(giftCardTransactions)
+            .where(eq(giftCardTransactions.idempotencyKey, idempotencyKey)).get(),
+    ]);
     if (!card) throw new NotFoundError("Gift card not found.");
+    // A retry of an adjustment that already landed moves nothing again.
+    if (landedBefore) return getStaffGiftCardSummary(db, card.id);
     if (card.balanceMinor + input.amountMinor < 0) {
         throw new ValidationError("A gift card balance can't go below zero.");
     }
-    const idempotencyKey = `adjust:${(await giftCardIdFromRequestKey("adjust", requestKey)).slice(3)}`;
     const versionGuard = input.expectedVersion === undefined ? [] : [buildBatchGuard(db, sql`EXISTS (
         SELECT 1 FROM ${giftCards} WHERE ${giftCards.id} = ${card.id} AND ${giftCards.version} = ${input.expectedVersion}
     )`, GIFT_CARD_VERSION_CONFLICT)];
     try {
-        await safeBatch(db, [...versionGuard, buildGiftCardTransactionInsert(db, {
+        await safeBatch(db, [...versionGuard, ...(input.extraStatements ?? []), buildGiftCardTransactionInsert(db, {
             giftCardId: card.id,
             kind: "adjust",
             amountMinor: input.amountMinor,
@@ -387,6 +398,12 @@ export async function updateGiftCardForStaff(
         expiresAt?: number | null;
         customerId?: string | null;
         note?: string | null;
+        /**
+         * An app's write (security audit S2): the owner of a card with a
+         * balance never changes, since the owner can reveal its code. Checked
+         * in the update itself, so a card funded meanwhile is refused too.
+         */
+        ownerFixedWhileFunded?: boolean;
     },
 ): Promise<StaffGiftCardSummary> {
     const changes: Partial<typeof giftCards.$inferInsert> = {};
@@ -406,13 +423,20 @@ export async function updateGiftCardForStaff(
         changes.customerId = input.customerId;
     }
     if (Object.keys(changes).length === 0) return getStaffGiftCardSummary(db, input.giftCardId);
+    const nextOwner = changes.customerId;
+    const ownerGuard = input.ownerFixedWhileFunded && nextOwner !== undefined
+        ? or(eq(giftCards.balanceMinor, 0), nextOwner === null ? isNull(giftCards.customerId) : eq(giftCards.customerId, nextOwner))
+        : undefined;
     const updated = await db.update(giftCards)
         .set({ ...changes, version: sql`${giftCards.version} + 1`, updatedAt: sql`unixepoch()` })
-        .where(and(eq(giftCards.id, input.giftCardId), eq(giftCards.version, input.version)))
+        .where(and(eq(giftCards.id, input.giftCardId), eq(giftCards.version, input.version), ownerGuard))
         .returning({ id: giftCards.id });
     if (updated.length === 0) {
-        const exists = await db.select({ id: giftCards.id }).from(giftCards).where(eq(giftCards.id, input.giftCardId)).get();
-        if (!exists) throw new NotFoundError("Gift card not found.");
+        const current = await db.select({ version: giftCards.version }).from(giftCards).where(eq(giftCards.id, input.giftCardId)).get();
+        if (!current) throw new NotFoundError("Gift card not found.");
+        if (ownerGuard && current.version === input.version) {
+            throw new ForbiddenError("An app can't change who owns a gift card that still has a balance: the owner can see its code. Ask the store's staff to move it.");
+        }
         throw new ConflictError("This gift card changed since you opened it. Reload it and try again.");
     }
     return getStaffGiftCardSummary(db, input.giftCardId);

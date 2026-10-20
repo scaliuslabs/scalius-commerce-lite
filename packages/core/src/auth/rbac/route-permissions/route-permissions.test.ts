@@ -352,6 +352,14 @@ describe("route permissions", () => {
     expect(allowed([PERMISSIONS.ORDERS_VIEW], path)).toBe(true);
   });
 
+  // Security audit S2: what apps may add to gift cards a day is stored-value policy.
+  it("keeps the app gift card limit readable with gift card view and changeable only with manage", () => {
+    const path = "/api/v1/admin/gift-cards/settings";
+    expect(allowed([PERMISSIONS.GIFT_CARDS_VIEW], path)).toBe(true);
+    expect(allowed([PERMISSIONS.GIFT_CARDS_VIEW], path, "PUT")).toBe(false);
+    expect(allowed([PERMISSIONS.GIFT_CARDS_MANAGE], path, "PUT")).toBe(true);
+  });
+
   it("separates tax reads and previews from tax mutations", () => {
     expect(getRoutePermission("/api/v1/admin/taxes", "GET"))
       .toEqual({ permission: PERMISSIONS.TAXES_VIEW });

@@ -13922,7 +13922,7 @@
          "notify": {
           "type": "boolean",
           "default": false,
-          "description": "Send the code to the recipient (else the owning customer) now."
+          "description": "Send the code to the recipient (else the owning customer) now. From an app: to the owning customer's own contact only."
          }
         },
         "required": [

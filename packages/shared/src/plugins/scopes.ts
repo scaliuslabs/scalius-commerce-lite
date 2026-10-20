@@ -140,8 +140,10 @@ export const PLUGIN_SCOPES = {
   read_gift_cards: { rbac: ["gift_cards.view"], staff: "gift_cards.view" },
   /**
    * Issue gift cards, adjust their balances, disable, enable and change
-   * expiry. Sensitive: it creates and moves stored value the store owes. The
-   * app never sees a card's code; the store delivers it to the recipient.
+   * expiry. Sensitive: it creates and moves stored value the store owes, so
+   * what one app adds a day stays within the merchant's limit. The app never
+   * sees a card's code; the store delivers it to the owning customer only,
+   * and an app never moves a card with a balance to another owner.
    */
   write_gift_cards: { rbac: ["gift_cards.view", "gift_cards.manage"], staff: "gift_cards.manage", sensitive: true },
   /**

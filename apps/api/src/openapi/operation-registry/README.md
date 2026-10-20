@@ -52,7 +52,8 @@ mirror a dashboard screen, an editor section or a summary card.
   SKUs (prices in minor units, stock at 0: quantities move through
   `variants.bulk_set_stock` under `write_inventory`); `products.update`
   patches its fields under `expectedRevision` in one write. Gift cards
-  (`gift_cards.*`, `read_gift_cards` / the Sensitive `write_gift_cards`)
+  (`gift_cards.*`, `read_gift_cards` / the Sensitive `write_gift_cards`, within the
+  merchant's daily app limit; an app never re-owns a funded card)
   issue, adjust under `expectedVersion` and disable; the code never reaches
   an app (`notify` has the store send it). `webhook_subscriptions.*`
   (`write_webhooks`, Sensitive) reach only the calling app's own
