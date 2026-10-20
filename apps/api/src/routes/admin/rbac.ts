@@ -71,13 +71,12 @@ export function assertPermissionSubset(
     sessionUser: { isSuperAdmin?: boolean },
     callerPermissions: Set<string>,
     requestedPermissions: Iterable<string>,
+    message = "You cannot grant or restore permissions you do not have",
 ): void {
     if (sessionUser.isSuperAdmin === true) return;
     for (const permission of requestedPermissions) {
         if (!callerPermissions.has(permission)) {
-            throw new ForbiddenError(
-                "You cannot grant or restore permissions you do not have",
-            );
+            throw new ForbiddenError(message);
         }
     }
 }
@@ -635,6 +634,21 @@ app.openapi(removeRoleRoute, async (c) => {
         if (targetUser[0]?.isSuperAdmin) {
             throw new ValidationError("Cannot modify super admin's roles");
         }
+
+        // The same authority as assigning it: nobody takes away a role they could not give.
+        const role = await db.select({ name: roles.name }).from(roles).where(eq(roles.id, data.roleId)).limit(1);
+        if (role.length === 0) {
+            throw new NotFoundError("Role not found");
+        }
+        if (role[0]?.name === "super_admin" && !delegatingUser(c).isSuperAdmin) {
+            throw new ForbiddenError("Only the store owner can remove the Super Admin role");
+        }
+        assertPermissionSubset(
+            delegatingUser(c),
+            c.get("adminPermissions"),
+            await getRolePermissions(db, data.roleId),
+            "You cannot remove a role with permissions you do not have",
+        );
 
         // Staff always keep a role; removing access entirely is "Remove staff".
         const heldRoles = await db
