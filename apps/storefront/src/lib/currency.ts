@@ -6,6 +6,8 @@ import {
   formatMoney as formatMoneyIn,
   formatPrice as formatPriceIn,
 } from "@scalius/shared/currency";
+import { getDecimalPlaces } from "@scalius/shared/currency";
+import { fromMinor } from "@scalius/shared/money";
 import { pageLanguage } from "./store-time-zone";
 
 export {
@@ -23,6 +25,11 @@ type PriceOptions = NonNullable<Parameters<typeof formatPriceIn>[1]>;
 /** The buyer-facing money format (`@scalius/shared/currency`), in the page's digits. */
 export function formatMoney(amount: number | string, opts?: MoneyOptions): string {
   return formatMoneyIn(amount, { ...opts, language: opts?.language ?? pageLanguage() });
+}
+
+/** Wire money (`{ amountMinor, currency }`, integer minor units) in the buyer format of its own currency. */
+export function formatMinorMoney(money: { amountMinor: number; currency: string }, opts?: Omit<MoneyOptions, "code">): string {
+  return formatMoney(fromMinor(money.amountMinor, getDecimalPlaces(money.currency)), { ...opts, code: money.currency });
 }
 
 /** A price with every decimal place, in the page's digits. */

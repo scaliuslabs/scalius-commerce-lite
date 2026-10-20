@@ -21,7 +21,7 @@ import type { PageMoney, PagePayout, PageSeller, PageSplit, SellerPortalProps, S
 export type { PageMoney, PagePayout, PageSeller, PageSplit, SellerPortalProps, SellerShopProps } from "./page-props";
 
 function money(context: StorefrontRenderContext, value: PageMoney): string {
-  return formatMoney({ ...context, store: { ...context.store, currency: value.currency } }, value.amount);
+  return formatMoney(context, value);
 }
 
 function day(context: StorefrontRenderContext, at: number): string {

@@ -10,12 +10,20 @@
 //   island module from its release's files when its moment comes (visible,
 //   idle, load or first interaction) and mounts it on the element.
 
-import type { StorefrontIslandContext, StorefrontIslandModule } from "@scalius/shared/plugins/storefront-protocol";
-import { formatMoney, getCurrencyCode } from "@/lib/currency";
+import type { StorefrontIslandContext, StorefrontIslandModule, StorefrontMoney } from "@scalius/shared/plugins/storefront-protocol";
+import { toMinor } from "@scalius/shared/money";
+import { formatMinorMoney, getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
 import { productContext } from "./product-context";
 import { initQuickAddCards } from "@/components/cards/scripts/quick-add-card";
 
-type CartSummary = { count: number; total: number };
+type CartSummary = { count: number; total: StorefrontMoney };
+
+/** The cart's total (decimal page-currency units in the cart store) as protocol money. */
+function cartTotal(total: number): StorefrontMoney {
+  const currency = getCurrencyCode();
+  const money = { amountMinor: toMinor(Math.max(0, total), getDecimalPlaces(currency)), currency };
+  return { ...money, formatted: formatMinorMoney(money) };
+}
 
 async function cartStoreModule() {
   return import("@/store/cart");
@@ -35,7 +43,7 @@ function onCart(listener: (cart: CartSummary) => void): () => void {
     hydrateCartFromStorage();
     const stop = cartStore.subscribe((state) => {
       if (stopped) return;
-      try { listener({ count: state.totalItems, total: state.totalAmount }); }
+      try { listener({ count: state.totalItems, total: cartTotal(state.totalAmount) }); }
       catch (error) {
         stopListening();
         console.warn("App cart listener failed", error);
@@ -84,8 +92,8 @@ function contextFor(element: Element): StorefrontIslandContext | null {
     assets,
     language: document.documentElement.lang || "en",
     currency: getCurrencyCode(),
-    // The page's currency and symbol, as the store writes prices.
-    formatMoney: (amount) => formatMoney(amount),
+    // The store's buyer format (the page's symbol for the page's currency).
+    formatMoney: (money) => formatMinorMoney(money),
     openCart,
     quickAdd,
     onCart,

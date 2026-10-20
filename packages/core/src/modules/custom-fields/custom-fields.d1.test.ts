@@ -252,7 +252,7 @@ describe("custom field values", () => {
         const rows = await selectStorefrontCustomFieldRows(db, "product", "prod_a").all();
         expect(presentStorefrontCustomFields(rows)).toEqual([
             { namespace: "custom", key: "care", name: "Care", type: "single_line_text", value: "Hand wash" },
-            { namespace: "custom", key: "msrp", name: "MSRP", type: "money", value: 1200 },
+            { namespace: "custom", key: "msrp", name: "MSRP", type: "money", value: { amountMinor: 120000, currency: "BDT" } },
         ]);
     });
 

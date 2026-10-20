@@ -565,7 +565,7 @@ const productPageProjection = (): StorefrontProductPage => pageProjection ??= pr
   ],
   price: { current: buyerDisplayedPrice, regular: buyerPricePresentation.pricing.originalPrice, from: buyerPricePresentation.isStartingAt },
   variantPrice: getVariantSchemaPrice,
-  money: (amount) => formatMoney(amount, { code: currencyCode, symbol: currencySymbol }),
+  page: { currencyCode, currencySymbol },
 });
 const productMainSkin = await appSkin(Astro.locals, Astro.url, "product-main");
 const productMainMarkup = productMainSkin

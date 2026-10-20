@@ -9,7 +9,7 @@
 // product information table (the product's public custom fields), the
 // store's reviews and related products.
 
-import { BuyForm, Gallery, Recommendations, Reviews, raw, t, type ProductMainProps } from "@scalius/plugin-sdk/storefront";
+import { BuyForm, Gallery, Recommendations, Reviews, raw, t, type ProductMainProps, type StorefrontMoney } from "@scalius/plugin-sdk/storefront";
 import { Icon } from "./icons";
 import { BigPrice, SELLER_HANDLE_FIELD, SELLER_NAME_FIELD, Stars, cx, percentOff, ratingCount, ratingLabel, ratingValue, soldBy, text } from "./ui";
 
@@ -23,11 +23,20 @@ export interface ProductSettings {
   show_info_table: boolean;
 }
 
+function isMoney(value: unknown): value is StorefrontMoney {
+  return typeof value === "object" && value !== null && typeof (value as StorefrontMoney).formatted === "string" && typeof (value as StorefrontMoney).amountMinor === "number";
+}
+
 /** A custom field's value as table text; null for shapes a table cannot show. */
 function fieldValue(value: unknown): string | null {
   if (typeof value === "string") return value.trim() || null;
   if (typeof value === "number" || typeof value === "boolean") return String(value);
-  if (Array.isArray(value)) return value.every((item) => typeof item === "string" || typeof item === "number") ? value.join(", ") : null;
+  // Money fields arrive as StorefrontMoney, with the store's text.
+  if (isMoney(value)) return value.formatted;
+  if (Array.isArray(value)) {
+    if (value.every(isMoney)) return value.map((item) => item.formatted).join(", ");
+    return value.every((item) => typeof item === "string" || typeof item === "number") ? value.join(", ") : null;
+  }
   return null;
 }
 
@@ -42,8 +51,8 @@ export function ProductPage({ data, settings, context }: ProductMainProps<Produc
   const crumbs = product.breadcrumbs.slice(1, -1);
   const seller = soldBy(product.fields);
   const sellerName = seller?.name ?? context.store.name;
-  const discounted = product.compareAt !== null && product.compareAt.amount > product.price.amount;
-  const percent = discounted ? Math.round((1 - product.price.amount / product.compareAt!.amount) * 100) : 0;
+  const discounted = product.compareAt !== null && product.compareAt.amountMinor > product.price.amountMinor;
+  const percent = discounted ? Math.round((1 - product.price.amountMinor / product.compareAt!.amountMinor) * 100) : 0;
   const info = settings.show_info_table === false ? [] : Object.entries(product.fields)
     .filter(([key]) => key !== SELLER_NAME_FIELD && key !== SELLER_HANDLE_FIELD)
     .flatMap(([key, value]) => {

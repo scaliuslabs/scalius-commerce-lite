@@ -93,7 +93,7 @@ export interface PriceProps {
  */
 export function Price(props: PriceProps): Html {
   const { price, compareAt, context } = props;
-  const discounted = compareAt !== null && compareAt !== undefined && compareAt.amount > price.amount;
+  const discounted = compareAt !== null && compareAt !== undefined && compareAt.amountMinor > price.amountMinor;
   const current = props.from ? t(context, { en: `From ${price.formatted}`, bn: `${price.formatted} থেকে` }) : price.formatted;
   const label = discounted ? t(context, { en: "Sale price", bn: "বিক্রয় মূল্য" }) : t(context, { en: "Price", bn: "মূল্য" });
   let out = `<span data-price${props.class ? ` class="${escapeHtml(props.class)}"` : ""}${discounted ? " data-discounted" : ""}>`;

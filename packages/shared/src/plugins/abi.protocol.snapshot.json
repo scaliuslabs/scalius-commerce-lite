@@ -2085,7 +2085,7 @@
                {
                 "type": "object",
                 "properties": {
-                 "money": {
+                 "amountMinor": {
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
@@ -2096,7 +2096,8 @@
                  }
                 },
                 "required": [
-                 "money"
+                 "amountMinor",
+                 "currency"
                 ],
                 "additionalProperties": false
                },
@@ -11540,7 +11541,7 @@
               {
                "type": "object",
                "properties": {
-                "money": {
+                "amountMinor": {
                  "type": "integer",
                  "minimum": -9007199254740991,
                  "maximum": 9007199254740991
@@ -11551,7 +11552,8 @@
                 }
                },
                "required": [
-                "money"
+                "amountMinor",
+                "currency"
                ],
                "additionalProperties": false
               },

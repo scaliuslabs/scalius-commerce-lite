@@ -42,8 +42,8 @@ export function whole(value: unknown, min: number, max: number, fallback: number
 /** "৳ 4,501 OFF": the amount saved, as the source store words its pill (an amount, not a percentage). */
 export function savedLabel(context: Context, card: Pick<StorefrontProductCard, "price" | "compareAt">): string | null {
   if (!card.compareAt) return null;
-  const saved = card.compareAt.amount - card.price.amount;
-  if (!(saved > 0)) return null;
+  const saved = { amountMinor: card.compareAt.amountMinor - card.price.amountMinor, currency: card.price.currency };
+  if (!(saved.amountMinor > 0)) return null;
   return t(context, { en: `${formatMoney(context, saved)} OFF`, bn: `${formatMoney(context, saved)} ছাড়` });
 }
 

@@ -88,8 +88,8 @@ describe("the header", () => {
 describe("the card", () => {
   it("shows the amount saved as the pill and the regular price struck through", () => {
     const html = shown(renderProductCard(storefront, "volt_card", skinSettings("volt_card"), {
-      price: { amount: 113999, formatted: "৳113,999" },
-      compareAt: { amount: 117000, formatted: "৳117,000" },
+      price: { amountMinor: 11399900, currency: "BDT", formatted: "৳113,999" },
+      compareAt: { amountMinor: 11700000, currency: "BDT", formatted: "৳117,000" },
     }));
     expect(html).toContain("volt-pill");
     expect(html).toMatch(/3,001/);

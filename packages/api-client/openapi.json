@@ -315,7 +315,7 @@
           },
           "value": {
             "nullable": true,
-            "description": "JSON per the type: text, dates, URLs, colours and record ids as strings; integers as numbers; decimals as decimal strings; booleans; any JSON for `json`; money in decimal major units of the store currency; lists as arrays."
+            "description": "JSON per the type: text, dates, URLs, colours and record ids as strings; integers as numbers; decimals as decimal strings; booleans; any JSON for `json`; money as `{ amountMinor, currency }` (integer minor units; the page market's currency on a product page, else the store's); lists as arrays."
           },
           "reference": {
             "type": "object",
@@ -1376,7 +1376,7 @@
                             },
                             "value": {
                               "nullable": true,
-                              "description": "The custom-field HTTP contract, as public custom fields: text, dates, URLs, colours and media ids (in media) as strings; integers and money (decimal major units of the store currency) as numbers; booleans; lists as arrays."
+                              "description": "The custom-field HTTP contract, as public custom fields: text, dates, URLs, colours and media ids (in media) as strings; integers as numbers; money as `{ amountMinor, currency }` (integer minor units of the store currency); booleans; lists as arrays."
                             }
                           },
                           "required": [
@@ -7903,7 +7903,7 @@
                           {
                             "type": "object",
                             "properties": {
-                              "money": {
+                              "amountMinor": {
                                 "type": "integer"
                               },
                               "currency": {
@@ -7912,7 +7912,8 @@
                               }
                             },
                             "required": [
-                              "money"
+                              "amountMinor",
+                              "currency"
                             ],
                             "additionalProperties": false
                           },
@@ -11382,7 +11383,7 @@
                                     {
                                       "type": "object",
                                       "properties": {
-                                        "money": {
+                                        "amountMinor": {
                                           "type": "integer"
                                         },
                                         "currency": {
@@ -11391,7 +11392,8 @@
                                         }
                                       },
                                       "required": [
-                                        "money"
+                                        "amountMinor",
+                                        "currency"
                                       ],
                                       "additionalProperties": false
                                     },
@@ -47101,7 +47103,7 @@
                                                   {
                                                     "type": "object",
                                                     "properties": {
-                                                      "money": {
+                                                      "amountMinor": {
                                                         "type": "integer"
                                                       },
                                                       "currency": {
@@ -47110,7 +47112,8 @@
                                                       }
                                                     },
                                                     "required": [
-                                                      "money"
+                                                      "amountMinor",
+                                                      "currency"
                                                     ],
                                                     "additionalProperties": false
                                                   },
@@ -75327,7 +75330,7 @@
                                                       {
                                                         "type": "object",
                                                         "properties": {
-                                                          "money": {
+                                                          "amountMinor": {
                                                             "type": "integer"
                                                           },
                                                           "currency": {
@@ -75336,7 +75339,8 @@
                                                           }
                                                         },
                                                         "required": [
-                                                          "money"
+                                                          "amountMinor",
+                                                          "currency"
                                                         ],
                                                         "additionalProperties": false
                                                       },
@@ -80290,7 +80294,7 @@
                                                   {
                                                     "type": "object",
                                                     "properties": {
-                                                      "money": {
+                                                      "amountMinor": {
                                                         "type": "integer"
                                                       },
                                                       "currency": {
@@ -80299,7 +80303,8 @@
                                                       }
                                                     },
                                                     "required": [
-                                                      "money"
+                                                      "amountMinor",
+                                                      "currency"
                                                     ],
                                                     "additionalProperties": false
                                                   },
@@ -84350,7 +84355,7 @@
                                                   {
                                                     "type": "object",
                                                     "properties": {
-                                                      "money": {
+                                                      "amountMinor": {
                                                         "type": "integer"
                                                       },
                                                       "currency": {
@@ -84359,7 +84364,8 @@
                                                       }
                                                     },
                                                     "required": [
-                                                      "money"
+                                                      "amountMinor",
+                                                      "currency"
                                                     ],
                                                     "additionalProperties": false
                                                   },

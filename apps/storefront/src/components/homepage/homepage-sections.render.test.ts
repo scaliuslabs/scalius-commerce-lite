@@ -194,7 +194,7 @@ const OBJECT_STORES: HomepageObject = {
         { key: "map", name: "Map", type: "url", value: "/pages/stores" },
         { key: "evil", name: "Evil", type: "url", value: "javascript:alert(1)" },
         { key: "brand", name: "Brand colour", type: "color", value: "#1f5f4a" },
-        { key: "deposit", name: "Deposit", type: "money", value: 1250 },
+        { key: "deposit", name: "Deposit", type: "money", value: { amountMinor: 125000, currency: "BDT" } },
         { key: "parking", name: "Parking", type: "boolean", value: true },
         { key: "opened", name: "Opened", type: "date", value: "2019-04-14" },
         { key: "photo", name: "Photo", type: "media_reference", value: "m-story" },

@@ -928,7 +928,10 @@ export type Words<T = string> = {
 };
 export declare function t<T = string>(context: Context, words: Words<T>): T;
 export declare function formatNumber(context: Context, value: number, options?: Intl.NumberFormatOptions): string;
-export declare function formatMoney(context: Context, amount: number): string;
+export declare function formatMoney(context: Context, money: {
+    amountMinor: number;
+    currency: string;
+}): string;
 export declare function plural(context: Context, count: number, words: Words<Partial<Record<Intl.LDMLPluralRule, string>> & {
     other: string;
 }>): string;
@@ -2422,7 +2425,8 @@ export interface StorefrontImage {
     alt: string;
 }
 export interface StorefrontMoney {
-    amount: number;
+    amountMinor: number;
+    currency: string;
     formatted: string;
 }
 export interface StorefrontProductCard {
@@ -2443,7 +2447,7 @@ export interface StorefrontProductCard {
     quickAdd: boolean;
     needsOptions: boolean;
     facts: string[];
-    fields: Record<string, CustomFieldWireValue>;
+    fields: Record<string, CustomFieldWireValue | StorefrontMoney | StorefrontMoney[]>;
 }
 export interface StorefrontMenuItem {
     title: string;
@@ -2956,12 +2960,15 @@ export interface StorefrontIslandContext {
     assets: string;
     language: string;
     currency: string;
-    formatMoney(amount: number): string;
+    formatMoney(money: {
+        amountMinor: number;
+        currency: string;
+    }): string;
     openCart(): void;
     quickAdd(productUrl: string): Promise<boolean>;
     onCart(listener: (cart: {
         count: number;
-        total: number;
+        total: StorefrontMoney;
     }) => void): () => void;
     fetchApp(path: string, init?: RequestInit): Promise<Response>;
     product?: {

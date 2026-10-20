@@ -178,5 +178,23 @@
   "from": "652c2620e31b39ad",
   "change": "events.gift_card.transaction: the topic was removed.",
   "reason": "Pre-lock rename (audit R2 item 11): each topic's prefix names its resource, so gift_card.transaction is gift_card_transaction.created; migration 0164 rewrites stored topics, grants, registrations and subscriptions."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "cd5c76334ba0d78e",
+  "change": "functions.buyer.ui output ui.root[variant 11].rows[].cells{*}[variant 5].money: the field is no longer accepted.",
+  "reason": "Contract seal (beta criterion 1.9): a UI table money cell is PluginMoney, { amountMinor, currency }, the one money shape of every app boundary; the currency is always named."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "cd5c76334ba0d78e",
+  "change": "functions.buyer.ui output ui.root[variant 11].rows[].cells{*}[variant 5].amountMinor: a new required field.",
+  "reason": "Contract seal (beta criterion 1.9): a UI table money cell is PluginMoney, { amountMinor, currency }, the one money shape of every app boundary; the currency is always named."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "cd5c76334ba0d78e",
+  "change": "functions.buyer.ui output ui.root[variant 11].rows[].cells{*}[variant 5].currency: a new required field.",
+  "reason": "Contract seal (beta criterion 1.9): a UI table money cell is PluginMoney, { amountMinor, currency }, the one money shape of every app boundary; the currency is always named."
  }
 ]

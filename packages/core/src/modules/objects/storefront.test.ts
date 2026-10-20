@@ -77,7 +77,7 @@ describe("public Objects projection", () => {
     record("targets", "public"); record("targets", "draft", 0);
     record("source", "hello", 1, { title: "Hello", buyer: "customer_secret", order: "order_secret", related: ["public", "draft", "deleted"], missing: "deleted", price: 12300 });
     const { value, dependencies } = await withDependencyScope(() => listPublicObjects(db, "custom.source"), { strict: true });
-    expect(value?.records[0]?.data).toEqual({ title: "Hello", related: ["public", null, null], missing: null, price: 123 });
+    expect(value?.records[0]?.data).toEqual({ title: "Hello", related: ["public", null, null], missing: null, price: { amountMinor: 12300, currency: "BDT" } });
     expect(dependencies.keys).toContain("obj:oty_custom.source");
     expect(dependencies.keys).toContain("obj:oty_custom.targets");
     expect(dependencies.coarseTables).toEqual([]);

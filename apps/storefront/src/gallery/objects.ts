@@ -65,7 +65,7 @@ export const FIXTURE_OBJECTS: Record<string, HomepageObject> = {
         field("photo", "Photo", "media_reference", "square-store-chattogram"),
         field("address", "Address", "multi_line_text", "Shop 4, Chittagong Shopping Complex, GEC Circle"),
         field("services", "Services", "list.single_line_text", ["Alterations", "Gift wrap", "Same-day pickup"]),
-        field("pickup", "Free pickup over", "money", 3000),
+        field("pickup", "Free pickup over", "money", { amountMinor: 300000, currency: "BDT" }),
         field("accent", "Store colour", "color", "#7a1f2b"),
       ]),
       entry("sylhet", "Sylhet, Zindabazar", [

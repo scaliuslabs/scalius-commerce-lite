@@ -254,9 +254,14 @@ export interface StorefrontImage {
   alt: string;
 }
 
-/** An amount in the page's currency: the number and the store's formatting of it. */
+/**
+ * An amount of money, as every app boundary carries it: integer minor units
+ * of `currency` (ISO 4217), with the store's text for it on this page
+ * (`formatted`, the format of the store's own prices).
+ */
 export interface StorefrontMoney {
-  amount: number;
+  amountMinor: number;
+  currency: string;
   formatted: string;
 }
 
@@ -282,8 +287,8 @@ export interface StorefrontProductCard {
   needsOptions: boolean;
   /** Short facts the store shows on cards (key specs, delivery). */
   facts: string[];
-  /** Requested storefront-visible custom fields, keyed by namespace.key. */
-  fields: Record<string, CustomFieldWireValue>;
+  /** Requested storefront-visible custom fields, keyed by namespace.key (money as `StorefrontMoney`). */
+  fields: Record<string, CustomFieldWireValue | StorefrontMoney | StorefrontMoney[]>;
 }
 
 /** A navigation entry: a title, a store path or https link, and its children (three levels at most). */
@@ -366,7 +371,7 @@ export interface StorefrontProductCardData {
   aboveFold: boolean;
 }
 
-/** Storefront-visible custom fields, by `<namespace>.<key>` (JSON per type; money in major units). */
+/** Storefront-visible custom fields, by `<namespace>.<key>` (JSON per type; money as `StorefrontMoney`). */
 export type StorefrontFieldValues = Record<string, unknown>;
 
 /** A page link: its title and store path. */
@@ -777,7 +782,7 @@ export type StorefrontRenderJob =
   | {
     id: string;
     kind: "section";
-    /** Published records from the section's declared public object reads. */
+    /** Published records from the section's declared public object reads (money fields as `StorefrontMoney`). */
     objects?: Record<string, { records: Array<{ id: string; handle: string | null; data: Record<string, unknown> }>; fields: Record<string, string> }>;
     /** The manifest section type. */
     type: string;
@@ -841,8 +846,8 @@ export interface StorefrontIslandContext {
   /** The page's language (BCP 47). */
   language: string;
   currency: string;
-  /** Formats an amount in the page's currency as the store does. */
-  formatMoney(amount: number): string;
+  /** Formats an amount (integer minor units of its currency) as the store does. */
+  formatMoney(money: { amountMinor: number; currency: string }): string;
   /** Opens the cart drawer. */
   openCart(): void;
   /**
@@ -852,7 +857,7 @@ export interface StorefrontIslandContext {
    */
   quickAdd(productUrl: string): Promise<boolean>;
   /** Calls the cart's listener now and on every change; returns the unsubscribe. */
-  onCart(listener: (cart: { count: number; total: number }) => void): () => void;
+  onCart(listener: (cart: { count: number; total: StorefrontMoney }) => void): () => void;
   /** Calls the app's public routes through the storefront proxy (`/apps/<plugin id>/<path>`). */
   fetchApp(path: string, init?: RequestInit): Promise<Response>;
   /**

@@ -121,8 +121,7 @@ export function formatAppDate(value: string): string {
 /** Integer minor units in the store currency (or the cell's own currency). */
 function useMinorMoney() {
   const { fmt, code } = useCurrency();
-  return (minor: number, currency?: string): string => {
-    const shown = currency ?? code;
+  return (minor: number, shown: string): string => {
     const digits = getDecimalPlaces(shown);
     const major = minor / 10 ** digits;
     if (shown === code) return fmt(major);
@@ -675,7 +674,7 @@ function CellView({ cell }: { cell: PluginUiCell | undefined }) {
   if (cell === null || typeof cell !== "object") return <>{plain(cell)}</>;
   if ("badge" in cell) return <Badge variant={BADGE_VARIANT[cell.tone ?? "neutral"]}>{cell.badge}</Badge>;
   if ("to" in cell) return <PluginLink to={cell.to} className="text-link hover:underline">{cell.text}</PluginLink>;
-  if ("money" in cell) return <span className="tabular-nums">{money(cell.money, cell.currency)}</span>;
+  if ("amountMinor" in cell) return <span className="tabular-nums">{money(cell.amountMinor, cell.currency)}</span>;
   return <time dateTime={cell.date}>{formatAppDate(cell.date)}</time>;
 }
 

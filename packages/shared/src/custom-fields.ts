@@ -19,8 +19,8 @@
 // code, the one money format of the app API, webhooks, functions and ports);
 // arrays of those for lists. `null`, an empty string or an empty list clears
 // a value. Money bounds (`min`/`max`) are integer minor units of the store
-// currency. Only the storefront contract shows money in major units
-// (`customFieldStorefrontValue`).
+// currency. The storefront contract carries the same wire money; the
+// storefront adds the page's `formatted` text where it hands money to apps.
 
 import { toHandle } from "./handle";
 import { fromMinor, isIncrementMultipleMinor, MAX_MINOR_AMOUNT, priceIncrementMessage, toMinor } from "./money";
@@ -849,7 +849,7 @@ export function parseCustomFieldValue(
   return ok(stored);
 }
 
-function scalarWire(type: CustomFieldScalarType, stored: string, context: CustomFieldCodecContext, majorMoney = false): CustomFieldWireValue {
+function scalarWire(type: CustomFieldScalarType, stored: string, context: CustomFieldCodecContext): CustomFieldWireValue {
   switch (type) {
     case "integer":
       return Number(stored);
@@ -858,7 +858,7 @@ function scalarWire(type: CustomFieldScalarType, stored: string, context: Custom
     case "json":
       return JSON.parse(stored) as CustomFieldJson;
     case "money":
-      return majorMoney ? fromMinor(Number(stored), context.decimalPlaces) : customFieldMoney(Number(stored), context);
+      return customFieldMoney(Number(stored), context);
     default:
       return stored;
   }
@@ -889,25 +889,8 @@ export function customFieldWireValue(
   stored: string,
   context: CustomFieldCodecContext,
 ): CustomFieldWireValue | null {
-  return wireValue(type, stored, context, false);
-}
-
-/**
- * A stored value as the storefront contract shows it: the HTTP form, except
- * money is a decimal major-unit number of the store currency (the page
- * formats it). Never used for an app boundary.
- */
-export function customFieldStorefrontValue(
-  type: CustomFieldType,
-  stored: string,
-  context: CustomFieldCodecContext,
-): CustomFieldWireValue | null {
-  return wireValue(type, stored, context, true);
-}
-
-function wireValue(type: CustomFieldType, stored: string, context: CustomFieldCodecContext, majorMoney: boolean): CustomFieldWireValue | null {
   const item = customFieldItemType(type);
-  if (!isCustomFieldListType(type)) return isStoredItem(item, stored, context) ? scalarWire(item, stored, context, majorMoney) : null;
+  if (!isCustomFieldListType(type)) return isStoredItem(item, stored, context) ? scalarWire(item, stored, context) : null;
   let items: unknown;
   try {
     items = JSON.parse(stored);
@@ -915,7 +898,7 @@ function wireValue(type: CustomFieldType, stored: string, context: CustomFieldCo
     return null;
   }
   if (!Array.isArray(items) || !items.every((value) => isStoredItem(item, value, context))) return null;
-  return (items as string[]).map((value) => scalarWire(item, value, context, majorMoney));
+  return (items as string[]).map((value) => scalarWire(item, value, context));
 }
 
 /** The record ids a stored reference value names (empty for other types). */

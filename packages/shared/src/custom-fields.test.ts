@@ -14,7 +14,6 @@ import {
   customFieldReferenceTarget,
   customFieldMoneyFromMajor,
   customFieldMoneyMajorText,
-  customFieldStorefrontValue,
   customFieldValidationsToWire,
   customFieldWireValue,
   isCustomFieldKey,
@@ -177,9 +176,6 @@ describe("custom field value codec", () => {
     expect(stored("list.money", [usd(100), usd(225)])).toBe('["100","225"]');
     expect(customFieldWireValue("money", "1250", USD)).toEqual(usd(1250));
     expect(customFieldWireValue("list.money", '["100","225"]', USD)).toEqual([usd(100), usd(225)]);
-    // The storefront contract alone shows major units.
-    expect(customFieldStorefrontValue("money", "1250", USD)).toBe(12.5);
-    expect(customFieldStorefrontValue("list.money", '["100","225"]', USD)).toEqual([1, 2.25]);
     // One format: no decimals, no bare numbers, no other currency, never negative or fractional.
     for (const refused of [12.5, "12.50", 1250, { amountMinor: 1250 }, { amountMinor: 1250, currency: "USD", extra: 1 }, usd(-1), usd(12.5)]) {
       expect(issue("money", refused).code).toBe("invalid");

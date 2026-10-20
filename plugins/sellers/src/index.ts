@@ -347,9 +347,9 @@ async function payoutsPage(request: PluginRouteRequest, ctx: PluginContext) {
       cells: {
         seller: record.data.seller_id,
         orders: record.data.split_count,
-        gross: { money: record.data.gross_minor, currency: record.data.currency },
-        commission: { money: record.data.commission_minor, currency: record.data.currency },
-        net: { money: record.data.net_minor, currency: record.data.currency },
+        gross: { amountMinor: record.data.gross_minor, currency: record.data.currency },
+        commission: { amountMinor: record.data.commission_minor, currency: record.data.currency },
+        net: { amountMinor: record.data.net_minor, currency: record.data.currency },
         status: { badge: record.data.status, tone: statusTone(record.data.status) },
         ref: record.data.reference ?? "",
       },
@@ -389,9 +389,9 @@ async function commissionsPage(_request: PluginRouteRequest, ctx: PluginContext)
       cells: {
         seller: seller.data.name,
         orders: live.length,
-        gross: { money: live.reduce((sum, record) => sum + record.data.subtotal_minor, 0), currency },
-        commission: { money: live.reduce((sum, record) => sum + record.data.commission_minor, 0), currency },
-        unpaid: { money: live.filter((record) => !record.data.payout_id).reduce((sum, record) => sum + record.data.net_minor, 0), currency },
+        gross: { amountMinor: live.reduce((sum, record) => sum + record.data.subtotal_minor, 0), currency },
+        commission: { amountMinor: live.reduce((sum, record) => sum + record.data.commission_minor, 0), currency },
+        unpaid: { amountMinor: live.filter((record) => !record.data.payout_id).reduce((sum, record) => sum + record.data.net_minor, 0), currency },
       },
     });
   }
@@ -489,8 +489,8 @@ const routes = {
           cells: {
             seller: record.data.seller_id,
             items: record.data.item_count,
-            net: { money: record.data.net_minor, currency: record.data.currency },
-            commission: { money: record.data.commission_minor, currency: record.data.currency },
+            net: { amountMinor: record.data.net_minor, currency: record.data.currency },
+            commission: { amountMinor: record.data.commission_minor, currency: record.data.currency },
             status: { badge: record.data.status, tone: statusTone(record.data.status) },
           },
         })),

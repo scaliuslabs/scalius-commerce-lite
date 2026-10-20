@@ -2,9 +2,9 @@
 // (pages.tsx draws them). Plain types, so the backend (portal.ts) imports
 // them without compiling the storefront's JSX.
 
-/** An amount in major units of `currency` (the route converts from minor units once, with the store's decimal places). */
+/** An amount in integer minor units of `currency` (`PluginMoney`, as the SDK's `formatMoney` takes it). */
 export interface PageMoney {
-  amount: number;
+  amountMinor: number;
   currency: string;
 }
 

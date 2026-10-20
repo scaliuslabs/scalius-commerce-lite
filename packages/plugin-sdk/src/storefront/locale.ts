@@ -6,7 +6,7 @@
 import type { StorefrontRenderContext } from "@scalius/shared/plugins/storefront-protocol";
 import { baseLanguage, dateLocale, formatDateTime, formatNumber as formatLocaleNumber, numberLocale } from "@scalius/shared/locale-format";
 import { pluralCategory } from "@scalius/shared/locale-words";
-import { formatMoney as formatStoreMoney } from "@scalius/shared/currency";
+import { formatMoney as formatStoreMoney, getDecimalPlaces } from "@scalius/shared/currency";
 import { commerceWallTimeToEpoch } from "@scalius/shared/commerce-time";
 
 type Context = Pick<StorefrontRenderContext, "store">;
@@ -30,9 +30,13 @@ export function formatNumber(context: Context, value: number, options?: Intl.Num
   return formatLocaleNumber(value, numberLocale(context.store.language, region(context)), options);
 }
 
-/** An amount in the page's currency, in the store's buyer format (the format of every `StorefrontMoney.formatted`). */
-export function formatMoney(context: Context, amount: number): string {
-  return formatStoreMoney(amount, { code: context.store.currency });
+/**
+ * An amount (integer minor units of its currency: a `StorefrontMoney` or a
+ * `PluginMoney`) in the store's buyer format, the format of every
+ * `StorefrontMoney.formatted`.
+ */
+export function formatMoney(context: Context, money: { amountMinor: number; currency: string }): string {
+  return formatStoreMoney(money.amountMinor / 10 ** getDecimalPlaces(money.currency), { code: money.currency, language: context.store.language });
 }
 
 /**

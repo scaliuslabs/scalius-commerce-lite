@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { objectTypeDeclarationSchema, objectTypeId, prepareObjectData, objectDataStorefront, objectDataWire } from "./objects";
+import { objectTypeDeclarationSchema, objectTypeId, prepareObjectData, objectDataWire } from "./objects";
 
 const context = { decimalPlaces: 2, currencyCode: "USD" };
 const declaration = (fields: unknown[], extra: Record<string, unknown> = {}) => objectTypeDeclarationSchema.parse({ name: "Records", fields, ...extra });
@@ -34,8 +34,6 @@ describe("object contract", () => {
     expect(wire).toEqual({ price: money(1250), prices: [money(125), money(250)] });
     // What an app reads, it can write back unchanged.
     expect(prepareObjectData(schema, wire, context)).toEqual(prepared);
-    // The storefront contract alone shows major units.
-    expect(objectDataStorefront(schema, prepared.data, context)).toEqual({ price: 12.5, prices: [1.25, 2.5] });
     expect(prepareObjectData(schema, { price: "12.50" }, context).ok).toBe(false);
   });
 });

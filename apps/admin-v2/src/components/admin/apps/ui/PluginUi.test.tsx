@@ -262,7 +262,7 @@ describe("app UI renderer", () => {
       rows: [{
         id: "r1",
         to: { kind: "resource", resource: "order", id: "o1" },
-        cells: { order: "#1001", total: { money: 125050 }, state: { badge: "Greeted", tone: "success" }, at: { date: "2026-10-02" }, paid: false },
+        cells: { order: "#1001", total: { amountMinor: 125050, currency: "BDT" }, state: { badge: "Greeted", tone: "success" }, at: { date: "2026-10-02" }, paid: false },
       }],
       pagination: { next: "cursor-2", total: 31 },
     }, { host: hostFor({ paginate }) });

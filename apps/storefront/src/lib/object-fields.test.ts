@@ -21,9 +21,11 @@ describe("object field views", () => {
     expect(view("url", "javascript:alert(1)")!.parts).toEqual([{ kind: "text", text: "javascript:alert(1)" }]);
   });
 
-  it("formats money (major units, as the API sends it), booleans and dates in the store language", () => {
-    expect(view("money", 1250.5)!.parts).toEqual([{ kind: "text", text: "৳1,250.50" }]);
-    expect(view("money", -5)).toBeNull();
+  it("formats money (`{ amountMinor, currency }`, as the API sends it), booleans and dates in the store language", () => {
+    expect(view("money", { amountMinor: 125050, currency: "BDT" } as never)!.parts).toEqual([{ kind: "text", text: "৳1,250.50" }]);
+    expect(view("money", { amountMinor: 1999, currency: "USD" } as never)!.parts).toEqual([{ kind: "text", text: "$19.99" }]);
+    expect(view("money", { amountMinor: -5, currency: "BDT" } as never)).toBeNull();
+    expect(view("money", 1250.5)).toBeNull();
     expect(view("money", "125050")).toBeNull();
     expect(view("boolean", true)!.parts).toEqual([{ kind: "text", text: "Yes" }]);
     expect(view("boolean", false, "bn")!.parts).toEqual([{ kind: "text", text: "না" }]);

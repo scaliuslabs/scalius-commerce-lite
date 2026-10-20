@@ -12,22 +12,22 @@ export const BUNDLED_PLUGINS: Readonly<Record<string, BundledPluginEntry>> = {
   },
   "scalius.bazaar": {
     version: "1.0.0",
-    sha256: "fa39712e0238b7561841c4329b9f08ad282ed55289db7029fb3665fb8bb35229",
+    sha256: "f75ab90e3d72d03e6c8c198ebc9931406eacbbfa7aac3d25a5fb118af7a9b753",
     load: () => import("../../../../plugins/bazaar/src/index"),
   },
   "scalius.noor": {
     version: "2.0.0",
-    sha256: "26446c221d3e1b3530932c7346ccbf4f8601a36601f3073f842950a174c5041d",
+    sha256: "bc397476736796195ff51551dcddcbbb127f206adab1ee165b643ff369ab4de2",
     load: () => import("../../../../plugins/noor/src/index"),
   },
   "scalius.sellers": {
     version: "1.0.0",
-    sha256: "c0dd0dc5adcbf99df83650d9508f0ed5084d0ee0a195324f6f5de673dfd68f99",
+    sha256: "d44e7dff0c0f4bc92781f6f00ed93d56a7ddd7d6b0f0a94ebc63015ed5289d36",
     load: () => import("../../../../plugins/sellers/src/index"),
   },
   "scalius.volt": {
     version: "1.0.0",
-    sha256: "80f75ad5b861ad2e798e0793efad22163266c56d833f17b82ab75ac6afdc250c",
+    sha256: "98581ea41c72ef45a9efa818d3f77d2dc1ff03013a43ef49a872947bbf523e9a",
     load: () => import("../../../../plugins/volt/src/index"),
   },
 };

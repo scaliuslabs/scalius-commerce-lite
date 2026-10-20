@@ -8,7 +8,6 @@ import type { StorefrontListingPage, StorefrontProductPage } from "@scalius/shar
 import { storefrontEmbedRule } from "@scalius/shared/plugins/storefront-components";
 import { splitStorefrontEmbeds } from "@scalius/shared/plugins/storefront-embeds";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
-import { formatMoney } from "@scalius/shared/currency";
 import { DEFAULT_STOREFRONT_THEME } from "@scalius/shared/storefront-theme";
 import { requestThemeFor } from "@/lib/storefront-theme-context";
 import { resolveProductListQueryState } from "@/lib/product-list-query";
@@ -72,7 +71,7 @@ const projection = productPageData({
   breadcrumbs: [{ title: "Home", url: "/" }, { title: product.name, url: "/products/linen-shirt" }],
   price: { current: 108, regular: 120, from: false },
   variantPrice: (variant) => (variant.price ?? product.price) * 0.9,
-  money: (amount) => formatMoney(amount, { code: "USD", symbol: "$" }),
+  page: { currencyCode: "USD", currencySymbol: "$" },
 });
 const buyBox = {
   summary: { product, category: null, variants, options, details: false, currencyCode: "USD", currencySymbol: "$" },
@@ -115,7 +114,8 @@ describe("core and skin projection fidelity", () => {
     expect(skin.querySelector("#product-buy-form")?.getAttribute("action")).toBe("/buy/linen-shirt");
     const browserVariants = JSON.parse(core.querySelector("#product-variants-data")!.textContent!);
     expect(browserVariants.map((variant: { id: string; discountedPrice: number }) => [variant.id, variant.discountedPrice]))
-      .toEqual(projection.product.variants.map((variant) => [variant.id, variant.price.amount]));
+      .toEqual(projection.product.variants.map((variant) => [variant.id, variant.price.amountMinor / 100]));
+    expect(projection.product.price).toEqual({ amountMinor: 10800, currency: "USD", formatted: "$108" });
     expect(core.querySelectorAll("#product-variant-noscript option")).toHaveLength(1);
     expect(projection.product.variants.map((variant) => variant.available)).toEqual([true, false]);
     expect(projection.product.fields).toEqual({ "details.fabric": "Linen" });

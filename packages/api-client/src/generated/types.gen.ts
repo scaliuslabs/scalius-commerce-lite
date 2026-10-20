@@ -84,7 +84,7 @@ export type StorefrontCustomField = {
         }>;
     };
     /**
-     * JSON per the type: text, dates, URLs, colours and record ids as strings; integers as numbers; decimals as decimal strings; booleans; any JSON for `json`; money in decimal major units of the store currency; lists as arrays.
+     * JSON per the type: text, dates, URLs, colours and record ids as strings; integers as numbers; decimals as decimal strings; booleans; any JSON for `json`; money as `{ amountMinor, currency }` (integer minor units; the page market's currency on a product page, else the store's); lists as arrays.
      */
     value?: unknown;
     /**
@@ -391,7 +391,7 @@ export type StorefrontHomepageSections = {
                 name: string;
                 type: string;
                 /**
-                 * The custom-field HTTP contract, as public custom fields: text, dates, URLs, colours and media ids (in media) as strings; integers and money (decimal major units of the store currency) as numbers; booleans; lists as arrays.
+                 * The custom-field HTTP contract, as public custom fields: text, dates, URLs, colours and media ids (in media) as strings; integers as numbers; money as `{ amountMinor, currency }` (integer minor units of the store currency); booleans; lists as arrays.
                  */
                 value?: unknown;
             }>;
@@ -1606,8 +1606,8 @@ export type PluginUiNode = {
                     path: string;
                 };
             } | {
-                money: number;
-                currency?: string;
+                amountMinor: number;
+                currency: string;
             } | {
                 date: string;
             };
@@ -2210,8 +2210,8 @@ export type CustomerAccountSummary = {
                             path: string;
                         };
                     } | {
-                        money: number;
-                        currency?: string;
+                        amountMinor: number;
+                        currency: string;
                     } | {
                         date: string;
                     };
@@ -12097,8 +12097,8 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                                     path: string;
                                 };
                             } | {
-                                money: number;
-                                currency?: string;
+                                amountMinor: number;
+                                currency: string;
                             } | {
                                 date: string;
                             };
@@ -19926,8 +19926,8 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                                         path: string;
                                     };
                                 } | {
-                                    money: number;
-                                    currency?: string;
+                                    amountMinor: number;
+                                    currency: string;
                                 } | {
                                     date: string;
                                 };
@@ -20909,8 +20909,8 @@ export type PostApiV1OrdersCartValidationResponses = {
                                     path: string;
                                 };
                             } | {
-                                money: number;
-                                currency?: string;
+                                amountMinor: number;
+                                currency: string;
                             } | {
                                 date: string;
                             };
@@ -21660,8 +21660,8 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                                     path: string;
                                 };
                             } | {
-                                money: number;
-                                currency?: string;
+                                amountMinor: number;
+                                currency: string;
                             } | {
                                 date: string;
                             };

@@ -7,7 +7,8 @@
  * (v1): they have no buyer-facing form without more reads.
  */
 import { formatDateTime } from "@scalius/shared/locale-format";
-import { formatMoney } from "@/lib/currency";
+import { isCustomFieldMoney } from "@scalius/shared/custom-fields";
+import { formatMinorMoney } from "@/lib/currency";
 import type { HomepageMediaAsset, HomepageObjectField } from "@/lib/api/storefront";
 import type { NewsletterLanguage } from "@/lib/newsletter-copy";
 import type { StorefrontObjectFieldView } from "@scalius/shared/plugins/storefront-protocol";
@@ -83,12 +84,12 @@ function formatDate(value: string, language: NewsletterLanguage, withTime: boole
 }
 
 function itemPart(type: string, raw: unknown, context: ObjectFieldContext): ObjectPart | null {
-  // The API sends the custom-field HTTP contract: integers and money as numbers, booleans as booleans.
+  // The API sends the custom-field HTTP contract: integers as numbers, money as `{ amountMinor, currency }`, booleans as booleans.
   if (type === "boolean") return typeof raw === "boolean" ? { kind: "text", text: raw ? WORDS[context.language].yes : WORDS[context.language].no } : null;
   if (type === "integer") return typeof raw === "number" && Number.isFinite(raw) ? { kind: "text", text: String(raw) } : null;
   if (type === "money") {
-    return typeof raw === "number" && Number.isFinite(raw) && raw >= 0
-      ? { kind: "text", text: formatMoney(raw, { symbol: context.currencySymbol, code: context.currencyCode }) }
+    return isCustomFieldMoney(raw) && Number.isSafeInteger(raw.amountMinor) && raw.amountMinor >= 0
+      ? { kind: "text", text: formatMinorMoney(raw, raw.currency === context.currencyCode ? { symbol: context.currencySymbol } : {}) }
       : null;
   }
   if (typeof raw !== "string") return null;

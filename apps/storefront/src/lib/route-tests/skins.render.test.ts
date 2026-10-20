@@ -233,7 +233,7 @@ describe("a product-main skin", () => {
     const product = (skinJob.job.data as { product: Record<string, unknown> }).product;
     expect(product).toMatchObject({
       id: "prod_linen", title: "Linen shirt", url: "/products/linen", availability: "in_stock",
-      price: { amount: 1200 }, compareAt: { amount: 1500 }, rating: { average: 4.5, count: 2 },
+      price: { amountMinor: 120000, currency: "BDT" }, compareAt: { amountMinor: 150000, currency: "BDT" }, rating: { average: 4.5, count: 2 },
       fields: { "custom.fabric": "Linen" }, descriptionHtml: "<p>Soft linen.</p>",
     });
     expect(JSON.stringify(product)).not.toContain('"stock"');

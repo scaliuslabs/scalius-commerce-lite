@@ -160,7 +160,7 @@ The SDK's primitives:
 - `editable(context, key)`: marks the element that shows a text setting, so the editor edits it in place (preview only; the published page has no marks).
 - `asset(context, "public/font.woff2")`: a public file's URL.
 - `t(context, { en, bn, … })`: words in the page's language (exact BCP 47 tag, then its language, then English).
-- `formatNumber`, `plural(context, count, { en: { one: "# review", other: "# reviews" } })`, `formatMoney`, `formatDate`, `storeTime`: numbers, plurals, money and dates as the store writes them (`@scalius/shared/locale-format`); `context.store` carries the page's `language`, `locale` (language and the store's country), `currency` and `timeZone`, never a default.
+- `formatNumber`, `plural(context, count, { en: { one: "# review", other: "# reviews" } })`, `formatMoney(context, { amountMinor, currency })`, `formatDate`, `storeTime`: numbers, plurals, money and dates as the store writes them (`@scalius/shared/locale-format`); `context.store` carries the page's `language`, `locale` (language and the store's country), `currency` and `timeZone`, never a default.
 - `BuyForm`, `Gallery`, `Reviews`, `Recommendations`, `Filters`, `Toolbar`, `Pagination`, `OrderForm`: core embeds (below).
 
 JSX escapes every string. `raw(...)` passes HTML through; the output check still runs. Event handler attributes and functions as attributes are refused at render time.
@@ -239,7 +239,7 @@ export default defineIsland<{ step: number }>((element, props, context) => {
 });
 ```
 
-An island's module loads from `/_x/...` only when its moment comes, once per page however many times it appears. `context` carries the app's file base (`assets`), the store's `language` and `currency`, `formatMoney`, the cart (`openCart`, `quickAdd(url)`, `onCart(listener)`) and `fetchApp(path)`, which reaches the app's public routes through the storefront proxy (`/apps/<id>/...`, same origin, no CSP host needed).
+An island's module loads from `/_x/...` only when its moment comes, once per page however many times it appears. `context` carries the app's file base (`assets`), the store's `language` and `currency`, `formatMoney({ amountMinor, currency })`, the cart (`openCart`, `quickAdd(url)`, `onCart(listener)`, whose `total` is a `StorefrontMoney`) and `fetchApp(path)`, which reaches the app's public routes through the storefront proxy (`/apps/<id>/...`, same origin, no CSP host needed).
 
 Return a cleanup for your listeners, timers and observers. The host cancels
 pending hydration on removal, ignores imports from an old connection and

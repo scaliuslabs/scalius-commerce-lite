@@ -25,9 +25,8 @@ function signInPath(request: PluginRouteRequest): string {
   return request.routes?.signIn ?? "/account";
 }
 
-/** Integer minor units as the page component formats them: major units of the store's decimal places. */
-function money(ctx: PluginContext, minor: number, currency: string): PageMoney {
-  return { amount: minor / 10 ** ctx.store.decimalPlaces, currency };
+function money(amountMinor: number, currency: string): PageMoney {
+  return { amountMinor, currency };
 }
 
 function portalPage(title: string, props: SellerPortalProps): PluginRouteResponse {
@@ -53,7 +52,7 @@ function splitRows(ctx: PluginContext, rows: Array<{ id: string; data: OrderSpli
     placedAt: data.created_at,
     lines: data.lines.map((line) => ({ quantity: line.quantity, title: line.title })),
     status: data.status,
-    net: money(ctx, data.net_minor, data.currency),
+    net: money(data.net_minor, data.currency),
     shippable: data.status === "open" || data.status === "paid",
   }));
 }
@@ -68,8 +67,8 @@ async function dashboard(ctx: PluginContext, id: string, seller: Seller) {
   return portalPage(`${seller.name}: seller dashboard`, {
     view: "home",
     seller: sellerOf(seller),
-    sales: money(ctx, sales, currency),
-    net: money(ctx, net, currency),
+    sales: money(sales, currency),
+    net: money(net, currency),
     toShipCount: toShip.length,
     toShip: splitRows(ctx, toShip.slice(0, 10)),
   });
@@ -107,9 +106,9 @@ async function payoutsPage(ctx: PluginContext, id: string, seller: Seller) {
     payouts: page.records.map(({ data }) => ({
       periodEnd: data.period_end,
       orders: data.split_count,
-      gross: money(ctx, data.gross_minor, data.currency),
-      commission: money(ctx, data.commission_minor, data.currency),
-      net: money(ctx, data.net_minor, data.currency),
+      gross: money(data.gross_minor, data.currency),
+      commission: money(data.commission_minor, data.currency),
+      net: money(data.net_minor, data.currency),
       status: data.status,
       reference: data.reference ?? null,
     })),
@@ -196,7 +195,7 @@ export async function storeRoute(request: PluginRouteRequest, ctx: PluginContext
     products.push({
       name: product.name,
       url: `/products/${encodeURIComponent(product.slug)}`,
-      price: typeof product.priceMinor === "number" ? money(ctx, product.priceMinor, product.currency ?? ctx.store.currency) : null,
+      price: typeof product.priceMinor === "number" ? money(product.priceMinor, product.currency ?? ctx.store.currency) : null,
       image: product.imageUrl && /^https?:\/\//.test(product.imageUrl) ? product.imageUrl : null,
     });
   }

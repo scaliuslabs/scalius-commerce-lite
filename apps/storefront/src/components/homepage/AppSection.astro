@@ -14,7 +14,7 @@ import { bindingResourceMedia } from "@/lib/setting-bindings";
 import type { HomepageAppSurface } from "@/lib/app-surfaces";
 import { appMarkup, requestExtensions, type AppMarkup } from "@/lib/extensions";
 import { orderFormEmbed, type EmbedRender } from "@/lib/extensions/embeds";
-import { componentSectionSettings, productCardData, storefrontImageOf } from "@/lib/extensions/data";
+import { componentSectionSettings, productCardData, sectionObjectsOf, storefrontImageOf } from "@/lib/extensions/data";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { productCardModel, type ProductCardProduct } from "@/components/cards/card-model";
 import { getLayoutData } from "@/lib/api/storefront";
@@ -57,7 +57,7 @@ if (extension && schema && extension.sections.includes(component.type)) {
       hoverImage: true,
       ratings: resolved.facts.hasReviews,
     });
-    return productCardData(card, model);
+    return productCardData(card, model, { currencyCode: currency.code, currencySymbol: currency.symbol });
   })]));
   const values = resolvePluginSettingBindings(schema, { ...component.values, ...section.settings.values }, section.bindings, { ...bindingContext, mediaIds: new Set(media.keys()) });
   for (const field of schema) {
@@ -69,7 +69,7 @@ if (extension && schema && extension.sections.includes(component.type)) {
     kind: "section",
     type: component.type,
     instanceId: section.id,
-    objects: component.objects,
+    ...(component.objects ? { objects: sectionObjectsOf(component.objects, { currencyCode: currency.code, currencySymbol: currency.symbol }) } : {}),
     settings: componentSectionSettings(schema, values, media, products),
   });
   markup = appMarkup(extension, "section", html);

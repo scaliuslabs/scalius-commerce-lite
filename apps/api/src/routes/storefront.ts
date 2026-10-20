@@ -219,7 +219,7 @@ const homepageSectionsSchema = z.object({
         key: z.string(),
         name: z.string(),
         type: z.string(),
-        value: z.unknown().openapi({ description: "The custom-field HTTP contract, as public custom fields: text, dates, URLs, colours and media ids (in media) as strings; integers and money (decimal major units of the store currency) as numbers; booleans; lists as arrays." }),
+        value: z.unknown().openapi({ description: "The custom-field HTTP contract, as public custom fields: text, dates, URLs, colours and media ids (in media) as strings; integers as numbers; money as `{ amountMinor, currency }` (integer minor units of the store currency); booleans; lists as arrays." }),
       })),
     })),
   })).optional().openapi({

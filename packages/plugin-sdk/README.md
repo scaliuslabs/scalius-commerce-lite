@@ -300,7 +300,7 @@ await ctx.objects.wallets!.put(customerId, { balance: { amountMinor: 125000, cur
 const wallet = await ctx.objects.wallets!.get(customerId); // { balance: { amountMinor: 125000, currency: "BDT" } }
 ```
 
-A write refuses (`object.invalid`) a decimal, a bare number, another currency, a negative or fractional `amountMinor`, and an amount off the store's price increment. Validation bounds (`min`, `max`) on a money field are integer minor units of the store currency. A `where` filter on a money field takes the `PluginMoney` you read or its `amountMinor`; on the HTTP API, `where[price]=125000`. Only the storefront contract (sections, components and `/api/v1` buyer reads) shows money as a formatted amount of the page currency.
+A write refuses (`object.invalid`) a decimal, a bare number, another currency, a negative or fractional `amountMinor`, and an amount off the store's price increment. Validation bounds (`min`, `max`) on a money field are integer minor units of the store currency. A `where` filter on a money field takes the `PluginMoney` you read or its `amountMinor`; on the HTTP API, `where[price]=125000`. The storefront contract (sections, components, skins and islands) adds the store's text: `StorefrontMoney` is `{ amountMinor, currency, formatted }`, and `formatMoney(context, money)` takes either shape.
 
 `ctx.kv` is a key/value store with TTLs (value 64 KiB, key 256 characters, TTL at most one year, `list(prefix)` at most 1,000 keys). `getVersion` and `compareAndSet(key, expectedRevision | null, value)` give the same compare-and-set (`kv.conflict`). `batch` is a reserved object name. Private caches are never exposed as content to staff or the storefront.
 

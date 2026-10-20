@@ -15,7 +15,7 @@ export const storefrontCustomFieldSchema = z.object({
     fields: z.array(z.object({ key: z.string(), name: z.string(), type: z.enum(CUSTOM_FIELD_TYPES), value: z.unknown() })).max(40),
   }).optional().openapi({ description: "One published scalar object reference, containing declared public fields only." }),
   value: z.unknown().openapi({
-    description: "JSON per the type: text, dates, URLs, colours and record ids as strings; integers as numbers; decimals as decimal strings; booleans; any JSON for `json`; money in decimal major units of the store currency; lists as arrays.",
+    description: "JSON per the type: text, dates, URLs, colours and record ids as strings; integers as numbers; decimals as decimal strings; booleans; any JSON for `json`; money as `{ amountMinor, currency }` (integer minor units; the page market's currency on a product page, else the store's); lists as arrays.",
   }),
   reference: z.object({
     id: z.string(),

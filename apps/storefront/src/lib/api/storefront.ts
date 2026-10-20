@@ -101,8 +101,8 @@ export interface HomepageObjectField {
   name: string;
   /** A custom-field type id (`single_line_text`, `money`, `list.media_reference`...). */
   type: string;
-  /** The custom-field HTTP contract: text, dates, URLs, colours and media ids as strings; integers and money (major units) as numbers; booleans; lists as arrays. */
-  value: string | number | boolean | unknown[] | null;
+  /** The custom-field HTTP contract: text, dates, URLs, colours and media ids as strings; integers as numbers; money as `{ amountMinor, currency }`; booleans; lists as arrays. */
+  value: string | number | boolean | { amountMinor: number; currency: string } | unknown[] | null;
 }
 
 /** A Objects section's content type with its published entries (only types with storefront access are sent). */

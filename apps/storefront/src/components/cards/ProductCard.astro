@@ -17,15 +17,15 @@ type Props = import("astro/types").ComponentProps<typeof CoreProductCard>;
 const props = Astro.props;
 const data = async () => {
   const { resolved } = await currentRequestTheme(Astro.locals);
+  const page = { currencySymbol: props.currencySymbol ?? DEFAULT_CURRENCY.symbol, currencyCode: props.currencyCode ?? DEFAULT_CURRENCY.code };
   const model = productCardModel(props.product, {
-    currencySymbol: props.currencySymbol ?? DEFAULT_CURRENCY.symbol,
-    currencyCode: props.currencyCode ?? DEFAULT_CURRENCY.code,
+    ...page,
     // The skin decides whether to show the second photo (its own card settings).
     hoverImage: true,
     ratings: resolved.facts.hasReviews,
   });
   return {
-    product: productCardData(props.product, model),
+    product: productCardData(props.product, model, page),
     position: props.index ?? 0,
     aboveFold: props.aboveFold === true && (props.index ?? 0) < 4,
   };
