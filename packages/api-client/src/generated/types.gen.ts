@@ -15448,38 +15448,6 @@ export type GetApiV1SeoResponses = {
 
 export type GetApiV1SeoResponse = GetApiV1SeoResponses[keyof GetApiV1SeoResponses];
 
-export type GetApiV1PtproxyData = {
-    body?: never;
-    path?: never;
-    query: {
-        /**
-         * Target URL to proxy
-         */
-        url: string;
-    };
-    url: '/api/v1/__ptproxy';
-};
-
-export type GetApiV1PtproxyErrors = {
-    /**
-     * Validation error
-     */
-    400: ErrorResponse;
-    /**
-     * Forbidden
-     */
-    403: ErrorResponse;
-};
-
-export type GetApiV1PtproxyError = GetApiV1PtproxyErrors[keyof GetApiV1PtproxyErrors];
-
-export type GetApiV1PtproxyResponses = {
-    /**
-     * Proxied response
-     */
-    200: unknown;
-};
-
 export type GetApiV1ProductsData = {
     body?: never;
     path?: never;

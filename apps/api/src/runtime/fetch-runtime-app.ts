@@ -27,7 +27,6 @@ const PUBLIC_PREFIXES = [
   "/api/v1/seo",
   "/api/v1/shipping-methods",
   "/api/v1/storefront",
-  "/api/v1/__ptproxy",
 ] as const;
 
 const SYSTEM_PREFIXES = [

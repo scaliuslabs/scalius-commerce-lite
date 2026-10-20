@@ -38,7 +38,7 @@ An active script refuses placeholder values (`G-XXXX`, `GTM-XXXX`, `PIXEL_ID`, `
 
 - Google Analytics, Tag Manager, Facebook Pixel and TikTok Pixel always run through Partytown (a web worker), even if a legacy row stores `use_partytown = false`. A `custom` script chooses (default on).
 - Cloudflare Web Analytics runs on the main thread. The service canonicalizes a token or a pasted beacon to the platform-generated snippet (`src` `https://static.cloudflareinsights.com/beacon.min.js`, `data-cf-beacon='{"token":"..."}'`). The token must match `^[A-Za-z0-9_-]{8,128}$`.
-- The Partytown proxy (`/__ptproxy`, `apps/api/src/routes/partytown-proxy.ts`) accepts HTTPS targets only. The host must be in the merchant's CSP allow-list (Settings > Advanced > Trusted websites).
+- Partytown fetches go through the storefront's own `/api/ptproxy` (`apps/storefront/src/pages/api/ptproxy.ts`), a fixed four-host list. The API has no proxy: an open proxy on the API/dashboard address would let a trusted host's files run as the dashboard.
 - `GET /api/v1/analytics/configurations` (public) and the storefront layout read return the active, injectable scripts, with Cloudflare snippets normalized and Partytown scripts rewritten. They depend on `deps.analytics()` (kind `an`), so any write to `analytics` advances the dependency.
 
 ### Provider readiness

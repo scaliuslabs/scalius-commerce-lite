@@ -19,7 +19,6 @@ import { paymentWebhookRoutes } from "./routes/webhooks/payments";
 import { courierWebhookRoutes } from "./routes/webhooks/couriers";
 import { discountRoutes } from "./routes/discounts";
 import { analyticsRoutes } from "./routes/analytics";
-import { partytownProxyRoutes } from "./routes/partytown-proxy";
 import {
   checkoutLanguageRoutes,
   publicCheckoutLanguageRoutes,
@@ -176,9 +175,6 @@ app.route("/media", serveMediaRoute);
 // Add health check endpoint (relative path '/health')
 app.get("/health", (c) => c.json({ status: "ok", timestamp: new Date().toISOString() }));
 app.route("/", readinessRoutes);
-
-// Adding Partytown proxy route (publicly accessible, no authMiddleware)
-app.route("/__ptproxy", partytownProxyRoutes);
 
 // --- Protected API routes ---
 
