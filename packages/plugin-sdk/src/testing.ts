@@ -29,6 +29,7 @@ import {
   type PluginSettingValue,
 } from "@scalius/shared/plugins";
 import { providerOperationSchemas } from "@scalius/shared/plugins/providers";
+import { STOREFRONT_CORE_ROUTES } from "@scalius/shared/storefront-routes";
 import type { EventTopic } from "@scalius/shared/events";
 import type { PluginApiCallInput, PluginApiResult, PluginEvent, PluginRouteRequest, PluginStoreInfo } from "./context";
 import {
@@ -544,7 +545,12 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       kind: "route",
       surface,
       name,
-      request: { method: "GET", subpath: "", query: {}, headers: {}, body: null, rawBody: null, staffId: null, ...request },
+      request: {
+        method: "GET", subpath: "", query: {}, headers: {}, body: null, rawBody: null, staffId: null,
+        // The platform's core routes (`@scalius/shared/storefront-routes`), on public routes.
+        routes: surface === "public" ? STOREFRONT_CORE_ROUTES : null,
+        ...request,
+      },
     }),
     cron: (name: string, scheduledAt = new Date().toISOString()) => run({ kind: "cron", name, scheduledAt }),
     lifecycle: (hook: "install" | "activate" | "deactivate" | "uninstall", keepData = true) => run({ kind: "lifecycle", hook, keepData }),

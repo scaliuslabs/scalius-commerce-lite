@@ -317,6 +317,16 @@ export interface PluginRouteRequest {
     customer?: {
         id: string;
     } | null;
+    routes?: PluginStorefrontRoutes | null;
+}
+export interface PluginStorefrontRoutes {
+    readonly home: string;
+    readonly search: string;
+    readonly cart: string;
+    readonly account: string;
+    readonly signIn: string;
+    readonly orders: string;
+    readonly trackOrder: string;
 }
 export interface PluginRouteResponse {
     status?: number;

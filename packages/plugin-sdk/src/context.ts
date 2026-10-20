@@ -332,6 +332,28 @@ export interface PluginRouteRequest {
    * JSON requests need no token (a cross-site page cannot send them).
    */
   customer?: { id: string } | null;
+  /**
+   * Public routes: the store's own pages to link and redirect to (never
+   * hard-code `/account`). Root paths: on a market presence page the
+   * platform keeps every link, form action and redirect inside the presence.
+   * Null on admin and webhook routes.
+   */
+  routes?: PluginStorefrontRoutes | null;
+}
+
+/** The store's core pages (`request.routes`). */
+export interface PluginStorefrontRoutes {
+  readonly home: string;
+  readonly search: string;
+  readonly cart: string;
+  /** The buyer's account. */
+  readonly account: string;
+  /** Where a guest signs in. */
+  readonly signIn: string;
+  /** The buyer's order history. */
+  readonly orders: string;
+  /** Guest order lookup. */
+  readonly trackOrder: string;
 }
 
 /**

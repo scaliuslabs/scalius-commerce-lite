@@ -74,8 +74,8 @@ const proxyModule = {
     manifest: proxyManifest,
     routes: {
       public: {
-        who: async (request: { customer?: unknown; headers: Record<string, string> }) => ({
-          body: { customer: request.customer ?? null, cookie: request.headers.cookie ?? null },
+        who: async (request: { customer?: unknown; headers: Record<string, string>; routes?: unknown }) => ({
+          body: { customer: request.customer ?? null, cookie: request.headers.cookie ?? null, routes: request.routes ?? null },
         }),
       },
     },
@@ -218,6 +218,7 @@ describe("plugin routes", { timeout: 30_000 }, () => {
       rawBody: null,
       staffId: null,
       customer: null,
+      routes: { home: "/", search: "/search", cart: "/cart", account: "/account", signIn: "/account", orders: "/account", trackOrder: "/track-order" },
     });
     // Its own cache wish beyond 300 s is refused; it can never redirect.
     expect(seen.headers.get("cache-control")).toBe("no-store");
@@ -268,7 +269,12 @@ describe("plugin routes", { timeout: 30_000 }, () => {
     await activatePlugin(db, "acme.who", { actorUserId: "owner", expectedRevision: 1 });
 
     const signedIn = await call("/api/v1/plugins/acme.who/public/who", { headers: { "x-scalius-app-proxy": "1", Cookie: "cs_tok=cs-session-token-buyer; other=1" } });
-    expect(signedIn.json).toEqual({ customer: { id: "cust_buyer" }, cookie: null });
+    // The store's core pages come with it, as root paths (the gateway keeps a presence).
+    expect(signedIn.json).toEqual({
+      customer: { id: "cust_buyer" },
+      cookie: null,
+      routes: { home: "/", search: "/search", cart: "/cart", account: "/account", signIn: "/account", orders: "/account", trackOrder: "/track-order" },
+    });
     // Guests, unknown sessions and requests that did not come through the storefront proxy carry no customer.
     expect((await call("/api/v1/plugins/acme.who/public/who", { headers: { "x-scalius-app-proxy": "1" } })).json.customer).toBeNull();
     expect((await call("/api/v1/plugins/acme.who/public/who", { headers: { "x-scalius-app-proxy": "1", Cookie: "cs_tok=forged" } })).json.customer).toBeNull();

@@ -31,6 +31,7 @@ import {
   verifyAppFormToken,
 } from "@scalius/shared/plugins/app-form";
 import { deriveRuntimeSecret, readMasterSecret } from "@scalius/shared/runtime-secrets";
+import { STOREFRONT_CORE_ROUTES } from "@scalius/shared/storefront-routes";
 import type { PluginRouteRequest } from "@scalius/plugin-sdk";
 import { adminAuthMiddleware } from "../middleware/admin-auth";
 import { dashboardOriginGuardMiddleware } from "../middleware/cookie-origin-guard";
@@ -335,6 +336,7 @@ export async function handlePluginRoute(c: Context<{ Bindings: Env }>, deps: Plu
     rawBody: target.surface === "webhooks" ? raw ?? "" : null,
     staffId: user?.id ?? null,
     customer: proxied ? await proxiedCustomer(c, db) : null,
+    routes: target.surface === "public" ? STOREFRONT_CORE_ROUTES : null,
   };
 
   const { PluginHost } = await import("./host");

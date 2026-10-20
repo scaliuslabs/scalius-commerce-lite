@@ -18,8 +18,11 @@ import { createSeller, sellerOfCustomer } from "./accounts";
 import { HANDLE_PATTERN, plain, productSellers, profiles, sellers, splits, payouts, type OrderSplit, type Seller } from "./model";
 
 const BASE = "/apps/scalius.sellers";
-/** The core account page, where a guest signs in (proxy pages get no route map: a platform gap, see BURST-NOTES). */
-const ACCOUNT = "/account";
+
+/** Where a guest signs in: the store's own route (`request.routes`), never a hard-coded path. */
+function signInPath(request: PluginRouteRequest): string {
+  return request.routes?.signIn ?? "/account";
+}
 
 function view(ctx: PluginContext) {
   const language = ctx.store.locale.split("-")[0] || "en";
@@ -54,12 +57,12 @@ function Nav({ current }: { current: string }) {
   );
 }
 
-function SignIn() {
+function SignIn(request: PluginRouteRequest) {
   return page("Seller dashboard", (
     <section class="sellers-page">
       <h1>Seller dashboard</h1>
       <p>Sign in to your account to open your seller dashboard or apply to sell.</p>
-      <p><a class="sellers-button" href={ACCOUNT}>Sign in</a></p>
+      <p><a class="sellers-button" href={signInPath(request)}>Sign in</a></p>
     </section>
   ));
 }
@@ -216,7 +219,7 @@ async function ship(ctx: PluginContext, request: PluginRouteRequest, id: string)
 
 export async function portalRoute(request: PluginRouteRequest, ctx: PluginContext): Promise<PluginRouteResponse> {
   const customerId = request.customer?.id ?? null;
-  if (!customerId) return SignIn();
+  if (!customerId) return SignIn(request);
   const mine = await sellerOfCustomer(ctx, customerId);
   if (!mine) return { body: { redirect: `${BASE}/apply` } };
   const section = request.subpath.replace(/^\/+|\/+$/g, "");
@@ -251,7 +254,7 @@ function ApplyForm({ errors = {}, values = {} }: { errors?: Record<string, strin
 
 export async function applyRoute(request: PluginRouteRequest, ctx: PluginContext): Promise<PluginRouteResponse> {
   const customerId = request.customer?.id ?? null;
-  if (!customerId) return SignIn();
+  if (!customerId) return SignIn(request);
   const mine = await sellerOfCustomer(ctx, customerId);
   if (mine) return { body: { redirect: `${BASE}/portal` } };
   if (ctx.settings.applications_open === false) {
