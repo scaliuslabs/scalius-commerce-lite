@@ -142,6 +142,9 @@ export const warrantyClaims = sqliteTable("warranty_claims", {
         .where(sql`${table.status} IN ('open', 'in_progress')`),
     index("warranty_claims_status_created_idx").on(table.status, sql`${table.createdAt} DESC`, table.id),
     index("warranty_claims_order_idx").on(table.orderId),
+    // A warranty's latest claims (order pages), and an order line's delete (amendment).
+    index("warranty_claims_warranty_idx").on(table.warrantyId),
+    index("warranty_claims_order_item_idx").on(table.orderItemId),
     check("warranty_claims_id_shape", sql`substr(${table.id}, 1, 4) = 'wcl_' AND length(${table.id}) BETWEEN 12 AND 68`),
     check("warranty_claims_status_check", sql`${table.status} IN ('open', 'in_progress', 'resolved', 'rejected')`),
     check("warranty_claims_resolution_check", sql`${table.resolution} IS NULL OR ${table.resolution} IN ('repair', 'replacement', 'refund', 'other')`),

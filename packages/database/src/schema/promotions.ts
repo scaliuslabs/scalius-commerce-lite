@@ -333,7 +333,9 @@ export const promotionRedemptions = sqliteTable("promotion_redemptions", {
 }, (table) => [
     uniqueIndex("promotion_redemptions_order_promotion_unique").on(table.orderId, table.promotionId),
     index("promotion_redemptions_promotion_idx").on(table.promotionId, table.createdAt),
-    index("promotion_redemptions_customer_idx").on(table.promotionId, table.customerId, table.createdAt),
+    // Leads with the customer: a customer delete checks this foreign key, and
+    // a customer's redemptions of one promotion still seek both columns.
+    index("promotion_redemptions_customer_idx").on(table.customerId, table.promotionId, table.createdAt),
     check("promotion_redemptions_revision_positive", sql`${table.promotionRevision} >= 1`),
     check(
         "promotion_redemptions_code_shape",

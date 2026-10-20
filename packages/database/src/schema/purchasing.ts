@@ -178,6 +178,8 @@ export const purchaseOrderReceiptLines = sqliteTable("purchase_order_receipt_lin
     uniqueIndex("purchase_order_receipt_lines_movement_unique").on(table.movementId),
     index("purchase_order_receipt_lines_order_idx").on(table.purchaseOrderId, table.createdAt),
     index("purchase_order_receipt_lines_variant_idx").on(table.variantId, table.createdAt),
+    // A draft order's line replacement checks this foreign key.
+    index("purchase_order_receipt_lines_line_idx").on(table.purchaseOrderLineId),
     check("purchase_order_receipt_lines_quantity_positive", sql`${table.quantity} >= 1`),
     check(
         "purchase_order_receipt_lines_costs_nonnegative",

@@ -137,6 +137,10 @@ export const digitalLicenceKeys = sqliteTable("digital_licence_keys", {
     index("digital_licence_keys_order_item_idx")
         .on(table.orderItemId)
         .where(sql`${table.orderItemId} IS NOT NULL`),
+    // An order's assigned keys, read by its entitlements (downloads, order pages).
+    index("digital_licence_keys_entitlement_idx")
+        .on(table.entitlementId)
+        .where(sql`${table.entitlementId} IS NOT NULL`),
     check("digital_licence_keys_status_check", sql`${table.status} IN ('available', 'assigned', 'revoked')`),
     check("digital_licence_keys_last4_length", sql`length(${table.keyLast4}) BETWEEN 1 AND 4`),
     check("digital_licence_keys_assignment_shape", sql`(${table.status} = 'assigned') = (${table.orderItemId} IS NOT NULL AND ${table.entitlementId} IS NOT NULL AND ${table.assignedAt} IS NOT NULL)`),

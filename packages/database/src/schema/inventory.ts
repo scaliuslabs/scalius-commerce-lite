@@ -350,6 +350,9 @@ export const inventoryTransferMovements = sqliteTable("inventory_transfer_moveme
 }, (table) => [
     uniqueIndex("inventory_transfer_movements_movement_unique").on(table.movementId),
     index("inventory_transfer_movements_transfer_idx").on(table.transferId, table.createdAt),
+    // Foreign keys a SKU delete and a draft transfer's line replacement check.
+    index("inventory_transfer_movements_variant_idx").on(table.variantId),
+    index("inventory_transfer_movements_line_idx").on(table.transferLineId),
     check("inventory_transfer_movements_kind_check", sql`${table.kind} IN ('ship', 'receive', 'return')`),
     check("inventory_transfer_movements_quantity_positive", sql`${table.quantity} >= 1`),
 ]);

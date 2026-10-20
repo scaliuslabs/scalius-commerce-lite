@@ -64,6 +64,10 @@ export const giftCards = sqliteTable("gift_cards", {
     index("gift_cards_source_order_idx")
         .on(table.sourceOrderId)
         .where(sql`${table.sourceOrderId} IS NOT NULL`),
+    // An order line's delete (order amendment) checks this foreign key.
+    index("gift_cards_source_order_item_idx")
+        .on(table.sourceOrderItemId)
+        .where(sql`${table.sourceOrderItemId} IS NOT NULL`),
     check("gift_cards_id_shape", sql`substr(${table.id}, 1, 3) = 'gc_' AND length(${table.id}) BETWEEN 11 AND 67`),
     check("gift_cards_last4_shape", sql`length(${table.codeLast4}) = 4`),
     check("gift_cards_currency_shape", sql`length(${table.currencyCode}) = 3`),
@@ -108,6 +112,10 @@ export const giftCardTransactions = sqliteTable("gift_card_transactions", {
     index("gift_card_transactions_order_idx")
         .on(table.orderId)
         .where(sql`${table.orderId} IS NOT NULL`),
+    // The card each gift-card tender payment debited (refunds).
+    index("gift_card_transactions_order_payment_idx")
+        .on(table.orderPaymentId)
+        .where(sql`${table.orderPaymentId} IS NOT NULL`),
     check("gift_card_transactions_id_shape", sql`substr(${table.id}, 1, 4) = 'gct_' AND length(${table.id}) BETWEEN 12 AND 68`),
     check("gift_card_transactions_kind_check", sql`${table.kind} IN ('issue', 'redeem', 'release', 'refund', 'adjust')`),
     check("gift_card_transactions_amount_sign", sql`${table.amountMinor} <> 0 AND (${table.kind} <> 'redeem' OR ${table.amountMinor} < 0) AND (${table.kind} NOT IN ('issue', 'release', 'refund') OR ${table.amountMinor} > 0)`),

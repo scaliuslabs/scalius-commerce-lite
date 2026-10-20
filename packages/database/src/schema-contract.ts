@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 168,
-  name: "0168_tax_document_commands",
+  version: 169,
+  name: "0169_fk_indexes_and_trigger_guards",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -621,6 +621,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 168,
     name: "0168_tax_document_commands",
     sourceSha256: "4be963196e5a3977f80b9594e3414313266336a813691c57797c73df8e68a3ed",
+  },
+  {
+    version: 169,
+    name: "0169_fk_indexes_and_trigger_guards",
+    sourceSha256: "6e9c8f9b2c33ad0dd44ec64b37f1c641a2d5483ee9ffdf42ceb862e278e7fddb",
   },
 ] as const;
 

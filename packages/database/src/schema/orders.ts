@@ -689,7 +689,9 @@ export const orderReturnLines = sqliteTable("order_return_lines", {
     updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
 }, (table) => [
     uniqueIndex("order_return_lines_return_item_unique").on(table.returnId, table.orderItemId),
-    index("order_return_lines_order_item_idx").on(table.orderId, table.orderItemId),
+    // An order line's delete (order amendment) checks this foreign key; the
+    // order's lines read through the sales index.
+    index("order_return_lines_order_item_idx").on(table.orderItemId),
     index("order_return_lines_sales_idx").on(table.orderId, table.orderItemId, table.returnId, table.approvedQuantity),
     index("order_return_lines_variant_idx").on(table.variantId),
     check("order_return_lines_requested_positive", sql`${table.requestedQuantity} > 0`),
@@ -777,6 +779,8 @@ export const orderReturnReceiptLines = sqliteTable("order_return_receipt_lines",
     index("order_return_receipt_lines_return_created_idx").on(table.returnId, table.createdAt),
     index("order_return_receipt_lines_order_created_idx").on(table.orderId, table.createdAt),
     index("order_return_receipt_lines_movement_idx").on(table.inventoryMovementId),
+    // A SKU delete checks this foreign key.
+    index("order_return_receipt_lines_variant_idx").on(table.variantId).where(sql`${table.variantId} IS NOT NULL`),
     check("order_return_receipt_lines_received_positive", sql`${table.receivedQuantity} > 0`),
     check("order_return_receipt_lines_disposition_exact", sql`(
         ${table.restockQuantity} >= 0
@@ -1121,7 +1125,8 @@ export const orderHolds = sqliteTable("order_holds", {
     releasedAt: integer("released_at"),
     releasedBy: text("released_by").references(() => user.id, { onDelete: "set null" }),
 }, (table) => [
-    index("order_holds_open_idx").on(table.orderId).where(sql`${table.releasedAt} IS NULL`),
+    // Every hold of an order (its page), and its open ones (released_at IS NULL).
+    index("order_holds_order_idx").on(table.orderId, table.releasedAt),
     check("order_holds_id_shape", sql`length(${table.id}) = 36 AND substr(${table.id}, 1, 4) = 'ohd_'`),
     check("order_holds_app_name_length", sql`length(${table.appName}) BETWEEN 1 AND 80`),
     check("order_holds_reason_length", sql`length(${table.reason}) BETWEEN 1 AND 1200`),
