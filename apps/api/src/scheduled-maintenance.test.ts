@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => {
     pruneExpiredIdentityHandoffEvents: vi.fn(),
     reconcileDueRefundAttempts: vi.fn(),
     reconcileExternalRefundWebhooks: vi.fn(),
+    drainTaxDocumentCommands: vi.fn(async () => ({ scanned: 0, done: 0, failed: 0, skipped: 0, dead: 0, deferred: 0, busy: 0 })),
     sendOrderRefundNotification: vi.fn(),
     runScheduledEventMaintenance: vi.fn(),
     runScheduledEventRetention: vi.fn(async () => ({ events: 0, deliveries: 0, pluginDeliveries: 0 })),
@@ -134,6 +135,11 @@ vi.mock("@scalius/core/modules/payments", async (importOriginal) => ({
   reconcileExternalRefundWebhooks: mocks.reconcileExternalRefundWebhooks,
 }));
 
+vi.mock("@scalius/core/modules/tax", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/tax")>()),
+  drainTaxDocumentCommands: mocks.drainTaxDocumentCommands,
+}));
+
 vi.mock("./utils/order-notifications", () => ({
   sendOrderRefundNotification: mocks.sendOrderRefundNotification,
 }));
@@ -176,6 +182,7 @@ import {
   REFUND_ATTEMPT_RECONCILIATION_LIMIT,
   SCANNER_TOKEN_CLAIM_SWEEP_LIMIT,
   EXTERNAL_REFUND_RECONCILIATION_LIMIT,
+  TAX_DOCUMENT_DRAIN_LIMIT,
   STALE_INCOMPLETE_ORDER_MAX_AGE_MINUTES,
   STALE_INCOMPLETE_ORDER_SWEEP_LIMIT,
   runScheduledMaintenance,
@@ -490,6 +497,10 @@ describe("runScheduledMaintenance", () => {
       encryptionKey: undefined,
       limit: EXTERNAL_REFUND_RECONCILIATION_LIMIT,
       providers: expect.any(Function),
+    });
+    // The owed app tax documents ride the same job.
+    expect(mocks.drainTaxDocumentCommands).toHaveBeenCalledWith(mocks.db, expect.objectContaining({ resolve: expect.any(Function) }), {
+      limit: TAX_DOCUMENT_DRAIN_LIMIT,
     });
     expect(mocks.sendOrderRefundNotification).toHaveBeenNthCalledWith(1, {
       db: mocks.db,

@@ -855,6 +855,58 @@ export const orderItemTaxSnapshots = sqliteTable("order_item_tax_snapshots", {
     index("order_item_tax_snapshots_order_idx").on(table.orderId),
 ]);
 
+/**
+ * What an app tax provider still owes its document (migration 0168): one
+ * durable command per operation, written in the same transaction as the
+ * write that owes it, by triggers. An app-provider tax snapshot's insert (the
+ * order commit) writes `commit`; the order's move to `cancelled` writes
+ * `void`; a confirmed refund payment writes `refund` with its share of the
+ * order's tax. The id is the provider's idempotency key
+ * (`tax-<operation>:<order id>[:<refund payment id>]`). The background
+ * runner drains them after the response and on the scheduled tick, with
+ * backoff; a void or refund waits for its order's commit. Private.
+ */
+export const taxDocumentCommands = sqliteTable("tax_document_commands", {
+    id: text("id").primaryKey(),
+    operation: text("operation", { enum: ["commit", "void", "refund"] }).notNull(),
+    orderId: text("order_id")
+        .notNull()
+        .references(() => orders.id, { onDelete: "cascade" }),
+    providerId: text("provider_id").notNull(),
+    calculationId: text("calculation_id").notNull(),
+    /** The refund payment (`order_payments.id`) a `refund` reverses; null otherwise. */
+    refundId: text("refund_id"),
+    /** A refund's amount, tax included, and the tax in it; null otherwise. */
+    amountMinor: integer("amount_minor"),
+    taxMinor: integer("tax_minor"),
+    status: text("status", {
+        enum: ["pending", "processing", "done", "failed", "skipped", "dead"],
+    }).notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    nextAttemptAt: integer("next_attempt_at").notNull().default(UNIX_NOW),
+    claimId: text("claim_id"),
+    claimExpiresAt: integer("claim_expires_at"),
+    /** The provider's document id once done. */
+    documentId: text("document_id"),
+    /** A fixed reason (`not_supported`, `provider_unavailable`, ...) or a bounded provider error code. */
+    lastError: text("last_error"),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    index("tax_document_commands_due_idx").on(table.status, table.nextAttemptAt),
+    index("tax_document_commands_claim_idx").on(table.status, table.claimExpiresAt),
+    index("tax_document_commands_order_idx").on(table.orderId),
+    check("tax_document_commands_operation_check", sql`${table.operation} IN ('commit', 'void', 'refund')`),
+    check(
+        "tax_document_commands_status_check",
+        sql`${table.status} IN ('pending', 'processing', 'done', 'failed', 'skipped', 'dead')`,
+    ),
+    check(
+        "tax_document_commands_refund_shape",
+        sql`(${table.operation} = 'refund') = (${table.refundId} IS NOT NULL AND ${table.amountMinor} IS NOT NULL AND ${table.taxMinor} IS NOT NULL)`,
+    ),
+]);
+
 export const orderPayments = sqliteTable("order_payments", {
     id: text("id").primaryKey(),
     orderId: text("order_id")
@@ -1183,6 +1235,7 @@ export type OrderReturnLine = InferSelectModel<typeof orderReturnLines>;
 export type OrderReturnCommand = InferSelectModel<typeof orderReturnCommands>;
 export type OrderReturnReceiptLine = InferSelectModel<typeof orderReturnReceiptLines>;
 export type OrderTaxSnapshot = InferSelectModel<typeof orderTaxSnapshots>;
+export type TaxDocumentCommand = InferSelectModel<typeof taxDocumentCommands>;
 export type OrderItemTaxSnapshot = InferSelectModel<typeof orderItemTaxSnapshots>;
 export type OrderPayment = InferSelectModel<typeof orderPayments>;
 export type RefundAttempt = InferSelectModel<typeof refundAttempts>;

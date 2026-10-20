@@ -17,8 +17,10 @@ describe("canonical schema hygiene", () => {
         RETIRED_PRE_CONSOLIDATION_TABLES.has(table));
 
       expect(d1Tables).toEqual(tursoTables);
-      expect(d1Tables).toHaveLength(211);
+      expect(d1Tables).toHaveLength(212);
       expect(d1Tables).toContain("system_kv");
+      // 0168: what app tax providers are still owed (commit, void, refund).
+      expect(d1Tables).toContain("tax_document_commands");
       // 0165: the app that created a catalogue row, for app-content deletes.
       expect(d1Tables).toContain("app_resource_owners");
       expect(d1Tables).toContain("conversation_inbox_counts");

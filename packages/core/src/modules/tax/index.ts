@@ -3,6 +3,7 @@ export * from "./money";
 export * from "./calculator";
 export * from "./discount-allocation";
 export * from "./provider";
+export * from "./documents";
 export * from "./snapshot";
 export * from "./tax.service";
 export * from "./tax-admin.service";

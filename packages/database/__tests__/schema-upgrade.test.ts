@@ -867,6 +867,12 @@ describe("provider-neutral schema upgrades", { timeout: 30_000 }, () => {
         sqliteStatements: 3,
         postgresStatements: 3,
       },
+      {
+        version: 168,
+        name: "0168_tax_document_commands",
+        sqliteStatements: 9,
+        postgresStatements: 9,
+      },
     ]);
   });
 
@@ -1123,6 +1129,7 @@ describe("provider-neutral schema upgrades", { timeout: 30_000 }, () => {
           { version: 163, name: "0163_payment_due_live_index" },
           { version: 164, name: "0164_event_topic_names" },
           { version: 165, name: "0165_app_resource_owners" },
+          { version: 168, name: "0168_tax_document_commands" },
         ],
       });
     } finally {

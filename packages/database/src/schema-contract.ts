@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 165,
-  name: "0165_app_resource_owners",
+  version: 168,
+  name: "0168_tax_document_commands",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -606,6 +606,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 165,
     name: "0165_app_resource_owners",
     sourceSha256: "edb157b0afaef9bf112a064ee0cad556e4c6207149fa2f98a0bc25d9bacbc15c",
+  },
+  {
+    version: 168,
+    name: "0168_tax_document_commands",
+    sourceSha256: "4be963196e5a3977f80b9594e3414313266336a813691c57797c73df8e68a3ed",
   },
 ] as const;
 

@@ -645,8 +645,15 @@ read. An app id resolves through the request's `AppProviders`, so a store on
 not installed, not ready, fails or answers wrongly, the quote and the order are
 refused (`tax_unavailable`). It never charges zero tax instead. The platform
 rounds an app's tax half-up to the price increment and refuses an included
-tax larger than the price. After an order commits, an app's calculation is
-committed with the order id as its idempotency key. The port gained `refund`,
+tax larger than the price. An app provider's documents are durable commands
+(`tax_document_commands`, migration 0168), each written by a trigger in the
+transaction that owes it: the app-provider tax snapshot's insert (the order
+commit) writes `commit`, the move to `cancelled` writes `void`, and a confirmed
+refund payment writes `refund` with its share of the order's tax. The id
+(`tax-<operation>:<order id>[:<refund payment id>]`) is the provider's
+idempotency key. The checkout sends the commit after its response; the
+`tax_document_drain` sweep retries with backoff, holds a void or refund until
+the commit is done, and gives up after 12 attempts (`dead`). The port gained `refund`,
 `shippingTaxCode`, `locationIds` and named tax lines (`name`, `rateRef`). All
 changes are additive.
 
