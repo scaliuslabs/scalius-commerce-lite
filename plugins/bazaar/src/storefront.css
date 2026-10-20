@@ -18,10 +18,10 @@
   --bz-card: var(--card, #fff);
   --bz-muted: var(--muted-foreground, #565959);
   --bz-line: var(--border, #d5d9d9);
-  --bz-link: #007185;
+  --bz-link: var(--primary, #007185);
   --bz-link-hover: #c7511f;
-  --bz-add: var(--primary, #ffd814);
-  --bz-add-ink: var(--primary-foreground, #0f1111);
+  --bz-add: #ffd814;
+  --bz-add-ink: #0f1111;
   --bz-buy: #ffa41c;
   --bz-search: var(--accent, #febd69);
   --bz-deal: var(--destructive, #cc0c39);

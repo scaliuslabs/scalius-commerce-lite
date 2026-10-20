@@ -188,13 +188,18 @@ const skins = [
   },
 ] satisfies Skin[];
 
-/** The marketplace look: dark navy header, grey page, white cards, teal links, yellow and orange pills. */
+/**
+ * The marketplace look: dark navy header, grey page, white cards, teal links.
+ * The theme contract needs `primary` to read on the page (4.5:1), so the
+ * brand colour is the link teal; the yellow and orange pills are the
+ * stylesheet's own (BURST-NOTES: token gap).
+ */
 const tokens = {
   colors: {
     background: "#e3e6e6", foreground: "#0f1111",
     card: "#ffffff", "card-foreground": "#0f1111",
     popover: "#ffffff", "popover-foreground": "#0f1111",
-    primary: "#ffd814", "primary-foreground": "#0f1111",
+    primary: "#007185", "primary-foreground": "#ffffff",
     secondary: "#232f3e", "secondary-foreground": "#ffffff",
     muted: "#f7f8f8", "muted-foreground": "#565959",
     accent: "#febd69", "accent-foreground": "#0f1111",
@@ -231,7 +236,7 @@ const templates = [
     themeVersion: 11,
     theme: {
       tokens,
-      blocks: { navigation: { source: "menu", maxTopItems: 30, linkBudget: 200 } },
+      blocks: { navigation: { source: "menu", maxTopItems: 18, linkBudget: 150 } },
       apps: {
         skins: {
           header: { app: "scalius.bazaar/bazaar_header", values: {} },

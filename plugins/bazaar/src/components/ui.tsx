@@ -84,15 +84,17 @@ export function Stars({ value, label, size = "s" }: { value: number; label: stri
  */
 export function BigPrice({ money, label }: { money: StorefrontMoney; context?: Context; label?: string }) {
   const formatted = money.formatted;
-  const match = /^(\D*?)([\d.,०-९০-৯\s]+?)([.,])(\d{2})(\D*)$/.exec(formatted);
+  // Digits in Latin, Devanagari or Bengali; the fraction is the last two digits after a separator, when there is one.
+  const match = /^(\D*?)([\d\u0966-\u096f\u09e6-\u09ef][\d\u0966-\u096f\u09e6-\u09ef.,\s]*?)(?:([.,])([\d\u0966-\u096f\u09e6-\u09ef]{2}))?(\D*)$/.exec(formatted);
   if (!match) return <span class="bz-price-big">{formatted}</span>;
   const [, before, whole, , fraction, after] = match;
   return (
-    <span class="bz-price-big" aria-label={label ?? formatted}>
+    <span class="bz-price-big">
+      <span class="bz-sr">{label ?? formatted}</span>
       <span aria-hidden="true">
         {before?.trim() ? <span class="bz-price-sym">{before.trim()}</span> : null}
         <span class="bz-price-whole">{whole}</span>
-        <span class="bz-price-frac">{fraction}</span>
+        {fraction ? <span class="bz-price-frac">{fraction}</span> : null}
         {after?.trim() ? <span class="bz-price-sym">{after.trim()}</span> : null}
       </span>
     </span>
