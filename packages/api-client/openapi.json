@@ -11465,7 +11465,8 @@
           },
           "data": {
             "type": "object",
-            "additionalProperties": {}
+            "additionalProperties": {},
+            "description": "Field values by key, typed as the custom-field HTTP contract: money as { amountMinor, currency } (integer minor units of the store currency)."
           },
           "position": {
             "type": "integer"
@@ -90987,7 +90988,7 @@
           "Admin - Objects"
         ],
         "summary": "List object records using indexed filters and a cursor",
-        "description": "where accepts a JSON scalar object or bracket parameters such as where[customer]=cus_123. Only index-leading fields may filter or sort.",
+        "description": "where accepts a JSON scalar object or bracket parameters such as where[customer]=cus_123; a money field matches its integer minor units of the store currency (where[price]=1250). Only index-leading fields may filter or sort.",
         "parameters": [
           {
             "schema": {
@@ -224840,7 +224841,7 @@
                           },
                           {}
                         ],
-                        "description": "Text and URL: minimum length. Numbers, money, dates: minimum value (money in decimal major units)."
+                        "description": "Text and URL: minimum length. Numbers, money, dates: minimum value (money in integer minor units of the store currency)."
                       },
                       "max": {
                         "anyOf": [
@@ -224852,7 +224853,7 @@
                           },
                           {}
                         ],
-                        "description": "Text and URL: maximum length. Numbers, money, dates: maximum value (money in decimal major units)."
+                        "description": "Text and URL: maximum length. Numbers, money, dates: maximum value (money in integer minor units of the store currency)."
                       },
                       "regex": {
                         "type": "string",
@@ -225235,7 +225236,7 @@
                           },
                           {}
                         ],
-                        "description": "Text and URL: minimum length. Numbers, money, dates: minimum value (money in decimal major units)."
+                        "description": "Text and URL: minimum length. Numbers, money, dates: minimum value (money in integer minor units of the store currency)."
                       },
                       "max": {
                         "anyOf": [
@@ -225247,7 +225248,7 @@
                           },
                           {}
                         ],
-                        "description": "Text and URL: maximum length. Numbers, money, dates: maximum value (money in decimal major units)."
+                        "description": "Text and URL: maximum length. Numbers, money, dates: maximum value (money in integer minor units of the store currency)."
                       },
                       "regex": {
                         "type": "string",
@@ -225873,7 +225874,7 @@
                               },
                               "value": {
                                 "nullable": true,
-                                "description": "JSON per the field type (lists as arrays, money in decimal major units); null when unset."
+                                "description": "JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset."
                               },
                               "updatedAt": {
                                 "type": "string",
@@ -226046,7 +226047,7 @@
                         },
                         "value": {
                           "nullable": true,
-                          "description": "JSON per the field type (lists as arrays, money in decimal major units); null, \"\" or [] clears it."
+                          "description": "JSON per the field type (lists as arrays, money as { amountMinor, currency } in the store currency); null, \"\" or [] clears it."
                         }
                       },
                       "required": [
@@ -226108,7 +226109,7 @@
                               },
                               "value": {
                                 "nullable": true,
-                                "description": "JSON per the field type (lists as arrays, money in decimal major units); null when unset."
+                                "description": "JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset."
                               },
                               "updatedAt": {
                                 "type": "string",
@@ -226305,7 +226306,7 @@
                               },
                               "value": {
                                 "nullable": true,
-                                "description": "JSON per the field type (lists as arrays, money in decimal major units); null when unset."
+                                "description": "JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset."
                               },
                               "updatedAt": {
                                 "type": "string",
@@ -226478,7 +226479,7 @@
                         },
                         "value": {
                           "nullable": true,
-                          "description": "JSON per the field type (lists as arrays, money in decimal major units); null, \"\" or [] clears it."
+                          "description": "JSON per the field type (lists as arrays, money as { amountMinor, currency } in the store currency); null, \"\" or [] clears it."
                         }
                       },
                       "required": [
@@ -226540,7 +226541,7 @@
                               },
                               "value": {
                                 "nullable": true,
-                                "description": "JSON per the field type (lists as arrays, money in decimal major units); null when unset."
+                                "description": "JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset."
                               },
                               "updatedAt": {
                                 "type": "string",
@@ -226737,7 +226738,7 @@
                               },
                               "value": {
                                 "nullable": true,
-                                "description": "JSON per the field type (lists as arrays, money in decimal major units); null when unset."
+                                "description": "JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset."
                               },
                               "updatedAt": {
                                 "type": "string",
@@ -226910,7 +226911,7 @@
                         },
                         "value": {
                           "nullable": true,
-                          "description": "JSON per the field type (lists as arrays, money in decimal major units); null, \"\" or [] clears it."
+                          "description": "JSON per the field type (lists as arrays, money as { amountMinor, currency } in the store currency); null, \"\" or [] clears it."
                         }
                       },
                       "required": [
@@ -226972,7 +226973,7 @@
                               },
                               "value": {
                                 "nullable": true,
-                                "description": "JSON per the field type (lists as arrays, money in decimal major units); null when unset."
+                                "description": "JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset."
                               },
                               "updatedAt": {
                                 "type": "string",
@@ -227169,7 +227170,7 @@
                               },
                               "value": {
                                 "nullable": true,
-                                "description": "JSON per the field type (lists as arrays, money in decimal major units); null when unset."
+                                "description": "JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset."
                               },
                               "updatedAt": {
                                 "type": "string",
@@ -227342,7 +227343,7 @@
                         },
                         "value": {
                           "nullable": true,
-                          "description": "JSON per the field type (lists as arrays, money in decimal major units); null, \"\" or [] clears it."
+                          "description": "JSON per the field type (lists as arrays, money as { amountMinor, currency } in the store currency); null, \"\" or [] clears it."
                         }
                       },
                       "required": [
@@ -227404,7 +227405,7 @@
                               },
                               "value": {
                                 "nullable": true,
-                                "description": "JSON per the field type (lists as arrays, money in decimal major units); null when unset."
+                                "description": "JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset."
                               },
                               "updatedAt": {
                                 "type": "string",
@@ -227601,7 +227602,7 @@
                               },
                               "value": {
                                 "nullable": true,
-                                "description": "JSON per the field type (lists as arrays, money in decimal major units); null when unset."
+                                "description": "JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset."
                               },
                               "updatedAt": {
                                 "type": "string",
@@ -227774,7 +227775,7 @@
                         },
                         "value": {
                           "nullable": true,
-                          "description": "JSON per the field type (lists as arrays, money in decimal major units); null, \"\" or [] clears it."
+                          "description": "JSON per the field type (lists as arrays, money as { amountMinor, currency } in the store currency); null, \"\" or [] clears it."
                         }
                       },
                       "required": [
@@ -227836,7 +227837,7 @@
                               },
                               "value": {
                                 "nullable": true,
-                                "description": "JSON per the field type (lists as arrays, money in decimal major units); null when unset."
+                                "description": "JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset."
                               },
                               "updatedAt": {
                                 "type": "string",
@@ -228033,7 +228034,7 @@
                               },
                               "value": {
                                 "nullable": true,
-                                "description": "JSON per the field type (lists as arrays, money in decimal major units); null when unset."
+                                "description": "JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset."
                               },
                               "updatedAt": {
                                 "type": "string",
@@ -228206,7 +228207,7 @@
                         },
                         "value": {
                           "nullable": true,
-                          "description": "JSON per the field type (lists as arrays, money in decimal major units); null, \"\" or [] clears it."
+                          "description": "JSON per the field type (lists as arrays, money as { amountMinor, currency } in the store currency); null, \"\" or [] clears it."
                         }
                       },
                       "required": [
@@ -228268,7 +228269,7 @@
                               },
                               "value": {
                                 "nullable": true,
-                                "description": "JSON per the field type (lists as arrays, money in decimal major units); null when unset."
+                                "description": "JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset."
                               },
                               "updatedAt": {
                                 "type": "string",
@@ -228465,7 +228466,7 @@
                               },
                               "value": {
                                 "nullable": true,
-                                "description": "JSON per the field type (lists as arrays, money in decimal major units); null when unset."
+                                "description": "JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset."
                               },
                               "updatedAt": {
                                 "type": "string",
@@ -228638,7 +228639,7 @@
                         },
                         "value": {
                           "nullable": true,
-                          "description": "JSON per the field type (lists as arrays, money in decimal major units); null, \"\" or [] clears it."
+                          "description": "JSON per the field type (lists as arrays, money as { amountMinor, currency } in the store currency); null, \"\" or [] clears it."
                         }
                       },
                       "required": [
@@ -228700,7 +228701,7 @@
                               },
                               "value": {
                                 "nullable": true,
-                                "description": "JSON per the field type (lists as arrays, money in decimal major units); null when unset."
+                                "description": "JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset."
                               },
                               "updatedAt": {
                                 "type": "string",
@@ -228897,7 +228898,7 @@
                               },
                               "value": {
                                 "nullable": true,
-                                "description": "JSON per the field type (lists as arrays, money in decimal major units); null when unset."
+                                "description": "JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset."
                               },
                               "updatedAt": {
                                 "type": "string",
@@ -229070,7 +229071,7 @@
                         },
                         "value": {
                           "nullable": true,
-                          "description": "JSON per the field type (lists as arrays, money in decimal major units); null, \"\" or [] clears it."
+                          "description": "JSON per the field type (lists as arrays, money as { amountMinor, currency } in the store currency); null, \"\" or [] clears it."
                         }
                       },
                       "required": [
@@ -229132,7 +229133,7 @@
                               },
                               "value": {
                                 "nullable": true,
-                                "description": "JSON per the field type (lists as arrays, money in decimal major units); null when unset."
+                                "description": "JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset."
                               },
                               "updatedAt": {
                                 "type": "string",

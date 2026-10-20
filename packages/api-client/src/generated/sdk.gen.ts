@@ -2510,7 +2510,7 @@ export const patchApiV1AdminObjectsTypesByType = <ThrowOnError extends boolean =
 /**
  * List object records using indexed filters and a cursor
  *
- * where accepts a JSON scalar object or bracket parameters such as where[customer]=cus_123. Only index-leading fields may filter or sort.
+ * where accepts a JSON scalar object or bracket parameters such as where[customer]=cus_123; a money field matches its integer minor units of the store currency (where[price]=1250). Only index-leading fields may filter or sort.
  */
 export const getApiV1AdminObjectsByType = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminObjectsByTypeData, ThrowOnError>): RequestResult<GetApiV1AdminObjectsByTypeResponses, GetApiV1AdminObjectsByTypeErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminObjectsByTypeResponses, GetApiV1AdminObjectsByTypeErrors, ThrowOnError>({ url: '/api/v1/admin/objects/{type}', ...options });
 

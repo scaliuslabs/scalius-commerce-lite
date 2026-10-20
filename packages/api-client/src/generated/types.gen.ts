@@ -2400,6 +2400,9 @@ export type ObjectRecord = {
     handle: string | null;
     status: 'active' | 'draft' | 'published';
     displayName: string;
+    /**
+     * Field values by key, typed as the custom-field HTTP contract: money as { amountMinor, currency } (integer minor units of the store currency).
+     */
     data: {
         [key: string]: unknown;
     };
@@ -64789,11 +64792,11 @@ export type PostApiV1AdminCustomFieldDefinitionsData = {
              */
             to?: string | null;
             /**
-             * Text and URL: minimum length. Numbers, money, dates: minimum value (money in decimal major units).
+             * Text and URL: minimum length. Numbers, money, dates: minimum value (money in integer minor units of the store currency).
              */
             min?: string | number | unknown;
             /**
-             * Text and URL: maximum length. Numbers, money, dates: maximum value (money in decimal major units).
+             * Text and URL: maximum length. Numbers, money, dates: maximum value (money in integer minor units of the store currency).
              */
             max?: string | number | unknown;
             /**
@@ -64984,11 +64987,11 @@ export type PatchApiV1AdminCustomFieldDefinitionsByIdData = {
              */
             to?: string | null;
             /**
-             * Text and URL: minimum length. Numbers, money, dates: minimum value (money in decimal major units).
+             * Text and URL: minimum length. Numbers, money, dates: minimum value (money in integer minor units of the store currency).
              */
             min?: string | number | unknown;
             /**
-             * Text and URL: maximum length. Numbers, money, dates: maximum value (money in decimal major units).
+             * Text and URL: maximum length. Numbers, money, dates: maximum value (money in integer minor units of the store currency).
              */
             max?: string | number | unknown;
             /**
@@ -65174,7 +65177,7 @@ export type GetApiV1AdminCustomFieldsProductByOwnerIdResponses = {
             fields: Array<{
                 definition: AdminCustomFieldDefinition;
                 /**
-                 * JSON per the field type (lists as arrays, money in decimal major units); null when unset.
+                 * JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset.
                  */
                 value?: unknown;
                 updatedAt: string | null;
@@ -65190,7 +65193,7 @@ export type PutApiV1AdminCustomFieldsProductByOwnerIdData = {
         values: Array<{
             definitionId: string;
             /**
-             * JSON per the field type (lists as arrays, money in decimal major units); null, "" or [] clears it.
+             * JSON per the field type (lists as arrays, money as { amountMinor, currency } in the store currency); null, "" or [] clears it.
              */
             value?: unknown;
         }>;
@@ -65253,7 +65256,7 @@ export type PutApiV1AdminCustomFieldsProductByOwnerIdResponses = {
             fields: Array<{
                 definition: AdminCustomFieldDefinition;
                 /**
-                 * JSON per the field type (lists as arrays, money in decimal major units); null when unset.
+                 * JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset.
                  */
                 value?: unknown;
                 updatedAt: string | null;
@@ -65314,7 +65317,7 @@ export type GetApiV1AdminCustomFieldsVariantByOwnerIdResponses = {
             fields: Array<{
                 definition: AdminCustomFieldDefinition;
                 /**
-                 * JSON per the field type (lists as arrays, money in decimal major units); null when unset.
+                 * JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset.
                  */
                 value?: unknown;
                 updatedAt: string | null;
@@ -65330,7 +65333,7 @@ export type PutApiV1AdminCustomFieldsVariantByOwnerIdData = {
         values: Array<{
             definitionId: string;
             /**
-             * JSON per the field type (lists as arrays, money in decimal major units); null, "" or [] clears it.
+             * JSON per the field type (lists as arrays, money as { amountMinor, currency } in the store currency); null, "" or [] clears it.
              */
             value?: unknown;
         }>;
@@ -65393,7 +65396,7 @@ export type PutApiV1AdminCustomFieldsVariantByOwnerIdResponses = {
             fields: Array<{
                 definition: AdminCustomFieldDefinition;
                 /**
-                 * JSON per the field type (lists as arrays, money in decimal major units); null when unset.
+                 * JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset.
                  */
                 value?: unknown;
                 updatedAt: string | null;
@@ -65454,7 +65457,7 @@ export type GetApiV1AdminCustomFieldsCustomerByOwnerIdResponses = {
             fields: Array<{
                 definition: AdminCustomFieldDefinition;
                 /**
-                 * JSON per the field type (lists as arrays, money in decimal major units); null when unset.
+                 * JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset.
                  */
                 value?: unknown;
                 updatedAt: string | null;
@@ -65470,7 +65473,7 @@ export type PutApiV1AdminCustomFieldsCustomerByOwnerIdData = {
         values: Array<{
             definitionId: string;
             /**
-             * JSON per the field type (lists as arrays, money in decimal major units); null, "" or [] clears it.
+             * JSON per the field type (lists as arrays, money as { amountMinor, currency } in the store currency); null, "" or [] clears it.
              */
             value?: unknown;
         }>;
@@ -65533,7 +65536,7 @@ export type PutApiV1AdminCustomFieldsCustomerByOwnerIdResponses = {
             fields: Array<{
                 definition: AdminCustomFieldDefinition;
                 /**
-                 * JSON per the field type (lists as arrays, money in decimal major units); null when unset.
+                 * JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset.
                  */
                 value?: unknown;
                 updatedAt: string | null;
@@ -65594,7 +65597,7 @@ export type GetApiV1AdminCustomFieldsOrderByOwnerIdResponses = {
             fields: Array<{
                 definition: AdminCustomFieldDefinition;
                 /**
-                 * JSON per the field type (lists as arrays, money in decimal major units); null when unset.
+                 * JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset.
                  */
                 value?: unknown;
                 updatedAt: string | null;
@@ -65610,7 +65613,7 @@ export type PutApiV1AdminCustomFieldsOrderByOwnerIdData = {
         values: Array<{
             definitionId: string;
             /**
-             * JSON per the field type (lists as arrays, money in decimal major units); null, "" or [] clears it.
+             * JSON per the field type (lists as arrays, money as { amountMinor, currency } in the store currency); null, "" or [] clears it.
              */
             value?: unknown;
         }>;
@@ -65673,7 +65676,7 @@ export type PutApiV1AdminCustomFieldsOrderByOwnerIdResponses = {
             fields: Array<{
                 definition: AdminCustomFieldDefinition;
                 /**
-                 * JSON per the field type (lists as arrays, money in decimal major units); null when unset.
+                 * JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset.
                  */
                 value?: unknown;
                 updatedAt: string | null;
@@ -65734,7 +65737,7 @@ export type GetApiV1AdminCustomFieldsCategoryByOwnerIdResponses = {
             fields: Array<{
                 definition: AdminCustomFieldDefinition;
                 /**
-                 * JSON per the field type (lists as arrays, money in decimal major units); null when unset.
+                 * JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset.
                  */
                 value?: unknown;
                 updatedAt: string | null;
@@ -65750,7 +65753,7 @@ export type PutApiV1AdminCustomFieldsCategoryByOwnerIdData = {
         values: Array<{
             definitionId: string;
             /**
-             * JSON per the field type (lists as arrays, money in decimal major units); null, "" or [] clears it.
+             * JSON per the field type (lists as arrays, money as { amountMinor, currency } in the store currency); null, "" or [] clears it.
              */
             value?: unknown;
         }>;
@@ -65813,7 +65816,7 @@ export type PutApiV1AdminCustomFieldsCategoryByOwnerIdResponses = {
             fields: Array<{
                 definition: AdminCustomFieldDefinition;
                 /**
-                 * JSON per the field type (lists as arrays, money in decimal major units); null when unset.
+                 * JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset.
                  */
                 value?: unknown;
                 updatedAt: string | null;
@@ -65874,7 +65877,7 @@ export type GetApiV1AdminCustomFieldsCollectionByOwnerIdResponses = {
             fields: Array<{
                 definition: AdminCustomFieldDefinition;
                 /**
-                 * JSON per the field type (lists as arrays, money in decimal major units); null when unset.
+                 * JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset.
                  */
                 value?: unknown;
                 updatedAt: string | null;
@@ -65890,7 +65893,7 @@ export type PutApiV1AdminCustomFieldsCollectionByOwnerIdData = {
         values: Array<{
             definitionId: string;
             /**
-             * JSON per the field type (lists as arrays, money in decimal major units); null, "" or [] clears it.
+             * JSON per the field type (lists as arrays, money as { amountMinor, currency } in the store currency); null, "" or [] clears it.
              */
             value?: unknown;
         }>;
@@ -65953,7 +65956,7 @@ export type PutApiV1AdminCustomFieldsCollectionByOwnerIdResponses = {
             fields: Array<{
                 definition: AdminCustomFieldDefinition;
                 /**
-                 * JSON per the field type (lists as arrays, money in decimal major units); null when unset.
+                 * JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset.
                  */
                 value?: unknown;
                 updatedAt: string | null;
@@ -66014,7 +66017,7 @@ export type GetApiV1AdminCustomFieldsBrandByOwnerIdResponses = {
             fields: Array<{
                 definition: AdminCustomFieldDefinition;
                 /**
-                 * JSON per the field type (lists as arrays, money in decimal major units); null when unset.
+                 * JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset.
                  */
                 value?: unknown;
                 updatedAt: string | null;
@@ -66030,7 +66033,7 @@ export type PutApiV1AdminCustomFieldsBrandByOwnerIdData = {
         values: Array<{
             definitionId: string;
             /**
-             * JSON per the field type (lists as arrays, money in decimal major units); null, "" or [] clears it.
+             * JSON per the field type (lists as arrays, money as { amountMinor, currency } in the store currency); null, "" or [] clears it.
              */
             value?: unknown;
         }>;
@@ -66093,7 +66096,7 @@ export type PutApiV1AdminCustomFieldsBrandByOwnerIdResponses = {
             fields: Array<{
                 definition: AdminCustomFieldDefinition;
                 /**
-                 * JSON per the field type (lists as arrays, money in decimal major units); null when unset.
+                 * JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset.
                  */
                 value?: unknown;
                 updatedAt: string | null;
@@ -66154,7 +66157,7 @@ export type GetApiV1AdminCustomFieldsPageByOwnerIdResponses = {
             fields: Array<{
                 definition: AdminCustomFieldDefinition;
                 /**
-                 * JSON per the field type (lists as arrays, money in decimal major units); null when unset.
+                 * JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset.
                  */
                 value?: unknown;
                 updatedAt: string | null;
@@ -66170,7 +66173,7 @@ export type PutApiV1AdminCustomFieldsPageByOwnerIdData = {
         values: Array<{
             definitionId: string;
             /**
-             * JSON per the field type (lists as arrays, money in decimal major units); null, "" or [] clears it.
+             * JSON per the field type (lists as arrays, money as { amountMinor, currency } in the store currency); null, "" or [] clears it.
              */
             value?: unknown;
         }>;
@@ -66233,7 +66236,7 @@ export type PutApiV1AdminCustomFieldsPageByOwnerIdResponses = {
             fields: Array<{
                 definition: AdminCustomFieldDefinition;
                 /**
-                 * JSON per the field type (lists as arrays, money in decimal major units); null when unset.
+                 * JSON per the field type (lists as arrays, money as { amountMinor, currency }: integer minor units of the store currency); null when unset.
                  */
                 value?: unknown;
                 updatedAt: string | null;
