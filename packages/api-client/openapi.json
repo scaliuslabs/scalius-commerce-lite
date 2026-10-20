@@ -216302,6 +216302,14 @@
                       "dashboard",
                       "storefront"
                     ]
+                  },
+                  "confirmPolicy": {
+                    "type": "string",
+                    "enum": [
+                      "destructive_financial",
+                      "none"
+                    ],
+                    "description": "Whether destructive and financial operations wait for the merchant's approval (`destructive_financial`, the default) or run directly (`none`). A view-only key never needs it. Only the store owner's own session can turn it off."
                   }
                 },
                 "required": [

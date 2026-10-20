@@ -123,6 +123,13 @@ describe("agent access management route boundaries", () => {
     expect(dbTouched).toBe(false);
   });
 
+  it("never lets an agent create a connection that skips the merchant's approval", async () => {
+    const app = createApp({ agentPrincipal: principal });
+    expect((await send(app, "POST", "/tokens", { ...customGrant, confirmPolicy: "none" })).status).toBe(403);
+    expect((await send(app, "POST", "/tokens", { ...customGrant, confirmPolicy: "sometimes" })).status).toBe(400);
+    expect(dbTouched).toBe(false);
+  });
+
   it("keeps secure browser handoffs human-only and 2FA-verified", async () => {
     const path = `/browser-handoffs/abh_${"a".repeat(20)}`;
     expect((await send(createApp({ agentPrincipal: principal }), "GET", path)).status).toBe(403);

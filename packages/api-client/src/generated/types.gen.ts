@@ -62050,6 +62050,10 @@ export type PostApiV1AdminAgentAccessTokensData = {
         riskCeiling?: 'read' | 'write' | 'destructive' | 'financial' | 'security';
         expiresInDays?: number;
         resource: 'dashboard' | 'storefront';
+        /**
+         * Whether destructive and financial operations wait for the merchant's approval (`destructive_financial`, the default) or run directly (`none`). A view-only key never needs it. Only the store owner's own session can turn it off.
+         */
+        confirmPolicy?: 'destructive_financial' | 'none';
     };
     path?: never;
     query?: never;

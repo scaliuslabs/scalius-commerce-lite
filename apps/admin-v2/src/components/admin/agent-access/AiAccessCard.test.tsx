@@ -165,6 +165,37 @@ describe("AI & app access card", () => {
     expect(document.body.innerHTML).not.toContain(SECRET);
   });
 
+  it("creates a custom key with the inbox scope, a risk ceiling and approvals off", async () => {
+    await render(["agent_access.view", "agent_access.manage"], true);
+    await vi.waitFor(() => expect(document.body.textContent).toContain("Codex"));
+    await click(button("Create access key"));
+    await type(document.getElementById("ai-key-name") as HTMLInputElement, "Inbox helper");
+
+    // Presets first; Custom waits behind "More options".
+    expect(document.body.textContent).not.toContain("Custom access");
+    await click(button("More options"));
+    const custom = document.querySelector<HTMLButtonElement>('button[role="radio"][value="custom"]')!;
+    await click(custom);
+    await vi.waitFor(() => expect(document.getElementById("ai-key-scope-inbox")).not.toBeNull());
+    // Nothing ticked yet: the key can't be created.
+    expect(document.body.textContent).toContain("Choose at least one permission.");
+
+    await click(document.getElementById("ai-key-scope-inbox")!);
+    expect(document.body.textContent).toContain("Ticking an action also ticks what it needs.");
+    await click(document.getElementById("ai-key-confirm")!);
+    await click(button("Save"));
+
+    expect(api.createAgentToken).toHaveBeenCalledWith({
+      label: "Inbox helper",
+      resource: "dashboard",
+      preset: "custom",
+      permissions: ["conversations.reply", "conversations.view"],
+      riskCeiling: "write",
+      confirmPolicy: "none",
+      expiresInDays: 90,
+    });
+  });
+
   it("shows the exact setup command for this store's API origin, with a copy button", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
