@@ -471,7 +471,7 @@ export declare const defineIdentityProvider: <const T extends ProviderImplementa
 // packages/plugin-sdk/src/manifest-types.d.ts
 import type { PluginManifestInput, PluginSettingValue } from "@scalius/shared/plugins";
 import type { StorefrontImage, StorefrontProductCard, StorefrontResolvedSettings } from "@scalius/shared/plugins/storefront-protocol";
-import type { PluginContext, PluginObjectCollection, PluginObjects } from "./context";
+import type { PluginContext, PluginMoney, PluginObjectCollection, PluginObjects } from "./context";
 type Manifest = PluginManifestInput;
 declare const DEFINED_MANIFEST: unique symbol;
 export type DefinedManifest<M> = M & {
@@ -480,7 +480,7 @@ export type DefinedManifest<M> = M & {
 type IsDefined<M> = typeof DEFINED_MANIFEST extends keyof M ? true : false;
 type Values<T> = T extends readonly (infer U)[] ? U : never;
 type IsLiteral<K> = K extends string ? (string extends K ? false : true) : false;
-export type ObjectFieldValue<Type> = Type extends `list.${infer Item}` ? Array<ObjectFieldValue<Item>> : Type extends "integer" | "decimal" ? number : Type extends "boolean" ? boolean : Type extends "json" ? unknown : Type extends "money" ? number | string : Type extends string ? string : unknown;
+export type ObjectFieldValue<Type> = Type extends `list.${infer Item}` ? Array<ObjectFieldValue<Item>> : Type extends "integer" | "decimal" ? number : Type extends "boolean" ? boolean : Type extends "json" ? unknown : Type extends "money" ? PluginMoney : Type extends string ? string : unknown;
 type FieldOf<O> = O extends {
     fields?: infer F;
 } ? Values<F> : never;

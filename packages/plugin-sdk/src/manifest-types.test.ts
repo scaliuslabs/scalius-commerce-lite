@@ -2,7 +2,7 @@
 // ctx.settings from a defineManifest manifest; a loose manifest keeps the
 // loose types; typed contexts stay assignable to PluginContext.
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { defineManifest, definePlugin, PLUGIN_API_VERSION, type PluginContext, type PluginManifestInput, type StorefrontSettingsOf } from "./index";
+import { defineManifest, definePlugin, PLUGIN_API_VERSION, type PluginContext, type PluginManifestInput, type PluginMoney, type StorefrontSettingsOf } from "./index";
 import { createPluginTestHarness } from "./testing";
 
 const manifest = defineManifest({
@@ -28,6 +28,13 @@ const manifest = defineManifest({
         { key: "tags", name: "Tags", type: "list.single_line_text" },
       ],
     },
+    prices: {
+      name: "Prices",
+      fields: [
+        { key: "price", name: "Price", type: "money", required: true },
+        { key: "tiers", name: "Tiers", type: "list.money" },
+      ],
+    },
   },
   storefront: {
     sections: [{
@@ -47,6 +54,7 @@ function helper(ctx: PluginContext) {
 
 describe("manifest type inference", () => {
   it("types records and settings from the manifest", async () => {
+    let pricesRead: unknown;
     const plugin = definePlugin({
       manifest,
       events: {
@@ -58,6 +66,16 @@ describe("manifest type inference", () => {
           expectTypeOf(ctx.settings.limit).toEqualTypeOf<number | null | undefined>();
           helper(ctx);
           await ctx.objects.notes.put("last", { value: event.resource.id });
+          // Money fields read and write `PluginMoney` (integer minor units), as the codec does.
+          const price = await ctx.objects.prices.get("standard");
+          expectTypeOf(price).toEqualTypeOf<({ price: PluginMoney } & { tiers?: PluginMoney[] | null }) | null>();
+          await ctx.objects.prices.put("standard", { price: { amountMinor: 125_000, currency: "BDT" }, tiers: [{ amountMinor: 99_000, currency: "BDT" }] });
+          pricesRead = await ctx.objects.prices.get("standard");
+          // Type-only: the platform refuses a bare number or a decimal string (object.invalid).
+          type PriceWrite = Parameters<typeof ctx.objects.prices.put>[1];
+          expectTypeOf<{ price: number }>().not.toExtend<PriceWrite>();
+          expectTypeOf<{ price: string }>().not.toExtend<PriceWrite>();
+          expectTypeOf<{ price: PluginMoney; tiers: number[] }>().not.toExtend<PriceWrite>();
         },
       },
       functions: {
@@ -70,6 +88,10 @@ describe("manifest type inference", () => {
     const harness = createPluginTestHarness(plugin);
     expect((await harness.event("order.created", { type: "order", id: "o1" })).ok).toBe(true);
     expect(harness.records.get("notes")?.get("last")).toEqual({ value: "o1" });
+    expect(pricesRead).toEqual({
+      price: { amountMinor: 125_000, currency: "BDT" },
+      tiers: [{ amountMinor: 99_000, currency: "BDT" }],
+    });
   });
 
   it("types storefront component settings", () => {
