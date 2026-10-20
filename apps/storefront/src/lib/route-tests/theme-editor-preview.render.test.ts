@@ -576,7 +576,7 @@ describe("initial preview dependency failures", () => {
     const failed = await renderPage(component, api, { url, cookie: PREVIEW_COOKIE });
     expect(failed.response.status).toBe(503);
     expect(failed.response.headers.get("Cache-Control")).toContain("no-store");
-    expect(failed.html).toContain("Storefront temporarily unavailable");
+    expect(failed.html).toContain("We&#39;ll be right back");
     expect(failed.html).not.toContain("data-theme-section-id");
     expect((await renderPage(component, { document, unavailable: api.unavailable }, { url })).response.status).toBe(200);
     const empty = { lists: [], media: [], brands: [], promotions: [], categories: [], collections: [], homeProduct: null };
@@ -590,7 +590,7 @@ describe("initial preview dependency failures", () => {
     for (const [component, url] of [[HomePage, "https://shop.test/"], [LandingPage, "https://shop.test/pages/eid"]] as const) {
       const result = await renderPage(component, { document, preview: document, unavailable: [path] }, { url, cookie: PREVIEW_COOKIE });
       expect(result.response.status).toBe(503);
-      expect(result.html).toContain("Storefront temporarily unavailable");
+      expect(result.html).toContain("We&#39;ll be right back");
     }
   });
 });

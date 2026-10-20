@@ -17,6 +17,7 @@ import { cn } from "@scalius/shared/utils";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
+import { useCurrency } from "~/hooks/use-currency";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -66,7 +67,7 @@ import { AppIcon } from "~/components/admin/apps/AppIcon";
 import { appProviderSetupPath } from "~/components/admin/apps/app-sections";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
-import { useWholeUnitPrices } from "../shared/MoneyInput";
+import { MoneyInput, useWholeUnitPrices } from "../shared/MoneyInput";
 import { ProvidedByChip } from "./AppProviderStatus";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsCardLoading, useCloseSettingsDialog } from "./SettingsPage";
 
@@ -694,6 +695,7 @@ export function PaymentOptionsCard() {
     return limits ? [{ method, ...limits }] : [];
   });
   const wholeTaka = useWholeUnitPrices();
+  const currencyCode = useCurrency().code;
   const issuesFor = (draft: CheckoutFlow) =>
     getCheckoutFlowPreviewIssues({
       checkoutMode: draft.checkoutMode,
@@ -763,18 +765,15 @@ export function PaymentOptionsCard() {
       </div>
       {values.partialPaymentEnabled ? (
         <SettingsField id="advance-amount" label={t("advanceAmount")} help={t("advanceAmountHelp")}>
-          <Input
+          <MoneyInput
             id="advance-amount"
-            type="number"
-            inputMode={wholeTaka ? "numeric" : "decimal"}
-            min="0"
-            step={wholeTaka ? "1" : "0.01"}
+            currencyCode={currencyCode}
             className="max-w-40"
-            value={Number.isFinite(values.partialPaymentAmount) ? values.partialPaymentAmount : ""}
+            value={Number.isFinite(values.partialPaymentAmount) ? values.partialPaymentAmount : null}
             disabled={!canEdit}
             aria-invalid={issues.includes("amountInvalid") || issues.includes("advanceRange") || issues.includes("wholeTaka")}
             aria-describedby="advance-amount-note"
-            onChange={(event) => setValue("partialPaymentAmount", Number(event.target.value))}
+            onValueChange={(amount) => setValue("partialPaymentAmount", amount ?? Number.NaN)}
           />
         </SettingsField>
       ) : null}
