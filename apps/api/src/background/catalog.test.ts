@@ -83,7 +83,7 @@ describe.each(["free", "paid"] as const satisfies readonly WorkersPlan[])("catal
     const unchanged = storeSeq();
     await project(db);
     expect(storeSeq()).toBe(unchanged);
-  }, 60_000); // A Paid drain recomputes 9,000 seeded products.
+  }); // A Paid drain recomputes 9,000 seeded products.
 
   it("keeps a rebuild requested while a chunk runs instead of overwriting it", async () => {
     const { db, kv, sqlite } = seeded(limits.catalogRebuildChunk + 5);
@@ -119,7 +119,7 @@ describe.each(["free", "paid"] as const satisfies readonly WorkersPlan[])("catal
     expect(await rotateRecommendations(db, now + RECOMMENDATION_LAP_SECONDS - 1)).toBe(0);
     expect(await rotateRecommendations(db, now + RECOMMENDATION_LAP_SECONDS)).toBe(perRun);
     expect(JSON.parse(kv(RECOMMENDATION_ROTATION_CURSOR_KEY)!)).toEqual({ lapStartedAt: now + RECOMMENDATION_LAP_SECONDS, after: publicIds[perRun - 1], done: false });
-  }, 60_000); // A Paid lap ranks about seventy products.
+  }); // A Paid lap ranks about seventy products.
 
   it("refreshes products a buyer read queued before the lap, even on a resting day", async () => {
     const { enqueueRecommendationRefresh, queuedRecommendationRefresh } = await import("@scalius/core/modules/catalog");
@@ -139,7 +139,7 @@ describe.each(["free", "paid"] as const satisfies readonly WorkersPlan[])("catal
     // The lap's cursor is untouched, and with nothing queued the rotation rests again.
     expect(kv(RECOMMENDATION_ROTATION_CURSOR_KEY)).toBe(lap);
     expect(await rotateRecommendations(db, now + 120)).toBe(0);
-  }, 60_000);
+  });
 
   it("refreshes a write's recommendation targets after the response, as many as the plan allows, and never fails the write", async () => {
     const { db, sqlite } = seeded(3);

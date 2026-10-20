@@ -92,7 +92,7 @@ describe("the Bangladesh pack's providers", () => {
   };
   const placeCount = () => (sqlite.prepare("SELECT count(*) AS count FROM places WHERE country_code = 'BD'").get() as { count: number }).count;
 
-  it("fails closed and says why until the pack is active, then sends, checks and keeps places through it", { timeout: 60_000 }, async () => {
+  it("fails closed and says why until the pack is active, then sends, checks and keeps places through it", async () => {
     // Before activation: the choices name the pack's providers and say what to do.
     await expect(getSmsProviderReadiness(db, KEY, apps())).resolves.toMatchObject({
       status: "incomplete",

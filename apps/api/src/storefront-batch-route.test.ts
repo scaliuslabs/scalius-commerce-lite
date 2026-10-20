@@ -149,7 +149,7 @@ describe("storefront batch parts, dependency-validated (strict)", () => {
     expect(third[2]!.cache!.s0).toBeGreaterThan(first[2]!.cache!.s0);
   // The first test of the file imports the whole API Worker and migrates a
   // fresh database: about five seconds on its own, more under a parallel suite.
-  }, 30_000);
+  });
 
   it("serve direct reads through the same validated reader, never PublicApi, without internal headers", async () => {
     cacheMode.value = "strict";

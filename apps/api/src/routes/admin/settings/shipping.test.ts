@@ -55,7 +55,7 @@ describe("delivery zone settings API", () => {
     expect(list.data.zones).toMatchObject([
       { name: "Inside Dhaka", locations: [{ id: "dhaka" }], rates: [{ fee: 60, freeOver: 1500 }] },
     ]);
-  }, 20_000); // The first test also builds the migrated SQLite database; give it room under a loaded suite.
+  }); // The first test also builds the migrated SQLite database; give it room under a loaded suite.
 
   it("refuses paisa in a taka charge with a 400 naming the field", async () => {
     const { send } = createTestApp();

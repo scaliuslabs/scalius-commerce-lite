@@ -90,7 +90,7 @@ const STAFF: Record<string, string[] | null> = {
   clerk: ["orders.view"],
 };
 
-describe("plugin routes", { timeout: 30_000 }, () => {
+describe("plugin routes", () => {
   let sqlite: DatabaseSync;
   let db: Database;
   let env: Env;

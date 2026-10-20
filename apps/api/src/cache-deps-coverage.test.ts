@@ -178,5 +178,5 @@ describe("cache dependency registry coverage of public reads", () => {
     for (const table of ["products", "product_buyer_state", "product_facet_values", "product_variants", "categories", "category_closure", "settings", "navigation_placements", "pages", "object_types", "object_records"]) {
       expect(touched.has(table), table).toBe(true);
     }
-  }, 120_000);
+  });
 });

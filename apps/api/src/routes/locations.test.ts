@@ -46,5 +46,5 @@ describe("public delivery location pickers", () => {
       locations: [{ id: "dhaka", name: "Dhaka", type: "city", parentId: null, isActive: true, sortOrder: 1 }],
       pagination: { page: 1, limit: 50, total: 1, totalPages: 1 },
     });
-  }, 20_000); // The first test also builds the migrated SQLite database.
+  }); // The first test also builds the migrated SQLite database.
 });

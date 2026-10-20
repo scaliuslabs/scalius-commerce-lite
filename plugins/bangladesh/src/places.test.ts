@@ -154,5 +154,5 @@ describe("the bundled place directory", () => {
     const code = result.outputFiles[0]!.text;
     expect(code).toContain('{"key":"pathao:');
     expect(code).not.toMatch(/\bkey: "pathao:/);
-  }, 30_000);
+  });
 });

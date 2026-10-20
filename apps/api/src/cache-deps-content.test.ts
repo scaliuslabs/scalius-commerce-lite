@@ -234,7 +234,7 @@ describe("strict dependency coverage of public content and settings reads", () =
       report[route] = dependencies.keys.length;
     }
     console.info("[CacheDeps] S3b key counts", JSON.stringify(report));
-  }, 120_000);
+  });
 
   it("declares the layout's settings documents, content rows, brand images and the tracked Platform row", async () => {
     const { body, dependencies } = await render("/api/v1/storefront/layout");

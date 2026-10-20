@@ -29,7 +29,7 @@ import {
 const tick = (ms = 1) => new Promise((resolve) => setTimeout(resolve, ms));
 const silent = { log: () => undefined };
 
-describe("dependency scope", { timeout: 30_000 }, () => {
+describe("dependency scope", () => {
   it("isolates concurrent requests that interleave reads and declarations", async () => {
     const { db } = createSqliteD1Database();
     const renderProduct = async (id: string) => {
@@ -140,7 +140,7 @@ describe("dependency scope", { timeout: 30_000 }, () => {
   });
 });
 
-describe("coverage fallback", { timeout: 30_000 }, () => {
+describe("coverage fallback", () => {
   it("covers a table by any declared key of a kind the registry lists for it", () => {
     const resolution = resolveCacheDependencies({
       declared: [cacheDep.listMembership(categoryScope("cat_1")), cacheDep.settings("seo", "document")],

@@ -119,7 +119,7 @@ describe("statement table extraction", () => {
   });
 });
 
-describe("read observer", { timeout: 30_000 }, () => {
+describe("read observer", () => {
   it("does nothing outside an observer and isolates concurrent observers", async () => {
     expect(currentReadObserver()).toBeUndefined();
     observeStatement("select * from products");
@@ -163,7 +163,7 @@ describe("read observer", { timeout: 30_000 }, () => {
   });
 });
 
-describe("capture on every provider", { timeout: 30_000 }, () => {
+describe("capture on every provider", () => {
   it("D1 through getDb, with and without a request session", async () => {
     const sqlite = createMigratedSqlite();
     const plain = getDb({ DB: createSqliteD1Binding(sqlite) });
@@ -199,7 +199,7 @@ describe("capture on every provider", { timeout: 30_000 }, () => {
   });
 });
 
-describe("bound statements of row-keyed tables", { timeout: 30_000 }, () => {
+describe("bound statements of row-keyed tables", () => {
   /** The settings documents each settings statement of a run pinned (category x key). */
   async function settingsDocuments(run: () => Promise<unknown>): Promise<string[][]> {
     const statements: Array<{ sql: string; params: readonly unknown[] }> = [];

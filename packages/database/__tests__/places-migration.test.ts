@@ -100,7 +100,7 @@ describe(`${NAME} over a populated 0117 database`, () => {
       "delivery_zone_locations_checkout_authority_delete", "delivery_zone_locations_checkout_authority_insert",
       "delivery_zone_locations_checkout_authority_update",
     ]);
-   }, 20_000); // The first test also builds the migrated SQLite database.
+   }); // The first test also builds the migrated SQLite database.
 
   it("keeps a parent one level up in the same country", () => {
     const database = migrate(seedPlaces);

@@ -238,5 +238,5 @@ describe("dev.sh shutdown", () => {
       for (const pid of pids) if (alive(pid)) process.kill(pid, "SIGKILL");
       rmSync(dir, { recursive: true, force: true });
     }
-  }, 15_000);
+  });
 });

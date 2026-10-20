@@ -55,7 +55,7 @@ describe("DeferredTiptapEditor", () => {
       { timeout: 5_000 },
     );
     expect(host.querySelector(".ProseMirror")).not.toBeNull();
-  }, 10_000);
+  });
 
   const mountEditor = async (content: string, onChange: (html: string) => void) => {
     await act(async () => {
@@ -71,7 +71,7 @@ describe("DeferredTiptapEditor", () => {
     await act(async () => { editor.commands.setContent("<p></p>", { emitUpdate: true }); });
     expect(onChange).toHaveBeenLastCalledWith("");
     expect(onChange).toHaveBeenCalledTimes(1);
-  }, 10_000);
+  });
 
   it("stays silent while an empty field is still empty (an Enter, an empty paragraph)", async () => {
     const onChange = vi.fn();
@@ -79,7 +79,7 @@ describe("DeferredTiptapEditor", () => {
     await act(async () => { editor.commands.setContent("<p></p><p></p>", { emitUpdate: true }); });
     await act(async () => { editor.commands.setContent("<p></p>", { emitUpdate: true }); });
     expect(onChange).not.toHaveBeenCalled();
-  }, 10_000);
+  });
 
   it.each(["<b>x</b>", '<p style="text-align:left">x</p>'])("restores the incoming representation after editing and reverting %s", async (baseline) => {
     const onChange = vi.fn();
@@ -112,7 +112,7 @@ describe("DeferredTiptapEditor", () => {
     await act(async () => { editor.commands.redo(); });
     expect(onChange).toHaveBeenLastCalledWith(baseline);
     expect(host.querySelector("[data-dirty]")?.textContent).toBe("false");
-  }, 10_000);
+  });
 
   it("treats changed marks as an edit even when the text matches the loaded document", async () => {
     const baseline = "<b>x</b>";
@@ -123,7 +123,7 @@ describe("DeferredTiptapEditor", () => {
     expect(onChange).toHaveBeenLastCalledWith("<p>x</p>");
     await act(async () => { editor.commands.toggleBold(); });
     expect(onChange).toHaveBeenLastCalledWith(baseline);
-  }, 10_000);
+  });
 
   it("uses a real external load as the new baseline without emitting or remounting", async () => {
     const onChange = vi.fn();
@@ -140,5 +140,5 @@ describe("DeferredTiptapEditor", () => {
     expect(onChange).not.toHaveBeenLastCalledWith(baseline);
     await act(async () => { editor.view.dispatch(editor.state.tr.delete(2, 3)); });
     expect(onChange).toHaveBeenLastCalledWith(baseline);
-  }, 10_000);
+  });
 });
