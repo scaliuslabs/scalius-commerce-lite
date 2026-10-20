@@ -71,7 +71,7 @@ describe("the app form token", () => {
     expect(ownersOf(blockOfA)).toEqual(["a.sizes"]);
     expect(ownersOf(sectionOfB)).toEqual(["b.loyalty"]);
     expect(ownersOf(pageOfB)).toEqual(["b.loyalty"]);
-    const forms = [
+    const forms: Array<Record<string, string>> = [
       { method: "post", action: "/apps/b.loyalty/redeem", "data-sx-form-app": ownersOf(blockOfA)[0]! },
       { method: "post", action: "/apps/b.loyalty/redeem", "data-sx-form-app": ownersOf(sectionOfB)[0]! },
       { method: "post", action: "/apps/b.loyalty/redeem", "data-sx-form-app": ownersOf(pageOfB)[0]! },
