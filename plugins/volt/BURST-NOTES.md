@@ -35,8 +35,16 @@ theme app plus a removable demo store. Research: `RESEARCH.md`.
 
 - `tsc --build` for `plugins/volt`: clean.
 - `pnpm plugin validate plugins/volt`: ready to pack.
-- `pnpm plugin pack plugins/volt`: packed (smoke-renders every section and skin).
-- `vitest run` in `plugins/volt`: see the commit message for the final count.
+- `pnpm plugin pack plugins/volt`: packed (smoke-renders every section and
+  skin): 45.6 KB module, 26 KB stylesheet, 63 KB backend bundle.
+- `vitest run` in `plugins/volt`: 20 of 20 pass (template applies to a valid
+  theme document; header, card, product page, listing, hero, tabs, trust,
+  offers, footer render with zero sanitizer drops; demo plan order; import
+  in slices with no duplicate creates after a rate limit; removal trashes
+  only what it created and keeps an edited product with its dependencies;
+  cron continues; admin page).
+- `grep applegadgetsbd dist/storefront/*`: 0. The copied content is only in
+  the backend bundle (`plugin.js`, the demo feature), never in the theme.
 
 ## Unverified (the lead must check)
 
@@ -145,7 +153,12 @@ core; the closest current mechanism is noted.
 14. **Card projection has no brand or key specs per card.** Fine for this
     source; noted for the Star Tech style (`facts` exists but is
     store-controlled, not app-requested).
-15. **Header data has no "Offers" or "Blog" routes.** Quick links are
+15. **The source's brand orange cannot be the primary token.** The theme
+    contrast rule needs 4.5:1 for primary on the background; #f26522 on the
+    grey page is 2.86:1, so the template uses #c2410c (darker orange). An
+    exact replica needs either a separate fill-only brand token (pills,
+    large buttons, the active tab) or a large-text contrast tier (3:1).
+16. **Header data has no "Offers" or "Blog" routes.** Quick links are
     settings with typed paths; a store without `/offers` gets dead links
     until the merchant edits them. Wanted: `routes.blog` when the store has
     a blog, and a pages lookup for skins.
