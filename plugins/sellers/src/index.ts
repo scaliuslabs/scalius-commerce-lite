@@ -70,7 +70,6 @@ export const manifest = {
   },
   scopes: ["write_orders", "write_fulfillments", "write_products"],
   events: ["order.created", "order.paid", "order.fulfilled", "order.cancelled", "order.refunded"],
-  timeline: [{ kind: "split", title: "Marketplace split" }],
   functions: [{
     point: "cart.validate",
     priority: 20,
@@ -197,6 +196,7 @@ export const manifest = {
   },
   cron: [{ name: "payouts", schedule: "0 3 * * 1" }],
   admin: {
+    timeline: [{ kind: "split", title: "Marketplace split" }],
     pages: [{
       id: "sellers",
       title: "Sellers",

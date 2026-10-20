@@ -30,7 +30,6 @@ const PACK: PluginManifestInput = {
     { key: "pay_key", label: "Key", type: "secret", group: "pay" },
     { key: "sms_token", label: "Token", type: "secret", group: "texts" },
   ],
-  settingsGroups: [{ id: "texts", title: "Texts" }],
   providers: {
     payment: [{ id: "pay", name: "Pay", flow: "hosted", chargeCurrencies: ["BDT"], operations: ["verifyReturn", "queryPayment"], settings: ["pay_key"] }],
     sms: [{ id: "sms", name: "SMS", settings: ["sms_token"] }],
@@ -39,7 +38,10 @@ const PACK: PluginManifestInput = {
     admin: [{ name: "places", methods: ["GET"] }, { name: "home", methods: ["GET"] }],
     webhooks: [{ name: "pay-callback" }],
   },
-  admin: { pages: [{ id: "places", title: "Places", route: "places" }, { id: "home", title: "Home", route: "home" }] },
+  admin: {
+    pages: [{ id: "places", title: "Places", route: "places" }, { id: "home", title: "Home", route: "home" }],
+    settingsGroups: [{ id: "texts", title: "Texts" }],
+  },
   cron: [{ name: "sync", schedule: "0 * * * *" }],
   features: [
     {
@@ -90,7 +92,7 @@ describe("app features", () => {
     expect(base.cron).toEqual([]);
     expect(base.admin.pages.map((page) => page.id)).toEqual(["home"]);
     expect(base.settings.map((field) => field.key)).toEqual(["general"]);
-    expect(base.settingsGroups).toEqual([]);
+    expect(base.admin.settingsGroups).toEqual([]);
     // The declaration stays for the dashboard.
     expect(base.features).toHaveLength(3);
   });

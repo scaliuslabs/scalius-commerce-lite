@@ -92,7 +92,7 @@ export const pluginFeatureTranslationSchema = z.object({
 // ── Ownership ─────────────────────────────────────────────────────────────
 
 type FeatureManifest = Pick<PluginManifest,
-  "features" | "providers" | "settings" | "settingsGroups" | "routes" | "cron" | "events" | "functions" | "admin" | "storefront">;
+  "features" | "providers" | "settings" | "routes" | "cron" | "events" | "functions" | "admin" | "storefront">;
 
 /** Which feature owns each claimed item, by item kind (absent: the base). */
 export interface PluginFeatureOwners {
@@ -174,7 +174,6 @@ export function pluginManifestWithFeatures(manifest: PluginManifest, enabled: It
     allowedHosts: union(manifest.allowedHosts, onFeatures.flatMap((feature) => feature.allowedHosts)),
     providers: manifest.providers.filter((provider) => keep(owners.providers, provider.id)),
     settings: manifest.settings.filter((field) => keep(owners.settings, field.key)),
-    settingsGroups: manifest.settingsGroups.filter((group) => keep(owners.settingsGroups, group.id)),
     routes: {
       admin: manifest.routes.admin.filter((route) => keep(owners.adminRoutes, route.name)),
       public: manifest.routes.public.filter((route) => keep(owners.publicRoutes, route.name)),
@@ -189,6 +188,7 @@ export function pluginManifestWithFeatures(manifest: PluginManifest, enabled: It
       cards: manifest.admin.cards.filter((card) => keep(owners.admin, card.id)),
       actions: manifest.admin.actions.filter((action) => keep(owners.admin, action.id)),
       widgets: manifest.admin.widgets.filter((widget) => keep(owners.admin, widget.id)),
+      settingsGroups: manifest.admin.settingsGroups.filter((group) => keep(owners.settingsGroups, group.id)),
     },
     storefront: {
       ...manifest.storefront,
@@ -260,7 +260,7 @@ export function pluginFeatureIssues(manifest: PluginManifest): Issue[] {
 
   const declared = {
     providers: new Set(manifest.providers.map((provider) => provider.id)),
-    settingsGroups: new Set(manifest.settingsGroups.map((group) => group.id)),
+    settingsGroups: new Set(manifest.admin.settingsGroups.map((group) => group.id)),
     adminRoutes: new Set(manifest.routes.admin.map((route) => route.name)),
     publicRoutes: new Set(manifest.routes.public.map((route) => route.name)),
     webhooks: new Set(manifest.routes.webhooks.map((route) => route.name)),

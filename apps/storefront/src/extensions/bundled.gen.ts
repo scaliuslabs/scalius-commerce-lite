@@ -7,7 +7,7 @@ import type { BundledStorefrontExtension } from "../lib/extensions/loaders";
 
 export const BUNDLED_STOREFRONT_EXTENSIONS: Readonly<Record<string, BundledStorefrontExtension>> = {
   "scalius.bazaar": {
-    release: "eb6c651f4129947df57cb59ebbb554c030d570ab3d0f9d3e948d04c42863a6aa",
+    release: "7c0657cdb42e993cfdaf857d60280841dc911f828dec6b0e06b44f95fc83768a",
     module: () => import("./bundled/scalius-bazaar/storefront.gen.js"),
     files: () => import("./bundled/scalius-bazaar/files.gen"),
   },
@@ -17,7 +17,7 @@ export const BUNDLED_STOREFRONT_EXTENSIONS: Readonly<Record<string, BundledStore
     files: () => import("./bundled/scalius-noor/files.gen"),
   },
   "scalius.sellers": {
-    release: "c77f01924cbb36afbe066bf83bdb84d158f33e7369ac7abc36deea0f25ffc2d8",
+    release: "7a7da4027bd41a60a6079fb4540c6004cf04c3489f2b12ff91c85a16dbcc68ef",
     module: () => import("./bundled/scalius-sellers/storefront.gen.js"),
     files: () => import("./bundled/scalius-sellers/files.gen"),
   },

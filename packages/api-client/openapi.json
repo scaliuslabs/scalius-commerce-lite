@@ -198831,8 +198831,7 @@
             "schema": {
               "type": "string",
               "pattern": "^[\\x20-\\x7E]{8,200}$",
-              "minLength": 8,
-              "maxLength": 200
+              "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice."
             },
             "required": false,
             "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
@@ -199011,13 +199010,13 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "supported",
+          "idempotency": "none",
           "revision": "none",
           "batch": "sequential",
           "transport": "json",

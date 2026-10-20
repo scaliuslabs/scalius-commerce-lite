@@ -42,7 +42,6 @@ export const manifest = {
       indexes: ["tagged_at"],
     },
   },
-  timeline: [{ kind: "tagged", title: "Order tagged" }],
   customFields: [
     { ownerType: "order", key: "tag", name: "Tag", type: "single_line_text", description: "Set by Order tagger when the order is paid." },
   ],
@@ -53,6 +52,7 @@ export const manifest = {
   ],
   admin: {
     pages: [{ id: "overview", title: "Order tagger", route: "summary" }],
+    timeline: [{ kind: "tagged", title: "Order tagged" }],
   },
   translations: {
     bn: {

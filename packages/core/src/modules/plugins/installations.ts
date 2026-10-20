@@ -163,12 +163,54 @@ export function parseStoredPluginGrant(value: string | null): PluginGrantRequest
 }
 
 /**
- * A manifest stored before scopes, read as the scopes it asked for: each RBAC
- * permission becomes the first scope that confers it (`legacyPermissionScope`),
- * an admin route's `permission` gate its `scope`. Only the stored row's read
- * shape changes; its grant still needs approval (`parseStoredPluginGrant`).
+ * A stored manifest read in the current shape. Each step is pure and leaves a
+ * current manifest as it is; only the stored row's read shape changes, and
+ * its grant still needs approval (`parseStoredPluginGrant`).
+ *
+ * 1. Before scopes: each RBAC permission becomes the first scope that confers
+ *    it (`legacyPermissionScope`), an admin route's `permission` its `scope`.
+ * 2. Before storefront extensions: a `buyer.ui` function becomes one
+ *    `storefront.extensions` entry per target, with the function's reads.
+ * 3. Before admin nesting: top-level `timeline` and `settingsGroups` move to
+ *    `admin.timeline` and `admin.settingsGroups`.
  */
 export function upgradeStoredPluginManifest(manifest: Record<string, unknown>): Record<string, unknown> {
+  return nestAdminParts(buyerUiAsExtensions(permissionsAsScopes(manifest)));
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function buyerUiAsExtensions(manifest: Record<string, unknown>): Record<string, unknown> {
+  if (!Array.isArray(manifest.functions)) return manifest;
+  const buyerUi = manifest.functions.find((fn) => isObject(fn) && fn.point === "buyer.ui");
+  if (!isObject(buyerUi)) return manifest;
+  const storefront = isObject(manifest.storefront) ? manifest.storefront : {};
+  const targets = Array.isArray(buyerUi.targets) ? buyerUi.targets : [];
+  const reads = Array.isArray(buyerUi.reads) ? buyerUi.reads : [];
+  return {
+    ...manifest,
+    functions: manifest.functions.filter((fn) => fn !== buyerUi),
+    storefront: { ...storefront, extensions: targets.map((target) => ({ target, reads })) },
+  };
+}
+
+function nestAdminParts(manifest: Record<string, unknown>): Record<string, unknown> {
+  if (manifest.timeline === undefined && manifest.settingsGroups === undefined) return manifest;
+  const { timeline, settingsGroups, ...rest } = manifest;
+  const admin = isObject(rest.admin) ? rest.admin : {};
+  return {
+    ...rest,
+    admin: {
+      ...admin,
+      ...(timeline !== undefined ? { timeline } : {}),
+      ...(settingsGroups !== undefined ? { settingsGroups } : {}),
+    },
+  };
+}
+
+function permissionsAsScopes(manifest: Record<string, unknown>): Record<string, unknown> {
   if (manifest.scopes !== undefined || !Array.isArray(manifest.permissions)) return manifest;
   const { permissions, ...rest } = manifest;
   const scopes = [...new Set((permissions as unknown[])

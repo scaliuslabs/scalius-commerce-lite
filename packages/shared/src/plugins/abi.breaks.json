@@ -250,5 +250,17 @@
   "from": "3a808dd2ec4a9e74",
   "change": "functions.buyer.ui: the function point was removed.",
   "reason": "Contract seal (beta criterion 1, plugins F5): buyer UI is a render extension, not a checkout function point; its input and output are sealed under extensions (PLUGIN_EXTENSION_SCHEMAS)."
+ },
+ {
+  "snapshot": "./abi.manifest.snapshot.json",
+  "from": "f3eda0275e4f3ae9",
+  "change": "manifest settingsGroups: the field is no longer accepted.",
+  "reason": "Contract seal (beta criterion 1, R2 item 14): the order timeline kinds and the settings page sections are dashboard surfaces, so they move under admin (admin.timeline, admin.settingsGroups); stored manifests are read in the new shape (upgradeStoredPluginManifest)."
+ },
+ {
+  "snapshot": "./abi.manifest.snapshot.json",
+  "from": "f3eda0275e4f3ae9",
+  "change": "manifest timeline: the field is no longer accepted.",
+  "reason": "Contract seal (beta criterion 1, R2 item 14): the order timeline kinds and the settings page sections are dashboard surfaces, so they move under admin (admin.timeline, admin.settingsGroups); stored manifests are read in the new shape (upgradeStoredPluginManifest)."
  }
 ]

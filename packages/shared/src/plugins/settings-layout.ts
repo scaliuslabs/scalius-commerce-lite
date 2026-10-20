@@ -8,7 +8,8 @@
 /** The manifest parts the layout reads (a parsed manifest fits). */
 export interface PluginSettingsLayoutSource {
   settings: ReadonlyArray<{ key: string; group?: string | undefined }>;
-  settingsGroups: ReadonlyArray<{ id: string; title: string; description?: string | undefined; order: number }>;
+  /** The settings page's sections (`admin.settingsGroups`). */
+  admin: { settingsGroups: ReadonlyArray<{ id: string; title: string; description?: string | undefined; order: number }> };
   providers: ReadonlyArray<{ id: string; settings?: readonly string[] | undefined }>;
 }
 
@@ -60,12 +61,12 @@ export interface PluginSettingsSection {
  */
 export function appSettingsSections(source: PluginSettingsLayoutSource): PluginSettingsSection[] {
   const keys = new Set(appWideSettingKeys(source));
-  const declared = new Set(source.settingsGroups.map((group) => group.id));
+  const declared = new Set(source.admin.settingsGroups.map((group) => group.id));
   const fields = source.settings.filter((field) => keys.has(field.key));
   const sections: PluginSettingsSection[] = [];
   const general = fields.filter((field) => field.group === undefined || !declared.has(field.group)).map((field) => field.key);
   if (general.length > 0) sections.push({ group: null, keys: general });
-  const groups = source.settingsGroups
+  const groups = source.admin.settingsGroups
     .map((group, index) => ({ group, index }))
     .sort((a, b) => a.group.order - b.group.order || a.index - b.index);
   for (const { group } of groups) {
@@ -84,7 +85,7 @@ export function appSettingsSections(source: PluginSettingsLayoutSource): PluginS
 export function qualifiedSettingLabel(
   source: {
     settings: ReadonlyArray<{ key: string; label: string; group?: string | undefined }>;
-    settingsGroups: PluginSettingsLayoutSource["settingsGroups"];
+    admin: PluginSettingsLayoutSource["admin"];
     providers: ReadonlyArray<{ id: string; name: string; settings?: readonly string[] | undefined }>;
   },
   key: string,

@@ -161,6 +161,12 @@ export interface PluginHttp {
   fetch(url: string, init?: { method?: string; headers?: Record<string, string>; body?: string; timeoutMs?: number }): Promise<PluginHttpResponse>;
 }
 
+/**
+ * The app's own custom fields (its namespace, declared in `customFields`).
+ * The merchant's fields (`custom` namespace) are `ctx.api.call`
+ * operations (`custom_fields.get_<owner>_values`, `set_<owner>_values`),
+ * which never show an app another app's fields.
+ */
 export interface PluginCustomFields {
   /** Values of this plugin's own fields on one resource, typed per field (money as `PluginMoney`). */
   get(ownerType: string, ownerId: string): Promise<Record<string, unknown>>;
@@ -206,7 +212,11 @@ export interface PluginMessaging {
   pushCustomer(input: { customerId: string; title: string; body?: string; url?: string; tag?: string }): Promise<{ delivered: boolean }>;
 }
 
-/** Typed lines on order timelines (needs `orders.edit`; each kind declared in `manifest.timeline`). */
+/**
+ * Typed lines on order timelines (needs `orders.edit`; each kind declared in
+ * `manifest.admin.timeline`): the one way an app writes on a timeline. Staff
+ * notes (`orders.comment_add`) are the dashboard's, not the app API's.
+ */
 export interface PluginTimeline {
   /**
    * Adds a line staff see on the order (and agents read): your app's name,

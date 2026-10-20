@@ -356,17 +356,19 @@ describe("settings groups and page tabs in the manifest", () => {
       { key: "alpha_sender", label: "Sender", type: "text", group: "alpha" },
       { key: "beta_token", label: "Token", type: "secret", group: "beta" },
     ],
-    settingsGroups: [
-      { id: "store", title: "Store", description: "How the app names your store.", order: 50 },
-      { id: "extras", title: "Extras" },
-    ],
+    admin: {
+      settingsGroups: [
+        { id: "store", title: "Store", description: "How the app names your store.", order: 50 },
+        { id: "extras", title: "Extras" },
+      ],
+    },
   } satisfies PluginManifestInput;
 
   it("puts provider fields with their provider and app-wide ones in their sections", () => {
     const parsed = parsePluginManifest(pack);
     if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
     const { manifest } = parsed;
-    expect(manifest.settingsGroups.map((group) => [group.id, group.order])).toEqual([["store", 50], ["extras", 100]]);
+    expect(manifest.admin.settingsGroups.map((group) => [group.id, group.order])).toEqual([["store", 50], ["extras", 100]]);
     expect(providerOwnSettingKeys(manifest, "alpha")).toEqual(["alpha_key", "alpha_sender"]);
     expect(providerOwnSettingKeys(manifest, "beta")).toEqual(["beta_token"]);
     expect(appWideSettingKeys(manifest)).toEqual(["store_code", "region"]);
@@ -392,10 +394,12 @@ describe("settings groups and page tabs in the manifest", () => {
   it("refuses a group that names nothing, a group named like a provider and groups on storefront settings", () => {
     expect(issues({ ...pack, settings: [...pack.settings, { key: "x", label: "X", type: "text", group: "nowhere" }] }))
       .toEqual(["settings.5.group Group nowhere is neither a settings group nor a provider id."]);
-    expect(issues({ ...pack, settingsGroups: [{ id: "alpha", title: "Alpha" }] }))
-      .toContain('settingsGroups.0.id alpha is a provider id: provider fields join their provider with group: "alpha".');
-    expect(issues({ ...pack, settingsGroups: [{ id: "store", title: "A" }, { id: "store", title: "B" }] }))
-      .toContain("settingsGroups Settings group ids must be unique.");
+    expect(issues({ ...pack, admin: { settingsGroups: [{ id: "alpha", title: "Alpha" }] } }))
+      .toContain('admin.settingsGroups.0.id alpha is a provider id: provider fields join their provider with group: "alpha".');
+    expect(issues({ ...pack, admin: { settingsGroups: [{ id: "store", title: "A" }, { id: "store", title: "B" }] } }))
+      .toContain("admin.settingsGroups Settings group ids must be unique.");
+    // The sections are a dashboard surface: only under admin.
+    expect(issues({ ...pack, settingsGroups: [{ id: "store", title: "Store" }] }).length).toBeGreaterThan(0);
     expect(issues({
       ...pack,
       routes: { ...FULL.routes, public: [{ name: "draw", methods: ["GET"] }] },
@@ -419,7 +423,7 @@ describe("settings groups and page tabs in the manifest", () => {
 
   it("translates group titles, tab titles and setting labels it declares, and nothing else", () => {
     const tabs = [{ id: "summary", title: "Summary", route: "dashboard" }, { id: "adjust", title: "Adjust", route: "adjust" }];
-    const withTabs = { ...pack, admin: { ...FULL.admin, pages: [{ id: "overview", title: "Loyalty", route: "dashboard", tabs }] } };
+    const withTabs = { ...pack, admin: { ...FULL.admin, ...pack.admin, pages: [{ id: "overview", title: "Loyalty", route: "dashboard", tabs }] } };
     const bn = { tabs: { overview: { summary: "সারসংক্ষেপ" } }, settingsGroups: { store: { title: "স্টোর" } }, settings: { alpha_key: { label: "এপিআই কী" } } };
     expect(issues({ ...withTabs, translations: { bn } })).toEqual([]);
     expect(issues({ ...withTabs, translations: { bn: { tabs: { overview: { nope: "x" } }, settingsGroups: { nope: { title: "x" } }, settings: { nope: { label: "x" } } } } })).toEqual([
@@ -540,10 +544,10 @@ describe("the manifest vocabulary", () => {
     expect(issues({
       ...FULL,
       routes: { admin: [{ name: "adjust_points" }, { name: "dashboard" }, { name: "adjust" }], public: [{ name: "balance-check" }], webhooks: [] },
-      timeline: [{ kind: "vendor_split", title: "Vendor split" }],
+      admin: { ...FULL.admin, timeline: [{ kind: "vendor_split", title: "Vendor split" }] },
     })).toEqual([]);
-    expect(issues({ ...FULL, timeline: [{ kind: "vendor-split", title: "Vendor split" }] }))
-      .toEqual(["timeline.0.kind Use snake_case: a lowercase letter, then at most 47 lowercase letters, digits or underscores."]);
+    expect(issues({ ...FULL, admin: { ...FULL.admin, timeline: [{ kind: "vendor-split", title: "Vendor split" }] } }))
+      .toEqual(["admin.timeline.0.kind Use snake_case: a lowercase letter, then at most 47 lowercase letters, digits or underscores."]);
     expect(issues({ ...FULL, cron: [{ name: "expire-points", schedule: "0 3 * * *" }] })[0]).toMatch(/^cron\.0\.name Use snake_case/);
     expect(issues({ ...FULL, routes: { ...FULL.routes, public: [{ name: "Balance" }] } })[0])
       .toMatch(/^routes\.public\.0\.name Use snake_case or kebab-case \(this name is part of a URL\)/);

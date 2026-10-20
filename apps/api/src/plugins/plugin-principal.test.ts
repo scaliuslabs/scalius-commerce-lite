@@ -10,6 +10,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { activatePlugin, deactivatePlugin, installPlugin, requirePluginInstallation } from "@scalius/core/modules/plugins";
+import { createCustomFieldDefinition, setCustomFieldValues } from "@scalius/core/modules/custom-fields";
+import { createCustomFieldDefinitionSchema } from "@scalius/core/modules/custom-fields/browser";
 import { PLUGIN_API_VERSION, type PluginManifestInput } from "@scalius/shared/plugins";
 import { AGENT_OPERATIONS } from "../generated/agent-operations.gen";
 import { withOperationDispatchPrincipal } from "../agent-access/dispatch-context";
@@ -97,18 +99,32 @@ describe("ctx.api.call as a plugin principal", () => {
     const read = await call("orders.get", { path: { id: "ord_rbac1" } });
     expect(read).toMatchObject({ ok: true, status: 200, error: null, data: { id: "ord_rbac1", status: "pending" } });
 
-    const write = await call("orders.comment_add", { path: { id: "ord_rbac1" }, body: { body: "Points granted" }, idempotencyKey: "plugin-comment-1" });
-    expect(write.ok).toBe(true);
-    expect(sqlite.prepare("SELECT kind, body, actor_id FROM order_events WHERE order_id = 'ord_rbac1' AND body = 'Points granted'").all())
-      .toEqual([expect.objectContaining({ body: "Points granted", actor_id: "owner" })]);
+    const write = await call("orders.update_status", { path: { id: "ord_rbac1" }, body: { status: "confirmed" }, idempotencyKey: "plugin-status-1" });
+    expect(write.error).toBeNull();
+    expect(sqlite.prepare("SELECT actor_id FROM order_events WHERE order_id = 'ord_rbac1' AND actor_id IS NOT NULL").all())
+      .toContainEqual({ actor_id: "owner" });
     expect(audit()).toEqual([
       { plugin_id: "acme.rbac", operation_id: "dashboard.resources.orders.get", outcome: "success", http_status: 200, error_class: null },
-      { plugin_id: "acme.rbac", operation_id: "dashboard.orders.comment_add", outcome: "success", http_status: write.status, error_class: null },
+      { plugin_id: "acme.rbac", operation_id: "dashboard.orders.update_status", outcome: "success", http_status: write.status, error_class: null },
     ]);
   });
 
+  it("keeps one lane per owner: the operations reach the merchant's data, ctx the app's own", async () => {
+    // Custom fields: an app's call reads and answers only the merchant's `custom` fields, never another app's.
+    const giftNote = await createCustomFieldDefinition(db, createCustomFieldDefinitionSchema.parse({ ownerType: "order", key: "gift_note", name: "Gift note", type: "single_line_text" }), { writer: { kind: "merchant" } });
+    const otherApp = await createCustomFieldDefinition(db, createCustomFieldDefinitionSchema.parse({ ownerType: "order", key: "risk", name: "Risk", type: "single_line_text" }), { writer: { kind: "plugin", pluginId: "acme.other" } });
+    await setCustomFieldValues(db, "order", "ord_rbac1", { values: [{ definitionId: giftNote.id, value: "Happy birthday" }] }, { writer: { kind: "merchant" } });
+    await setCustomFieldValues(db, "order", "ord_rbac1", { values: [{ definitionId: otherApp.id, value: "high" }] }, { writer: { kind: "plugin", pluginId: "acme.other" } });
+    const read = await call("custom_fields.get_order_values", { path: { ownerId: "ord_rbac1" } });
+    expect(read).toMatchObject({ ok: true, data: { fields: [{ definition: { namespace: "custom", key: "gift_note" }, value: "Happy birthday" }] } });
+    expect((read.data as { fields: unknown[] }).fields).toHaveLength(1);
+    // Order timelines: an app writes its own typed lines (ctx.timeline.add); the staff note is the dashboard's.
+    expect(await call("orders.comment_add", { path: { id: "ord_rbac1" }, body: { body: "Hi" }, idempotencyKey: "plugin-comment-1" }))
+      .toMatchObject({ ok: false, status: 403, error: { code: "api_operation_not_stable" } });
+  });
+
   it("names a schema refusal validation_error, as the SDK's contract double does", async () => {
-    const refused = await call("orders.comment_add", { path: { id: "ord_rbac1" }, body: { body: 42 }, idempotencyKey: "plugin-comment-bad" });
+    const refused = await call("orders.update_status", { path: { id: "ord_rbac1" }, body: { status: 42 }, idempotencyKey: "plugin-status-bad" });
     expect(refused).toMatchObject({ ok: false, status: 400, error: { code: "validation_error" } });
   });
 

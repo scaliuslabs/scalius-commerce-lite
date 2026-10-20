@@ -67,11 +67,11 @@ export const manifest = {
     { key: "api_key", label: "API key", type: "secret", help: "Never shown again once saved.", group: "connection" },
     { key: "webhook_secret", label: "Webhook signing secret", type: "secret", help: "Signs pings sent to the ping webhook (HMAC-SHA256 of the body, hex, in x-hello-signature).", group: "connection" },
   ],
-  settingsGroups: [
-    { id: "discount", title: "Welcome discount", description: "The discount Hello offers at checkout." },
-    { id: "connection", title: "Connection", description: "Keys for Hello's outside service and its webhook.", order: 200 },
-  ],
   admin: {
+    settingsGroups: [
+      { id: "discount", title: "Welcome discount", description: "The discount Hello offers at checkout." },
+      { id: "connection", title: "Connection", description: "Keys for Hello's outside service and its webhook.", order: 200 },
+    ],
     pages: [{
       id: "overview",
       title: "Hello",

@@ -7,6 +7,10 @@
 // family (products.*, customers.*, orders.*, …). Every write here is the
 // merchant's: it may touch only the `custom` namespace. Storefront-visible
 // writes are buyer-visible; database triggers advance their dependencies.
+//
+// One lane per owner of the data: an app reaches the merchant's fields here
+// and its own through `ctx.customFields` (the bridge), so an app's call
+// reads and answers only `custom` namespace values, never another app's.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { isoTimestampSchema, nullableIsoTimestampSchema } from "../../schemas/timestamps";
 import {
@@ -30,10 +34,12 @@ import {
   updateCustomFieldDefinitionSchema,
 } from "@scalius/core/modules/custom-fields/browser";
 import {
+  CUSTOM_FIELD_MERCHANT_NAMESPACE,
   CUSTOM_FIELD_OWNER_TYPES,
   MERCHANT_CUSTOM_FIELD_WRITER,
   type CustomFieldOwnerType,
 } from "@scalius/shared/custom-fields";
+import type { Context } from "hono";
 import { ok, created } from "../../utils/api-response";
 import { NotFoundError } from "../../utils/api-error";
 import { conflictResponse, errorResponses, successEnvelope } from "../../schemas/responses";
@@ -81,6 +87,12 @@ const ownerValuesSchema = z.object({
 });
 
 type OwnerValuesWire = z.output<typeof ownerValuesSchema>;
+
+/** The values as the caller sees them: an app (`ctx.api.call`) sees only the merchant's `custom` fields. */
+function valuesFor(c: Context, values: OwnerValuesWire): OwnerValuesWire {
+  if (!c.get("pluginPrincipal")) return values;
+  return { ...values, fields: values.fields.filter((field) => field.definition.namespace === CUSTOM_FIELD_MERCHANT_NAMESPACE) };
+}
 
 const idParams = z.object({ id: customFieldDefinitionIdSchema });
 const definitionErrors = { ...errorResponses, 409: conflictResponse };
@@ -268,7 +280,7 @@ function registerOwnerValueRoutes(ownerType: CustomFieldOwnerType): void {
   customFieldValueRoutes.openapi(getValuesRoute, async (c) => {
     // `value` is opaque JSON on both sides; the schema's type is the contract.
     const values: OwnerValuesWire = await readCustomFieldValues(c.get("db"), ownerType, c.req.valid("param").ownerId);
-    return ok(c, values);
+    return ok(c, valuesFor(c, values));
   });
 
   const setValuesRoute = createRoute({
@@ -286,7 +298,7 @@ function registerOwnerValueRoutes(ownerType: CustomFieldOwnerType): void {
   });
   customFieldValueRoutes.openapi(setValuesRoute, async (c) => {
     const values: OwnerValuesWire = await setCustomFieldValues(c.get("db"), ownerType, c.req.valid("param").ownerId, c.req.valid("json"), merchant);
-    return ok(c, values);
+    return ok(c, valuesFor(c, values));
   });
 }
 

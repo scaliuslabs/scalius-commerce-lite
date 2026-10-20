@@ -198,7 +198,7 @@ export interface AddOrderAppEventInput {
     orderId: string;
     pluginId: string;
     appName: string;
-    /** The entry kind the app declares (`manifest.timeline[].kind`) and its title. */
+    /** The entry kind the app declares (`manifest.admin.timeline[].kind`) and its title. */
     kind: string;
     title: string;
     /** Plain text for staff. */

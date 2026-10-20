@@ -29,7 +29,7 @@ export interface PluginBridgeAuthority {
   objects: Record<string, ObjectTypeDeclaration>;
   /** Declared custom fields (owner type + key), all in the plugin's own namespace. */
   customFields: Array<{ ownerType: string; key: string; name: string; type: string; description?: string; storefrontVisible: boolean; to?: string }>;
-  /** The app's name and the order timeline entry kinds it declares (`manifest.timeline`). */
+  /** The app's name and the order timeline entry kinds it declares (`manifest.admin.timeline`). */
   appName?: string;
   timeline?: Array<{ kind: string; title: string }>;
 }

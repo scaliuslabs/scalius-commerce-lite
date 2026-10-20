@@ -3427,48 +3427,15 @@
      "additionalProperties": false
     }
    },
-   "settingsGroups": {
-    "default": [],
-    "maxItems": 20,
-    "type": "array",
-    "items": {
-     "type": "object",
-     "properties": {
-      "id": {
-       "type": "string",
-       "pattern": "^[a-z][a-z0-9_]{0,47}$"
-      },
-      "title": {
-       "type": "string",
-       "minLength": 1,
-       "maxLength": 80
-      },
-      "description": {
-       "type": "string",
-       "minLength": 1,
-       "maxLength": 500
-      },
-      "order": {
-       "default": 100,
-       "type": "integer",
-       "minimum": 0,
-       "maximum": 1000
-      }
-     },
-     "required": [
-      "id",
-      "title"
-     ],
-     "additionalProperties": false
-    }
-   },
    "admin": {
     "default": {
      "pages": [],
      "cards": [],
      "actions": [],
      "widgets": [],
-     "listColumns": []
+     "listColumns": [],
+     "settingsGroups": [],
+     "timeline": []
     },
     "type": "object",
     "properties": {
@@ -3762,33 +3729,68 @@
        ],
        "additionalProperties": false
       }
+     },
+     "settingsGroups": {
+      "default": [],
+      "maxItems": 20,
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "id": {
+         "type": "string",
+         "pattern": "^[a-z][a-z0-9_]{0,47}$"
+        },
+        "title": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 80
+        },
+        "description": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 500
+        },
+        "order": {
+         "default": 100,
+         "type": "integer",
+         "minimum": 0,
+         "maximum": 1000
+        }
+       },
+       "required": [
+        "id",
+        "title"
+       ],
+       "additionalProperties": false
+      }
+     },
+     "timeline": {
+      "default": [],
+      "maxItems": 20,
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "kind": {
+         "type": "string",
+         "pattern": "^[a-z][a-z0-9_]{0,47}$"
+        },
+        "title": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 80
+        }
+       },
+       "required": [
+        "kind",
+        "title"
+       ],
+       "additionalProperties": false
+      }
      }
     },
     "additionalProperties": false
-   },
-   "timeline": {
-    "default": [],
-    "maxItems": 20,
-    "type": "array",
-    "items": {
-     "type": "object",
-     "properties": {
-      "kind": {
-       "type": "string",
-       "pattern": "^[a-z][a-z0-9_]{0,47}$"
-      },
-      "title": {
-       "type": "string",
-       "minLength": 1,
-       "maxLength": 80
-      }
-     },
-     "required": [
-      "kind",
-      "title"
-     ],
-     "additionalProperties": false
-    }
    },
    "storefront": {
     "default": {

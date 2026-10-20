@@ -119,7 +119,7 @@ export function pluginBridgeAuthority(installation: PluginInstallation): PluginB
         ...(field.to ? { to: field.to } : {}),
       })),
     appName: manifest.name,
-    timeline: manifest.timeline.map((entry) => ({ kind: entry.kind, title: entry.title })),
+    timeline: manifest.admin.timeline.map((entry) => ({ kind: entry.kind, title: entry.title })),
   };
 }
 

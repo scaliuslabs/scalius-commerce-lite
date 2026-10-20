@@ -38,7 +38,8 @@ export const DASHBOARD_ORDER_OPERATIONS = {
   },
   "dashboard.orders.catalog_products": {},
   "dashboard.orders.cod_get": {},
-  "dashboard.orders.comment_add": { stability: "stable" },
+  // A staff note: an app writes its own typed lines with ctx.timeline.add.
+  "dashboard.orders.comment_add": {},
   "dashboard.orders.comment_delete": { risk: "destructive" },
   "dashboard.orders.cod_update": {
     risk: "financial",

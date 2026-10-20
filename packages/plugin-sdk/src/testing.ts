@@ -407,7 +407,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     timelineAdd: async (input) => {
       const entry = copy(input) as { kind?: unknown };
       if (!pluginScopePermissions(manifest.scopes).has("orders.edit")) refuse("timeline_not_allowed", "Writing to order timelines needs the write_orders scope.");
-      if (!manifest.timeline.some((declared) => declared.kind === entry.kind)) refuse("timeline_undeclared", `Timeline kind ${String(entry.kind)} is not declared in the manifest.`);
+      if (!manifest.admin.timeline.some((declared) => declared.kind === entry.kind)) refuse("timeline_undeclared", `Timeline kind ${String(entry.kind)} is not declared in the manifest.`);
       sent.timeline.push(entry);
       return { id: `oev_test${sent.timeline.length}` };
     },

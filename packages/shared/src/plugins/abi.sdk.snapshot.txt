@@ -1434,12 +1434,6 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
                 extensions: ("checkout.contact.after" | "checkout.delivery.after" | "cart.page.summary" | "checkout.payment.after" | "checkout.actions.before" | "order.confirmation" | "account.order" | "account.overview" | "account.profile")[];
             };
         }[];
-        settingsGroups: {
-            id: string;
-            title: string;
-            order: number;
-            description?: string | undefined;
-        }[];
         admin: {
             pages: {
                 id: string;
@@ -1486,11 +1480,17 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
                 };
                 filterable: boolean;
             }[];
+            settingsGroups: {
+                id: string;
+                title: string;
+                order: number;
+                description?: string | undefined;
+            }[];
+            timeline: {
+                kind: string;
+                title: string;
+            }[];
         };
-        timeline: {
-            kind: string;
-            title: string;
-        }[];
         storefront: {
             components: {
                 type: string;

@@ -83,6 +83,11 @@ mirror a dashboard screen, an editor section or a summary card.
   dashboard's has none (`@scalius/shared/plugins/app-operations`).
   `stable-operations.snapshot.json` is keyed by app name, so the alias table
   is sealed with the contract. Agents, MCP and the CLI keep operation ids.
+- **One lane per owner.** Operations reach the merchant's data; an app's
+  own data goes through `ctx`. An app writes typed order timeline lines with
+  `ctx.timeline.add` (`orders.comment_add`, the staff note, is beta), and its
+  own custom fields with `ctx.customFields`; the `custom_fields.*` operations
+  show an app only the merchant's `custom` namespace.
 - **Error codes are one lower_snake vocabulary** (`not_found`, `validation_error`,
   `price_changed`, `product_revision_conflict`, `api_operation_not_stable`); an
   area prefix is `<area>_<code>`, never dotted or upper-case.

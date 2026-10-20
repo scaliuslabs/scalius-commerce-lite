@@ -12,7 +12,7 @@ export const BUNDLED_PLUGINS: Readonly<Record<string, BundledPluginEntry>> = {
   },
   "scalius.bazaar": {
     version: "1.0.0",
-    sha256: "eb6c651f4129947df57cb59ebbb554c030d570ab3d0f9d3e948d04c42863a6aa",
+    sha256: "7c0657cdb42e993cfdaf857d60280841dc911f828dec6b0e06b44f95fc83768a",
     load: () => import("../../../../plugins/bazaar/src/index"),
   },
   "scalius.noor": {
@@ -22,7 +22,7 @@ export const BUNDLED_PLUGINS: Readonly<Record<string, BundledPluginEntry>> = {
   },
   "scalius.sellers": {
     version: "1.0.0",
-    sha256: "c77f01924cbb36afbe066bf83bdb84d158f33e7369ac7abc36deea0f25ffc2d8",
+    sha256: "7a7da4027bd41a60a6079fb4540c6004cf04c3489f2b12ff91c85a16dbcc68ef",
     load: () => import("../../../../plugins/sellers/src/index"),
   },
   "scalius.volt": {

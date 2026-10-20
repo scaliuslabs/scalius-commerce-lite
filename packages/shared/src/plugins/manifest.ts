@@ -224,6 +224,33 @@ const listColumnSchema = z.object({
   filterable: z.boolean().default(false),
 }).strict();
 
+// ── Settings groups ───────────────────────────────────────────────────────
+
+/** The most app-wide settings sections one app declares. */
+export const PLUGIN_SETTINGS_GROUPS_MAX = 20;
+
+/**
+ * An app-wide section of the app's settings page (Polaris: a titled card of
+ * related fields). Fields join one with `settings[].group`; provider-scoped
+ * fields are shown with their provider instead.
+ */
+const settingsGroupSchema = z.object({
+  id: key,
+  title,
+  description: description.optional(),
+  /** Lower comes first; groups with the same order keep the manifest's order. */
+  order: z.number().int().min(0).max(1000).default(100),
+}).strict();
+
+// ── Admin surfaces ────────────────────────────────────────────────────────
+
+/**
+ * Entry kinds the app writes on order timelines (`ctx.timeline.add`), each
+ * with the title staff see. Writing needs the `write_orders` scope.
+ */
+const timelineSchema = z.array(z.object({ kind: key, title }).strict()).max(20).default([])
+  .refine((kinds) => new Set(kinds.map((entry) => entry.kind)).size === kinds.length, "Timeline kinds must be unique.");
+
 const adminSchema = z.object({
   /** Full pages; their content is the declarative UI tree the plugin's admin route returns. */
   pages: z.array(z.object({
@@ -256,14 +283,11 @@ const adminSchema = z.object({
   widgets: z.array(z.object({ id: key, title, route: urlName }).strict()).max(5).default([]),
   /** Columns (and filters) on the products, orders and customers lists. */
   listColumns: z.array(listColumnSchema).max(10).default([]),
+  /** Sections of the app's settings page (`settings[].group`); presentation only. */
+  settingsGroups: z.array(settingsGroupSchema).max(PLUGIN_SETTINGS_GROUPS_MAX).default([]),
+  /** Typed lines the app writes on order timelines (`ctx.timeline.add`). */
+  timeline: timelineSchema,
 }).strict();
-
-/**
- * Entry kinds the app writes on order timelines (`ctx.timeline.add`), each
- * with the title staff see. Writing needs the `write_orders` scope.
- */
-const timelineSchema = z.array(z.object({ kind: key, title }).strict()).max(20).default([])
-  .refine((kinds) => new Set(kinds.map((entry) => entry.kind)).size === kinds.length, "Timeline kinds must be unique.");
 
 /** The pages an app script can name. Buyer pages (cart, checkout, the receipt, account) are not among them. */
 export const PLUGIN_STOREFRONT_SCRIPT_PAGES = ["all", "home", "product", "listing"] as const;
@@ -372,24 +396,6 @@ export function objectFieldLookupIndexed(declaration: Pick<ObjectTypeDeclaration
   const alone = (entry: string | readonly string[]) => (typeof entry === "string" ? entry === field : entry.length === 1 && entry[0] === field);
   return declaration.indexes.some((entry) => lead(entry) === field) || declaration.unique.some(alone);
 }
-
-// ── Settings groups ───────────────────────────────────────────────────────
-
-/** The most app-wide settings sections one app declares. */
-export const PLUGIN_SETTINGS_GROUPS_MAX = 20;
-
-/**
- * An app-wide section of the app's settings page (Polaris: a titled card of
- * related fields). Fields join one with `settings[].group`; provider-scoped
- * fields are shown with their provider instead.
- */
-const settingsGroupSchema = z.object({
-  id: key,
-  title,
-  description: description.optional(),
-  /** Lower comes first; groups with the same order keep the manifest's order. */
-  order: z.number().int().min(0).max(1000).default(100),
-}).strict();
 
 // ── Listing ───────────────────────────────────────────────────────────────
 
@@ -617,11 +623,7 @@ export const pluginManifestSchema = z.object({
    * only then do its providers, routes, jobs, events and surfaces run.
    */
   features: z.array(pluginFeatureSchema).max(PLUGIN_FEATURES_MAX).default([]),
-  /** App-wide settings sections (`settings[].group`); additive, presentation only. */
-  settingsGroups: z.array(settingsGroupSchema).max(PLUGIN_SETTINGS_GROUPS_MAX).default([]),
-
-  admin: adminSchema.default({ pages: [], cards: [], actions: [], widgets: [], listColumns: [] }),
-  timeline: timelineSchema,
+  admin: adminSchema.default({ pages: [], cards: [], actions: [], widgets: [], listColumns: [], settingsGroups: [], timeline: [] }),
   storefront: storefrontSchema.default(emptyPluginStorefront),
   /** The dashboard text in other languages (additive; English is the manifest itself). */
   translations: z.record(z.string().regex(PLUGIN_TRANSLATION_LOCALE_PATTERN, "Use a BCP 47 language tag such as bn or pt-BR."), pluginTranslationSchema).optional()
@@ -707,7 +709,7 @@ export const pluginManifestSchema = z.object({
         }
       }
     }
-    const timelineKinds = new Set(manifest.timeline.map((entry) => entry.kind));
+    const timelineKinds = new Set(manifest.admin.timeline.map((entry) => entry.kind));
     for (const kind of Object.keys(translation.timeline ?? {})) {
       if (!timelineKinds.has(kind)) context.addIssue({ code: "custom", path: ["translations", locale, "timeline", kind], message: `No timeline kind ${kind} to translate.` });
     }
@@ -727,7 +729,7 @@ export const pluginManifestSchema = z.object({
     for (const id of Object.keys(translation.features ?? {})) {
       if (!featureIds.has(id)) context.addIssue({ code: "custom", path: ["translations", locale, "features", id], message: `No feature ${id} to translate.` });
     }
-    const groups = new Set(manifest.settingsGroups.map((group) => group.id));
+    const groups = new Set(manifest.admin.settingsGroups.map((group) => group.id));
     for (const id of Object.keys(translation.settingsGroups ?? {})) {
       if (!groups.has(id)) context.addIssue({ code: "custom", path: ["translations", locale, "settingsGroups", id], message: `No settings group ${id} to translate.` });
     }
@@ -841,14 +843,14 @@ export const pluginManifestSchema = z.object({
       }
     }
   });
-  unique(manifest.settingsGroups.map((group) => group.id), ["settingsGroups"], "Settings group ids");
+  unique(manifest.admin.settingsGroups.map((group) => group.id), ["admin", "settingsGroups"], "Settings group ids");
   const providerIds = new Set(manifest.providers.map((provider) => provider.id));
-  manifest.settingsGroups.forEach((group, index) => {
+  manifest.admin.settingsGroups.forEach((group, index) => {
     if (providerIds.has(group.id)) {
-      context.addIssue({ code: "custom", path: ["settingsGroups", index, "id"], message: `${group.id} is a provider id: provider fields join their provider with group: "${group.id}".` });
+      context.addIssue({ code: "custom", path: ["admin", "settingsGroups", index, "id"], message: `${group.id} is a provider id: provider fields join their provider with group: "${group.id}".` });
     }
   });
-  const groupIds = new Set(manifest.settingsGroups.map((group) => group.id));
+  const groupIds = new Set(manifest.admin.settingsGroups.map((group) => group.id));
   manifest.settings.forEach((field, index) => {
     if (field.group !== undefined && !groupIds.has(field.group) && !providerIds.has(field.group)) {
       context.addIssue({ code: "custom", path: ["settings", index, "group"], message: `Group ${field.group} is neither a settings group nor a provider id.` });

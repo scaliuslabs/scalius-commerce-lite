@@ -299,7 +299,6 @@ export const manifest = {
   settings: [
     { key: "demo_image_base", label: "Demo photo folder", type: "url", group: "demo", help: "An https folder with the demo pack's photos (earbuds.jpg, speaker.jpg, ...). Empty: the demo products import without photos." },
   ],
-  settingsGroups: [{ id: "demo", title: "Demo content", description: "Sample products to see the theme with a full catalogue." }],
   routes: {
     admin: [
       { name: "demo", methods: ["GET"], description: "The demo content page." },
@@ -309,6 +308,7 @@ export const manifest = {
   },
   admin: {
     pages: [{ id: "demo", title: "Bazaar demo content", route: "demo" }],
+    settingsGroups: [{ id: "demo", title: "Demo content", description: "Sample products to see the theme with a full catalogue." }],
   },
   features: [{
     id: "demo_content",
