@@ -104,11 +104,25 @@ export const pluginEventFanOutTarget: EventFanOutTarget = {
 
 // ── Claim and finish ──────────────────────────────────────────────────────
 
+/** The due states, each one index range. */
+function claimableBranches() {
+  return [
+    and(inArray(pluginEventDeliveries.status, ["pending", "failed"]), lte(pluginEventDeliveries.nextAttemptAt, sql`unixepoch()`))!,
+    and(eq(pluginEventDeliveries.status, "processing"), lte(pluginEventDeliveries.claimExpiresAt, sql`unixepoch()`))!,
+  ];
+}
+
 function claimableCondition() {
-  return or(
-    and(inArray(pluginEventDeliveries.status, ["pending", "failed"]), lte(pluginEventDeliveries.nextAttemptAt, sql`unixepoch()`)),
-    and(eq(pluginEventDeliveries.status, "processing"), lte(pluginEventDeliveries.claimExpiresAt, sql`unixepoch()`)),
-  );
+  return or(...claimableBranches());
+}
+
+/**
+ * Whether `listDuePluginEventDeliveries` would find a row: one bounded index
+ * probe per due state (the scheduled drain runs only when one finds a row).
+ */
+export function pluginEventDeliveryDueProbes(db: Database) {
+  return claimableBranches().map((where) =>
+    db.select({ id: pluginEventDeliveries.id }).from(pluginEventDeliveries).where(where).limit(1));
 }
 
 /** Fewer than `limit` deliveries of the row's plugin hold a live claim. */

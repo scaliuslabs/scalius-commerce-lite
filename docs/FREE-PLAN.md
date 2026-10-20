@@ -114,7 +114,7 @@ A store has no KV namespace (an account allows 1,000, and KV was only ever a hin
 
 ### Maintenance cron
 
-The cron runs every minute (`* * * * *` in `apps/api/wrangler.jsonc`). Every tick runs the background drains. `MAINTENANCE_SWEEPS` in `apps/api/src/scheduled-maintenance.ts` lists the maintenance jobs as data, in rotation order (23 jobs, including agent-access housekeeping). `apps/api/src/scheduled/slices.ts` picks the jobs of a tick from two plan values, `sweepEveryMinutes` and `sweepsPerTick`:
+The cron runs every minute (`* * * * *` in `apps/api/wrangler.jsonc`). Every tick first asks, in one statement, which background drains have due rows (`apps/api/src/scheduled/due-work.ts`: each drain's index probes, with the conditions its own list query uses) and runs only those. `MAINTENANCE_SWEEPS` in `apps/api/src/scheduled-maintenance.ts` lists the maintenance jobs as data, in rotation order (23 jobs, including agent-access housekeeping). `apps/api/src/scheduled/slices.ts` picks the jobs of a tick from two plan values, `sweepEveryMinutes` and `sweepsPerTick`:
 
 - Free runs the next job of the rotation on every tick, beside the drains. Each job runs every 23 minutes, and every tick of a whole rotation stays within 50 D1 queries with work due (`apps/api/src/maintenance-budget.test.ts`).
 - Paid runs every job on every fifteenth minute.
@@ -122,7 +122,7 @@ The cron runs every minute (`* * * * *` in `apps/api/wrangler.jsonc`). Every tic
 - Hourly work inside a job (app exchange rates) runs on the job's first run of each hour (`firstSweepRunOfHour`).
 - A sweep's row limit is `floor(limit * limitScale)`, at least 1.
 
-The 2026-10-15 ordered budget run measures at most 23 D1 calls on Free and 62 on Paid during the initial cron rotation, including first registration of the bundled apps' three Object types. Each new type checks the store's 100-type capacity; its insert returns the created row without another read. After warm-up, both profiles write zero rows per idle tick (mean D1 calls: 7.73 Free, 8.67 Paid). The Free invocation ceiling stays at 50.
+The 2026-10-15 ordered budget run measures at most 23 D1 calls on Free and 62 on Paid during the initial cron rotation, including first registration of the bundled apps' three Object types. Each new type checks the store's 100-type capacity; its insert returns the created row without another read. After warm-up, both profiles write zero rows per idle tick. Since the 2026-10-21 due-work probe an idle tick pays one D1 query for all the drains (mean D1 calls: 2.78 Free, 3.73 Paid, from 8.78 and 9.73). The Free invocation ceiling stays at 50.
 
 ### Frontier cache refresh
 

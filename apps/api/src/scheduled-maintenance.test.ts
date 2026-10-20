@@ -38,8 +38,12 @@ const mocks = vi.hoisted(() => {
     purgeExpiredOAuthData: vi.fn(),
     purgeExpiredAgentArtifacts: vi.fn(),
     expireAgentBrowserHandoffs: vi.fn(),
+    // The due-work probe has its own suite (scheduled/due-work.test.ts); null runs every drain.
+    readDueDrains: vi.fn(async (): Promise<Set<string> | null> => null),
   };
 });
+
+vi.mock("./scheduled/due-work", () => ({ readDueDrains: mocks.readDueDrains }));
 
 vi.mock("@scalius/database/client", () => ({
   getDb: mocks.getDb,
@@ -676,6 +680,19 @@ describe("runScheduledMaintenance", () => {
     expect(mocks.releaseExpiredReservations).not.toHaveBeenCalled();
     expect(mocks.runScheduledPluginMaintenance).not.toHaveBeenCalled();
     expect(mocks.rotateRecommendations).not.toHaveBeenCalled();
+  });
+
+  it("skips the probed drains with nothing due and still runs the unprobed ones", async () => {
+    mocks.readDueDrains.mockResolvedValueOnce(new Set(["payment_event_drain"]));
+    await runScheduledMaintenance(createEnv(), createExecutionContext());
+    expect(mocks.readDueDrains).toHaveBeenCalledTimes(1);
+    expect(mocks.drainPaymentEvents).toHaveBeenCalledTimes(1);
+    expect(mocks.drainNotificationOutbox).not.toHaveBeenCalled();
+    expect(mocks.runScheduledEventMaintenance).not.toHaveBeenCalled();
+    expect(mocks.drainCatalogProjectionRebuild).not.toHaveBeenCalled();
+    expect(mocks.drainBulkRuns).not.toHaveBeenCalled();
+    // No probe: free once claimed (a per-colo hint).
+    expect(mocks.syncBundledPluginsOncePerDeploy).toHaveBeenCalledTimes(1);
   });
 
   it("keeps draining when one drain fails, then fails the run", async () => {

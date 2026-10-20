@@ -105,6 +105,11 @@ export async function rebuildCatalogProjectionsAfterWrite(caller: BackgroundCall
   await afterResponse(caller, "projection rebuild", () => drainCatalogProjectionRebuild(db));
 }
 
+/** Whether a rebuild is requested (its cursor row exists): the scheduled drain runs only then. */
+export function projectionRebuildDueProbe(db: Database) {
+  return db.select({ key: systemKv.key }).from(systemKv).where(eq(systemKv.key, PROJECTION_REBUILD_CURSOR_KEY)).limit(1);
+}
+
 /** Runs up to this plan's chunks of a requested rebuild. Returns the products recomputed. */
 export async function drainCatalogProjectionRebuild(db: Database): Promise<number> {
   let cursor = await getSystemKv(db, PROJECTION_REBUILD_CURSOR_KEY);

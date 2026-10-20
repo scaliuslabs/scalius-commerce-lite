@@ -45,7 +45,7 @@ Related docs:
 - `apps/api/src/app.ts` is the full contract app that produces the OpenAPI contract. `runtime/route-family-parity.test.ts` checks that each of its routes belongs to exactly one runtime app.
 - A store has no queue. Background work is a durable row first: a notification, a domain event, a webhook or app delivery, a payment event, an OTP delivery receipt, or a `system_kv` cursor. The request that commits the row starts the work after the response (`apps/api/src/background/`); the cron retries and finishes it. The table of work, retries and terminal states is in [FREE-PLAN.md](./FREE-PLAN.md#background-work).
 - The API Worker also exports the realtime hub, one Durable Object per store (see [Realtime hub](#realtime-hub)).
-- The cron runs `runScheduledMaintenance` (`apps/api/src/scheduled-maintenance.ts`) every minute. Every tick runs the background drains (`BACKGROUND_DRAINS`) and the tick's maintenance jobs (`MAINTENANCE_SWEEPS`). Workers Free runs one job a minute, so each job runs every 23 minutes and a tick fits 50 D1 queries. Paid runs every job every 15 minutes. The 02:00 store-time minute runs only the nightly pass.
+- The cron runs `runScheduledMaintenance` (`apps/api/src/scheduled-maintenance.ts`) every minute. Every tick runs the background drains with due rows (`BACKGROUND_DRAINS`, asked in one statement by `scheduled/due-work.ts`) and the tick's maintenance jobs (`MAINTENANCE_SWEEPS`). Workers Free runs one job a minute, so each job runs every 23 minutes and a tick fits 50 D1 queries. Paid runs every job every 15 minutes. The 02:00 store-time minute runs only the nightly pass.
 
 ## Layer rules
 

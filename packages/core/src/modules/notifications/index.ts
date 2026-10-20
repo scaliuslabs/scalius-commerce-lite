@@ -8,6 +8,7 @@ export {
   claimNotificationOutboxForProcessing,
   createNotificationOutboxInsertValues,
   listDueNotificationOutbox,
+  notificationOutboxDueProbes,
   markNotificationOutboxDeadLettered,
   markNotificationOutboxProcessingFailed,
   markNotificationOutboxSent,

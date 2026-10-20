@@ -95,15 +95,33 @@ function claimableCondition() {
  * time would read every due row first (a backlog of a million events read a
  * million rows on every drain). Ties keep index order.
  */
+const DUE_WALKS = [
+  { status: "pending", column: sql.raw(`"next_attempt_at"`) },
+  { status: "failed", column: sql.raw(`"next_attempt_at"`) },
+  { status: "processing", column: sql.raw(`"claim_expires_at"`) },
+] as const;
+
+/** One due state's bounded index walk, oldest first. */
+function dueWalk(walk: (typeof DUE_WALKS)[number], limit: number): SQL {
+  return sql`SELECT "id", ${walk.column} AS "due" FROM "event_outbox"
+    WHERE "status" = ${walk.status} AND ${walk.column} <= unixepoch() ORDER BY ${walk.column} LIMIT ${limit}`;
+}
+
 function dueEventIds(limit: number): SQL {
-  const due = (status: "pending" | "failed") => sql`SELECT "id", "next_attempt_at" AS "due" FROM "event_outbox"
-    WHERE "status" = ${status} AND "next_attempt_at" <= unixepoch() ORDER BY "next_attempt_at" LIMIT ${limit}`;
+  const [pending, failed, lease] = DUE_WALKS;
   return sql`SELECT "id" FROM (
-    SELECT "id", "due" FROM (${due("pending")}) AS "pending_due"
-    UNION ALL SELECT "id", "due" FROM (${due("failed")}) AS "failed_due"
-    UNION ALL SELECT "id", "due" FROM (SELECT "id", "claim_expires_at" AS "due" FROM "event_outbox"
-      WHERE "status" = 'processing' AND "claim_expires_at" <= unixepoch() ORDER BY "claim_expires_at" LIMIT ${limit}) AS "lease_due"
+    SELECT "id", "due" FROM (${dueWalk(pending, limit)}) AS "pending_due"
+    UNION ALL SELECT "id", "due" FROM (${dueWalk(failed, limit)}) AS "failed_due"
+    UNION ALL SELECT "id", "due" FROM (${dueWalk(lease, limit)}) AS "lease_due"
   ) AS "due_rows" ORDER BY "due" LIMIT ${limit}`;
+}
+
+/**
+ * Whether `dispatchPendingEvents` would find a row: its three walks, one row
+ * each (the scheduled drain runs only when one finds a row).
+ */
+export function eventOutboxDueProbes(): SQL[] {
+  return DUE_WALKS.map((walk) => dueWalk(walk, 1));
 }
 
 export interface EventFlushResult {
