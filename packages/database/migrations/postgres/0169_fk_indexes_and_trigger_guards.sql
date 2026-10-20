@@ -1,4 +1,5 @@
 -- Foreign-key child indexes: see ../0169_fk_indexes_and_trigger_guards.sql.
+-- Its FTS5 update guards are D1-only (search_fts_terms triggers are guarded).
 DROP INDEX "order_holds_open_idx";
 --> statement-breakpoint
 CREATE INDEX "order_holds_order_idx" ON "order_holds" ("order_id","released_at");
@@ -33,4 +34,4 @@ CREATE INDEX "warranty_claims_warranty_idx" ON "warranty_claims" ("warranty_id")
 --> statement-breakpoint
 CREATE INDEX "warranty_claims_order_item_idx" ON "warranty_claims" ("order_item_id");
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (169, '0169_fk_indexes_and_trigger_guards', '6e9c8f9b2c33ad0dd44ec64b37f1c641a2d5483ee9ffdf42ceb862e278e7fddb');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (169, '0169_fk_indexes_and_trigger_guards', '5bf32515d910e92fe3f3455e4d53b57711d315ca49a63b46ff44673a0c29577d');
