@@ -2,8 +2,13 @@
 import { describe, expect, it } from "vitest";
 import { STOREFRONT_COMPONENT_ABI } from "@scalius/shared/plugins/storefront-protocol";
 import {
+  BuyForm,
   CartCount,
+  Deferred,
   OrderForm,
+  Reviews,
+  whenSignedIn,
+  whenSignedOut,
   Image,
   Island,
   Price,
@@ -27,7 +32,7 @@ import {
   type ProductCardProps,
   type SectionProps,
 } from "./index";
-import { fixtureContext, fixtureProductCard, renderHeader, renderProductCard, renderSection } from "./testing";
+import { checkSkinHtml, fixtureContext, fixtureProductCard, renderHeader, renderProductCard, renderSection, storefrontShown } from "./testing";
 
 const Hero = ({ settings, context }: SectionProps<{ heading: string; text: string | null }>) => (
   <section class="hero" data-kind={context.page.kind}>
@@ -147,6 +152,41 @@ describe("primitives", () => {
   it("places islands with JSON props and fallback markup", () => {
     const out = Island({ name: "carousel", props: { a: `"</script>` }, hydrate: "idle", children: <p>Slides</p> }).value;
     expect(out).toBe(`<scalius-island data-island="carousel" data-hydrate="idle" data-props="{&quot;a&quot;:&quot;\\&quot;&lt;/script&gt;&quot;}"><p>Slides</p></scalius-island>`);
+  });
+
+  it("defers markup into a template the store shows as is, holding its space", () => {
+    const out = (
+      <Deferred minHeight="24rem">
+        <Island name="wall" hydrate="load"><p>Reviews</p></Island>
+      </Deferred>
+    ).value;
+    expect(out).toBe('<scalius-deferred data-hydrate="visible" style="display:block;min-block-size:24rem"><template>'
+      + '<scalius-island data-island="wall" data-hydrate="load"><p>Reviews</p></scalius-island></template></scalius-deferred>');
+    expect(storefrontShown(out, "acme.theme")).toEqual({ html: out, dropped: 0 });
+    expect(Deferred({ hydrate: "interaction", children: "x" }).value).toBe('<scalius-deferred data-hydrate="interaction" style="display:block"><template>x</template></scalius-deferred>');
+    expect(Deferred({ minHeight: "calc(100vh - 4rem)" }).value).toContain('style="display:block;min-block-size:calc(100vh - 4rem)"');
+    expect(() => Deferred({ minHeight: "1rem;background:red" })).toThrow(/CSS length/);
+  });
+
+  it("drops an embed inside deferred markup, and the packer's rule sees it", () => {
+    const out = <section><Deferred><Reviews /></Deferred></section>;
+    expect(storefrontShown(out.value, "acme.theme")).toEqual({ html: '<section><scalius-deferred data-hydrate="visible" style="display:block"><template></template></scalius-deferred></section>', dropped: 1 });
+    expect(checkSkinHtml("product_main", (<div><BuyForm /></div>).value)).toEqual([]);
+    expect(checkSkinHtml("product_main", (<div><Deferred><BuyForm /></Deferred></div>).value)).toEqual([
+      'A product_main skin must place <scalius-embed kind="buy_form"> (the SDK\'s <BuyForm />); without it the store draws its own.',
+      "1 embed(s) render nothing here: product_main allows buy_form, reviews, recommendations, gallery.",
+    ]);
+  });
+
+  it("marks signed-in and signed-out parts, which the store keeps", () => {
+    const out = (
+      <nav>
+        <a href="/account" {...whenSignedIn()}>My account</a>
+        <a href="/account" {...whenSignedOut()}>Sign in</a>
+      </nav>
+    ).value;
+    expect(out).toBe('<nav><a href="/account" data-scalius-when="signed-in">My account</a><a href="/account" data-scalius-when="signed-out">Sign in</a></nav>');
+    expect(storefrontShown(out, "acme.theme")).toEqual({ html: out, dropped: 0 });
   });
 
   it("names public files and the cart count", () => {

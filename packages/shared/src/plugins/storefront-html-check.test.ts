@@ -14,6 +14,14 @@ describe("header author diagnostics", () => {
     expect(checkStorefrontHeaderHtml('<header id="menu"><!-- <div id="menu"> --><style>.x::before{content:\'<a id="menu">\'}</style></header>')).toEqual([]);
   });
 
+  it("checks deferred markup's content: it becomes page content at its moment", () => {
+    const deferred = (inner: string) => `<header id="menu"><scalius-deferred data-hydrate="idle"><template>${inner}</template></scalius-deferred></header>`;
+    expect(checkStorefrontHeaderHtml(deferred('<div id="menu"></div>'))).toHaveLength(1);
+    expect(checkStorefrontHeaderHtml(deferred('<scalius-island data-island="later"></scalius-island>'), { islands: [] })).toHaveLength(1);
+    // A plain template inside it stays inert.
+    expect(checkStorefrontHeaderHtml(deferred('<template><div id="menu"></div></template><a id="other">Link</a>'))).toEqual([]);
+  });
+
   it("does not count inert template content against the live header's IDs or island declarations", () => {
     expect(checkStorefrontHeaderHtml('<header id="menu"><template><div id="menu"></div><template><scalius-island data-island="later"></scalius-island></template></template><a id="other">Link</a></header>', { islands: [] })).toEqual([]);
     expect(checkStorefrontHeaderHtml('<template><span id="menu"></span></template><div id="menu"></div><span id="menu"></span>')).toHaveLength(1);

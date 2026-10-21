@@ -2,7 +2,7 @@
 // declared host contracts; layout, CSS and optional capabilities stay the app's.
 import { Parser } from "htmlparser2";
 import { sanitizePluginUrl } from "./html";
-import { STOREFRONT_ISLAND_HYDRATION } from "./storefront-protocol";
+import { STOREFRONT_DEFERRED_TAG, STOREFRONT_ISLAND_HYDRATION } from "./storefront-protocol";
 
 export interface StorefrontHeaderCheckOptions {
   /** Manifest island names. Omit when testing markup without its manifest. */
@@ -15,15 +15,20 @@ export function checkStorefrontHeaderHtml(html: string, options: StorefrontHeade
   const ids = new Set<string>();
   const islands = options.islands ? new Set(options.islands) : undefined;
   let templateDepth = 0;
+  // Open elements, to know a template's parent: deferred markup's template
+  // (`<scalius-deferred><template>`) becomes page content, so it is checked.
+  const open: string[] = [];
   const parser = new Parser({
     onopentag(tag, attributes) {
+      const parent = open.at(-1);
+      open.push(tag);
       // Template children are inert and have a separate ID scope until an
       // island clones them. The template element itself is still in the page.
       if (templateDepth > 0) {
         if (tag === "template") templateDepth += 1;
         return;
       }
-      if (tag === "template") templateDepth = 1;
+      if (tag === "template" && parent !== STOREFRONT_DEFERRED_TAG) templateDepth = 1;
       const id = attributes.id;
       if (id) {
         if (ids.has(id)) issues.push(`Duplicate id ${JSON.stringify(id)}: give each header element a unique id.`);
@@ -54,6 +59,7 @@ export function checkStorefrontHeaderHtml(html: string, options: StorefrontHeade
       }
     },
     onclosetag(tag) {
+      open.pop();
       if (tag === "template" && templateDepth > 0) templateDepth -= 1;
     },
   }, { decodeEntities: true, lowerCaseTags: true, lowerCaseAttributeNames: true });
