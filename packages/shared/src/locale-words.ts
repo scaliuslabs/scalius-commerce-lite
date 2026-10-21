@@ -42,6 +42,11 @@ export function formatUnitRange(
   options: Omit<Intl.NumberFormatOptions, "style" | "unit"> = {},
 ): string {
   if (start === end) return formatUnit(start, unit, locale, options);
-  const formatter = numberFormatter(locale, { maximumFractionDigits: 2, ...options, style: "unit", unit });
-  return formatter.formatRange(start, end);
+  // ES2023 Intl (every supported runtime); the shared lib types predate it.
+  const formatter = numberFormatter(locale, { maximumFractionDigits: 2, ...options, style: "unit", unit }) as Intl.NumberFormat & {
+    formatRange?: (start: number, end: number) => string;
+  };
+  return formatter.formatRange
+    ? formatter.formatRange(start, end)
+    : `${formatNumber(start, locale)}–${formatUnit(end, unit, locale, options)}`;
 }
