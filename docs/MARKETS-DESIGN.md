@@ -804,8 +804,11 @@ Writes to an active list, its prices or a market's pricing advance the
 checkout authority revision.
 
 **The rule.** `resolvePrice()` in `@scalius/shared/market-pricing` is the
-one precedence: a live sale list, then a segment list, then a market list,
-then the FX-derived price, then the base price. Among lists of one kind the
+one precedence, stated once in its module header: a line's purchase-option
+price from the app that declares the option, then a live sale list, then a
+segment list, then a market list, then an app price (`cart.line_prices`,
+FX and base lines only), then the FX-derived price, then the base price.
+Among lists of one kind the
 higher priority wins, then the lower amount, then the smaller list id. A
 list offers its row with the largest `min_quantity` that the quantity
 reaches. A list price replaces the SKU price and its catalogue discount;

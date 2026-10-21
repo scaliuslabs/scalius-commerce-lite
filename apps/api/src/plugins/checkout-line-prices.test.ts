@@ -1,4 +1,5 @@
 import { putObjectRecord } from "@scalius/core/modules/objects";
+import { createPriceList, setPriceListPrices } from "@scalius/core/modules/price-lists";
 import { objectTypeDeclarationSchema } from "@scalius/shared/plugins/objects";
 // `cart.line_prices` end to end on the real migrated schema: an app's unit
 // price takes the app place in resolvePrice() (below every list, above FX and
@@ -28,6 +29,7 @@ import {
   priceStorefrontCheckout,
   resolveAppLineAdjustments,
   resolveAppLinePrices,
+  checkoutPurchaseOptions,
   validateStorefrontCartItems,
   type CheckoutAppFunctions,
 } from "@scalius/core/modules/checkout";
@@ -94,7 +96,7 @@ describe("cart.line_prices (real schema, test apps)", () => {
     return createCheckoutAppFunctions({ env, ctx: pluginTestCtx(), db, registrations: await listActiveFunctionRegistrations(db), loaderFor: loaderFor() });
   }
 
-  async function installPricer(id: string, options: { priority?: number; onError?: "skip" | "block"; contracts?: string } = {}) {
+  async function installPricer(id: string, options: { priority?: number; onError?: "skip" | "block"; contracts?: string; purchaseOptions?: Array<{ key: string; title: string }> } = {}) {
     const manifest: PluginManifestInput = {
       id, name: `${id} app`, version: "1.0.0", apiVersion: PLUGIN_API_VERSION, description: "A pricing test app.",
       author: { name: "Test" },
@@ -105,6 +107,7 @@ describe("cart.line_prices (real schema, test apps)", () => {
         ...(options.contracts ? { reads: [{ as: "contract", object: options.contracts, key: "customer" as const }] } : {}),
       }],
       ...(options.contracts ? { objects: { [options.contracts]: contracts } } : {}),
+      ...(options.purchaseOptions ? { checkout: { purchaseOptions: options.purchaseOptions } } : {}),
       limits: { cpuMs: 50, wallMs: 100 },
     };
     await installPlugin(db, { manifest, source: "upload", bundleSha256: "4".repeat(64), actorUserId: "owner" });
@@ -308,6 +311,68 @@ describe("cart.line_prices (real schema, test apps)", () => {
     );
     expect([...prices]).toEqual([[1, { amountMinor: 200, pluginId: "acme.b2b" }]]);
     expect(reports).toEqual(["Line cart:0:v_a is priced by a market price list, which an app price never replaces; it was skipped."]);
+  });
+
+  it("prices a purchase-option line by its own app, above a sale list; another app never prices it", async () => {
+    // A market with a live sale on the tea (450.00 instead of 500.00).
+    sqlite.exec(`
+      INSERT INTO markets (id, handle, name, status) VALUES ('mkt_in', 'india', 'India', 'active');
+      INSERT INTO market_countries (country_code, market_id) VALUES ('IN', 'mkt_in');
+      INSERT INTO market_presences (id, market_id, kind, value, locale) VALUES ('mkp_in', 'mkt_in', 'subfolder', 'en-in', 'en');
+    `);
+    const sale = await createPriceList(db, { name: "Eid sale", kind: "sale", marketId: "mkt_in", status: "active" });
+    await setPriceListPrices(db, sale.id, { expectedRevision: sale.revision, set: [{ variantId: "v_tea", prices: [{ amount: 450 }] }] });
+    await installPricer("acme.b2b", { priority: 1 });
+    await installPricer("acme.subscriptions", { priority: 50, purchaseOptions: [{ key: "subscribe", title: "Subscribe and save" }] });
+    // The subscription app prices its own lines 400.00; the B2B app (first by priority) tries to price every line.
+    answers["acme.subscriptions"] = (fn) => {
+      const cart = fn.cart as { lines: Array<{ lineId: string; purchaseOption: string | null }> };
+      return ok({ prices: cart.lines.filter((entry) => entry.purchaseOption === "acme.subscriptions.subscribe").map((entry) => ({ lineId: entry.lineId, unitPriceMinor: 40_000 })) });
+    };
+    answers["acme.b2b"] = (fn) => {
+      const cart = fn.cart as { lines: Array<{ lineId: string }> };
+      return ok({ prices: cart.lines.map((entry) => ({ lineId: entry.lineId, unitPriceMinor: 10_000 })) });
+    };
+    const runner = await apps();
+    const items = [
+      { ...line("p_tea", "v_tea", 1, 450) },
+      { ...line("p_tea", "v_tea", 1, 400), purchaseOption: "acme.subscriptions.subscribe" },
+      { ...line("p_mug", "v_mug", 1, 400), purchaseOption: "acme.subscriptions.subscribe" },
+    ];
+    const result = await validateStorefrontCartItems(db, items, {
+      currencyCode: "BDT", priceIncrementMinor: 100, market: { presence: "en-in" },
+      purchaseOptions: checkoutPurchaseOptions(runner),
+      linePricer: createAppLinePricer(db, runner, { channel: "online_store" }),
+    });
+    // One-time tea keeps the sale price (a list outranks a plain app price); the subscription is the
+    // subscription app's price on a sale item and on a full-price item; the B2B app prices neither option line.
+    expect(result.issues).toEqual([]);
+    expect(result.items.map((item) => [item.variantId, item.unitPriceMinor, item.priceSource, item.purchaseOption?.id ?? null])).toEqual([
+      ["v_tea", 45_000, "sale", null],
+      ["v_tea", 40_000, "app", "acme.subscriptions.subscribe"],
+      ["v_mug", 40_000, "app", "acme.subscriptions.subscribe"],
+    ]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect((await listPluginLogs(db, "acme.b2b")).map((entry) => entry.message)).toEqual(expect.arrayContaining([
+      "Line cart:0:v_tea is priced by a sale price list, which an app price never replaces; it was skipped.",
+      "Line cart:1:v_tea is bought with acme.subscriptions.subscribe, which only its own app prices; it was skipped.",
+    ]));
+  });
+
+  it("keeps a purchase-option line's one-time price when its app does not price it", () => {
+    const reports: string[] = [];
+    const option = { id: "acme.rentals.rent", title: "Rent" };
+    const prices = resolveAppLinePrices(
+      [{ index: 0, isGiftCard: false, priceSource: "sale", purchaseOption: option }, { index: 1, isGiftCard: false, priceSource: "base", purchaseOption: option }],
+      ["cart:0:v_a", "cart:1:v_b"],
+      [
+        { pluginId: "acme.other", output: { prices: [{ lineId: "cart:0:v_a", unitPriceMinor: 100 }], adjustments: [] } },
+        { pluginId: "acme.rentals", output: { prices: [{ lineId: "cart:1:v_b", unitPriceMinor: 900 }], adjustments: [] } },
+      ],
+      { report: (_plugin, _point, message) => reports.push(message) },
+    );
+    expect([...prices]).toEqual([[1, { amountMinor: 900, pluginId: "acme.rentals", purchaseOption: "acme.rentals.rent" }]]);
+    expect(reports).toEqual(["Line cart:0:v_a is bought with acme.rentals.rent, which only its own app prices; it was skipped."]);
   });
 
   it("prices a signed-in buyer from their contract record (a declared read)", async () => {

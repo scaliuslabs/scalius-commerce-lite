@@ -581,6 +581,10 @@ function appendOrderItemRows(
         }),
       ].filter(Boolean).join(" · "),
     );
+    // How the line is bought, when an app's option ("Subscribe and save").
+    if (item.purchaseOption) {
+      appendTextElement(itemCopy, "p", "break-words text-xs font-medium leading-5 text-foreground", item.purchaseOption.title);
+    }
     // Buyer inputs as the order will keep them: "Engraving: Anika (+৳200)",
     // then the apps' add-ons: "Add-on: Gift wrap (+৳50)".
     for (const property of [...item.properties, ...(item.adjustments ?? [])]) {

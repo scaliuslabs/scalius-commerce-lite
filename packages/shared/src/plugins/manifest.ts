@@ -661,6 +661,12 @@ export const pluginManifestSchema = z.object({
     }
   });
   for (const issue of pluginFeatureIssues(manifest)) context.addIssue({ code: "custom", path: issue.path, message: issue.message });
+  // Checkout reads an app's purchase options with its functions or its payment
+  // provider (the registrations it loads): options without either are never offered.
+  if ((manifest.checkout?.purchaseOptions.length ?? 0) > 0 && manifest.functions.length === 0
+    && manifest.storefront.extensions.length === 0 && !manifest.providers.some((provider) => provider.kind === "payment")) {
+    context.addIssue({ code: "custom", path: ["checkout", "purchaseOptions"], message: "Purchase options need a checkout function (to price or check them) or a payment provider." });
+  }
   // A provider receives the buyer data its port carries: the app asks for it
   // (in its base scopes or the provider's feature), so consent names it.
   const providerOwners = pluginFeatureOwners(manifest).providers;

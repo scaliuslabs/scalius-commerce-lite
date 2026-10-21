@@ -149,6 +149,11 @@ export interface CatalogCopy {
   product: {
     increaseQuantity: string;
     decreaseQuantity: string;
+    /** The legend of an app's ways to buy (a subscription) beside a one-time purchase. */
+    purchaseOptions: string;
+    oneTimePurchase: string;
+    /** Under an app's option: its price is set at checkout. */
+    purchaseOptionPrice: string;
     zoom: string;
     zoomedView: (name: string) => string;
     zoomedImage: string;
@@ -323,6 +328,9 @@ const EN: CatalogCopy = {
   product: {
     increaseQuantity: "Increase quantity",
     decreaseQuantity: "Decrease quantity",
+    purchaseOptions: "How to buy",
+    oneTimePurchase: "One-time purchase",
+    purchaseOptionPrice: "Price shown in your cart",
     zoom: "Zoom",
     zoomedView: (name) => `${name} — zoomed view`,
     zoomedImage: "Zoomed product image",
@@ -497,6 +505,9 @@ const BN: CatalogCopy = {
   product: {
     increaseQuantity: "পরিমাণ বাড়ান",
     decreaseQuantity: "পরিমাণ কমান",
+    purchaseOptions: "কীভাবে কিনবেন",
+    oneTimePurchase: "একবার কেনা",
+    purchaseOptionPrice: "দাম কার্টে দেখানো হবে",
     zoom: "বড় করুন",
     zoomedView: (name) => `${name} — বড় করে দেখা`,
     zoomedImage: "বড় করা পণ্যের ছবি",

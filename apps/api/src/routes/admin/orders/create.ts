@@ -21,7 +21,7 @@ import {
     serviceUnavailableResponse,
 } from "../../../schemas/responses";
 
-import { listActiveFunctionRegistrations } from "@scalius/core/modules/plugins";
+import { listActiveCheckoutRegistrations } from "@scalius/core/modules/plugins";
 import { createManualOrderAppFunctions, validateCheckoutAttributes } from "@scalius/core/modules/checkout";
 import type { Database } from "@scalius/database/client";
 import { resolveCanonicalIdempotencyKey } from "../idempotency-key";
@@ -34,10 +34,12 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 
 /**
  * The apps' checkout functions for a staff order (channel "admin"): one
- * indexed registration read; none active means no app work.
+ * indexed registration read (functions and payment providers, so a payment
+ * app's purchase options are offered as at checkout); none active means no
+ * app work.
  */
 async function manualOrderApps(env: Env, ctx: ExecutionContext | undefined, db: Database) {
-    return createCheckoutAppFunctions({ env, ctx, db, registrations: await listActiveFunctionRegistrations(db) });
+    return createCheckoutAppFunctions({ env, ctx, db, registrations: await listActiveCheckoutRegistrations(db) });
 }
 
 const manualOrderRequestKeySchema = z.uuid("A valid manual-order request key is required");

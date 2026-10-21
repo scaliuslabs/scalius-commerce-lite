@@ -194,6 +194,12 @@ export interface LayoutData {
     signIn: Array<{ id: string; name: string }>;
   };
   /**
+   * Ways to buy a line the active apps offer (a subscription), the ones
+   * checkout accepts: the buy form lists them beside a one-time purchase.
+   * Absent from an older API: none.
+   */
+  purchaseOptions?: Array<{ id: string; title: string; description: string | null }>;
+  /**
    * Every active market with its countries and subfolder presences (backup
    * first): hreflang, the market selector and the presence a page renders.
    * Absent from an older API: the store has its root presence only.

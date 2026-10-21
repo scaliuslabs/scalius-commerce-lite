@@ -1,7 +1,7 @@
 import type { BuyerUiBlock } from "@scalius/shared/plugins/buyer-ui";
 import type { PluginUiAction } from "@scalius/shared/plugins/ui";
 import { isCartSlot } from "./state";
-import { PLUGIN_ID_PATTERN } from "@scalius/shared/plugins/ids";
+import { PLUGIN_ID_PATTERN, purchaseOptionAppId } from "@scalius/shared/plugins/ids";
 import type { ProductPageData } from "@/lib/api/products";
 import { browserApiUrl } from "@/lib/api/browser-url";
 import { unwrapEnvelope } from "@/lib/api/unwrap";
@@ -9,7 +9,8 @@ import { currentPresence } from "@/lib/presence-url";
 import { isVariantAvailable, resolveBuyerVariants } from "@/lib/product-sellable-variants";
 import { calculateVariantPrice } from "@/components/product/lib/pricing-engine";
 import { resolveVariantCartMedia } from "@/components/product/lib/cart-media";
-import { addDiscountCode, addToCart } from "@/store/cart";
+import { addDiscountCode, addToCart, cartLineKeyFor } from "@/store/cart";
+import { acceptedNewCartLine, validateCartLinesInBrowser, validateNewCartLine } from "@/lib/cart/new-line";
 
 const FAILED = "This action could not be completed. Please try again.";
 const UNAVAILABLE = "This item cannot be added here. Open its product page to choose it.";
@@ -28,9 +29,19 @@ async function publicRead<T>(path: string, query = new URLSearchParams()): Promi
 /** A route or cart action (`set_attribute` and `navigate` run in the renderer). */
 export type RunnableAction = Exclude<PluginUiAction, { kind: "navigate" } | { op: "set_attribute" }>;
 
-async function addLine(action: Extract<PluginUiAction, { op: "add_line" }>): Promise<void> {
+/**
+ * Adds a SKU without buyer inputs to the cart: one-time, or under a purchase
+ * option of `appId` (the app that asked), priced by the store for that option.
+ * Returns the line's key; throws the buyer's words when it can't be added.
+ */
+export async function addVariantLine(
+  action: { variantId: string; quantity: number; purchaseOption?: string },
+  appId: string,
+): Promise<string> {
   if (!action.variantId || action.variantId.length > 128 || !Number.isInteger(action.quantity)
     || action.quantity < 1 || action.quantity > 10) throw new Error(UNAVAILABLE);
+  // An app sells a line only under its own option.
+  if (action.purchaseOption !== undefined && purchaseOptionAppId(action.purchaseOption) !== appId) throw new Error(UNAVAILABLE);
   // Resolve through the online store, independent of feed/agent channel publication.
   const listing = await publicRead<{ products: Array<{ id: string; slug: string }> }>(
     "/products", new URLSearchParams({ ids: action.variantId, limit: "1" }),
@@ -48,15 +59,31 @@ async function addLine(action: Extract<PluginUiAction, { op: "add_line" }>): Pro
     basePrice: product.price, discountType: product.discountType,
     discountPercentage: product.discountPercentage, discountAmount: product.discountAmount,
   }, variant).finalPrice;
-  if (!(price > 0)) throw new Error(UNAVAILABLE);
-  const added = await addToCart({
+  if (!(price > 0) || (action.purchaseOption && product.isGiftCard)) throw new Error(UNAVAILABLE);
+  const options = variant.selectedOptions.map((option) => ({ name: option.name, label: option.value }));
+  let linePrice = price;
+  let purchaseOption: { id: string; title: string } | undefined;
+  if (action.purchaseOption) {
+    // The app prices its option: the line takes the store's price for it.
+    const checked = acceptedNewCartLine(await validateNewCartLine(validateCartLinesInBrowser, {
+      cartKey: "new", productId: product.id, variantId: variant.id, quantity: action.quantity, price,
+      productName: product.name, variantLabel: options.map((option) => option.label).join(" / ") || null,
+      purchaseOption: action.purchaseOption,
+    }));
+    if (!checked.item) throw new Error(checked.message || UNAVAILABLE);
+    linePrice = checked.item.unitPrice;
+    purchaseOption = checked.item.purchaseOption ?? { id: action.purchaseOption, title: action.purchaseOption };
+  }
+  const line = {
     id: product.id, variantId: variant.id, slug: product.slug, name: product.name,
-    price, quantity: action.quantity, freeDelivery: product.freeDelivery,
-    options: variant.selectedOptions.map((option) => ({ name: option.name, label: option.value })),
+    price: linePrice, quantity: action.quantity, freeDelivery: product.freeDelivery, options,
+    ...(purchaseOption ? { purchaseOption } : {}),
     ...resolveVariantCartMedia(variant, product),
     ...(variant.fulfillmentKind ? { fulfillmentKind: variant.fulfillmentKind } : {}),
-  }).catch(() => { throw new Error(FAILED); });
+  };
+  const added = await addToCart(line).catch(() => { throw new Error(FAILED); });
   if (!added) throw new Error("This item could not be added. Check the quantity in your cart.");
+  return cartLineKeyFor(line);
 }
 
 function message(value: unknown): string | undefined {
@@ -68,7 +95,7 @@ export async function runBuyerUiAction(action: RunnableAction, block: BuyerUiBlo
   if (action.kind === "cart") {
     if (!isCartSlot(block.target)) throw new Error(FAILED);
     if (action.op === "add_line") {
-      await addLine(action);
+      await addVariantLine(action, block.appId);
       return { message: "Item added to your cart." };
     }
     if (!addDiscountCode(action.code)) throw new Error("This code could not be added, or is already in your cart.");

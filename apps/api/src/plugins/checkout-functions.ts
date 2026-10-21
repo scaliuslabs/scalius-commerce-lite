@@ -48,9 +48,15 @@ function contextOf(ctx: ExecutionContext | undefined): ExecutionContext {
 }
 
 export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions): CheckoutAppFunctions {
-  const registrations = (isResolved(options.registrations)
+  const active = isResolved(options.registrations)
     ? [...options.registrations]
-    : resolveActiveFunctionRegistrations(options.registrations as readonly ActiveFunctionRegistrationRow[]))
+    : resolveActiveFunctionRegistrations(options.registrations as readonly ActiveFunctionRegistrationRow[]);
+  // Purchase options (manifest `checkout.purchaseOptions`): what a cart line may
+  // name, from every app checkout reads (a function or a payment provider: the
+  // layout's `purchaseOptions` offers the same); core prices nothing for them.
+  const purchaseOptions = [...new Map(active.filter(({ installation }) => installation.grant).map(({ installation }) => [installation.pluginId, { appId: installation.pluginId, options: installation.manifest.checkout?.purchaseOptions ?? [] }])).values()]
+    .filter((app) => app.options.length > 0);
+  const registrations = active
     // The approved grant decides: an app runs only at the points (and UI slots) it was approved for.
     .filter((registration) => registration.name === PLUGIN_EXTENSION_RUN
       ? (registration.installation.grant?.extensions ?? []).length > 0
@@ -58,9 +64,6 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
         && registration.installation.grant?.functions.includes(registration.name as PluginFunctionPoint));
   const attributeApps = new Map(registrations.map(({ installation }) => [installation.pluginId, { appId: installation.pluginId, fields: installation.manifest.checkout?.attributes ?? [] }]));
   const attributes = [...attributeApps.values()];
-  // Purchase options (manifest `checkout.purchaseOptions`): what a cart line may name; core prices nothing for them.
-  const purchaseOptions = [...new Map(registrations.map(({ installation }) => [installation.pluginId, { appId: installation.pluginId, options: installation.manifest.checkout?.purchaseOptions ?? [] }])).values()]
-    .filter((app) => app.options.length > 0);
   const points = new Set(registrations.map((registration) => registration.name as PluginRunPoint));
   if (points.size === 0) return { points, attributes, purchaseOptions, buyerUi: async () => [], run: async () => [], report: () => undefined };
 

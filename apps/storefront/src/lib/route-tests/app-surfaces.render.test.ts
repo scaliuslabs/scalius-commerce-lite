@@ -33,6 +33,8 @@ let HomePage: unknown;
 let ProductPage: unknown;
 let ProxyPage: unknown;
 let runtimeModule: RuntimeModule;
+/** The `acme.subscriptions` test app's options, as the layout read lists them (`activePluginPurchaseOptions`). */
+let subscriptionOptions: Array<{ id: string; title: string; description: string | null }>;
 
 beforeAll(async () => {
   const { getViteConfig } = await import("astro/config");
@@ -66,6 +68,12 @@ beforeAll(async () => {
   ProductPage = (await server.ssrLoadModule("/src/pages/products/[slug].astro")).default;
   ProxyPage = (await server.ssrLoadModule("/src/pages/apps/[pluginId]/[...path].astro")).default;
   runtimeModule = (await server.ssrLoadModule("/src/lib/api/runtime.ts")) as RuntimeModule;
+  const subscriptions = await server.ssrLoadModule(fileURLToPath(new URL("../../../../api/src/plugins/testing/apps/subscriptions/src/index.ts", import.meta.url))) as {
+    manifest: { id: string; checkout: { purchaseOptions: Array<{ key: string; title: string; description?: string }> } };
+  };
+  subscriptionOptions = subscriptions.manifest.checkout.purchaseOptions.map((option) => ({
+    id: `${subscriptions.manifest.id}.${option.key}`, title: option.title, description: option.description ?? null,
+  }));
   // The apps' page components, built with the SDK and served as bundled modules.
   const sdk = await server.ssrLoadModule(fileURLToPath(new URL("../../../../../packages/plugin-sdk/src/storefront/index.ts", import.meta.url))) as {
     defineStorefront(definition: unknown): unknown;
@@ -121,8 +129,9 @@ function theme(): StorefrontThemeDocument {
   return storefrontTemplateTheme("boutique");
 }
 
-function layout() {
+function layout(stub: Stub = {}) {
   return {
+    ...(stub.purchaseOptions ? { purchaseOptions: stub.purchaseOptions } : {}),
     analytics: [],
     navigation: [],
     footerMenus: [],
@@ -137,9 +146,10 @@ function layout() {
 }
 
 
-function productData(noIndex: boolean) {
+function productData(noIndex: boolean, giftCard = false) {
   return {
     product: {
+      isGiftCard: giftCard,
       id: "prod_linen",
       name: "Linen shirt",
       slug: "linen",
@@ -204,13 +214,16 @@ interface Stub {
   noIndex?: boolean;
   /** What the app answers at `/api/v1/plugins/<id>/public/...`. */
   app?: () => Response;
+  /** The layout read's `purchaseOptions`. */
+  purchaseOptions?: Array<{ id: string; title: string; description: string | null }>;
+  giftCard?: boolean;
 }
 
 function stubApi(stub: Stub = {}) {
   const calls: string[] = [];
   const pluginCalls: Array<{ url: string; headers: Headers }> = [];
   const answer = (path: string): { status: number; body: string } => {
-    if (path === "/api/v1/storefront/layout") return { status: 200, body: envelope(layout()) };
+    if (path === "/api/v1/storefront/layout") return { status: 200, body: envelope(layout(stub)) };
     if (path === "/api/v1/storefront/homepage") {
       return {
         status: 200,
@@ -220,7 +233,7 @@ function stubApi(stub: Stub = {}) {
         }),
       };
     }
-    if (path === "/api/v1/products/linen") return { status: 200, body: envelope(productData(stub.noIndex ?? false)) };
+    if (path === "/api/v1/products/linen") return { status: 200, body: envelope(productData(stub.noIndex ?? false, stub.giftCard ?? false)) };
     if (path === "/api/v1/shipping-methods") return { status: 200, body: envelope({ shippingMethods: [] }) };
     if (path === "/api/v1/checkout/config") return { status: 200, body: envelope({ gateways: [] }) };
     return { status: 404, body: "{}" };
@@ -285,6 +298,43 @@ describe("app scripts on public pages", () => {
     expect(appScriptSources(page)).toEqual(["https://chat.example/all.js", "https://cdn.acme.example/product.js"]);
     expect(html).not.toContain("data-app-slot");
     expect(html).not.toContain("AppSurface.astro?astro&type=script");
+  });
+});
+
+// ─── Purchase options ─────────────────────────────────────────────────────
+
+describe("an app's purchase options on the product page (acme.subscriptions)", () => {
+  it("lists them in the buy form beside a one-time purchase, as form fields that post without JavaScript, in the page's one batch", async () => {
+    const { calls } = stubApi({ purchaseOptions: subscriptionOptions });
+    const response = await render(ProductPage, new Request("https://shop.test/products/linen"), { slug: "linen" });
+    expect(response.status).toBe(200);
+    const page = parse(await response.text());
+    expect(calls).toHaveLength(1);
+    const form = page.querySelector<HTMLFormElement>("form#product-buy-form");
+    expect(form?.getAttribute("action")).toBe("/buy/linen");
+    const choices = Array.from(page.querySelectorAll<HTMLInputElement>('[data-product-purchase-options] input[type="radio"][name="purchaseOption"]'));
+    // Every choice belongs to the buy form, so "Buy now" posts it in the body.
+    expect(choices.map((input) => [input.value, input.getAttribute("form"), input.hasAttribute("checked")])).toEqual([
+      ["", "product-buy-form", true],
+      ["acme.subscriptions.subscribe", "product-buy-form", false],
+    ]);
+    const options = page.querySelector("[data-product-purchase-options]")!;
+    expect(options.querySelector("legend")?.textContent).toBe("How to buy");
+    expect(options.textContent).toContain("One-time purchase");
+    expect(options.textContent).toContain("Subscribe and save");
+    expect(options.textContent).toContain("Delivered again every month; cancel any time.");
+    expect(choices[1]!.dataset.purchaseOptionTitle).toBe("Subscribe and save");
+  });
+
+  it("offers none on a gift card, or when no app offers one", async () => {
+    stubApi({ purchaseOptions: subscriptionOptions, giftCard: true });
+    const giftCard = parse(await (await render(ProductPage, new Request("https://shop.test/products/linen"), { slug: "linen" })).text());
+    expect(giftCard.querySelector("[data-product-purchase-options]")).toBeNull();
+    vi.unstubAllGlobals();
+    stubApi();
+    const plain = parse(await (await render(ProductPage, new Request("https://shop.test/products/linen"), { slug: "linen" })).text());
+    expect(plain.querySelector("[data-product-purchase-options]")).toBeNull();
+    expect(plain.querySelector('input[name="purchaseOption"]')).toBeNull();
   });
 });
 

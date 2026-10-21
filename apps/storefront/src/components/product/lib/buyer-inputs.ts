@@ -22,6 +22,7 @@ import { getCheckoutLanguagePreset, type CheckoutLanguageData } from "@scalius/s
 import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor, toMinor } from "@scalius/shared/money";
+import { isPurchaseOptionId } from "@scalius/shared/plugins/ids";
 import type { OrderLineProperty, ProductCustomization } from "@/lib/api/types";
 import type { CartLineProperty } from "@/store/cart";
 
@@ -261,17 +262,26 @@ export function cartLinePropertiesFromOrderLine(
 }
 
 export type PostedBuyerInputs =
-  | { ok: true; variantId: string | null; quantity: string | null; properties: LinePropertyInput[] }
+  | {
+    ok: true;
+    variantId: string | null;
+    quantity: string | null;
+    properties: LinePropertyInput[];
+    /** An app's purchase option (`<app id>.<key>`); null: one-time. */
+    purchaseOption: string | null;
+  }
   | { ok: false };
 
 /**
- * Reads the no-JavaScript form body: `variant`, `quantity` and bounded
+ * Reads the no-JavaScript form body: `variant`, `quantity`, `purchaseOption`
+ * (empty: one-time; a malformed one refuses the body) and bounded
  * `property.<key>` fields (at most 10, each at most 1,000 characters).
  * Anything else in the body is ignored.
  */
 export function readPostedBuyerInputs(entries: Iterable<[string, FormDataEntryValue]>): PostedBuyerInputs {
   let variantId: string | null = null;
   let quantity: string | null = null;
+  let purchaseOption: string | null = null;
   const properties: LinePropertyInput[] = [];
   const seen = new Set<string>();
   for (const [name, entry] of entries) {
@@ -282,6 +292,12 @@ export function readPostedBuyerInputs(entries: Iterable<[string, FormDataEntryVa
     }
     if (name === "quantity" || name === "qty") {
       quantity = entry.trim().slice(0, 16);
+      continue;
+    }
+    if (name === "purchaseOption") {
+      const value = entry.trim();
+      if (value && !isPurchaseOptionId(value)) return { ok: false };
+      purchaseOption = value || null;
       continue;
     }
     if (!name.startsWith(BUYER_INPUT_FIELD_PREFIX)) continue;
@@ -296,5 +312,5 @@ export function readPostedBuyerInputs(entries: Iterable<[string, FormDataEntryVa
     }
     properties.push({ key, value: entry });
   }
-  return { ok: true, variantId, quantity, properties };
+  return { ok: true, variantId, quantity, properties, purchaseOption };
 }

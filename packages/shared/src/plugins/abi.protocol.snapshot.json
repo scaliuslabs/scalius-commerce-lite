@@ -4266,6 +4266,11 @@
                 "type": "integer",
                 "minimum": 1,
                 "maximum": 10
+               },
+               "purchaseOption": {
+                "type": "string",
+                "maxLength": 160,
+                "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
                }
               },
               "required": [
@@ -4624,6 +4629,11 @@
                 "type": "integer",
                 "minimum": 1,
                 "maximum": 10
+               },
+               "purchaseOption": {
+                "type": "string",
+                "maxLength": 160,
+                "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
                }
               },
               "required": [
@@ -5127,6 +5137,11 @@
                 "type": "integer",
                 "minimum": 1,
                 "maximum": 10
+               },
+               "purchaseOption": {
+                "type": "string",
+                "maxLength": 160,
+                "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
                }
               },
               "required": [
@@ -5974,6 +5989,11 @@
                "type": "integer",
                "minimum": 1,
                "maximum": 10
+              },
+              "purchaseOption": {
+               "type": "string",
+               "maxLength": 160,
+               "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
               }
              },
              "required": [
@@ -6487,6 +6507,11 @@
              "type": "integer",
              "minimum": 1,
              "maximum": 10
+            },
+            "purchaseOption": {
+             "type": "string",
+             "maxLength": 160,
+             "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
             }
            },
            "required": [
@@ -11675,6 +11700,11 @@
                 "type": "integer",
                 "minimum": 1,
                 "maximum": 10
+               },
+               "purchaseOption": {
+                "type": "string",
+                "maxLength": 160,
+                "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
                }
               },
               "required": [
@@ -12040,6 +12070,11 @@
                 "type": "integer",
                 "minimum": 1,
                 "maximum": 10
+               },
+               "purchaseOption": {
+                "type": "string",
+                "maxLength": 160,
+                "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
                }
               },
               "required": [
@@ -12550,6 +12585,11 @@
                 "type": "integer",
                 "minimum": 1,
                 "maximum": 10
+               },
+               "purchaseOption": {
+                "type": "string",
+                "maxLength": 160,
+                "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
                }
               },
               "required": [
@@ -13396,6 +13436,11 @@
                "type": "integer",
                "minimum": 1,
                "maximum": 10
+              },
+              "purchaseOption": {
+               "type": "string",
+               "maxLength": 160,
+               "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
               }
              },
              "required": [
@@ -13908,6 +13953,11 @@
              "type": "integer",
              "minimum": 1,
              "maximum": 10
+            },
+            "purchaseOption": {
+             "type": "string",
+             "maxLength": 160,
+             "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
             }
            },
            "required": [

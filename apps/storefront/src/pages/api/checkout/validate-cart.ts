@@ -6,7 +6,7 @@ import {
   type CartValidationOptions,
   type CartValidationRequestItem,
 } from "@/lib/api/orders";
-import { parseCheckoutAttributes, parseRequestProperties } from "@/lib/checkout/tax-quote-contract";
+import { parseCheckoutAttributes, parseRequestProperties, parseRequestPurchaseOption } from "@/lib/checkout/tax-quote-contract";
 import { isMarketSubfolder } from "@scalius/shared/markets";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -24,9 +24,11 @@ function normalizeItem(value: unknown): CartValidationRequestItem | null {
   if (typeof value.quantity !== "number" || !Number.isInteger(value.quantity)) return null;
   if (typeof value.price !== "number" || !Number.isFinite(value.price)) return null;
   let properties: CartValidationRequestItem["properties"];
+  let purchaseOption: string | undefined;
   try {
     // Buyer inputs stay in the body; bounded like the API's own limits.
     properties = parseRequestProperties(value.properties);
+    purchaseOption = parseRequestPurchaseOption(value.purchaseOption);
   } catch {
     return null;
   }
@@ -40,6 +42,7 @@ function normalizeItem(value: unknown): CartValidationRequestItem | null {
     productName: typeof value.productName === "string" ? value.productName : null,
     variantLabel: typeof value.variantLabel === "string" ? value.variantLabel : null,
     ...(properties ? { properties } : {}),
+    ...(purchaseOption ? { purchaseOption } : {}),
   };
 }
 

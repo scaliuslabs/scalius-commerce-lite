@@ -160,6 +160,7 @@ describe("buyer inputs", () => {
       ["quantity", "২"],
       ["property.engraving", "Anika"],
       ["property.fit", "slim"],
+      ["purchaseOption", "acme.subscriptions.subscribe"],
       ["unrelated", "ignored"],
     ]);
     expect(readPostedBuyerInputs(body.entries())).toEqual({
@@ -170,7 +171,11 @@ describe("buyer inputs", () => {
         { key: "engraving", value: "Anika" },
         { key: "fit", value: "slim" },
       ],
+      purchaseOption: "acme.subscriptions.subscribe",
     });
+    // An empty choice is a one-time purchase; a malformed option refuses the body.
+    expect(readPostedBuyerInputs(new URLSearchParams([["purchaseOption", ""]]).entries())).toMatchObject({ ok: true, purchaseOption: null });
+    expect(readPostedBuyerInputs(new URLSearchParams([["purchaseOption", "not an option"]]).entries())).toEqual({ ok: false });
     const tooMany = new URLSearchParams(
       Array.from({ length: 11 }, (_, index) => [`property.field_${index}`, "x"] as [string, string]),
     );

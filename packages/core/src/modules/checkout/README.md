@@ -80,6 +80,15 @@ language with the merchant's edits).
   hash, the cart key and the quote fingerprint) and of the checkout attempt
   hash. Core prices nothing for it: the owning app prices it
   (`cart.line_prices`, `checkout.discounts`) and checks it (`cart.validate`).
+  Only that app's line price applies to the line, and it outranks every
+  price list (`resolvePrice()`); without it the line keeps its one-time price.
+  Checkout reads the options of every app among its registrations (a
+  function or a payment provider, before the per-point grant filter), and
+  the layout read's `purchaseOptions` (`activePluginPurchaseOptions`) offers
+  the same set: the product page's buy form lists them, the storefront cart
+  keeps the choice per line (its identity hash includes it) and sends it on
+  every cart check, tax quote and order, and `/buy/<slug>` takes it from the
+  form body without JavaScript.
   The order line freezes it as its `_purchase_option` property
   (`LINE_PURCHASE_OPTION_PROPERTY_KEY`, after the add-ons), so every
   line-property surface shows it, and the order representation's line

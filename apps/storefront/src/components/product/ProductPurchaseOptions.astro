@@ -1,0 +1,50 @@
+---
+// How to buy the item: once, or under an app's purchase option ("Subscribe
+// and save"; manifest `checkout.purchaseOptions`). Radio buttons of the buy
+// form (`form`), so "Buy now" posts the choice to `/buy/<slug>` in the body
+// before the product script runs or without JavaScript; the product
+// controller reads the same inputs (and checks a cart line's option when
+// the line is edited). The app prices the line at checkout, so an option
+// shows no price here.
+interface Props {
+  formId: string;
+  options: ReadonlyArray<{ id: string; title: string; description: string | null }>;
+  copy: { legend: string; oneTime: string; price: string };
+}
+
+const { formId, options, copy } = Astro.props;
+const choiceClass =
+  "flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border border-input bg-background px-3 py-2 has-[:checked]:border-primary has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring/30";
+---
+
+{options.length > 0 && (
+  <fieldset class="space-y-2" data-product-purchase-options>
+    <legend class="mb-1 text-sm font-medium text-foreground">{copy.legend}</legend>
+    <label class={choiceClass}>
+      <input type="radio" name="purchaseOption" value="" form={formId} checked class="mt-0.5 size-5 shrink-0 accent-primary" />
+      <span class="min-w-0 flex-1 text-sm font-medium text-foreground">{copy.oneTime}</span>
+    </label>
+    {options.map((option) => {
+      const hint = `product-purchase-option-${option.id.replace(/[^a-z0-9_-]/g, "-")}`;
+      return (
+        <label class={choiceClass}>
+          <input
+            type="radio"
+            name="purchaseOption"
+            value={option.id}
+            form={formId}
+            aria-describedby={hint}
+            data-purchase-option-title={option.title}
+            class="mt-0.5 size-5 shrink-0 accent-primary"
+          />
+          <span class="min-w-0 flex-1">
+            <span class="block text-sm font-medium text-foreground">{option.title}</span>
+            <span id={hint} class="block text-sm text-muted-foreground">
+              {option.description ? `${option.description} ` : ""}{copy.price}
+            </span>
+          </span>
+        </label>
+      );
+    })}
+  </fieldset>
+)}
