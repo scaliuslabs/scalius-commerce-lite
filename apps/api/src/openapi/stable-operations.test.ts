@@ -289,6 +289,130 @@ function paginationProblems(operations: readonly AgentOperationManifestEntry[], 
   return problems;
 }
 
+type InputShape = {
+  parameters?: { name: string; in: string }[];
+  requestBody?: { content?: Record<string, { schema?: unknown }> };
+};
+
+function resolveIn(components: Record<string, unknown>) {
+  const resolve = (node: unknown): SchemaNode | null => {
+    if (!node || typeof node !== "object") return null;
+    const ref = (node as { $ref?: unknown }).$ref;
+    return typeof ref === "string" ? resolve(components[ref.replace("#/components/schemas/", "")]) : node as SchemaNode;
+  };
+  return resolve;
+}
+
+function dataOf(operation: AgentOperationManifestEntry, components: Record<string, unknown>): { raw: unknown; schema: SchemaNode | null } {
+  const resolve = resolveIn(components);
+  const envelope = resolve(operation.outputSchema);
+  const raw = ((envelope?.properties ?? {}) as Record<string, unknown>).data;
+  return { raw, schema: resolve(raw) };
+}
+
+/** A list (`<resource>.list`, `<resource>.list_<noun>`) answers exactly one array and `nextCursor`. */
+function listShapeProblems(operations: readonly AgentOperationManifestEntry[], components: Record<string, unknown> = AGENT_COMPONENT_SCHEMAS as Record<string, unknown>): string[] {
+  const problems: string[] = [];
+  for (const operation of operations) {
+    const name = appOperationName(operation.operationId) ?? operation.operationId;
+    if (!/\.list(?:_[a-z0-9_]+)?$/u.test(name)) continue;
+    const { schema } = dataOf(operation, components);
+    const keys = Object.keys((schema?.properties ?? {}) as Record<string, unknown>).sort();
+    const arrays = keys.filter((key) => resolveIn(components)(((schema!.properties as Record<string, unknown>)[key]))?.type === "array");
+    if (arrays.length !== 1 || keys.length !== 2 || !keys.includes("nextCursor")) problems.push(`${name}: answers { ${keys.join(", ")} }; a list answers { <plural>, nextCursor }.`);
+    const query = new Set(((operation.inputSchema ?? {}) as InputShape).parameters?.filter((parameter) => parameter.in === "query").map((parameter) => parameter.name) ?? []);
+    if (!query.has("cursor") || !query.has("limit")) problems.push(`${name}: a list takes cursor and limit.`);
+  }
+  return problems;
+}
+
+/** A stable answer is an object naming what it holds: never a bare resource, `{}`, `{ message }` or no body. */
+function answerShapeProblems(operations: readonly AgentOperationManifestEntry[], components: Record<string, unknown> = AGENT_COMPONENT_SCHEMAS as Record<string, unknown>): string[] {
+  const problems: string[] = [];
+  for (const operation of operations) {
+    const name = appOperationName(operation.operationId) ?? operation.operationId;
+    if (!operation.outputSchema) {
+      problems.push(`${name}: answers no body.`);
+      continue;
+    }
+    const { raw, schema } = dataOf(operation, components);
+    if (raw && typeof raw === "object" && "$ref" in raw) problems.push(`${name}: answers a bare resource; answer { <singular>: Resource }.`);
+    const keys = Object.keys((schema?.properties ?? {}) as Record<string, unknown>);
+    if (keys.length === 0) problems.push(`${name}: answers an empty object.`);
+    if (keys.length === 1 && keys[0] === "message") problems.push(`${name}: answers prose; answer the resource.`);
+  }
+  return problems;
+}
+
+/** Every key of a schema tree (properties, items, variants), with its path. */
+function keysOf(node: unknown, components: Record<string, unknown>, path: string, refs = new Set<string>()): { key: string; path: string; schema: SchemaNode }[] {
+  const ref = node && typeof node === "object" ? (node as { $ref?: unknown }).$ref : undefined;
+  if (typeof ref === "string") {
+    if (refs.has(ref)) return [];
+    refs = new Set([...refs, ref]);
+  }
+  const schema = resolveIn(components)(node);
+  if (!schema) return [];
+  const out: { key: string; path: string; schema: SchemaNode }[] = [];
+  for (const [key, value] of Object.entries((schema.properties ?? {}) as Record<string, unknown>)) {
+    const child = resolveIn(components)(value);
+    if (child) out.push({ key, path: `${path}.${key}`, schema: child });
+    out.push(...keysOf(value, components, `${path}.${key}`, refs));
+  }
+  if (schema.items) out.push(...keysOf(schema.items, components, `${path}[]`, refs));
+  for (const variant of [...((schema.anyOf ?? []) as unknown[]), ...((schema.oneOf ?? []) as unknown[]), ...((schema.allOf ?? []) as unknown[])]) out.push(...keysOf(variant, components, path, refs));
+  return out;
+}
+
+const RETIRED_PRECONDITIONS = new Set(["expectedVersion", "expectedAggregateRevision", "expectedDraftRevision"]);
+
+function preconditionProblems(operations: readonly AgentOperationManifestEntry[], components: Record<string, unknown> = AGENT_COMPONENT_SCHEMAS as Record<string, unknown>): string[] {
+  const problems: string[] = [];
+  for (const operation of operations) {
+    const name = appOperationName(operation.operationId) ?? operation.operationId;
+    const input = (operation.inputSchema ?? {}) as InputShape;
+    const isDelete = operation.method.toUpperCase() === "DELETE";
+    for (const parameter of input.parameters ?? []) {
+      if (RETIRED_PRECONDITIONS.has(parameter.name)) problems.push(`${name}: takes ${parameter.name}; take expectedRevision.`);
+      if (parameter.name === "expectedRevision" && !isDelete) problems.push(`${name}: takes expectedRevision in the ${parameter.in}; a write takes it in the body.`);
+    }
+    for (const media of Object.values(input.requestBody?.content ?? {})) {
+      for (const { key, path } of keysOf(media.schema, components, "body")) {
+        if (RETIRED_PRECONDITIONS.has(key)) problems.push(`${name}: takes ${path}; take expectedRevision.`);
+        if (key === "expectedRevision" && isDelete && path === "body.expectedRevision") problems.push(`${name}: a DELETE takes expectedRevision in the query.`);
+      }
+    }
+    for (const { key, path } of keysOf(operation.outputSchema, components, "output")) {
+      if (key === "version" || key === "aggregateRevision") problems.push(`${name}: answers ${path}; a resource exposes revision.`);
+    }
+  }
+  return [...new Set(problems)];
+}
+
+const FLAT_ADDRESS_KEYS = /^(shipping|billing)(Address|AddressLine2|Locality|AdminArea|PostalCode|DependentLocality|Company|CountryCode|Name)$|^skipAddressValidation$/u;
+
+function addressProblems(operations: readonly AgentOperationManifestEntry[], components: Record<string, unknown> = AGENT_COMPONENT_SCHEMAS as Record<string, unknown>): string[] {
+  const problems: string[] = [];
+  for (const operation of operations) {
+    const name = appOperationName(operation.operationId) ?? operation.operationId;
+    const input = (operation.inputSchema ?? {}) as InputShape;
+    const trees = [
+      ...Object.values(input.requestBody?.content ?? {}).map((media) => ({ root: "body", schema: media.schema })),
+      { root: "output", schema: operation.outputSchema },
+    ];
+    for (const { root, schema } of trees) {
+      for (const { key, path, schema: node } of keysOf(schema, components, root)) {
+        if (key !== "skipAddressValidation" && FLAT_ADDRESS_KEYS.test(key) && node.type !== "object") problems.push(`${name}: ${path} flattens an address; take a PostalAddress object.`);
+        const fields = Object.keys((node.properties ?? {}) as Record<string, unknown>);
+        if (fields.includes("line1") && fields.some((field) => ["city", "zone", "area", "cityName", "phoneRaw"].includes(field))) {
+          problems.push(`${name}: ${path} carries place ids beside the address lines; they go under placeIds.`);
+        }
+      }
+    }
+  }
+  return [...new Set(problems)];
+}
+
 describe("the stable app API", () => {
   it("is a deliberate, coherent set every third-party app can reach through a scope", () => {
     expect(stable.length).toBeGreaterThanOrEqual(100);
@@ -409,6 +533,22 @@ describe("the stable app API", () => {
 
   it("pages every list one way: cursor and limit in, nextCursor out", () => {
     expect(paginationProblems(stable)).toEqual([]);
+  });
+
+  it("answers every list as { <plural>, nextCursor } and nothing else (audit L9)", () => {
+    expect(listShapeProblems(stable)).toEqual([]);
+  });
+
+  it("answers one shape per kind: a resource under its name, never bare, empty, a message or no body (audit L1)", () => {
+    expect(answerShapeProblems(stable)).toEqual([]);
+  });
+
+  it("has one precondition: expectedRevision, in the body or a DELETE's query, and resources expose revision (audit L2)", () => {
+    expect(preconditionProblems(stable)).toEqual([]);
+  });
+
+  it("has one address shape: place ids only under placeIds, no flattened address fields (audit L3)", () => {
+    expect(addressProblems(stable)).toEqual([]);
   });
 
   it("carries every instant as one ISO 8601 date-time string", () => {

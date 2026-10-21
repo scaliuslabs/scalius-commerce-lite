@@ -61,7 +61,7 @@ mirror a dashboard screen, an editor section or a summary card.
   patches its fields under `expectedRevision` in one write. Gift cards
   (`gift_cards.*`, `read_gift_cards` / the Sensitive `write_gift_cards`, within the
   merchant's daily app limit; an app never re-owns a funded card)
-  issue, adjust under `expectedVersion` and disable; the code never reaches
+  issue, adjust under `expectedRevision` and disable; the code never reaches
   an app (`notify` has the store send it). `webhook_subscriptions.*`
   (`write_webhooks`, Sensitive) reach only the calling app's own
   subscriptions (`webhook_subscriptions.plugin_id`), on its approved hosts,
@@ -124,10 +124,27 @@ mirror a dashboard screen, an editor section or a summary card.
   `apps/api/src/app-error-codes.test.ts` holds the ctx hosts, the dispatch and
   every stable route module to it, and the dispatch translates its own
   refusals into it (`dispatchRefusalCode`).
-- **Lists page one way**: `cursor` + `limit` in, `{ <plural>, nextCursor }` out.
-  Page-numbered and offset lists (the dashboard's brands, categories,
-  collections, content and discounts lists, `*.get_section`) are beta; a
-  bounded lookup (`limit` without a cursor) returns at most `limit`.
+- **Lists page one way**: `cursor` + `limit` in, `{ <plural>, nextCursor }` out
+  and nothing else, a bounded list included (read whole and cut by
+  `utils/bounded-page.ts`; its limit defaults to the bound, so `nextCursor` is
+  null unless a smaller page is asked). Page-numbered and offset lists (the
+  dashboard's brands, categories, collections, content and discounts lists,
+  `*.get_section`) are beta.
+- **One answer shape per kind.** A single resource, read or written, answers
+  `{ <singular>: Resource }` (`{ order }`, `{ product }`, `{ run }` for a bulk
+  run), the same component its get returns; a write may keep receipt fields
+  beside it (`replayed`, `unresolved`). A permanent delete answers `{ id,
+  deleted: true }`. No stable answer is a bare resource, `{}`, `{ message }` or
+  an empty 204.
+- **One address shape.** Every stable address is the representation's
+  `PostalAddress` fields (`name, phone, company, line1, line2,
+  dependentLocality, locality, adminArea, postalCode, countryCode`), with the
+  store's delivery place ids only under `placeIds: { city, zone, area }`;
+  inputs use `schemas/postal-address.ts`. A store-owned address uses the same
+  names without the buyer-data markers.
+
+`stable-operations.test.ts` checks the list, answer, precondition and address
+rules on every stable operation.
 - **Regional and editor fields stay out.** `emiEligible`, product-level
   `freeDelivery` and product-level discount fields belong to the dashboard's
   editor routes (beta); no stable schema carries them.
@@ -142,12 +159,13 @@ mirror a dashboard screen, an editor section or a summary card.
   runs again. No stable request body carries a key: an operation with a
   durable retry key of its own (the stock ledger, fulfilments, timeline
   notes) derives it from the header. Stock moves require the header.
-- **Writes take a precondition.** Every stable write that is not a create
-  takes the revision it was based on (`expectedRevision`, `expectedVersion`,
-  `expectedAggregateRevision` or `expectedStockVersion`, required or
-  optional); a stale value is refused with 409 and changes nothing. Reads
-  return them (`version` on orders, `stockVersion` on SKUs, `revision`
-  elsewhere). The few writes with no revision to compare yet (custom field
+- **Writes take a precondition, one name.** Every stable write that is not a
+  create takes the `revision` it was based on as `expectedRevision` (in the
+  JSON body; a DELETE takes it in the query), required or optional; a stale
+  value is refused with 409 and changes nothing. Every resource exposes
+  `revision`. The named exceptions guard another counter: a SKU's stock moves
+  take `expectedStockVersion` (its `stockVersion`), and theme writes add the
+  live theme's `basePublishedRevision`. The few writes with no revision to compare yet (custom field
   values, customers, the place import, publications) are listed in
   `stable-operations.test.ts`; an optional precondition added later is
   additive.
