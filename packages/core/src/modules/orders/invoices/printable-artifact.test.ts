@@ -83,6 +83,14 @@ describe("printable invoice artifact", () => {
     expect(artifact).not.toContain("<b>Anika</b>");
   });
 
+  it("prints net terms with the due day on the store calendar", () => {
+    const document = invoice();
+    document.order.paymentTerms = { kind: "net", days: 30, dueAt: "2023-12-14T20:00:00.000Z" };
+
+    expect(renderPrintableInvoice(document, "Asia/Dhaka")).toContain("<p><strong>Terms: Net 30</strong> · due 2023-12-15</p>");
+    expect(renderPrintableInvoice(invoice(), "Asia/Dhaka")).not.toContain("Terms:");
+  });
+
   it("prints a free gift at zero with its price struck, as the payment counts it", () => {
     const document = invoice();
     document.order.items.push({

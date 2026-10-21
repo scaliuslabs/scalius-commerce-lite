@@ -90,6 +90,10 @@ export function renderPrintableInvoice(
     timeZone,
     new Date(typeof issuedAt === "number" && issuedAt < 1_000_000_000_000 ? issuedAt * 1000 : issuedAt),
   );
+  // Net terms print with their due day on the store calendar, as the issue date does.
+  const terms = order.paymentTerms
+    ? `<p><strong>Terms: Net ${order.paymentTerms.days}</strong> · due ${commerceCalendarDateKey(timeZone, new Date(order.paymentTerms.dueAt))}</p>`
+    : "";
   const free = (amount: string) => `<s>${amount}</s> ${formatMoney(0, order.currencyCode, decimals, true)}`;
   const rows = order.items.map((item) => {
     const unit = formatMoney(item.unitPriceMinor ?? Math.round(item.price * (10 ** decimals)), order.currencyCode, decimals, true);
@@ -120,7 +124,7 @@ export function renderPrintableInvoice(
 </style></head><body><main>${document.status === "draft" ? '<div class="draft"><strong>Draft invoice</strong> — no invoice number has been allocated.</div>' : ""}
 <header><div><h1>${html(businessInfo.companyName || businessInfo.legalName)}</h1><p>${html(businessInfo.addressLine1)}</p><p>${html(businessInfo.phone)} ${html(businessInfo.email)}</p></div>
 <div><strong>${html(document.invoiceNumber ?? "Draft")}</strong><p>${date}</p><p>Order ${html(formatOrderNumber(order.orderNumber, order.id))}</p></div></header>
-<section class="meta"><div><strong>Bill to</strong>${billTo}</div><div><strong>${shipToHeading}</strong><p>${shipToText}</p><p>Payment: ${html(order.paymentMethod?.toUpperCase())} (${html(order.paymentStatus)})</p></div></section>
+<section class="meta"><div><strong>Bill to</strong>${billTo}</div><div><strong>${shipToHeading}</strong><p>${shipToText}</p><p>Payment: ${html(order.paymentMethod?.toUpperCase())} (${html(order.paymentStatus)})</p>${terms}</div></section>
 <table><thead><tr><th>Item</th><th>Qty</th><th>Unit price</th><th>Amount</th></tr></thead><tbody>${rows}</tbody></table>
 <section class="totals"><div><span>Subtotal</span><span>${formatMoney(subtotalMinor, order.currencyCode, decimals, true)}</span></div><div><span>${html(shippingLabel)}${shippingDetails ? `<small>${html(shippingDetails)}</small>` : ""}</span><span>${formatMoney(shippingMinor, order.currencyCode, decimals, true)}</span></div>${discountMinor > 0 ? `<div><span>Discount</span><span>-${formatMoney(discountMinor, order.currencyCode, decimals, true)}</span></div>` : ""}<div><span>${html(order.taxLabel || "Tax")}</span><span>${formatMoney(order.taxAmountMinor, order.currencyCode, decimals, true)}</span></div><div class="total"><span>Total</span><span>${formatMoney(totalMinor, order.currencyCode, decimals, true)}</span></div>${refundedMinor > 0 ? `<div><span>Refunded</span><span>-${formatMoney(refundedMinor, order.currencyCode, decimals, true)}</span></div><div class="total"><span>Net</span><span>${formatMoney(totalMinor - refundedMinor, order.currencyCode, decimals, true)}</span></div>` : ""}</section>
 <footer><p>${html(businessInfo.invoiceFooterText)}</p><p>This is a computer-generated invoice and does not require a signature.</p></footer></main></body></html>`;

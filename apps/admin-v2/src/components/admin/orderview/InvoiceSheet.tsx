@@ -29,13 +29,13 @@ export function invoiceBusinessName(document: Pick<InvoiceDocument, "businessInf
   return document.businessInfo.companyName || document.businessInfo.legalName;
 }
 
-/** One printable invoice sheet (A4). Several stack with page breaks for bulk printing. */
 /** The number a courier dials: "01712345678" for a Bangladesh mobile, else as stored. */
 function localPhone(phone: string): string {
   const mobile = normalizeBdMobile(phone);
   return mobile ? `0${mobile.slice(4)}` : phone;
 }
 
+/** One printable invoice sheet (A4). Several stack with page breaks for bulk printing. */
 export function InvoiceSheet({ document }: { document: InvoiceDocument }) {
   const t = useMessages(orderDetailMessages);
   const o = useMessages(orderMessages);
@@ -46,6 +46,8 @@ export function InvoiceSheet({ document }: { document: InvoiceDocument }) {
   const delivery = resolveDeliveryMethodPresentation(order, saved);
   const discount = order.discountAmount ?? 0;
   const issuedAt = unixToDate(document.issuedAt ?? order.createdAt);
+  const paymentTerms = order.paymentTerms ?? null;
+  const dueAt = paymentTerms ? new Date(paymentTerms.dueAt) : null;
   const businessName = invoiceBusinessName(document);
   const refunded = Number(order.refundedAmount ?? 0);
   const refundedSinceIssue = Number(document.refundedSinceIssue ?? 0);
@@ -125,6 +127,13 @@ export function InvoiceSheet({ document }: { document: InvoiceDocument }) {
             {paymentMethodLabel(o, order.paymentMethod ?? "cod")}
             {order.paymentStatus ? ` · ${paymentStatusLabel(o, order.paymentStatus, order.paymentMethod ?? "cod")}` : ""}
           </p>
+          {/* An invoice paid later prints its terms and the day payment is due, as placed. */}
+          {paymentTerms ? (
+            <p>
+              {t("netTerms.terms")}: {t("netTerms.netDays", { days: formatNumber(paymentTerms.days) })}
+              {dueAt ? <> · <span className="strong">{t("netTerms.due")} {formatDateTime(dueAt, { dateStyle: "medium" })}</span></> : null}
+            </p>
+          ) : null}
         </div>
         <div>
           <h2>{t("invoice.billTo")}</h2>

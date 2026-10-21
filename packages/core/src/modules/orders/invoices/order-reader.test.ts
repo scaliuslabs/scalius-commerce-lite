@@ -55,6 +55,22 @@ describe("invoice order projection", () => {
     expect(snapshot.items[0]?.properties).toEqual([{ label: "Engraving", displayValue: "Anika", priceMinor: 2000 }]);
   });
 
+  it("snapshots an invoice order's net terms and due date, and none for an order paid now", async () => {
+    sqlite.exec(`
+      INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, total_amount_minor, shipping_amount_minor,
+        payment_method, payment_terms_days, payment_due_at)
+        VALUES ('order_net', 'Buyer', '+8801700000000', 'Address', 'city', 'zone', 16000, 6000, 'net_terms', 30, 1702592000);
+      INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, total_amount_minor, shipping_amount_minor)
+        VALUES ('order_cod', 'Buyer', '+8801700000000', 'Address', 'city', 'zone', 16000, 6000);
+    `);
+
+    const net = snapshotInvoiceOrder((await readInvoiceOrderSource(db, "order_net"))!);
+    expect(net.paymentTerms).toEqual({ kind: "net", days: 30, dueAt: "2023-12-14T22:13:20.000Z" });
+    expect(snapshotInvoiceOrder((await readInvoiceOrderSource(db, "order_cod"))!).paymentTerms).toBeNull();
+    // An invoice issued before terms were snapshotted reads as having none.
+    expect(snapshotInvoiceOrder(baseOrder()).paymentTerms).toBeNull();
+  });
+
   it("leaves lines without buyer inputs in the version-1 shape", () => {
     const snapshot = snapshotInvoiceOrder({
       ...baseOrder(),

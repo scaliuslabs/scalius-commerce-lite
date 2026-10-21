@@ -196311,6 +196311,33 @@
                                 ]
                               }
                             },
+                            "paymentTerms": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "net"
+                                  ]
+                                },
+                                "days": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true
+                                },
+                                "dueAt": {
+                                  "type": "string",
+                                  "description": "ISO 8601 due date: placement plus the net days."
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "days",
+                                "dueAt"
+                              ],
+                              "description": "Net terms of an invoice paid later; null when the order is paid now, absent on invoices issued before terms were printed."
+                            },
                             "createdAt": {
                               "anyOf": [
                                 {
@@ -197046,6 +197073,33 @@
                                   "amount"
                                 ]
                               }
+                            },
+                            "paymentTerms": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "net"
+                                  ]
+                                },
+                                "days": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true
+                                },
+                                "dueAt": {
+                                  "type": "string",
+                                  "description": "ISO 8601 due date: placement plus the net days."
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "days",
+                                "dueAt"
+                              ],
+                              "description": "Net terms of an invoice paid later; null when the order is paid now, absent on invoices issued before terms were printed."
                             },
                             "createdAt": {
                               "anyOf": [
