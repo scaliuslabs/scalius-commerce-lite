@@ -4,7 +4,7 @@
 // must be answered at once (a loading dialog), never silently.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { MediaManager } from "./LazyMediaManager";
 
 vi.mock("@tanstack/react-router", async (original) => ({ ...(await original<object>()), useBlocker: () => ({ status: "idle" }) }));
@@ -34,6 +34,13 @@ describe("the media picker's first click", () => {
   afterEach(() => {
     act(() => root.unmount());
     host.remove();
+  });
+
+  // The lazy module may still be loading when the test ends: let every
+  // dynamic import settle before the environment is torn down.
+  afterAll(async () => {
+    gate.release();
+    await vi.dynamicImportSettled();
   });
 
   it("opens a loading dialog while the code arrives, then the picker", async () => {
