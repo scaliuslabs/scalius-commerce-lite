@@ -5624,9 +5624,21 @@ export type RemovedAppData = {
      */
     removedAt: string | null;
     /**
-     * Send it back as expectedRevision to delete this data (0: the store kept no record of the removal).
+     * Send it back as expectedRevision to delete or hand over this data (0: the store kept no record of the removal).
      */
     revision: number;
+    /**
+     * The key the data belongs to: the signer of the release that kept it (its fingerprint is this id in groups of four). null: unsigned or bundled code, or no record. Only a release signed with this key reclaims the data on its own.
+     */
+    signerKeyId: string | null;
+    /**
+     * A release of this app in this deployment's own code that cannot install while the data belongs to another key. It installs once the data is deleted or handed over to it (signerKeyId null).
+     */
+    waitingRelease: {
+        source: 'bundled';
+        version: string;
+        signerKeyId: unknown;
+    } | null;
     objectTypes: number;
     /**
      * Entries of its object types.
@@ -70767,6 +70779,70 @@ export type PostApiV1AdminAppsRemovedDataByIdDeleteResponses = {
 };
 
 export type PostApiV1AdminAppsRemovedDataByIdDeleteResponse = PostApiV1AdminAppsRemovedDataByIdDeleteResponses[keyof PostApiV1AdminAppsRemovedDataByIdDeleteResponses];
+
+export type PostApiV1AdminAppsRemovedDataByIdHandOverData = {
+    body: {
+        /**
+         * The group's revision from dashboard.apps.removed_data_list.
+         */
+        expectedRevision: number;
+        /**
+         * The key that may take the data: the waiting release's signer (the key id an upload refusal names as releaseSigner), or null for bundled or unsigned code.
+         */
+        signerKeyId: string | null;
+    };
+    path: {
+        /**
+         * The removed app's id (vendor.name).
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/apps/removed-data/{id}/hand-over';
+};
+
+export type PostApiV1AdminAppsRemovedDataByIdHandOverErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+};
+
+export type PostApiV1AdminAppsRemovedDataByIdHandOverError = PostApiV1AdminAppsRemovedDataByIdHandOverErrors[keyof PostApiV1AdminAppsRemovedDataByIdHandOverErrors];
+
+export type PostApiV1AdminAppsRemovedDataByIdHandOverResponses = {
+    /**
+     * Handed over
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            /**
+             * The group's new revision (0: the store kept no record, so any release reclaims it already).
+             */
+            revision: number;
+            /**
+             * Whether a bundled release of this app was waiting and is now installed with the data.
+             */
+            installed: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminAppsRemovedDataByIdHandOverResponse = PostApiV1AdminAppsRemovedDataByIdHandOverResponses[keyof PostApiV1AdminAppsRemovedDataByIdHandOverResponses];
 
 export type GetApiV1AdminAppsByIdData = {
     body?: never;

@@ -25414,7 +25414,34 @@
           "revision": {
             "type": "integer",
             "minimum": 0,
-            "description": "Send it back as expectedRevision to delete this data (0: the store kept no record of the removal)."
+            "description": "Send it back as expectedRevision to delete or hand over this data (0: the store kept no record of the removal)."
+          },
+          "signerKeyId": {
+            "type": "string",
+            "nullable": true,
+            "description": "The key the data belongs to: the signer of the release that kept it (its fingerprint is this id in groups of four). null: unsigned or bundled code, or no record. Only a release signed with this key reclaims the data on its own."
+          },
+          "waitingRelease": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "source": {
+                "type": "string",
+                "enum": [
+                  "bundled"
+                ]
+              },
+              "version": {
+                "type": "string"
+              },
+              "signerKeyId": {}
+            },
+            "required": [
+              "source",
+              "version",
+              "signerKeyId"
+            ],
+            "description": "A release of this app in this deployment's own code that cannot install while the data belongs to another key. It installs once the data is deleted or handed over to it (signerKeyId null)."
           },
           "objectTypes": {
             "type": "integer"
@@ -25459,6 +25486,8 @@
           "name",
           "removedAt",
           "revision",
+          "signerKeyId",
+          "waitingRelease",
           "objectTypes",
           "records",
           "objectTypeHandles",
@@ -250472,6 +250501,171 @@
         "x-scalius-rbac": {
           "type": "permission",
           "permission": "apps.manage"
+        }
+      }
+    },
+    "/api/v1/admin/apps/removed-data/{id}/hand-over": {
+      "post": {
+        "operationId": "dashboard.apps.removed_data_hand_over",
+        "tags": [
+          "Admin - Apps"
+        ],
+        "summary": "Hand a removed app's data over to another key",
+        "description": "Super Admin in the dashboard only (never an agent or an app). Data an uninstall kept belongs to the key that signed the release that kept it, and only that key's release reclaims it. This lets a release of the same app id with another key, or a move between a signed upload and the store's own bundled or unsigned code (signerKeyId null), reclaim everything listed, settings included: that release's code can then read and change it. A bundled release waiting for it installs at once. Refused while the app is installed, or when the group changed since the revision read.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$",
+              "description": "The removed app's id (vendor.name)."
+            },
+            "required": true,
+            "description": "The removed app's id (vendor.name).",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "The group's revision from dashboard.apps.removed_data_list."
+                  },
+                  "signerKeyId": {
+                    "type": "string",
+                    "nullable": true,
+                    "pattern": "^[0-9a-f]{16}$",
+                    "description": "The key that may take the data: the waiting release's signer (the key id an upload refusal names as releaseSigner), or null for bundled or unsigned code."
+                  }
+                },
+                "required": [
+                  "expectedRevision",
+                  "signerKeyId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Handed over",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "description": "The group's new revision (0: the store kept no record, so any release reclaims it already)."
+                        },
+                        "installed": {
+                          "type": "boolean",
+                          "description": "Whether a bundled release of this app was waiting and is now installed with the data."
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "revision",
+                        "installed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "excluded",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "security",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 4096,
+          "maxRequestBytes": 4096,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Letting another release's code read and change an app's kept data is a Super Admin's trust decision in the dashboard, like trusting a developer key.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "unmapped"
         }
       }
     },

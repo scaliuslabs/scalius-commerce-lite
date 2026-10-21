@@ -104,7 +104,10 @@ async function syncOne(
   } catch (error) {
     if (error instanceof PluginError && error.pluginCode === "installation_revision_conflict") return; // another sync won
     const reason = error instanceof Error ? error.message.slice(0, 300) : "unknown error";
-    console.warn(`[plugins] Bundled plugin ${pluginId} could not be synced: ${reason}`);
+    // Held by data another key's release kept: the dashboard lists it under
+    // Data from removed apps with this release waiting, so it is not a fault.
+    const held = error instanceof PluginError && error.pluginCode === "retained_data_other_developer";
+    if (!held) console.warn(`[plugins] Bundled plugin ${pluginId} could not be synced: ${reason}`);
     result.failed.push({ pluginId, reason });
     // A running app whose release this deployment cannot install: it cannot
     // run the old one either (its code is gone), so say so where the merchant

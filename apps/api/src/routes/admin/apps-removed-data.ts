@@ -1,11 +1,16 @@
-// Data from removed apps (docs/platform/PLUGINS.md, "Uninstalling"): what an
-// app that is no longer installed left in the store (any source, including a
-// bundled app taken out of the deployment), by app, and the Super Admin's
-// "Delete data" for one app's group. Reinstalling the app reclaims its data
-// instead. Registered before `/{id}` in apps.ts.
+// Data from removed apps (packages/plugin-sdk/docs/apps.md, "Uninstalling"):
+// what an app that is no longer installed left in the store (any source,
+// including a bundled app taken out of the deployment), by app, with the key
+// it belongs to, and the Super Admin's two decisions for one app's group:
+// "Delete data", or "Hand over data" to another key, for a release of the
+// same app from another source or signer that is held until then (a signed
+// upload moved into the store's own bundled code). Reinstalling the app with
+// the same key reclaims its data instead. Registered before `/{id}` in apps.ts.
 import { createRoute, z, type OpenAPIHono } from "@hono/zod-openapi";
-import { listRemovedAppData } from "@scalius/core/modules/plugins";
+import { handOverRemovedAppData, listRemovedAppData } from "@scalius/core/modules/plugins";
 import { PLUGIN_ID_PATTERN } from "@scalius/shared/plugins";
+import { PLUGIN_KEY_ID } from "@scalius/shared/plugins/registry";
+import { BUNDLED_PLUGINS } from "../../plugins/bundled.gen";
 import { conflictResponse, errorResponses, successEnvelope } from "../../schemas/responses";
 import { ForbiddenError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
@@ -16,7 +21,13 @@ const removedAppDataSchema = z.object({
   id: z.string().openapi({ description: "The removed app's id (vendor.name): the namespace of its object types and custom fields." }),
   name: z.string().openapi({ description: "The app's name when it was removed; its id when the store kept no record of the removal." }),
   removedAt: z.string().nullable().openapi({ description: "When it was uninstalled keeping its data; null when the store kept no record." }),
-  revision: z.number().int().min(0).openapi({ description: "Send it back as expectedRevision to delete this data (0: the store kept no record of the removal)." }),
+  revision: z.number().int().min(0).openapi({ description: "Send it back as expectedRevision to delete or hand over this data (0: the store kept no record of the removal)." }),
+  signerKeyId: z.string().nullable().openapi({ description: "The key the data belongs to: the signer of the release that kept it (its fingerprint is this id in groups of four). null: unsigned or bundled code, or no record. Only a release signed with this key reclaims the data on its own." }),
+  waitingRelease: z.object({
+    source: z.literal("bundled"),
+    version: z.string(),
+    signerKeyId: z.null(),
+  }).nullable().openapi({ description: "A release of this app in this deployment's own code that cannot install while the data belongs to another key. It installs once the data is deleted or handed over to it (signerKeyId null)." }),
   objectTypes: z.number().int(),
   records: z.number().int().openapi({ description: "Entries of its object types." }),
   objectTypeHandles: z.array(z.string()).openapi({ description: "Its object types the dashboard lists under Objects." }),
@@ -53,11 +64,16 @@ export function registerRemovedAppDataRoutes(app: OpenAPIHono<{ Bindings: Env }>
     const db = c.get("db");
     // A bundled app in this deployment is installed, not removed.
     await syncBundledPlugins(db);
-    const apps = (await listRemovedAppData(db)).map(({ pluginId, removedAt, ...entry }) => ({
-      id: pluginId,
-      ...entry,
-      removedAt: isoOrNull(removedAt),
-    }));
+    const apps = (await listRemovedAppData(db)).map(({ pluginId, removedAt, ...entry }) => {
+      // Still listed although this deployment bundles it: its sync was held by the data's owner key.
+      const bundled = Object.prototype.hasOwnProperty.call(BUNDLED_PLUGINS, pluginId) ? BUNDLED_PLUGINS[pluginId]! : null;
+      return {
+        id: pluginId,
+        ...entry,
+        removedAt: isoOrNull(removedAt),
+        waitingRelease: bundled && entry.signerKeyId !== null ? { source: "bundled" as const, version: bundled.version, signerKeyId: null } : null,
+      };
+    });
     return ok(c, { apps });
   });
 
@@ -114,5 +130,60 @@ export function registerRemovedAppDataRoutes(app: OpenAPIHono<{ Bindings: Env }>
     await syncBundledPlugin(db, id);
     const result = await deleteRemovedAppDataWithFiles(db, c.env, id, expectedRevision);
     return ok(c, { id, deleted: true as const, ...result });
+  });
+
+  app.openapi(createRoute({
+    method: "post",
+    path: "/removed-data/{id}/hand-over",
+    operationId: "dashboard.apps.removed_data_hand_over",
+    tags: ["Admin - Apps"],
+    summary: "Hand a removed app's data over to another key",
+    description: "Super Admin in the dashboard only (never an agent or an app). Data an uninstall kept belongs to the key that signed the release that kept it, and only that key's release reclaims it. This lets a release of the same app id with another key, or a move between a signed upload and the store's own bundled or unsigned code (signerKeyId null), reclaim everything listed, settings included: that release's code can then read and change it. A bundled release waiting for it installs at once. Refused while the app is installed, or when the group changed since the revision read.",
+    request: {
+      params: idParams,
+      body: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: z.object({
+              expectedRevision: z.number().int().min(0).openapi({ description: "The group's revision from dashboard.apps.removed_data_list." }),
+              signerKeyId: z.string().regex(PLUGIN_KEY_ID).nullable().openapi({ description: "The key that may take the data: the waiting release's signer (the key id an upload refusal names as releaseSigner), or null for bundled or unsigned code." }),
+            }).strict(),
+          },
+        },
+      },
+    },
+    responses: {
+      200: {
+        description: "Handed over",
+        content: {
+          "application/json": {
+            schema: successEnvelope(z.object({
+              id: z.string(),
+              revision: z.number().int().openapi({ description: "The group's new revision (0: the store kept no record, so any release reclaims it already)." }),
+              installed: z.boolean().openapi({ description: "Whether a bundled release of this app was waiting and is now installed with the data." }),
+            })),
+          },
+        },
+      },
+      400: errorResponses[400],
+      401: errorResponses[401],
+      403: errorResponses[403],
+      409: conflictResponse,
+    },
+  }), async (c) => {
+    c.header("Cache-Control", "private, no-store");
+    const actor = c.get("user") as { id?: string; isSuperAdmin?: boolean } | undefined;
+    // Who may read an app's data is a trust decision, like trusting a developer key: a person's, in the dashboard.
+    if (!actor?.id || actor.isSuperAdmin !== true || c.get("agentPrincipal") || c.get("pluginPrincipal")) {
+      throw new ForbiddenError("Only a Super Admin in the dashboard can hand an app's data to another release.");
+    }
+    const { id } = c.req.valid("param");
+    const { expectedRevision, signerKeyId } = c.req.valid("json");
+    const db = c.get("db");
+    const { revision } = await handOverRemovedAppData(db, id, { expectedRevision, signerKeyId });
+    // A bundled release held by the data's owner key installs now, with the data.
+    const installed = signerKeyId === null && (await syncBundledPlugin(db, id)) !== null;
+    return ok(c, { id, revision, installed });
   });
 }

@@ -67,6 +67,14 @@ export const DASHBOARD_APP_OPERATIONS = {
     revision: "required",
     limits: { request: 4_096, response: 4_096 },
   },
+  "dashboard.apps.removed_data_hand_over": {
+    exposure: "excluded",
+    risk: "security",
+    batch: "forbidden",
+    revision: "required",
+    limits: { request: 4_096, response: 4_096 },
+    reason: "Letting another release's code read and change an app's kept data is a Super Admin's trust decision in the dashboard, like trusting a developer key.",
+  },
   "dashboard.apps.logs_list": { limits: { response: 65_536 } },
   "dashboard.apps.deliveries_list": { limits: { response: 65_536 } },
   "dashboard.apps.delivery_retry": {

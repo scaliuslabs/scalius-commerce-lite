@@ -9,10 +9,15 @@
 // reinstall picks its settings up again and the dashboard can name the data
 // of an app that is no longer installed (any source, including a bundled app
 // removed from the deployment). Reinstalling reclaims all of it: every
-// reader keys on the plugin id. So only the same developer reclaims it
-// (security audit N4): `installPlugin` refuses a release under that id from
-// another signer while the data is kept, and the data stays here, listed and
-// deletable, until a Super Admin deletes it.
+// reader keys on the plugin id. So kept data belongs to the key that signed
+// the release that wrote it (none for unsigned or bundled code), and only a
+// release with that key reclaims it on its own (security audit N4). A
+// release under the id from another key, or a move between a signed upload
+// and unsigned or bundled code, is held while the data is kept: the group
+// lists here with its owner key, and a Super Admin either deletes the data
+// (the release installs clean) or hands it over to the waiting release's key
+// (`handOverRemovedAppData`; it then reclaims everything). With nothing kept
+// that another release could read, nothing is held.
 //
 // `appDataDeleteStatements` is the one delete, used by an uninstall that does
 // not keep data and by "Delete data" on a removed app's group. Catalogue
@@ -168,6 +173,12 @@ export interface RemovedAppData {
   removedAt: number | null;
   /** The "Delete data" precondition: 0 when the store kept no record of the removal. */
   revision: number;
+  /**
+   * The key the data belongs to: the signer of the release that kept it
+   * (null: unsigned or bundled code, or no record). Only a release signed
+   * with it reclaims the data on its own.
+   */
+  signerKeyId: string | null;
   objectTypes: number;
   records: number;
   /** Object types the dashboard lists (`admin` read or edit), with their handles. */
@@ -187,6 +198,7 @@ function emptyGroup(pluginId: string): RemovedAppData {
     name: pluginId,
     removedAt: null,
     revision: 0,
+    signerKeyId: null,
     objectTypes: 0,
     records: 0,
     objectTypeHandles: [],
@@ -205,11 +217,12 @@ function emptyGroup(pluginId: string): RemovedAppData {
  * whose only trace is history (logs, deliveries) or untouched settings is
  * not listed.
  */
-export async function listRemovedAppData(db: Database): Promise<RemovedAppData[]> {
+export async function listRemovedAppData(db: Database, options: { pluginId?: string } = {}): Promise<RemovedAppData[]> {
   const installed = new Set((await db.select({ id: pluginInstallations.pluginId }).from(pluginInstallations).all()).map((row) => row.id));
   const groups = new Map<string, RemovedAppData>();
   const group = (pluginId: string) => {
     if (installed.has(pluginId)) return null;
+    if (options.pluginId !== undefined && pluginId !== options.pluginId) return null;
     let entry = groups.get(pluginId);
     if (!entry) groups.set(pluginId, entry = emptyGroup(pluginId));
     return entry;
@@ -257,6 +270,7 @@ export async function listRemovedAppData(db: Database): Promise<RemovedAppData[]
     if (app.name) entry.name = app.name;
     entry.removedAt = app.removedAt || null;
     entry.revision = app.revision;
+    entry.signerKeyId = app.signerKeyId;
     entry.settings = app.settingsCustomized;
   }
   return [...groups.values()]
@@ -267,6 +281,55 @@ export async function listRemovedAppData(db: Database): Promise<RemovedAppData[]
 
 const NOT_INSTALLED_GUARD = "app_data_installed";
 const RETAINED_GUARD = "app_data_changed";
+
+/** One removed app's kept data (null: it keeps nothing another release could read). */
+export async function removedAppDataOf(db: Database, pluginId: string): Promise<RemovedAppData | null> {
+  return (await listRemovedAppData(db, { pluginId }))[0] ?? null;
+}
+
+/**
+ * A Super Admin hands a removed app's kept data over to another key
+ * (`signerKeyId`; null for unsigned or bundled code): the next release of the
+ * app signed with that key reclaims it, settings included, as the original
+ * developer's would. For moving an app between sources (a signed upload to
+ * the store's own bundled code) or to a developer's new key. Refused while
+ * the app is installed or once the group changed since `expectedRevision`.
+ */
+export async function handOverRemovedAppData(
+  db: Database,
+  pluginId: string,
+  input: { expectedRevision: number; signerKeyId: string | null },
+): Promise<{ revision: number }> {
+  const changed = (currentRevision: number) => new PluginError(
+    "installation_revision_conflict",
+    `The data of ${pluginId} changed since revision ${input.expectedRevision}; reload and try again.`,
+    { currentRevision },
+  );
+  if (await db.select({ id: pluginInstallations.pluginId }).from(pluginInstallations).where(eq(pluginInstallations.pluginId, pluginId)).get()) {
+    throw new PluginError("installation_exists", `${pluginId} is installed and owns its data.`);
+  }
+  const retained = await readRetainedApp(db, pluginId);
+  if (!retained?.app) {
+    // No record: nothing names an owner, so any release reclaims the data already.
+    if (input.expectedRevision !== 0) throw changed(0);
+    return { revision: 0 };
+  }
+  if (retained.app.revision !== input.expectedRevision) throw changed(retained.app.revision);
+  const revision = retained.app.revision + 1;
+  const value = JSON.stringify({ ...retained.app, signerKeyId: input.signerKeyId, revision });
+  try {
+    await safeBatch(db, [
+      buildBatchGuard(db, sql`NOT EXISTS (SELECT 1 FROM ${pluginInstallations} WHERE ${pluginInstallations.pluginId} = ${pluginId})`, NOT_INSTALLED_GUARD),
+      buildBatchGuard(db, sql`EXISTS (SELECT 1 FROM ${systemKv} WHERE ${systemKv.key} = ${retainedAppKey(pluginId)} AND ${systemKv.value} = ${retained.stored})`, RETAINED_GUARD),
+      db.update(systemKv).set({ value }).where(eq(systemKv.key, retainedAppKey(pluginId))),
+    ] as never);
+  } catch (error) {
+    if (isBatchGuardError(error, NOT_INSTALLED_GUARD)) throw new PluginError("installation_exists", `${pluginId} is installed and owns its data.`);
+    if (isBatchGuardError(error, RETAINED_GUARD)) throw changed((await readRetainedApp(db, pluginId))?.app?.revision ?? 0);
+    throw error;
+  }
+  return { revision };
+}
 
 /**
  * Permanently deletes the data of an app that is not installed, if it is

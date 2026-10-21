@@ -18,6 +18,7 @@ import {
   postApiV1AdminAppsByIdFeaturesByFeatureIdEnable,
   postApiV1AdminAppsByIdUninstall,
   postApiV1AdminAppsRemovedDataByIdDelete,
+  postApiV1AdminAppsRemovedDataByIdHandOver,
   putApiV1AdminAppsByIdSettings,
 } from "@scalius/api-client/sdk";
 import type {
@@ -169,6 +170,15 @@ export const removedAppDataQueryOptions = () =>
 /** Permanently deletes one removed app's group, if it is still the one the page listed. */
 export function deleteRemovedAppData(group: Pick<RemovedAppData, "id" | "revision">) {
   return apiData(postApiV1AdminAppsRemovedDataByIdDelete({ path: { id: group.id }, body: { expectedRevision: group.revision } }));
+}
+
+/**
+ * Lets the release signed with `signerKeyId` (null: the store's own bundled
+ * code or an unsigned upload) take a removed app's kept data, if the group is
+ * still the one the page listed. A waiting bundled release installs at once.
+ */
+export function handOverRemovedAppData(group: Pick<RemovedAppData, "id" | "revision">, signerKeyId: string | null) {
+  return apiData(postApiV1AdminAppsRemovedDataByIdHandOver({ path: { id: group.id }, body: { expectedRevision: group.revision, signerKeyId } }));
 }
 
 export async function retryAppDelivery(id: string, deliveryId: string) {

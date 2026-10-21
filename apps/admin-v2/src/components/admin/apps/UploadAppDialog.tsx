@@ -13,7 +13,7 @@ import { useMessages } from "~/i18n";
 import { appsLifecycleMessages, type AppsLifecycleMessageKey } from "~/i18n/apps-lifecycle";
 import { queryKeys } from "~/lib/query-keys";
 import { toast } from "~/lib/toast";
-import { appErrorCode } from "~/lib/api-query-options/apps";
+import { appErrorCode, handOverRemovedAppData } from "~/lib/api-query-options/apps";
 import { appErrorDetails, appErrorMessage, uploadAppPackage } from "~/lib/api-query-options/apps-lifecycle";
 import { pluginKeyFingerprint } from "@scalius/shared/plugins/registry";
 
@@ -22,7 +22,13 @@ const MAX_PACKAGE_BYTES = 20 * 1024 * 1024;
 
 /** Where the upload stands: choosing a file, or stopped at a warning that a Super Admin may accept. */
 /** `keyId` identifies the signing key; `developer` is only the label the signer gave it. */
-type Step = { kind: "choose" } | { kind: "untrusted"; developer: string | null; keyId: string | null } | { kind: "unsigned" };
+type Trust = { allowUnsigned?: boolean; trustDeveloper?: boolean };
+type Step =
+  | { kind: "choose" }
+  | { kind: "untrusted"; developer: string | null; keyId: string | null }
+  | { kind: "unsigned" }
+  /** Held: data an earlier version of this app kept belongs to another key (or to the store's own code). */
+  | { kind: "held"; appId: string; releaseSigner: string | null; retainedRevision: number; trust: Trust };
 
 const REFUSALS: Record<string, AppsLifecycleMessageKey> = {
   "package_invalid": "packageInvalid",
@@ -45,11 +51,16 @@ export function UploadAppDialog({ open, onOpenChange }: { open: boolean; onOpenC
   const [problem, setProblem] = useState<{ text: string; detail: string | null } | null>(null);
 
   const upload = useMutation({
-    mutationFn: (trust: { allowUnsigned?: boolean; trustDeveloper?: boolean }) => uploadAppPackage(file!, trust),
+    mutationFn: async (trust: Trust) => {
+      // A Super Admin's "hand over and install": the kept data goes to this release's key first.
+      if (step.kind === "held") await handOverRemovedAppData({ id: step.appId, revision: step.retainedRevision }, step.releaseSigner);
+      return uploadAppPackage(file!, trust);
+    },
     onSuccess: async ({ app, updated, rolledBack, error }) => {
       queryClient.setQueryData(queryKeys.apps.detail(app.id), app);
       void queryClient.invalidateQueries({ queryKey: queryKeys.apps.list() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.apps.surfaces() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.apps.removedData() });
       if (rolledBack) toast.error(t("updateUndone", { error: error ?? "" }), { duration: 10000 });
       else if (app.needsApproval) toast.success(t("updatedNeedsApproval"));
       else toast.success(t(updated ? "uploadUpdated" : "uploadInstalled"));
@@ -57,8 +68,14 @@ export function UploadAppDialog({ open, onOpenChange }: { open: boolean; onOpenC
       onOpenChange(false);
       await navigate({ to: "/admin/apps/$pluginId", params: { pluginId: app.id } });
     },
-    onError: (error) => {
-      const { code, developer, keyId } = appErrorDetails(error);
+    onError: (error, trust) => {
+      const { code, developer, keyId, releaseSigner, retainedRevision } = appErrorDetails(error);
+      const appId = appErrorDetails(error).pluginId;
+      if (code === "retained_data_other_developer" && retainedRevision !== null && appId) {
+        setProblem(null);
+        setStep({ kind: "held", appId, releaseSigner, retainedRevision, trust });
+        return;
+      }
       if (code === "signature_untrusted") {
         setProblem(null);
         setStep({ kind: "untrusted", developer, keyId });
@@ -99,7 +116,7 @@ export function UploadAppDialog({ open, onOpenChange }: { open: boolean; onOpenC
     }
   };
 
-  let warning: { title: string; body: string; ask: string; action: string; trust: { allowUnsigned?: boolean; trustDeveloper?: boolean } } | null = null;
+  let warning: { title: string; body: string; ask: string; action: string; trust: Trust } | null = null;
   if (step.kind === "untrusted") {
     warning = {
       title: t("untrustedTitle"),
@@ -109,6 +126,14 @@ export function UploadAppDialog({ open, onOpenChange }: { open: boolean; onOpenC
       ask: t("askForTrust"),
       action: t("trustAndInstall"),
       trust: { trustDeveloper: true },
+    };
+  } else if (step.kind === "held") {
+    warning = {
+      title: t("heldTitle"),
+      body: step.releaseSigner ? t("heldBodySigned", { fingerprint: pluginKeyFingerprint(step.releaseSigner) }) : t("heldBodyUnsigned"),
+      ask: t("heldAsk"),
+      action: t("handOverAndInstall"),
+      trust: step.trust,
     };
   } else if (step.kind === "unsigned") {
     warning = { title: t("unsignedTitle"), body: t("unsignedBody"), ask: t("askForUnsigned"), action: t("installUnsigned"), trust: { allowUnsigned: true } };

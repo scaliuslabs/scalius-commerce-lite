@@ -21,6 +21,7 @@ const sdk = vi.hoisted(() => ({
   postApiV1AdminAppsRegistryInstall: vi.fn(),
   postApiV1AdminAppsByIdUpdate: vi.fn(),
   postApiV1AdminAppsUpload: vi.fn(),
+  postApiV1AdminAppsRemovedDataByIdHandOver: vi.fn(),
   postApiV1AdminAppsStopThirdParty: vi.fn(),
   postApiV1AdminAppsByIdStop: vi.fn(),
   postApiV1AdminAppsByIdFeaturesByFeatureIdEnable: vi.fn(),
@@ -1432,6 +1433,26 @@ describe("Upload and emergency stop on the Apps list", () => {
     await click(button("Trust this key and install", dialog()));
     await vi.waitFor(() => expect(sdk.postApiV1AdminAppsUpload).toHaveBeenCalledTimes(2));
     expect((sdk.postApiV1AdminAppsUpload.mock.calls[1]![0] as { query: unknown }).query).toEqual({ trustDeveloper: "true" });
+    await vi.waitFor(() => expect(navigate).toHaveBeenCalled());
+  });
+
+  it("holds an upload over data another key kept; a Super Admin hands it over and installs", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST()));
+    sdk.postApiV1AdminAppsRemovedDataByIdHandOver.mockImplementation(() => ok({ id: "acme.wrap", revision: 4, installed: false }));
+    sdk.postApiV1AdminAppsUpload
+      .mockImplementationOnce(() => refused(409, { code: "retained_data_other_developer", pluginId: "acme.wrap", retainedSigner: "1a2b3c4d5e6f7a8b", releaseSigner: "0123456789abcdef", retainedRevision: 3 }))
+      .mockImplementationOnce(() => ok({ app: detail({ id: "acme.wrap" }), updated: false, rolledBack: false, error: null }));
+    await render(<AppsList />, MANAGER, true);
+    await vi.waitFor(() => expect(hasButton("Upload app")).toBe(true));
+    await click(button("Upload app"));
+    await vi.waitFor(() => expect(dialog()?.textContent).toContain("Upload an app"));
+    await chooseFile();
+    await click(button("Upload", dialog()));
+    await vi.waitFor(() => expect(dialog().textContent).toContain("This file is signed with key 0123 4567 89ab cdef."));
+
+    await click(button("Hand over data and install", dialog()));
+    await vi.waitFor(() => expect(sdk.postApiV1AdminAppsUpload).toHaveBeenCalledTimes(2));
+    expect(sdk.postApiV1AdminAppsRemovedDataByIdHandOver).toHaveBeenCalledWith({ path: { id: "acme.wrap" }, body: { expectedRevision: 3, signerKeyId: "0123456789abcdef" } });
     await vi.waitFor(() => expect(navigate).toHaveBeenCalled());
   });
 
