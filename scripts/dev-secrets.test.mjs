@@ -31,4 +31,19 @@ describe("dev secrets", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it("rebinds a service binding to this stack's local worker name", () => {
+    const dir = mkdtempSync(join(tmpdir(), "scalius-dev-secrets-"));
+    try {
+      const source = join(dir, "wrangler.jsonc");
+      writeFileSync(source, JSON.stringify({ name: "s", services: [{ binding: "BACKEND_API", service: "scalius-api" }, { binding: "OTHER", service: "x" }] }));
+      const out = writeDevWranglerConfig(pathToFileURL(source), ["SCALIUS_SECRET"], { services: { BACKEND_API: "scalius-api-local-8931" } });
+      expect(JSON.parse(readFileSync(out, "utf8")).services).toEqual([
+        { binding: "BACKEND_API", service: "scalius-api-local-8931" },
+        { binding: "OTHER", service: "x" },
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

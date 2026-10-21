@@ -255,14 +255,6 @@ start_mailpit() {
   exit 1
 }
 
-stop_storefront_background() {
-  if [ "$DRY_RUN" = "1" ] || [ -z "$STOREFRONT_PID" ]; then
-    return
-  fi
-
-  (cd "$ROOT_DIR/apps/storefront" && "$PNPM_BIN" exec astro dev stop >/dev/null 2>&1) || true
-}
-
 # Applies pending migrations to the database the API Worker will open: the
 # local Wrangler config (the one `pnpm dev` in apps/api uses, not the deploy
 # config, whose database id would give a different local SQLite file) and the
@@ -329,7 +321,6 @@ cleanup() {
 
   echo ""
   echo "Shutting down dev servers..."
-  stop_storefront_background
   terminate_owned_process "$STOREFRONT_PID" "Storefront"
   terminate_owned_process "$ADMIN_PID" "Admin dashboard"
   terminate_owned_process "$API_PID" "API worker"
@@ -386,22 +377,16 @@ start_admin() {
 start_storefront() {
   echo "Starting storefront (port $STOREFRONT_PORT)..."
   if [ "$DRY_RUN" = "1" ]; then
-    echo "[dry-run] cd apps/storefront && $PNPM_BIN dev"
+    echo "[dry-run] cd apps/storefront && $PNPM_BIN dev --ignore-lock"
     return
   fi
 
+  # --ignore-lock keeps `astro dev` in the foreground: run by an AI agent,
+  # Astro otherwise detaches the server (PPID 1, "background mode"), outside
+  # the process tree this wrapper stops, so it outlived the stack.
   (
     cd "$ROOT_DIR/apps/storefront" || exit 1
-    "$PNPM_BIN" dev
-    status=$?
-    if [ "$status" -ne 0 ]; then
-      exit "$status"
-    fi
-
-    if "$PNPM_BIN" exec astro dev status >/dev/null 2>&1; then
-      echo "Storefront is running in Astro background mode; streaming astro dev logs."
-      exec "$PNPM_BIN" exec astro dev logs --follow
-    fi
+    exec "$PNPM_BIN" dev --ignore-lock
   ) &
   STOREFRONT_PID=$!
 }
