@@ -107,7 +107,7 @@ export function CustomerAddressesCard({ customerId, addresses, canEdit }: {
       <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
         <CardTitle>{t("addresses")}</CardTitle>
         {canEdit ? (
-          <Button variant="ghost" size="sm" onClick={() => setEditing({ kind: "new" })}>{t("addAddress")}</Button>
+          <Button variant="link" size="sm" onClick={() => setEditing({ kind: "new" })}>{t("addAddress")}</Button>
         ) : null}
       </CardHeader>
       <CardContent>

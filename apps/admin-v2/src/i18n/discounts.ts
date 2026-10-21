@@ -3,7 +3,7 @@ import { defineMessages } from "./index";
 const en = {
   pageTitle: "Discounts",
   createDiscount: "Create discount",
-  emptyTitle: "Manage discounts and promotions",
+  emptyTitle: "Create your first discount",
   emptyBody: "Create discount codes and automatic discounts that apply at checkout.",
   searchPlaceholder: "Search discounts",
   tabAll: "All",
@@ -224,7 +224,7 @@ export const discountsMessages = defineMessages({
   bn: {
     pageTitle: "ডিসকাউন্ট",
     createDiscount: "ডিসকাউন্ট তৈরি করুন",
-    emptyTitle: "ডিসকাউন্ট ও অফার পরিচালনা করুন",
+    emptyTitle: "প্রথম ডিসকাউন্ট তৈরি করুন",
     emptyBody: "ডিসকাউন্ট কোড ও অটোমেটিক ডিসকাউন্ট তৈরি করুন, যা চেকআউটে কাজ করবে।",
     searchPlaceholder: "ডিসকাউন্ট খুঁজুন",
     tabAll: "সব",

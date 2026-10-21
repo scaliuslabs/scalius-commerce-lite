@@ -194,8 +194,9 @@ function HomePage() {
                             <span title={`${formatOrderNumber(order.orderNumber, order.id)} · ${order.customerName}`} className="block truncate font-medium">
                               {formatOrderNumber(order.orderNumber, order.id)} · {order.customerName}
                             </span>
-                            <span className="block text-muted-foreground">
-                              {placed ? formatDateTime(placed, { dateStyle: "medium", timeStyle: "short" }) : null}
+                            {/* One line on a phone ("Sep 20, 10:55 PM"); the full date on hover. */}
+                            <span className="block truncate text-muted-foreground" title={placed ? formatDateTime(placed, { dateStyle: "full", timeStyle: "short" }) : undefined}>
+                              {placed ? formatDateTime(placed, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : null}
                             </span>
                           </span>
                           <Badge variant={statusBadgeVariant(order.status, "order")}>{orderStatusLabel(to, order.status)}</Badge>
