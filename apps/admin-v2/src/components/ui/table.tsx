@@ -118,8 +118,9 @@ const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<
         // eslint-disable-next-line no-restricted-syntax -- the ::after line is the sticky border
         "sticky top-[var(--index-sticky-top,0px)] z-10 h-9 whitespace-nowrap bg-muted px-3 text-start align-middle in-data-[scrolls]:top-0 text-caption font-medium text-muted-foreground after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-border has-[[role=checkbox]]:w-10 has-[[role=checkbox]]:pe-0 in-data-[scrolls]:data-[pin]:z-20",
         LAYOUT,
-        afterNumeric(props),
         className,
+        // After className: the list kit's `px-1.5` padding would otherwise merge this away.
+        afterNumeric(props),
       )}
       {...props}
     />
@@ -134,8 +135,9 @@ const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<
       className={cn(
         "px-3 py-1.5 align-middle has-[[role=checkbox]]:pe-0 in-data-[scrolls]:data-[pin]:z-10 in-data-[scrolls]:data-[pin]:bg-card in-data-[scrolls]:data-[pin]:group-hover:bg-muted in-data-[scrolls]:data-[pin]:group-data-[state=selected]:bg-accent",
         LAYOUT,
-        afterNumeric(props),
         className,
+        // After className: the list kit's `px-1.5` padding would otherwise merge this away.
+        afterNumeric(props),
       )}
       {...props}
     />

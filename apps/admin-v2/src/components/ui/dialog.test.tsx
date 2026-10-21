@@ -76,7 +76,7 @@ describe("modal top anchor", () => {
 
   it("pins the top edge where the first content centres the dialog, before the first paint", async () => {
     await render(<Harness />);
-    expect(top()).toBe("max(1rem, 250px)");
+    expect(top()).toBe("max(4rem, 250px)");
     expect(panel()?.hasAttribute("data-anchored")).toBe(true);
   });
 
@@ -86,7 +86,7 @@ describe("modal top anchor", () => {
     panelHeight = 620;
     await render(<Harness extra />);
     expect(document.body.textContent).toContain("A chip row appeared");
-    expect(top()).toBe("max(1rem, 250px)");
+    expect(top()).toBe("max(4rem, 250px)");
     // No re-measure: the position was decided once.
     expect(measured).toBe(before);
   });
@@ -107,7 +107,7 @@ describe("modal top anchor", () => {
     await render(<Counter />);
     panelHeight = 700;
     await act(async () => document.querySelector<HTMLButtonElement>("button:not([class])")!.click());
-    expect(top()).toBe("max(1rem, 250px)");
+    expect(top()).toBe("max(4rem, 250px)");
   });
 
   it("lifts the panel, never lowers it, when loaded content outgrows the room below its top", async () => {
@@ -121,40 +121,40 @@ describe("modal top anchor", () => {
     vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockImplementation(function (this: HTMLElement) { return this.matches(PANEL) ? box.scroll : 0; });
     vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockImplementation(function (this: HTMLElement) { return this.matches(PANEL) ? box.client : 0; });
     await render(<Harness />);
-    expect(top()).toBe("max(1rem, 250px)");
+    expect(top()).toBe("max(4rem, 250px)");
     const changed = () => act(() => { for (const watcher of watchers) watcher(); });
     // A list loads: 620px of content, but the cap from a 250px top leaves 534px.
     box.scroll = 620;
     box.client = 534;
     changed();
-    expect(top()).toBe("max(1rem, 90px)");
+    expect(top()).toBe("max(4rem, 90px)");
     // It shrinks again: the panel stays where it is.
     box.scroll = 400;
     box.client = 400;
     changed();
-    expect(top()).toBe("max(1rem, 90px)");
+    expect(top()).toBe("max(4rem, 90px)");
     // Content that fits under the pinned top never moves it.
     box.scroll = 500;
     box.client = 500;
     changed();
-    expect(top()).toBe("max(1rem, 90px)");
+    expect(top()).toBe("max(4rem, 90px)");
     vi.unstubAllGlobals();
   });
 
   it("measures again on every open", async () => {
     await render(<Harness />);
-    expect(top()).toBe("max(1rem, 250px)");
+    expect(top()).toBe("max(4rem, 250px)");
     await render(<Harness open={false} />);
     expect(panel()).toBeNull();
     panelHeight = 500;
     await render(<Harness />);
-    expect(top()).toBe("max(1rem, 150px)");
+    expect(top()).toBe("max(4rem, 150px)");
   });
 
   it("never sits nearer than 1rem to the top, and lets the height cap scroll a taller panel", async () => {
     panelHeight = 900;
     await render(<Harness />);
-    expect(top()).toBe("max(1rem, -50px)");
+    expect(top()).toBe("max(4rem, -50px)");
     // The cap stops 1rem above the bottom edge, measured from the pinned top.
     expect(panel()?.className).toContain("max-h-[calc(100dvh-var(--dialog-top,0px)-1rem)]");
     expect(panel()?.className).toContain("overflow-y-auto");
@@ -164,7 +164,7 @@ describe("modal top anchor", () => {
     await render(<Harness />);
     panelHeight = 400;
     resize({ height: 600 });
-    expect(top()).toBe("max(1rem, 100px)");
+    expect(top()).toBe("max(4rem, 100px)");
   });
 
   it("leaves a phone's bottom sheet alone, including after a resize", async () => {
@@ -177,7 +177,7 @@ describe("modal top anchor", () => {
     expect(top()).toBe("");
     // Widening to a tablet turns it into a centred, anchored dialog; narrowing releases it.
     resize({ width: 900 });
-    expect(top()).toBe("max(1rem, 200px)");
+    expect(top()).toBe("max(4rem, 200px)");
     resize({ width: 390 });
     expect(panel()?.hasAttribute("data-anchored")).toBe(false);
     expect(top()).toBe("");
@@ -199,7 +199,7 @@ describe("modal top anchor", () => {
         </AlertDialogContent>
       </AlertDialog>,
     );
-    expect(top()).toBe("max(1rem, 250px)");
+    expect(top()).toBe("max(4rem, 250px)");
     expect(panel()?.hasAttribute("data-anchored")).toBe(true);
   });
 

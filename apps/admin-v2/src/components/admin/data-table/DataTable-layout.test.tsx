@@ -133,6 +133,8 @@ describe("DataTable column layout", () => {
     const cells = [...host.querySelectorAll("tbody td")];
     // A start-aligned column after a number keeps 24px from it (T6).
     expect(cells[4]?.hasAttribute("data-after-numeric")).toBe(true);
+    // The kit's own cell padding (`px-1.5`) must not merge the extra start padding away.
+    expect(cells[4]?.className.split(" ")).toContain("ps-5");
     expect(cells[2]?.hasAttribute("data-after-numeric")).toBe(false);
     // Every row has its density's one height (T3).
     for (const row of host.querySelectorAll("tbody tr")) expect(row.className).toContain("h-[calc(2lh+12px)]");

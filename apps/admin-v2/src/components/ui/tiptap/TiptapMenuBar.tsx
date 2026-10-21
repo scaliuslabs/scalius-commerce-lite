@@ -374,7 +374,7 @@ export const TiptapMenuBar = ({
           <ToolbarButton onClick={() => toggleRichTextOrderedList(editor)} isActive={toolbarState.orderedList} disabled={!toolbarState.canToggleList} tooltip={t("numberedList")}><ListOrdered /></ToolbarButton>
           <DropdownMenu onOpenChange={(open) => { if (open) { insertAnchor.current = insertTrigger.current; inserted.current = false; } }}>
             <DropdownMenuTrigger asChild>
-              <Button ref={insertTrigger} type="button" variant="ghost" size="icon" className="h-11 w-11 shrink-0 sm:h-8 sm:w-20 pointer-coarse:h-11 pointer-coarse:w-11" aria-label={t("insert")}>
+              <Button ref={insertTrigger} type="button" variant="ghost" size="sm" className="w-11 shrink-0 sm:w-auto pointer-coarse:h-11 pointer-coarse:w-11" aria-label={t("insert")}>
                 <Plus className="hidden text-muted-foreground pointer-coarse:block" />
                 <span className="text-body text-muted-foreground pointer-coarse:hidden">{t("insert")}</span>
                 <ChevronDown className="text-muted-foreground pointer-coarse:hidden" />

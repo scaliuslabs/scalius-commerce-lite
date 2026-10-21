@@ -29,12 +29,13 @@ export function IdText({
       <span title={value} className="min-w-0 max-w-48 truncate whitespace-nowrap font-mono">
         {value}
       </span>
+      {/* A 44px target on phones that overlaps the lines around it instead of making this one 44px tall. */}
       {copy ? (
         <button
           type="button"
           aria-label={copied ? t("copied") : t("copy", { value })}
           data-row-click-ignore=""
-          className="flex size-11 sm:size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 outline-none hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring group-hover/id:opacity-100 touch-reveal"
+          className="-my-3 flex size-11 shrink-0 items-center justify-center rounded-md sm:size-6 text-muted-foreground opacity-0 outline-none hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring group-hover/id:opacity-100 touch-reveal"
           onClick={() => {
             void navigator.clipboard?.writeText(value).then(() => {
               setCopied(true);

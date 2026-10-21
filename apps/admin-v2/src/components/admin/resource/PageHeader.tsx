@@ -49,8 +49,9 @@ export function PageHeader({ title, backTo, backLabel, backOnlyWithoutPanel = fa
           </Link>
         </Button>
       ) : null}
-      {/* Titles wrap, never truncate (only table cells truncate); a list's one action stays beside its title on phones. */}
-      <div className="flex min-w-0 flex-1 basis-40 flex-col gap-1">
+      {/* Titles wrap, never truncate (only table cells truncate); a list's one action stays beside its title on phones,
+          but a record title keeps at least 192px, so "More actions" drops under it instead of squeezing it to one word a line. */}
+      <div className="flex min-w-0 flex-1 basis-48 flex-col gap-1">
         <div className="flex min-h-9 min-w-0 flex-wrap items-center gap-2">
           <h1 data-slot="page-title" className="min-w-0 break-words text-heading-lg">{title}</h1>
           {status}
@@ -62,7 +63,9 @@ export function PageHeader({ title, backTo, backLabel, backOnlyWithoutPanel = fa
         {meta ? <p className="text-body text-muted-foreground">{meta}</p> : null}
       </div>
       {actions || primaryAction ? (
-        <div data-slot="page-actions" className="flex flex-wrap items-center gap-2">
+        // A record page (it has a back arrow) puts its actions on their own line on phones, so the
+        // title and meta line keep the width; a list's one action stays beside its title.
+        <div data-slot="page-actions" className={cn("flex flex-wrap items-center gap-2", backTo && "max-sm:basis-full")}>
           {actions}
           {primaryAction}
         </div>
