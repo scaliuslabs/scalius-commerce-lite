@@ -40,7 +40,9 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 const SKIN_UNITS = ["header", "footer", "product_card", "product_main", "listing_main"] as const;
 
 /** What the app's own storefront code draws, in plain words (only what it declares). */
-function storefrontParts(app: Pick<AppDetail, "storefront">, t: (key: string) => string): string {
+type StorefrontPartKey = `storefrontPart_${"sections" | "blocks" | "section" | "other" | (typeof SKIN_UNITS)[number]}`;
+
+function storefrontParts(app: Pick<AppDetail, "storefront">, t: (key: StorefrontPartKey) => string): string {
   const { sections = [], components = [], skins = [] } = app.storefront ?? {};
   const parts: string[] = [];
   if (sections.length > 0) parts.push(t("storefrontPart_sections"));
