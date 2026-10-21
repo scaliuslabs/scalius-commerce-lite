@@ -50,7 +50,7 @@ describe("manual collection membership on D1", () => {
       add: ["prod_c", "prod_a", "prod_missing", "prod_gone", "ops006_product", "prod_b", "prod_c"],
     }));
 
-    expect(result).toEqual({ id: "col_eid", version: 4 });
+    expect(result).toEqual({ id: "col_eid", version: 4, slug: null });
     // Ids are opaque: an existing product whose id lacks the usual prefix still counts.
     expect(stored()).toEqual({ productIds: ["prod_a", "prod_c", "ops006_product", "prod_b"], version: 4 });
   });

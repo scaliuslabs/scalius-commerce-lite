@@ -24,6 +24,11 @@ import {
   updateBrandSchema,
   updateBrandStatusSchema,
 } from "@scalius/core/modules/brands/browser";
+import { brands as brandsTable } from "@scalius/database/schema";
+import { and, inArray, isNull } from "drizzle-orm";
+import { planLimits } from "@scalius/shared/plan-limits";
+import { idempotencyKeyHeaderSchema } from "./idempotency";
+import { batchItemKeySchema, batchRequestSchema, batchResultSchema, runBatchCreate, type BatchCreateData, type BatchRef } from "./resources-batch";
 import { ok, created } from "../../utils/api-response";
 import { NotFoundError } from "../../utils/api-error";
 import {
@@ -190,6 +195,57 @@ app.openapi(createRouteDef, async (c) => {
   const result = await createBrand(c.get("db"), c.req.valid("json"));
 
   return created(c, result);
+});
+
+// Batch create (stable app API, resources-batch.ts): many brands per call,
+// each item the create body plus its `key`, replayed per item (its id derives from the key).
+// Bound: plan value `batchCreates.brands` (Free 19, Paid 50). A call costs 2
+// D1 calls and each brand 2: nineteen brands are 40 D1 calls, 46 of Free's 50
+// with the platform's own (resources-batch.d1.test.ts).
+const batchCreateBody = batchRequestSchema(
+  createBrandSchema.safeExtend({ key: batchItemKeySchema }),
+  planLimits("paid").batchCreates.brands,
+);
+
+const batchCreateRoute = createRoute({
+  method: "post",
+  path: "/batch",
+  operationId: "dashboard.brands.batch_create",
+  tags: TAGS,
+  summary: "Create many brands in one call",
+  description: "Creates up to the plan's bound of brands (50 on Paid, fewer on Free), each the body of `brands.create` plus a `key` of yours. Items run in order and one refusal never stops the others: each result is `created`, `replayed` (that key already created its brand earlier; nothing is created again) or `failed` with the refusal's code. Results carry `{ id, slug, revision }`. Send an Idempotency-Key too: a repeat of the whole request returns the first response.",
+  request: {
+    headers: idempotencyKeyHeaderSchema,
+    body: { required: true, content: { "application/json": { schema: batchCreateBody } } },
+  },
+  responses: {
+    200: { description: "One result per item, in request order", content: { "application/json": { schema: successEnvelope(batchResultSchema("brand")) } } },
+    ...errorResponses,
+    409: conflictResponse,
+  },
+});
+
+app.openapi(batchCreateRoute, async (c) => {
+  const db = c.get("db");
+  const { items } = c.req.valid("json");
+  const { data } = await runBatchCreate(c, {
+    operationId: "dashboard.brands.batch_create",
+    noun: "brand",
+    plural: "brands",
+    items,
+    bound: planLimits().batchCreates.brands,
+    idPrefix: "brd_",
+    create: ({ key: _key, ...body }, id) => createBrand(db, body, { id }),
+    existing: async (ids) => new Set((await db.select({ id: brandsTable.id }).from(brandsTable).where(inArray(brandsTable.id, [...ids]))).map((row) => row.id)),
+    readRefs: async (ids) => {
+      const rows = await db
+        .select({ id: brandsTable.id, slug: brandsTable.slug, revision: brandsTable.revision })
+        .from(brandsTable)
+        .where(and(inArray(brandsTable.id, [...ids]), isNull(brandsTable.deletedAt)));
+      return new Map<string, BatchRef>(rows.map((row) => [row.id, row]));
+    },
+  });
+  return ok(c, data as BatchCreateData<"brand">);
 });
 
 const updateRoute = createRoute({

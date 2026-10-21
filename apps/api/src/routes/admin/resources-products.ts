@@ -21,8 +21,13 @@ import { NotFoundError, ValidationError } from "../../utils/api-error";
 import { conflictResponse, errorResponses, namedSharedSchema, successEnvelope } from "../../schemas/responses";
 import { readProductRepresentations } from "../../events/representations";
 import { refreshRecommendationsAfterWrite } from "../../background/catalog";
+import { products } from "@scalius/database/schema";
+import type { Database } from "@scalius/database/client";
+import { and, inArray, isNull } from "drizzle-orm";
+import { planLimits } from "@scalius/shared/plan-limits";
 import { idempotencyKeyHeaderSchema } from "./idempotency";
 import { registerAppContentRoutes } from "./resources-app-content";
+import { batchItemKeySchema, batchRequestSchema, batchResultSchema, runBatchCreate, type BatchCreateData, type BatchRef } from "./resources-batch";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -160,6 +165,34 @@ function issuesError(error: z.ZodError): ValidationError {
   });
 }
 
+/** Whether the database refused the write because a row it names does not exist (any wrapper level). */
+function isForeignKeyRefusal(error: unknown, depth = 0): boolean {
+  if (typeof error !== "object" || error === null || depth > 4) return false;
+  const { message, cause } = error as { message?: unknown; cause?: unknown };
+  return (typeof message === "string" && /FOREIGN KEY constraint failed/i.test(message)) || isForeignKeyRefusal(cause, depth + 1);
+}
+
+/**
+ * The editor's create for a resource-shaped body: the one path of the single
+ * and the batch create. A category, brand, media file or sales channel that
+ * does not exist is a refusal of the input (the product write is one atomic
+ * batch, so nothing is left behind), not a server fault.
+ */
+async function createProductFromBody(db: Database, body: CreateBody, places: number, id?: string): Promise<string> {
+  const parsed = createProductSchema.safeParse(editorCreateInput(body, places));
+  if (!parsed.success) throw issuesError(parsed.error);
+  try {
+    return (await createProduct(db, parsed.data, id ? { id } : {})).id;
+  } catch (error) {
+    if (isForeignKeyRefusal(error)) {
+      throw new ValidationError("A category, brand, media file or sales channel named in the product does not exist.", {
+        fields: ["categoryId", "brandId", "mediaIds", "salesChannelIds"],
+      });
+    }
+    throw error;
+  }
+}
+
 app.openapi(createRoute({
   operationId: "dashboard.resources.products.create",
   method: "post",
@@ -179,13 +212,67 @@ app.openapi(createRoute({
   const db = c.get("db");
   const body = c.req.valid("json");
   const places = getDecimalPlaces((await readStoreCurrency(db)).code);
-  const parsed = createProductSchema.safeParse(editorCreateInput(body, places));
-  if (!parsed.success) throw issuesError(parsed.error);
-  const result = await createProduct(db, parsed.data);
-  await refreshRecommendationsAfterWrite(c, db, [result.id]);
-  const [product] = await readProductRepresentations(db, [result.id]);
+  const id = await createProductFromBody(db, body, places);
+  await refreshRecommendationsAfterWrite(c, db, [id]);
+  const [product] = await readProductRepresentations(db, [id]);
   if (!product) throw new NotFoundError("Product not found");
   return created(c, { product });
+});
+
+// Batch create (resources-batch.ts): many products per call, each item the
+// create body above plus its `key`, replayed per item (its id derives from the key).
+//
+// Bound (plan value `batchCreates.products`: Free 4, Paid 20), measured in
+// resources-batch.d1.test.ts: a call costs 6 D1 calls and each product 4
+// (the id check, slug, SKU check, the write batch), plus 2 for
+// its recommendation refresh after the response (the first 5 products of a
+// call) and 3 more when it names a category and a brand. Four such products
+// are about 36 D1 calls; with the ~6 of the idempotency middleware and plugin
+// dispatch that is about 42 of Free's 50 per invocation. Paid allows 1,000.
+const batchItem = createBody.extend({ key: batchItemKeySchema });
+const batchBody = batchRequestSchema(batchItem, planLimits("paid").batchCreates.products);
+const batchResult = successEnvelope(batchResultSchema("product"));
+
+async function readProductRefs(db: Database, ids: readonly string[]): Promise<Map<string, BatchRef>> {
+  const rows = await db
+    .select({ id: products.id, slug: products.slug, revision: products.aggregateRevision })
+    .from(products)
+    .where(and(inArray(products.id, [...ids]), isNull(products.deletedAt)));
+  return new Map(rows.map((row) => [row.id, row]));
+}
+
+app.openapi(createRoute({
+  operationId: "dashboard.resources.products.batch_create",
+  method: "post",
+  path: "/products/batch",
+  tags: ["App API - Products"],
+  summary: "Create many products in one call",
+  description: "Creates up to the plan's bound of products (20 on Paid, fewer on Free), each the body of `products.create` plus a `key` of yours. Items run in order and one refusal never stops the others: each result is `created`, `replayed` (that key already created its product earlier; nothing is created again) or `failed` with the refusal's code. Results carry `{ id, slug, revision }`; read a full product with `products.get`. Send an Idempotency-Key too: a repeat of the whole request returns the first response.",
+  request: {
+    headers: idempotencyKeyHeaderSchema,
+    body: { required: true, content: { "application/json": { schema: batchBody } } },
+  },
+  responses: {
+    200: { description: "One result per item, in request order", content: { "application/json": { schema: batchResult } } },
+    ...writeResponses,
+  },
+}), async (c) => {
+  const db = c.get("db");
+  const { items } = c.req.valid("json");
+  const places = getDecimalPlaces((await readStoreCurrency(db)).code);
+  const { data, createdIds } = await runBatchCreate(c, {
+    operationId: "dashboard.resources.products.batch_create",
+    noun: "product",
+    plural: "products",
+    items,
+    bound: planLimits().batchCreates.products,
+    idPrefix: "prod_",
+    create: ({ key: _key, ...body }, id) => createProductFromBody(db, body, places, id),
+    existing: async (ids) => new Set((await db.select({ id: products.id }).from(products).where(inArray(products.id, [...ids]))).map((row) => row.id)),
+    readRefs: (ids) => readProductRefs(db, ids),
+  });
+  await refreshRecommendationsAfterWrite(c, db, createdIds);
+  return ok(c, data as BatchCreateData<"product">);
 });
 
 const updateBody = z.object({

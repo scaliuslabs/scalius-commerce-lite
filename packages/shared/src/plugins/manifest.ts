@@ -10,6 +10,7 @@ import { CUSTOM_FIELD_TYPES, isCustomFieldKey, isCustomFieldObjectTarget } from 
 import { isEventTopicFilter, topicMatchesAnyFilter, type EventTopic, type EventTopicFilter } from "../events";
 import { SCALIUS_PLATFORM_VERSION, SUPPORTED_PLUGIN_API_VERSIONS } from "./api-version";
 import { parsePluginCronSchedule } from "./cron";
+import { PLUGIN_JOBS_MAX } from "./jobs";
 import { FIRST_PARTY_PLUGIN_VENDOR, PLUGIN_ID_PATTERN } from "./ids";
 import {
   PLUGIN_FIELD_KEY_PATTERN, PLUGIN_FIELD_KEY_RULE, PLUGIN_HOST_PATTERN, PLUGIN_KEY_PATTERN, PLUGIN_KEY_RULE, PLUGIN_OBJECT_TYPE_RULE,
@@ -590,6 +591,14 @@ export const pluginManifestSchema = z.object({
     webhooks: z.array(webhookRouteSchema).max(10).default([]),
   }).strict().default({ admin: [], public: [], webhooks: [] }),
   cron: z.array(z.object({ name: key, schedule: cronSchedule }).strict()).max(10).default([]),
+  /**
+   * Background jobs (jobs.ts): long admin actions the app starts with
+   * `ctx.jobs.start(name)`, run one step at a time by the platform (one
+   * `jobs[name]` handler run per step, right after the request and on the
+   * every-minute drain). Declaring one needs no scope: a step runs the app's
+   * own code, and every platform call inside it is checked as usual.
+   */
+  jobs: z.array(z.object({ name: key, title }).strict()).max(PLUGIN_JOBS_MAX).default([]),
 
   objects: z.record(z.string().regex(OBJECT_TYPE_PATTERN, PLUGIN_OBJECT_TYPE_RULE), objectTypeDeclarationSchema).default({})
     .refine((types) => Object.keys(types).length <= 20, "At most 20 object types."),
@@ -877,6 +886,7 @@ export const pluginManifestSchema = z.object({
     }
   });
   unique(manifest.cron.map((job) => job.name), ["cron"], "Cron names");
+  unique(manifest.jobs.map((job) => job.name), ["jobs"], "Job names");
   unique(manifest.customFields.map((field) => `${field.ownerType}:${field.key}`), ["customFields"], "Custom field keys");
   unique(manifest.admin.listColumns.map((column) => `${column.resource}:${column.id}`), ["admin", "listColumns"], "List column ids");
   manifest.admin.listColumns.forEach((column, index) => {

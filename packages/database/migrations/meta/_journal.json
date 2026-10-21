@@ -1191,6 +1191,20 @@
       "when": 1792771200000,
       "tag": "0169_fk_indexes_and_trigger_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 170,
+      "version": "6",
+      "when": 1792857600000,
+      "tag": "0170_collection_slugs_and_theme_permission",
+      "breakpoints": true
+    },
+    {
+      "idx": 171,
+      "version": "6",
+      "when": 1792944000000,
+      "tag": "0171_app_customer_roles_and_jobs",
+      "breakpoints": true
     }
   ]
 }

@@ -120,7 +120,9 @@ export const DASHBOARD_CONTENT_OPERATIONS = {
   "dashboard.navigation.menus_update": { revision: "required" },
   "dashboard.navigation.placements_list": {},
   "dashboard.navigation.placements_manifest": {},
-  "dashboard.navigation.placements_save": { revision: "required" },
+  // Where a menu shows stays the merchant's choice: no app, first-party included,
+  // places one (write_navigation reaches menus only; agents ignore the tier).
+  "dashboard.navigation.placements_save": { stability: "internal", revision: "required" },
   "dashboard.navigation.products_preview_count": { limits: { response: 16_384 } },
   "dashboard.navigation.publications_list": {},
   "dashboard.navigation.resources_search": {},
@@ -160,7 +162,9 @@ export const DASHBOARD_CONTENT_OPERATIONS = {
       sensitiveFields: ["continuationCode"],
     },
   },
-  "dashboard.theme.publish": { revision: "required", limits: { response: 4096 } },
+  // No app publishes the theme: write_themes changes the draft only, so even a
+  // bundled first-party app holding settings.theme.edit cannot call this (agents ignore the tier).
+  "dashboard.theme.publish": { stability: "internal", revision: "required", limits: { response: 4096 } },
   // Builder: restore points (the draft before a restore or discard) and drafted sections.
   "dashboard.theme.draft_snapshots_list": { limits: { response: 16_384 } },
   "dashboard.theme.draft_snapshot_restore": { revision: "required", limits: { response: 4096 } },

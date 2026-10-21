@@ -76,6 +76,15 @@ mirror a dashboard screen, an editor section or a summary card.
   milliseconds, no bare string, no union of forms. Discount schedules are
   `startsAt`/`endsAt`. The test fails on any `*At`/`*Since` field of another
   form (`isoTimestampSchema` in `schemas/timestamps.ts`).
+- **Batch creates are bounded, per item and idempotent.** `products.batch_create`,
+  `categories.batch_create` and `brands.batch_create` take `{ items }` (each the
+  single create's body plus a `key` of 1 to 64 characters, unique in the
+  request; the bound is a plan value, `planLimits().batchCreates`), run the
+  items in order and answer `{ items: [{ key, outcome, <noun>, error }] }` where
+  `outcome` is `created`, `replayed` or `failed` (a refusal's lower_snake code
+  never stops the others). An item's id derives from its key, per caller and
+  operation, so a retry with any `Idempotency-Key`, or a call racing it, creates
+  nothing twice (`routes/admin/resources-batch.ts`).
 - **Apps name an operation by resource and verb.** `ctx.api.call` takes the
   app name (`orders.get`, `products.create`, `objects.upsert`), never the
   operation id: `dashboard.resources.` or `dashboard.` is dropped, and where

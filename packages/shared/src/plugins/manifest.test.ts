@@ -121,6 +121,18 @@ describe("plugin manifest", () => {
     if (!backwards.ok) expect(backwards.issues[0]).toMatchObject({ path: "migrations.1.version" });
   });
 
+  it("declares background jobs by snake_case name, unique, at most ten, asking for no access", () => {
+    const ok = parsePluginManifest({ ...FULL, jobs: [{ name: "import_products", title: "Import products" }] });
+    expect(ok.ok && ok.manifest.jobs).toEqual([{ name: "import_products", title: "Import products" }]);
+    expect(parsePluginManifest(FULL).ok && (parsePluginManifest(FULL) as { manifest: { jobs: unknown } }).manifest.jobs).toEqual([]);
+    // A job runs only the app's own code: it adds nothing to what the merchant approves.
+    const base = parsePluginManifest(FULL);
+    expect(ok.ok && base.ok && pluginGrantKey(pluginGrantRequest(ok.manifest))).toBe(base.ok && pluginGrantKey(pluginGrantRequest(base.manifest)));
+    expect(parsePluginManifest({ ...FULL, jobs: [{ name: "import-products", title: "Import" }] }).ok).toBe(false);
+    expect(parsePluginManifest({ ...FULL, jobs: [{ name: "a", title: "A" }, { name: "a", title: "Again" }] }).ok).toBe(false);
+    expect(parsePluginManifest({ ...FULL, jobs: Array.from({ length: 11 }, (_, index) => ({ name: `job_${index}`, title: "Job" })) }).ok).toBe(false);
+  });
+
   it("says plainly when this platform cannot run a manifest", () => {
     expect(pluginCompatibility(FULL)).toEqual({ ok: true });
     expect(pluginCompatibility({ ...FULL, apiVersion: "2025-01" })).toMatchObject({ ok: false, reason: "api_version" });

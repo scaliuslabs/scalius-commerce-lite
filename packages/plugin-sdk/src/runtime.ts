@@ -22,6 +22,7 @@ import {
   type PluginLifecycleHook,
 } from "@scalius/shared/plugins/handlers";
 import { providerErrorOf, type ProviderErrorCategory } from "@scalius/shared/plugins/providers/kinds";
+import type { PluginJobStepInput } from "@scalius/shared/plugins/jobs";
 
 /** What the host hands every invocation: identity, store facts, settings, declared objects, handler inventory. */
 export interface PluginContextSeed {
@@ -41,6 +42,8 @@ export type PluginInvocation =
   | { kind: "provider"; provider: string; operation: string; input: unknown }
   | { kind: "route"; surface: "admin" | "public" | "webhooks"; name: string; request: PluginRouteRequest }
   | { kind: "cron"; name: string; scheduledAt: string }
+  /** One step of a declared background job (`jobs[name]`); its value is the step result. */
+  | { kind: "job"; name: string; job: PluginJobStepInput }
   /** `feature`: the feature an `enable` or `disable` hook is for. */
   | { kind: "lifecycle"; hook: PluginLifecycleHook; keepData?: boolean; feature?: string }
   /** One declared data update (`migrations[version]`); the host runs each once, in order. */
@@ -56,7 +59,7 @@ export interface PluginLogRecord {
 
 export interface PluginInvocationResult {
   ok: boolean;
-  /** A function's or provider operation's output, or a route's response; null for events, cron and lifecycle. */
+  /** A function's or provider operation's output, a route's response or a job step's result; null for events, cron and lifecycle. */
   value: unknown;
   /** `category` and `uncertain`: a `ProviderError` a provider operation raised. */
   error: { code: string | null; message: string; category?: ProviderErrorCategory; uncertain?: boolean } | null;
@@ -94,6 +97,15 @@ export interface PluginRuntimeBridge {
   ordersHold?(input: unknown): Promise<void>;
   ordersAssessRisk?(input: unknown): Promise<void>;
   ordersRiskHistory?(orderId: unknown): Promise<{ orders: number; cancelled: number; returnedToSender: number }>;
+  /** Optional on older hosts (`ctx.customers.roles`): a clear refusal. */
+  customerRolesGrant?(customerId: unknown, role: unknown, ref?: unknown): Promise<void>;
+  customerRolesRevoke?(customerId: unknown, role: unknown): Promise<void>;
+  customerRolesList?(customerId: unknown): Promise<unknown>;
+  /** Optional on older hosts (`ctx.jobs`): a clear refusal. */
+  jobsStart?(name: unknown, options?: unknown): Promise<{ id: string; status: string }>;
+  jobsGet?(id: unknown): Promise<unknown>;
+  jobsList?(options?: unknown): Promise<unknown>;
+  jobsCancel?(id: unknown): Promise<unknown>;
 }
 
 const MAX_LOGS = 100;
@@ -292,6 +304,41 @@ function createContext(seed: PluginContextSeed, bridge: PluginRuntimeBridge, log
         return bridge.ordersRiskHistory(orderId);
       }),
     }),
+    customers: Object.freeze({
+      roles: Object.freeze({
+        grant: (customerId: unknown, role: unknown, options?: unknown) => call(async () => {
+          if (!bridge.customerRolesGrant) throw new Error("[customers_unavailable] This platform does not keep app customer roles yet.");
+          const ref = typeof options === "object" && options !== null ? (options as { ref?: unknown }).ref : undefined;
+          await bridge.customerRolesGrant(customerId, role, ref ?? null);
+        }),
+        revoke: (customerId: unknown, role: unknown) => call(async () => {
+          if (!bridge.customerRolesRevoke) throw new Error("[customers_unavailable] This platform does not keep app customer roles yet.");
+          await bridge.customerRolesRevoke(customerId, role);
+        }),
+        list: (customerId: unknown) => call(() => {
+          if (!bridge.customerRolesList) throw new Error("[customers_unavailable] This platform does not keep app customer roles yet.");
+          return bridge.customerRolesList(customerId);
+        }),
+      }),
+    }),
+    jobs: Object.freeze({
+      start: (name: unknown, options?: unknown) => call(() => {
+        if (!bridge.jobsStart) throw new Error("[jobs_unavailable] This platform does not run app background jobs yet.");
+        return bridge.jobsStart(name, options ?? {});
+      }),
+      get: (id: unknown) => call(() => {
+        if (!bridge.jobsGet) throw new Error("[jobs_unavailable] This platform does not run app background jobs yet.");
+        return bridge.jobsGet(id);
+      }),
+      list: (options?: unknown) => call(() => {
+        if (!bridge.jobsList) throw new Error("[jobs_unavailable] This platform does not run app background jobs yet.");
+        return bridge.jobsList(options ?? {});
+      }),
+      cancel: (id: unknown) => call(() => {
+        if (!bridge.jobsCancel) throw new Error("[jobs_unavailable] This platform does not run app background jobs yet.");
+        return bridge.jobsCancel(id);
+      }),
+    }),
     log: Object.freeze({ debug: log("debug"), info: log("info"), warn: log("warn"), error: log("error") }),
   }) as unknown as PluginContext;
 }
@@ -386,6 +433,11 @@ export async function invokePluginDefinition(
         if (!handler) return result(false, null, { code: "plugin_no_handler", message: `No cron handler ${invocation.name}.` });
         await handler(createContext(seed, requireBridge(bridge), logs), { name: invocation.name, scheduledAt: invocation.scheduledAt });
         return result(true, null, null);
+      }
+      case "job": {
+        const handler = (seed.inventory.jobs ?? []).includes(invocation.name) ? handlerIn(definition.jobs, invocation.name) : null;
+        if (!handler) return result(false, null, { code: "plugin_no_handler", message: `No job handler ${invocation.name}.` });
+        return result(true, (await handler(createContext(seed, requireBridge(bridge), logs), invocation.job)) ?? null, null);
       }
       case "lifecycle": {
         const handler = handlerIn(definition.lifecycle, invocation.hook);

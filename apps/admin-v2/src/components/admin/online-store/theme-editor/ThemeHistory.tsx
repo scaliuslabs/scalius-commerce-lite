@@ -157,7 +157,7 @@ function RestorePointItem({ point, draft, busy, sectionName, onRestore }: {
   const document = useQuery(restorePointDocumentQuery(comparing ? point.id : null));
   return (
     <li className="space-y-2 border-b border-border px-4 py-4 last:border-b-0" data-restore-point={point.id}>
-      <h3 className="text-heading-sm">{t(point.reason === "discard" ? "restorePointDiscard" : "restorePointRestore")}</h3>
+      <h3 className="text-heading-sm">{t(point.reason === "discard" ? "restorePointDiscard" : point.reason === "app" ? "restorePointApp" : "restorePointRestore")}</h3>
       <p className="text-body text-muted-foreground">
         {t("versionAuthor", {
           name: point.createdByName ?? t("unknownAuthor"),

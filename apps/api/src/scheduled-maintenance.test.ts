@@ -663,7 +663,8 @@ describe("runScheduledMaintenance", () => {
     expect(mocks.runScheduledEventMaintenance).toHaveBeenCalledWith(mocks.db, env, ctx);
     expect(mocks.drainPaymentEvents).toHaveBeenCalledWith(mocks.db, env, ctx);
     expect(mocks.drainCatalogProjectionRebuild).toHaveBeenCalledWith(mocks.db);
-    expect(mocks.drainBulkRuns).toHaveBeenCalledWith(mocks.db, expect.any(Number));
+    // App jobs ride the bulk-run drain: it carries the Worker runtime they run with.
+    expect(mocks.drainBulkRuns).toHaveBeenCalledWith(mocks.db, expect.any(Number), { env, ctx });
     // A new deployment's bundled apps sync on every tick's drain pass (free once claimed).
     expect(mocks.syncBundledPluginsOncePerDeploy).toHaveBeenCalled();
     // The drains go first: a sweep that keeps failing never delays them.

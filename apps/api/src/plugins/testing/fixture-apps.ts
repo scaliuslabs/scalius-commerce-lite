@@ -18,6 +18,11 @@
 // - acme.bulk-discount: checkout.discounts and cart.validate by quantity.
 // - acme.order-tagger: an order card and actions through `ctx.api`.
 // - acme.notes: checkout and customer-account blocks.
+// - acme.builder: a store setup on the stable app API: batch creates, a
+//   collection by handle, the theme template and section settings, a
+//   published menu, a customer role and a background job with progress.
+// - acme.members: customer roles (ctx.customers.roles, cart.customer.roles)
+//   and a background job with a live progress page (ctx.jobs).
 //
 // Each fingerprint is a fixed test value: an installation made from an entry
 // matches the "deployed" code, and a test that changes it sees an update.
@@ -30,6 +35,8 @@ import { manifest as orderTaggerManifest } from "./apps/order-tagger/src/index";
 import { manifest as wishlistManifest } from "./apps/wishlist/src/index";
 import { manifest as wholesaleManifest } from "./apps/wholesale/src/index";
 import { manifest as riskGuardManifest } from "./apps/risk-guard/src/index";
+import { manifest as membersManifest } from "./apps/members/src/index";
+import { manifest as builderManifest } from "./apps/builder/src/index";
 import type { BundledPluginEntry } from "../loaders/bundled";
 
 /** Directories of the fixture apps, for `packPlugin` (sandbox tests). */
@@ -42,6 +49,8 @@ export const FIXTURE_APP_SOURCES = {
   "acme.notes": "./apps/api/src/plugins/testing/apps/notes",
   "acme.wholesale": "./apps/api/src/plugins/testing/apps/wholesale",
   "acme.risk-guard": "./apps/api/src/plugins/testing/apps/risk-guard",
+  "acme.members": "./apps/api/src/plugins/testing/apps/members",
+  "acme.builder": "./apps/api/src/plugins/testing/apps/builder",
 } as const;
 
 export const HELLO_BUNDLED: BundledPluginEntry = {
@@ -59,6 +68,8 @@ export const FIXTURE_APPS: Readonly<Record<string, BundledPluginEntry>> = {
   "acme.notes": { version: notesManifest.version, sha256: "4073".repeat(16), load: () => import("./apps/notes/src/index") },
   "acme.wholesale": { version: wholesaleManifest.version, sha256: "b2b0".repeat(16), load: () => import("./apps/wholesale/src/index") },
   "acme.risk-guard": { version: riskGuardManifest.version, sha256: "715c".repeat(16), load: () => import("./apps/risk-guard/src/index") },
+  "acme.members": { version: membersManifest.version, sha256: "3e3b".repeat(16), load: () => import("./apps/members/src/index") },
+  "acme.builder": { version: builderManifest.version, sha256: "b11d".repeat(16), load: () => import("./apps/builder/src/index") },
 };
 
 /** The bundled registry with every fixture app added. */

@@ -74,6 +74,7 @@ export const DASHBOARD_WHEN_A: Readonly<Record<string, string>> = {
   "dashboard.attributes.restore": "Use when bringing one trashed product attribute back.",
   "dashboard.attributes.trash": "Use when moving one product attribute to trash.",
   "dashboard.attributes.update": "Use when renaming a product attribute or changing whether it filters, shows or is required.",
+  "dashboard.brands.batch_create": "Use when an importer or app adds many brands at once (up to the plan's bound per call); each item has its own key, so a retry never duplicates.",
   "dashboard.brands.create": "Use when adding a brand record that products can belong to.",
   "dashboard.brands.delete_permanently": "Use when trashed brands must be deleted for good.",
   "dashboard.brands.form_options": "Use when finding a brand's id by name to assign it to a product.",
@@ -87,6 +88,7 @@ export const DASHBOARD_WHEN_A: Readonly<Record<string, string>> = {
   "dashboard.catalog_projections.rebuild": "Use when product listings, filters or counts look wrong after a bulk change: recomputes the stored catalogue projections.",
   "dashboard.categories.bulk_delete": "Use when moving several categories to trash at once.",
   "dashboard.categories.bulk_restore": "Use when restoring several trashed categories at once.",
+  "dashboard.categories.batch_create": "Use when an importer or app adds many product categories at once, parents before children; each item has its own key, so a retry never duplicates.",
   "dashboard.categories.create": "Use when creating a product category (optionally under a parent category).",
   "dashboard.categories.delete_permanently": "Use when a trashed category must be deleted for good.",
   "dashboard.categories.form_options": "Use when finding a category id by name, for example to assign products to it.",
@@ -283,4 +285,5 @@ export const DASHBOARD_WHEN_A: Readonly<Record<string, string>> = {
   "dashboard.inventory.set_default_alert_level": "Use when setting the store-wide low-stock alert level.",
   "dashboard.inventory.set_stock": "Use when setting one SKU's counted stock at a location (stocktake), not a relative change.",
   "dashboard.inventory.valuation": "Use when asked what the stock on hand is worth at cost, per location.",
+  "dashboard.resources.products.batch_create": "Use when an importer, demo-content app or PIM sync creates many products at once (up to the plan's bound per call), minor-unit prices; each item has its own key, so a retry never duplicates.",
 };

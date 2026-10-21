@@ -200,7 +200,7 @@ function MenusCard({ reach }: { reach: HeaderMenuReach }) {
 
 function LocationsCard({ reach }: { reach: HeaderMenuReach }) {
   const t = useMessages(onlineStoreMessages);
-  const canEditTheme = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT);
+  const canEditTheme = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_THEME_EDIT);
   const slotLabel = useSlotLabel();
   const queryClient = useQueryClient();
   const { data: menus } = useSuspenseQuery(navigationMenusQueryOptions());

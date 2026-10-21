@@ -40,6 +40,14 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   // PIM sync (routes/admin/resources-products.ts): the editor's create and
   // base-section writes in minor units; stock stays with inventory.
   "dashboard.resources.products.create": { stability: "stable", batch: "forbidden", uncurated: true },
+  // An importer or PIM sync creates many products per call: an item's id derives
+  // from its key, so it replays (routes/admin/resources-batch.ts); the bound is a plan value.
+  "dashboard.resources.products.batch_create": {
+    stability: "stable",
+    idempotency: "supported",
+    batch: "forbidden",
+    uncurated: true,
+  },
   "dashboard.resources.products.update": { stability: "stable", revision: "required", batch: "forbidden", uncurated: true },
   // An app permanently deletes the trashed content it created itself
   // (routes/admin/resources-app-content.ts); ownership is the platform's record.
@@ -50,6 +58,28 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
     principals: ["admin"],
     uncurated: true,
   },
+  // Theme draft writes (routes/admin/resources-theme.ts, write_themes): never
+  // publish. Applying a template replaces the draft's look and homepage, so
+  // agents confirm it; the replaced draft is kept as a restore point.
+  "dashboard.resources.theme.get": { stability: "stable", uncurated: true },
+  "dashboard.resources.theme.apply_template": {
+    stability: "stable",
+    risk: "destructive",
+    revision: "required",
+    batch: "forbidden",
+    uncurated: true,
+  },
+  "dashboard.resources.theme.section_settings_set": {
+    stability: "stable",
+    revision: "required",
+    batch: "forbidden",
+    limits: { request: 65_536 },
+    uncurated: true,
+  },
+  // Whole-menu writes (routes/admin/resources-menus.ts, write_navigation).
+  "dashboard.resources.menus.get": { stability: "stable", uncurated: true },
+  "dashboard.resources.menus.create": { stability: "stable", batch: "forbidden", uncurated: true },
+  "dashboard.resources.menus.update": { stability: "stable", revision: "required", batch: "forbidden", uncurated: true },
   "dashboard.resources.variants.get": { stability: "stable", uncurated: true },
   "dashboard.resources.variants.lookup": { stability: "stable", risk: "read", uncurated: true },
   "dashboard.resources.customers.list": { stability: "stable", uncurated: true },

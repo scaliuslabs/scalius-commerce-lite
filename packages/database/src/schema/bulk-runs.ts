@@ -7,6 +7,12 @@
 // a crash between chunks repeats nothing and loses nothing. Runs of at most
 // 250 items finish inside their request; larger ones are drained right after
 // the response and by the minute cron (apps/api/src/bulk-runs).
+//
+// An app's background job (`app.job`, migration 0171) rides the same rows,
+// lease and drain: its input names the app and the job it declared, `cursor`
+// holds the job's own state between steps, each step is one app invocation
+// moving `chunks` on by one, and `processed`/`total` are the progress the app
+// reports. The staff bulk-run reads never list app jobs.
 import { sql } from "drizzle-orm";
 import { check, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { UNIX_NOW } from "./shared";
@@ -20,13 +26,19 @@ export const BULK_RUN_KINDS = [
 ] as const;
 export type BulkRunKind = (typeof BULK_RUN_KINDS)[number];
 
+/** The kind of an app's background job: a row of its own, never listed by the bulk-run reads. */
+export const APP_JOB_RUN_KIND = "app.job";
+/** Every kind a row may hold: the staff bulk changes and app jobs. */
+export const BULK_RUN_ROW_KINDS = [...BULK_RUN_KINDS, APP_JOB_RUN_KIND] as const;
+export type BulkRunRowKind = (typeof BULK_RUN_ROW_KINDS)[number];
+
 /** `running` is due (the drain continues it); `done` and `failed` are final. */
 export const BULK_RUN_STATUSES = ["running", "done", "failed"] as const;
 export type BulkRunStatus = (typeof BULK_RUN_STATUSES)[number];
 
 export const bulkRuns = sqliteTable("bulk_runs", {
     id: text("id").primaryKey(),
-    kind: text("kind", { enum: BULK_RUN_KINDS }).notNull(),
+    kind: text("kind", { enum: BULK_RUN_ROW_KINDS }).notNull(),
     status: text("status", { enum: BULK_RUN_STATUSES }).notNull().default("running"),
     /** The caller-scoped Idempotency-Key (or a fresh key): one run per key. */
     operationKey: text("operation_key").notNull(),
@@ -55,7 +67,7 @@ export const bulkRuns = sqliteTable("bulk_runs", {
 }, (table) => [
     uniqueIndex("bulk_runs_operation_key_unique").on(table.operationKey),
     index("bulk_runs_status_created_idx").on(table.status, table.createdAt),
-    check("bulk_runs_kind_check", sql`${table.kind} IN ('variants.set_prices', 'variants.set_stock', 'customers.tag', 'products.set_status', 'products.publish')`),
+    check("bulk_runs_kind_check", sql`${table.kind} IN ('variants.set_prices', 'variants.set_stock', 'customers.tag', 'products.set_status', 'products.publish', 'app.job')`),
     check("bulk_runs_status_check", sql`${table.status} IN ('running', 'done', 'failed')`),
     check("bulk_runs_input_json", sql`json_valid(${table.input}) AND length(${table.input}) <= 262144`),
     check("bulk_runs_results_json", sql`json_valid(${table.results}) AND length(${table.results}) <= 65536`),

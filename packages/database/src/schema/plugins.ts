@@ -16,6 +16,7 @@ import { sql } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import { check, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { user } from "./auth";
+import { customers } from "./customers";
 import { eventOutbox } from "./events";
 import { UNIX_NOW } from "./shared";
 
@@ -286,3 +287,28 @@ export const appResourceOwners = sqliteTable("app_resource_owners", {
     check("app_resource_owners_plugin_shape", pluginIdShape(table.pluginId)),
 ]);
 export type AppResourceOwner = InferSelectModel<typeof appResourceOwners>;
+
+/**
+ * App-defined customer roles (migration 0171): an app grants a role it names
+ * (`seller`, `wholesale`) to a customer, with an optional reference to its own
+ * record (`ref`, the app's seller id). Each app reads and writes only its own
+ * rows; app pages see them as `request.customer.roles` and checkout functions
+ * as `cart.customer.roles`. A customer's hard delete removes them; uninstalling
+ * the app without keeping its data deletes the app's rows. Private state: no
+ * public read touches it. The checks mirror `@scalius/shared/plugins/customer-roles`.
+ */
+export const pluginCustomerRoles = sqliteTable("plugin_customer_roles", {
+    pluginId: text("plugin_id").notNull(),
+    customerId: text("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
+    role: text("role").notNull(),
+    ref: text("ref"),
+    grantedAt: integer("granted_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    primaryKey({ columns: [table.pluginId, table.customerId, table.role] }),
+    index("plugin_customer_roles_customer_idx").on(table.customerId),
+    index("plugin_customer_roles_role_idx").on(table.pluginId, table.role, table.customerId),
+    check("plugin_customer_roles_plugin_shape", pluginIdShape(table.pluginId)),
+    check("plugin_customer_roles_role_shape", sql`length(${table.role}) BETWEEN 1 AND 32 AND substr(${table.role}, 1, 1) BETWEEN 'a' AND 'z' AND ${table.role} NOT GLOB '*[^a-z0-9_-]*'`),
+    check("plugin_customer_roles_ref_shape", sql`${table.ref} IS NULL OR (length(${table.ref}) BETWEEN 1 AND 128 AND ${table.ref} NOT GLOB '*[^ -~]*')`),
+]);
+export type PluginCustomerRoleRow = InferSelectModel<typeof pluginCustomerRoles>;

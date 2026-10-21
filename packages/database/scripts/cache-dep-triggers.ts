@@ -137,6 +137,8 @@ export const CACHE_DEP_LATER_TRIGGERS: Readonly<Record<string, string>> = {
   // The band guard reads the store's default low-stock level once per update.
   cdep_product_variants_band: "0169_fk_indexes_and_trigger_guards",
   cdep_product_variants_band_old: "0169_fk_indexes_and_trigger_guards",
+  // A collection's handle (0170) is a visible column of its row.
+  cdep_collections_upd: "0170_collection_slugs_and_theme_permission",
 };
 
 /**
@@ -178,6 +180,11 @@ export const CACHE_DEP_BASELINE_WHERE: Readonly<Record<string, NonNullable<Cache
 };
 
 export const CACHE_DEP_BASELINE_COLUMNS: Readonly<Record<string, readonly string[]>> = {
+  collections: [
+    "id", "name", "description", "content", "presentation", "config", "sort_order", "is_active", "version",
+    "meta_title", "meta_description", "canonical_path", "no_index", "exclude_from_sitemap", "listing_template",
+    "created_at", "updated_at", "deleted_at",
+  ],
   shipping_methods: [
     "id", "name", "fee_minor", "description", "is_active", "sort_order", "created_at", "updated_at",
     "deleted_at", "zone_id", "free_over_minor", "pickup_address", "pickup_hours", "kind",

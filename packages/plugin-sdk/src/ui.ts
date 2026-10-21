@@ -52,6 +52,14 @@ export const ui = {
   banner: (tone: PluginUiTone, text: string, options: Options<"banner", "tone" | "text"> = {}): PluginUiNode => ({ type: "banner", tone, text, ...options }),
   keyValue: (items: NodeOf<"key-value">["items"]): PluginUiNode => ({ type: "key-value", items }),
   stat: (label: string, value: string | number, help?: string): PluginUiNode => ({ type: "stat", label, value, ...(help ? { help } : {}) }),
+  /**
+   * A progress bar at `value` of `max` with its percentage (admin), e.g. a
+   * background job's `progress.done` of `progress.total`. `live: true`
+   * makes the dashboard read the surface again every few seconds while it is
+   * shown, so the bar moves on its own; leave it off once the job is done.
+   */
+  progress: (label: string, value: number, max: number, options: Options<"progress", "label" | "value" | "max"> = {}): PluginUiNode =>
+    ({ type: "progress", label, value, max, ...options }),
   table: (options: Options<"table">): PluginUiNode => ({ type: "table", ...options }),
   empty: (title: string, options: Options<"empty-state", "title"> = {}): PluginUiNode => ({ type: "empty-state", title, ...options }),
   /** An https URL (admin), or `{ media }` / `{ app: "public/…" }` (buyer). */

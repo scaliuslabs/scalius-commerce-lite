@@ -10,6 +10,9 @@ export const BRAND_ROUTE_PERMISSIONS: RoutePermissionMap = {
     GET: { permission: PERMISSIONS.CATEGORIES_VIEW },
     POST: { permission: PERMISSIONS.CATEGORIES_CREATE },
   },
+  "/api/v1/admin/brands/batch": {
+    POST: { permission: PERMISSIONS.CATEGORIES_CREATE },
+  },
   "/api/v1/admin/brands/form-options": {
     GET: { anyOf: [PERMISSIONS.CATEGORIES_VIEW, PERMISSIONS.PRODUCTS_VIEW] },
   },

@@ -70,14 +70,14 @@ describe("theme operations through real MCP dispatch and D1", () => {
 
   // A store with 20 published versions of a 400+ KiB document (about 9 MB of rows).
   beforeEach(() => {
-    state.principal = { kind: "agent", grantId: GRANT, credentialId: null, ownerUserId: OWNER, isSuperAdmin: false, resource: "dashboard", grantKind: "oauth", preset: "full", permissions: new Set(["settings.general.view", "settings.general.edit"]), riskCeiling: "destructive", authorityRevision: 1, expiresAt: new Date(Date.now() + 3600_000) };
+    state.principal = { kind: "agent", grantId: GRANT, credentialId: null, ownerUserId: OWNER, isSuperAdmin: false, resource: "dashboard", grantKind: "oauth", preset: "full", permissions: new Set(["settings.general.view", "settings.general.edit", "settings.theme.edit"]), riskCeiling: "destructive", authorityRevision: 1, expiresAt: new Date(Date.now() + 3600_000) };
     state.props = { grantId: GRANT, ownerUserId: OWNER, resource: "dashboard", permissions: [...state.principal.permissions], riskCeiling: "destructive", audience: ["https://api.example.test/api/v1/mcp/dashboard"] };
     const harness = createSqliteD1Database();
     sqlite = harness.sqlite;
     // A long Bangla name: the history bounds what it returns.
     sqlite.prepare("INSERT INTO user (id,name,email) VALUES (?,?,'owner@example.test')").run(OWNER, "বাংলা".repeat(80));
     const now = Math.floor(Date.now() / 1000);
-    sqlite.prepare("INSERT INTO agent_grants (id,kind,owner_user_id,resource,label,oauth_client_id,oauth_redirect_uris_json,preset,permissions_json,risk_ceiling,authority_revision,status,expires_at,created_at,updated_at) VALUES (?,'oauth',?,'dashboard','Themes','theme-test-client','[]','full','[\"settings.general.view\",\"settings.general.edit\"]','destructive',1,'active',?,?,?)").run(GRANT, OWNER, now + 3600, now, now);
+    sqlite.prepare("INSERT INTO agent_grants (id,kind,owner_user_id,resource,label,oauth_client_id,oauth_redirect_uris_json,preset,permissions_json,risk_ceiling,authority_revision,status,expires_at,created_at,updated_at) VALUES (?,'oauth',?,'dashboard','Themes','theme-test-client','[]','full','[\"settings.general.view\",\"settings.general.edit\",\"settings.theme.edit\"]','destructive',1,'active',?,?,?)").run(GRANT, OWNER, now + 3600, now, now);
     const theme = JSON.stringify(DEFAULT_STOREFRONT_THEME);
     sqlite.prepare("INSERT INTO theme_settings (id,colors,revision) VALUES ('default',?,20)").run(theme);
     sqlite.prepare("INSERT INTO theme_settings_drafts (id,theme,revision,base_published_revision) VALUES ('default',?,1,20)").run(theme);

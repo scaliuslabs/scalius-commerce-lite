@@ -20,6 +20,8 @@ import {
   pluginInstallations,
   pluginKv,
   webhookSubscriptions,
+  bulkRuns,
+  pluginCustomerRoles,
   pluginLogEntries,
   pluginMigrations,
   pluginRegistrations,
@@ -54,6 +56,7 @@ import {
 import { and, asc, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { appSalesChannelId } from "@scalius/shared/sales-channels";
 import { PluginError } from "./errors";
+import { appJobRowsCondition } from "./app-jobs";
 import {
   derivePluginSettingsKey,
   isSealedPluginSecret,
@@ -942,7 +945,9 @@ export async function restorePluginRelease(
  * `keepData: true` keeps everything the plugin owns for a reinstall: storage
  * records, KV, logs, the delivery and cron history (deliveries still waiting
  * are cancelled) and its custom fields. `keepData: false` deletes all of it,
- * including its custom-field namespace (definitions and, by cascade, values).
+ * including its custom-field namespace (definitions and, by cascade, values),
+ * the customer roles it granted and its background jobs. Either way a job
+ * still running stops (`app_inactive`).
  */
 export async function uninstallPlugin(
   db: Database,
@@ -960,6 +965,14 @@ export async function uninstallPlugin(
       db.delete(webhookSubscriptions).where(eq(webhookSubscriptions.pluginId, pluginId)),
       // Its channels go (or, when orders name them, stay switched off).
       ...salesChannelStatements(db, pluginId, [], false, hadChannels),
+      // Its running jobs stop with it (kept or deleted below).
+      db.update(bulkRuns).set({
+        status: "failed",
+        errorCode: "app_inactive",
+        finishedAt: sql`unixepoch()`,
+        leaseUntil: null,
+        updatedAt: sql`unixepoch()`,
+      }).where(and(appJobRowsCondition(pluginId), eq(bulkRuns.status, "running"))),
       ...(options.keepData
         ? [
           db.update(pluginEventDeliveries).set({
@@ -982,6 +995,9 @@ export async function uninstallPlugin(
           db.delete(customFieldDefinitions).where(eq(customFieldDefinitions.namespace, pluginId)),
           // Its object types and, by cascade, their records.
           db.delete(objectTypes).where(eq(objectTypes.namespace, pluginId)),
+          // The roles it granted customers and its background jobs.
+          db.delete(pluginCustomerRoles).where(eq(pluginCustomerRoles.pluginId, pluginId)),
+          db.delete(bulkRuns).where(appJobRowsCondition(pluginId)),
         ]),
     ] as never);
   } catch (error) {

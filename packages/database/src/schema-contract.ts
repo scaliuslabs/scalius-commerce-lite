@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 169,
-  name: "0169_fk_indexes_and_trigger_guards",
+  version: 171,
+  name: "0171_app_customer_roles_and_jobs",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -626,6 +626,16 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 169,
     name: "0169_fk_indexes_and_trigger_guards",
     sourceSha256: "1a3adbac4726960c9bab33d5e44dcb86e6aa387d5ceb4b756a2a0532010ad47f",
+  },
+  {
+    version: 170,
+    name: "0170_collection_slugs_and_theme_permission",
+    sourceSha256: "d392d4f5489fb732bf8193dc3e01c6a048464950d9160839787d722d942cfa8a",
+  },
+  {
+    version: 171,
+    name: "0171_app_customer_roles_and_jobs",
+    sourceSha256: "a2736d0c89081497f17bd00e6ad36d38f5c181b97754a4870ad6ac119776b3f6",
   },
 ] as const;
 

@@ -222,6 +222,16 @@ describe("app UI renderer", () => {
     expect(nested?.querySelector("h3")?.textContent).toBe("Nested");
   });
 
+  it("draws a long action's progress as a labelled bar with its percentage", async () => {
+    await renderTree({ type: "page", children: [{ type: "progress", label: "Importing products", value: 40, max: 160, help: "40 of 160 imported" }] });
+    const bar = document.querySelector('[role="progressbar"]');
+    expect(bar).not.toBeNull();
+    expect(document.getElementById(bar!.getAttribute("aria-labelledby")!)?.textContent).toBe("Importing products");
+    expect(bar!.getAttribute("aria-valuetext")).toBe("25%");
+    expect(text()).toContain("25%");
+    expect(text()).toContain("40 of 160 imported");
+  });
+
   it("links only to this app's pages, Scalius resource pages and https sites in a new tab", async () => {
     await renderTree({
       type: "stack",
@@ -470,6 +480,27 @@ describe("app surfaces", () => {
     expect(Object.fromEntries(second.searchParams)).toEqual({ tab: "all", cursor: "c2" });
     await click(button("Previous page"));
     await vi.waitFor(() => expect(text()).toContain("First page"));
+  });
+
+  it("reads a page with a live progress again every few seconds, and stops once it is no longer live", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      let served = 0;
+      route("GET", "dashboard", () => {
+        served += 1;
+        const done = Math.min(served * 50, 100);
+        return { body: doc({ type: "page", children: [{ type: "progress", label: "Importing", value: done, max: 100, live: done < 100 }] }) };
+      });
+      await render(<PluginSurface app={app} route="dashboard" query={{}} variant="page" title="Overview" />);
+      await vi.waitFor(() => expect(text()).toContain("50%"));
+      await act(async () => { await vi.advanceTimersByTimeAsync(3_100); });
+      await vi.waitFor(() => expect(text()).toContain("100%"));
+      const reads = calls("GET", "dashboard").length;
+      await act(async () => { await vi.advanceTimersByTimeAsync(15_000); });
+      expect(calls("GET", "dashboard")).toHaveLength(reads);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("asks for a newer dashboard when the app speaks a newer UI version", async () => {

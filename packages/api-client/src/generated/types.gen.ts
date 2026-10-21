@@ -1876,6 +1876,13 @@ export type PluginUiNode = {
 } | {
     type: 'field';
     attribute: string;
+} | {
+    type: 'progress';
+    label: string;
+    value: number;
+    max: number;
+    help?: string;
+    live?: boolean;
 };
 
 export type OrderLineExtras = {
@@ -2480,6 +2487,13 @@ export type CustomerAccountSummary = {
         } | {
             type: 'field';
             attribute: string;
+        } | {
+            type: 'progress';
+            label: string;
+            value: number;
+            max: number;
+            help?: string;
+            live?: boolean;
         };
         attributes: Array<{
             key: string;
@@ -3748,6 +3762,119 @@ export type InventoryTransfer = {
     }>;
 };
 
+export type ThemeDraftReceipt = {
+    revision: number;
+    basePublishedRevision: number;
+    updatedAt: string | null;
+};
+
+export type ThemeSection = {
+    id: string;
+    /**
+     * The section type (`hero`, `product_grid`…), or `app` for an app's own section.
+     */
+    type: string;
+    /**
+     * An app section's `<app id>/<section type>`; null for the platform's.
+     */
+    app: string | null;
+    hidden: boolean;
+    /**
+     * The section's settings as the theme document stores them (an app section: its own values).
+     */
+    settings: {
+        [key: string]: unknown;
+    };
+};
+
+export type ThemeUnresolvedHandle = {
+    kind: 'category' | 'collection';
+    handle: string;
+    sectionId: string | null;
+};
+
+export type MenuResource = {
+    id: string;
+    name: string;
+    handle: string;
+    revision: number;
+    publishedRevision: number | null;
+    trashed: boolean;
+    updatedAt: string;
+    deletedAt: string | null;
+    /**
+     * Its links in tree order; null when it holds more than 150 (edit those in the dashboard).
+     */
+    items: Array<{
+        id: string;
+        parentId: string | null;
+        label: string;
+        labelMode: 'custom' | 'resource';
+        target: MenuLinkTarget;
+        openInNewTab: boolean;
+        isEnabled: boolean;
+    }> | null;
+};
+
+export type MenuLinkTarget = {
+    type: 'resource';
+    resourceType: 'page' | 'category' | 'collection' | 'product';
+    resourceId: string;
+    query: string | null;
+} | {
+    type: 'system';
+    key: string;
+} | {
+    type: 'internal_path';
+    path: string;
+} | {
+    type: 'external_url';
+    url: string;
+} | {
+    type: 'label';
+};
+
+export type MenuLinkInput = {
+    /**
+     * Your name for this link, unique in the request: children name it as `parentKey`.
+     */
+    key: string;
+    /**
+     * The parent link's key (listed before it); omit for a top-level link.
+     */
+    parentKey?: string | null;
+    label: string;
+    /**
+     * `resource` follows the linked resource's own title.
+     */
+    labelMode?: 'custom' | 'resource';
+    target: MenuLinkTargetInput;
+    openInNewTab?: boolean;
+    isEnabled?: boolean;
+};
+
+export type MenuLinkTargetInput = {
+    type: 'resource';
+    resourceType: 'page' | 'category' | 'collection' | 'product';
+    resourceId?: string;
+    /**
+     * A category's or collection's handle, instead of `resourceId`.
+     */
+    handle?: string;
+    query?: string;
+} | {
+    type: 'system';
+    key: 'home' | 'catalog' | 'search' | 'account' | 'cart' | 'checkout' | 'order_lookup';
+} | {
+    type: 'internal_path';
+    path: string;
+} | {
+    type: 'external_url';
+    url: string;
+} | {
+    type: 'label';
+};
+
 export type TranslatableResource = {
     type: string;
     id: string;
@@ -3968,7 +4095,7 @@ export type ThemeVersionSummary = {
 
 export type ThemeRestorePoint = {
     id: string;
-    reason: 'restore' | 'discard';
+    reason: 'restore' | 'discard' | 'app';
     draftRevision: number;
     createdBy: string | null;
     createdByName: string | null;
@@ -4704,7 +4831,7 @@ export type AppDetail = AppSummary & {
      * The requested scopes, for the consent screen.
      */
     scopes: Array<{
-        name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_places';
+        name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_themes' | 'write_navigation' | 'write_places';
         /**
          * The highest risk among the operations the scope lets this app call.
          */
@@ -4922,7 +5049,7 @@ export type AppGrant = {
     /**
      * Access scopes: store data and actions the app may read or change.
      */
-    scopes: Array<'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_places'>;
+    scopes: Array<'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_themes' | 'write_navigation' | 'write_places'>;
     allowedHosts: Array<string>;
     events: Array<string>;
     functions: Array<string>;
@@ -4974,7 +5101,7 @@ export type AppFeature = {
          * Store access this feature adds, for its consent dialog.
          */
         scopes: Array<{
-            name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_places';
+            name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_themes' | 'write_navigation' | 'write_places';
             /**
              * The highest risk among the operations the scope lets this app call.
              */
@@ -12337,6 +12464,13 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 } | {
                     type: 'field';
                     attribute: string;
+                } | {
+                    type: 'progress';
+                    label: string;
+                    value: number;
+                    max: number;
+                    help?: string;
+                    live?: boolean;
                 };
                 attributes: Array<{
                     key: string;
@@ -20174,6 +20308,13 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                     } | {
                         type: 'field';
                         attribute: string;
+                    } | {
+                        type: 'progress';
+                        label: string;
+                        value: number;
+                        max: number;
+                        help?: string;
+                        live?: boolean;
                     };
                     attributes: Array<{
                         key: string;
@@ -21157,6 +21298,13 @@ export type PostApiV1OrdersCartValidationResponses = {
                 } | {
                     type: 'field';
                     attribute: string;
+                } | {
+                    type: 'progress';
+                    label: string;
+                    value: number;
+                    max: number;
+                    help?: string;
+                    live?: boolean;
                 };
                 attributes: Array<{
                     key: string;
@@ -21908,6 +22056,13 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                 } | {
                     type: 'field';
                     attribute: string;
+                } | {
+                    type: 'progress';
+                    label: string;
+                    value: number;
+                    max: number;
+                    help?: string;
+                    live?: boolean;
                 };
                 attributes: Array<{
                     key: string;
@@ -26836,6 +26991,157 @@ export type PostApiV1AdminResourcesGiftCardsByIdAdjustResponses = {
 
 export type PostApiV1AdminResourcesGiftCardsByIdAdjustResponse = PostApiV1AdminResourcesGiftCardsByIdAdjustResponses[keyof PostApiV1AdminResourcesGiftCardsByIdAdjustResponses];
 
+export type PostApiV1AdminResourcesProductsBatchData = {
+    body: {
+        /**
+         * The items to create, each the single create's body plus `key`. At most the plan's bound per call (Free fewer than Paid): over it is refused with 400 and nothing is created.
+         */
+        items: Array<{
+            name: string;
+            description?: string | null;
+            /**
+             * Omit to derive the web address from the name; a taken one gets a -2, -3… suffix.
+             */
+            slug?: string;
+            /**
+             * An active product needs a price above 0 on every SKU.
+             */
+            status?: 'active' | 'draft';
+            condition: 'new' | 'refurbished' | 'used';
+            categoryId?: string | null;
+            brandId?: string | null;
+            metaTitle?: string | null;
+            metaDescription?: string | null;
+            /**
+             * Merchant-named options (up to five). Leave empty for a product sold as one SKU.
+             */
+            options?: Array<{
+                name: string;
+                values: Array<string>;
+                /**
+                 * Which standard attribute it is for catalog feeds; each one at most once.
+                 */
+                standardMapping?: 'size' | 'color' | 'material' | 'pattern' | 'none';
+            }>;
+            /**
+             * With options, one SKU per combination, each using every option's value; without options, exactly one.
+             */
+            variants: Array<{
+                /**
+                 * Unique in the store, any case.
+                 */
+                sku: string;
+                /**
+                 * Its price, in minor units of the store currency at its price increment.
+                 */
+                priceMinor: number;
+                /**
+                 * One value of every option, by option name (`{ "Size": "M", "Color": "Red" }`); leave it out on a product without options.
+                 */
+                optionValues?: {
+                    [key: string]: string;
+                };
+                /**
+                 * Omit or null to generate an internal barcode.
+                 */
+                barcode?: string | null;
+                /**
+                 * Required with `barcode`.
+                 */
+                barcodeType?: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'code128' | 'custom' | null;
+                /**
+                 * Count its stock. It starts at 0: set quantities through inventory.
+                 */
+                trackInventory?: boolean;
+                weightGrams?: number | null;
+            }>;
+            /**
+             * Ready media library files (`dashboard.media.import_url`), in gallery order; the first is featured.
+             */
+            mediaIds?: Array<string>;
+            /**
+             * The sales channels to publish it to. Omit to publish it to every channel.
+             */
+            salesChannelIds?: Array<string>;
+            /**
+             * Your name for this item (1 to 64 printable characters, unique in the request). Repeating a key returns the item created under it (`replayed`) instead of creating again.
+             */
+            key: string;
+        }>;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/resources/products/batch';
+};
+
+export type PostApiV1AdminResourcesProductsBatchErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesProductsBatchError = PostApiV1AdminResourcesProductsBatchErrors[keyof PostApiV1AdminResourcesProductsBatchErrors];
+
+export type PostApiV1AdminResourcesProductsBatchResponses = {
+    /**
+     * One result per item, in request order
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<{
+                key: string;
+                /**
+                 * `created` now; `replayed` was created earlier under this key (nothing was created); `failed` was refused, see `error` (the other items are unaffected).
+                 */
+                outcome: 'created' | 'replayed' | 'failed';
+                product: {
+                    id: string;
+                    slug: string;
+                    revision: number;
+                } | null;
+                error: {
+                    code: string;
+                    message: string;
+                } | null;
+            }>;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesProductsBatchResponse = PostApiV1AdminResourcesProductsBatchResponses[keyof PostApiV1AdminResourcesProductsBatchResponses];
+
 export type PostApiV1AdminResourcesAppContentDeleteData = {
     body: {
         items: Array<{
@@ -28058,6 +28364,119 @@ export type PutApiV1AdminCategoriesByIdResponses = {
 
 export type PutApiV1AdminCategoriesByIdResponse = PutApiV1AdminCategoriesByIdResponses[keyof PutApiV1AdminCategoriesByIdResponses];
 
+export type PostApiV1AdminCategoriesBatchData = {
+    body: {
+        /**
+         * The items to create, each the single create's body plus `key`. At most the plan's bound per call (Free fewer than Paid): over it is refused with 400 and nothing is created.
+         */
+        items: Array<{
+            name: string;
+            description?: string | null;
+            content?: string | null;
+            /**
+             * Omit to derive the web address from the name; a taken one gets a -2, -3… suffix.
+             */
+            slug?: string;
+            metaTitle?: string | null;
+            metaDescription?: string | null;
+            canonicalPath?: string | null;
+            noIndex?: boolean;
+            excludeFromSitemap?: boolean;
+            image?: {
+                id: string;
+                url: string;
+                filename: string;
+                size: number;
+                createdAt?: string;
+            } | null;
+            /**
+             * The parent category's id, or null for a top-level category. The tree has at most four levels.
+             */
+            parentId?: string | null;
+            /**
+             * A listing template id from the theme, or null for the theme's default category listing.
+             */
+            listingTemplate?: string | null;
+            status?: 'draft' | 'published' | 'internal';
+            /**
+             * Your name for this item (1 to 64 printable characters, unique in the request). Repeating a key returns the item created under it (`replayed`) instead of creating again.
+             */
+            key: string;
+        }>;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/categories/batch';
+};
+
+export type PostApiV1AdminCategoriesBatchErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminCategoriesBatchError = PostApiV1AdminCategoriesBatchErrors[keyof PostApiV1AdminCategoriesBatchErrors];
+
+export type PostApiV1AdminCategoriesBatchResponses = {
+    /**
+     * One result per item, in request order
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<{
+                key: string;
+                /**
+                 * `created` now; `replayed` was created earlier under this key (nothing was created); `failed` was refused, see `error` (the other items are unaffected).
+                 */
+                outcome: 'created' | 'replayed' | 'failed';
+                category: {
+                    id: string;
+                    slug: string;
+                    revision: number;
+                } | null;
+                error: {
+                    code: string;
+                    message: string;
+                } | null;
+            }>;
+        };
+    };
+};
+
+export type PostApiV1AdminCategoriesBatchResponse = PostApiV1AdminCategoriesBatchResponses[keyof PostApiV1AdminCategoriesBatchResponses];
+
 export type PostApiV1AdminCategoriesBulkDeleteData = {
     body: {
         categories: Array<{
@@ -28745,6 +29164,118 @@ export type PutApiV1AdminBrandsByIdResponses = {
 };
 
 export type PutApiV1AdminBrandsByIdResponse = PutApiV1AdminBrandsByIdResponses[keyof PutApiV1AdminBrandsByIdResponses];
+
+export type PostApiV1AdminBrandsBatchData = {
+    body: {
+        /**
+         * The items to create, each the single create's body plus `key`. At most the plan's bound per call (Free fewer than Paid): over it is refused with 400 and nothing is created.
+         */
+        items: Array<{
+            name: string;
+            /**
+             * Buyer-facing brand story shown on the brand page (sanitised rich text).
+             */
+            description?: string | null;
+            /**
+             * A ready image from Files, or null for no logo.
+             */
+            logoMediaId?: string | null;
+            /**
+             * Brand wall and brand list order, lowest first; ties sort by name.
+             */
+            sortOrder?: number;
+            metaTitle?: string | null;
+            metaDescription?: string | null;
+            canonicalPath?: string | null;
+            noIndex?: boolean;
+            excludeFromSitemap?: boolean;
+            /**
+             * A listing template id from the theme, or null for the theme's default brand listing.
+             */
+            listingTemplate?: string | null;
+            /**
+             * Omit to derive the web address from the name; a taken one gets a -2, -3… suffix.
+             */
+            slug?: string;
+            status?: 'draft' | 'published';
+            /**
+             * Your name for this item (1 to 64 printable characters, unique in the request). Repeating a key returns the item created under it (`replayed`) instead of creating again.
+             */
+            key: string;
+        }>;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/brands/batch';
+};
+
+export type PostApiV1AdminBrandsBatchErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminBrandsBatchError = PostApiV1AdminBrandsBatchErrors[keyof PostApiV1AdminBrandsBatchErrors];
+
+export type PostApiV1AdminBrandsBatchResponses = {
+    /**
+     * One result per item, in request order
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<{
+                key: string;
+                /**
+                 * `created` now; `replayed` was created earlier under this key (nothing was created); `failed` was refused, see `error` (the other items are unaffected).
+                 */
+                outcome: 'created' | 'replayed' | 'failed';
+                brand: {
+                    id: string;
+                    slug: string;
+                    revision: number;
+                } | null;
+                error: {
+                    code: string;
+                    message: string;
+                } | null;
+            }>;
+        };
+    };
+};
+
+export type PostApiV1AdminBrandsBatchResponse = PostApiV1AdminBrandsBatchResponses[keyof PostApiV1AdminBrandsBatchResponses];
 
 export type PatchApiV1AdminBrandsByIdStatusData = {
     body: {
@@ -30372,6 +30903,10 @@ export type GetApiV1AdminCollectionsResponse = GetApiV1AdminCollectionsResponses
 export type PostApiV1AdminCollectionsData = {
     body: {
         name: string;
+        /**
+         * The collection's handle: lower-case letters, digits and single dashes, unique in the store (trash included). Omit on create to derive it from the name.
+         */
+        slug?: string;
         description?: string | null;
         content?: string | null;
         presentation: 'grid' | 'carousel';
@@ -30444,6 +30979,7 @@ export type PostApiV1AdminCollectionsResponses = {
         data: {
             id: string;
             version: number;
+            slug: string | null;
         };
     };
 };
@@ -30998,6 +31534,7 @@ export type GetApiV1AdminCollectionsByIdResponses = {
             createdAt: string | null;
             updatedAt: string | null;
             deletedAt: string | null;
+            slug: string | null;
             description: string | null;
             content: string | null;
             metaTitle: string | null;
@@ -31012,6 +31549,10 @@ export type PutApiV1AdminCollectionsByIdData = {
     body: {
         expectedVersion: number;
         name?: string;
+        /**
+         * The collection's handle: lower-case letters, digits and single dashes, unique in the store (trash included). Omit on create to derive it from the name.
+         */
+        slug?: string;
         description?: string | null;
         content?: string | null;
         presentation?: 'grid' | 'carousel';
@@ -31090,6 +31631,7 @@ export type PutApiV1AdminCollectionsByIdResponses = {
         data: {
             id: string;
             version: number;
+            slug: string | null;
         };
     };
 };
@@ -31157,6 +31699,7 @@ export type PostApiV1AdminCollectionsByIdProductsResponses = {
         data: {
             id: string;
             version: number;
+            slug: string | null;
         };
     };
 };
@@ -40537,6 +41080,463 @@ export type PutApiV1AdminNavigationPlacementsByPlacementIdResponses = {
 };
 
 export type PutApiV1AdminNavigationPlacementsByPlacementIdResponse = PutApiV1AdminNavigationPlacementsByPlacementIdResponses[keyof PutApiV1AdminNavigationPlacementsByPlacementIdResponses];
+
+export type GetApiV1AdminResourcesThemeData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * A landing page's slug; omit for the homepage.
+         */
+        landing?: string;
+    };
+    url: '/api/v1/admin/resources/theme';
+};
+
+export type GetApiV1AdminResourcesThemeErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesThemeError = GetApiV1AdminResourcesThemeErrors[keyof GetApiV1AdminResourcesThemeErrors];
+
+export type GetApiV1AdminResourcesThemeResponses = {
+    /**
+     * The theme draft
+     */
+    200: {
+        success: true;
+        data: {
+            theme: {
+                /**
+                 * The theme document version section settings follow.
+                 */
+                documentVersion: number;
+                publishedRevision: number;
+                draft: ThemeDraftReceipt;
+                draftDiffersFromLive: boolean;
+                /**
+                 * The template the draft came from (`<app id>/<template id>`), if any.
+                 */
+                template: string | null;
+                page: 'home' | 'landing';
+                slug: string | null;
+                sections: Array<ThemeSection>;
+                landingPages: Array<{
+                    slug: string;
+                    title: string;
+                }>;
+                readAt: string;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesThemeResponse = GetApiV1AdminResourcesThemeResponses[keyof GetApiV1AdminResourcesThemeResponses];
+
+export type PostApiV1AdminResourcesThemeApplyTemplateData = {
+    body: {
+        /**
+         * The template: its id in the calling app's manifest (`storefront.templates[].id`), or `<app id>/<template id>`. An app applies only its own templates.
+         */
+        template: string;
+        /**
+         * The draft `revision` you read (`theme.get`); 0 when no draft was ever saved. A draft changed since is refused with 409 and nothing is saved.
+         */
+        expectedDraftRevision: number;
+        /**
+         * The draft's `basePublishedRevision` you read: the live theme it was based on.
+         */
+        basePublishedRevision: number;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/resources/theme/apply-template';
+};
+
+export type PostApiV1AdminResourcesThemeApplyTemplateErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesThemeApplyTemplateError = PostApiV1AdminResourcesThemeApplyTemplateErrors[keyof PostApiV1AdminResourcesThemeApplyTemplateErrors];
+
+export type PostApiV1AdminResourcesThemeApplyTemplateResponses = {
+    /**
+     * The draft with the template applied
+     */
+    200: {
+        success: true;
+        data: {
+            draft: ThemeDraftReceipt;
+            template: string;
+            unresolved: Array<ThemeUnresolvedHandle>;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesThemeApplyTemplateResponse = PostApiV1AdminResourcesThemeApplyTemplateResponses[keyof PostApiV1AdminResourcesThemeApplyTemplateResponses];
+
+export type PostApiV1AdminResourcesThemeSectionSettingsData = {
+    body: {
+        page?: 'home' | 'landing';
+        /**
+         * The landing page's slug, with `page: "landing"`.
+         */
+        slug?: string;
+        sectionId: string;
+        /**
+         * Settings to merge at the top level (an app section: into its values). Catalogue handles resolve as in apply_template.
+         */
+        settings: {
+            [key: string]: unknown;
+        };
+        /**
+         * The draft `revision` you read (`theme.get`); 0 when no draft was ever saved. A draft changed since is refused with 409 and nothing is saved.
+         */
+        expectedDraftRevision: number;
+        /**
+         * The draft's `basePublishedRevision` you read: the live theme it was based on.
+         */
+        basePublishedRevision: number;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/resources/theme/section-settings';
+};
+
+export type PostApiV1AdminResourcesThemeSectionSettingsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesThemeSectionSettingsError = PostApiV1AdminResourcesThemeSectionSettingsErrors[keyof PostApiV1AdminResourcesThemeSectionSettingsErrors];
+
+export type PostApiV1AdminResourcesThemeSectionSettingsResponses = {
+    /**
+     * The saved draft and the section as it now reads
+     */
+    200: {
+        success: true;
+        data: {
+            draft: ThemeDraftReceipt;
+            section: ThemeSection;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesThemeSectionSettingsResponse = PostApiV1AdminResourcesThemeSectionSettingsResponses[keyof PostApiV1AdminResourcesThemeSectionSettingsResponses];
+
+export type GetApiV1AdminResourcesMenusByMenuData = {
+    body?: never;
+    path: {
+        /**
+         * The menu's id, or the handle of a menu not in the trash.
+         */
+        menu: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/menus/{menu}';
+};
+
+export type GetApiV1AdminResourcesMenusByMenuErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesMenusByMenuError = GetApiV1AdminResourcesMenusByMenuErrors[keyof GetApiV1AdminResourcesMenusByMenuErrors];
+
+export type GetApiV1AdminResourcesMenusByMenuResponses = {
+    /**
+     * The menu
+     */
+    200: {
+        success: true;
+        data: {
+            menu: MenuResource;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesMenusByMenuResponse = GetApiV1AdminResourcesMenusByMenuResponses[keyof GetApiV1AdminResourcesMenusByMenuResponses];
+
+export type PatchApiV1AdminResourcesMenusByMenuData = {
+    body: {
+        /**
+         * The menu's `revision` you read; a menu changed since is refused with 409 and nothing is saved.
+         */
+        expectedRevision: number;
+        name?: string;
+        handle?: string;
+        /**
+         * When given, all the menu's links: they replace the current ones.
+         */
+        items?: Array<MenuLinkInput>;
+        /**
+         * Publish the saved revision in the same call.
+         */
+        publish?: boolean;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        /**
+         * The menu's id, or the handle of a menu not in the trash.
+         */
+        menu: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/menus/{menu}';
+};
+
+export type PatchApiV1AdminResourcesMenusByMenuErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PatchApiV1AdminResourcesMenusByMenuError = PatchApiV1AdminResourcesMenusByMenuErrors[keyof PatchApiV1AdminResourcesMenusByMenuErrors];
+
+export type PatchApiV1AdminResourcesMenusByMenuResponses = {
+    /**
+     * The menu
+     */
+    200: {
+        success: true;
+        data: {
+            menu: MenuResource;
+            /**
+             * Whether this call published the saved revision.
+             */
+            published: boolean;
+            publishError: {
+                code: string;
+                message: string;
+            } | null;
+        };
+    };
+};
+
+export type PatchApiV1AdminResourcesMenusByMenuResponse = PatchApiV1AdminResourcesMenusByMenuResponses[keyof PatchApiV1AdminResourcesMenusByMenuResponses];
+
+export type PostApiV1AdminResourcesMenusData = {
+    body: {
+        name: string;
+        /**
+         * Omit to derive it from the name; another live menu's handle is refused with 409.
+         */
+        handle?: string;
+        /**
+         * All the menu's links in tree order (a parent before its children), at most 150 and three levels.
+         */
+        items?: Array<MenuLinkInput>;
+        /**
+         * Publish the new menu in the same call.
+         */
+        publish?: boolean;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/resources/menus';
+};
+
+export type PostApiV1AdminResourcesMenusErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesMenusError = PostApiV1AdminResourcesMenusErrors[keyof PostApiV1AdminResourcesMenusErrors];
+
+export type PostApiV1AdminResourcesMenusResponses = {
+    /**
+     * The menu
+     */
+    201: {
+        success: true;
+        data: {
+            menu: MenuResource;
+            /**
+             * Whether this call published the saved revision.
+             */
+            published: boolean;
+            publishError: {
+                code: string;
+                message: string;
+            } | null;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesMenusResponse = PostApiV1AdminResourcesMenusResponses[keyof PostApiV1AdminResourcesMenusResponses];
 
 export type GetApiV1AdminTranslationsResourcesData = {
     body?: never;

@@ -3,6 +3,7 @@ import {
   PLUGIN_UI_SURFACES,
   parsePluginUiActionResult,
   parsePluginUiDocument,
+  pluginUiHasLiveProgress,
   pluginUiRouteActions,
   type PluginUiNode,
 } from "./ui";
@@ -75,6 +76,24 @@ describe("plugin UI tree", () => {
     };
     const result = parsePluginUiDocument(doc(tree));
     expect(result).toMatchObject({ ok: true });
+  });
+
+  it("draws a long action's progress on the dashboard only, between 0 and its maximum", () => {
+    const progress = { type: "progress", label: "Importing products", value: 40, max: 200, help: "40 of 200", live: true };
+    expect(parsePluginUiDocument(page(progress)).ok).toBe(true);
+    expect(parsePluginUiDocument(page({ ...progress, value: 0, live: undefined })).ok).toBe(true);
+    expect(parsePluginUiDocument(page({ ...progress, value: 200 })).ok).toBe(true);
+    expect(issues(page({ ...progress, value: 201 })).issues[0]!.message).toMatch(/must not exceed max/);
+    expect(parsePluginUiDocument(page({ ...progress, value: -1 })).ok).toBe(false);
+    expect(parsePluginUiDocument(page({ ...progress, max: 0 })).ok).toBe(false);
+    expect(parsePluginUiDocument(page({ ...progress, value: Number.NaN })).ok).toBe(false);
+    expect(parsePluginUiDocument(page({ ...progress, max: Number.POSITIVE_INFINITY })).ok).toBe(false);
+    expect(parsePluginUiDocument(page({ ...progress, label: "" })).ok).toBe(false);
+    expect(parsePluginUiDocument(page({ ...progress, live: "yes" })).ok).toBe(false);
+    expect(parsePluginUiDocument(doc({ type: "stack", children: [progress] }), "buyer")).toMatchObject({ ok: false, issues: [{ message: expect.stringMatching(/not shown on the buyer surface/) }] });
+    // `live` asks the dashboard to read the surface again while it is shown.
+    expect(pluginUiHasLiveProgress({ type: "page", children: [{ type: "card", children: [progress as PluginUiNode] }] })).toBe(true);
+    expect(pluginUiHasLiveProgress({ type: "page", children: [{ ...progress, live: false } as PluginUiNode] })).toBe(false);
   });
 
   it("reports a newer version instead of guessing", () => {

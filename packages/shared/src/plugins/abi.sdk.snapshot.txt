@@ -69,6 +69,10 @@
 // packages/plugin-sdk/src/context.d.ts
 import type { EventTopic, EventsApiVersion } from "@scalius/shared/events";
 import type { PluginSettingValue } from "@scalius/shared/plugins";
+import type { PluginCustomerRole, PluginCustomerRoleGrant } from "@scalius/shared/plugins/customer-roles";
+import type { PluginJob } from "@scalius/shared/plugins/jobs";
+export type { PluginCustomerRole, PluginCustomerRoleGrant } from "@scalius/shared/plugins/customer-roles";
+export type { PluginJob, PluginJobStatus, PluginJobStepInput, PluginJobStepResult } from "@scalius/shared/plugins/jobs";
 export interface PluginStoreInfo {
     name: string;
     url: string | null;
@@ -273,6 +277,31 @@ export interface PluginOrders {
         returnedToSender: number;
     }>;
 }
+export interface PluginCustomerRoles {
+    grant(customerId: string, role: string, options?: {
+        ref?: string | null;
+    }): Promise<void>;
+    revoke(customerId: string, role: string): Promise<void>;
+    list(customerId: string): Promise<PluginCustomerRoleGrant[]>;
+}
+export interface PluginCustomers {
+    roles: PluginCustomerRoles;
+}
+export interface PluginJobs {
+    start(name: string, options?: {
+        input?: unknown;
+        key?: string;
+    }): Promise<{
+        id: string;
+        status: PluginJob["status"];
+    }>;
+    get(id: string): Promise<PluginJob | null>;
+    list(options?: {
+        name?: string;
+        limit?: number;
+    }): Promise<PluginJob[]>;
+    cancel(id: string): Promise<PluginJob>;
+}
 export interface PluginLogger {
     debug(message: string, fields?: Record<string, unknown>): void;
     info(message: string, fields?: Record<string, unknown>): void;
@@ -295,6 +324,8 @@ export interface PluginContext {
     messaging: PluginMessaging;
     timeline: PluginTimeline;
     orders: PluginOrders;
+    customers: PluginCustomers;
+    jobs: PluginJobs;
     log: PluginLogger;
 }
 export interface PluginEvent<T extends EventTopic = EventTopic> {
@@ -318,6 +349,7 @@ export interface PluginRouteRequest {
     staffId: string | null;
     customer?: {
         id: string;
+        roles: PluginCustomerRole[];
     } | null;
     routes?: PluginStorefrontRoutes | null;
 }
@@ -368,7 +400,7 @@ export {};
 import type { EventTopic, EventTopicFilter } from "@scalius/shared/events";
 import type { FunctionReadRecord, FunctionReads, PluginFunctionAnswer, PluginFunctionInput, PluginFunctionPoint, PluginManifestInput, PluginSettingValue, StorefrontUiSlot } from "@scalius/shared/plugins";
 import type { ProviderImplementation, ProviderKind } from "@scalius/shared/plugins/providers";
-import type { PluginContext, PluginEvent, PluginRouteRequest, PluginRouteResponse } from "./context";
+import type { PluginContext, PluginEvent, PluginJobStepInput, PluginJobStepResult, PluginRouteRequest, PluginRouteResponse } from "./context";
 import type { PluginContextOf, PluginSettingsOf } from "./manifest-types";
 export type * from "./context";
 export { defineManifest, type DefinedManifest, type ObjectFieldValue, type ObjectRecordOf, type PluginContextOf, type PluginObjectsOf, type PluginSettingsOf, type SettingsOf, type SettingValueOf, type StorefrontSettingsOf, } from "./manifest-types";
@@ -395,6 +427,7 @@ export type PluginCronHandler<Ctx = PluginContext> = (ctx: Ctx, run: {
     scheduledAt: string;
 }) => Promise<void> | void;
 export type PluginLifecycleHandler<Ctx = PluginContext> = (ctx: Ctx) => Promise<void> | void;
+export type PluginJobHandler<Ctx = PluginContext> = (ctx: Ctx, job: PluginJobStepInput) => Promise<PluginJobStepResult | void> | PluginJobStepResult | void;
 export interface PluginDefinition<M extends PluginManifestInput = PluginManifestInput, Ctx = PluginContextOf<M>> {
     manifest: M;
     events?: {
@@ -414,6 +447,7 @@ export interface PluginDefinition<M extends PluginManifestInput = PluginManifest
         webhooks?: Record<string, PluginRouteHandler<Ctx>>;
     };
     cron?: Record<string, PluginCronHandler<Ctx>>;
+    jobs?: Record<string, PluginJobHandler<Ctx>>;
     providers?: Record<string, PluginProvider>;
     lifecycle?: {
         install?: PluginLifecycleHandler<Ctx>;
@@ -617,6 +651,7 @@ import type { PluginEvent, PluginRouteRequest, PluginStoreInfo } from "./context
 import type { PluginSettingValue } from "@scalius/shared/plugins/settings-schema";
 import { type PluginHandlerInventory, type PluginLifecycleHook } from "@scalius/shared/plugins/handlers";
 import { type ProviderErrorCategory } from "@scalius/shared/plugins/providers/kinds";
+import type { PluginJobStepInput } from "@scalius/shared/plugins/jobs";
 export interface PluginContextSeed {
     plugin: {
         id: string;
@@ -649,6 +684,10 @@ export type PluginInvocation = {
     kind: "cron";
     name: string;
     scheduledAt: string;
+} | {
+    kind: "job";
+    name: string;
+    job: PluginJobStepInput;
 } | {
     kind: "lifecycle";
     hook: PluginLifecycleHook;
@@ -721,6 +760,16 @@ export interface PluginRuntimeBridge {
         cancelled: number;
         returnedToSender: number;
     }>;
+    customerRolesGrant?(customerId: unknown, role: unknown, ref?: unknown): Promise<void>;
+    customerRolesRevoke?(customerId: unknown, role: unknown): Promise<void>;
+    customerRolesList?(customerId: unknown): Promise<unknown>;
+    jobsStart?(name: unknown, options?: unknown): Promise<{
+        id: string;
+        status: string;
+    }>;
+    jobsGet?(id: unknown): Promise<unknown>;
+    jobsList?(options?: unknown): Promise<unknown>;
+    jobsCancel?(id: unknown): Promise<unknown>;
 }
 export declare class PluginPlatformError extends Error {
     readonly code: string;
@@ -1067,6 +1116,8 @@ export declare const NON_STABLE_OPERATION_NAMES: readonly string[];
 
 // packages/plugin-sdk/src/testing.d.ts
 import { PLUGIN_EXTENSION_RUN, type PluginFunctionInputDraft, type PluginFunctionOutput, type PluginFunctionPoint, type PluginRunPoint, type PluginSettingValue } from "@scalius/shared/plugins";
+import { type PluginCustomerRole } from "@scalius/shared/plugins/customer-roles";
+import { type PluginJob } from "@scalius/shared/plugins/jobs";
 import type { EventTopic } from "@scalius/shared/events";
 import type { PluginApiCallInput, PluginApiResult, PluginEvent, PluginRouteRequest, PluginStoreInfo } from "./context";
 import { type PluginInvocationResult, type PluginLogRecord } from "./runtime";
@@ -1095,7 +1146,18 @@ export interface PluginTestHarnessOptions {
         headers?: Record<string, string>;
         body: string;
     }>;
+    customers?: string[];
 }
+export interface PluginJobTestStep {
+    result: PluginInvocationResult;
+    job: PluginJob;
+}
+export type PluginRouteTestRequest = Partial<Omit<PluginRouteRequest, "customer">> & {
+    customer?: {
+        id: string;
+        roles?: PluginCustomerRole[];
+    } | null;
+};
 export type PluginFunctionTestResult<P extends PluginRunPoint> = Omit<PluginInvocationResult, "value"> & {
     value: PluginFunctionOutput<P> | null;
 };
@@ -1113,7 +1175,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
         };
         categories: ("checkout" | "shipping" | "payments" | "orders" | "inventory" | "returns" | "pricing" | "marketing" | "loyalty" | "store-design" | "content" | "notifications" | "analytics" | "finances" | "support" | "operations" | "compliance")[];
         screenshots: string[];
-        scopes: ("read_products" | "write_products" | "read_inventory" | "write_inventory" | "read_orders" | "write_orders" | "write_payments" | "write_fulfillments" | "read_customers" | "write_customers" | "write_marketing" | "send_messages_any" | "read_customer_names" | "read_customer_emails" | "read_customer_phones" | "read_customer_addresses" | "read_discounts" | "write_discounts" | "read_content" | "write_content" | "read_objects" | "write_objects" | "read_files" | "write_files" | "read_gift_cards" | "write_gift_cards" | "write_webhooks" | "read_settings" | "write_places")[];
+        scopes: ("read_products" | "write_products" | "read_inventory" | "write_inventory" | "read_orders" | "write_orders" | "write_payments" | "write_fulfillments" | "read_customers" | "write_customers" | "write_marketing" | "send_messages_any" | "read_customer_names" | "read_customer_emails" | "read_customer_phones" | "read_customer_addresses" | "read_discounts" | "write_discounts" | "read_content" | "write_content" | "read_objects" | "write_objects" | "read_files" | "write_files" | "read_gift_cards" | "write_gift_cards" | "write_webhooks" | "read_settings" | "write_themes" | "write_navigation" | "write_places")[];
         allowedHosts: string[];
         events: import("@scalius/shared/events").EventTopicFilter[];
         functions: {
@@ -1142,7 +1204,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
                 name: string;
                 methods: ("POST" | "PUT" | "PATCH" | "DELETE" | "GET")[];
                 description?: string | undefined;
-                scope?: "read_products" | "write_products" | "read_inventory" | "write_inventory" | "read_orders" | "write_orders" | "write_payments" | "write_fulfillments" | "read_customers" | "write_customers" | "write_marketing" | "send_messages_any" | "read_customer_names" | "read_customer_emails" | "read_customer_phones" | "read_customer_addresses" | "read_discounts" | "write_discounts" | "read_content" | "write_content" | "read_objects" | "write_objects" | "read_files" | "write_files" | "read_gift_cards" | "write_gift_cards" | "write_webhooks" | "read_settings" | "write_places" | undefined;
+                scope?: "read_products" | "write_products" | "read_inventory" | "write_inventory" | "read_orders" | "write_orders" | "write_payments" | "write_fulfillments" | "read_customers" | "write_customers" | "write_marketing" | "send_messages_any" | "read_customer_names" | "read_customer_emails" | "read_customer_phones" | "read_customer_addresses" | "read_discounts" | "write_discounts" | "read_content" | "write_content" | "read_objects" | "write_objects" | "read_files" | "write_files" | "read_gift_cards" | "write_gift_cards" | "write_webhooks" | "read_settings" | "write_themes" | "write_navigation" | "write_places" | undefined;
             }[];
             public: {
                 name: string;
@@ -1158,6 +1220,10 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
         cron: {
             name: string;
             schedule: string;
+        }[];
+        jobs: {
+            name: string;
+            title: string;
         }[];
         objects: Record<string, {
             name: string;
@@ -1427,7 +1493,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
             name: string;
             description: string;
             recommended: boolean;
-            scopes: ("read_products" | "write_products" | "read_inventory" | "write_inventory" | "read_orders" | "write_orders" | "write_payments" | "write_fulfillments" | "read_customers" | "write_customers" | "write_marketing" | "send_messages_any" | "read_customer_names" | "read_customer_emails" | "read_customer_phones" | "read_customer_addresses" | "read_discounts" | "write_discounts" | "read_content" | "write_content" | "read_objects" | "write_objects" | "read_files" | "write_files" | "read_gift_cards" | "write_gift_cards" | "write_webhooks" | "read_settings" | "write_places")[];
+            scopes: ("read_products" | "write_products" | "read_inventory" | "write_inventory" | "read_orders" | "write_orders" | "write_payments" | "write_fulfillments" | "read_customers" | "write_customers" | "write_marketing" | "send_messages_any" | "read_customer_names" | "read_customer_emails" | "read_customer_phones" | "read_customer_addresses" | "read_discounts" | "write_discounts" | "read_content" | "write_content" | "read_objects" | "write_objects" | "read_files" | "write_files" | "read_gift_cards" | "write_gift_cards" | "write_webhooks" | "read_settings" | "write_themes" | "write_navigation" | "write_places")[];
             allowedHosts: string[];
             providers: string[];
             settingsGroups: string[];
@@ -2314,7 +2380,18 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
         }>;
     }>;
     provider: (providerId: string, operation: string, input: unknown) => Promise<PluginInvocationResult>;
-    route: (surface: "admin" | "public" | "webhooks", name: string, request?: Partial<PluginRouteRequest>) => Promise<PluginInvocationResult>;
+    route: (surface: "admin" | "public" | "webhooks", name: string, request?: PluginRouteTestRequest) => Promise<PluginInvocationResult>;
+    roles: (customerId: string) => PluginCustomerRole[];
+    jobs: () => PluginJob[];
+    jobStep: (id: string) => Promise<PluginJobTestStep>;
+    runJob: (name: string, startOptions?: {
+        input?: unknown;
+        key?: string;
+        maxSteps?: number;
+    }) => Promise<{
+        job: PluginJob;
+        steps: PluginJobTestStep[];
+    }>;
     cron: (name: string, scheduledAt?: string) => Promise<PluginInvocationResult>;
     lifecycle: (hook: "install" | "activate" | "deactivate" | "uninstall", keepData?: boolean) => Promise<PluginInvocationResult>;
     feature: (hook: "enable" | "disable", feature: string) => Promise<PluginInvocationResult>;
@@ -2340,6 +2417,7 @@ export declare const ui: {
     banner: (tone: PluginUiTone, text: string, options?: Options<"banner", "tone" | "text">) => PluginUiNode;
     keyValue: (items: NodeOf<"key-value">["items"]) => PluginUiNode;
     stat: (label: string, value: string | number, help?: string) => PluginUiNode;
+    progress: (label: string, value: number, max: number, options?: Options<"progress", "label" | "value" | "max">) => PluginUiNode;
     table: (options: Options<"table">) => PluginUiNode;
     empty: (title: string, options?: Options<"empty-state", "title">) => PluginUiNode;
     image: (src: PluginUiImageSource, alt: string, options?: Options<"image", "src" | "alt">) => PluginUiNode;

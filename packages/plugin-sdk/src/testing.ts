@@ -33,6 +33,25 @@ import {
   type StorefrontUiSlot,
 } from "@scalius/shared/plugins";
 import { providerOperationSchemas } from "@scalius/shared/plugins/providers";
+import {
+  PLUGIN_CUSTOMER_ROLE_PATTERN,
+  PLUGIN_CUSTOMER_ROLE_REF_PATTERN,
+  PLUGIN_CUSTOMER_ROLES_MAX,
+  type PluginCustomerRole,
+  type PluginCustomerRoleGrant,
+} from "@scalius/shared/plugins/customer-roles";
+import {
+  checkPluginJobStep,
+  PLUGIN_JOB_ID_PATTERN,
+  PLUGIN_JOB_INPUT_MAX_BYTES,
+  PLUGIN_JOB_KEY_PATTERN,
+  PLUGIN_JOB_LIST_MAX,
+  PLUGIN_JOB_STEP_ATTEMPTS,
+  pluginJsonBytes,
+  type PluginJob,
+  type PluginJobErrorCode,
+} from "@scalius/shared/plugins/jobs";
+import { planLimits } from "@scalius/shared/plan-limits";
 import { STOREFRONT_CORE_ROUTES } from "@scalius/shared/storefront-routes";
 import type { EventTopic } from "@scalius/shared/events";
 import type { PluginApiCallInput, PluginApiResult, PluginEvent, PluginRouteRequest, PluginStoreInfo } from "./context";
@@ -95,7 +114,24 @@ export interface PluginTestHarnessOptions {
   staff?: string[];
   /** Answers `ctx.http.fetch` for allowed hosts; by default nothing is reachable. */
   fetch?: (url: string, init: unknown) => { status: number; headers?: Record<string, string>; body: string } | Promise<{ status: number; headers?: Record<string, string>; body: string }>;
+  /**
+   * The store's live customers: `ctx.customers.roles.grant` to any other id
+   * is refused with `customers_not_found`, as for a missing or deleted
+   * customer on the platform. By default every id is a live customer.
+   */
+  customers?: string[];
 }
+
+/** One `harness.runJob` / `harness.jobStep` step: the run and the job after it. */
+export interface PluginJobTestStep {
+  result: PluginInvocationResult;
+  job: PluginJob;
+}
+
+/** A route request as a test writes it: `customer.roles` defaults to the roles the app granted in the harness. */
+export type PluginRouteTestRequest = Partial<Omit<PluginRouteRequest, "customer">> & {
+  customer?: { id: string; roles?: PluginCustomerRole[] } | null;
+};
 
 /** `harness.fn`'s result: the checked answer, or the host's refusal (`function_invalid_output`). */
 export type PluginFunctionTestResult<P extends PluginRunPoint> = Omit<PluginInvocationResult, "value"> & { value: PluginFunctionOutput<P> | null };
@@ -149,6 +185,36 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
   const logs: PluginLogRecord[] = [];
   const emailKeys = new Set<string>();
   const sent = { emails: [] as unknown[], sms: [] as unknown[], notices: [] as unknown[], pushes: [] as unknown[], timeline: [] as unknown[], holds: [] as unknown[], risks: [] as unknown[] };
+  /** Customer roles the app granted, by customer id then role (the platform keeps them per app). */
+  const roles = new Map<string, Map<string, { ref: string | null; grantedAt: string }>>();
+  const liveCustomers = options.customers ? new Set(options.customers) : null;
+  const rolesOf = (customerId: string): PluginCustomerRole[] => [...(roles.get(customerId) ?? new Map<string, { ref: string | null }>())]
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+    .map(([role, entry]) => ({ role, ref: entry.ref }));
+  /** Background jobs the app started, by id (`runJob` and `jobStep` run their steps). */
+  type TestJob = { id: string; name: string; input: unknown; state: unknown; status: PluginJob["status"]; done: number; total: number; message: string | null; error: string | null; steps: number; attempts: number; key: string | null; createdAt: string; updatedAt: string; finishedAt: string | null };
+  const jobs = new Map<string, TestJob>();
+  let jobSerial = 0;
+  const jobView = (job: TestJob): PluginJob => ({
+    id: job.id, name: job.name, status: job.status, progress: { done: job.done, total: job.total }, message: job.message, error: job.error,
+    steps: job.steps, createdAt: job.createdAt, updatedAt: job.updatedAt, finishedAt: job.finishedAt,
+  });
+  const finishJob = (job: TestJob, status: "done" | "failed", error: PluginJobErrorCode | null) => {
+    job.status = status;
+    job.error = error;
+    job.finishedAt = job.updatedAt = new Date().toISOString();
+  };
+  const customerIdOf = (value: unknown): string => {
+    if (typeof value !== "string" || value.length < 1 || value.length > 128) refuse("customers_invalid", "customerId is a customer id.");
+    return value;
+  };
+  const roleOf = (value: unknown): string => {
+    if (typeof value !== "string" || !PLUGIN_CUSTOMER_ROLE_PATTERN.test(value)) refuse("customers_invalid", "role is a lower-case letter, then up to 31 lower-case letters, digits, _ or -.");
+    return value;
+  };
+  const requireCustomers = () => {
+    if (!permissions.has("customers.view")) refuse("customers_not_allowed", "Customer roles need the read_customers scope.");
+  };
 
   const object = (name: string) => records.get(name) ?? refuse("object_undeclared_type", `Object type "${name}" is not declared in the manifest.`);
   const indexFor = (name: string, where: Record<string, Scalar>, orderField: string | undefined) => {
@@ -434,6 +500,83 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       if (typeof orderId !== "string" || orderId.length < 1 || orderId.length > 128) refuse("orders_invalid", "orderId is an order id.");
       return copy(options.riskHistory?.(orderId) ?? { orders: 0, cancelled: 0, returnedToSender: 0 });
     },
+    // The host's checks (apps/api/src/plugins/customer-roles.ts): read_customers, a live customer, at most 10 roles per customer.
+    customerRolesGrant: async (customerIdInput, roleInput, refInput) => {
+      requireCustomers();
+      const customerId = customerIdOf(customerIdInput);
+      const role = roleOf(roleInput);
+      if (refInput !== undefined && refInput !== null && (typeof refInput !== "string" || !PLUGIN_CUSTOMER_ROLE_REF_PATTERN.test(refInput))) {
+        refuse("customers_invalid", "ref is 1 to 128 printable characters.");
+      }
+      if (liveCustomers && !liveCustomers.has(customerId)) refuse("customers_not_found", "The customer was not found.");
+      const held = roles.get(customerId) ?? new Map<string, { ref: string | null; grantedAt: string }>();
+      if (!held.has(role) && held.size >= PLUGIN_CUSTOMER_ROLES_MAX) {
+        refuse("customer_roles_limit", `An app gives one customer at most ${PLUGIN_CUSTOMER_ROLES_MAX} roles; revoke one first.`);
+      }
+      held.set(role, { ref: (refInput as string | null | undefined) ?? null, grantedAt: held.get(role)?.grantedAt ?? new Date().toISOString() });
+      roles.set(customerId, held);
+    },
+    customerRolesRevoke: async (customerIdInput, roleInput) => {
+      requireCustomers();
+      const customerId = customerIdOf(customerIdInput);
+      roles.get(customerId)?.delete(roleOf(roleInput));
+    },
+    customerRolesList: async (customerIdInput): Promise<PluginCustomerRoleGrant[]> => {
+      requireCustomers();
+      const customerId = customerIdOf(customerIdInput);
+      const held = roles.get(customerId) ?? new Map<string, { ref: string | null; grantedAt: string }>();
+      return rolesOf(customerId).map((entry) => ({ ...entry, grantedAt: held.get(entry.role)!.grantedAt }));
+    },
+    // The host's checks (apps/api/src/plugins/jobs.ts): a declared job, 16 KiB of input, an idempotent key, the plan's running jobs.
+    jobsStart: async (nameInput, optionsInput) => {
+      if (typeof nameInput !== "string" || !manifest.jobs.some((job) => job.name === nameInput)) {
+        refuse("jobs_undeclared", `Job ${String(nameInput).slice(0, 48)} is not declared in the manifest.`);
+      }
+      const startOptions = (optionsInput ?? {}) as { input?: unknown; key?: unknown };
+      if (typeof startOptions !== "object" || Array.isArray(startOptions)) refuse("jobs_invalid", "options is { input?, key? }.");
+      const input = startOptions.input === undefined ? null : startOptions.input;
+      const bytes = pluginJsonBytes(input);
+      if (bytes === null) refuse("jobs_invalid", "input must be JSON.");
+      if (bytes > PLUGIN_JOB_INPUT_MAX_BYTES) refuse("jobs_invalid", `input is at most ${PLUGIN_JOB_INPUT_MAX_BYTES / 1024} KiB of JSON.`);
+      const key = startOptions.key;
+      if (key !== undefined && (typeof key !== "string" || !PLUGIN_JOB_KEY_PATTERN.test(key))) refuse("jobs_invalid", "key is 8 to 200 printable characters.");
+      if (typeof key === "string") {
+        const earlier = [...jobs.values()].find((job) => job.name === nameInput && job.key === key);
+        if (earlier) {
+          if (JSON.stringify(earlier.input) !== JSON.stringify(input)) refuse("jobs_key_reused", "This key started the job with a different input.");
+          return { id: earlier.id, status: earlier.status };
+        }
+      }
+      const limit = planLimits().plugins.runningJobs;
+      if ([...jobs.values()].filter((job) => job.status === "running").length >= limit) {
+        refuse("jobs_limit", `An app runs at most ${limit} jobs at once; wait for one to finish.`);
+      }
+      jobSerial += 1;
+      const now = new Date().toISOString();
+      const id = `job_${jobSerial.toString(16).padStart(32, "0")}`;
+      jobs.set(id, {
+        id, name: nameInput, input: copy(input), state: null, status: "running", done: 0, total: 0, message: null, error: null,
+        steps: 0, attempts: 0, key: typeof key === "string" ? key : null, createdAt: now, updatedAt: now, finishedAt: null,
+      });
+      return { id, status: "running" };
+    },
+    jobsGet: async (id) => {
+      const job = typeof id === "string" && PLUGIN_JOB_ID_PATTERN.test(id) ? jobs.get(id) : undefined;
+      return job ? jobView(job) : null;
+    },
+    jobsList: async (optionsInput) => {
+      const listOptions = (optionsInput ?? {}) as { name?: unknown; limit?: unknown };
+      const limit = listOptions.limit ?? PLUGIN_JOB_LIST_MAX;
+      if (typeof limit !== "number" || !Number.isInteger(limit) || limit < 1 || limit > PLUGIN_JOB_LIST_MAX) refuse("jobs_invalid", `limit is 1 to ${PLUGIN_JOB_LIST_MAX}.`);
+      return [...jobs.values()].filter((job) => listOptions.name === undefined || job.name === listOptions.name)
+        .reverse().slice(0, limit).map(jobView);
+    },
+    jobsCancel: async (id) => {
+      const job = typeof id === "string" ? jobs.get(id) : undefined;
+      if (!job) refuse("jobs_not_found", "The job was not found.");
+      if (job.status === "running") finishJob(job, "failed", "cancelled");
+      return jobView(job);
+    },
   };
 
   const seed: PluginContextSeed = {
@@ -452,6 +595,44 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     const result = await invokePluginDefinition(module, copy(invocation), copy(seed), invocation.kind === "function" ? null : runBridge);
     logs.push(...result.logs);
     return copy(result);
+  };
+
+  /** A function input's signed-in buyer gets the roles the app granted, as the platform fills them per app. */
+  const withRoles = <T,>(input: T): T => {
+    const cart = (input as { cart?: { customer?: { id?: unknown; roles?: unknown } | null } | null } | null)?.cart;
+    if (!cart?.customer || cart.customer.roles !== undefined || typeof cart.customer.id !== "string") return input;
+    return { ...input, cart: { ...cart, customer: { ...cart.customer, roles: rolesOf(cart.customer.id) } } } as T;
+  };
+
+  /** Runs one step of a running job, as the platform's drain does (attempts, validation, done). */
+  const stepJob = async (id: string): Promise<PluginJobTestStep> => {
+    const job = jobs.get(id);
+    if (!job) throw new Error(`No job ${id}.`);
+    if (job.status !== "running") throw new Error(`Job ${id} is ${job.status}.`);
+    let result = await run({ kind: "job", name: job.name, job: { id, name: job.name, input: copy(job.input), state: copy(job.state), step: job.steps + 1 } });
+    // Cancelled during the step: nothing commits.
+    if (job.status !== "running") return { result, job: jobView(job) };
+    const checked = result.ok ? checkPluginJobStep(result.value) : null;
+    if (!checked || !checked.ok) {
+      const code: PluginJobErrorCode = checked ? "job_invalid_step" : "job_step_failed";
+      if (checked && !checked.ok) result = { ...result, ok: false, value: null, error: { code, message: checked.message } };
+      job.attempts += 1;
+      job.updatedAt = new Date().toISOString();
+      if (job.attempts >= PLUGIN_JOB_STEP_ATTEMPTS) finishJob(job, "failed", code);
+      return { result, job: jobView(job) };
+    }
+    const step = checked.value;
+    job.steps += 1;
+    job.attempts = 0;
+    if (!step.state.keep) job.state = step.state.value;
+    if (step.progress) {
+      job.done = step.progress.done;
+      job.total = step.progress.total;
+    }
+    if (step.message !== null) job.message = step.message;
+    job.updatedAt = new Date().toISOString();
+    if (step.done) finishJob(job, "done", null);
+    return { result, job: jobView(job) };
   };
 
   return {
@@ -490,7 +671,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
      */
     fn: async <P extends PluginFunctionPoint>(point: P, input: PluginFunctionInputDraft<P>): Promise<PluginFunctionTestResult<P>> => {
       if (!manifest.functions.some((fn) => fn.point === point)) throw new Error(`The manifest declares no ${point} function.`);
-      const checked = PLUGIN_FUNCTION_SCHEMAS[point].input.safeParse(input);
+      const checked = PLUGIN_FUNCTION_SCHEMAS[point].input.safeParse(withRoles(input));
       if (!checked.success) {
         const issue = checked.error.issues[0];
         throw new TypeError(`Invalid ${point} input at ${issue?.path.join(".") || "(root)"}: ${issue?.message ?? "invalid"}.`);
@@ -511,7 +692,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     extension: async (input: PluginFunctionInputDraft<typeof PLUGIN_EXTENSION_RUN>): Promise<PluginFunctionTestResult<typeof PLUGIN_EXTENSION_RUN>> => {
       const target: StorefrontUiSlot = input.target;
       if (!manifest.storefront.extensions.some((extension) => extension.target === target)) throw new Error(`The manifest declares no ${target} extension.`);
-      const checked = PLUGIN_EXTENSION_SCHEMAS.input.safeParse(input);
+      const checked = PLUGIN_EXTENSION_SCHEMAS.input.safeParse(withRoles(input));
       if (!checked.success) {
         const issue = checked.error.issues[0];
         throw new TypeError(`Invalid ${target} extension input at ${issue?.path.join(".") || "(root)"}: ${issue?.message ?? "invalid"}.`);
@@ -575,17 +756,44 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
         },
       };
     },
-    route: (surface: "admin" | "public" | "webhooks", name: string, request: Partial<PluginRouteRequest> = {}) => run({
-      kind: "route",
-      surface,
-      name,
-      request: {
-        method: "GET", subpath: "", query: {}, headers: {}, body: null, rawBody: null, staffId: null,
-        // The platform's core routes (`@scalius/shared/storefront-routes`), on public routes.
-        routes: surface === "public" ? STOREFRONT_CORE_ROUTES : null,
-        ...request,
-      },
-    }),
+    route: (surface: "admin" | "public" | "webhooks", name: string, request: PluginRouteTestRequest = {}) => {
+      const { customer, ...rest } = request;
+      return run({
+        kind: "route",
+        surface,
+        name,
+        request: {
+          method: "GET", subpath: "", query: {}, headers: {}, body: null, rawBody: null, staffId: null,
+          // The platform's core routes (`@scalius/shared/storefront-routes`), on public routes.
+          routes: surface === "public" ? STOREFRONT_CORE_ROUTES : null,
+          ...rest,
+          // A proxied buyer carries this app's roles, as the platform reads them with the session.
+          ...(customer === undefined ? {} : { customer: customer === null ? null : { id: customer.id, roles: customer.roles ?? rolesOf(customer.id) } }),
+        },
+      });
+    },
+    /**
+     * Customer roles the app granted (`ctx.customers.roles`), by customer id:
+     * `{ role, ref }` by role. Proxied requests and function carts carry them.
+     */
+    roles: (customerId: string): PluginCustomerRole[] => rolesOf(customerId),
+    /** The jobs the app started (`ctx.jobs.start`), oldest first. */
+    jobs: (): PluginJob[] => [...jobs.values()].map(jobView),
+    /** Runs one step of a job the app started, as the platform's drain does. */
+    jobStep: (id: string) => stepJob(id),
+    /**
+     * Starts a declared job as `ctx.jobs.start` does and runs its steps until
+     * it is done or failed (or `maxSteps`, default 100): a failed step is
+     * tried again right away, three attempts in all, as the platform tries it
+     * a minute later.
+     */
+    runJob: async (name: string, startOptions: { input?: unknown; key?: string; maxSteps?: number } = {}): Promise<{ job: PluginJob; steps: PluginJobTestStep[] }> => {
+      const { maxSteps = 100, ...start } = startOptions;
+      const { id } = await bridge.jobsStart!(name, start);
+      const steps: PluginJobTestStep[] = [];
+      while (jobs.get(id)!.status === "running" && steps.length < maxSteps) steps.push(await stepJob(id));
+      return { job: jobView(jobs.get(id)!), steps };
+    },
     cron: (name: string, scheduledAt = new Date().toISOString()) => run({ kind: "cron", name, scheduledAt }),
     lifecycle: (hook: "install" | "activate" | "deactivate" | "uninstall", keepData = true) => run({ kind: "lifecycle", hook, keepData }),
     /** Runs the `enable` or `disable` hook for one feature, as the platform does when a person turns it on or off. */

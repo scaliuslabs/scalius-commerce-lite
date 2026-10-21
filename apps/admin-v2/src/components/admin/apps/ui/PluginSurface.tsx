@@ -3,10 +3,12 @@
 // resource card and a home widget are each one of these. Table pages
 // re-request it with `cursor`; an action's `refresh` requests it again and
 // its `ui` replaces the tree until then. Nothing an app sends can break the
-// page around it: failures stay inside the surface.
-import { useMemo, useState, type ReactNode } from "react";
+// page around it: failures stay inside the surface. While the tree shows a
+// `live` progress (a background job), the surface is read again every few
+// seconds, for at most ten minutes in a row.
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { parsePluginUiDocument, type PluginUiDocument } from "@scalius/shared/plugins/ui";
+import { parsePluginUiDocument, pluginUiHasLiveProgress, type PluginUiDocument } from "@scalius/shared/plugins/ui";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { useLocale } from "~/i18n";
 import { fetchAppDocument } from "~/lib/app-route";
@@ -18,6 +20,23 @@ import { isAppRouteDeclared, type AppSurfaces } from "./surfaces";
 
 /** A drawn document stays fresh until something asks for it again (an action's refresh). */
 const APP_DOCUMENT_STALE_TIME_MS = 30_000;
+/** A live progress is read again this often. */
+const APP_LIVE_REFRESH_MS = 3_000;
+/** For at most this long in a row: a job that never finishes stops costing requests. */
+const APP_LIVE_REFRESH_MAX_MS = 10 * 60_000;
+
+/** Whether an answer is a valid document that shows a live progress (each answer checked once). */
+const liveAnswers = new WeakMap<object, boolean>();
+function showsLiveProgress(data: unknown): boolean {
+  if (typeof data !== "object" || data === null) return false;
+  let live = liveAnswers.get(data);
+  if (live === undefined) {
+    const parsed = parsePluginUiDocument(data);
+    live = parsed.ok && pluginUiHasLiveProgress(parsed.document.root);
+    liveAnswers.set(data, live);
+  }
+  return live;
+}
 
 export interface PluginSurfaceProps {
   app: AppSurfaces;
@@ -53,6 +72,8 @@ export function PluginSurface({ app, route, query, resource = null, variant, tit
   const declared = isAppRouteDeclared(app, route, "GET");
   // The app writes in the dashboard's language: switching it asks again.
   const locale = useLocale();
+  // Since when the answers have shown a live progress without a break.
+  const liveSince = useRef<number | null>(null);
   const document = useQuery({
     queryKey: [...queryKeys.apps.document(app.id, route, request), locale],
     queryFn: ({ signal }) => fetchAppDocument(app.id, route, { query: request, signal }),
@@ -60,6 +81,14 @@ export function PluginSurface({ app, route, query, resource = null, variant, tit
     staleTime: APP_DOCUMENT_STALE_TIME_MS,
     // The page before stays on screen while the next one loads.
     placeholderData: keepPreviousData,
+    refetchInterval: (query) => {
+      if (!showsLiveProgress(query.state.data)) {
+        liveSince.current = null;
+        return false;
+      }
+      liveSince.current ??= Date.now();
+      return Date.now() - liveSince.current < APP_LIVE_REFRESH_MAX_MS ? APP_LIVE_REFRESH_MS : false;
+    },
   });
   const parsed = useMemo(() => (document.data === undefined ? null : parsePluginUiDocument(document.data)), [document.data]);
   // An action's replacement tree, shown until the document is requested again.

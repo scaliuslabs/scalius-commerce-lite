@@ -36,6 +36,7 @@ describe("plugin handler inventory", () => {
       extensions: [],
       routes: { admin: ["dashboard"], public: [], webhooks: ["acme-callback"] },
       cron: ["expire"],
+      jobs: [],
       providers: [],
       migrations: [],
     });
@@ -75,6 +76,14 @@ describe("plugin handler inventory", () => {
       .toEqual(['Migration "2" is declared in the manifest but has no handler.']);
     expect(checkPluginHandlers(inventory, { ...complete, migrations: { 3: handler } }))
       .toEqual(['Migration "3" has a handler but is not declared in the manifest.']);
+  });
+
+  it("needs a step handler for each declared background job, and none for undeclared ones", () => {
+    const withJobs = { ...inventory, jobs: ["import_products"] };
+    expect(checkPluginHandlers(withJobs, { ...complete, jobs: { import_products: handler } })).toEqual([]);
+    expect(checkPluginHandlers(withJobs, complete)).toEqual(['Job "import_products" is declared in the manifest but has no handler.']);
+    expect(checkPluginHandlers(inventory, { ...complete, jobs: { import_products: handler } }))
+      .toEqual(['Job "import_products" has a handler but is not declared in the manifest.']);
   });
 
   it("delivers an event to the exact topic, else its resource wildcard, else *", () => {

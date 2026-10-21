@@ -80,10 +80,12 @@ const collectionTextFieldSchema = z.enum(["description", "content"]);
 const collectionMutationResultSchema = z.object({
     id: z.string(),
     version: z.number().int().min(1),
+    /** Its handle (`@collection:<handle>` in templates). */
+    slug: z.string().nullable(),
 });
 
-function toCollectionMutationResult(collection: { id: string; version: number }) {
-    return { id: collection.id, version: collection.version };
+function toCollectionMutationResult(collection: { id: string; version: number; slug: string | null }) {
+    return { id: collection.id, version: collection.version, slug: collection.slug };
 }
 
 function parseProductOptionCategoryIds(ids: string | undefined): string[] {

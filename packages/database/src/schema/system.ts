@@ -214,8 +214,8 @@ export const themeRestorePoints = sqliteTable("theme_restore_points", {
     theme: text("theme").notNull(),
     /** The draft revision the point captured. */
     draftRevision: integer("draft_revision").notNull(),
-    /** What replaced the draft: a version or point restored (`restore`), or a discard. */
-    reason: text("reason", { enum: ["restore", "discard"] }).notNull(),
+    /** What replaced the draft: a version or point restored (`restore`), a discard, or an app's template (`app`, migration 0170). */
+    reason: text("reason", { enum: ["restore", "discard", "app"] }).notNull(),
     createdBy: text("created_by"),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
@@ -223,7 +223,7 @@ export const themeRestorePoints = sqliteTable("theme_restore_points", {
 }, (table) => [
     index("theme_restore_points_created_at_idx").on(table.createdAt),
     check("theme_restore_points_id_shape", sql`substr(${table.id}, 1, 8) = 'themerp_' AND length(${table.id}) BETWEEN 12 AND 40`),
-    check("theme_restore_points_reason_check", sql`${table.reason} IN ('restore', 'discard')`),
+    check("theme_restore_points_reason_check", sql`${table.reason} IN ('restore', 'discard', 'app')`),
     check("theme_restore_points_draft_revision_positive", sql`${table.draftRevision} >= 1`),
 ]);
 

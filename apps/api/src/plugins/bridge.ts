@@ -19,6 +19,8 @@ import { ObjectError, type ObjectRecordVersion, type ObjectOperation, type Objec
 import type { ObjectTypeDeclaration } from "@scalius/shared/plugins/objects";
 import { checkOutboundUrl, describeOutboundUrlIssue } from "@scalius/shared/outbound-url";
 import { isPluginHostAllowed } from "@scalius/shared/plugins/manifest";
+import type { PluginCustomerRoleGrant } from "@scalius/shared/plugins/customer-roles";
+import type { PluginJob } from "@scalius/shared/plugins/jobs";
 import { pluginWithinRateLimit, resolvePluginPrincipal } from "./authority";
 
 /** What the host lets one installation do, derived from its manifest and approved grant. */
@@ -32,6 +34,8 @@ export interface PluginBridgeAuthority {
   /** The app's name and the order timeline entry kinds it declares (`manifest.admin.timeline`). */
   appName?: string;
   timeline?: Array<{ kind: string; title: string }>;
+  /** The background jobs it declares (`manifest.jobs`); absent from hosts before jobs: none. */
+  jobs?: string[];
 }
 
 export interface PluginBridgeProps {
@@ -105,6 +109,20 @@ export interface PluginBridgeApi {
   ordersAssessRisk(input: { orderId: string; level: "low" | "medium" | "high"; reasons: string[] }): Promise<void>;
   /** The buyer's earlier orders, counts only (`orders.view`). */
   ordersRiskHistory(orderId: string): Promise<{ orders: number; cancelled: number; returnedToSender: number }>;
+  /** Grants one of the app's own roles to a customer (`customers.view`); re-granting updates `ref`. */
+  customerRolesGrant(customerId: string, role: string, ref?: string | null): Promise<void>;
+  /** Removes one of the app's roles from a customer (`customers.view`); idempotent. */
+  customerRolesRevoke(customerId: string, role: string): Promise<void>;
+  /** The app's roles on a customer (`customers.view`), by role. */
+  customerRolesList(customerId: string): Promise<PluginCustomerRoleGrant[]>;
+  /** Starts one of the app's declared background jobs (`key`: idempotent per app and job). */
+  jobsStart(name: string, options?: { input?: unknown; key?: string }): Promise<{ id: string; status: PluginJob["status"] }>;
+  /** One of the app's jobs, or null (another app's id reads as not found). */
+  jobsGet(id: string): Promise<PluginJob | null>;
+  /** The app's jobs, newest first. */
+  jobsList(options?: { name?: string; limit?: number }): Promise<PluginJob[]>;
+  /** Stops a running job (`cancelled`). */
+  jobsCancel(id: string): Promise<PluginJob>;
 }
 
 /** Where the bridge runs: the Worker env and context of the current request. */
@@ -114,6 +132,8 @@ export interface PluginBridgeEnvironment {
   db(): Database;
   /** The request env with derived secrets and Platform origins (composed lazily, once). */
   composedEnv(): Promise<Env>;
+  /** Test seam: where work after the response goes (default: `ctx.waitUntil`). */
+  afterResponse?: (work: () => Promise<unknown>) => void;
 }
 
 export const PLUGIN_HTTP_MAX_REDIRECTS = 5;
@@ -545,6 +565,77 @@ export class PluginBridgeHost implements PluginBridgeApi {
       const order = await this.orderOwners(orderId);
       const { readOrderRiskHistory } = await import("@scalius/core/modules/order-kernel");
       return readOrderRiskHistory(this.runtime.db(), { orderId: order.id, customerId: order.customerId, accountOwnerCustomerId: order.accountOwnerCustomerId });
+    });
+  }
+
+  // ── customer roles (the app's own, `customers.view`) ──────────────────
+
+  private requireCustomers(): void {
+    if (!this.props.authority.permissions.includes("customers.view")) {
+      fail("customers_not_allowed", "Customer roles need the read_customers scope.");
+    }
+  }
+
+  async customerRolesGrant(customerId: string, role: string, ref?: string | null): Promise<void> {
+    return this.guard("customerRolesGrant", async () => {
+      this.requireCustomers();
+      const { grantPluginCustomerRole } = await import("./customer-roles");
+      await grantPluginCustomerRole(this.runtime.db(), this.pluginId, customerId, role, ref);
+    });
+  }
+
+  async customerRolesRevoke(customerId: string, role: string): Promise<void> {
+    return this.guard("customerRolesRevoke", async () => {
+      this.requireCustomers();
+      const { revokePluginCustomerRole } = await import("./customer-roles");
+      await revokePluginCustomerRole(this.runtime.db(), this.pluginId, customerId, role);
+    });
+  }
+
+  async customerRolesList(customerId: string): Promise<PluginCustomerRoleGrant[]> {
+    return this.guard("customerRolesList", async () => {
+      this.requireCustomers();
+      const { listPluginCustomerRoles } = await import("./customer-roles");
+      return listPluginCustomerRoles(this.runtime.db(), this.pluginId, customerId);
+    });
+  }
+
+  // ── background jobs (the app's own) ───────────────────────────────────
+
+  async jobsStart(name: string, options?: { input?: unknown; key?: string }): Promise<{ id: string; status: PluginJob["status"] }> {
+    return this.guard("jobsStart", async () => {
+      const { drainAfterJobStart, startPluginJob } = await import("./jobs");
+      const db = this.runtime.db();
+      const { job, created } = await startPluginJob(db, this.pluginId, this.props.authority.jobs ?? [], name, options);
+      // Its first steps run once this response is out; the minute drain continues it.
+      if (created) {
+        const runtime = { env: await this.runtime.composedEnv(), ctx: this.runtime.ctx };
+        const work = () => drainAfterJobStart(db, runtime);
+        if (this.runtime.afterResponse) this.runtime.afterResponse(work);
+        else this.runtime.ctx.waitUntil(work());
+      }
+      return { id: job.id, status: job.status };
+    });
+  }
+
+  async jobsGet(id: string): Promise<PluginJob | null> {
+    return this.guard("jobsGet", async () => {
+      const { readPluginJob } = await import("./jobs");
+      return readPluginJob(this.runtime.db(), this.pluginId, id);
+    });
+  }
+
+  async jobsList(options?: { name?: string; limit?: number }): Promise<PluginJob[]> {
+    return this.guard("jobsList", async () => {
+      const { listPluginJobs } = await import("./jobs");
+      return listPluginJobs(this.runtime.db(), this.pluginId, options);
+    });
+  }
+
+  async jobsCancel(id: string): Promise<PluginJob> {
+    return this.guard("jobsCancel", async () => {
+      const { cancelPluginJob } = await import("./jobs");
+      return cancelPluginJob(this.runtime.db(), this.pluginId, id);
     });
   }
 

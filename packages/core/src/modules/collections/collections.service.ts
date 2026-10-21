@@ -29,6 +29,7 @@ import {
     stringifyCollectionConfig,
 } from "./collection-config";
 import { truthfulUpdatedAt } from "../../utils/truthful-updated-at";
+import { insertWithDerivedHandle } from "../../utils/derived-handle";
 
 // ─────────────────────────────────────────
 // Admin queries
@@ -352,10 +353,12 @@ export async function createCollection(
         .where(isNull(collections.deletedAt))
         .then((result: { max: number | null }[]) => (result[0]?.max ?? -1) + 1);
 
-    return db
+    const id = nanoid();
+    const insert = (slug: string) => db
         .insert(collections)
         .values({
-            id: nanoid(),
+            id,
+            slug,
             name: data.name,
             description: data.description,
             content: data.content,
@@ -372,6 +375,34 @@ export async function createCollection(
         })
         .returning()
         .get();
+    try {
+        // A typed handle that is taken (trashed collections included) is refused;
+        // an omitted one reads as the name and takes the lowest free -2, -3… suffix.
+        return data.slug
+            ? await insert(data.slug)
+            : await insertWithDerivedHandle(
+                { db, table: collections, column: collections.slug, isHandleConflict: isCollectionSlugConstraintError },
+                data.name,
+                "collection",
+                insert,
+            );
+    } catch (error) {
+        if (isCollectionSlugConstraintError(error)) {
+            throw new ConflictError("Another collection already has this handle, including in trash.");
+        }
+        throw error;
+    }
+}
+
+/** The insert or update lost on the collections' handle index. */
+function isCollectionSlugConstraintError(error: unknown): boolean {
+    let current: unknown = error;
+    for (let depth = 0; depth < 4 && current; depth += 1) {
+        const message = current instanceof Error ? current.message : String(current);
+        if (/collections_slug_idx|UNIQUE constraint failed: collections\.slug|collections\.slug/i.test(message)) return true;
+        current = current instanceof Error ? (current as { cause?: unknown }).cause : undefined;
+    }
+    return false;
 }
 
 export async function updateCollection(
@@ -418,6 +449,7 @@ export async function updateCollection(
         updatedAt: sql`(unixepoch())`,
     };
     if (data.name !== undefined) updateData.name = data.name;
+    if (data.slug !== undefined) updateData.slug = data.slug;
     if (data.description !== undefined) updateData.description = data.description;
     if (data.content !== undefined) updateData.content = data.content;
     if (data.presentation !== undefined) updateData.presentation = data.presentation;
@@ -439,7 +471,13 @@ export async function updateCollection(
             isNull(collections.deletedAt),
         ))
         .returning()
-        .get();
+        .get()
+        .catch((error: unknown) => {
+            if (isCollectionSlugConstraintError(error)) {
+                throw new ConflictError("Another collection already has this handle, including in trash.");
+            }
+            throw error;
+        });
     if (!updated) {
         throw new CollectionRevisionConflictError(id, data.expectedVersion, null);
     }
@@ -509,7 +547,7 @@ export async function updateCollectionProducts(
             eq(collections.version, data.expectedVersion),
             isNull(collections.deletedAt),
         ))
-        .returning({ id: collections.id, version: collections.version })
+        .returning({ id: collections.id, version: collections.version, slug: collections.slug })
         .get();
     if (!updated) {
         throw new CollectionRevisionConflictError(id, data.expectedVersion, null);

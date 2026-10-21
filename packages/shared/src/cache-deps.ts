@@ -1180,6 +1180,7 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   // App content ownership (0165): which app created a catalogue row, read only
   // by the admin app-content delete; no public read touches it.
   app_resource_owners: PRIVATE,
+  plugin_customer_roles: PRIVATE,
   user: PRIVATE,
   session: PRIVATE,
   account: PRIVATE,

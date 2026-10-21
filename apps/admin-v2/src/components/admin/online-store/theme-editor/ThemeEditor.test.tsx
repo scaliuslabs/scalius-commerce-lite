@@ -209,7 +209,7 @@ function render(theme: StorefrontThemeDocument = themeWith(HOME), options: {
   if (options.noDraft) (workspace.draft as { revision: number }).revision = 0;
   const editor = (
     <QueryClientProvider client={queryClient}>
-      <PermissionProvider permissions={options.permissions ?? ["settings.general.view", "settings.general.edit"]}>
+      <PermissionProvider permissions={options.permissions ?? ["settings.general.view", "settings.general.edit", "settings.theme.edit"]}>
         <ThemeEditor workspace={workspace} refetch={options.refetch ?? (async () => ({ data: workspace }))} />
       </PermissionProvider>
     </QueryClientProvider>

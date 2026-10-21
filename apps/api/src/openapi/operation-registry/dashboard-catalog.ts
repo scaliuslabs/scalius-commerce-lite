@@ -19,6 +19,13 @@ export const DASHBOARD_CATALOG_OPERATIONS = {
   "dashboard.attributes.restore": {},
   "dashboard.attributes.trash": { risk: "destructive" },
   "dashboard.attributes.update": {},
+  // Many creates per call for importers: per-item keys, bounded by plan (resources-batch.ts).
+  "dashboard.categories.batch_create": {
+    stability: "stable",
+    idempotency: "supported",
+    batch: "forbidden",
+    uncurated: true,
+  },
   "dashboard.categories.bulk_delete": {
     risk: "destructive",
     revision: "required",

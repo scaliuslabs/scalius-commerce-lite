@@ -18,6 +18,7 @@ import {
 } from "@scalius/plugin-sdk/runtime";
 import type { PluginEvent, PluginRouteRequest } from "@scalius/plugin-sdk";
 import type { PluginLifecycleHook } from "@scalius/shared/plugins/handlers";
+import type { PluginJobStepInput } from "@scalius/shared/plugins/jobs";
 
 export default class PluginSandbox extends WorkerEntrypoint {
   invokeEvent(bridge: PluginRuntimeBridge, seed: PluginContextSeed, event: PluginEvent): Promise<PluginInvocationResult> {
@@ -50,6 +51,10 @@ export default class PluginSandbox extends WorkerEntrypoint {
 
   invokeCron(bridge: PluginRuntimeBridge, seed: PluginContextSeed, name: string, scheduledAt: string): Promise<PluginInvocationResult> {
     return invokePluginDefinition(pluginModule, { kind: "cron", name, scheduledAt }, seed, bridge);
+  }
+
+  invokeJob(bridge: PluginRuntimeBridge, seed: PluginContextSeed, name: string, job: PluginJobStepInput): Promise<PluginInvocationResult> {
+    return invokePluginDefinition(pluginModule, { kind: "job", name, job }, seed, bridge);
   }
 
   invokeLifecycle(

@@ -2,6 +2,13 @@
 import type { OperationRegistryEntry } from "./entry";
 
 export const DASHBOARD_BRAND_OPERATIONS = {
+  // Many creates per call for importers: per-item keys, bounded by plan (resources-batch.ts).
+  "dashboard.brands.batch_create": {
+    stability: "stable",
+    idempotency: "supported",
+    batch: "forbidden",
+    uncurated: true,
+  },
   "dashboard.brands.create": { stability: "stable" },
   "dashboard.brands.delete_permanently": { risk: "destructive", revision: "required" },
   "dashboard.brands.form_options": {},

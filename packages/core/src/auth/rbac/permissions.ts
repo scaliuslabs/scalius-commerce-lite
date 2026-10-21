@@ -143,10 +143,11 @@ export const PERMISSIONS = {
   ANALYTICS_TOGGLE: "analytics.toggle",
 
   // =============================================
-  // Settings - General (2 permissions) - SENSITIVE
+  // Settings - General and theme (3 permissions) - SENSITIVE
   // =============================================
   SETTINGS_GENERAL_VIEW: "settings.general.view",
   SETTINGS_GENERAL_EDIT: "settings.general.edit",
+  SETTINGS_THEME_EDIT: "settings.theme.edit",
 
   // =============================================
   // Settings - Header/Footer/SEO (3 permissions)

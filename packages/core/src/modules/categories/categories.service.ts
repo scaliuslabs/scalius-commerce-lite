@@ -588,6 +588,8 @@ export async function getCategoryById(db: Database, id: string) {
 export async function createCategory(
     db: Database,
     data: CreateCategoryInput,
+    /** `id`: the new category's id when the caller derives one (a batch item's retry key); otherwise a fresh one. */
+    options: { id?: string } = {},
 ): Promise<{ id: string; revision: number; status: CreateCategoryInput["status"] }> {
     if (data.slug) {
         const existing = await db
@@ -608,7 +610,7 @@ export async function createCategory(
     const parentId = data.parentId ?? null;
     await assertCategoryPlacement(db, null, parentId);
 
-    const categoryId = "cat_" + nanoid();
+    const categoryId = options.id ?? "cat_" + nanoid();
     const imageUrl = data.image?.url || null;
     const mediaGuard = noDeletingMediaReferences(`${data.content}\u0000${imageUrl ?? ""}`);
     const insertWithSlug = async (slug: string) => {

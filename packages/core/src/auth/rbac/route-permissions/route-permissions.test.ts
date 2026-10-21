@@ -399,7 +399,7 @@ describe("route permissions", () => {
       expect(getRoutePermission(path, "GET"), path).toBeNull();
     }
     expect(getRoutePermission("/api/v1/admin/settings/theme/draft", "POST"))
-      .toEqual({ permission: PERMISSIONS.SETTINGS_GENERAL_EDIT });
+      .toEqual({ permission: PERMISSIONS.SETTINGS_THEME_EDIT });
   });
 
   it("separates checkout flow reads from versioned mutations", () => {

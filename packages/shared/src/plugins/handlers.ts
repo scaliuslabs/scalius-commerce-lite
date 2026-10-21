@@ -17,6 +17,8 @@ export interface PluginHandlerInventory {
   extensions?: string[];
   routes: { admin: string[]; public: string[]; webhooks: string[] };
   cron: string[];
+  /** Declared background jobs (`jobs: { import_products: step }`); absent in seeds from before they existed. */
+  jobs?: string[];
   /** Each provider's port and the operations its implementation must have. */
   providers: PluginProviderInventory[];
   /** Declared data updates, by version (`migrations: { "1": handler }`); absent in seeds from before they existed. */
@@ -65,6 +67,7 @@ export interface PluginHandlerManifest {
     webhooks: ReadonlyArray<{ name: string }>;
   };
   cron: ReadonlyArray<{ name: string }>;
+  jobs?: ReadonlyArray<{ name: string }>;
   providers: ReadonlyArray<{ id: string; kind: ProviderKind; operations: readonly string[] }>;
   migrations?: ReadonlyArray<{ version: number }>;
 }
@@ -107,6 +110,7 @@ function liveInventory(manifest: PluginHandlerManifest): PluginHandlerInventory 
       webhooks: manifest.routes.webhooks.map((route) => route.name),
     },
     cron: manifest.cron.map((job) => job.name),
+    jobs: (manifest.jobs ?? []).map((job) => job.name),
     providers: manifest.providers.map((provider) => ({
       id: provider.id,
       kind: provider.kind,
@@ -146,6 +150,7 @@ export function checkPluginHandlers(live: PluginHandlerInventory, definition: un
         webhooks: [...live.routes.webhooks, ...dormant.routes.webhooks],
       },
       cron: [...live.cron, ...dormant.cron],
+      ...(live.jobs ? { jobs: live.jobs } : {}),
       providers: [...live.providers, ...dormant.providers],
       ...(live.migrations ? { migrations: live.migrations } : {}),
     }
@@ -154,7 +159,7 @@ export function checkPluginHandlers(live: PluginHandlerInventory, definition: un
   const plugin = pluginDefinitionOf(definition);
   if (!plugin) return ["The plugin module must export a plugin definition (definePlugin) as its default export."];
 
-  const known = new Set(["manifest", "events", "functions", "extensions", "routes", "cron", "providers", "lifecycle", "migrations"]);
+  const known = new Set(["manifest", "events", "functions", "extensions", "routes", "cron", "jobs", "providers", "lifecycle", "migrations"]);
   for (const key of Object.keys(plugin)) {
     if (!known.has(key)) issues.push(`Unknown plugin definition key "${key}".`);
   }
@@ -187,6 +192,7 @@ export function checkPluginHandlers(live: PluginHandlerInventory, definition: un
   compare("Function", inventory.functions, plugin.functions, "function");
   compare("Extension", inventory.extensions ?? [], plugin.extensions, "function");
   compare("Cron job", inventory.cron, plugin.cron, "function");
+  compare("Job", inventory.jobs ?? [], plugin.jobs, "function");
   compare("Migration", inventory.migrations ?? [], plugin.migrations, "function");
   compare("Provider", inventory.providers.map((provider) => provider.id), plugin.providers, "object");
   if (isRecord(plugin.providers)) {

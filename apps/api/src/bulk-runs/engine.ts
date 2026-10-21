@@ -17,10 +17,16 @@
 //     the run advance; a chunk repeated after a crash changes nothing more.
 //
 // A dry run reads the same selection and plans every item without a write.
-import { and, asc, eq, gt, isNull, sql, type SQL } from "drizzle-orm";
+//
+// App background jobs (`app.job` rows, plugins/jobs.ts) ride the same rows,
+// lease and drain: the drain hands them to `advanceAppJob` with the Worker
+// runtime it was given. A drain without one (tests, scripts) leaves them
+// for a drain that has one; staff reads never show them.
+import { and, asc, eq, gt, isNull, ne, sql, type SQL } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { buildBatchGuard, isBatchGuardError, safeBatch, withCoarseCacheClock, type Database } from "@scalius/database/client";
-import { bulkRuns, customerTagLinks, customers, inventoryLevels, productVariants, products, type BulkRunKind } from "@scalius/database/schema";
+import { APP_JOB_RUN_KIND, bulkRuns, customerTagLinks, customers, inventoryLevels, productVariants, products, type BulkRunKind } from "@scalius/database/schema";
+import type { AppJobRuntime } from "../plugins/jobs";
 import { roundToIncrementMinor } from "@scalius/shared/money";
 import { dueBulkRunCondition } from "./due";
 import { AppError, ConflictError, ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
@@ -474,7 +480,15 @@ function readResults(row: BulkRunRow): { sample: BulkSample[]; failures: BulkFai
   }
 }
 
-export function presentBulkRun(row: BulkRunRow, currency: string | null): BulkRunView {
+/** Whether a row is a staff bulk run (app jobs are never shown by the bulk-run reads). */
+export function isStaffBulkRun(row: BulkRunRow): row is BulkRunRow & { kind: BulkRunKind } {
+  return row.kind !== APP_JOB_RUN_KIND;
+}
+
+/** Staff bulk runs only, for the bulk-run reads. */
+export const staffBulkRunCondition = (): SQL => ne(bulkRuns.kind, APP_JOB_RUN_KIND);
+
+export function presentBulkRun(row: BulkRunRow & { kind: BulkRunKind }, currency: string | null): BulkRunView {
   const results = readResults(row);
   return {
     id: row.id,
@@ -720,10 +734,16 @@ async function readRun(db: Database, id: string): Promise<BulkRunRow | undefined
 /**
  * Commits up to `maxChunks` chunks of one run. A lost race re-reads the run
  * and tries the chunk again (a few times); any other error stops the run as
- * failed with its code. Returns the run as it stands.
+ * failed with its code. Returns the run as it stands. An app job runs its
+ * steps only with a Worker `runtime` (left as it is without one).
  */
-export async function advanceBulkRun(db: Database, id: string, maxChunks: number): Promise<BulkRunRow | undefined> {
+export async function advanceBulkRun(db: Database, id: string, maxChunks: number, runtime?: AppJobRuntime): Promise<BulkRunRow | undefined> {
   let row = await readRun(db, id);
+  if (row?.kind === APP_JOB_RUN_KIND) {
+    if (!runtime) return row;
+    const { advanceAppJob } = await import("../plugins/jobs");
+    return advanceAppJob(db, id, maxChunks, runtime);
+  }
   let races = 0;
   for (let chunk = 0; row && row.status === "running" && chunk < maxChunks;) {
     try {
@@ -757,11 +777,11 @@ export async function advanceBulkRun(db: Database, id: string, maxChunks: number
   return row;
 }
 
-/** Claims the oldest due run nobody holds. */
-async function claimDueRun(db: Database): Promise<string | null> {
+/** Claims the oldest due run nobody holds (app jobs only with a runtime to run them). */
+async function claimDueRun(db: Database, withAppJobs: boolean): Promise<string | null> {
   const now = nowSeconds();
   const due = await db.select({ id: bulkRuns.id }).from(bulkRuns)
-    .where(dueBulkRunCondition(now))
+    .where(and(dueBulkRunCondition(now), withAppJobs ? undefined : staffBulkRunCondition()))
     .orderBy(asc(bulkRuns.createdAt), asc(bulkRuns.id))
     .limit(1)
     .get();
@@ -773,17 +793,18 @@ async function claimDueRun(db: Database): Promise<string | null> {
 }
 
 /**
- * The background drain (right after a large run's request, and every minute):
- * up to `maxChunks` chunks of due runs, oldest first.
+ * The background drain (right after a large run's request or an app job's
+ * start, and every minute): up to `maxChunks` chunks (or app job steps) of
+ * due runs, oldest first. App jobs run only with a Worker `runtime`.
  */
-export async function drainBulkRuns(db: Database, maxChunks: number): Promise<number> {
+export async function drainBulkRuns(db: Database, maxChunks: number, runtime?: AppJobRuntime): Promise<number> {
   let budget = maxChunks;
   let runs = 0;
   while (budget > 0) {
-    const id = await claimDueRun(db);
+    const id = await claimDueRun(db, runtime !== undefined);
     if (!id) break;
     const before = await readRun(db, id);
-    const after = await advanceBulkRun(db, id, budget);
+    const after = await advanceBulkRun(db, id, budget, runtime);
     budget -= Math.max(1, (after?.chunks ?? 0) - (before?.chunks ?? 0));
     runs += 1;
   }

@@ -442,7 +442,7 @@ describe("the stable app API", () => {
       // harmless; a restore in between makes the item not_in_trash.
       "dashboard.resources.app_content.delete",
     ]);
-    const creates = /\.(create|import_url)$/u;
+    const creates = /\.(create|batch_create|import_url)$/u;
     const unguarded = stable
       .filter((operation) => operation.risk !== "read" && !creates.test(operation.operationId) && operation.revision === "none")
       .map((operation) => operation.operationId);

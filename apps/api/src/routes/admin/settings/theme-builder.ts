@@ -40,7 +40,7 @@ const draftRevisionFields = { expectedDraftRevision: revisionSchema, basePublish
 
 const restorePointSchema = z.object({
   id: z.string().max(40),
-  reason: z.enum(["restore", "discard"]),
+  reason: z.enum(["restore", "discard", "app"]),
   draftRevision: z.number().int().positive(),
   createdBy: z.string().max(160).nullable(),
   createdByName: z.string().max(200).nullable(),
