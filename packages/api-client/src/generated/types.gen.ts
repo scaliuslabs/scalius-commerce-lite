@@ -5294,6 +5294,28 @@ export type AppDetail = AppSummary & {
     } | null;
     runtime: 'bundled' | 'sandbox';
     runtimeAvailable: boolean;
+    /**
+     * Checkout functions that failed recently (circuit breaker); empty when every function answers.
+     */
+    functionCircuits: Array<{
+        point: string;
+        /**
+         * Failed answers counted in the current window.
+         */
+        failures: number;
+        /**
+         * Checkout is not calling the function now: it applies its failure policy (refuses checkout when the function is approved as blocking, else goes on without it).
+         */
+        open: boolean;
+        /**
+         * When checkout tries the function again (ISO 8601); null when closed.
+         */
+        openUntil: string | null;
+        /**
+         * Approved as blocking: while open, checkout refuses orders.
+         */
+        blocking: boolean;
+    }>;
     settings: {
         fields: Array<AppSettingField>;
         values: {

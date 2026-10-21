@@ -24232,6 +24232,42 @@
               "runtimeAvailable": {
                 "type": "boolean"
               },
+              "functionCircuits": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "point": {
+                      "type": "string"
+                    },
+                    "failures": {
+                      "type": "integer",
+                      "description": "Failed answers counted in the current window."
+                    },
+                    "open": {
+                      "type": "boolean",
+                      "description": "Checkout is not calling the function now: it applies its failure policy (refuses checkout when the function is approved as blocking, else goes on without it)."
+                    },
+                    "openUntil": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "When checkout tries the function again (ISO 8601); null when closed."
+                    },
+                    "blocking": {
+                      "type": "boolean",
+                      "description": "Approved as blocking: while open, checkout refuses orders."
+                    }
+                  },
+                  "required": [
+                    "point",
+                    "failures",
+                    "open",
+                    "openUntil",
+                    "blocking"
+                  ]
+                },
+                "description": "Checkout functions that failed recently (circuit breaker); empty when every function answers."
+              },
               "settings": {
                 "type": "object",
                 "properties": {
@@ -24990,6 +25026,7 @@
               "activatedBy",
               "runtime",
               "runtimeAvailable",
+              "functionCircuits",
               "settings",
               "providers",
               "routes",
