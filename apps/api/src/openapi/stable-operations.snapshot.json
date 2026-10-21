@@ -9188,6 +9188,120 @@
     ]
    }
   },
+  "brands.list": {
+   "operationId": "dashboard.resources.brands.list",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/brands",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_products",
+    "write_products"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 50,
+       "default": 20,
+       "description": "At most this many records; a page may hold fewer to stay within the response budget."
+      },
+      "required": false,
+      "description": "At most this many records; a page may hold fewer to stay within the response budget.",
+      "name": "limit",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "format": "date-time",
+       "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync."
+      },
+      "required": false,
+      "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.",
+      "name": "updatedSince",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "enum": [
+        "draft",
+        "published"
+       ],
+       "description": "Only brands in this status; `published` brands are public."
+      },
+      "required": false,
+      "description": "Only brands in this status; `published` brands are public.",
+      "name": "status",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "enum": [
+        "true",
+        "false"
+       ],
+       "description": "true lists trashed brands instead."
+      },
+      "required": false,
+      "description": "true lists trashed brands instead.",
+      "name": "trashed",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "brands": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/BrandResource"
+        }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
+       }
+      },
+      "required": [
+       "brands",
+       "nextCursor"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
   "bulk_runs.get": {
    "operationId": "dashboard.resources.bulk_runs.get",
    "method": "GET",
@@ -11706,6 +11820,120 @@
       },
       "required": [
        "orders",
+       "nextCursor"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "pages.list": {
+   "operationId": "dashboard.resources.pages.list",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/pages",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_content",
+    "write_content"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 50,
+       "default": 20,
+       "description": "At most this many records; a page may hold fewer to stay within the response budget."
+      },
+      "required": false,
+      "description": "At most this many records; a page may hold fewer to stay within the response budget.",
+      "name": "limit",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "format": "date-time",
+       "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync."
+      },
+      "required": false,
+      "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.",
+      "name": "updatedSince",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "enum": [
+        "page",
+        "article"
+       ],
+       "description": "`page` (About Us, policies) or `article` (blog posts); omit for both."
+      },
+      "required": false,
+      "description": "`page` (About Us, policies) or `article` (blog posts); omit for both.",
+      "name": "contentType",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "enum": [
+        "true",
+        "false"
+       ],
+       "description": "true lists trashed pages instead."
+      },
+      "required": false,
+      "description": "true lists trashed pages instead.",
+      "name": "trashed",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "pages": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/PageResource"
+        }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
+       }
+      },
+      "required": [
+       "pages",
        "nextCursor"
       ]
      }
@@ -14334,7 +14562,27 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991,
-          "description": "A product without options: its price, in minor units of the store currency. A product with options prices each SKU (`variants.bulk_set_prices`)."
+          "description": "A product without options: its price, in minor units of the store currency. A product with options prices each SKU (`variants.bulk_set_prices`, `variants.update`)."
+         },
+         "mediaIds": {
+          "type": "array",
+          "items": {
+           "type": "string",
+           "minLength": 8,
+           "maxLength": 160
+          },
+          "maxItems": 250,
+          "description": "The whole gallery: ready media library files in order, the first featured; [] removes them all. Files it already shows keep their alt text; a SKU that showed a removed image shows the featured one."
+         },
+         "salesChannelIds": {
+          "type": "array",
+          "items": {
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 160
+          },
+          "maxItems": 50,
+          "description": "Exactly the sales channels to publish it to (as `products.set_publications`); [] unpublishes it everywhere."
          }
         },
         "required": [
@@ -15572,6 +15820,154 @@
     ]
    }
   },
+  "variants.create": {
+   "operationId": "dashboard.resources.variants.create",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/products/{id}/variants",
+   "risk": "write",
+   "idempotency": "supported",
+   "revision": "required",
+   "scopes": [
+    "write_products"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "exclusiveMinimum": true,
+          "description": "The product's `revision` you read; a product changed since is refused with 409 and nothing is saved."
+         },
+         "sku": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 100,
+          "description": "Unique in the store, any case."
+         },
+         "priceMinor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Its price, in minor units of the store currency at its price increment."
+         },
+         "optionValues": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 100
+          },
+          "description": "One value of every option, by option name (`{ \"Size\": \"XL\", \"Color\": \"Red\" }`), any case. A value the option does not have yet is added to it."
+         },
+         "barcode": {
+          "type": "string",
+          "nullable": true,
+          "minLength": 1,
+          "maxLength": 50,
+          "description": "Omit or null to generate an internal barcode."
+         },
+         "barcodeType": {
+          "type": "string",
+          "nullable": true,
+          "enum": [
+           "ean13",
+           "upc",
+           "isbn",
+           "gtin",
+           "code128",
+           "custom",
+           null
+          ],
+          "description": "Required with `barcode`."
+         },
+         "trackInventory": {
+          "type": "boolean",
+          "default": true,
+          "description": "Count its stock. It starts at 0: set quantities through inventory."
+         },
+         "weightGrams": {
+          "type": "number",
+          "nullable": true,
+          "minimum": 0,
+          "maximum": 1000000
+         },
+         "mediaId": {
+          "type": "string",
+          "nullable": true,
+          "minLength": 8,
+          "maxLength": 160,
+          "description": "Its own image: a file in the product's gallery. Omit or null to show the featured image."
+         }
+        },
+        "required": [
+         "expectedRevision",
+         "sku",
+         "priceMinor",
+         "optionValues"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "product": {
+        "$ref": "#/components/schemas/ProductResource"
+       }
+      },
+      "required": [
+       "product"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
   "variants.get": {
    "operationId": "dashboard.resources.variants.get",
    "method": "GET",
@@ -15655,12 +16051,21 @@
            "maxLength": 100
           },
           "minItems": 1,
-          "maxItems": 90
+          "maxItems": 90,
+          "description": "SKU codes, any case. Send skus or barcodes."
+         },
+         "barcodes": {
+          "type": "array",
+          "items": {
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 50
+          },
+          "minItems": 1,
+          "maxItems": 90,
+          "description": "Barcodes (EAN, UPC, GTIN or the store's own), any case. Send skus or barcodes."
          }
         },
-        "required": [
-         "skus"
-        ],
         "additionalProperties": false
        }
       }
@@ -15688,6 +16093,252 @@
       },
       "required": [
        "variants"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "variants.restore": {
+   "operationId": "dashboard.resources.variants.restore",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/products/{id}/variants/{variantId}/restore",
+   "risk": "write",
+   "idempotency": "supported",
+   "revision": "required",
+   "scopes": [
+    "write_products"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "variantId",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "exclusiveMinimum": true,
+          "description": "The product's `revision` you read; a product changed since is refused with 409 and nothing is saved."
+         }
+        },
+        "required": [
+         "expectedRevision"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "product": {
+        "$ref": "#/components/schemas/ProductResource"
+       }
+      },
+      "required": [
+       "product"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "variants.update": {
+   "operationId": "dashboard.resources.variants.update",
+   "method": "PATCH",
+   "path": "/api/v1/admin/resources/products/{id}/variants/{variantId}",
+   "risk": "write",
+   "idempotency": "supported",
+   "revision": "required",
+   "scopes": [
+    "write_products"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "variantId",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "exclusiveMinimum": true,
+          "description": "The product's `revision` you read; a product changed since is refused with 409 and nothing is saved."
+         },
+         "sku": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 100,
+          "description": "Unique in the store, any case."
+         },
+         "priceMinor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Its price, in minor units of the store currency. On a product sold as one SKU this is the product's price."
+         },
+         "optionValues": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 100
+          },
+          "description": "One value of every option, by option name (`{ \"Size\": \"XL\", \"Color\": \"Red\" }`), any case. A value the option does not have yet is added to it."
+         },
+         "barcode": {
+          "type": "string",
+          "nullable": true,
+          "minLength": 1,
+          "maxLength": 50,
+          "description": "Null clears it."
+         },
+         "barcodeType": {
+          "type": "string",
+          "enum": [
+           "ean13",
+           "upc",
+           "isbn",
+           "gtin",
+           "code128",
+           "custom"
+          ],
+          "description": "Omit to keep the current type."
+         },
+         "trackInventory": {
+          "type": "boolean"
+         },
+         "weightGrams": {
+          "type": "number",
+          "nullable": true,
+          "minimum": 0,
+          "maximum": 1000000
+         },
+         "mediaId": {
+          "type": "string",
+          "nullable": true,
+          "minLength": 8,
+          "maxLength": 160,
+          "description": "Its own image, a file in the product's gallery; null shows the featured image."
+         }
+        },
+        "required": [
+         "expectedRevision"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "product": {
+        "$ref": "#/components/schemas/ProductResource"
+       }
+      },
+      "required": [
+       "product"
       ]
      }
     },
@@ -20650,6 +21301,29 @@
        },
        "isDefault": {
         "type": "boolean"
+       },
+       "barcodeType": {
+        "type": "string",
+        "nullable": true,
+        "minLength": 1,
+        "maxLength": 64
+       },
+       "weightGrams": {
+        "type": "number",
+        "nullable": true
+       },
+       "optionValues": {
+        "type": "object",
+        "additionalProperties": {
+         "type": "string",
+         "maxLength": 4000
+        }
+       },
+       "mediaId": {
+        "type": "string",
+        "nullable": true,
+        "minLength": 1,
+        "maxLength": 128
        }
       },
       "required": [
@@ -20659,7 +21333,11 @@
        "barcode",
        "trackInventory",
        "fulfillmentKind",
-       "isDefault"
+       "isDefault",
+       "barcodeType",
+       "weightGrams",
+       "optionValues",
+       "mediaId"
       ]
      }
     },
@@ -20681,6 +21359,109 @@
      "minLength": 1,
      "maxLength": 40,
      "format": "date-time"
+    },
+    "description": {
+     "type": "string",
+     "nullable": true
+    },
+    "condition": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 64
+    },
+    "metaTitle": {
+     "type": "string",
+     "nullable": true
+    },
+    "metaDescription": {
+     "type": "string",
+     "nullable": true
+    },
+    "salesChannelIds": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+     }
+    },
+    "media": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "id": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+       },
+       "mediaId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+       },
+       "kind": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+       },
+       "url": {
+        "type": "string",
+        "maxLength": 2048
+       },
+       "altText": {
+        "type": "string",
+        "nullable": true
+       },
+       "featured": {
+        "type": "boolean"
+       }
+      },
+      "required": [
+       "id",
+       "mediaId",
+       "kind",
+       "url",
+       "altText",
+       "featured"
+      ]
+     }
+    },
+    "options": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "id": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+       },
+       "name": {
+        "type": "string",
+        "maxLength": 4000
+       },
+       "standardMapping": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+       },
+       "values": {
+        "type": "array",
+        "items": {
+         "type": "string",
+         "maxLength": 4000
+        }
+       }
+      },
+      "required": [
+       "id",
+       "name",
+       "standardMapping",
+       "values"
+      ]
+     }
     }
    },
    "required": [
@@ -20698,7 +21479,14 @@
     "variants",
     "createdAt",
     "updatedAt",
-    "deletedAt"
+    "deletedAt",
+    "description",
+    "condition",
+    "metaTitle",
+    "metaDescription",
+    "salesChannelIds",
+    "media",
+    "options"
    ]
   },
   "RefundResource": {
@@ -21324,6 +22112,18 @@
      "minLength": 1,
      "maxLength": 40,
      "format": "date-time"
+    },
+    "barcode": {
+     "type": "string",
+     "nullable": true,
+     "maxLength": 4000
+    },
+    "retiredAt": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
     }
    },
    "required": [
@@ -21334,7 +22134,9 @@
     "onHand",
     "levels",
     "stockVersion",
-    "updatedAt"
+    "updatedAt",
+    "barcode",
+    "retiredAt"
    ]
   }
  }

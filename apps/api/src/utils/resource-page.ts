@@ -27,6 +27,12 @@ export function epochSeconds(iso: string): number {
   return Math.floor(Date.parse(iso) / 1000);
 }
 
+/** A resource's `updatedAt` (an ISO string or a timestamp column's Date) in the cursor's whole seconds. */
+function updatedSeconds(updatedAt: string | Date | null): number {
+  if (updatedAt instanceof Date) return Math.floor(updatedAt.getTime() / 1000);
+  return updatedAt ? epochSeconds(updatedAt) : 0;
+}
+
 /** Ascending (updatedAt, id): the order of every resource list. */
 export function updatedOrder(column: SQLWrapper, id: SQLWrapper): KeysetOrder {
   return { column, id, direction: "asc" };
@@ -35,7 +41,7 @@ export function updatedOrder(column: SQLWrapper, id: SQLWrapper): KeysetOrder {
 const CURSOR_SHAPE: ListCursorShape = { sort: "updatedAt", direction: "asc", kinds: ["number"] };
 
 /** One page of a resource list (see the file comment). */
-export async function resourcePage<T extends { id: string; updatedAt: string }>(
+export async function resourcePage<T extends { id: string; updatedAt: string | Date | null }>(
   options: {
     order: KeysetOrder;
     cursor: string | undefined;
@@ -64,7 +70,7 @@ export async function resourcePage<T extends { id: string; updatedAt: string }>(
   return {
     items: kept,
     nextCursor: cut && last
-      ? encodeListCursorOrNull({ sort: CURSOR_SHAPE.sort, direction: "asc", values: [epochSeconds(last.updatedAt)], id: last.id })
+      ? encodeListCursorOrNull({ sort: CURSOR_SHAPE.sort, direction: "asc", values: [updatedSeconds(last.updatedAt)], id: last.id })
       : null,
   };
 }

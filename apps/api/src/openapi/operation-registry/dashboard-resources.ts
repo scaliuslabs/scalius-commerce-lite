@@ -108,8 +108,15 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.categories.list": { uncurated: true },
   "dashboard.resources.collections.get": { uncurated: true },
   "dashboard.resources.collections.list": { uncurated: true },
+  "dashboard.resources.brands.list": { uncurated: true },
+  "dashboard.resources.pages.list": { uncurated: true },
   "dashboard.resources.variants.get": { uncurated: true },
   "dashboard.resources.variants.lookup": { risk: "read", uncurated: true },
+  // One SKU at a time under the product's revision (routes/admin/resources-products.ts,
+  // product-admin sku-writes.ts); stock stays with inventory.
+  "dashboard.resources.variants.create": { revision: "required", batch: "forbidden", uncurated: true },
+  "dashboard.resources.variants.update": { revision: "required", batch: "forbidden", uncurated: true },
+  "dashboard.resources.variants.restore": { revision: "required", batch: "forbidden", uncurated: true },
   "dashboard.resources.customers.list": { uncurated: true },
   "dashboard.resources.customers.get": { uncurated: true },
   // Price lists (MARKETS-DESIGN D5), in minor units of the list's currency.

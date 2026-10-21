@@ -1,14 +1,20 @@
-// Categories and collections in the stable app API (operation-registry/README.md),
-// mounted at /admin/resources (/categories, /collections): the one resource
-// shape each is read in (`CategoryResource`, `CollectionResource`), which every
-// category and collection write answers too (`{ category }`, `{ collection }`).
-// Lists page by cursor in (updatedAt, id) order (`updatedSince` starts a sync).
-// The dashboard's own tree, editor sections and pickers stay its beta
-// operations (`dashboard.categories.*`, `dashboard.collections.*`).
+// Categories, collections, brands and content pages in the stable app API
+// (operation-registry/README.md), mounted at /admin/resources (/categories,
+// /collections, /brands, /pages): the one resource shape each is read in
+// (`CategoryResource`, `CollectionResource`, `BrandResource`, `PageResource`),
+// which every write of it answers too (`{ category }`, `{ collection }`,
+// `{ brand }`, `{ page }`). Lists page by cursor in (updatedAt, id) order
+// (`updatedSince` starts a sync). The dashboard's own tree, editor sections,
+// pickers and page-numbered lists stay its beta operations
+// (`dashboard.categories.*`, `dashboard.collections.*`, `dashboard.brands.list`,
+// `dashboard.content.list`).
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import type { MiddlewareHandler } from "hono";
 import { gte, inArray, isNotNull, isNull, eq, sql, type SQL } from "drizzle-orm";
-import { categories, collections } from "@scalius/database/schema";
+import { brands, categories, collections, CONTENT_ENTRY_TYPES, pages } from "@scalius/database/schema";
+import { getBrandsByIds } from "@scalius/core/modules/brands";
+import { brandStatusSchema } from "@scalius/core/modules/brands/browser";
+import { BrandResource, PageResource } from "../../schemas/catalog-resources";
 import type { Database } from "@scalius/database/client";
 import { categoryStatusSchema } from "@scalius/shared/category-publication";
 import { normalizeCollectionConfig } from "@scalius/core/modules/collections/browser";
@@ -290,6 +296,87 @@ app.openapi(createRoute({
     load: (ids) => readCollectionResources(db, ids),
   });
   return ok(c, { collections: page.items, nextCursor: page.nextCursor });
+});
+
+// ─── Brands ──────────────────────────────────────────────────────────────────
+
+const brandsQuery = z.object({
+  ...resourcePageQuery,
+  status: brandStatusSchema.optional().openapi({ description: "Only brands in this status; `published` brands are public." }),
+  trashed: z.enum(["true", "false"]).optional().openapi({ description: "true lists trashed brands instead." }),
+});
+
+app.openapi(createRoute({
+  operationId: "dashboard.resources.brands.list",
+  method: "get",
+  path: "/brands",
+  tags: ["App API - Brands"],
+  summary: "List brands, least recently updated first",
+  description: "Brands (BrandResource, as `brands.get` reads them) in (updatedAt, id) order. Start a sync with updatedSince and follow nextCursor.",
+  request: { query: brandsQuery },
+  responses: {
+    200: { description: "A page of brands", content: { "application/json": { schema: successEnvelope(z.object({ brands: z.array(BrandResource), nextCursor: nextCursorSchema })) } } },
+    ...errorResponses,
+  },
+}), async (c) => {
+  const query = c.req.valid("query");
+  const db = c.get("db");
+  const where: SQL[] = [query.trashed === "true" ? isNotNull(brands.deletedAt) : isNull(brands.deletedAt)];
+  if (query.updatedSince) where.push(gte(sql`${brands.updatedAt}`, epochSeconds(query.updatedSince)));
+  if (query.status) where.push(eq(brands.status, query.status));
+  const order = updatedOrder(brands.updatedAt, brands.id);
+  const page = await resourcePage({
+    order,
+    cursor: query.cursor,
+    limit: query.limit,
+    where,
+    ids: (condition, limit) => db.select({ id: brands.id }).from(brands).where(condition).orderBy(...keysetOrderBy(order)).limit(limit).all(),
+    load: (ids) => getBrandsByIds(db, ids),
+  });
+  return ok(c, { brands: page.items, nextCursor: page.nextCursor });
+});
+
+// ─── Content pages ───────────────────────────────────────────────────────────
+
+const pagesQuery = z.object({
+  ...resourcePageQuery,
+  contentType: z.enum(CONTENT_ENTRY_TYPES).optional().openapi({ description: "`page` (About Us, policies) or `article` (blog posts); omit for both." }),
+  trashed: z.enum(["true", "false"]).optional().openapi({ description: "true lists trashed pages instead." }),
+});
+
+app.openapi(createRoute({
+  operationId: "dashboard.resources.pages.list",
+  method: "get",
+  path: "/pages",
+  tags: ["App API - Content"],
+  summary: "List content pages and articles, least recently updated first",
+  description: "Pages and blog articles (PageResource, as `pages.get` reads them) in (updatedAt, id) order. Start a sync with updatedSince and follow nextCursor.",
+  request: { query: pagesQuery },
+  responses: {
+    200: { description: "A page of content pages", content: { "application/json": { schema: successEnvelope(z.object({ pages: z.array(PageResource), nextCursor: nextCursorSchema })) } } },
+    ...errorResponses,
+  },
+}), async (c) => {
+  const query = c.req.valid("query");
+  const db = c.get("db");
+  const where: SQL[] = [query.trashed === "true" ? isNotNull(pages.deletedAt) : isNull(pages.deletedAt)];
+  if (query.updatedSince) where.push(gte(sql`${pages.updatedAt}`, epochSeconds(query.updatedSince)));
+  if (query.contentType) where.push(eq(pages.contentType, query.contentType));
+  const order = updatedOrder(pages.updatedAt, pages.id);
+  const page = await resourcePage({
+    order,
+    cursor: query.cursor,
+    limit: query.limit,
+    where,
+    ids: (condition, limit) => db.select({ id: pages.id }).from(pages).where(condition).orderBy(...keysetOrderBy(order)).limit(limit).all(),
+    load: async (ids) => {
+      if (ids.length === 0) return [];
+      const rows = await db.select().from(pages).where(inArray(pages.id, ids)).all();
+      const byId = new Map(rows.map((row) => [row.id, row]));
+      return ids.flatMap((id) => byId.get(id) ?? []);
+    },
+  });
+  return ok(c, { pages: page.items, nextCursor: page.nextCursor });
 });
 
 export { app as adminResourceCatalogContentRoutes };

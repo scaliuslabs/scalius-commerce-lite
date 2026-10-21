@@ -3203,10 +3203,35 @@ export type ProductResource = {
         trackInventory: boolean;
         fulfillmentKind: string;
         isDefault: boolean;
+        barcodeType: string | null;
+        weightGrams: number | null;
+        optionValues: {
+            [key: string]: string;
+        };
+        mediaId: string | null;
     }>;
     createdAt: string;
     updatedAt: string;
     deletedAt: string | null;
+    description: string | null;
+    condition: string | null;
+    metaTitle: string | null;
+    metaDescription: string | null;
+    salesChannelIds: Array<string>;
+    media: Array<{
+        id: string;
+        mediaId: string;
+        kind: string;
+        url: string;
+        altText: string | null;
+        featured: boolean;
+    }>;
+    options: Array<{
+        id: string;
+        name: string;
+        standardMapping: string;
+        values: Array<string>;
+    }>;
 };
 
 export type VariantResource = {
@@ -3221,6 +3246,8 @@ export type VariantResource = {
     }>;
     stockVersion: number;
     updatedAt: string;
+    barcode: string | null;
+    retiredAt: string | null;
 };
 
 export type CustomerResource = {
@@ -26122,9 +26149,17 @@ export type PatchApiV1AdminResourcesProductsByIdData = {
         metaTitle?: string | null;
         metaDescription?: string | null;
         /**
-         * A product without options: its price, in minor units of the store currency. A product with options prices each SKU (`variants.bulk_set_prices`).
+         * A product without options: its price, in minor units of the store currency. A product with options prices each SKU (`variants.bulk_set_prices`, `variants.update`).
          */
         priceMinor?: number;
+        /**
+         * The whole gallery: ready media library files in order, the first featured; [] removes them all. Files it already shows keep their alt text; a SKU that showed a removed image shows the featured one.
+         */
+        mediaIds?: Array<string>;
+        /**
+         * Exactly the sales channels to publish it to (as `products.set_publications`); [] unpublishes it everywhere.
+         */
+        salesChannelIds?: Array<string>;
     };
     headers?: {
         /**
@@ -26240,7 +26275,14 @@ export type GetApiV1AdminResourcesVariantsByIdResponse = GetApiV1AdminResourcesV
 
 export type PostApiV1AdminResourcesVariantsLookupData = {
     body: {
-        skus: Array<string>;
+        /**
+         * SKU codes, any case. Send skus or barcodes.
+         */
+        skus?: Array<string>;
+        /**
+         * Barcodes (EAN, UPC, GTIN or the store's own), any case. Send skus or barcodes.
+         */
+        barcodes?: Array<string>;
     };
     path?: never;
     query?: never;
@@ -28045,6 +28087,268 @@ export type PostApiV1AdminResourcesProductsBatchResponses = {
 };
 
 export type PostApiV1AdminResourcesProductsBatchResponse = PostApiV1AdminResourcesProductsBatchResponses[keyof PostApiV1AdminResourcesProductsBatchResponses];
+
+export type PostApiV1AdminResourcesProductsByIdVariantsData = {
+    body: {
+        /**
+         * The product's `revision` you read; a product changed since is refused with 409 and nothing is saved.
+         */
+        expectedRevision: number;
+        /**
+         * Unique in the store, any case.
+         */
+        sku: string;
+        /**
+         * Its price, in minor units of the store currency at its price increment.
+         */
+        priceMinor: number;
+        /**
+         * One value of every option, by option name (`{ "Size": "XL", "Color": "Red" }`), any case. A value the option does not have yet is added to it.
+         */
+        optionValues: {
+            [key: string]: string;
+        };
+        /**
+         * Omit or null to generate an internal barcode.
+         */
+        barcode?: string | null;
+        /**
+         * Required with `barcode`.
+         */
+        barcodeType?: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'code128' | 'custom' | null;
+        /**
+         * Count its stock. It starts at 0: set quantities through inventory.
+         */
+        trackInventory?: boolean;
+        weightGrams?: number | null;
+        /**
+         * Its own image: a file in the product's gallery. Omit or null to show the featured image.
+         */
+        mediaId?: string | null;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/products/{id}/variants';
+};
+
+export type PostApiV1AdminResourcesProductsByIdVariantsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesProductsByIdVariantsError = PostApiV1AdminResourcesProductsByIdVariantsErrors[keyof PostApiV1AdminResourcesProductsByIdVariantsErrors];
+
+export type PostApiV1AdminResourcesProductsByIdVariantsResponses = {
+    /**
+     * The product with the new SKU
+     */
+    201: {
+        success: true;
+        data: {
+            product: ProductResource;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesProductsByIdVariantsResponse = PostApiV1AdminResourcesProductsByIdVariantsResponses[keyof PostApiV1AdminResourcesProductsByIdVariantsResponses];
+
+export type PatchApiV1AdminResourcesProductsByIdVariantsByVariantIdData = {
+    body: {
+        /**
+         * The product's `revision` you read; a product changed since is refused with 409 and nothing is saved.
+         */
+        expectedRevision: number;
+        /**
+         * Unique in the store, any case.
+         */
+        sku?: string;
+        /**
+         * Its price, in minor units of the store currency. On a product sold as one SKU this is the product's price.
+         */
+        priceMinor?: number;
+        /**
+         * One value of every option, by option name (`{ "Size": "XL", "Color": "Red" }`), any case. A value the option does not have yet is added to it.
+         */
+        optionValues?: {
+            [key: string]: string;
+        };
+        /**
+         * Null clears it.
+         */
+        barcode?: string | null;
+        /**
+         * Omit to keep the current type.
+         */
+        barcodeType?: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'code128' | 'custom';
+        trackInventory?: boolean;
+        weightGrams?: number | null;
+        /**
+         * Its own image, a file in the product's gallery; null shows the featured image.
+         */
+        mediaId?: string | null;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+        variantId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/products/{id}/variants/{variantId}';
+};
+
+export type PatchApiV1AdminResourcesProductsByIdVariantsByVariantIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PatchApiV1AdminResourcesProductsByIdVariantsByVariantIdError = PatchApiV1AdminResourcesProductsByIdVariantsByVariantIdErrors[keyof PatchApiV1AdminResourcesProductsByIdVariantsByVariantIdErrors];
+
+export type PatchApiV1AdminResourcesProductsByIdVariantsByVariantIdResponses = {
+    /**
+     * The product
+     */
+    200: {
+        success: true;
+        data: {
+            product: ProductResource;
+        };
+    };
+};
+
+export type PatchApiV1AdminResourcesProductsByIdVariantsByVariantIdResponse = PatchApiV1AdminResourcesProductsByIdVariantsByVariantIdResponses[keyof PatchApiV1AdminResourcesProductsByIdVariantsByVariantIdResponses];
+
+export type PostApiV1AdminResourcesProductsByIdVariantsByVariantIdRestoreData = {
+    body: {
+        /**
+         * The product's `revision` you read; a product changed since is refused with 409 and nothing is saved.
+         */
+        expectedRevision: number;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+        variantId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/products/{id}/variants/{variantId}/restore';
+};
+
+export type PostApiV1AdminResourcesProductsByIdVariantsByVariantIdRestoreErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesProductsByIdVariantsByVariantIdRestoreError = PostApiV1AdminResourcesProductsByIdVariantsByVariantIdRestoreErrors[keyof PostApiV1AdminResourcesProductsByIdVariantsByVariantIdRestoreErrors];
+
+export type PostApiV1AdminResourcesProductsByIdVariantsByVariantIdRestoreResponses = {
+    /**
+     * The product with the SKU back
+     */
+    200: {
+        success: true;
+        data: {
+            product: ProductResource;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesProductsByIdVariantsByVariantIdRestoreResponse = PostApiV1AdminResourcesProductsByIdVariantsByVariantIdRestoreResponses[keyof PostApiV1AdminResourcesProductsByIdVariantsByVariantIdRestoreResponses];
 
 export type PostApiV1AdminResourcesAppContentDeleteData = {
     body: {
@@ -43419,6 +43723,156 @@ export type GetApiV1AdminResourcesCollectionsResponses = {
 };
 
 export type GetApiV1AdminResourcesCollectionsResponse = GetApiV1AdminResourcesCollectionsResponses[keyof GetApiV1AdminResourcesCollectionsResponses];
+
+export type GetApiV1AdminResourcesBrandsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many records; a page may hold fewer to stay within the response budget.
+         */
+        limit?: number;
+        /**
+         * Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.
+         */
+        updatedSince?: string;
+        /**
+         * Only brands in this status; `published` brands are public.
+         */
+        status?: 'draft' | 'published';
+        /**
+         * true lists trashed brands instead.
+         */
+        trashed?: 'true' | 'false';
+    };
+    url: '/api/v1/admin/resources/brands';
+};
+
+export type GetApiV1AdminResourcesBrandsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesBrandsError = GetApiV1AdminResourcesBrandsErrors[keyof GetApiV1AdminResourcesBrandsErrors];
+
+export type GetApiV1AdminResourcesBrandsResponses = {
+    /**
+     * A page of brands
+     */
+    200: {
+        success: true;
+        data: {
+            brands: Array<BrandResource>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesBrandsResponse = GetApiV1AdminResourcesBrandsResponses[keyof GetApiV1AdminResourcesBrandsResponses];
+
+export type GetApiV1AdminResourcesPagesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many records; a page may hold fewer to stay within the response budget.
+         */
+        limit?: number;
+        /**
+         * Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.
+         */
+        updatedSince?: string;
+        /**
+         * `page` (About Us, policies) or `article` (blog posts); omit for both.
+         */
+        contentType?: 'page' | 'article';
+        /**
+         * true lists trashed pages instead.
+         */
+        trashed?: 'true' | 'false';
+    };
+    url: '/api/v1/admin/resources/pages';
+};
+
+export type GetApiV1AdminResourcesPagesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesPagesError = GetApiV1AdminResourcesPagesErrors[keyof GetApiV1AdminResourcesPagesErrors];
+
+export type GetApiV1AdminResourcesPagesResponses = {
+    /**
+     * A page of content pages
+     */
+    200: {
+        success: true;
+        data: {
+            pages: Array<PageResource>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesPagesResponse = GetApiV1AdminResourcesPagesResponses[keyof GetApiV1AdminResourcesPagesResponses];
 
 export type GetApiV1AdminTranslationsResourcesData = {
     body?: never;

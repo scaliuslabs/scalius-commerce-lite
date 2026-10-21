@@ -157,3 +157,45 @@ describe("brands answer the brand", () => {
     expect(trashed.body.data.brands[0].deletedAt).not.toBeNull();
   });
 });
+
+describe("brands and pages list by cursor", () => {
+  it("walks brands in (updatedAt, id) order, filtered by status, updatedSince and the trash", async () => {
+    for (const name of ["Volt", "Amp", "Ohm"]) expect((await call("POST", "/brands", { name })).status).toBe(201);
+    const amp = (await call("GET", "/resources/brands?limit=50")).body.data.brands.find((each: { slug: string }) => each.slug === "amp");
+    await call("PATCH", `/brands/${amp.id}/status`, { status: "published", expectedRevision: 1 });
+    const seen: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const page: Wire = await call("GET", `/resources/brands?limit=2${cursor ? `&cursor=${cursor}` : ""}`);
+      expect(page.status).toBe(200);
+      expect(Object.keys(page.body.data).sort()).toEqual(["brands", "nextCursor"]);
+      seen.push(...page.body.data.brands.map((each: { slug: string }) => each.slug));
+      cursor = page.body.data.nextCursor;
+    } while (cursor);
+    expect(seen.sort()).toEqual(["amp", "ohm", "volt"]);
+    const published = (await call("GET", "/resources/brands?status=published")).body.data.brands;
+    expect(published).toEqual([(await call("GET", `/brands/${amp.id}`)).body.data.brand]);
+    expect((await call("GET", "/resources/brands?updatedSince=2999-01-01T00:00:00Z")).body.data).toEqual({ brands: [], nextCursor: null });
+    expect((await call("GET", "/resources/brands?trashed=true")).body.data).toEqual({ brands: [], nextCursor: null });
+  });
+
+  it("walks content pages and articles, filtered by type, updatedSince and the trash", async () => {
+    sqlite.exec(`
+      INSERT INTO pages (id, content_type, title, slug, content, updated_at) VALUES
+        ('pg_about', 'page', 'About us', 'about-us', '<p>Hello</p>', 100),
+        ('pg_post', 'article', 'Launch', 'launch', '<p>News</p>', 200),
+        ('pg_old', 'page', 'Old', 'old', '<p>Gone</p>', 300);
+      UPDATE pages SET deleted_at = 400 WHERE id = 'pg_old';
+    `);
+    const first = await call("GET", "/resources/pages?limit=1");
+    expect(first.status).toBe(200);
+    expect(first.body.data.pages.map((each: { id: string }) => each.id)).toEqual(["pg_about"]);
+    expect(first.body.data.pages[0]).toMatchObject({ contentType: "page", title: "About us", slug: "about-us", revision: 1, deletedAt: null });
+    const rest = await call("GET", `/resources/pages?limit=5&cursor=${first.body.data.nextCursor}`);
+    expect(rest.body.data).toMatchObject({ nextCursor: null });
+    expect(rest.body.data.pages.map((each: { id: string }) => each.id)).toEqual(["pg_post"]);
+    expect((await call("GET", "/resources/pages?contentType=article")).body.data.pages.map((each: { id: string }) => each.id)).toEqual(["pg_post"]);
+    expect((await call("GET", "/resources/pages?updatedSince=1970-01-01T00:03:00Z")).body.data.pages.map((each: { id: string }) => each.id)).toEqual(["pg_post"]);
+    expect((await call("GET", "/resources/pages?trashed=true")).body.data.pages.map((each: { id: string }) => each.id)).toEqual(["pg_old"]);
+  });
+});

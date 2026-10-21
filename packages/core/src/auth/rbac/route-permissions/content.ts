@@ -48,6 +48,10 @@ export const CONTENT_ROUTE_PERMISSIONS: RoutePermissionMap = {
     GET: { permission: PERMISSIONS.PAGES_VIEW },
     POST: { permission: PERMISSIONS.PAGES_CREATE },
   },
+  // The stable app API's page list (resources-catalog-content.ts).
+  "/api/v1/admin/resources/pages": {
+    GET: { permission: PERMISSIONS.PAGES_VIEW },
+  },
   "/api/v1/admin/pages/bulk-delete": {
     POST: { permission: PERMISSIONS.PAGES_DELETE },
     DELETE: { permission: PERMISSIONS.PAGES_DELETE },
