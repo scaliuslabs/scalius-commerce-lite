@@ -469,6 +469,13 @@ export interface MatrixIssueContext {
   weightUnit?: WeightUnit;
 }
 
+/** Units the rows give out when stock must be split across them: every tracked row, or only new rows. */
+export function allocatedStock(variants: readonly { id: string; trackInventory: boolean; stock: number }[], scope: "all" | "new"): number {
+  return variants
+    .filter((variant) => scope === "all" || variant.id.startsWith("draft_"))
+    .reduce((total, variant) => total + (variant.trackInventory ? variant.stock : 0), 0);
+}
+
 export function getOptionMatrixIssue(
   options: DraftOption[],
   variants: DraftVariant[],
@@ -536,11 +543,11 @@ export function getOptionMatrixIssue(
   const required = context.requiredStockAllocation ?? 0;
   if (required > 0) {
     const newOnly = context.allocationScope === "new";
-    const allocated = variants
-      .filter((variant) => !newOnly || variant.id.startsWith("draft_"))
-      .reduce((total, variant) => total + (variant.trackInventory ? variant.stock : 0), 0);
+    const allocated = allocatedStock(variants, context.allocationScope ?? "all");
     if (allocated !== required) {
-      return at(newOnly ? "issueReplaceStock" : "issueAllocateStock", { required, allocated });
+      // Said at a quantity field (the last row that takes stock), so the field itself shows the rule while typing.
+      const last = variants.filter((variant) => variant.trackInventory && (!newOnly || variant.id.startsWith("draft_"))).at(-1);
+      return at(newOnly ? "issueReplaceStock" : "issueAllocateStock", { required, allocated }, last?.id, last ? "stock" : undefined);
     }
   }
   return null;

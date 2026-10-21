@@ -43,6 +43,7 @@ import {
   ADVANCED_FIELDS,
   draftId,
   draftSignature,
+  allocatedStock,
   getOptionMatrixIssue,
   getSimpleSkuIssue,
   initialOptions,
@@ -894,6 +895,15 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
         </div> : null}
       </div>
 
+      {/* Stock that must be split across the rows: the rule shows before the first quantity is typed. */}
+      {!readOnly && requiredStockAllocation > 0 && variants.length > 0 ? (
+        <p className="text-body text-muted-foreground" data-allocation-note>
+          {t(simpleConversion ? "allocationNote" : "allocationReplaceNote", {
+            required: requiredStockAllocation,
+            allocated: allocatedStock(shownVariants, simpleConversion ? "all" : "new"),
+          })}
+        </p>
+      ) : null}
       {/* Option-level problems show once a value is entered (an option still being filled in waits
           for Save); variant problems sit on their field. */}
       {shownIssue && !shownIssue.field && !simpleMode && (!shownIssue.incomplete || revealed)
