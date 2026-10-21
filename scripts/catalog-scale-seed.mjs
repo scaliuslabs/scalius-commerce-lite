@@ -352,10 +352,12 @@ const insVariant = insert(`INSERT INTO product_variants (id, product_id, option_
 const insVariantOption = insert(`INSERT INTO product_variant_option_values (variant_id, option_definition_id, option_value_id) VALUES (?, ?, ?)`);
 const insAttrValue = insert(`INSERT INTO product_attribute_values (id, product_id, attribute_id, value, created_at) VALUES (?, ?, ?, ?, ?)`);
 const insCollection = insert(`INSERT INTO collections (id, name, description, presentation, config, sort_order, is_active, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, ?)`);
+// Orders store the street line apart from their City/Thana/Area places, and the tax label
+// checkout always writes ("VAT" when nothing was taxed), so saved money reads in the order's currency.
 // Customers carry no address columns any more: a customer's first address is
 // written by the orders_seed_customer_address trigger from the first shipping order.
 const insCustomer = insert(`INSERT INTO customers (id, name, email, phone, total_orders, last_order_at, origin, created_at, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-const insOrder = insert(`INSERT INTO orders (id, order_number, customer_name, customer_phone, customer_email, shipping_address, city, zone, area, city_name, zone_name, area_name, shipping_method_kind, shipping_method_id, shipping_method_name, status, payment_method, payment_status, fulfillment_status, customer_id, currency_code, currency_decimal_places, subtotal_amount_minor, shipping_amount_minor, total_amount_minor, paid_amount_minor, balance_due_minor, payment_terms_days, payment_due_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'delivery', ?, ?, ?, ?, ?, ?, ?, 'BDT', 2, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+const insOrder = insert(`INSERT INTO orders (id, order_number, customer_name, customer_phone, customer_email, shipping_address, city, zone, area, city_name, zone_name, area_name, shipping_method_kind, shipping_method_id, shipping_method_name, status, payment_method, payment_status, fulfillment_status, customer_id, currency_code, currency_decimal_places, tax_label, subtotal_amount_minor, shipping_amount_minor, total_amount_minor, paid_amount_minor, balance_due_minor, payment_terms_days, payment_due_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'delivery', ?, ?, ?, ?, ?, ?, ?, 'BDT', 2, 'VAT', ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
 const insShipFulfillment = insert(`INSERT INTO order_fulfillments (id, order_id, kind, status, request_key, actor_type, actor_id, created_at, location_id) VALUES (?, ?, 'ship', 'active', 'seed-0', 'system', NULL, ?, 'loc_default')`);
 const insShipFulfillmentLine = insert(`INSERT INTO order_fulfillment_lines (id, fulfillment_id, order_id, order_item_id, quantity, created_at) VALUES (?, ?, ?, ?, ?, ?)`);
 const insOrderItem = insert(`INSERT INTO order_items (id, order_id, product_id, variant_id, quantity, product_name, variant_label, inventory_tracked, unit_price_minor, line_subtotal_minor, taxable_amount_minor, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`);
@@ -994,13 +996,13 @@ function seedHuge() {
     const location = c.market === 0 ? deliveryLocation(PLACES_BY_CITY, c.city, c.house)
       : { city: null, zone: null, area: null, cityName: null, zoneName: null, areaName: null };
     const address = c.market === 0
-      ? (c.bangla ? `বাসা ${c.house}, রোড ${c.road}, ${c.area}, ${c.city}` : `House ${c.house}, Road ${c.road}, ${c.area}, ${c.city}`)
+      ? (c.bangla ? `বাসা ${c.house}, রোড ${c.road}` : `House ${c.house}, Road ${c.road}`)
       : `${c.house} ${c.market === 1 ? "Market St" : "Hauptstrasse"}`;
     insOrderHuge.run(orderId, orderNumber, c.name, c.phone, c.email, c.whatsapp && c.phone ? c.phone : null,
       address, market.code, location.city, location.zone, location.area, location.cityName, location.zoneName, location.areaName,
       c.name, c.phone || null, c.market === 0 ? null : c.city, c.market === 1 ? "CA" : null, c.market === 1 ? "94107" : c.market === 2 ? "10115" : null,
       life.status, method, paymentStatus, life.fulfillment, c.id, market.id,
-      market.currency, priced.subtotal, priced.shipping, priced.discount, priced.tax, taxBps > 0 ? market.taxLabel : null, total, paid, balance,
+      market.currency, priced.subtotal, priced.shipping, priced.discount, priced.tax, taxBps > 0 ? market.taxLabel : "VAT", total, paid, balance,
       "BDT", c.market === 0 ? "1" : market.orderRate, c.market === 0 ? "same_currency" : "manual", c.market === 0 ? null : ts, c.market === 0 ? null : ts + 1800,
       subtotalShop, shippingShopMinor, discountShop, taxShop, totalShop,
       hrng.chance(0.08) ? "admin" : "online_store", c.market === 0 ? (c.city === "Dhaka" ? "sm_scale_inside" : "sm_scale_outside") : null,
@@ -1384,7 +1386,7 @@ for (let start = 0; start < ORDERS; start += 5000) {
       // against them); one in five multi-line shipped orders is only partly fulfilled.
       const shipped = SHIPPED_STATUSES.has(status);
       const fulfilment = !shipped ? "none" : status === "shipped" && lines.length > 1 && chance(0.2) ? "partial" : "complete";
-      const address = `House ${int(1, 200)}, ${customer.city}`;
+      const address = `House ${int(1, 200)}, Road ${(index % 30) + 1}`;
       const method = chance(0.8) ? (netTerms ? "net_terms" : "cod") : netTerms ? "net_terms" : "sslcommerz";
       const updatedAt = createdAt + int(0, 10) * DAY;
       insOrder.run(id, 100000 + index, customer.name, customer.phone, null, address,
