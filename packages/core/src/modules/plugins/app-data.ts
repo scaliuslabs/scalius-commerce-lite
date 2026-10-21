@@ -9,7 +9,10 @@
 // reinstall picks its settings up again and the dashboard can name the data
 // of an app that is no longer installed (any source, including a bundled app
 // removed from the deployment). Reinstalling reclaims all of it: every
-// reader keys on the plugin id.
+// reader keys on the plugin id. So only the same developer reclaims it
+// (security audit N4): `installPlugin` refuses a release under that id from
+// another signer while the data is kept, and the data stays here, listed and
+// deletable, until a Super Admin deletes it.
 //
 // `appDataDeleteStatements` is the one delete, used by an uninstall that does
 // not keep data and by "Delete data" on a removed app's group. Catalogue
