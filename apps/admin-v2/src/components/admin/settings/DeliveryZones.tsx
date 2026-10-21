@@ -973,14 +973,14 @@ export function DeliveryZonesCard() {
       title={t("zonesTitle")}
       description={data.zones.length ? t("zonesDescription") : t(suggestsSetups ? "noZones" : "noZonesOwn")}
       action={
-        <SettingsDialog title={t("addZone")} trigger={<Button type="button" variant="outline" size="sm" disabled={!canEdit}>{t("addZone")}</Button>}>
+        <SettingsDialog layout="sheet" title={t("addZone")} trigger={<Button type="button" variant="outline" size="sm" disabled={!canEdit}>{t("addZone")}</Button>}>
           <ZoneForm zone={null} zones={data.zones} />
         </SettingsDialog>
       }
       rows={
         <>
           {data.zones.map((zone) => (
-            <SettingsDialog key={zone.id} title={t("editZone", { name: zone.name })} trigger={
+            <SettingsDialog layout="sheet" key={zone.id} title={t("editZone", { name: zone.name })} trigger={
               <SettingsRow disabled={!canEdit} label={zone.name} value={`${regionSummary(zone, t)} · ${summary(zone.rates)}`} />
             }>
               <ZoneForm zone={zone} zones={data.zones} />
