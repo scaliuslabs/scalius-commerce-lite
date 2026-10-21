@@ -14,6 +14,12 @@ describe("browserApiUrl", () => {
     expect(browserApiUrl("categories/rice/products")).toBe("https://api.example.test/api/v1/categories/rice/products");
   });
 
+  it("returns the base itself for an empty path, so a caller appending '/locations/zones' never sends a double slash", () => {
+    window.__API_BASE_URL__ = "https://api.example.test/api/v1";
+    expect(browserApiUrl("")).toBe("https://api.example.test/api/v1");
+    expect(`${browserApiUrl("")}/locations/zones`).toBe("https://api.example.test/api/v1/locations/zones");
+  });
+
   it("fails closed when the page carries no API URL", () => {
     expect(() => browserApiUrl("/checkout/config")).toThrow(/PUBLIC_API_URL is not configured/);
     window.__API_BASE_URL__ = "";

@@ -70,6 +70,7 @@ import { hasSeveralMarkets, hasSeveralPresences, languageOptions, pageMarket, pr
 import LanguageSelector from "../components/markets/LanguageSelector.astro";
 import MarketSelector from "../components/markets/MarketSelector.astro";
 import MarketSuggestion from "../components/markets/MarketSuggestion.astro";
+import Container from "../components/ui/Container.astro";
 import type { LocalizedPaths } from "@/lib/localized-paths";
 import type { HomepageHeaderLead } from "@/lib/homepage-sections";
 
@@ -590,23 +591,29 @@ const pageStoreTimeZone = storeTimeZone();
             business={businessInfo}
             languageCode={layoutData?.storefrontCopy?.languageCode}
           />
-          {hasSeveralMarkets(marketMatrix) && (
-            <MarketSelector
-              matrix={marketMatrix}
-              presence={marketPresence}
-              currencyCode={layoutData?.currency?.shopCode ?? currencyCode}
-              language={pageLanguage}
-              returnTo={marketReturnTo}
-            />
-          )}
-          {languageMarket && languageCountry && (
-            <LanguageSelector
-              market={languageMarket}
-              presence={marketPresence}
-              country={languageCountry}
-              language={pageLanguage}
-              returnTo={marketReturnTo}
-            />
+          {(hasSeveralMarkets(marketMatrix) || (languageMarket && languageCountry)) && (
+            <div class="footer-locale">
+              <Container class="footer-locale-row">
+                {hasSeveralMarkets(marketMatrix) && (
+                  <MarketSelector
+                    matrix={marketMatrix}
+                    presence={marketPresence}
+                    currencyCode={layoutData?.currency?.shopCode ?? currencyCode}
+                    language={pageLanguage}
+                    returnTo={marketReturnTo}
+                  />
+                )}
+                {languageMarket && languageCountry && (
+                  <LanguageSelector
+                    market={languageMarket}
+                    presence={marketPresence}
+                    country={languageCountry}
+                    language={pageLanguage}
+                    returnTo={marketReturnTo}
+                  />
+                )}
+              </Container>
+            </div>
           )}
         </div>
       )

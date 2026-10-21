@@ -67,7 +67,8 @@ const links = [
   }
   @media (min-width: 64rem) {
     [data-product-section-nav][data-section-nav-desktop] {
-      padding-inline: max(0px, calc((100% - 80rem) / 2));
+      /* The first label lines up with the page container's content edge. */
+      padding-inline: max(0px, calc((100% - var(--theme-container-width, 80rem)) / 2 + var(--theme-gutter-desktop, 2rem) - 1.25rem));
     }
     [data-product-section-nav][data-section-nav-desktop] > a {
       flex: 0 0 auto;

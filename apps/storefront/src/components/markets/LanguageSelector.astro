@@ -42,9 +42,6 @@ const selected = market.presences.find((each) => each.value === (presence ?? "")
     flex-wrap: wrap;
     align-items: center;
     gap: 0.5rem;
-    max-width: var(--theme-container-width, 80rem);
-    margin: 0 auto;
-    padding: 0.75rem var(--theme-gutter-phone, 1rem);
     font-size: 0.875rem;
     color: var(--muted-foreground);
   }
@@ -56,5 +53,11 @@ const selected = market.presences.find((each) => each.value === (presence ?? "")
     background: var(--background);
     color: var(--foreground);
     padding: 0 0.75rem;
+  }
+  /* Phones: the label above, the choice and its button share the row. */
+  @media (max-width: 39.99rem) {
+    .language-selector { flex: 1 1 100%; }
+    .language-selector label { flex-basis: 100%; }
+    .language-selector select { flex: 1 1 0; min-inline-size: 0; }
   }
 </style>

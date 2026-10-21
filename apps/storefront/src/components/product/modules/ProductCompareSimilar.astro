@@ -19,14 +19,12 @@ interface Props {
 
 const { title, productId, products, currencySymbol, currencyCode } = Astro.props;
 const compareHref = `/compare?ids=${[productId, ...products.map((product) => product.id)].map(encodeURIComponent).join(",")}`;
-// theme-foundation.css keeps the product route's `max-w-7xl` at 80rem.
-const PRODUCT_PAGE_CONTAINER_WIDTH = "80rem";
 ---
 
 <ProductModule id="compare-similar" title={title}>
   <ProductGrid>
     {products.map((product) => (
-      <ProductCard product={product} currencySymbol={currencySymbol} currencyCode={currencyCode} containerWidth={PRODUCT_PAGE_CONTAINER_WIDTH} />
+      <ProductCard product={product} currencySymbol={currencySymbol} currencyCode={currencyCode} />
     ))}
   </ProductGrid>
   <a

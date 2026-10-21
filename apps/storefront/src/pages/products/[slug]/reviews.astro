@@ -6,6 +6,7 @@
 // nothing else. It is noindex,follow (the product page carries the review
 // markup), and it is cached like any public page under the store's generation.
 import Layout from "@/layouts/Layout.astro";
+import Container from "@/components/ui/Container.astro";
 import ReviewsOverview from "@/components/product/reviews/ReviewsOverview.astro";
 import "@/components/product/reviews/product-reviews.css";
 import { getLayoutData, getProductBySlugResult } from "@/lib/api";
@@ -73,7 +74,8 @@ const firstHref = view.cursor ? productReviewsPageHref(product.slug, { sort: vie
   layoutData={layoutData}
   noindex
 >
-  <section class="product-reviews product-reviews-page mx-auto max-w-7xl px-3 py-4 sm:px-6 lg:px-8 lg:py-8" aria-labelledby="reviews-page-heading">
+  <Container>
+  <section class="product-reviews product-reviews-page py-4 lg:py-8" aria-labelledby="reviews-page-heading">
     <p class="mb-3">
       <a href={productHref} class="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-primary hover:underline">
         <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 19l-7-7 7-7" /></svg>
@@ -130,4 +132,5 @@ const firstHref = view.cursor ? productReviewsPageHref(product.slug, { sort: vie
       </div>
     )}
   </section>
+  </Container>
 </Layout>
