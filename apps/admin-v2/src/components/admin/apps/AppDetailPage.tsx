@@ -30,6 +30,7 @@ import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import type { AppDetail, AppFunction } from "~/lib/api-query-options/apps";
 import { formatDuration, formatWhen } from "../settings/webhooks/webhook-format";
 import { AppAccess } from "./AppAccess";
+import { AppFunctionCircuits } from "./AppFunctionCircuits";
 import { AppFeatures, HealthBadge } from "./AppFeatures";
 import { AppFeatureSection } from "./AppFeatureSection";
 import { AppSectionNav } from "./AppSectionNav";
@@ -414,6 +415,7 @@ function AppPage({ app, section }: { app: AppDetail; section: AppSection }) {
             <AlertDescription>{app.failureReason ?? t("failedBody")}</AlertDescription>
           </Alert>
         ) : null}
+        <AppFunctionCircuits app={app} />
         {(app.status === "disabled" && app.failureReason) || (canManage && app.source !== "bundled") ? (
           <Suspense fallback={null}>
             <AppLifecycleNotices app={app} canManage={canManage} />
