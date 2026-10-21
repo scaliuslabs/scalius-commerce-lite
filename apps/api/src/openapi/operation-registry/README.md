@@ -33,7 +33,8 @@ mirror a dashboard screen, an editor section or a summary card.
   `EVENT_REPRESENTATION_SCHEMAS[type]` (`@scalius/shared/events`), the shape a
   webhook delivery carries in `data` under `EVENTS_API_VERSION`. A webhook
   receiver and an API reader see one representation, and a truncated
-  delivery's `fetch` names the matching `get`. Lists page by cursor in
+  delivery's `fetch` names the stable read of it by app name (`appOperation`,
+  beside the HTTP `operationId` and `path`), or is null where none exists yet. Lists page by cursor in
   `updatedAt, id` order (`updatedSince` starts a sync) and stop early before a
   page would pass the response budget. Order, payment, refund, return,
   shipment and fulfilment states are sealed enums

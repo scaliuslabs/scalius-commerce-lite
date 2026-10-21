@@ -2304,8 +2304,14 @@
     "maxLength": 128
    },
    "fetch": {
+    "nullable": true,
     "type": "object",
     "properties": {
+     "appOperation": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+     },
      "operationId": {
       "type": "string",
       "minLength": 1,
@@ -2324,6 +2330,7 @@
      }
     },
     "required": [
+     "appOperation",
      "operationId",
      "method",
      "path"

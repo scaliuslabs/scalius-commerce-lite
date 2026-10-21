@@ -26,7 +26,7 @@ import { describe, expect, it } from "vitest";
 import { effectivePluginPermissions } from "@scalius/core/modules/plugins";
 import { PLUGIN_SCOPE_NAMES, PROTECTED_FIELD_KEYWORD, isProtectedDataScope, type PluginScope } from "@scalius/shared/plugins";
 import { protectedMarkerCategories } from "@scalius/shared/plugins/protected-data";
-import { eventDataTruncation } from "@scalius/shared/events";
+import { EVENT_REPRESENTATION_SCHEMAS, eventDataTruncation } from "@scalius/shared/events";
 import { AGENT_COMPONENT_SCHEMAS, AGENT_OPERATIONS } from "../generated/agent-operations.gen";
 import { isOperationAvailableToPlugin, pluginRbacSatisfied } from "../plugins/authority";
 import { appOperationName, resolveAppOperation } from "../plugins/app-operations";
@@ -467,15 +467,30 @@ describe("the stable app API", () => {
     expect([...WITHOUT_REVISION].filter((id) => !unguarded.includes(id))).toEqual([]);
   });
 
-  it("reads each resource in the representation its webhooks carry, where a truncated delivery points", () => {
+  it("points every truncated delivery at a stable read an app can call, by its app name", () => {
     const facts = { orderId: "ord_1", giftCardId: "gc_1", objectType: "custom.x" };
+    // No stable read returns these representations yet: the delivery keeps the id only.
+    const WITHOUT_READ = new Set(["purchase_order", "inventory_transfer", "checkout", "review"]);
+    for (const type of Object.keys(EVENT_REPRESENTATION_SCHEMAS) as (keyof typeof EVENT_REPRESENTATION_SCHEMAS)[]) {
+      const { fetch } = eventDataTruncation(type, "res_1", facts);
+      if (WITHOUT_READ.has(type)) {
+        expect(fetch, type).toBeNull();
+        continue;
+      }
+      expect(fetch, type).not.toBeNull();
+      const operation = resolveAppOperation(fetch!.appOperation);
+      expect(operation?.stability, `${type}: ${fetch!.appOperation} is stable`).toBe("stable");
+      expect(operation!.operationId, type).toBe(fetch!.operationId);
+      const template = new RegExp(`^${operation!.pathTemplate.replace(/\{[^}]+\}/gu, "[^/]+")}$`, "u");
+      expect(fetch!.path, type).toMatch(template);
+    }
     for (const type of ["order", "product", "variant", "customer", "fulfillment", "shipment", "payment"] as const) {
       const { fetch } = eventDataTruncation(type, "res_1", facts);
-      const operation = stable.find((candidate) => candidate.operationId === fetch.operationId);
-      expect(operation, `${type}: ${fetch.operationId} is stable`).toBeDefined();
+      const operation = stable.find((candidate) => candidate.operationId === fetch!.operationId);
+      expect(operation, `${type}: ${fetch!.operationId} is stable`).toBeDefined();
       expect(operation!.operationId.startsWith("dashboard.resources."), type).toBe(true);
       const template = new RegExp(`^${operation!.pathTemplate.replace(/\{[^}]+\}/gu, "[^/]+")}$`, "u");
-      expect(fetch.path, type).toMatch(template);
+      expect(fetch!.path, type).toMatch(template);
       const output = JSON.stringify(operation!.outputSchema);
       expect(output.includes(`#/components/schemas/${type[0]!.toUpperCase()}${type.slice(1)}Resource`), type).toBe(true);
     }

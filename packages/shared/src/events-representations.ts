@@ -13,6 +13,7 @@
 
 import { z } from "zod";
 import { PROTECTED_FIELD_KEYWORD, protectedPathsOf, redactProtectedData, type ProtectedCustomerData, type ProtectedPath } from "./plugins/protected-data";
+import { STABLE_APP_OPERATIONS, type StableAppOperationName } from "./plugins/app-operations";
 import {
   FULFILLMENT_RECORD_STATUSES,
   FULFILLMENT_STATUSES,
@@ -465,16 +466,21 @@ export type EventRepresentationInput<T extends EventRepresentationType> =
 /**
  * What a delivery carries in `data` when the whole body would pass 512 KiB:
  * the resource id and where to read it. `data: null` only ever means the
- * resource no longer exists.
+ * resource no longer exists. `fetch` names a stable app API read that
+ * returns the same representation: `appOperation` is what an app passes to
+ * `ctx.api.call`, `operationId`/`method`/`path` what an HTTP or agent caller
+ * uses. It is null for a resource no stable operation reads; the receiver
+ * keeps the `id`.
  */
 export const eventDataTruncationSchema = z.object({
   truncated: z.literal(true),
   id,
   fetch: z.object({
+    appOperation: z.string().min(1).max(128),
     operationId: z.string().min(1).max(128),
     method: z.literal("GET"),
     path: z.string().min(1).max(512),
-  }),
+  }).nullable(),
 });
 export type EventDataTruncation = z.output<typeof eventDataTruncationSchema>;
 
@@ -482,33 +488,37 @@ const segment = (value: unknown) => encodeURIComponent(typeof value === "string"
 
 /**
  * Where a receiver reads a resource the delivery could not carry (the admin
- * API, under its API credential): the stable app API's read of the same
- * representation where one exists.
+ * API, under its API credential): a stable read of the same representation,
+ * by its sealed app name. Null where none exists yet.
  */
-const FETCH_HINTS: Record<EventRepresentationType, (resourceId: string, facts: Record<string, unknown>) => { operationId: string; path: string }> = {
-  order: (resource) => ({ operationId: "dashboard.resources.orders.get", path: `/api/v1/admin/resources/orders/${segment(resource)}` }),
-  return: (resource, facts) => ({ operationId: "dashboard.orders.return_get", path: `/api/v1/admin/orders/${segment(facts.orderId)}/returns/${segment(resource)}` }),
-  product: (resource) => ({ operationId: "dashboard.resources.products.get", path: `/api/v1/admin/resources/products/${segment(resource)}` }),
-  variant: (resource) => ({ operationId: "dashboard.resources.variants.get", path: `/api/v1/admin/resources/variants/${segment(resource)}` }),
-  customer: (resource) => ({ operationId: "dashboard.resources.customers.get", path: `/api/v1/admin/resources/customers/${segment(resource)}` }),
-  purchase_order: (resource) => ({ operationId: "dashboard.purchase_orders.get", path: `/api/v1/admin/inventory/purchase-orders/${segment(resource)}` }),
-  inventory_transfer: (resource) => ({ operationId: "dashboard.inventory_transfers.get", path: `/api/v1/admin/inventory/transfers/${segment(resource)}` }),
-  fulfillment: (_resource, facts) => ({ operationId: "dashboard.resources.fulfillments.list", path: `/api/v1/admin/resources/orders/${segment(facts.orderId)}/fulfillments` }),
-  refund: (_resource, facts) => ({ operationId: "dashboard.resources.refunds.list", path: `/api/v1/admin/resources/orders/${segment(facts.orderId)}/refunds` }),
-  shipment: (resource) => ({ operationId: "dashboard.resources.shipments.get", path: `/api/v1/admin/resources/shipments/${segment(resource)}` }),
-  payment: (_resource, facts) => ({ operationId: "dashboard.resources.payments.list", path: `/api/v1/admin/resources/orders/${segment(facts.orderId)}/payments` }),
-  checkout: () => ({ operationId: "dashboard.abandoned_checkouts.summaries_list", path: "/api/v1/admin/abandoned-checkouts/summaries" }),
-  discount: (resource) => ({ operationId: "dashboard.discounts.get", path: `/api/v1/admin/discounts/${segment(resource)}` }),
-  review: (resource) => ({ operationId: "dashboard.reviews.get", path: `/api/v1/admin/reviews/${segment(resource)}` }),
-  gift_card: (resource) => ({ operationId: "dashboard.gift_cards.get", path: `/api/v1/admin/gift-cards/${segment(resource)}` }),
-  gift_card_transaction: (_resource, facts) => ({ operationId: "dashboard.gift_cards.get", path: `/api/v1/admin/gift-cards/${segment(facts.giftCardId)}` }),
-  object: (resource, facts) => ({ operationId: "objects.get", path: `/api/v1/admin/objects/${segment(facts.objectType)}/${segment(resource)}` }),
+const FETCH_HINTS: Record<EventRepresentationType, ((resourceId: string, facts: Record<string, unknown>) => { appOperation: StableAppOperationName; path: string }) | null> = {
+  order: (resource) => ({ appOperation: "orders.get", path: `/api/v1/admin/resources/orders/${segment(resource)}` }),
+  return: (resource) => ({ appOperation: "returns.get", path: `/api/v1/admin/resources/returns/${segment(resource)}` }),
+  product: (resource) => ({ appOperation: "products.get", path: `/api/v1/admin/resources/products/${segment(resource)}` }),
+  variant: (resource) => ({ appOperation: "variants.get", path: `/api/v1/admin/resources/variants/${segment(resource)}` }),
+  customer: (resource) => ({ appOperation: "customers.get", path: `/api/v1/admin/resources/customers/${segment(resource)}` }),
+  purchase_order: null,
+  inventory_transfer: null,
+  fulfillment: (_resource, facts) => ({ appOperation: "fulfillments.list", path: `/api/v1/admin/resources/orders/${segment(facts.orderId)}/fulfillments` }),
+  refund: (_resource, facts) => ({ appOperation: "refunds.list", path: `/api/v1/admin/resources/orders/${segment(facts.orderId)}/refunds` }),
+  shipment: (resource) => ({ appOperation: "shipments.get", path: `/api/v1/admin/resources/shipments/${segment(resource)}` }),
+  payment: (_resource, facts) => ({ appOperation: "payments.list", path: `/api/v1/admin/resources/orders/${segment(facts.orderId)}/payments` }),
+  checkout: null,
+  discount: (resource) => ({ appOperation: "discounts.get", path: `/api/v1/admin/discounts/${segment(resource)}` }),
+  review: null,
+  gift_card: (resource) => ({ appOperation: "gift_cards.get", path: `/api/v1/admin/resources/gift-cards/${segment(resource)}` }),
+  gift_card_transaction: (_resource, facts) => ({ appOperation: "gift_cards.get", path: `/api/v1/admin/resources/gift-cards/${segment(facts.giftCardId)}` }),
+  object: (resource, facts) => ({ appOperation: "objects.get", path: `/api/v1/admin/objects/${segment(facts.objectType)}/${segment(resource)}` }),
 };
 
 /** The `data` of a delivery too large to carry its representation. */
 export function eventDataTruncation(type: EventRepresentationType, resourceId: string, facts: Record<string, unknown>): EventDataTruncation {
-  const hint = FETCH_HINTS[type](resourceId, facts);
-  return eventDataTruncationSchema.parse({ truncated: true, id: resourceId, fetch: { operationId: hint.operationId, method: "GET", path: hint.path } });
+  const hint = FETCH_HINTS[type]?.(resourceId, facts) ?? null;
+  return eventDataTruncationSchema.parse({
+    truncated: true,
+    id: resourceId,
+    fetch: hint && { appOperation: hint.appOperation, operationId: STABLE_APP_OPERATIONS[hint.appOperation], method: "GET", path: hint.path },
+  });
 }
 
 /** A copy of a sealed representation with the protected fields outside `customerData` as null (per subscription). */
