@@ -3,7 +3,7 @@ import { defineMessages } from "./index";
 export const dynamicSourceMessages = defineMessages({
   en: {
     cardFields: "Product card fields", cardFieldsHelp: "Show up to three public custom fields on product cards.", cardAdd: "Add a field", removeField: "Remove {name}", remove: "Remove",
-    connect: "Connect", connectSetting: "Connect {name}", connected: "Connected source",
+    connect: "Connect source", connectSetting: "Connect source for {name}", connected: "Connected source",
     disconnect: "Disconnect", close: "Close sources", source: "Source", choose: "Choose a source",
     resource: "Page content", fields: "Custom fields", objects: "Objects", record: "Published record",
     chooseRecord: "Choose a record", previous: "Previous records", next: "Next records",
@@ -14,7 +14,7 @@ export const dynamicSourceMessages = defineMessages({
   },
   bn: {
     cardFields: "পণ্য কার্ডের ফিল্ড", cardFieldsHelp: "পণ্য কার্ডে সর্বোচ্চ তিনটি প্রকাশ্য কাস্টম ফিল্ড দেখান।", cardAdd: "ফিল্ড যোগ করুন", removeField: "{name} সরান", remove: "সরান",
-    connect: "সংযুক্ত করুন", connectSetting: "{name} সংযুক্ত করুন", connected: "সংযুক্ত উৎস",
+    connect: "উৎস সংযুক্ত করুন", connectSetting: "{name}-এর জন্য উৎস সংযুক্ত করুন", connected: "সংযুক্ত উৎস",
     disconnect: "সংযোগ সরান", close: "উৎস বন্ধ করুন", source: "উৎস", choose: "একটি উৎস বাছুন",
     resource: "পৃষ্ঠার বিষয়বস্তু", fields: "কাস্টম ফিল্ড", objects: "অবজেক্ট", record: "প্রকাশিত রেকর্ড",
     chooseRecord: "একটি রেকর্ড বাছুন", previous: "আগের রেকর্ড", next: "পরের রেকর্ড",
