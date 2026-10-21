@@ -24013,6 +24013,59 @@
           "icon"
         ]
       },
+      "AppStorefrontProblem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "section",
+              "component",
+              "skin",
+              null
+            ]
+          },
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "target": {
+            "type": "string",
+            "nullable": true
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "unavailable",
+              "late",
+              "error",
+              "refused",
+              "missing",
+              null
+            ]
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "message",
+          "kind",
+          "type",
+          "target",
+          "reason",
+          "at"
+        ]
+      },
       "RegistryState": {
         "type": "object",
         "properties": {
@@ -24823,6 +24876,28 @@
                       ]
                     }
                   },
+                  "skins": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "target": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "target"
+                      ]
+                    }
+                  },
                   "scripts": {
                     "type": "array",
                     "items": {
@@ -24885,6 +24960,7 @@
                   "head",
                   "sections",
                   "components",
+                  "skins",
                   "scripts",
                   "themeProblems"
                 ]
@@ -25657,7 +25733,34 @@
           "revision": {
             "type": "integer",
             "minimum": 0,
-            "description": "Send it back as expectedRevision to delete this data (0: the store kept no record of the removal)."
+            "description": "Send it back as expectedRevision to delete or hand over this data (0: the store kept no record of the removal)."
+          },
+          "signerKeyId": {
+            "type": "string",
+            "nullable": true,
+            "description": "The key the data belongs to: the signer of the release that kept it (its fingerprint is this id in groups of four). null: unsigned or bundled code, or no record. Only a release signed with this key reclaims the data on its own."
+          },
+          "waitingRelease": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "source": {
+                "type": "string",
+                "enum": [
+                  "bundled"
+                ]
+              },
+              "version": {
+                "type": "string"
+              },
+              "signerKeyId": {}
+            },
+            "required": [
+              "source",
+              "version",
+              "signerKeyId"
+            ],
+            "description": "A release of this app in this deployment's own code that cannot install while the data belongs to another key. It installs once the data is deleted or handed over to it (signerKeyId null)."
           },
           "objectTypes": {
             "type": "integer"
@@ -25702,6 +25805,8 @@
           "name",
           "removedAt",
           "revision",
+          "signerKeyId",
+          "waitingRelease",
           "objectTypes",
           "records",
           "objectTypeHandles",
@@ -33354,7 +33459,7 @@
                         "price": {
                           "type": "number",
                           "minimum": 0,
-                          "maximum": 99999999
+                          "maximum": 9000000000000
                         },
                         "quantity": {
                           "type": "integer",
@@ -33370,7 +33475,7 @@
                         "basePrice": {
                           "type": "number",
                           "minimum": 0,
-                          "maximum": 99999999,
+                          "maximum": 9000000000000,
                           "description": "Unit price before buyer-input surcharges, which quantity bundles price from; defaults to `price`."
                         }
                       },
@@ -33386,7 +33491,7 @@
                   "shippingCost": {
                     "type": "number",
                     "minimum": 0,
-                    "maximum": 99999999,
+                    "maximum": 9000000000000,
                     "description": "Delivery charge of the chosen delivery option. Omit it before the buyer has one: delivery discounts then wait (`needs_delivery`) instead of failing."
                   },
                   "customerPhone": {
@@ -36005,7 +36110,7 @@
                               "connect"
                             ]
                           },
-                          "description": "Active apps with storefront components (docs/STOREFRONT-COMPONENTS.md): the sections, components and skins their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts."
+                          "description": "Active apps with storefront components (packages/plugin-sdk/docs/storefront.md): the sections, components and skins their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts."
                         },
                         "purchaseOptions": {
                           "type": "array",
@@ -96547,7 +96652,7 @@
                         "unitPriceMinor": {
                           "type": "integer",
                           "minimum": 0,
-                          "maximum": 9007199254740991,
+                          "maximum": 9000000000000,
                           "description": "A unit price set by hand (a quote, an agreed renewal price), in minor units of the store currency at its price increment; it replaces the catalogue price and the order's timeline records it."
                         },
                         "properties": {
@@ -96760,13 +96865,13 @@
                   "shippingMinor": {
                     "type": "integer",
                     "minimum": 0,
-                    "maximum": 9007199254740991,
+                    "maximum": 9000000000000,
                     "description": "The delivery charge, in minor units of the store currency."
                   },
                   "discountMinor": {
                     "type": "integer",
                     "minimum": 0,
-                    "maximum": 9007199254740991,
+                    "maximum": 9000000000000,
                     "description": "An order discount set by hand, in minor units of the store currency."
                   },
                   "paymentMethod": {
@@ -97374,7 +97479,7 @@
                   "amountMinor": {
                     "type": "integer",
                     "minimum": 1,
-                    "maximum": 9007199254740991,
+                    "maximum": 9000000000000,
                     "description": "What was received, in minor units of the order's `currency`; at most its `balanceDueMinor`."
                   },
                   "via": {
@@ -98012,7 +98117,7 @@
                       "amountMinor": {
                         "type": "integer",
                         "minimum": 0,
-                        "maximum": 9007199254740991,
+                        "maximum": 9000000000000,
                         "description": "What the delivery cost, in minor units of the order's currency."
                       }
                     },
@@ -98022,7 +98127,7 @@
                   "cashReceivedMinor": {
                     "type": "integer",
                     "minimum": 0,
-                    "maximum": 9007199254740991,
+                    "maximum": 9000000000000,
                     "description": "Cash on delivery taken in the same action (`pickup`/`service`), in minor units of the order's currency. Must equal the balance due."
                   }
                 },
@@ -99654,7 +99759,7 @@
                         "priceMinor": {
                           "type": "integer",
                           "minimum": 0,
-                          "maximum": 9007199254740991,
+                          "maximum": 9000000000000,
                           "description": "Its price, in minor units of the store currency at its price increment."
                         },
                         "optionValues": {
@@ -100133,7 +100238,7 @@
                   "priceMinor": {
                     "type": "integer",
                     "minimum": 0,
-                    "maximum": 9007199254740991,
+                    "maximum": 9000000000000,
                     "description": "A product without options: its price, in minor units of the store currency. A product with options prices each SKU (`variants.bulk_set_prices`, `variants.update`)."
                   },
                   "mediaIds": {
@@ -102269,7 +102374,7 @@
                                 "type": "integer",
                                 "minimum": 0,
                                 "exclusiveMinimum": true,
-                                "maximum": 9007199254740991,
+                                "maximum": 9000000000000,
                                 "description": "The price of one unit, in minor units of the list's currency, at its price increment."
                               },
                               "compareAtMinor": {
@@ -102277,7 +102382,7 @@
                                 "nullable": true,
                                 "minimum": 0,
                                 "exclusiveMinimum": true,
-                                "maximum": 9007199254740991,
+                                "maximum": 9000000000000,
                                 "description": "The struck-through price, above the amount; null for none."
                               },
                               "minQuantity": {
@@ -102507,7 +102612,7 @@
                         "expectedPriceMinor": {
                           "type": "integer",
                           "minimum": 0,
-                          "maximum": 9007199254740991,
+                          "maximum": 9000000000000,
                           "description": "The price you read; a SKU whose price changed since is left alone (a failure)."
                         }
                       },
@@ -102565,7 +102670,7 @@
                           "amountMinor": {
                             "type": "integer",
                             "minimum": 1,
-                            "maximum": 9007199254740991
+                            "maximum": 9000000000000
                           }
                         },
                         "required": [
@@ -102606,8 +102711,8 @@
                           },
                           "amountMinor": {
                             "type": "integer",
-                            "minimum": -9007199254740991,
-                            "maximum": 9007199254740991
+                            "minimum": -9000000000000,
+                            "maximum": 9000000000000
                           }
                         },
                         "required": [
@@ -104485,7 +104590,7 @@
                     "type": "integer",
                     "minimum": 0,
                     "exclusiveMinimum": true,
-                    "maximum": 9007199254740991,
+                    "maximum": 9000000000000,
                     "description": "Its value, in minor units of the store currency."
                   },
                   "expiresAt": {
@@ -105108,8 +105213,8 @@
                   },
                   "amountMinor": {
                     "type": "integer",
-                    "minimum": -9007199254740991,
-                    "maximum": 9007199254740991
+                    "minimum": -9000000000000,
+                    "maximum": 9000000000000
                   },
                   "reason": {
                     "type": "string",
@@ -105414,7 +105519,7 @@
                               "priceMinor": {
                                 "type": "integer",
                                 "minimum": 0,
-                                "maximum": 9007199254740991,
+                                "maximum": 9000000000000,
                                 "description": "Its price, in minor units of the store currency at its price increment."
                               },
                               "optionValues": {
@@ -105777,7 +105882,7 @@
                   "priceMinor": {
                     "type": "integer",
                     "minimum": 0,
-                    "maximum": 9007199254740991,
+                    "maximum": 9000000000000,
                     "description": "Its price, in minor units of the store currency at its price increment."
                   },
                   "optionValues": {
@@ -106044,7 +106149,7 @@
                   "priceMinor": {
                     "type": "integer",
                     "minimum": 0,
-                    "maximum": 9007199254740991,
+                    "maximum": 9000000000000,
                     "description": "Its price, in minor units of the store currency. On a product sold as one SKU this is the product's price."
                   },
                   "optionValues": {
@@ -106737,7 +106842,7 @@
                   "amountMinor": {
                     "type": "integer",
                     "minimum": 1,
-                    "maximum": 9007199254740991,
+                    "maximum": 9000000000000,
                     "description": "What goes back, in minor units of the order's `currency`; at most what was paid less what was refunded."
                   },
                   "lines": {
@@ -107555,7 +107660,7 @@
                   "amountMinor": {
                     "type": "integer",
                     "minimum": 1,
-                    "maximum": 9007199254740991,
+                    "maximum": 9000000000000,
                     "description": "What to charge, in minor units of the order's `currency`. Default: its `balanceDueMinor`; another amount must be one the order takes (a deposit)."
                   },
                   "capture": {
@@ -133618,7 +133723,7 @@
                     "nullable": true,
                     "minimum": 0,
                     "exclusiveMinimum": true,
-                    "maximum": 9007199254740991,
+                    "maximum": 9000000000000,
                     "default": null
                   },
                   "budgetCurrency": {
@@ -133673,7 +133778,7 @@
                                   "type": "integer",
                                   "minimum": 0,
                                   "exclusiveMinimum": true,
-                                  "maximum": 9007199254740991
+                                  "maximum": 9000000000000
                                 },
                                 "currency": {
                                   "type": "string",
@@ -133837,7 +133942,7 @@
                                       "type": "integer",
                                       "minimum": 0,
                                       "exclusiveMinimum": true,
-                                      "maximum": 9007199254740991
+                                      "maximum": 9000000000000
                                     },
                                     "currency": {
                                       "type": "string",
@@ -133924,7 +134029,7 @@
                                   "type": "integer",
                                   "minimum": 0,
                                   "exclusiveMinimum": true,
-                                  "maximum": 9007199254740991
+                                  "maximum": 9000000000000
                                 },
                                 "currency": {
                                   "type": "string",
@@ -134472,7 +134577,7 @@
                     "nullable": true,
                     "minimum": 0,
                     "exclusiveMinimum": true,
-                    "maximum": 9007199254740991,
+                    "maximum": 9000000000000,
                     "default": null
                   },
                   "budgetCurrency": {
@@ -134527,7 +134632,7 @@
                                   "type": "integer",
                                   "minimum": 0,
                                   "exclusiveMinimum": true,
-                                  "maximum": 9007199254740991
+                                  "maximum": 9000000000000
                                 },
                                 "currency": {
                                   "type": "string",
@@ -134691,7 +134796,7 @@
                                       "type": "integer",
                                       "minimum": 0,
                                       "exclusiveMinimum": true,
-                                      "maximum": 9007199254740991
+                                      "maximum": 9000000000000
                                     },
                                     "currency": {
                                       "type": "string",
@@ -134778,7 +134883,7 @@
                                   "type": "integer",
                                   "minimum": 0,
                                   "exclusiveMinimum": true,
-                                  "maximum": 9007199254740991
+                                  "maximum": 9000000000000
                                 },
                                 "currency": {
                                   "type": "string",
@@ -221280,7 +221385,7 @@
           "Admin - Products"
         ],
         "summary": "Create a product",
-        "description": "Create the complete product atomically. Discover categoryId with dashboard.categories.form_options and attributeId with dashboard.attributes.list_summaries. Media must first be committed through dashboard.media.upload_initiate, upload_part, and upload_complete. Product-media IDs (pmed_*) are caller-local association IDs; option/value/variant draft IDs only correlate this request. Each variant selectedOptionValueIds must follow option order, and variant imageId references a pmed_* association rather than a media_* asset.",
+        "description": "Create the complete product atomically. Discover categoryId with dashboard.categories.form_options and attributeId with dashboard.attributes.list_summaries. Media must first be committed through dashboard.media.upload_initiate, upload_part, and upload_complete (or `scalius media upload`). Each media[] item names its file by mediaId, the id the upload returns; its attachment id (pmed_*) is optional and only needed when a variant's imageId names that image (variant imageId is the pmed_* id, never the media file's id); without isPrimary the first item is featured. Option/value/variant draft IDs only correlate this request. Each variant selectedOptionValueIds must follow option order.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -221299,7 +221404,7 @@
                   "price": {
                     "type": "number",
                     "minimum": 0,
-                    "maximum": 99999999
+                    "maximum": 9000000000000
                   },
                   "categoryId": {
                     "type": "string",
@@ -221331,7 +221436,7 @@
                     "type": "number",
                     "nullable": true,
                     "minimum": 0,
-                    "maximum": 99999999
+                    "maximum": 9000000000000
                   },
                   "freeDelivery": {
                     "type": "boolean"
@@ -221380,13 +221485,15 @@
                           "type": "string",
                           "minLength": 10,
                           "maxLength": 80,
-                          "pattern": "^pmed_[A-Za-z0-9_-]+$"
+                          "pattern": "^pmed_[A-Za-z0-9_-]+$",
+                          "description": "Optional pmed_ id of your choosing, for a SKU's imageId to name this attachment. Omit it and one is made."
                         },
                         "mediaId": {
                           "type": "string",
                           "minLength": 8,
                           "maxLength": 160,
-                          "pattern": "^[A-Za-z0-9_-]+$"
+                          "pattern": "^[A-Za-z0-9_-]+$",
+                          "description": "The media file's id: the id a media upload or URL import returns."
                         },
                         "altText": {
                           "type": "string",
@@ -221394,17 +221501,16 @@
                           "maxLength": 500
                         },
                         "isPrimary": {
-                          "type": "boolean"
+                          "type": "boolean",
+                          "description": "The featured image. Omit on every item and the first is featured."
                         }
                       },
                       "required": [
-                        "id",
-                        "mediaId",
-                        "altText",
-                        "isPrimary"
+                        "mediaId"
                       ]
                     },
-                    "maxItems": 250
+                    "maxItems": 250,
+                    "default": []
                   },
                   "attributes": {
                     "type": "array",
@@ -221498,7 +221604,7 @@
                             "price": {
                               "type": "number",
                               "minimum": 0,
-                              "maximum": 99999999,
+                              "maximum": 9000000000000,
                               "description": "Added to one unit's price when the buyer uses this input, in major units."
                             },
                             "options": {
@@ -221519,7 +221625,7 @@
                                   "price": {
                                     "type": "number",
                                     "minimum": 0,
-                                    "maximum": 99999999,
+                                    "maximum": 9000000000000,
                                     "description": "Added to one unit's price when the buyer uses this input, in major units."
                                   }
                                 },
@@ -221660,7 +221766,7 @@
                             "price": {
                               "type": "number",
                               "minimum": 0,
-                              "maximum": 99999999
+                              "maximum": 9000000000000
                             },
                             "stock": {
                               "type": "integer",
@@ -221718,7 +221824,7 @@
                               "type": "number",
                               "nullable": true,
                               "minimum": 0,
-                              "maximum": 99999999
+                              "maximum": 9000000000000
                             },
                             "fulfillmentKind": {
                               "type": "string",
@@ -221847,8 +221953,7 @@
                   "freeDelivery",
                   "metaTitle",
                   "metaDescription",
-                  "productCondition",
-                  "media"
+                  "productCondition"
                 ]
               }
             }
@@ -225570,7 +225675,7 @@
                           "price": {
                             "type": "number",
                             "minimum": 0,
-                            "maximum": 99999999
+                            "maximum": 9000000000000
                           },
                           "categoryId": {
                             "type": "string",
@@ -225601,7 +225706,7 @@
                             "type": "number",
                             "nullable": true,
                             "minimum": 0,
-                            "maximum": 99999999
+                            "maximum": 9000000000000
                           },
                           "freeDelivery": {
                             "type": "boolean"
@@ -225733,7 +225838,8 @@
                               "type": "string",
                               "minLength": 8,
                               "maxLength": 160,
-                              "pattern": "^[A-Za-z0-9_-]+$"
+                              "pattern": "^[A-Za-z0-9_-]+$",
+                              "description": "The media file's id: the id a media upload or URL import returns."
                             },
                             "altText": {
                               "type": "string",
@@ -226109,7 +226215,7 @@
                                   "type": "number",
                                   "minimum": 0,
                                   "exclusiveMinimum": true,
-                                  "maximum": 99999999
+                                  "maximum": 9000000000000
                                 },
                                 "label": {
                                   "type": "string",
@@ -227079,7 +227185,7 @@
                   "price": {
                     "type": "number",
                     "minimum": 0,
-                    "maximum": 99999999
+                    "maximum": 9000000000000
                   },
                   "categoryId": {
                     "type": "string",
@@ -227111,7 +227217,7 @@
                     "type": "number",
                     "nullable": true,
                     "minimum": 0,
-                    "maximum": 99999999
+                    "maximum": 9000000000000
                   },
                   "freeDelivery": {
                     "type": "boolean"
@@ -227167,7 +227273,8 @@
                           "type": "string",
                           "minLength": 8,
                           "maxLength": 160,
-                          "pattern": "^[A-Za-z0-9_-]+$"
+                          "pattern": "^[A-Za-z0-9_-]+$",
+                          "description": "The media file's id: the id a media upload or URL import returns."
                         },
                         "altText": {
                           "type": "string",
@@ -227279,7 +227386,7 @@
                             "price": {
                               "type": "number",
                               "minimum": 0,
-                              "maximum": 99999999,
+                              "maximum": 9000000000000,
                               "description": "Added to one unit's price when the buyer uses this input, in major units."
                             },
                             "options": {
@@ -227300,7 +227407,7 @@
                                   "price": {
                                     "type": "number",
                                     "minimum": 0,
-                                    "maximum": 99999999,
+                                    "maximum": 9000000000000,
                                     "description": "Added to one unit's price when the buyer uses this input, in major units."
                                   }
                                 },
@@ -227458,7 +227565,7 @@
                             "price": {
                               "type": "number",
                               "minimum": 0,
-                              "maximum": 99999999
+                              "maximum": 9000000000000
                             },
                             "stock": {
                               "type": "integer",
@@ -227516,7 +227623,7 @@
                               "type": "number",
                               "nullable": true,
                               "minimum": 0,
-                              "maximum": 99999999
+                              "maximum": 9000000000000
                             },
                             "fulfillmentKind": {
                               "type": "string",
@@ -227760,7 +227867,7 @@
                               "type": "number",
                               "minimum": 0,
                               "exclusiveMinimum": true,
-                              "maximum": 99999999
+                              "maximum": 9000000000000
                             },
                             "label": {
                               "type": "string",
@@ -228538,7 +228645,7 @@
                   "price": {
                     "type": "number",
                     "minimum": 0,
-                    "maximum": 99999999
+                    "maximum": 9000000000000
                   },
                   "stock": {
                     "type": "integer",
@@ -228583,7 +228690,7 @@
                     "type": "number",
                     "nullable": true,
                     "minimum": 0,
-                    "maximum": 99999999
+                    "maximum": 9000000000000
                   },
                   "fulfillmentKind": {
                     "type": "string",
@@ -229327,7 +229434,7 @@
                   "price": {
                     "type": "number",
                     "minimum": 0,
-                    "maximum": 99999999
+                    "maximum": 9000000000000
                   },
                   "stock": {
                     "type": "integer",
@@ -229373,7 +229480,7 @@
                     "type": "number",
                     "nullable": true,
                     "minimum": 0,
-                    "maximum": 99999999
+                    "maximum": 9000000000000
                   },
                   "fulfillmentKind": {
                     "type": "string",
@@ -230023,7 +230130,7 @@
                         "price": {
                           "type": "number",
                           "minimum": 0,
-                          "maximum": 99999999
+                          "maximum": 9000000000000
                         },
                         "stock": {
                           "type": "integer",
@@ -230081,7 +230188,7 @@
                           "type": "number",
                           "nullable": true,
                           "minimum": 0,
-                          "maximum": 99999999
+                          "maximum": 9000000000000
                         },
                         "fulfillmentKind": {
                           "type": "string",
@@ -248201,6 +248308,68 @@
                         },
                         "expiresAt": {
                           "type": "string"
+                        },
+                        "requester": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "client": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "oauth",
+                                "pat",
+                                "cli"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "client",
+                            "kind"
+                          ]
+                        },
+                        "targets": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "product",
+                                  "variant",
+                                  "order",
+                                  "customer"
+                                ]
+                              },
+                              "total": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "names": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "matching": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "total",
+                              "names",
+                              "matching"
+                            ]
+                          }
                         }
                       },
                       "required": [
@@ -248208,7 +248377,9 @@
                         "status",
                         "summary",
                         "operationIds",
-                        "expiresAt"
+                        "expiresAt",
+                        "requester",
+                        "targets"
                       ]
                     }
                   },
@@ -250719,6 +250890,110 @@
         }
       }
     },
+    "/api/v1/admin/apps/storefront-problems": {
+      "get": {
+        "operationId": "dashboard.apps.storefront_problems_list",
+        "tags": [
+          "Admin - Apps"
+        ],
+        "summary": "List apps whose storefront parts the store recently drew without",
+        "description": "The newest storefront render problem of each installed app with storefront parts in the last 24 hours: a section, block or skin a page was drawn without (unavailable, late, failed or refused), as written in the app's log. Pages never fail because of it; the store draws its own instead.",
+        "responses": {
+          "200": {
+            "description": "Recent storefront problems, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "problems": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/AppStorefrontProblem"
+                          }
+                        }
+                      },
+                      "required": [
+                        "problems"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app's section, block or design does not show on the storefront: which apps' parts the store drew without in the last day, and why.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "anyOf",
+          "permissions": [
+            "apps.view",
+            "settings.theme.edit"
+          ]
+        }
+      }
+    },
     "/api/v1/admin/apps/registry": {
       "get": {
         "operationId": "dashboard.apps.registry_list",
@@ -252290,6 +252565,171 @@
         "x-scalius-rbac": {
           "type": "permission",
           "permission": "apps.manage"
+        }
+      }
+    },
+    "/api/v1/admin/apps/removed-data/{id}/hand-over": {
+      "post": {
+        "operationId": "dashboard.apps.removed_data_hand_over",
+        "tags": [
+          "Admin - Apps"
+        ],
+        "summary": "Hand a removed app's data over to another key",
+        "description": "Super Admin in the dashboard only (never an agent or an app). Data an uninstall kept belongs to the key that signed the release that kept it, and only that key's release reclaims it. This lets a release of the same app id with another key, or a move between a signed upload and the store's own bundled or unsigned code (signerKeyId null), reclaim everything listed, settings included: that release's code can then read and change it. A bundled release waiting for it installs at once. Refused while the app is installed, or when the group changed since the revision read.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$",
+              "description": "The removed app's id (vendor.name)."
+            },
+            "required": true,
+            "description": "The removed app's id (vendor.name).",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "The group's revision from dashboard.apps.removed_data_list."
+                  },
+                  "signerKeyId": {
+                    "type": "string",
+                    "nullable": true,
+                    "pattern": "^[0-9a-f]{16}$",
+                    "description": "The key that may take the data: the waiting release's signer (the key id an upload refusal names as releaseSigner), or null for bundled or unsigned code."
+                  }
+                },
+                "required": [
+                  "expectedRevision",
+                  "signerKeyId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Handed over",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "description": "The group's new revision (0: the store kept no record, so any release reclaims it already)."
+                        },
+                        "installed": {
+                          "type": "boolean",
+                          "description": "Whether a bundled release of this app was waiting and is now installed with the data."
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "revision",
+                        "installed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "excluded",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "security",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 4096,
+          "maxRequestBytes": 4096,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Letting another release's code read and change an app's kept data is a Super Admin's trust decision in the dashboard, like trusting a developer key.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "unmapped"
         }
       }
     },
@@ -265658,19 +266098,19 @@
                               "price": {
                                 "type": "number",
                                 "minimum": 0,
-                                "maximum": 99999999
+                                "maximum": 9000000000000
                               },
                               "compareAtPrice": {
                                 "type": "number",
                                 "nullable": true,
                                 "minimum": 0,
-                                "maximum": 99999999
+                                "maximum": 9000000000000
                               },
                               "cost": {
                                 "type": "number",
                                 "nullable": true,
                                 "minimum": 0,
-                                "maximum": 99999999
+                                "maximum": 9000000000000
                               },
                               "stock": {
                                 "type": "integer",
@@ -276954,6 +277394,7 @@
         "operationIds": [
           "dashboard.apps.list",
           "dashboard.apps.surfaces",
+          "dashboard.apps.storefront_problems_list",
           "dashboard.apps.get",
           "dashboard.apps.features_list",
           "dashboard.apps.feature_disable",
@@ -278400,7 +278841,8 @@
         "title": "Product status counts",
         "summary": "Read active, draft, and trashed product counts.",
         "examples": [
-          "How many active, draft, and trashed products do I have?"
+          "How many active, draft, and trashed products do I have?",
+          "How many products do we have?"
         ],
         "tags": [
           "catalog",
@@ -281908,6 +282350,14 @@
           "mode": "curated",
           "workflowIds": [
             "dashboard.apps-install"
+          ]
+        },
+        {
+          "operationId": "dashboard.apps.storefront_problems_list",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.apps-manage"
           ]
         },
         {

@@ -5215,6 +5215,16 @@ export type AppProviderEntry = {
     icon: string | null;
 };
 
+export type AppStorefrontProblem = {
+    id: string;
+    message: string;
+    kind: 'section' | 'component' | 'skin' | null;
+    type: string | null;
+    target: string | null;
+    reason: 'unavailable' | 'late' | 'error' | 'refused' | 'missing' | null;
+    at: string;
+};
+
 export type RegistryState = {
     id: string;
     name: string;
@@ -5439,6 +5449,11 @@ export type AppDetail = AppSummary & {
             type: string;
             name: string;
             targets: Array<'header.actions' | 'product.buy_box.before' | 'product.buy_box.after' | 'product.below' | 'footer.columns' | 'product_card.badges' | 'product_card.meta' | 'page'>;
+        }>;
+        skins: Array<{
+            id: string;
+            name: string;
+            target: string;
         }>;
         scripts: Array<{
             src: string;
@@ -5697,9 +5712,21 @@ export type RemovedAppData = {
      */
     removedAt: string | null;
     /**
-     * Send it back as expectedRevision to delete this data (0: the store kept no record of the removal).
+     * Send it back as expectedRevision to delete or hand over this data (0: the store kept no record of the removal).
      */
     revision: number;
+    /**
+     * The key the data belongs to: the signer of the release that kept it (its fingerprint is this id in groups of four). null: unsigned or bundled code, or no record. Only a release signed with this key reclaims the data on its own.
+     */
+    signerKeyId: string | null;
+    /**
+     * A release of this app in this deployment's own code that cannot install while the data belongs to another key. It installs once the data is deleted or handed over to it (signerKeyId null).
+     */
+    waitingRelease: {
+        source: 'bundled';
+        version: string;
+        signerKeyId: unknown;
+    } | null;
     objectTypes: number;
     /**
      * Entries of its object types.
@@ -8740,7 +8767,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 pages: Array<'all' | 'home' | 'product' | 'listing'>;
             }>;
             /**
-             * Active apps with storefront components (docs/STOREFRONT-COMPONENTS.md): the sections, components and skins their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts.
+             * Active apps with storefront components (packages/plugin-sdk/docs/storefront.md): the sections, components and skins their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts.
              */
             appExtensions: Array<{
                 pluginId: string;
@@ -62213,11 +62240,20 @@ export type PostApiV1AdminProductsData = {
          * Omit to derive the web address from the name; a taken one gets a -2, -3… suffix.
          */
         slug?: string;
-        media: Array<{
-            id: string;
+        media?: Array<{
+            /**
+             * Optional pmed_ id of your choosing, for a SKU's imageId to name this attachment. Omit it and one is made.
+             */
+            id?: string;
+            /**
+             * The media file's id: the id a media upload or URL import returns.
+             */
             mediaId: string;
-            altText: string | null;
-            isPrimary: boolean;
+            altText?: string | null;
+            /**
+             * The featured image. Omit on every item and the first is featured.
+             */
+            isPrimary?: boolean;
         }>;
         attributes?: Array<{
             attributeId: string;
@@ -63425,6 +63461,9 @@ export type PatchApiV1AdminProductsByIdSectionsBySectionData = {
         expectedAggregateRevision: number;
         media: Array<{
             id: string;
+            /**
+             * The media file's id: the id a media upload or URL import returns.
+             */
             mediaId: string;
             altText: string | null;
             isPrimary: boolean;
@@ -63814,6 +63853,9 @@ export type PutApiV1AdminProductsByIdData = {
         slug: string;
         media: Array<{
             id: string;
+            /**
+             * The media file's id: the id a media upload or URL import returns.
+             */
             mediaId: string;
             altText: string | null;
             isPrimary: boolean;
@@ -70161,6 +70203,17 @@ export type GetApiV1AdminAgentAccessApprovalsByApprovalIdResponses = {
             summary: string;
             operationIds: Array<string>;
             expiresAt: string;
+            requester: {
+                name: string;
+                client: string | null;
+                kind: 'oauth' | 'pat' | 'cli';
+            } | null;
+            targets: Array<{
+                kind: 'product' | 'variant' | 'order' | 'customer';
+                total: number;
+                names: Array<string>;
+                matching: boolean;
+            }>;
         };
     };
 };
@@ -70858,6 +70911,40 @@ export type GetApiV1AdminAppsSurfacesResponses = {
 
 export type GetApiV1AdminAppsSurfacesResponse = GetApiV1AdminAppsSurfacesResponses[keyof GetApiV1AdminAppsSurfacesResponses];
 
+export type GetApiV1AdminAppsStorefrontProblemsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/apps/storefront-problems';
+};
+
+export type GetApiV1AdminAppsStorefrontProblemsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+};
+
+export type GetApiV1AdminAppsStorefrontProblemsError = GetApiV1AdminAppsStorefrontProblemsErrors[keyof GetApiV1AdminAppsStorefrontProblemsErrors];
+
+export type GetApiV1AdminAppsStorefrontProblemsResponses = {
+    /**
+     * Recent storefront problems, newest first
+     */
+    200: {
+        success: true;
+        data: {
+            problems: Array<AppStorefrontProblem>;
+        };
+    };
+};
+
+export type GetApiV1AdminAppsStorefrontProblemsResponse = GetApiV1AdminAppsStorefrontProblemsResponses[keyof GetApiV1AdminAppsStorefrontProblemsResponses];
+
 export type GetApiV1AdminAppsRegistryData = {
     body?: never;
     path?: never;
@@ -71404,6 +71491,70 @@ export type PostApiV1AdminAppsRemovedDataByIdDeleteResponses = {
 };
 
 export type PostApiV1AdminAppsRemovedDataByIdDeleteResponse = PostApiV1AdminAppsRemovedDataByIdDeleteResponses[keyof PostApiV1AdminAppsRemovedDataByIdDeleteResponses];
+
+export type PostApiV1AdminAppsRemovedDataByIdHandOverData = {
+    body: {
+        /**
+         * The group's revision from dashboard.apps.removed_data_list.
+         */
+        expectedRevision: number;
+        /**
+         * The key that may take the data: the waiting release's signer (the key id an upload refusal names as releaseSigner), or null for bundled or unsigned code.
+         */
+        signerKeyId: string | null;
+    };
+    path: {
+        /**
+         * The removed app's id (vendor.name).
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/apps/removed-data/{id}/hand-over';
+};
+
+export type PostApiV1AdminAppsRemovedDataByIdHandOverErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+};
+
+export type PostApiV1AdminAppsRemovedDataByIdHandOverError = PostApiV1AdminAppsRemovedDataByIdHandOverErrors[keyof PostApiV1AdminAppsRemovedDataByIdHandOverErrors];
+
+export type PostApiV1AdminAppsRemovedDataByIdHandOverResponses = {
+    /**
+     * Handed over
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            /**
+             * The group's new revision (0: the store kept no record, so any release reclaims it already).
+             */
+            revision: number;
+            /**
+             * Whether a bundled release of this app was waiting and is now installed with the data.
+             */
+            installed: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminAppsRemovedDataByIdHandOverResponse = PostApiV1AdminAppsRemovedDataByIdHandOverResponses[keyof PostApiV1AdminAppsRemovedDataByIdHandOverResponses];
 
 export type GetApiV1AdminAppsByIdData = {
     body?: never;

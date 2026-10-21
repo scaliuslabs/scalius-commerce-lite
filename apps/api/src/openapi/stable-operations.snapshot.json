@@ -5599,7 +5599,7 @@
           "nullable": true,
           "minimum": 0,
           "exclusiveMinimum": true,
-          "maximum": 9007199254740991,
+          "maximum": 9000000000000,
           "default": null
          },
          "budgetCurrency": {
@@ -5654,7 +5654,7 @@
                  "type": "integer",
                  "minimum": 0,
                  "exclusiveMinimum": true,
-                 "maximum": 9007199254740991
+                 "maximum": 9000000000000
                 },
                 "currency": {
                  "type": "string",
@@ -5818,7 +5818,7 @@
                    "type": "integer",
                    "minimum": 0,
                    "exclusiveMinimum": true,
-                   "maximum": 9007199254740991
+                   "maximum": 9000000000000
                   },
                   "currency": {
                    "type": "string",
@@ -5905,7 +5905,7 @@
                  "type": "integer",
                  "minimum": 0,
                  "exclusiveMinimum": true,
-                 "maximum": 9007199254740991
+                 "maximum": 9000000000000
                 },
                 "currency": {
                  "type": "string",
@@ -6321,7 +6321,7 @@
           "nullable": true,
           "minimum": 0,
           "exclusiveMinimum": true,
-          "maximum": 9007199254740991,
+          "maximum": 9000000000000,
           "default": null
          },
          "budgetCurrency": {
@@ -6376,7 +6376,7 @@
                  "type": "integer",
                  "minimum": 0,
                  "exclusiveMinimum": true,
-                 "maximum": 9007199254740991
+                 "maximum": 9000000000000
                 },
                 "currency": {
                  "type": "string",
@@ -6540,7 +6540,7 @@
                    "type": "integer",
                    "minimum": 0,
                    "exclusiveMinimum": true,
-                   "maximum": 9007199254740991
+                   "maximum": 9000000000000
                   },
                   "currency": {
                    "type": "string",
@@ -6627,7 +6627,7 @@
                  "type": "integer",
                  "minimum": 0,
                  "exclusiveMinimum": true,
-                 "maximum": 9007199254740991
+                 "maximum": 9000000000000
                 },
                 "currency": {
                  "type": "string",
@@ -10182,7 +10182,7 @@
            "amountMinor": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 9007199254740991,
+            "maximum": 9000000000000,
             "description": "What the delivery cost, in minor units of the order's currency."
            }
           },
@@ -10192,7 +10192,7 @@
          "cashReceivedMinor": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 9007199254740991,
+          "maximum": 9000000000000,
           "description": "Cash on delivery taken in the same action (`pickup`/`service`), in minor units of the order's currency. Must equal the balance due."
          }
         },
@@ -10375,8 +10375,8 @@
          },
          "amountMinor": {
           "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
+          "minimum": -9000000000000,
+          "maximum": 9000000000000
          },
          "reason": {
           "type": "string",
@@ -10458,7 +10458,7 @@
           "type": "integer",
           "minimum": 0,
           "exclusiveMinimum": true,
-          "maximum": 9007199254740991,
+          "maximum": 9000000000000,
           "description": "Its value, in minor units of the store currency."
          },
          "expiresAt": {
@@ -11276,7 +11276,7 @@
             "unitPriceMinor": {
              "type": "integer",
              "minimum": 0,
-             "maximum": 9007199254740991,
+             "maximum": 9000000000000,
              "description": "A unit price set by hand (a quote, an agreed renewal price), in minor units of the store currency at its price increment; it replaces the catalogue price and the order's timeline records it."
             },
             "properties": {
@@ -11489,13 +11489,13 @@
          "shippingMinor": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 9007199254740991,
+          "maximum": 9000000000000,
           "description": "The delivery charge, in minor units of the store currency."
          },
          "discountMinor": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 9007199254740991,
+          "maximum": 9000000000000,
           "description": "An order discount set by hand, in minor units of the store currency."
          },
          "paymentMethod": {
@@ -12346,7 +12346,7 @@
          "amountMinor": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 9007199254740991,
+          "maximum": 9000000000000,
           "description": "What to charge, in minor units of the order's `currency`. Default: its `balanceDueMinor`; another amount must be one the order takes (a deposit)."
          },
          "capture": {
@@ -12488,7 +12488,7 @@
          "amountMinor": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 9007199254740991,
+          "maximum": 9000000000000,
           "description": "What was received, in minor units of the order's `currency`; at most its `balanceDueMinor`."
          },
          "via": {
@@ -13256,7 +13256,7 @@
                 "type": "integer",
                 "minimum": 0,
                 "exclusiveMinimum": true,
-                "maximum": 9007199254740991,
+                "maximum": 9000000000000,
                 "description": "The price of one unit, in minor units of the list's currency, at its price increment."
                },
                "compareAtMinor": {
@@ -13264,7 +13264,7 @@
                 "nullable": true,
                 "minimum": 0,
                 "exclusiveMinimum": true,
-                "maximum": 9007199254740991,
+                "maximum": 9000000000000,
                 "description": "The struck-through price, above the amount; null for none."
                },
                "minQuantity": {
@@ -13628,7 +13628,7 @@
                "priceMinor": {
                 "type": "integer",
                 "minimum": 0,
-                "maximum": 9007199254740991,
+                "maximum": 9000000000000,
                 "description": "Its price, in minor units of the store currency at its price increment."
                },
                "optionValues": {
@@ -14238,7 +14238,7 @@
             "priceMinor": {
              "type": "integer",
              "minimum": 0,
-             "maximum": 9007199254740991,
+             "maximum": 9000000000000,
              "description": "Its price, in minor units of the store currency at its price increment."
             },
             "optionValues": {
@@ -14657,7 +14657,7 @@
          "priceMinor": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 9007199254740991,
+          "maximum": 9000000000000,
           "description": "A product without options: its price, in minor units of the store currency. A product with options prices each SKU (`variants.bulk_set_prices`, `variants.update`)."
          },
          "mediaIds": {
@@ -14762,7 +14762,7 @@
          "amountMinor": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 9007199254740991,
+          "maximum": 9000000000000,
           "description": "What goes back, in minor units of the order's `currency`; at most what was paid less what was refunded."
          },
          "lines": {
@@ -15651,7 +15651,7 @@
             "expectedPriceMinor": {
              "type": "integer",
              "minimum": 0,
-             "maximum": 9007199254740991,
+             "maximum": 9000000000000,
              "description": "The price you read; a SKU whose price changed since is left alone (a failure)."
             }
            },
@@ -15709,7 +15709,7 @@
              "amountMinor": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 9007199254740991
+              "maximum": 9000000000000
              }
             },
             "required": [
@@ -15750,8 +15750,8 @@
              },
              "amountMinor": {
               "type": "integer",
-              "minimum": -9007199254740991,
-              "maximum": 9007199254740991
+              "minimum": -9000000000000,
+              "maximum": 9000000000000
              }
             },
             "required": [
@@ -15973,7 +15973,7 @@
          "priceMinor": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 9007199254740991,
+          "maximum": 9000000000000,
           "description": "Its price, in minor units of the store currency at its price increment."
          },
          "optionValues": {
@@ -16360,7 +16360,7 @@
          "priceMinor": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 9007199254740991,
+          "maximum": 9000000000000,
           "description": "Its price, in minor units of the store currency. On a product sold as one SKU this is the product's price."
          },
          "optionValues": {
