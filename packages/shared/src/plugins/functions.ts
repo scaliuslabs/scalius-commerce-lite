@@ -126,7 +126,9 @@ export const functionCartSchema = z.object({
     country: z.string().length(2).nullable(),
   }).strict(),
   /**
-   * Validated checkout attributes the buyer entered, by `<app id>.<key>`.
+   * Validated checkout attributes the buyer entered, by `<app id>.<key>`:
+   * only the receiving app's own (the host drops every other app's answers
+   * before a function or extension runs).
    */
   attributes: checkoutAttributesSchema,
 }).strict();

@@ -370,7 +370,8 @@ export interface PluginRouteResponse {
 
 // packages/plugin-sdk/src/fixtures.d.ts
 import type { EventTopic } from "@scalius/shared/events";
-import type { FunctionCart, FunctionReads, PluginFunctionInput } from "@scalius/shared/plugins";
+import { type StorefrontUiSlot } from "@scalius/shared/plugins/storefront-protocol";
+import type { BuyerUiInput, FunctionCart, FunctionReads, PluginFunctionInput } from "@scalius/shared/plugins";
 import type { PluginEvent, PluginMoney, PluginRouteRequest } from "./context";
 declare function event<T extends EventTopic>(topic: T, overrides?: Partial<PluginEvent<T>>): PluginEvent<T>;
 declare function cartLine(overrides?: Partial<FunctionCart["lines"][number]>): FunctionCart["lines"][number];
@@ -385,11 +386,16 @@ declare function readRecord<T extends Record<string, unknown>>(data: T, revision
     data: T;
 };
 declare function adminRouteRequest(overrides?: Partial<PluginRouteRequest>): PluginRouteRequest;
+type StorefrontExtensionInputOverrides = Partial<Omit<BuyerUiInput, "target" | "cart">> & {
+    cart?: Partial<FunctionCart> | null;
+};
+declare function storefrontExtensionInput(target: StorefrontUiSlot, overrides?: StorefrontExtensionInputOverrides): BuyerUiInput;
 export declare const fixtures: {
     event: typeof event;
     cartLine: typeof cartLine;
     cart: typeof cart;
     checkoutDiscountsInput: typeof checkoutDiscountsInput;
+    storefrontExtensionInput: typeof storefrontExtensionInput;
     money: typeof money;
     readRecord: typeof readRecord;
     adminRouteRequest: typeof adminRouteRequest;

@@ -5,9 +5,11 @@
 //   harness.deliver(fixtures.event("order.created", { resource: { type: "order", id: "o1" } }));
 //   harness.fn("checkout.discounts", fixtures.checkoutDiscountsInput({ cart: { subtotalMinor: 150_000 } }));
 //   harness.route("admin", "overview", fixtures.adminRouteRequest({ query: { cursor: "abc" } }));
+//   harness.extension(fixtures.storefrontExtensionInput("checkout.contact.after", { attributes: { gift_message: "Hi" } }));
 
 import type { EventTopic } from "@scalius/shared/events";
-import type { FunctionCart, FunctionReads, PluginFunctionInput } from "@scalius/shared/plugins";
+import { STOREFRONT_UI_SLOT_PAGES, type StorefrontUiSlot } from "@scalius/shared/plugins/storefront-protocol";
+import type { BuyerUiInput, FunctionCart, FunctionReads, PluginFunctionInput } from "@scalius/shared/plugins";
 import type { PluginEvent, PluginMoney, PluginRouteRequest } from "./context";
 
 let eventCounter = 0;
@@ -101,4 +103,38 @@ function adminRouteRequest(overrides: Partial<PluginRouteRequest> = {}): PluginR
   };
 }
 
-export const fixtures = { event, cartLine, cart, checkoutDiscountsInput, money, readRecord, adminRouteRequest };
+/** What a storefront extension gets: `attributes` by your own bare keys; `cart` takes the `cart` fixture's overrides. */
+type StorefrontExtensionInputOverrides = Partial<Omit<BuyerUiInput, "target" | "cart">> & { cart?: Partial<FunctionCart> | null };
+
+/**
+ * The input of one storefront extension at a UI slot, as the host sends it
+ * (pass it to `harness.extension`). By the slot's page: a checkout or cart
+ * drawer slot gets a cart (see `cart`), an order slot (`order.confirmation`,
+ * `account.order`) a paid order of the cart fixture's line, and an `account.*`
+ * slot a signed-in customer; the rest are null (a guest's thank-you page).
+ * English, BDT, no answers and no reads unless overridden. `attributes` holds
+ * the buyer's answers to your own checkout attributes by bare key
+ * (`gift_message`); `cart.attributes` the same answers by `<app id>.<key>`.
+ */
+function storefrontExtensionInput(target: StorefrontUiSlot, overrides: StorefrontExtensionInputOverrides = {}): BuyerUiInput {
+  const page = STOREFRONT_UI_SLOT_PAGES[target];
+  const { cart: cartOverrides, ...rest } = overrides;
+  const builtCart = cartOverrides === null ? null
+    : cartOverrides !== undefined || page === "checkout" || page === "cart_drawer" ? cart(cartOverrides ?? {}) : null;
+  return {
+    target,
+    language: "en",
+    locale: "en-BD",
+    currency: "BDT",
+    cart: builtCart,
+    attributes: {},
+    order: page === "order"
+      ? { orderId: "order_test_1", status: "confirmed", paymentStatus: "paid", lines: [{ productId: "prod_1", variantId: "var_1", quantity: 2 }] }
+      : null,
+    customer: target.startsWith("account.") ? { id: "cust_test_1" } : null,
+    reads: {},
+    ...rest,
+  };
+}
+
+export const fixtures = { event, cartLine, cart, checkoutDiscountsInput, storefrontExtensionInput, money, readRecord, adminRouteRequest };
