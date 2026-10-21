@@ -148,7 +148,7 @@ describe("tax regions settings", () => {
     });
     await render(<TaxCollectionCard />);
     await vi.waitFor(() => expect(container.textContent).toContain("Start with one group for all your products."));
-    const start = [...container.querySelectorAll("button")].find((button) => button.textContent === "Create a Standard group")!;
+    const start = [...container.querySelectorAll("button")].find((button) => button.textContent === "Create Standard group")!;
     await act(async () => { start.click(); });
     await vi.waitFor(() => expect(sdk.postApiV1AdminTaxesClasses).toHaveBeenCalledWith({ body: { name: "Standard", isExempt: false } }));
     // The group exists now, so the one-button start is gone and the default group names it.
@@ -156,14 +156,14 @@ describe("tax regions settings", () => {
     expect(container.querySelector("#tax-default-group")?.textContent).toContain("Standard");
   });
 
-  it("keeps what depends on collecting tax switched off until the switch is on", async () => {
+  it("keeps what depends on collecting tax off until Collect tax is ticked", async () => {
     const off = { ...configuration.settings, enabled: false };
     sdk.getApiV1AdminTaxes.mockImplementation(() => envelope({ ...configuration, settings: off }));
     sdk.getApiV1AdminTaxesSettings.mockImplementation(() => envelope({ settings: off }));
     await render(<TaxCollectionCard />);
     await vi.waitFor(() => expect(container.querySelector("#tax-default-group")).not.toBeNull());
-    // The switch itself stays usable; the group, the delivery switch and the checkout name wait.
-    const switches = [...container.querySelectorAll<HTMLButtonElement>("button[role=switch]")];
+    // The checkbox itself stays usable; the group, the delivery checkbox and the checkout name wait.
+    const switches = [...container.querySelectorAll<HTMLButtonElement>("button[role=checkbox]")];
     expect(switches.map((entry) => entry.disabled)).toEqual([false, true]);
     expect(container.querySelector<HTMLButtonElement>("#tax-default-group")!.disabled).toBe(true);
     expect(container.querySelector<HTMLInputElement>("#tax-label")!.disabled).toBe(true);
@@ -171,7 +171,7 @@ describe("tax regions settings", () => {
     await act(async () => { switches[0]!.click(); });
     expect(container.querySelector<HTMLButtonElement>("#tax-default-group")!.disabled).toBe(false);
     expect(container.querySelector<HTMLInputElement>("#tax-label")!.disabled).toBe(false);
-    expect([...container.querySelectorAll<HTMLButtonElement>("button[role=switch]")].map((entry) => entry.disabled)).toEqual([false, false]);
+    expect([...container.querySelectorAll<HTMLButtonElement>("button[role=checkbox]")].map((entry) => entry.disabled)).toEqual([false, false]);
   });
 
   it("shows a country's rates with where each applies, and its places", async () => {

@@ -140,6 +140,7 @@ describe("couriers are apps", () => {
     await openCourier(courierRow(false, false), appCourier({ configured: false, usable: false, missingFields: ["secret"] }));
 
     expect(document.body.textContent).toContain("Complete Acme Parcel's settings: secret.");
-    expect(document.querySelector<HTMLButtonElement>("button[role='switch']")?.disabled).toBe(true);
+    // Saved with the dialog's Save: a checkbox (DESIGN F9).
+    expect(document.querySelector<HTMLButtonElement>("#courier-active")?.disabled).toBe(true);
   });
 });

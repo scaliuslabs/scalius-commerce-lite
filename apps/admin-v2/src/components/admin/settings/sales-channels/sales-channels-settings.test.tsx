@@ -131,7 +131,7 @@ describe("sales channels settings", () => {
 
     act(() => [...container.querySelectorAll("li")][0]!.querySelector("button")!.click());
     await vi.waitFor(() => expect(document.body.textContent).toContain(t("statusLockedStore")));
-    expect(labelled(t("statusOn")).querySelector<HTMLButtonElement>("button[role=switch]")!.disabled).toBe(true);
+    expect((document.getElementById(labelled(t("statusOn")).htmlFor) as HTMLButtonElement).disabled).toBe(true);
     act(() => button(t("cancel")).click());
 
     act(() => [...container.querySelectorAll("li")][1]!.querySelector("button")!.click());

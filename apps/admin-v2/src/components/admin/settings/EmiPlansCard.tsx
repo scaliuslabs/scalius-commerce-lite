@@ -4,7 +4,7 @@ import { getApiV1AdminSettingsEmi, putApiV1AdminSettingsEmi } from "@scalius/api
 import { EMI_MAX_MONTHS, EMI_MAX_PLANS, EMI_MIN_MONTHS } from "@scalius/shared/emi";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { Switch } from "~/components/ui/switch";
+import { SectionEmpty } from "~/components/admin/states/EmptyState";
 import { NumberInput, PercentInput } from "~/components/ui/number-input";
 import { MoneyInput } from "~/components/admin/shared/MoneyInput";
 import { useHasPermission } from "~/contexts/PermissionContext";
@@ -17,6 +17,7 @@ import { useMessages } from "~/i18n";
 import { settingsMessages } from "~/i18n/settings";
 import { emiMessages } from "~/i18n/settings-emi";
 import { SettingsCard, SettingsCardLoading } from "./SettingsPage";
+import { SettingsCheckbox } from "./SettingsCheckbox";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { Field } from "~/components/ui/field";
 
@@ -74,15 +75,16 @@ export function EmiPlansCard() {
 
   return (
     <SettingsCard title={t("title")} description={t("description")}>
-      <label className="flex min-h-11 items-center justify-between gap-4 text-body">
-        <span>
-          <span className="block font-medium">{t("enabled")}</span>
-          <span className="block text-muted-foreground">{t("enabledHelp")}</span>
-        </span>
-        <Switch checked={values.enabled} disabled={!canEdit} onCheckedChange={(on) => setValue("enabled", on)} />
-      </label>
+      <SettingsCheckbox
+        id="emi-enabled"
+        label={t("enabled")}
+        help={t("enabledHelp")}
+        checked={values.enabled}
+        disabled={!canEdit}
+        onCheckedChange={(on) => setValue("enabled", on)}
+      />
       <div className="space-y-3 border-t border-border pt-4">
-        {values.plans.length === 0 ? <p className="text-body text-muted-foreground">{t("noPlans")}</p> : (
+        {values.plans.length === 0 ? <SectionEmpty>{t("noPlans")}</SectionEmpty> : (
           <ul className="divide-y rounded-lg border">
             {values.plans.map((plan, index) => {
               const idFor = (field: string) => `emi-${plan.id}-${field}`;

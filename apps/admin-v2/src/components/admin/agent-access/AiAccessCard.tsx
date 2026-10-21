@@ -212,7 +212,7 @@ function ConnectionRow({
             })}
           />
         </DialogTrigger>
-        <DialogContent className="sm:max-w-xl">
+        <DialogContent className="sm:max-w-160">
           <DialogHeader>
             <DialogTitle>{name}</DialogTitle>
           </DialogHeader>

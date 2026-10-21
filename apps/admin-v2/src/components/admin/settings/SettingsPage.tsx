@@ -37,6 +37,7 @@ export function SettingsPage({
   page,
   title,
   back,
+  status,
   actions,
   readOnly = false,
   children,
@@ -45,6 +46,8 @@ export function SettingsPage({
   /** A sub-page of `page` (e.g. delivery areas under shipping). */
   title?: ReactNode;
   back?: { to: SettingsNavTo; label: string };
+  /** Status badges on the title line (P1). */
+  status?: ReactNode;
   actions?: ReactNode;
   /** Shows the one-line "view only" notice for roles that can't edit. */
   readOnly?: boolean;
@@ -63,6 +66,7 @@ export function SettingsPage({
           backLabel={back?.label ?? t("settings")}
           backOnlyWithoutPanel={!back}
           presence={<SettingsPresence presenceKey={key} />}
+          status={status}
           actions={actions}
         />
         <SaveErrorBanner />
@@ -279,7 +283,7 @@ export function SettingsDialog({
         <>
           <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : requestClose(state))}>
             <DialogTrigger asChild>{trigger}</DialogTrigger>
-            <DialogContent className="sm:max-w-xl">
+            <DialogContent className="sm:max-w-160">
               <DialogHeader>
                 <DialogTitle>{title}</DialogTitle>
                 {description ? <DialogDescription>{description}</DialogDescription> : null}

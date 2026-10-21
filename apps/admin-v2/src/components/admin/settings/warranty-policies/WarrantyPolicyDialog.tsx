@@ -137,7 +137,7 @@ export function WarrantyPolicyDialog({ policy, open, onOpenChange }: {
   return (
     <>
       <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : requestClose())}>
-        <DialogContent className="sm:max-w-xl">
+        <DialogContent className="sm:max-w-160">
           <DialogHeader>
             <DialogTitle>{t(policy ? "editTitle" : "addTitle")}</DialogTitle>
             {policy ? <DialogDescription>{t("editHelp")}</DialogDescription> : null}

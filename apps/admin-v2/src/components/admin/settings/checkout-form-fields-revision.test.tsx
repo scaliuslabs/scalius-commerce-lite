@@ -40,7 +40,7 @@ const ALL_ON = { showOrderNotesField: true, showAreaField: true };
 
 function checkbox(label: string): HTMLButtonElement {
   const row = [...document.querySelectorAll("label")].find((element) => element.textContent === label)!;
-  return row.querySelector<HTMLButtonElement>('[role="checkbox"]')!;
+  return document.getElementById(row.htmlFor) as HTMLButtonElement;
 }
 
 describe("checkout form fields (the two-tab repro)", () => {

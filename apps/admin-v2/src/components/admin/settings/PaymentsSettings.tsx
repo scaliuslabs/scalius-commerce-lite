@@ -737,7 +737,7 @@ export function PaymentOptionsCard() {
         onValueChange={(mode) => setValue("checkoutMode", mode as CheckoutFlow["checkoutMode"])}
       >
         {modes.map(([value, label, description]) => (
-          <label key={value} className="flex min-h-11 items-start gap-3 py-1 text-body">
+          <label key={value} className="flex min-h-11 items-start gap-2 py-1 text-body">
             <span className="flex h-lh items-center"><RadioGroupItem value={value}/></span>
             <span>
               <span className="block font-medium">{t(label)}</span>

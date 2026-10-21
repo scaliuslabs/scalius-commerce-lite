@@ -10,7 +10,6 @@ import {
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { SearchableSelect } from "~/components/ui/searchable-select";
-import { Switch } from "~/components/ui/switch";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { useProviderPortAccess } from "~/lib/provider-port-access";
@@ -35,6 +34,7 @@ import { useSaveBar } from "../shared/SaveBar";
 import { AppProviderSetupButton, ProvidedByChip } from "./AppProviderStatus";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
+import { SettingsCheckbox } from "./SettingsCheckbox";
 import { FieldRow } from "~/components/ui/field";
 
 function refreshCheckout(queryClient: ReturnType<typeof useQueryClient>, key: readonly unknown[]) {
@@ -199,21 +199,14 @@ function CourierForm({ courier }: { courier: DeliveryProviderRecord | null }) {
           />
         </SettingsField>
       </FieldRow>
-      <label className="flex min-h-11 items-center justify-between gap-4 text-body">
-        <span>
-          <span className="block font-medium">{t("courierOn")}</span>
-          {blocked ? (
-            <span className="block text-muted-foreground">
-              {app ? appCourierStatus(t, app) : t("appCourierInactive", { app: courierLabel })}
-            </span>
-          ) : null}
-        </span>
-        <Switch
-          checked={draft.isActive}
-          disabled={!draft.isActive && blocked}
-          onCheckedChange={(isActive) => setDraft({ ...draft, isActive })}
-        />
-      </label>
+      <SettingsCheckbox
+        id="courier-active"
+        label={t("courierOn")}
+        help={blocked ? (app ? appCourierStatus(t, app) : t("appCourierInactive", { app: courierLabel })) : undefined}
+        checked={draft.isActive}
+        disabled={!draft.isActive && blocked}
+        onCheckedChange={(isActive) => setDraft({ ...draft, isActive })}
+      />
       {app ? <AppCourierFields app={app} apiUrl={apiUrl} courierLabel={courierLabel} /> : null}
       <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
         <Button
