@@ -28,7 +28,7 @@ describe("Connect picker", () => {
     try {
       act(() => root.render(<QueryClientProvider client={client}><Harness /></QueryClientProvider>));
       expect(calls.fields).not.toHaveBeenCalled();
-      act(() => container.querySelector<HTMLButtonElement>('button[aria-label="Connect source for Heading"]')!.click());
+      act(() => container.querySelector<HTMLButtonElement>('button[aria-label="Use store data for Heading"]')!.click());
       await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
       expect(calls.fields).toHaveBeenCalledOnce();
       act(() => container.querySelector<HTMLButtonElement>('[role="combobox"]')!.click());

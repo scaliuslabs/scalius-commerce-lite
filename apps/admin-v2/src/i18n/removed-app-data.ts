@@ -9,7 +9,7 @@ import { defineMessages } from "./index";
 export const removedAppDataMessages = defineMessages({
   en: {
     fromRemovedApp: "From a removed app: {app}",
-    title: "Data from removed apps",
+    title: "Data left by uninstalled apps",
     body: "These apps are no longer installed. Their data stays until you reinstall the app, which takes it back, or delete it.",
     objectTypes: "{count, plural, one {# object type} other {# object types}}",
     records: "{count, plural, one {# entry} other {# entries}}",
@@ -27,7 +27,7 @@ export const removedAppDataMessages = defineMessages({
     deletedKept: "Data deleted. {count, plural, one {# trashed item stays} other {# trashed items stay}} because the store must keep it.",
     deleteFailed: "Couldn't delete the data. Nothing changed. Try again.",
     changed: "This data changed since the page loaded, or the app was installed again. Check it and try again.",
-    superAdminOnly: "Only a Super Admin can delete it.",
+    superAdminOnly: "Only the store owner can delete it.",
   },
   bn: {
     fromRemovedApp: "সরিয়ে ফেলা অ্যাপ থেকে: {app}",
@@ -49,6 +49,6 @@ export const removedAppDataMessages = defineMessages({
     deletedKept: "তথ্য ডিলিট হয়েছে। ট্র্যাশের {count}টি আইটেম থেকে গেছে, কারণ স্টোরকে সেগুলো রাখতে হবে।",
     deleteFailed: "তথ্য ডিলিট করা যায়নি। কিছু বদলায়নি। আবার চেষ্টা করুন।",
     changed: "পেজ লোড হওয়ার পর এই তথ্য বদলেছে, বা অ্যাপটি আবার ইনস্টল হয়েছে। দেখে নিয়ে আবার চেষ্টা করুন।",
-    superAdminOnly: "শুধু একজন সুপার অ্যাডমিন এটি ডিলিট করতে পারেন।",
+    superAdminOnly: "শুধু স্টোরের মালিক এটি ডিলিট করতে পারেন।",
   },
 });

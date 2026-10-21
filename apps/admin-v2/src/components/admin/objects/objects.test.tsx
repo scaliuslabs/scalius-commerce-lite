@@ -243,10 +243,10 @@ describe("objects", () => {
     await vi.waitFor(() => expect(container.textContent).toContain("From a removed app: Bazaar demo"));
     // An installed app's type still reads as managed by it.
     expect(container.textContent).toContain("Managed by app");
-    expect(container.textContent).toContain("Data from removed apps");
+    expect(container.textContent).toContain("Data left by uninstalled apps");
     expect(container.textContent).toContain("1 object type, 3 entries, and its settings");
     expect(button("Delete data")).toBeUndefined();
-    expect(container.textContent).toContain("Only a Super Admin can delete it.");
+    expect(container.textContent).toContain("Only the store owner can delete it.");
 
     act(() => root.unmount());
     root = createRoot(container);

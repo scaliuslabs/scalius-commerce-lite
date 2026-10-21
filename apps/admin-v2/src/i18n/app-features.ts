@@ -16,7 +16,7 @@ export const appFeaturesMessages = defineMessages({
     recommended: "Recommended",
     toggleLabel: "Turn {name} on or off",
     activateFirst: "Activate the app first. Then turn on the features you use.",
-    superAdminTurnsOn: "Only a Super Admin can turn a feature on, because it approves new access. You can turn features off.",
+    superAdminTurnsOn: "Only the store owner can turn a feature on, because it approves new access. You can turn features off.",
 
     status_ready: "Ready",
     status_setup: "Needs setup",
@@ -112,7 +112,7 @@ export const appFeaturesMessages = defineMessages({
     recommended: "প্রস্তাবিত",
     toggleLabel: "{name} চালু বা বন্ধ করুন",
     activateFirst: "আগে অ্যাপটি চালু করুন। তারপর যে ফিচারগুলো ব্যবহার করেন সেগুলো চালু করুন।",
-    superAdminTurnsOn: "শুধু একজন সুপার অ্যাডমিন ফিচার চালু করতে পারেন, কারণ এতে নতুন অনুমতি দেওয়া হয়। আপনি ফিচার বন্ধ করতে পারেন।",
+    superAdminTurnsOn: "শুধু স্টোরের মালিক ফিচার চালু করতে পারেন, কারণ এতে নতুন অনুমতি দেওয়া হয়। আপনি ফিচার বন্ধ করতে পারেন।",
 
     status_ready: "প্রস্তুত",
     status_setup: "সেট আপ বাকি",
