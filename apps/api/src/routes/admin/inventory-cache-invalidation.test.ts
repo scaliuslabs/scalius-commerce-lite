@@ -27,7 +27,11 @@ const mocks = vi.hoisted(() => ({
   getProductInventoryLevels: vi.fn(),
   readLocationOnHand: vi.fn(),
   resolveActiveInventoryLocation: vi.fn(),
+  readVariantRepresentation: vi.fn(),
 }));
+
+// The stable stock writes answer the SKU as variants.get reads it.
+vi.mock("../../events/representations", () => ({ readVariantRepresentation: mocks.readVariantRepresentation }));
 
 vi.mock("@scalius/core/modules/inventory", async () => {
   const { z } = await import("@hono/zod-openapi");
@@ -109,6 +113,9 @@ function createTestApp() {
     newStock: 7,
     delta: 2,
   });
+  mocks.readVariantRepresentation.mockImplementation(async (_db, id: string) => ({
+    id, productId: "prod_1", sku: "SKU-1", trackInventory: true, onHand: 7, stockVersion: 2, levels: [], updatedAt: "2026-10-21T00:00:00.000Z",
+  }));
   mocks.adjustStock.mockResolvedValue({
     variantId: "var_1",
     previousStock: 5,
@@ -487,7 +494,7 @@ describe("admin inventory write behavior", () => {
 
     expect(response.status).toBe(200);
     expect(mocks.adjustInventory).toHaveBeenCalledWith(expect.anything(), "var_1", expect.objectContaining({ pool: "preorderStock", delta: 2 }), expect.anything());
-    await expect(response.json()).resolves.toMatchObject({ success: true, data: { variantId: "var_1", previousStock: 5, newStock: 7, delta: 2 } });
+    await expect(response.json()).resolves.toMatchObject({ success: true, data: { variantId: "var_1", previousStock: 5, newStock: 7, delta: 2, variant: { id: "var_1", stockVersion: 2 } } });
 
   });
 

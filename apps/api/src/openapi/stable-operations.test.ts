@@ -12,8 +12,9 @@
 //   3. the snapshot equals the current contract exactly, so an additive
 //      change is reviewed: accept it with `vitest run -u` on this file.
 //
-// The snapshot is keyed by app name (`orders.get`, plugins/app-operations.ts):
-// the one name an app passes to `ctx.api.call`, sealed with its contract.
+// The snapshot is keyed by app name (`orders.get`): the one name an app passes
+// to `ctx.api.call`, from the sealed table `STABLE_APP_OPERATIONS`
+// (`@scalius/shared/plugins/app-operations`), which is also the stable tier.
 //
 // A breaking change needs a new operation (or a new plugin API version), not
 // an edited snapshot. Before the v2 lock a deliberate break (a security fix)
@@ -25,10 +26,11 @@ import { describe, expect, it } from "vitest";
 import { effectivePluginPermissions } from "@scalius/core/modules/plugins";
 import { PLUGIN_SCOPE_NAMES, PROTECTED_FIELD_KEYWORD, isProtectedDataScope, type PluginScope } from "@scalius/shared/plugins";
 import { protectedMarkerCategories } from "@scalius/shared/plugins/protected-data";
-import { eventDataTruncation } from "@scalius/shared/events";
+import { EVENT_REPRESENTATION_SCHEMAS, eventDataTruncation } from "@scalius/shared/events";
 import { AGENT_COMPONENT_SCHEMAS, AGENT_OPERATIONS } from "../generated/agent-operations.gen";
 import { isOperationAvailableToPlugin, pluginRbacSatisfied } from "../plugins/authority";
 import { appOperationName, resolveAppOperation } from "../plugins/app-operations";
+import { STABLE_APP_OPERATIONS, STABLE_APP_OPERATION_NAME, STABLE_OPERATION_IDS } from "@scalius/shared/plugins/app-operations";
 import type { AgentOperationManifestEntry } from "./agent-operation-manifest";
 import { referencedComponentSchemas } from "@scalius/shared/openapi-schema-refs";
 import { inputBreakingChanges, schemaBreakingChanges } from "@scalius/shared/schema-compat";
@@ -277,14 +279,141 @@ function paginationProblems(operations: readonly AgentOperationManifestEntry[], 
     for (const name of query) if (PAGE_PARAMETERS.has(name)) problems.push(`${operation.operationId}: pages by ${name}; take cursor and limit.`);
     const envelope = resolve(operation.outputSchema);
     const data = resolve(((envelope?.properties ?? {}) as Record<string, unknown>).data);
-    const keys = Object.keys((data?.properties ?? {}) as Record<string, unknown>);
-    for (const key of keys) if (PAGE_RESPONSE_KEYS.has(key)) problems.push(`${operation.operationId}: returns ${key}; return nextCursor.`);
+    const properties = (data?.properties ?? {}) as Record<string, unknown>;
+    const keys = Object.keys(properties);
+    // A CMS page resource answers `{ page: PageResource }`: an object is a resource, never a page number.
+    const isResource = (key: string) => resolve(properties[key])?.type === "object";
+    for (const key of keys) if (PAGE_RESPONSE_KEYS.has(key) && !isResource(key)) problems.push(`${operation.operationId}: returns ${key}; return nextCursor.`);
     const pages = query.has("cursor") || keys.includes("nextCursor");
     if (pages && !(query.has("cursor") && query.has("limit") && keys.includes("nextCursor"))) {
       problems.push(`${operation.operationId}: a cursor list takes cursor and limit and returns nextCursor.`);
     }
   }
   return problems;
+}
+
+type InputShape = {
+  parameters?: { name: string; in: string }[];
+  requestBody?: { content?: Record<string, { schema?: unknown }> };
+};
+
+function resolveIn(components: Record<string, unknown>) {
+  const resolve = (node: unknown): SchemaNode | null => {
+    if (!node || typeof node !== "object") return null;
+    const ref = (node as { $ref?: unknown }).$ref;
+    return typeof ref === "string" ? resolve(components[ref.replace("#/components/schemas/", "")]) : node as SchemaNode;
+  };
+  return resolve;
+}
+
+function dataOf(operation: AgentOperationManifestEntry, components: Record<string, unknown>): { raw: unknown; schema: SchemaNode | null } {
+  const resolve = resolveIn(components);
+  const envelope = resolve(operation.outputSchema);
+  const raw = ((envelope?.properties ?? {}) as Record<string, unknown>).data;
+  return { raw, schema: resolve(raw) };
+}
+
+/** A list (`<resource>.list`, `<resource>.list_<noun>`) answers exactly one array and `nextCursor`. */
+function listShapeProblems(operations: readonly AgentOperationManifestEntry[], components: Record<string, unknown> = AGENT_COMPONENT_SCHEMAS as Record<string, unknown>): string[] {
+  const problems: string[] = [];
+  for (const operation of operations) {
+    const name = appOperationName(operation.operationId) ?? operation.operationId;
+    if (!/\.list(?:_[a-z0-9_]+)?$/u.test(name)) continue;
+    const { schema } = dataOf(operation, components);
+    const keys = Object.keys((schema?.properties ?? {}) as Record<string, unknown>).sort();
+    const arrays = keys.filter((key) => resolveIn(components)(((schema!.properties as Record<string, unknown>)[key]))?.type === "array");
+    if (arrays.length !== 1 || keys.length !== 2 || !keys.includes("nextCursor")) problems.push(`${name}: answers { ${keys.join(", ")} }; a list answers { <plural>, nextCursor }.`);
+    const query = new Set(((operation.inputSchema ?? {}) as InputShape).parameters?.filter((parameter) => parameter.in === "query").map((parameter) => parameter.name) ?? []);
+    if (!query.has("cursor") || !query.has("limit")) problems.push(`${name}: a list takes cursor and limit.`);
+  }
+  return problems;
+}
+
+/** A stable answer is an object naming what it holds: never a bare resource, `{}`, `{ message }` or no body. */
+function answerShapeProblems(operations: readonly AgentOperationManifestEntry[], components: Record<string, unknown> = AGENT_COMPONENT_SCHEMAS as Record<string, unknown>): string[] {
+  const problems: string[] = [];
+  for (const operation of operations) {
+    const name = appOperationName(operation.operationId) ?? operation.operationId;
+    if (!operation.outputSchema) {
+      problems.push(`${name}: answers no body.`);
+      continue;
+    }
+    const { raw, schema } = dataOf(operation, components);
+    if (raw && typeof raw === "object" && "$ref" in raw) problems.push(`${name}: answers a bare resource; answer { <singular>: Resource }.`);
+    const keys = Object.keys((schema?.properties ?? {}) as Record<string, unknown>);
+    if (keys.length === 0) problems.push(`${name}: answers an empty object.`);
+    if (keys.length === 1 && keys[0] === "message") problems.push(`${name}: answers prose; answer the resource.`);
+  }
+  return problems;
+}
+
+/** Every key of a schema tree (properties, items, variants), with its path. */
+function keysOf(node: unknown, components: Record<string, unknown>, path: string, refs = new Set<string>()): { key: string; path: string; schema: SchemaNode }[] {
+  const ref = node && typeof node === "object" ? (node as { $ref?: unknown }).$ref : undefined;
+  if (typeof ref === "string") {
+    if (refs.has(ref)) return [];
+    refs = new Set([...refs, ref]);
+  }
+  const schema = resolveIn(components)(node);
+  if (!schema) return [];
+  const out: { key: string; path: string; schema: SchemaNode }[] = [];
+  for (const [key, value] of Object.entries((schema.properties ?? {}) as Record<string, unknown>)) {
+    const child = resolveIn(components)(value);
+    if (child) out.push({ key, path: `${path}.${key}`, schema: child });
+    out.push(...keysOf(value, components, `${path}.${key}`, refs));
+  }
+  if (schema.items) out.push(...keysOf(schema.items, components, `${path}[]`, refs));
+  for (const variant of [...((schema.anyOf ?? []) as unknown[]), ...((schema.oneOf ?? []) as unknown[]), ...((schema.allOf ?? []) as unknown[])]) out.push(...keysOf(variant, components, path, refs));
+  return out;
+}
+
+const RETIRED_PRECONDITIONS = new Set(["expectedVersion", "expectedAggregateRevision", "expectedDraftRevision"]);
+
+function preconditionProblems(operations: readonly AgentOperationManifestEntry[], components: Record<string, unknown> = AGENT_COMPONENT_SCHEMAS as Record<string, unknown>): string[] {
+  const problems: string[] = [];
+  for (const operation of operations) {
+    const name = appOperationName(operation.operationId) ?? operation.operationId;
+    const input = (operation.inputSchema ?? {}) as InputShape;
+    const isDelete = operation.method.toUpperCase() === "DELETE";
+    for (const parameter of input.parameters ?? []) {
+      if (RETIRED_PRECONDITIONS.has(parameter.name)) problems.push(`${name}: takes ${parameter.name}; take expectedRevision.`);
+      if (parameter.name === "expectedRevision" && !isDelete) problems.push(`${name}: takes expectedRevision in the ${parameter.in}; a write takes it in the body.`);
+    }
+    for (const media of Object.values(input.requestBody?.content ?? {})) {
+      for (const { key, path } of keysOf(media.schema, components, "body")) {
+        if (RETIRED_PRECONDITIONS.has(key)) problems.push(`${name}: takes ${path}; take expectedRevision.`);
+        if (key === "expectedRevision" && isDelete && path === "body.expectedRevision") problems.push(`${name}: a DELETE takes expectedRevision in the query.`);
+      }
+    }
+    for (const { key, path } of keysOf(operation.outputSchema, components, "output")) {
+      if (key === "version" || key === "aggregateRevision") problems.push(`${name}: answers ${path}; a resource exposes revision.`);
+    }
+  }
+  return [...new Set(problems)];
+}
+
+const FLAT_ADDRESS_KEYS = /^(shipping|billing)(Address|AddressLine2|Locality|AdminArea|PostalCode|DependentLocality|Company|CountryCode|Name)$|^skipAddressValidation$/u;
+
+function addressProblems(operations: readonly AgentOperationManifestEntry[], components: Record<string, unknown> = AGENT_COMPONENT_SCHEMAS as Record<string, unknown>): string[] {
+  const problems: string[] = [];
+  for (const operation of operations) {
+    const name = appOperationName(operation.operationId) ?? operation.operationId;
+    const input = (operation.inputSchema ?? {}) as InputShape;
+    const trees = [
+      ...Object.values(input.requestBody?.content ?? {}).map((media) => ({ root: "body", schema: media.schema })),
+      { root: "output", schema: operation.outputSchema },
+    ];
+    for (const { root, schema } of trees) {
+      for (const { key, path, schema: node } of keysOf(schema, components, root)) {
+        if (key !== "skipAddressValidation" && FLAT_ADDRESS_KEYS.test(key) && node.type !== "object") problems.push(`${name}: ${path} flattens an address; take a PostalAddress object.`);
+        const fields = Object.keys((node.properties ?? {}) as Record<string, unknown>);
+        if (fields.includes("line1") && fields.some((field) => ["city", "zone", "area", "cityName", "phoneRaw"].includes(field))) {
+          problems.push(`${name}: ${path} carries place ids beside the address lines; they go under placeIds.`);
+        }
+      }
+    }
+  }
+  return [...new Set(problems)];
 }
 
 describe("the stable app API", () => {
@@ -311,7 +440,7 @@ describe("the stable app API", () => {
     ]);
     const PERSON_CONTAINERS = new Set(["customers", "customer", "customerRecord", "addresses", "address", "defaultAddress", "mergedInto", "relatedCustomer"]);
     // The store's own contact details, not a buyer's.
-    const STORE_OWNED = new Set(["dashboard.inventory_locations.list", "dashboard.settings.business_get"]);
+    const STORE_OWNED = new Set(["dashboard.resources.inventory_locations.list", "dashboard.settings.business_get"]);
     // The store's own details inside a buyer document (an invoice's seller block).
     const STORE_OWNED_PATHS = ["data.businessInfo"];
     const resolve = (node: unknown): Record<string, unknown> | null => {
@@ -371,12 +500,20 @@ describe("the stable app API", () => {
     expect([...new Set(unmarked)]).toEqual([]);
   });
 
-  it("names every operation once, by resource and verb, never by the dashboard's route tree", () => {
-    for (const operation of stable) {
-      const name = appOperationName(operation.operationId);
-      expect(name, operation.operationId).toMatch(/^(?!dashboard\.|resources\.)[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/u);
-      expect(resolveAppOperation(name!)?.operationId).toBe(operation.operationId);
+  it("names every operation once, from the sealed table, by resource and a closed-list verb", () => {
+    // The table is the stable tier: every entry is a known stable operation and every stable operation has its entry.
+    const ids = new Set(AGENT_OPERATIONS.map((operation) => operation.operationId));
+    expect(Object.values(STABLE_APP_OPERATIONS).filter((operationId) => !ids.has(operationId))).toEqual([]);
+    expect(stable.map((operation) => operation.operationId).sort()).toEqual([...STABLE_OPERATION_IDS].sort());
+    expect(new Set(Object.values(STABLE_APP_OPERATIONS)).size).toBe(Object.keys(STABLE_APP_OPERATIONS).length);
+    for (const [name, operationId] of Object.entries(STABLE_APP_OPERATIONS)) {
+      expect(name, operationId).toMatch(STABLE_APP_OPERATION_NAME);
+      expect(name, operationId).not.toMatch(/^(dashboard|resources)\./u);
+      expect(appOperationName(operationId)).toBe(name);
+      expect(resolveAppOperation(name)?.operationId).toBe(operationId);
     }
+    // A derived (beta) name never takes a sealed one, and a sealed operation has only its sealed name.
+    expect(resolveAppOperation("orders.fulfillment_void")).toBeNull();
     // Where the dashboard has its own operation beside the resource, the resource owns the name.
     expect(resolveAppOperation("products.create")?.operationId).toBe("dashboard.resources.products.create");
     expect(resolveAppOperation("orders.list")?.operationId).toBe("dashboard.resources.orders.list");
@@ -399,6 +536,22 @@ describe("the stable app API", () => {
 
   it("pages every list one way: cursor and limit in, nextCursor out", () => {
     expect(paginationProblems(stable)).toEqual([]);
+  });
+
+  it("answers every list as { <plural>, nextCursor } and nothing else (audit L9)", () => {
+    expect(listShapeProblems(stable)).toEqual([]);
+  });
+
+  it("answers one shape per kind: a resource under its name, never bare, empty, a message or no body (audit L1)", () => {
+    expect(answerShapeProblems(stable)).toEqual([]);
+  });
+
+  it("has one precondition: expectedRevision, in the body or a DELETE's query, and resources expose revision (audit L2)", () => {
+    expect(preconditionProblems(stable)).toEqual([]);
+  });
+
+  it("has one address shape: place ids only under placeIds, no flattened address fields (audit L3)", () => {
+    expect(addressProblems(stable)).toEqual([]);
   });
 
   it("carries every instant as one ISO 8601 date-time string", () => {
@@ -457,15 +610,30 @@ describe("the stable app API", () => {
     expect([...WITHOUT_REVISION].filter((id) => !unguarded.includes(id))).toEqual([]);
   });
 
-  it("reads each resource in the representation its webhooks carry, where a truncated delivery points", () => {
+  it("points every truncated delivery at a stable read an app can call, by its app name", () => {
     const facts = { orderId: "ord_1", giftCardId: "gc_1", objectType: "custom.x" };
+    // No stable read returns these representations yet: the delivery keeps the id only.
+    const WITHOUT_READ = new Set(["purchase_order", "inventory_transfer", "checkout", "review"]);
+    for (const type of Object.keys(EVENT_REPRESENTATION_SCHEMAS) as (keyof typeof EVENT_REPRESENTATION_SCHEMAS)[]) {
+      const { fetch } = eventDataTruncation(type, "res_1", facts);
+      if (WITHOUT_READ.has(type)) {
+        expect(fetch, type).toBeNull();
+        continue;
+      }
+      expect(fetch, type).not.toBeNull();
+      const operation = resolveAppOperation(fetch!.appOperation);
+      expect(operation?.stability, `${type}: ${fetch!.appOperation} is stable`).toBe("stable");
+      expect(operation!.operationId, type).toBe(fetch!.operationId);
+      const template = new RegExp(`^${operation!.pathTemplate.replace(/\{[^}]+\}/gu, "[^/]+")}$`, "u");
+      expect(fetch!.path, type).toMatch(template);
+    }
     for (const type of ["order", "product", "variant", "customer", "fulfillment", "shipment", "payment"] as const) {
       const { fetch } = eventDataTruncation(type, "res_1", facts);
-      const operation = stable.find((candidate) => candidate.operationId === fetch.operationId);
-      expect(operation, `${type}: ${fetch.operationId} is stable`).toBeDefined();
+      const operation = stable.find((candidate) => candidate.operationId === fetch!.operationId);
+      expect(operation, `${type}: ${fetch!.operationId} is stable`).toBeDefined();
       expect(operation!.operationId.startsWith("dashboard.resources."), type).toBe(true);
       const template = new RegExp(`^${operation!.pathTemplate.replace(/\{[^}]+\}/gu, "[^/]+")}$`, "u");
-      expect(fetch.path, type).toMatch(template);
+      expect(fetch!.path, type).toMatch(template);
       const output = JSON.stringify(operation!.outputSchema);
       expect(output.includes(`#/components/schemas/${type[0]!.toUpperCase()}${type.slice(1)}Resource`), type).toBe(true);
     }

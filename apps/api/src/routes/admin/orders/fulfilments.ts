@@ -21,12 +21,18 @@ import {
     sendOrderNotificationsForStatus,
     sendOrderStatusChangeNotification,
 } from "../../../utils/order-notifications";
-import { successEnvelope, serviceUnavailableResponse } from "../../../schemas/responses";
+import { namedSharedSchema, successEnvelope, serviceUnavailableResponse } from "../../../schemas/responses";
 import {
     fulfillmentTypeSchema,
     orderFulfilmentLineSchema,
 } from "../../../schemas/order-lines";
 import { adminOrderResourceMutationErrorResponses } from "./shared";
+import { orderResourceSchema, readOrderResource } from "../order-resource";
+import { readFulfillmentRepresentation } from "../../../events/representations";
+import { EVENT_REPRESENTATION_SCHEMAS } from "@scalius/shared/events";
+import { NotFoundError } from "../../../utils/api-error";
+
+const FulfillmentResource = namedSharedSchema(EVENT_REPRESENTATION_SCHEMAS.fulfillment, "FulfillmentResource");
 import { notificationSender } from "../../../background/notification-sender";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -39,10 +45,10 @@ const requestKeySchema = z.string().uuid().openapi({
     description: "Retry key: repeating the request returns the first result instead of acting twice.",
 });
 
-/** A repeat is safe (the first result comes back); the version, when sent, must still be the order's. */
-const orderVersionBodySchema = z.object({
-    expectedVersion: z.number().int().min(1).optional().openapi({
-        description: "The order version you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since.",
+/** A repeat is safe (the first result comes back); the revision, when sent, must still be the order's. */
+const orderRevisionBodySchema = z.object({
+    expectedRevision: z.number().int().min(1).optional().openapi({
+        description: "The order `revision` you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since.",
     }),
 }).strict();
 
@@ -219,15 +225,16 @@ const voidFulfilmentRoute = createRoute({
         params: z.object({ id: z.string(), fulfillmentId: z.string() }),
         body: {
             required: true,
-            content: { "application/json": { schema: orderVersionBodySchema } },
+            content: { "application/json": { schema: orderRevisionBodySchema } },
         },
     },
     responses: {
         200: {
-            description: "Fulfilment voided",
+            description: "The voided fulfilment and the order after it",
             content: {
                 "application/json": {
-                    schema: successEnvelope(z.object({
+                    schema: successEnvelope(orderResourceSchema.extend({
+                        fulfillment: FulfillmentResource,
                         orderId: z.string(),
                         fulfillmentId: z.string(),
                         /** Units put back on the unsent list. */
@@ -245,7 +252,7 @@ const voidFulfilmentRoute = createRoute({
 app.openapi(voidFulfilmentRoute, async (c) => {
     const db = c.get("db");
     const { id: orderId, fulfillmentId } = c.req.valid("param");
-    const result = await voidOrderFulfilment(db, orderId, fulfillmentId, { expectedVersion: c.req.valid("json").expectedVersion });
+    const result = await voidOrderFulfilment(db, orderId, fulfillmentId, { expectedVersion: c.req.valid("json").expectedRevision });
     if (!result.replayed) {
         await recordOrderEvent(db, {
             orderId,
@@ -255,7 +262,19 @@ app.openapi(voidFulfilmentRoute, async (c) => {
             data: { quantity: result.quantity },
         });
     }
-    return ok(c, result);
+    const [order, fulfillment] = await Promise.all([
+        readOrderResource(db, orderId),
+        readFulfillmentRepresentation(db, fulfillmentId),
+    ]);
+    if (!fulfillment) throw new NotFoundError("Fulfilment not found");
+    return ok(c, {
+        order,
+        fulfillment,
+        orderId: result.orderId,
+        fulfillmentId: result.fulfillmentId,
+        quantity: result.quantity,
+        replayed: result.replayed,
+    });
 });
 
 const pickupReadyRoute = createRoute({
@@ -268,15 +287,15 @@ const pickupReadyRoute = createRoute({
         params: z.object({ id: z.string() }),
         body: {
             required: true,
-            content: { "application/json": { schema: orderVersionBodySchema } },
+            content: { "application/json": { schema: orderRevisionBodySchema } },
         },
     },
     responses: {
         200: {
-            description: "Order marked ready for pickup",
+            description: "The order, marked ready for pickup",
             content: {
                 "application/json": {
-                    schema: successEnvelope(z.object({
+                    schema: successEnvelope(orderResourceSchema.extend({
                         orderId: z.string(),
                         pickupReadyAt: isoTimestampSchema,
                         replayed: z.boolean(),
@@ -292,7 +311,7 @@ const pickupReadyRoute = createRoute({
 app.openapi(pickupReadyRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
-    const result = await markOrderReadyForPickup(db, orderId, { expectedVersion: c.req.valid("json").expectedVersion });
+    const result = await markOrderReadyForPickup(db, orderId, { expectedVersion: c.req.valid("json").expectedRevision });
     if (!result.replayed) {
         await recordOrderEvent(db, {
             orderId,
@@ -305,6 +324,7 @@ app.openapi(pickupReadyRoute, async (c) => {
     // The row committed with the mark; the scheduled drain sends it if this send fails.
     if (result.notificationOutboxId) await notificationSender(c)([result.notificationOutboxId]);
     return ok(c, {
+        order: await readOrderResource(db, orderId),
         orderId: result.orderId,
         pickupReadyAt: result.pickupReadyAt,
         replayed: result.replayed,

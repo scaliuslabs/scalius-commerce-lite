@@ -170,7 +170,7 @@ function buildMcpServer(api: LocalApi): McpServer {
       const done = api.state.bulkRunReads >= 2;
       return result({
         ok: true,
-        data: { id, kind: "variants.set_prices", status: done ? "done" : "running", dryRun: false, total: 300, processed: done ? 300 : 90, changed: done ? 298 : 90, unchanged: 0, failed: done ? 2 : 0, sample: [], failures: [] },
+        data: { run: { id, kind: "variants.set_prices", status: done ? "done" : "running", dryRun: false, total: 300, processed: done ? 300 : 90, changed: done ? 298 : 90, unchanged: 0, failed: done ? 2 : 0, sample: [], failures: [] } },
         meta: { operationId: args.operationId, status: 200 },
       });
     }
@@ -259,7 +259,7 @@ function buildMcpServer(api: LocalApi): McpServer {
       const large = body.filter !== undefined;
       return result({
         ok: true,
-        data: { id: large ? "bulk_aaaa" : "bulk_bbbb", kind: "variants.set_prices", status: large ? "running" : "done", dryRun: false, total: large ? 300 : 2, processed: large ? 90 : 2, changed: large ? 90 : 2, unchanged: 0, failed: 0, sample: [], failures: [] },
+        data: { run: { id: large ? "bulk_aaaa" : "bulk_bbbb", kind: "variants.set_prices", status: large ? "running" : "done", dryRun: false, total: large ? 300 : 2, processed: large ? 90 : 2, changed: large ? 90 : 2, unchanged: 0, failed: 0, sample: [], failures: [] } },
         meta: { operationId: args.operationId, requestId: "req_bulk", status: large ? 202 : 200, ...(replayed ? { replayed: true } : {}), ...(typeof args.idempotencyKey === "string" ? { idempotencyKey: args.idempotencyKey } : {}) },
       });
     }

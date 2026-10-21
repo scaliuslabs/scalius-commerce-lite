@@ -17,6 +17,10 @@ import { conflictResponse, errorResponses, namedSharedSchema, serviceUnavailable
 import { readOrderRefundRepresentations, readRefundRepresentation } from "../../events/representations";
 import { executeOrderRefund, refundLinesSchema } from "./orders-refund";
 import { idempotencyKeyHeaderSchema, scopedRequestKey } from "./idempotency";
+import { boundedPage, boundedPageQuery, nextCursorSchema } from "../../utils/bounded-page";
+
+/** An order's refunds per page (and by default): an order's refunds are few. */
+const REFUNDS_PAGE_BOUND = 100;
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -98,9 +102,9 @@ app.openapi(createRoute({
   tags: ["App API - Orders"],
   summary: "List an order's refunds",
   description: "Every refund made on the order with a refund command, oldest first: its money in integer minor units of `currency`, its status, the order lines it is for and the refund payments it became.",
-  request: { params: idParam },
+  request: { params: idParam, query: z.object(boundedPageQuery(REFUNDS_PAGE_BOUND)) },
   responses: {
-    200: { description: "The refunds", content: { "application/json": { schema: successEnvelope(z.object({ refunds: z.array(RefundResource) })) } } },
+    200: { description: "The refunds", content: { "application/json": { schema: successEnvelope(z.object({ refunds: z.array(RefundResource), nextCursor: nextCursorSchema })) } } },
     ...readResponses,
   },
 }), async (c) => {
@@ -108,7 +112,15 @@ app.openapi(createRoute({
   const db = c.get("db");
   const order = await db.select({ id: orders.id }).from(orders).where(eq(orders.id, orderId)).get();
   if (!order) throw new NotFoundError("Order not found");
-  return ok(c, { refunds: await readOrderRefundRepresentations(db, orderId) });
+  const query = c.req.valid("query");
+  const page = boundedPage(await readOrderRefundRepresentations(db, orderId), {
+    name: "refunds",
+    cursor: query.cursor,
+    limit: query.limit,
+    id: (refund) => refund.id,
+    sort: { kind: "text", value: (refund) => refund.createdAt },
+  });
+  return ok(c, { refunds: page.items, nextCursor: page.nextCursor });
 });
 
 export { app as adminResourceRefundRoutes };

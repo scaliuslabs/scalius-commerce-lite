@@ -6,6 +6,7 @@ import { nullableIsoTimestampSchema } from "../../schemas/timestamps";
 import {
   createBrand,
   getBrandById,
+  getBrandsByIds,
   listBrandOptions,
   listBrands,
   permanentlyDeleteBrands,
@@ -25,10 +26,11 @@ import {
   updateBrandStatusSchema,
 } from "@scalius/core/modules/brands/browser";
 import { brands as brandsTable } from "@scalius/database/schema";
-import { and, inArray, isNull } from "drizzle-orm";
+import type { Database } from "@scalius/database/client";
+import { inArray } from "drizzle-orm";
 import { planLimits } from "@scalius/shared/plan-limits";
 import { idempotencyKeyHeaderSchema } from "./idempotency";
-import { batchItemKeySchema, batchRequestSchema, batchResultSchema, runBatchCreate, type BatchCreateData, type BatchRef } from "./resources-batch";
+import { batchItemKeySchema, batchRequestSchema, batchResultSchema, runBatchCreate, type BatchCreateData } from "./resources-batch";
 import { ok, created } from "../../utils/api-response";
 import { NotFoundError } from "../../utils/api-error";
 import {
@@ -65,16 +67,26 @@ const brandRowSchema = z.object({
   deletedAt: nullableIsoTimestampSchema,
 });
 
-const brandDetailSchema = brandRowSchema.extend({
+/** A brand as `brands.get` reads it and every brand write answers it (`{ brand }`). */
+const BrandResource = brandRowSchema.extend({
   description: z.string().nullable(),
   metaTitle: z.string().nullable(),
   metaDescription: z.string().nullable(),
   canonicalPath: z.string().nullable(),
   listingTemplate: z.string().nullable(),
   logoMediaId: z.string().nullable(),
-});
+}).openapi("BrandResource");
 
-const mutationResultSchema = z.object({ revision: z.number().int().min(1), status: brandStatusSchema });
+type BrandResourceData = NonNullable<Awaited<ReturnType<typeof getBrandById>>>;
+
+const brandEnvelope = successEnvelope(z.object({ brand: BrandResource }));
+
+/** The brand as it is now, in the trash or not. */
+async function readBrand(db: Database, id: string): Promise<BrandResourceData> {
+  const brand = await getBrandById(db, id);
+  if (!brand) throw new NotFoundError("Brand not found");
+  return brand;
+}
 const claimsBodySchema = z.object({
   brands: z.array(brandRevisionClaimSchema).min(1).max(BRAND_BATCH_LIMIT),
 });
@@ -155,16 +167,14 @@ const getRoute = createRoute({
   responses: {
     200: {
       description: "Brand",
-      content: { "application/json": { schema: successEnvelope(brandDetailSchema) } },
+      content: { "application/json": { schema: brandEnvelope } },
     },
     ...errorResponses,
   },
 });
 
 app.openapi(getRoute, async (c) => {
-  const brand = await getBrandById(c.get("db"), c.req.valid("param").id);
-  if (!brand) throw new NotFoundError("Brand not found");
-  return ok(c, brand);
+  return ok(c, { brand: await readBrand(c.get("db"), c.req.valid("param").id) });
 });
 
 // ── Writes ──
@@ -178,13 +188,8 @@ const createRouteDef = createRoute({
   request: { body: { content: { "application/json": { schema: createBrandSchema } } } },
   responses: {
     201: {
-      description: "Brand created",
-      content: { "application/json": { schema: successEnvelope(z.object({
-        id: z.string(),
-        slug: z.string(),
-        revision: z.number().int().min(1),
-        status: brandStatusSchema,
-      })) } },
+      description: "The new brand",
+      content: { "application/json": { schema: brandEnvelope } },
     },
     ...errorResponses,
     409: conflictResponse,
@@ -192,9 +197,9 @@ const createRouteDef = createRoute({
 });
 
 app.openapi(createRouteDef, async (c) => {
-  const result = await createBrand(c.get("db"), c.req.valid("json"));
-
-  return created(c, result);
+  const db = c.get("db");
+  const { id } = await createBrand(db, c.req.valid("json"));
+  return created(c, { brand: await readBrand(db, id) });
 });
 
 // Batch create (stable app API, resources-batch.ts): many brands per call,
@@ -213,13 +218,13 @@ const batchCreateRoute = createRoute({
   operationId: "dashboard.brands.batch_create",
   tags: TAGS,
   summary: "Create many brands in one call",
-  description: "Creates up to the plan's bound of brands (50 on Paid, fewer on Free), each the body of `brands.create` plus a `key` of yours. Items run in order and one refusal never stops the others: each result is `created`, `replayed` (that key already created its brand earlier; nothing is created again) or `failed` with the refusal's code. Results carry `{ id, slug, revision }`. Send an Idempotency-Key too: a repeat of the whole request returns the first response.",
+  description: "Creates up to the plan's bound of brands (50 on Paid, fewer on Free), each the body of `brands.create` plus a `key` of yours. Items run in order and one refusal never stops the others: each result is `created`, `replayed` (that key already created its brand earlier; nothing is created again) or `failed` with the refusal's code. Each result carries the brand as `brands.get` reads it. Send an Idempotency-Key too: a repeat of the whole request returns the first response.",
   request: {
     headers: idempotencyKeyHeaderSchema,
     body: { required: true, content: { "application/json": { schema: batchCreateBody } } },
   },
   responses: {
-    200: { description: "One result per item, in request order", content: { "application/json": { schema: successEnvelope(batchResultSchema("brand")) } } },
+    200: { description: "One result per item, in request order", content: { "application/json": { schema: successEnvelope(batchResultSchema("brand", BrandResource)) } } },
     ...errorResponses,
     409: conflictResponse,
   },
@@ -237,15 +242,9 @@ app.openapi(batchCreateRoute, async (c) => {
     idPrefix: "brd_",
     create: ({ key: _key, ...body }, id) => createBrand(db, body, { id }),
     existing: async (ids) => new Set((await db.select({ id: brandsTable.id }).from(brandsTable).where(inArray(brandsTable.id, [...ids]))).map((row) => row.id)),
-    readRefs: async (ids) => {
-      const rows = await db
-        .select({ id: brandsTable.id, slug: brandsTable.slug, revision: brandsTable.revision })
-        .from(brandsTable)
-        .where(and(inArray(brandsTable.id, [...ids]), isNull(brandsTable.deletedAt)));
-      return new Map<string, BatchRef>(rows.map((row) => [row.id, row]));
-    },
+    readRefs: async (ids) => new Map((await getBrandsByIds(db, ids)).flatMap((brand) => (brand.deletedAt ? [] : [[brand.id, brand] as const]))),
   });
-  return ok(c, data as BatchCreateData<"brand">);
+  return ok(c, data as BatchCreateData<"brand", BrandResourceData>);
 });
 
 const updateRoute = createRoute({
@@ -260,8 +259,8 @@ const updateRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Brand updated",
-      content: { "application/json": { schema: successEnvelope(mutationResultSchema) } },
+      description: "The brand as updated",
+      content: { "application/json": { schema: brandEnvelope } },
     },
     ...errorResponses,
     409: conflictResponse,
@@ -269,9 +268,10 @@ const updateRoute = createRoute({
 });
 
 app.openapi(updateRoute, async (c) => {
-  const result = await updateBrand(c.get("db"), c.req.valid("param").id, c.req.valid("json"));
-
-  return ok(c, result);
+  const db = c.get("db");
+  const { id } = c.req.valid("param");
+  await updateBrand(db, id, c.req.valid("json"));
+  return ok(c, { brand: await readBrand(db, id) });
 });
 
 const statusRoute = createRoute({
@@ -286,8 +286,8 @@ const statusRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Brand status changed",
-      content: { "application/json": { schema: successEnvelope(mutationResultSchema) } },
+      description: "The brand with its new status",
+      content: { "application/json": { schema: brandEnvelope } },
     },
     ...errorResponses,
     409: conflictResponse,
@@ -295,16 +295,52 @@ const statusRoute = createRoute({
 });
 
 app.openapi(statusRoute, async (c) => {
-  const result = await updateBrandStatus(c.get("db"), c.req.valid("param").id, c.req.valid("json"));
-
-  return ok(c, result);
+  const db = c.get("db");
+  const { id } = c.req.valid("param");
+  await updateBrandStatus(db, id, c.req.valid("json"));
+  return ok(c, { brand: await readBrand(db, id) });
 });
 
+// Trash and restore answer the brands they moved, as `brands.get` reads them.
 function claimsRoute(
   path: string,
   operationId: string,
   summary: string,
   run: typeof trashBrands,
+) {
+  const route = createRoute({
+    method: "post",
+    path,
+    operationId,
+    tags: TAGS,
+    summary,
+    request: { body: { content: { "application/json": { schema: claimsBodySchema } } } },
+    responses: {
+      200: {
+        description: "The brands, in request order",
+        content: { "application/json": { schema: successEnvelope(z.object({ brands: z.array(BrandResource).max(BRAND_BATCH_LIMIT) })) } },
+      },
+      ...errorResponses,
+      409: conflictResponse,
+    },
+  });
+  app.openapi(route, async (c) => {
+    const db = c.get("db");
+    const { brands } = c.req.valid("json");
+    await run(db, brands);
+    return ok(c, { brands: await getBrandsByIds(db, brands.map((claim) => claim.id)) });
+  });
+}
+
+claimsRoute("/trash", "dashboard.brands.trash", "Move brands to trash", trashBrands);
+claimsRoute("/restore", "dashboard.brands.restore", "Restore brands from trash", restoreBrands);
+
+// Permanent delete answers how many brands it removed (they no longer exist).
+function deleteRoute(
+  path: string,
+  operationId: string,
+  summary: string,
+  run: typeof permanentlyDeleteBrands,
 ) {
   const route = createRoute({
     method: "post",
@@ -330,8 +366,6 @@ function claimsRoute(
   });
 }
 
-claimsRoute("/trash", "dashboard.brands.trash", "Move brands to trash", trashBrands);
-claimsRoute("/restore", "dashboard.brands.restore", "Restore brands from trash", restoreBrands);
-claimsRoute("/delete-permanently", "dashboard.brands.delete_permanently", "Permanently delete brands in trash", permanentlyDeleteBrands);
+deleteRoute("/delete-permanently", "dashboard.brands.delete_permanently", "Permanently delete brands in trash", permanentlyDeleteBrands);
 
 export { app as adminBrandRoutes };

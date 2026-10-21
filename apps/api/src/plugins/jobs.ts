@@ -185,7 +185,7 @@ export async function startPluginJob(
     throw new PluginError("jobs_limit", `An app runs at most ${limit} jobs at once; wait for one to finish.`);
   }
   const row = await db.select().from(bulkRuns).where(eq(bulkRuns.operationKey, operationKey)).get();
-  if (!row) throw new PluginError("internal", "The job could not be started.");
+  if (!row) throw new PluginError("internal_error", "The job could not be started.");
   if (row.id !== id) {
     // A concurrent start under the same key won the insert.
     if (row.requestHash !== requestHash) throw new PluginError("jobs_key_reused", "This key started the job with a different input.");

@@ -20,7 +20,8 @@ import {
   type WebhookOwner,
   type WebhookSubscriptionView,
 } from "@scalius/core/modules/events";
-import { EVENTS_API_VERSION, EVENT_TOPIC_FILTERS } from "@scalius/shared/events";
+import { EVENT_TOPIC_FILTERS } from "@scalius/shared/events";
+import { boundedPage, boundedPageQuery, nextCursorSchema } from "../../utils/bounded-page";
 import { OUTBOUND_URL_MAX_LENGTH } from "@scalius/shared/outbound-url";
 import { PROTECTED_CUSTOMER_DATA } from "@scalius/shared/plugins/protected-data";
 import { AppError } from "@scalius/core/errors";
@@ -60,7 +61,7 @@ const AppWebhookSubscription = z.object({
   lastSuccessAt: nullableIsoTimestampSchema,
   lastFailureAt: nullableIsoTimestampSchema,
   secretHint: z.string().openapi({ description: "The signing secret's last four characters." }),
-  version: z.number().int().positive().openapi({ description: "Send it as `expectedVersion` to change or delete it." }),
+  revision: z.number().int().positive().openapi({ description: "Send it as `expectedRevision` to change or delete it." }),
   createdAt: isoTimestampSchema,
   updatedAt: isoTimestampSchema,
 }).openapi("AppWebhookSubscription");
@@ -80,7 +81,7 @@ function subscriptionResource(view: WebhookSubscriptionView): z.infer<typeof App
     lastSuccessAt: isoOrNull(view.lastSuccessAt),
     lastFailureAt: isoOrNull(view.lastFailureAt),
     secretHint: view.secretHint,
-    version: view.version,
+    revision: view.version,
     createdAt: new Date(view.createdAt * 1000).toISOString(),
     updatedAt: new Date(view.updatedAt * 1000).toISOString(),
   };
@@ -103,7 +104,7 @@ const url = z.string().trim().min(1).max(OUTBOUND_URL_MAX_LENGTH).openapi({
 const topics = z.array(topicFilter).min(1).max(EVENT_TOPIC_FILTERS.length);
 const description = z.string().max(WEBHOOK_DESCRIPTION_MAX_LENGTH).nullable();
 const subscriptionId = z.object({ id: z.string().min(1).max(64) });
-const expectedVersion = z.number().int().positive().openapi({ description: "The subscription's `version` you read; a stale one is refused with 409." });
+const expectedRevision = z.number().int().positive().openapi({ description: "The subscription's `revision` you read; a stale one is refused with 409." });
 const subscriptionEnvelope = successEnvelope(z.object({ subscription: AppWebhookSubscription }));
 const writeResponses = { ...errorResponses, 409: conflictResponse };
 
@@ -113,26 +114,31 @@ app.openapi(createRoute({
   path: "/webhook-subscriptions",
   tags: ["App API - Webhooks"],
   summary: "List the app's own webhook subscriptions",
-  description: "Only the calling app's subscriptions, with their health. The store's other webhooks are never visible.",
+  description: `Only the calling app's subscriptions (at most ${MAX_APP_WEBHOOK_SUBSCRIPTIONS}), oldest first, with their health. The store's other webhooks are never visible.`,
+  request: { query: z.object(boundedPageQuery(MAX_APP_WEBHOOK_SUBSCRIPTIONS)) },
   responses: {
     200: {
       description: "The app's subscriptions",
       content: { "application/json": { schema: successEnvelope(z.object({
         subscriptions: z.array(AppWebhookSubscription).max(MAX_APP_WEBHOOK_SUBSCRIPTIONS),
-        maxSubscriptions: z.number().int().openapi({ description: "How many one app may keep." }),
-        apiVersion: z.string(),
+        nextCursor: nextCursorSchema,
       })) } },
     },
     ...errorResponses,
   },
 }), async (c) => {
   const owner = await appOwner(c);
-  const subscriptions = await listWebhookSubscriptions(c.get("db"), owner);
-  return ok(c, {
-    subscriptions: subscriptions.map(subscriptionResource),
-    maxSubscriptions: MAX_APP_WEBHOOK_SUBSCRIPTIONS,
-    apiVersion: EVENTS_API_VERSION,
+  const query = c.req.valid("query");
+  const subscriptions = (await listWebhookSubscriptions(c.get("db"), owner)).map(subscriptionResource)
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id));
+  const page = boundedPage(subscriptions, {
+    name: "webhook_subscriptions",
+    cursor: query.cursor,
+    limit: query.limit,
+    id: (subscription) => subscription.id,
+    sort: { kind: "text", value: (subscription) => subscription.createdAt },
   });
+  return ok(c, { subscriptions: page.items, nextCursor: page.nextCursor });
 });
 
 app.openapi(createRoute({
@@ -184,7 +190,7 @@ app.openapi(createRoute({
     body: {
       required: true,
       content: { "application/json": { schema: z.object({
-        expectedVersion,
+        expectedRevision,
         url: url.optional(),
         topics: topics.optional(),
         description: description.optional(),
@@ -199,7 +205,8 @@ app.openapi(createRoute({
   },
 }), async (c) => {
   const owner = await appOwner(c);
-  const subscription = await updateWebhookSubscription(c.get("db"), c.req.valid("param").id, c.req.valid("json"), owner);
+  const { expectedRevision, ...changes } = c.req.valid("json");
+  const subscription = await updateWebhookSubscription(c.get("db"), c.req.valid("param").id, { ...changes, expectedVersion: expectedRevision }, owner);
   return ok(c, { subscription: subscriptionResource(subscription) });
 });
 
@@ -211,7 +218,7 @@ app.openapi(createRoute({
   summary: "Delete one of the app's webhook subscriptions and its delivery log",
   request: {
     params: subscriptionId,
-    query: z.object({ expectedVersion: z.coerce.number().int().positive() }),
+    query: z.object({ expectedRevision: z.coerce.number().int().positive() }),
   },
   responses: {
     200: { description: "Deleted", content: { "application/json": { schema: successEnvelope(z.object({ id: z.string(), deleted: z.literal(true) })) } } },
@@ -220,7 +227,7 @@ app.openapi(createRoute({
 }), async (c) => {
   const owner = await appOwner(c);
   const { id } = c.req.valid("param");
-  await deleteWebhookSubscription(c.get("db"), id, owner, c.req.valid("query").expectedVersion);
+  await deleteWebhookSubscription(c.get("db"), id, owner, c.req.valid("query").expectedRevision);
   return ok(c, { id, deleted: true as const });
 });
 

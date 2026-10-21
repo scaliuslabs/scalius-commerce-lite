@@ -15,7 +15,7 @@ const order = {
   ],
 };
 const api = async (operationId: string) => operationId === "orders.get"
-  ? { ok: true, status: 200, data: order, error: null }
+  ? { ok: true, status: 200, data: { order }, error: null }
   : { ok: false, status: 404, data: null, error: { code: "not_found", message: "unknown" } };
 
 function harnessWithListings() {

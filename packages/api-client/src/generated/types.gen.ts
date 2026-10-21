@@ -2984,10 +2984,10 @@ export type BuyerWarrantyClaim = {
 export type OrderResource = {
     id: string;
     orderNumber: number | null;
-    status: string;
-    paymentStatus: string;
-    fulfillmentStatus: string;
-    channel: string;
+    status: 'pending' | 'processing' | 'confirmed' | 'shipped' | 'delivered' | 'completed' | 'cancelled' | 'returned' | 'refunded' | 'incomplete';
+    paymentStatus: 'unpaid' | 'partial' | 'paid' | 'partially_refunded' | 'refunded' | 'failed';
+    fulfillmentStatus: 'pending' | 'partial' | 'complete';
+    channel: 'online_store' | 'admin' | 'pos' | 'agent' | 'app';
     salesChannelId: string;
     marketId: string | null;
     currency: string;
@@ -3049,7 +3049,7 @@ export type OrderResource = {
         };
     } | null;
     fulfillmentLocationId: string | null;
-    version: number;
+    revision: number;
     lines: Array<{
         id: string;
         productId: string;
@@ -3072,9 +3072,9 @@ export type OrderResource = {
 export type PaymentResource = {
     id: string;
     orderId: string;
-    status: string;
+    status: 'pending' | 'confirmed' | 'succeeded' | 'failed' | 'refunded' | 'cancelled' | 'authorized';
     method: string;
-    type: string;
+    type: 'full' | 'deposit' | 'balance' | 'refund';
     currency: string;
     amountMinor: number;
     settlementCurrency: string;
@@ -3087,8 +3087,8 @@ export type PaymentResource = {
 export type FulfillmentResource = {
     id: string;
     orderId: string;
-    kind: string;
-    status: string;
+    kind: 'ship' | 'pickup' | 'digital' | 'gift_card' | 'service';
+    status: 'active' | 'voided';
     shipmentId: string | null;
     locationId: string | null;
     currency: string;
@@ -3107,7 +3107,7 @@ export type ShipmentResource = {
     orderId: string;
     providerId: string | null;
     providerType: string;
-    status: string;
+    status: 'pending' | 'pickup_assigned' | 'picked_up' | 'pickup_failed' | 'in_transit' | 'out_for_delivery' | 'delivered' | 'partial_delivered' | 'delivery_failed' | 'on_hold' | 'failed' | 'cancelled' | 'returned' | 'unknown' | 'creating' | 'processing' | 'reconcile_required';
     rawStatus: string | null;
     externalId: string | null;
     trackingId: string | null;
@@ -3119,6 +3119,68 @@ export type ShipmentResource = {
     lastCheckedAt: string | null;
     createdAt: string;
     updatedAt: string;
+};
+
+export type ReturnResource = {
+    id: string;
+    orderId: string;
+    status: 'requested' | 'approved' | 'receiving' | 'completed' | 'rejected' | 'cancelled';
+    reason: string;
+    source: 'admin' | 'support_request' | 'cod_return_to_sender';
+    revision: number;
+    requestedAt: string;
+    approvedAt: string | null;
+    completedAt: string | null;
+    rejectedAt: string | null;
+    cancelledAt: string | null;
+    lines: Array<{
+        id: string;
+        orderItemId: string;
+        variantId: string | null;
+        requestedQuantity: number;
+        approvedQuantity: number;
+        receivedQuantity: number;
+        restockQuantity: number;
+        damagedQuantity: number;
+        rejectedQuantity: number;
+    }>;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type InventoryLocationResource = {
+    id: string;
+    name: string;
+    code: string;
+    kind: 'warehouse' | 'store' | 'other';
+    isDefault: boolean;
+    status: 'active' | 'archived';
+    position: number;
+    revision: number;
+    address: InventoryLocationAddress;
+    createdAt: string;
+    updatedAt: string;
+};
+
+/**
+ * The store's address there; the street, city, postal code and phone read null without inventory.view or settings.general.view.
+ */
+export type InventoryLocationAddress = {
+    name: string | null;
+    phone: string | null;
+    company: string | null;
+    line1: string | null;
+    line2: string | null;
+    dependentLocality: string | null;
+    locality: string | null;
+    adminArea: string | null;
+    postalCode: string | null;
+    countryCode: string;
+    placeIds: {
+        city: string | null;
+        zone: string | null;
+        area: string | null;
+    };
 };
 
 export type ProductResource = {
@@ -3301,9 +3363,9 @@ export type GiftCardSummaryResource = {
     customerId: string | null;
     recipientName: string | null;
     /**
-     * Send it as `expectedVersion` to change the card; every balance movement advances it.
+     * Send it as `expectedRevision` to change the card; every balance movement advances it.
      */
-    version: number;
+    revision: number;
     createdAt: string;
 };
 
@@ -3332,9 +3394,9 @@ export type GiftCardResource = {
     customerId: string | null;
     recipientName: string | null;
     /**
-     * Send it as `expectedVersion` to change the card; every balance movement advances it.
+     * Send it as `expectedRevision` to change the card; every balance movement advances it.
      */
-    version: number;
+    revision: number;
     createdAt: string;
     recipientEmail: string | null;
     recipientPhone: string | null;
@@ -3373,10 +3435,10 @@ export type GiftCardTransactionResource = {
 export type RefundResource = {
     id: string;
     orderId: string;
-    status: string;
+    status: 'pending' | 'refunded' | 'failed' | 'partial';
     currency: string;
     amountMinor: number;
-    settlement: string;
+    settlement: 'original' | 'store_credit';
     lines: Array<{
         orderItemId: string;
         variantId: string | null;
@@ -3425,25 +3487,6 @@ export type PaymentMethodResource = {
     updatedAt: string;
 };
 
-export type PaymentOutcomeResource = {
-    /**
-     * `succeeded`: captured and credited to the order. `authorized`: held, capture it with payments.capture. `pending`: the provider answers later by webhook; read the order. `voided`: the hold was released.
-     */
-    outcome: 'succeeded' | 'authorized' | 'pending' | 'voided';
-    orderId: string;
-    providerId: string;
-    /**
-     * In minor units of `currency`.
-     */
-    amountMinor: number;
-    currency: string;
-    payment: PaymentResource & unknown;
-    /**
-     * True when this answers a request already handled (the same Idempotency-Key, or an authorization already settled).
-     */
-    replayed: boolean;
-};
-
 export type AppWebhookSubscription = {
     id: string;
     url: string;
@@ -3468,11 +3511,82 @@ export type AppWebhookSubscription = {
      */
     secretHint: string;
     /**
-     * Send it as `expectedVersion` to change or delete it.
+     * Send it as `expectedRevision` to change or delete it.
      */
-    version: number;
+    revision: number;
     createdAt: string;
     updatedAt: string;
+};
+
+export type CategoryResource = {
+    id: string;
+    name: string;
+    slug: string;
+    /**
+     * `published` is public; `draft` and `internal` are not.
+     */
+    status: 'draft' | 'published' | 'internal';
+    /**
+     * Send it as `expectedRevision` to change the category; every change advances it.
+     */
+    revision: number;
+    /**
+     * The parent category; null at the top level.
+     */
+    parentId: string | null;
+    /**
+     * 0 at the top level, at most 3.
+     */
+    depth: number;
+    description: string | null;
+    /**
+     * The category page's rich text below the products.
+     */
+    content: string | null;
+    imageUrl: string | null;
+    metaTitle: string | null;
+    metaDescription: string | null;
+    canonicalPath: string | null;
+    noIndex: boolean;
+    excludeFromSitemap: boolean;
+    /**
+     * A listing template id from the theme; null is the theme's default category listing.
+     */
+    listingTemplate: string | null;
+    createdAt: string;
+    updatedAt: string;
+    /**
+     * When it was moved to the trash; null when it is not in the trash.
+     */
+    deletedAt: string | null;
+};
+
+export type BrandResource = {
+    id: string;
+    name: string;
+    slug: string;
+    status: 'draft' | 'published';
+    sortOrder: number;
+    revision: number;
+    noIndex: boolean;
+    excludeFromSitemap: boolean;
+    productCount: number;
+    logo: {
+        mediaId: string;
+        url: string;
+        alt: string;
+        width: number | null;
+        height: number | null;
+    } | null;
+    createdAt: string | null;
+    updatedAt: string | null;
+    deletedAt: string | null;
+    description: string | null;
+    metaTitle: string | null;
+    metaDescription: string | null;
+    canonicalPath: string | null;
+    listingTemplate: string | null;
+    logoMediaId: string | null;
 };
 
 export type PriceList = {
@@ -3593,6 +3707,54 @@ export type ObjectRecord = {
     updatedAt: string;
 };
 
+export type CollectionResource = {
+    id: string;
+    name: string;
+    /**
+     * The collection's handle (`@collection:<handle>` in templates); null only on a row written outside the dashboard.
+     */
+    slug: string | null;
+    /**
+     * Send it as `expectedRevision` to change the collection; every change advances it.
+     */
+    revision: number;
+    /**
+     * Whether buyers see it.
+     */
+    isActive: boolean;
+    presentation: 'grid' | 'carousel';
+    sortOrder: number;
+    config: {
+        /**
+         * `manual`: exactly `productIds`; `dynamic`: the products of `categoryIds`.
+         */
+        source: 'manual' | 'dynamic';
+        productIds: Array<string>;
+        categoryIds: Array<string>;
+        featuredProductId: string | null;
+        maxProducts: number;
+        title: string;
+        subtitle: string;
+    };
+    description: string | null;
+    content: string | null;
+    metaTitle: string | null;
+    metaDescription: string | null;
+    canonicalPath: string | null;
+    noIndex: boolean;
+    excludeFromSitemap: boolean;
+    /**
+     * A listing template id from the theme; null is the theme's default collection listing.
+     */
+    listingTemplate: string | null;
+    createdAt: string;
+    updatedAt: string;
+    /**
+     * When it was moved to the trash; null when it is not in the trash.
+     */
+    deletedAt: string | null;
+};
+
 export type CustomerSegment = {
     id: string;
     name: string;
@@ -3701,6 +3863,119 @@ export type StaffSavedPaymentMethod = CustomerSavedPaymentMethod & {
      * The order whose payment kept it.
      */
     sourceOrderId: string | null;
+};
+
+export type PageResource = {
+    id: string;
+    contentType: 'page' | 'article';
+    title: string;
+    slug: string;
+    content: string;
+    excerpt: string | null;
+    author: string | null;
+    tags: Array<string>;
+    metaTitle: string | null;
+    metaDescription: string | null;
+    canonicalPath: string | null;
+    noIndex: boolean;
+    excludeFromSitemap: boolean;
+    isPublished: boolean;
+    hideHeader: boolean;
+    hideFooter: boolean;
+    hideTitle: boolean;
+    featuredImage?: {
+        id: string;
+        url: string;
+        filename: string;
+        size: number;
+        mimeType?: string;
+        altText?: string | null;
+        width?: number | null;
+        height?: number | null;
+        folderId?: string | null;
+        [key: string]: unknown;
+    } | null;
+    publishedAt?: string | null;
+    sortOrder: number;
+    revision: number;
+    createdAt: string | null;
+    updatedAt: string | null;
+    deletedAt: string | null;
+};
+
+export type DiscountResource = {
+    id: string;
+    revision: number;
+    name: string;
+    title: string | null;
+    method: 'automatic' | 'code';
+    status: 'draft' | 'active' | 'paused' | 'archived';
+    priority: number;
+    conflictPolicy: 'best';
+    combinesWith: {
+        product: boolean;
+        order: boolean;
+        shipping: boolean;
+    };
+    startsAt: string | null;
+    endsAt: string | null;
+    /**
+     * The schedule's IANA time zone.
+     */
+    timeZone: string;
+    maxRedemptions: number | null;
+    maxRedemptionsPerCustomer: number | null;
+    /**
+     * The store currency: rule amounts (amountMinor) and the spend are integer minor units of it.
+     */
+    currency: string;
+    maxDiscountSpendMinor: number | null;
+    /**
+     * The spend budget's currency, with maxDiscountSpendMinor.
+     */
+    budgetCurrency: string | null;
+    /**
+     * Orders that used this discount.
+     */
+    redemptionCount: number;
+    customerRedemptionCount: number;
+    /**
+     * Total savings given, in minor units.
+     */
+    discountSpendMinor: number;
+    createdAt: string;
+    updatedAt: string;
+    deletedAt: string | null;
+    codes: Array<{
+        code: string;
+        isActive: boolean;
+    }>;
+    conditions: Array<{
+        id: string;
+        kind: 'minimum_merchandise_subtotal' | 'minimum_item_quantity';
+        /**
+         * As `discounts.create` takes it: an amount beside its `currency`.
+         */
+        config: {
+            [key: string]: unknown;
+        };
+    }>;
+    effects: Array<{
+        id: string;
+        kind: 'percentage_off' | 'fixed_amount_off' | 'free';
+        target: 'line' | 'order' | 'shipping';
+        allocation: 'across' | 'once';
+        /**
+         * As `discounts.create` takes it: an amount beside its `currency`.
+         */
+        config: {
+            [key: string]: unknown;
+        };
+    }>;
+    /**
+     * Only signed-in customers in any of these customer segments get this discount; empty means every customer.
+     */
+    customerSegmentIds: Array<string>;
 };
 
 export type PurchaseOrder = {
@@ -3884,6 +4159,28 @@ export type InventoryTransfer = {
             locationId: string;
         }>;
     }>;
+};
+
+export type ThemeResource = {
+    /**
+     * The theme document version section settings follow.
+     */
+    documentVersion: number;
+    publishedRevision: number;
+    draft: ThemeDraftReceipt;
+    draftDiffersFromLive: boolean;
+    /**
+     * The template the draft came from (`<app id>/<template id>`), if any.
+     */
+    template: string | null;
+    page: 'home' | 'landing';
+    slug: string | null;
+    sections: Array<ThemeSection>;
+    landingPages: Array<{
+        slug: string;
+        title: string;
+    }>;
+    readAt: string;
 };
 
 export type ThemeDraftReceipt = {
@@ -24854,7 +25151,9 @@ export type GetApiV1AdminResourcesOrdersByIdResponses = {
      */
     200: {
         success: true;
-        data: OrderResource;
+        data: {
+            order: OrderResource;
+        };
     };
 };
 
@@ -24865,7 +25164,16 @@ export type GetApiV1AdminResourcesOrdersByIdPaymentsData = {
     path: {
         id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many items (default and maximum 100).
+         */
+        limit?: number;
+    };
     url: '/api/v1/admin/resources/orders/{id}/payments';
 };
 
@@ -24906,6 +25214,10 @@ export type GetApiV1AdminResourcesOrdersByIdPaymentsResponses = {
         success: true;
         data: {
             payments: Array<PaymentResource>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
         };
     };
 };
@@ -24928,9 +25240,9 @@ export type PostApiV1AdminResourcesOrdersByIdPaymentsData = {
         reference?: string | null;
         note?: string | null;
         /**
-         * The order `version` you read; a different one is refused with 409.
+         * The order `revision` you read; a different one is refused with 409.
          */
-        expectedVersion?: number;
+        expectedRevision?: number;
     };
     headers?: {
         /**
@@ -24997,7 +25309,16 @@ export type GetApiV1AdminResourcesOrdersByIdFulfillmentsData = {
     path: {
         id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many items (default and maximum 100).
+         */
+        limit?: number;
+    };
     url: '/api/v1/admin/resources/orders/{id}/fulfillments';
 };
 
@@ -25038,6 +25359,10 @@ export type GetApiV1AdminResourcesOrdersByIdFulfillmentsResponses = {
         success: true;
         data: {
             fulfillments: Array<FulfillmentResource>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
         };
     };
 };
@@ -25145,7 +25470,16 @@ export type GetApiV1AdminResourcesOrdersByIdShipmentsData = {
     path: {
         id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many items (default and maximum 100).
+         */
+        limit?: number;
+    };
     url: '/api/v1/admin/resources/orders/{id}/shipments';
 };
 
@@ -25186,6 +25520,10 @@ export type GetApiV1AdminResourcesOrdersByIdShipmentsResponses = {
         success: true;
         data: {
             shipments: Array<ShipmentResource>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
         };
     };
 };
@@ -25310,11 +25648,197 @@ export type GetApiV1AdminResourcesShipmentsByIdResponses = {
      */
     200: {
         success: true;
-        data: ShipmentResource;
+        data: {
+            shipment: ShipmentResource;
+        };
     };
 };
 
 export type GetApiV1AdminResourcesShipmentsByIdResponse = GetApiV1AdminResourcesShipmentsByIdResponses[keyof GetApiV1AdminResourcesShipmentsByIdResponses];
+
+export type GetApiV1AdminResourcesOrdersByIdReturnsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many items (default and maximum 100).
+         */
+        limit?: number;
+    };
+    url: '/api/v1/admin/resources/orders/{id}/returns';
+};
+
+export type GetApiV1AdminResourcesOrdersByIdReturnsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesOrdersByIdReturnsError = GetApiV1AdminResourcesOrdersByIdReturnsErrors[keyof GetApiV1AdminResourcesOrdersByIdReturnsErrors];
+
+export type GetApiV1AdminResourcesOrdersByIdReturnsResponses = {
+    /**
+     * The returns
+     */
+    200: {
+        success: true;
+        data: {
+            returns: Array<ReturnResource>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesOrdersByIdReturnsResponse = GetApiV1AdminResourcesOrdersByIdReturnsResponses[keyof GetApiV1AdminResourcesOrdersByIdReturnsResponses];
+
+export type GetApiV1AdminResourcesReturnsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/returns/{id}';
+};
+
+export type GetApiV1AdminResourcesReturnsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesReturnsByIdError = GetApiV1AdminResourcesReturnsByIdErrors[keyof GetApiV1AdminResourcesReturnsByIdErrors];
+
+export type GetApiV1AdminResourcesReturnsByIdResponses = {
+    /**
+     * The return
+     */
+    200: {
+        success: true;
+        data: {
+            return: ReturnResource;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesReturnsByIdResponse = GetApiV1AdminResourcesReturnsByIdResponses[keyof GetApiV1AdminResourcesReturnsByIdResponses];
+
+export type GetApiV1AdminResourcesInventoryLocationsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many items (default and maximum 100).
+         */
+        limit?: number;
+        /**
+         * Only locations in this status.
+         */
+        status?: 'active' | 'archived';
+    };
+    url: '/api/v1/admin/resources/inventory-locations';
+};
+
+export type GetApiV1AdminResourcesInventoryLocationsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesInventoryLocationsError = GetApiV1AdminResourcesInventoryLocationsErrors[keyof GetApiV1AdminResourcesInventoryLocationsErrors];
+
+export type GetApiV1AdminResourcesInventoryLocationsResponses = {
+    /**
+     * The locations
+     */
+    200: {
+        success: true;
+        data: {
+            locations: Array<InventoryLocationResource>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesInventoryLocationsResponse = GetApiV1AdminResourcesInventoryLocationsResponses[keyof GetApiV1AdminResourcesInventoryLocationsResponses];
 
 export type GetApiV1AdminResourcesProductsData = {
     body?: never;
@@ -25568,7 +26092,9 @@ export type GetApiV1AdminResourcesProductsByIdResponses = {
      */
     200: {
         success: true;
-        data: ProductResource;
+        data: {
+            product: ProductResource;
+        };
     };
 };
 
@@ -25701,7 +26227,9 @@ export type GetApiV1AdminResourcesVariantsByIdResponses = {
      */
     200: {
         success: true;
-        data: VariantResource;
+        data: {
+            variant: VariantResource;
+        };
     };
 };
 
@@ -25886,7 +26414,9 @@ export type GetApiV1AdminResourcesCustomersByIdResponses = {
      */
     200: {
         success: true;
-        data: CustomerResource;
+        data: {
+            customer: CustomerResource;
+        };
     };
 };
 
@@ -25896,6 +26426,14 @@ export type GetApiV1AdminResourcesPriceListsData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many items (default and maximum 100).
+         */
+        limit?: number;
         marketId?: string;
     };
     url: '/api/v1/admin/resources/price-lists';
@@ -25938,6 +26476,10 @@ export type GetApiV1AdminResourcesPriceListsResponses = {
         success: true;
         data: {
             priceLists: Array<PriceListResource>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
         };
     };
 };
@@ -26084,6 +26626,7 @@ export type DeleteApiV1AdminResourcesPriceListsByIdResponses = {
         success: true;
         data: {
             id: string;
+            deleted: true;
         };
     };
 };
@@ -26474,14 +27017,18 @@ export type PostApiV1AdminResourcesVariantsBulkSetPricesResponses = {
      */
     200: {
         success: true;
-        data: BulkRun;
+        data: {
+            run: BulkRun;
+        };
     };
     /**
      * The run started; read bulk_runs.get until it is done
      */
     202: {
         success: true;
-        data: BulkRun;
+        data: {
+            run: BulkRun;
+        };
     };
 };
 
@@ -26567,14 +27114,18 @@ export type PostApiV1AdminResourcesVariantsBulkSetStockResponses = {
      */
     200: {
         success: true;
-        data: BulkRun;
+        data: {
+            run: BulkRun;
+        };
     };
     /**
      * The run started; read bulk_runs.get until it is done
      */
     202: {
         success: true;
-        data: BulkRun;
+        data: {
+            run: BulkRun;
+        };
     };
 };
 
@@ -26664,14 +27215,18 @@ export type PostApiV1AdminResourcesCustomersBulkTagResponses = {
      */
     200: {
         success: true;
-        data: BulkRun;
+        data: {
+            run: BulkRun;
+        };
     };
     /**
      * The run started; read bulk_runs.get until it is done
      */
     202: {
         success: true;
-        data: BulkRun;
+        data: {
+            run: BulkRun;
+        };
     };
 };
 
@@ -26687,7 +27242,7 @@ export type PostApiV1AdminResourcesProductsBulkSetStatusData = {
             /**
              * The product revision you read; a product changed since is left alone (a failure).
              */
-            expectedAggregateRevision?: number;
+            expectedRevision?: number;
         }>;
         filter?: {
             /**
@@ -26767,14 +27322,18 @@ export type PostApiV1AdminResourcesProductsBulkSetStatusResponses = {
      */
     200: {
         success: true;
-        data: BulkRun;
+        data: {
+            run: BulkRun;
+        };
     };
     /**
      * The run started; read bulk_runs.get until it is done
      */
     202: {
         success: true;
-        data: BulkRun;
+        data: {
+            run: BulkRun;
+        };
     };
 };
 
@@ -26862,14 +27421,18 @@ export type PostApiV1AdminResourcesProductsBulkPublishResponses = {
      */
     200: {
         success: true;
-        data: BulkRun;
+        data: {
+            run: BulkRun;
+        };
     };
     /**
      * The run started; read bulk_runs.get until it is done
      */
     202: {
         success: true;
-        data: BulkRun;
+        data: {
+            run: BulkRun;
+        };
     };
 };
 
@@ -26919,7 +27482,9 @@ export type GetApiV1AdminResourcesBulkRunsByIdResponses = {
      */
     200: {
         success: true;
-        data: BulkRun;
+        data: {
+            run: BulkRun;
+        };
     };
 };
 
@@ -27187,9 +27752,9 @@ export type GetApiV1AdminResourcesGiftCardsByIdResponse = GetApiV1AdminResources
 export type PatchApiV1AdminResourcesGiftCardsByIdData = {
     body: {
         /**
-         * The card's `version` you read; a card changed since is refused with 409.
+         * The card's `revision` you read; a card changed since is refused with 409.
          */
-        expectedVersion: number;
+        expectedRevision: number;
         status?: 'active' | 'disabled';
         /**
          * null removes the expiry.
@@ -27261,9 +27826,9 @@ export type PatchApiV1AdminResourcesGiftCardsByIdResponse = PatchApiV1AdminResou
 export type PostApiV1AdminResourcesGiftCardsByIdAdjustData = {
     body: {
         /**
-         * The card's `version` you read; a card changed since is refused with 409.
+         * The card's `revision` you read; a card changed since is refused with 409.
          */
-        expectedVersion: number;
+        expectedRevision: number;
         amountMinor: number;
         reason: string;
     };
@@ -27556,7 +28121,16 @@ export type GetApiV1AdminResourcesOrdersByIdRefundsData = {
     path: {
         id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many items (default and maximum 100).
+         */
+        limit?: number;
+    };
     url: '/api/v1/admin/resources/orders/{id}/refunds';
 };
 
@@ -27597,6 +28171,10 @@ export type GetApiV1AdminResourcesOrdersByIdRefundsResponses = {
         success: true;
         data: {
             refunds: Array<RefundResource>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
         };
     };
 };
@@ -27702,6 +28280,14 @@ export type GetApiV1AdminResourcesPaymentMethodsData = {
     path?: never;
     query: {
         customerId: string;
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many items (default and maximum 50).
+         */
+        limit?: number;
     };
     url: '/api/v1/admin/resources/payment-methods';
 };
@@ -27737,12 +28323,16 @@ export type GetApiV1AdminResourcesPaymentMethodsError = GetApiV1AdminResourcesPa
 
 export type GetApiV1AdminResourcesPaymentMethodsResponses = {
     /**
-     * The saved methods
+     * The saved methods, oldest first
      */
     200: {
         success: true;
         data: {
             paymentMethods: Array<PaymentMethodResource>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
         };
     };
 };
@@ -27834,9 +28424,9 @@ export type PostApiV1AdminResourcesOrdersByIdPaymentsChargeData = {
          */
         capture?: 'automatic' | 'manual';
         /**
-         * The order `version` you read; a different one is refused with 409 before the provider is called.
+         * The order `revision` you read; a different one is refused with 409 before the provider is called.
          */
-        expectedVersion?: number;
+        expectedRevision?: number;
     };
     headers?: {
         /**
@@ -27898,7 +28488,24 @@ export type PostApiV1AdminResourcesOrdersByIdPaymentsChargeResponses = {
      */
     201: {
         success: true;
-        data: PaymentOutcomeResource;
+        data: {
+            /**
+             * `succeeded`: captured and credited to the order. `authorized`: held, capture it with payments.capture. `pending`: the provider answers later by webhook; read the order. `voided`: the hold was released.
+             */
+            outcome: 'succeeded' | 'authorized' | 'pending' | 'voided';
+            orderId: string;
+            providerId: string;
+            /**
+             * In minor units of `currency`.
+             */
+            amountMinor: number;
+            currency: string;
+            payment: PaymentResource & unknown;
+            /**
+             * True when this answers a request already handled (the same Idempotency-Key, or an authorization already settled).
+             */
+            replayed: boolean;
+        };
     };
 };
 
@@ -27969,7 +28576,24 @@ export type PostApiV1AdminResourcesPaymentsByIdCaptureResponses = {
      */
     200: {
         success: true;
-        data: PaymentOutcomeResource;
+        data: {
+            /**
+             * `succeeded`: captured and credited to the order. `authorized`: held, capture it with payments.capture. `pending`: the provider answers later by webhook; read the order. `voided`: the hold was released.
+             */
+            outcome: 'succeeded' | 'authorized' | 'pending' | 'voided';
+            orderId: string;
+            providerId: string;
+            /**
+             * In minor units of `currency`.
+             */
+            amountMinor: number;
+            currency: string;
+            payment: PaymentResource & unknown;
+            /**
+             * True when this answers a request already handled (the same Idempotency-Key, or an authorization already settled).
+             */
+            replayed: boolean;
+        };
     };
 };
 
@@ -28040,7 +28664,24 @@ export type PostApiV1AdminResourcesPaymentsByIdVoidResponses = {
      */
     200: {
         success: true;
-        data: PaymentOutcomeResource;
+        data: {
+            /**
+             * `succeeded`: captured and credited to the order. `authorized`: held, capture it with payments.capture. `pending`: the provider answers later by webhook; read the order. `voided`: the hold was released.
+             */
+            outcome: 'succeeded' | 'authorized' | 'pending' | 'voided';
+            orderId: string;
+            providerId: string;
+            /**
+             * In minor units of `currency`.
+             */
+            amountMinor: number;
+            currency: string;
+            payment: PaymentResource & unknown;
+            /**
+             * True when this answers a request already handled (the same Idempotency-Key, or an authorization already settled).
+             */
+            replayed: boolean;
+        };
     };
 };
 
@@ -28049,7 +28690,16 @@ export type PostApiV1AdminResourcesPaymentsByIdVoidResponse = PostApiV1AdminReso
 export type GetApiV1AdminResourcesWebhookSubscriptionsData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many items (default and maximum 5).
+         */
+        limit?: number;
+    };
     url: '/api/v1/admin/resources/webhook-subscriptions';
 };
 
@@ -28091,10 +28741,9 @@ export type GetApiV1AdminResourcesWebhookSubscriptionsResponses = {
         data: {
             subscriptions: Array<AppWebhookSubscription>;
             /**
-             * How many one app may keep.
+             * Pass it as `cursor` for the next page; null on the last page.
              */
-            maxSubscriptions: number;
-            apiVersion: string;
+            nextCursor: string | null;
         };
     };
 };
@@ -28185,7 +28834,7 @@ export type DeleteApiV1AdminResourcesWebhookSubscriptionsByIdData = {
         id: string;
     };
     query: {
-        expectedVersion: number;
+        expectedRevision: number;
     };
     url: '/api/v1/admin/resources/webhook-subscriptions/{id}';
 };
@@ -28241,9 +28890,9 @@ export type DeleteApiV1AdminResourcesWebhookSubscriptionsByIdResponse = DeleteAp
 export type PatchApiV1AdminResourcesWebhookSubscriptionsByIdData = {
     body: {
         /**
-         * The subscription's `version` you read; a stale one is refused with 409.
+         * The subscription's `revision` you read; a stale one is refused with 409.
          */
-        expectedVersion: number;
+        expectedRevision: number;
         /**
          * HTTPS endpoint on one of the app's approved hosts (`allowedHosts`). Private, loopback and reserved addresses are refused.
          */
@@ -28616,14 +29265,12 @@ export type PostApiV1AdminCategoriesError = PostApiV1AdminCategoriesErrors[keyof
 
 export type PostApiV1AdminCategoriesResponses = {
     /**
-     * Category created
+     * The new category
      */
     201: {
         success: true;
         data: {
-            id: string;
-            revision: number;
-            status: 'draft' | 'published' | 'internal';
+            category: CategoryResource;
         };
     };
 };
@@ -28965,9 +29612,7 @@ export type PatchApiV1AdminCategoriesByIdParentResponses = {
 export type PatchApiV1AdminCategoriesByIdParentResponse = PatchApiV1AdminCategoriesByIdParentResponses[keyof PatchApiV1AdminCategoriesByIdParentResponses];
 
 export type DeleteApiV1AdminCategoriesByIdData = {
-    body: {
-        expectedRevision: number;
-    };
+    body?: never;
     headers?: {
         /**
          * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
@@ -28977,7 +29622,12 @@ export type DeleteApiV1AdminCategoriesByIdData = {
     path: {
         id: string;
     };
-    query?: never;
+    query: {
+        /**
+         * The category's `revision` you read; a category changed since is refused with 409 and nothing changes.
+         */
+        expectedRevision: number;
+    };
     url: '/api/v1/admin/categories/{id}';
 };
 
@@ -29016,9 +29666,14 @@ export type DeleteApiV1AdminCategoriesByIdError = DeleteApiV1AdminCategoriesById
 
 export type DeleteApiV1AdminCategoriesByIdResponses = {
     /**
-     * No content
+     * The trashed category
      */
-    204: void;
+    200: {
+        success: true;
+        data: {
+            category: CategoryResource;
+        };
+    };
 };
 
 export type DeleteApiV1AdminCategoriesByIdResponse = DeleteApiV1AdminCategoriesByIdResponses[keyof DeleteApiV1AdminCategoriesByIdResponses];
@@ -29182,13 +29837,12 @@ export type PutApiV1AdminCategoriesByIdError = PutApiV1AdminCategoriesByIdErrors
 
 export type PutApiV1AdminCategoriesByIdResponses = {
     /**
-     * Category updated
+     * The category as updated
      */
     200: {
         success: true;
         data: {
-            revision: number;
-            status: 'draft' | 'published' | 'internal';
+            category: CategoryResource;
         };
     };
 };
@@ -29292,11 +29946,7 @@ export type PostApiV1AdminCategoriesBatchResponses = {
                  * `created` now; `replayed` was created earlier under this key (nothing was created); `failed` was refused, see `error` (the other items are unaffected).
                  */
                 outcome: 'created' | 'replayed' | 'failed';
-                category: {
-                    id: string;
-                    slug: string;
-                    revision: number;
-                } | null;
+                category: CategoryResource & unknown;
                 error: {
                     code: string;
                     message: string;
@@ -29470,13 +30120,12 @@ export type PatchApiV1AdminCategoriesByIdStatusError = PatchApiV1AdminCategories
 
 export type PatchApiV1AdminCategoriesByIdStatusResponses = {
     /**
-     * Category status changed
+     * The category with its new status
      */
     200: {
         success: true;
         data: {
-            revision: number;
-            status: 'draft' | 'published' | 'internal';
+            category: CategoryResource;
         };
     };
 };
@@ -29538,6 +30187,9 @@ export type DeleteApiV1AdminCategoriesByIdPermanentResponse = DeleteApiV1AdminCa
 
 export type PostApiV1AdminCategoriesByIdRestoreData = {
     body: {
+        /**
+         * The category's `revision` you read; a category changed since is refused with 409 and nothing changes.
+         */
         expectedRevision: number;
     };
     headers?: {
@@ -29588,12 +30240,12 @@ export type PostApiV1AdminCategoriesByIdRestoreError = PostApiV1AdminCategoriesB
 
 export type PostApiV1AdminCategoriesByIdRestoreResponses = {
     /**
-     * Category restored
+     * The restored category
      */
     200: {
         success: true;
         data: {
-            [key: string]: unknown;
+            category: CategoryResource;
         };
     };
 };
@@ -29760,15 +30412,12 @@ export type PostApiV1AdminBrandsError = PostApiV1AdminBrandsErrors[keyof PostApi
 
 export type PostApiV1AdminBrandsResponses = {
     /**
-     * Brand created
+     * The new brand
      */
     201: {
         success: true;
         data: {
-            id: string;
-            slug: string;
-            revision: number;
-            status: 'draft' | 'published';
+            brand: BrandResource;
         };
     };
 };
@@ -29876,31 +30525,7 @@ export type GetApiV1AdminBrandsByIdResponses = {
     200: {
         success: true;
         data: {
-            id: string;
-            name: string;
-            slug: string;
-            status: 'draft' | 'published';
-            sortOrder: number;
-            revision: number;
-            noIndex: boolean;
-            excludeFromSitemap: boolean;
-            productCount: number;
-            logo: {
-                mediaId: string;
-                url: string;
-                alt: string;
-                width: number | null;
-                height: number | null;
-            } | null;
-            createdAt: string | null;
-            updatedAt: string | null;
-            deletedAt: string | null;
-            description: string | null;
-            metaTitle: string | null;
-            metaDescription: string | null;
-            canonicalPath: string | null;
-            listingTemplate: string | null;
-            logoMediaId: string | null;
+            brand: BrandResource;
         };
     };
 };
@@ -29983,13 +30608,12 @@ export type PutApiV1AdminBrandsByIdError = PutApiV1AdminBrandsByIdErrors[keyof P
 
 export type PutApiV1AdminBrandsByIdResponses = {
     /**
-     * Brand updated
+     * The brand as updated
      */
     200: {
         success: true;
         data: {
-            revision: number;
-            status: 'draft' | 'published';
+            brand: BrandResource;
         };
     };
 };
@@ -30092,11 +30716,7 @@ export type PostApiV1AdminBrandsBatchResponses = {
                  * `created` now; `replayed` was created earlier under this key (nothing was created); `failed` was refused, see `error` (the other items are unaffected).
                  */
                 outcome: 'created' | 'replayed' | 'failed';
-                brand: {
-                    id: string;
-                    slug: string;
-                    revision: number;
-                } | null;
+                brand: BrandResource & unknown;
                 error: {
                     code: string;
                     message: string;
@@ -30161,13 +30781,12 @@ export type PatchApiV1AdminBrandsByIdStatusError = PatchApiV1AdminBrandsByIdStat
 
 export type PatchApiV1AdminBrandsByIdStatusResponses = {
     /**
-     * Brand status changed
+     * The brand with its new status
      */
     200: {
         success: true;
         data: {
-            revision: number;
-            status: 'draft' | 'published';
+            brand: BrandResource;
         };
     };
 };
@@ -30227,12 +30846,12 @@ export type PostApiV1AdminBrandsTrashError = PostApiV1AdminBrandsTrashErrors[key
 
 export type PostApiV1AdminBrandsTrashResponses = {
     /**
-     * Move brands to trash
+     * The brands, in request order
      */
     200: {
         success: true;
         data: {
-            count: number;
+            brands: Array<BrandResource>;
         };
     };
 };
@@ -30292,12 +30911,12 @@ export type PostApiV1AdminBrandsRestoreError = PostApiV1AdminBrandsRestoreErrors
 
 export type PostApiV1AdminBrandsRestoreResponses = {
     /**
-     * Restore brands from trash
+     * The brands, in request order
      */
     200: {
         success: true;
         data: {
-            count: number;
+            brands: Array<BrandResource>;
         };
     };
 };
@@ -30869,7 +31488,16 @@ export type PutApiV1AdminPriceListsByIdPricesResponse = PutApiV1AdminPriceListsB
 export type GetApiV1AdminObjectsTypesData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many items (default and maximum 100).
+         */
+        limit?: number;
+    };
     url: '/api/v1/admin/objects/types';
 };
 
@@ -30909,7 +31537,11 @@ export type GetApiV1AdminObjectsTypesResponses = {
     200: {
         success: true;
         data: {
-            items: Array<ObjectType>;
+            types: Array<ObjectType>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
         };
     };
 };
@@ -31040,9 +31672,15 @@ export type DeleteApiV1AdminObjectsTypesByTypeError = DeleteApiV1AdminObjectsTyp
 
 export type DeleteApiV1AdminObjectsTypesByTypeResponses = {
     /**
-     * No content
+     * Deleted
      */
-    204: void;
+    200: {
+        success: true;
+        data: {
+            id: string;
+            deleted: true;
+        };
+    };
 };
 
 export type DeleteApiV1AdminObjectsTypesByTypeResponse = DeleteApiV1AdminObjectsTypesByTypeResponses[keyof DeleteApiV1AdminObjectsTypesByTypeResponses];
@@ -31228,10 +31866,11 @@ export type GetApiV1AdminObjectsByTypeResponses = {
     200: {
         success: true;
         data: {
-            type: ObjectType;
             records: Array<ObjectRecord>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
             nextCursor: string | null;
-            total: number;
         };
     };
 };
@@ -31291,9 +31930,15 @@ export type DeleteApiV1AdminObjectsByTypeByIdError = DeleteApiV1AdminObjectsByTy
 
 export type DeleteApiV1AdminObjectsByTypeByIdResponses = {
     /**
-     * No content
+     * Deleted
      */
-    204: void;
+    200: {
+        success: true;
+        data: {
+            id: string;
+            deleted: true;
+        };
+    };
 };
 
 export type DeleteApiV1AdminObjectsByTypeByIdResponse = DeleteApiV1AdminObjectsByTypeByIdResponses[keyof DeleteApiV1AdminObjectsByTypeByIdResponses];
@@ -31710,7 +32355,7 @@ export type GetApiV1AdminCollectionsResponses = {
                 config: string;
                 sortOrder: number;
                 isActive: boolean;
-                version: number;
+                revision: number;
                 listingTemplate: string | null;
                 canonicalPath: string | null;
                 noIndex: boolean;
@@ -31803,14 +32448,12 @@ export type PostApiV1AdminCollectionsError = PostApiV1AdminCollectionsErrors[key
 
 export type PostApiV1AdminCollectionsResponses = {
     /**
-     * Collection created
+     * The new collection
      */
     201: {
         success: true;
         data: {
-            id: string;
-            version: number;
-            slug: string | null;
+            collection: CollectionResource;
         };
     };
 };
@@ -32074,7 +32717,12 @@ export type PostApiV1AdminCollectionsBulkRestoreResponses = {
 export type PostApiV1AdminCollectionsBulkRestoreResponse = PostApiV1AdminCollectionsBulkRestoreResponses[keyof PostApiV1AdminCollectionsBulkRestoreResponses];
 
 export type PostApiV1AdminCollectionsByIdRestoreData = {
-    body?: never;
+    body: {
+        /**
+         * The collection's `revision` you read; a collection changed since is refused with 409 and nothing changes.
+         */
+        expectedRevision: number;
+    };
     headers?: {
         /**
          * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
@@ -32084,12 +32732,7 @@ export type PostApiV1AdminCollectionsByIdRestoreData = {
     path: {
         id: string;
     };
-    query?: {
-        /**
-         * The collection version you read; a change since is refused with 409. Omit to act whatever happened since.
-         */
-        expectedVersion?: number;
-    };
+    query?: never;
     url: '/api/v1/admin/collections/{id}/restore';
 };
 
@@ -32128,12 +32771,12 @@ export type PostApiV1AdminCollectionsByIdRestoreError = PostApiV1AdminCollection
 
 export type PostApiV1AdminCollectionsByIdRestoreResponses = {
     /**
-     * Collection restored
+     * The restored collection
      */
     200: {
         success: true;
         data: {
-            message: string;
+            collection: CollectionResource;
         };
     };
 };
@@ -32145,7 +32788,10 @@ export type PostApiV1AdminCollectionsReorderData = {
         items: Array<{
             id: string;
             sortOrder: number;
-            expectedVersion: number;
+            /**
+             * The collection's `revision` you read; a collection changed since is refused with 409 and nothing changes.
+             */
+            expectedRevision: number;
         }>;
     };
     path?: never;
@@ -32237,7 +32883,7 @@ export type GetApiV1AdminCollectionsByIdSectionsBySectionResponses = {
                 config: string;
                 sortOrder: number;
                 isActive: boolean;
-                version: number;
+                revision: number;
                 listingTemplate: string | null;
                 canonicalPath: string | null;
                 noIndex: boolean;
@@ -32275,11 +32921,11 @@ export type DeleteApiV1AdminCollectionsByIdData = {
     path: {
         id: string;
     };
-    query?: {
+    query: {
         /**
-         * The collection version you read; a change since is refused with 409. Omit to act whatever happened since.
+         * The collection's `revision` you read; a collection changed since is refused with 409 and nothing changes.
          */
-        expectedVersion?: number;
+        expectedRevision: number;
     };
     url: '/api/v1/admin/collections/{id}';
 };
@@ -32319,9 +32965,14 @@ export type DeleteApiV1AdminCollectionsByIdError = DeleteApiV1AdminCollectionsBy
 
 export type DeleteApiV1AdminCollectionsByIdResponses = {
     /**
-     * No content
+     * The trashed collection
      */
-    204: void;
+    200: {
+        success: true;
+        data: {
+            collection: CollectionResource;
+        };
+    };
 };
 
 export type DeleteApiV1AdminCollectionsByIdResponse = DeleteApiV1AdminCollectionsByIdResponses[keyof DeleteApiV1AdminCollectionsByIdResponses];
@@ -32357,7 +33008,7 @@ export type GetApiV1AdminCollectionsByIdResponses = {
             config: string;
             sortOrder: number;
             isActive: boolean;
-            version: number;
+            revision: number;
             listingTemplate: string | null;
             canonicalPath: string | null;
             noIndex: boolean;
@@ -32378,7 +33029,6 @@ export type GetApiV1AdminCollectionsByIdResponse = GetApiV1AdminCollectionsByIdR
 
 export type PutApiV1AdminCollectionsByIdData = {
     body: {
-        expectedVersion: number;
         name?: string;
         /**
          * The collection's handle: lower-case letters, digits and single dashes, unique in the store (trash included). Omit on create to derive it from the name.
@@ -32406,6 +33056,10 @@ export type PutApiV1AdminCollectionsByIdData = {
          * A listing template id from the theme, or null for the theme's default collection listing.
          */
         listingTemplate?: string | null;
+        /**
+         * The collection's `revision` you read; a collection changed since is refused with 409 and nothing changes.
+         */
+        expectedRevision: number;
     };
     headers?: {
         /**
@@ -32455,14 +33109,12 @@ export type PutApiV1AdminCollectionsByIdError = PutApiV1AdminCollectionsByIdErro
 
 export type PutApiV1AdminCollectionsByIdResponses = {
     /**
-     * Collection updated
+     * The collection as updated
      */
     200: {
         success: true;
         data: {
-            id: string;
-            version: number;
-            slug: string | null;
+            collection: CollectionResource;
         };
     };
 };
@@ -32471,9 +33123,12 @@ export type PutApiV1AdminCollectionsByIdResponse = PutApiV1AdminCollectionsByIdR
 
 export type PostApiV1AdminCollectionsByIdProductsData = {
     body: {
-        expectedVersion: number;
         add?: Array<string>;
         remove?: Array<string>;
+        /**
+         * The collection's `revision` you read; a collection changed since is refused with 409 and nothing changes.
+         */
+        expectedRevision: number;
     };
     headers?: {
         /**
@@ -32523,14 +33178,12 @@ export type PostApiV1AdminCollectionsByIdProductsError = PostApiV1AdminCollectio
 
 export type PostApiV1AdminCollectionsByIdProductsResponses = {
     /**
-     * Collection products updated
+     * The collection with its new products
      */
     200: {
         success: true;
         data: {
-            id: string;
-            version: number;
-            slug: string | null;
+            collection: CollectionResource;
         };
     };
 };
@@ -32789,12 +33442,12 @@ export type PutApiV1AdminCustomersByIdTagsError = PutApiV1AdminCustomersByIdTags
 
 export type PutApiV1AdminCustomersByIdTagsResponses = {
     /**
-     * Tags saved
+     * The customer with its new tags
      */
     200: {
         success: true;
         data: {
-            tags: Array<string>;
+            customer: CustomerResource;
         };
     };
 };
@@ -33662,22 +34315,36 @@ export type PostApiV1AdminCustomersData = {
         name: string;
         email: string | null;
         phone: string | null;
+        /**
+         * The first address, which becomes the default.
+         */
         address?: {
-            countryCode?: string | null;
-            name?: string | null;
+            /**
+             * ISO 3166-1 alpha-2.
+             */
+            countryCode: string;
             company?: string | null;
-            line1?: string | null;
+            line1: string;
             line2?: string | null;
             dependentLocality?: string | null;
             locality?: string | null;
             adminArea?: string | null;
             postalCode?: string | null;
+            /**
+             * The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them.
+             */
+            placeIds?: {
+                city?: string | null;
+                zone?: string | null;
+                area?: string | null;
+            };
+            name?: string | null;
             phone?: string | null;
-            city?: string | null;
-            zone?: string | null;
-            area?: string | null;
-            skipValidation?: boolean;
         } | null;
+        /**
+         * Save the address as given, without the country's address rules.
+         */
+        skipAddressValidation?: boolean;
     };
     headers?: {
         /**
@@ -33721,12 +34388,12 @@ export type PostApiV1AdminCustomersError = PostApiV1AdminCustomersErrors[keyof P
 
 export type PostApiV1AdminCustomersResponses = {
     /**
-     * Customer created
+     * The new customer
      */
     201: {
         success: true;
         data: {
-            id: string;
+            customer: CustomerResource;
         };
     };
 };
@@ -34106,12 +34773,12 @@ export type PutApiV1AdminCustomersByIdError = PutApiV1AdminCustomersByIdErrors[k
 
 export type PutApiV1AdminCustomersByIdResponses = {
     /**
-     * Customer updated
+     * The customer as updated
      */
     200: {
         success: true;
         data: {
-            [key: string]: unknown;
+            customer: CustomerResource;
         };
     };
 };
@@ -35058,13 +35725,12 @@ export type PostApiV1AdminPagesError = PostApiV1AdminPagesErrors[keyof PostApiV1
 
 export type PostApiV1AdminPagesResponses = {
     /**
-     * Page created
+     * The new page
      */
     201: {
         success: true;
         data: {
-            revision: number;
-            id: string;
+            page: PageResource;
         };
     };
 };
@@ -35567,46 +36233,12 @@ export type GetApiV1AdminPagesByIdError = GetApiV1AdminPagesByIdErrors[keyof Get
 
 export type GetApiV1AdminPagesByIdResponses = {
     /**
-     * Page details
+     * The page
      */
     200: {
         success: true;
         data: {
-            id: string;
-            contentType: 'page' | 'article';
-            title: string;
-            slug: string;
-            content: string;
-            excerpt: string | null;
-            author: string | null;
-            tags: Array<string>;
-            metaTitle: string | null;
-            metaDescription: string | null;
-            canonicalPath: string | null;
-            noIndex: boolean;
-            excludeFromSitemap: boolean;
-            isPublished: boolean;
-            hideHeader: boolean;
-            hideFooter: boolean;
-            hideTitle: boolean;
-            featuredImage?: {
-                id: string;
-                url: string;
-                filename: string;
-                size: number;
-                mimeType?: string;
-                altText?: string | null;
-                width?: number | null;
-                height?: number | null;
-                folderId?: string | null;
-                [key: string]: unknown;
-            } | null;
-            publishedAt?: string | null;
-            sortOrder: number;
-            revision: number;
-            createdAt: string | null;
-            updatedAt: string | null;
-            deletedAt: string | null;
+            page: PageResource;
         };
     };
 };
@@ -35693,12 +36325,12 @@ export type PutApiV1AdminPagesByIdError = PutApiV1AdminPagesByIdErrors[keyof Put
 
 export type PutApiV1AdminPagesByIdResponses = {
     /**
-     * Page updated
+     * The page as updated
      */
     200: {
         success: true;
         data: {
-            revision: number;
+            page: PageResource;
         };
     };
 };
@@ -35833,7 +36465,10 @@ export type GetApiV1AdminDiscountsResponses = {
                 };
                 startsAt: string | null;
                 endsAt: string | null;
-                timezone: string;
+                /**
+                 * The schedule's IANA time zone.
+                 */
+                timeZone: string;
                 maxRedemptions: number | null;
                 maxRedemptionsPerCustomer: number | null;
                 /**
@@ -35841,7 +36476,10 @@ export type GetApiV1AdminDiscountsResponses = {
                  */
                 currency: string;
                 maxDiscountSpendMinor: number | null;
-                budgetCurrencyCode: string | null;
+                /**
+                 * The spend budget's currency, with maxDiscountSpendMinor.
+                 */
+                budgetCurrency: string | null;
                 /**
                  * Orders that used this discount.
                  */
@@ -35861,6 +36499,9 @@ export type GetApiV1AdminDiscountsResponses = {
                 conditions: Array<{
                     id: string;
                     kind: 'minimum_merchandise_subtotal' | 'minimum_item_quantity';
+                    /**
+                     * As `discounts.create` takes it: an amount beside its `currency`.
+                     */
                     config: {
                         [key: string]: unknown;
                     };
@@ -35870,6 +36511,9 @@ export type GetApiV1AdminDiscountsResponses = {
                     kind: 'percentage_off' | 'fixed_amount_off' | 'free';
                     target: 'line' | 'order' | 'shipping';
                     allocation: 'across' | 'once';
+                    /**
+                     * As `discounts.create` takes it: an amount beside its `currency`.
+                     */
                     config: {
                         [key: string]: unknown;
                     };
@@ -35916,19 +36560,37 @@ export type PostApiV1AdminDiscountsData = {
         method: 'automatic' | 'code';
         priority?: number;
         conflictPolicy?: 'best';
+        /**
+         * Which other discount classes may apply to the same order (both sides must allow it).
+         */
         combinesWith?: {
             product: boolean;
             order: boolean;
             shipping: boolean;
         };
+        /**
+         * When it starts; null: now.
+         */
         startsAt?: string | null;
+        /**
+         * When it ends; null: never.
+         */
         endsAt?: string | null;
-        timezone?: string;
+        /**
+         * The schedule's IANA time zone, such as Europe/London. Omit it for the store's zone (Settings → Store details).
+         */
+        timeZone?: string;
         maxRedemptions?: number | null;
         maxRedemptionsPerCustomer?: number | null;
         maxDiscountSpendMinor?: number | null;
-        budgetCurrencyCode?: string | null;
+        /**
+         * The spend budget's currency (ISO 4217), with maxDiscountSpendMinor.
+         */
+        budgetCurrency?: string | null;
         codes?: Array<{
+            /**
+             * Saved upper-case.
+             */
             code: string;
             isActive?: boolean;
         }>;
@@ -35936,9 +36598,15 @@ export type PostApiV1AdminDiscountsData = {
             kind: 'minimum_merchandise_subtotal';
             config: {
                 amountMinor: number;
-                currencyCode: string;
+                /**
+                 * ISO 4217, the store currency.
+                 */
+                currency: string;
                 productIds?: Array<string>;
                 collectionIds?: Array<string>;
+                /**
+                 * The minimum for the discount's bundled free shipping, after its savings.
+                 */
                 shippingOnly?: boolean;
             };
         } | {
@@ -35949,6 +36617,9 @@ export type PostApiV1AdminDiscountsData = {
                 collectionIds?: Array<string>;
             };
         }>;
+        /**
+         * One value; a product or order value may add free shipping as a second effect.
+         */
         effects: Array<{
             target: 'line' | 'order' | 'shipping';
             allocation: 'across' | 'once';
@@ -35957,10 +36628,16 @@ export type PostApiV1AdminDiscountsData = {
                 basisPoints: number;
                 productIds?: Array<string>;
                 collectionIds?: Array<string>;
+                /**
+                 * Buy X get Y: what the customer buys, a quantity or an amount (with its currency).
+                 */
                 buy?: {
                     quantity?: number;
                     amountMinor?: number;
-                    currencyCode?: string;
+                    /**
+                     * ISO 4217, the store currency.
+                     */
+                    currency?: string;
                     productIds?: Array<string>;
                     collectionIds?: Array<string>;
                 };
@@ -35973,7 +36650,10 @@ export type PostApiV1AdminDiscountsData = {
             kind: 'fixed_amount_off';
             config: {
                 amountMinor: number;
-                currencyCode: string;
+                /**
+                 * ISO 4217, the store currency.
+                 */
+                currency: string;
                 productIds?: Array<string>;
                 collectionIds?: Array<string>;
                 eachItem?: boolean;
@@ -35986,6 +36666,9 @@ export type PostApiV1AdminDiscountsData = {
                 [key: string]: never;
             };
         }>;
+        /**
+         * Only signed-in customers in any of these customer segments get this discount; empty means every customer.
+         */
         customerSegmentIds?: Array<string>;
     };
     headers?: {
@@ -36034,14 +36717,12 @@ export type PostApiV1AdminDiscountsError = PostApiV1AdminDiscountsErrors[keyof P
 
 export type PostApiV1AdminDiscountsResponses = {
     /**
-     * Draft discount created
+     * The new draft discount
      */
     201: {
         success: true;
         data: {
-            id: string;
-            revision: number;
-            status: 'draft' | 'active' | 'paused' | 'archived';
+            discount: DiscountResource;
         };
     };
 };
@@ -36049,9 +36730,7 @@ export type PostApiV1AdminDiscountsResponses = {
 export type PostApiV1AdminDiscountsResponse = PostApiV1AdminDiscountsResponses[keyof PostApiV1AdminDiscountsResponses];
 
 export type DeleteApiV1AdminDiscountsByIdData = {
-    body: {
-        expectedRevision: number;
-    };
+    body?: never;
     headers?: {
         /**
          * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
@@ -36061,7 +36740,12 @@ export type DeleteApiV1AdminDiscountsByIdData = {
     path: {
         id: string;
     };
-    query?: never;
+    query: {
+        /**
+         * The discount's `revision` you read; a discount changed since is refused with 409 and nothing changes.
+         */
+        expectedRevision: number;
+    };
     url: '/api/v1/admin/discounts/{id}';
 };
 
@@ -36100,9 +36784,14 @@ export type DeleteApiV1AdminDiscountsByIdError = DeleteApiV1AdminDiscountsByIdEr
 
 export type DeleteApiV1AdminDiscountsByIdResponses = {
     /**
-     * No content
+     * The archived discount
      */
-    204: void;
+    200: {
+        success: true;
+        data: {
+            discount: DiscountResource;
+        };
+    };
 };
 
 export type DeleteApiV1AdminDiscountsByIdResponse = DeleteApiV1AdminDiscountsByIdResponses[keyof DeleteApiV1AdminDiscountsByIdResponses];
@@ -36147,71 +36836,12 @@ export type GetApiV1AdminDiscountsByIdError = GetApiV1AdminDiscountsByIdErrors[k
 
 export type GetApiV1AdminDiscountsByIdResponses = {
     /**
-     * Discount
+     * The discount
      */
     200: {
         success: true;
         data: {
-            id: string;
-            revision: number;
-            name: string;
-            title: string | null;
-            method: 'automatic' | 'code';
-            status: 'draft' | 'active' | 'paused' | 'archived';
-            priority: number;
-            conflictPolicy: 'best';
-            combinesWith: {
-                product: boolean;
-                order: boolean;
-                shipping: boolean;
-            };
-            startsAt: string | null;
-            endsAt: string | null;
-            timezone: string;
-            maxRedemptions: number | null;
-            maxRedemptionsPerCustomer: number | null;
-            /**
-             * The store currency: rule amounts (amountMinor) and the spend are integer minor units of it.
-             */
-            currency: string;
-            maxDiscountSpendMinor: number | null;
-            budgetCurrencyCode: string | null;
-            /**
-             * Orders that used this discount.
-             */
-            redemptionCount: number;
-            customerRedemptionCount: number;
-            /**
-             * Total savings given, in minor units.
-             */
-            discountSpendMinor: number;
-            createdAt: string;
-            updatedAt: string;
-            deletedAt: string | null;
-            codes: Array<{
-                code: string;
-                isActive: boolean;
-            }>;
-            conditions: Array<{
-                id: string;
-                kind: 'minimum_merchandise_subtotal' | 'minimum_item_quantity';
-                config: {
-                    [key: string]: unknown;
-                };
-            }>;
-            effects: Array<{
-                id: string;
-                kind: 'percentage_off' | 'fixed_amount_off' | 'free';
-                target: 'line' | 'order' | 'shipping';
-                allocation: 'across' | 'once';
-                config: {
-                    [key: string]: unknown;
-                };
-            }>;
-            /**
-             * Only signed-in customers in any of these customer segments get this discount; empty means every customer.
-             */
-            customerSegmentIds: Array<string>;
+            discount: DiscountResource;
         };
     };
 };
@@ -36220,25 +36850,46 @@ export type GetApiV1AdminDiscountsByIdResponse = GetApiV1AdminDiscountsByIdRespo
 
 export type PutApiV1AdminDiscountsByIdData = {
     body: {
+        /**
+         * The discount's `revision` you read; a discount changed since is refused with 409 and nothing changes.
+         */
         expectedRevision: number;
         name: string;
         title?: string | null;
         method: 'automatic' | 'code';
         priority?: number;
         conflictPolicy?: 'best';
+        /**
+         * Which other discount classes may apply to the same order (both sides must allow it).
+         */
         combinesWith?: {
             product: boolean;
             order: boolean;
             shipping: boolean;
         };
+        /**
+         * When it starts; null: now.
+         */
         startsAt?: string | null;
+        /**
+         * When it ends; null: never.
+         */
         endsAt?: string | null;
-        timezone?: string;
+        /**
+         * The schedule's IANA time zone, such as Europe/London. Omit it for the store's zone (Settings → Store details).
+         */
+        timeZone?: string;
         maxRedemptions?: number | null;
         maxRedemptionsPerCustomer?: number | null;
         maxDiscountSpendMinor?: number | null;
-        budgetCurrencyCode?: string | null;
+        /**
+         * The spend budget's currency (ISO 4217), with maxDiscountSpendMinor.
+         */
+        budgetCurrency?: string | null;
         codes?: Array<{
+            /**
+             * Saved upper-case.
+             */
             code: string;
             isActive?: boolean;
         }>;
@@ -36246,9 +36897,15 @@ export type PutApiV1AdminDiscountsByIdData = {
             kind: 'minimum_merchandise_subtotal';
             config: {
                 amountMinor: number;
-                currencyCode: string;
+                /**
+                 * ISO 4217, the store currency.
+                 */
+                currency: string;
                 productIds?: Array<string>;
                 collectionIds?: Array<string>;
+                /**
+                 * The minimum for the discount's bundled free shipping, after its savings.
+                 */
                 shippingOnly?: boolean;
             };
         } | {
@@ -36259,6 +36916,9 @@ export type PutApiV1AdminDiscountsByIdData = {
                 collectionIds?: Array<string>;
             };
         }>;
+        /**
+         * One value; a product or order value may add free shipping as a second effect.
+         */
         effects: Array<{
             target: 'line' | 'order' | 'shipping';
             allocation: 'across' | 'once';
@@ -36267,10 +36927,16 @@ export type PutApiV1AdminDiscountsByIdData = {
                 basisPoints: number;
                 productIds?: Array<string>;
                 collectionIds?: Array<string>;
+                /**
+                 * Buy X get Y: what the customer buys, a quantity or an amount (with its currency).
+                 */
                 buy?: {
                     quantity?: number;
                     amountMinor?: number;
-                    currencyCode?: string;
+                    /**
+                     * ISO 4217, the store currency.
+                     */
+                    currency?: string;
                     productIds?: Array<string>;
                     collectionIds?: Array<string>;
                 };
@@ -36283,7 +36949,10 @@ export type PutApiV1AdminDiscountsByIdData = {
             kind: 'fixed_amount_off';
             config: {
                 amountMinor: number;
-                currencyCode: string;
+                /**
+                 * ISO 4217, the store currency.
+                 */
+                currency: string;
                 productIds?: Array<string>;
                 collectionIds?: Array<string>;
                 eachItem?: boolean;
@@ -36296,6 +36965,9 @@ export type PutApiV1AdminDiscountsByIdData = {
                 [key: string]: never;
             };
         }>;
+        /**
+         * Only signed-in customers in any of these customer segments get this discount; empty means every customer.
+         */
         customerSegmentIds?: Array<string>;
     };
     headers?: {
@@ -36346,14 +37018,12 @@ export type PutApiV1AdminDiscountsByIdError = PutApiV1AdminDiscountsByIdErrors[k
 
 export type PutApiV1AdminDiscountsByIdResponses = {
     /**
-     * Discount updated
+     * The discount as updated
      */
     200: {
         success: true;
         data: {
-            id: string;
-            revision: number;
-            status: 'draft' | 'active' | 'paused' | 'archived';
+            discount: DiscountResource;
         };
     };
 };
@@ -36362,6 +37032,9 @@ export type PutApiV1AdminDiscountsByIdResponse = PutApiV1AdminDiscountsByIdRespo
 
 export type PostApiV1AdminDiscountsByIdPreviewData = {
     body: {
+        /**
+         * The discount's `revision` you read; a discount changed since is refused with 409 and nothing changes.
+         */
         expectedRevision: number;
         /**
          * Preview as this customer, signed in: their usage and customer segments. Without one, a discount limited to segments does not apply.
@@ -36445,6 +37118,9 @@ export type PostApiV1AdminDiscountsByIdPreviewResponse = PostApiV1AdminDiscounts
 
 export type PostApiV1AdminDiscountsByIdActivateData = {
     body: {
+        /**
+         * The discount's `revision` you read; a discount changed since is refused with 409 and nothing changes.
+         */
         expectedRevision: number;
     };
     headers?: {
@@ -36500,9 +37176,7 @@ export type PostApiV1AdminDiscountsByIdActivateResponses = {
     200: {
         success: true;
         data: {
-            id: string;
-            revision: number;
-            status: 'draft' | 'active' | 'paused' | 'archived';
+            discount: DiscountResource;
         };
     };
 };
@@ -36511,6 +37185,9 @@ export type PostApiV1AdminDiscountsByIdActivateResponse = PostApiV1AdminDiscount
 
 export type PostApiV1AdminDiscountsByIdPauseData = {
     body: {
+        /**
+         * The discount's `revision` you read; a discount changed since is refused with 409 and nothing changes.
+         */
         expectedRevision: number;
     };
     headers?: {
@@ -36566,9 +37243,7 @@ export type PostApiV1AdminDiscountsByIdPauseResponses = {
     200: {
         success: true;
         data: {
-            id: string;
-            revision: number;
-            status: 'draft' | 'active' | 'paused' | 'archived';
+            discount: DiscountResource;
         };
     };
 };
@@ -36654,7 +37329,10 @@ export type GetApiV1AdminMediaResponses = {
                 posterUrl: string | null;
                 folderId: string | null;
                 status: 'ready' | 'trashed' | 'deleting' | 'deleted';
-                version: number;
+                /**
+                 * Send it as `expectedRevision` to change the file; every change advances it.
+                 */
+                revision: number;
                 createdAt: string;
                 updatedAt: string;
                 trashedAt: string | null;
@@ -36836,7 +37514,10 @@ export type PostApiV1AdminMediaUploadsImportUrlResponses = {
                 posterUrl: string | null;
                 folderId: string | null;
                 status: 'ready' | 'trashed' | 'deleting' | 'deleted';
-                version: number;
+                /**
+                 * Send it as `expectedRevision` to change the file; every change advances it.
+                 */
+                revision: number;
                 createdAt: string;
                 updatedAt: string;
                 trashedAt: string | null;
@@ -37108,7 +37789,10 @@ export type PostApiV1AdminMediaUploadsByIdCompleteResponses = {
                 posterUrl: string | null;
                 folderId: string | null;
                 status: 'ready' | 'trashed' | 'deleting' | 'deleted';
-                version: number;
+                /**
+                 * Send it as `expectedRevision` to change the file; every change advances it.
+                 */
+                revision: number;
                 createdAt: string;
                 updatedAt: string;
                 trashedAt: string | null;
@@ -37246,7 +37930,10 @@ export type GetApiV1AdminMediaByIdResponses = {
                 posterUrl: string | null;
                 folderId: string | null;
                 status: 'ready' | 'trashed' | 'deleting' | 'deleted';
-                version: number;
+                /**
+                 * Send it as `expectedRevision` to change the file; every change advances it.
+                 */
+                revision: number;
                 createdAt: string;
                 updatedAt: string;
                 trashedAt: string | null;
@@ -37260,7 +37947,10 @@ export type GetApiV1AdminMediaByIdResponse = GetApiV1AdminMediaByIdResponses[key
 
 export type PatchApiV1AdminMediaByIdData = {
     body: {
-        expectedVersion: number;
+        /**
+         * The file's `revision` you read; a file changed since is refused with 409 and nothing changes.
+         */
+        expectedRevision: number;
         filename?: string;
         altText?: string | null;
         caption?: string | null;
@@ -37341,7 +38031,10 @@ export type PatchApiV1AdminMediaByIdResponses = {
                 posterUrl: string | null;
                 folderId: string | null;
                 status: 'ready' | 'trashed' | 'deleting' | 'deleted';
-                version: number;
+                /**
+                 * Send it as `expectedRevision` to change the file; every change advances it.
+                 */
+                revision: number;
                 createdAt: string;
                 updatedAt: string;
                 trashedAt: string | null;
@@ -37355,7 +38048,10 @@ export type PatchApiV1AdminMediaByIdResponse = PatchApiV1AdminMediaByIdResponses
 
 export type PostApiV1AdminMediaByIdTrashData = {
     body: {
-        expectedVersion: number;
+        /**
+         * The file's `revision` you read; a file changed since is refused with 409 and nothing changes.
+         */
+        expectedRevision: number;
     };
     headers?: {
         /**
@@ -37428,7 +38124,10 @@ export type PostApiV1AdminMediaByIdTrashResponses = {
                 posterUrl: string | null;
                 folderId: string | null;
                 status: 'ready' | 'trashed' | 'deleting' | 'deleted';
-                version: number;
+                /**
+                 * Send it as `expectedRevision` to change the file; every change advances it.
+                 */
+                revision: number;
                 createdAt: string;
                 updatedAt: string;
                 trashedAt: string | null;
@@ -37442,7 +38141,10 @@ export type PostApiV1AdminMediaByIdTrashResponse = PostApiV1AdminMediaByIdTrashR
 
 export type PostApiV1AdminMediaByIdRestoreData = {
     body: {
-        expectedVersion: number;
+        /**
+         * The file's `revision` you read; a file changed since is refused with 409 and nothing changes.
+         */
+        expectedRevision: number;
     };
     path: {
         id: string;
@@ -37509,7 +38211,10 @@ export type PostApiV1AdminMediaByIdRestoreResponses = {
                 posterUrl: string | null;
                 folderId: string | null;
                 status: 'ready' | 'trashed' | 'deleting' | 'deleted';
-                version: number;
+                /**
+                 * Send it as `expectedRevision` to change the file; every change advances it.
+                 */
+                revision: number;
                 createdAt: string;
                 updatedAt: string;
                 trashedAt: string | null;
@@ -37596,7 +38301,10 @@ export type PostApiV1AdminMediaByIdVariantsResponses = {
                 posterUrl: string | null;
                 folderId: string | null;
                 status: 'ready' | 'trashed' | 'deleting' | 'deleted';
-                version: number;
+                /**
+                 * Send it as `expectedRevision` to change the file; every change advances it.
+                 */
+                revision: number;
                 createdAt: string;
                 updatedAt: string;
                 trashedAt: string | null;
@@ -37728,7 +38436,7 @@ export type DeleteApiV1AdminMediaByIdPermanentData = {
         id: string;
     };
     query: {
-        expectedVersion: number;
+        expectedRevision: number;
     };
     url: '/api/v1/admin/media/{id}/permanent';
 };
@@ -37783,7 +38491,10 @@ export type PostApiV1AdminMediaMoveData = {
     body: {
         items: Array<{
             id: string;
-            expectedVersion: number;
+            /**
+             * The file's `revision` you read; a file changed since is refused with 409 and nothing changes.
+             */
+            expectedRevision: number;
         }>;
         folderId?: string | null;
     };
@@ -39757,6 +40468,7 @@ export type PostApiV1AdminInventoryByVariantIdAdjustResponses = {
              * That location's on-hand after
              */
             locationNewStock?: number;
+            variant: VariantResource;
             [key: string]: unknown;
         };
     };
@@ -40043,6 +40755,7 @@ export type PostApiV1AdminInventoryStockSetResponses = {
              * That location's on-hand after
              */
             locationNewStock?: number;
+            variant: VariantResource;
         };
     };
 };
@@ -42065,27 +42778,7 @@ export type GetApiV1AdminResourcesThemeResponses = {
     200: {
         success: true;
         data: {
-            theme: {
-                /**
-                 * The theme document version section settings follow.
-                 */
-                documentVersion: number;
-                publishedRevision: number;
-                draft: ThemeDraftReceipt;
-                draftDiffersFromLive: boolean;
-                /**
-                 * The template the draft came from (`<app id>/<template id>`), if any.
-                 */
-                template: string | null;
-                page: 'home' | 'landing';
-                slug: string | null;
-                sections: Array<ThemeSection>;
-                landingPages: Array<{
-                    slug: string;
-                    title: string;
-                }>;
-                readAt: string;
-            };
+            theme: ThemeResource;
         };
     };
 };
@@ -42099,9 +42792,9 @@ export type PostApiV1AdminResourcesThemeApplyTemplateData = {
          */
         template: string;
         /**
-         * The draft `revision` you read (`theme.get`); 0 when no draft was ever saved. A draft changed since is refused with 409 and nothing is saved.
+         * The draft `revision` you read (`theme.draft.revision`); 0 when no draft was ever saved. A draft changed since is refused with 409 and nothing is saved.
          */
-        expectedDraftRevision: number;
+        expectedRevision: number;
         /**
          * The draft's `basePublishedRevision` you read: the live theme it was based on.
          */
@@ -42153,12 +42846,12 @@ export type PostApiV1AdminResourcesThemeApplyTemplateError = PostApiV1AdminResou
 
 export type PostApiV1AdminResourcesThemeApplyTemplateResponses = {
     /**
-     * The draft with the template applied
+     * The theme with the template applied (its homepage), the template and the handles left out
      */
     200: {
         success: true;
         data: {
-            draft: ThemeDraftReceipt;
+            theme: ThemeResource;
             template: string;
             unresolved: Array<ThemeUnresolvedHandle>;
         };
@@ -42182,9 +42875,9 @@ export type PostApiV1AdminResourcesThemeSectionSettingsData = {
             [key: string]: unknown;
         };
         /**
-         * The draft `revision` you read (`theme.get`); 0 when no draft was ever saved. A draft changed since is refused with 409 and nothing is saved.
+         * The draft `revision` you read (`theme.draft.revision`); 0 when no draft was ever saved. A draft changed since is refused with 409 and nothing is saved.
          */
-        expectedDraftRevision: number;
+        expectedRevision: number;
         /**
          * The draft's `basePublishedRevision` you read: the live theme it was based on.
          */
@@ -42236,12 +42929,12 @@ export type PostApiV1AdminResourcesThemeSectionSettingsError = PostApiV1AdminRes
 
 export type PostApiV1AdminResourcesThemeSectionSettingsResponses = {
     /**
-     * The saved draft and the section as it now reads
+     * The theme as it now reads (the section's page) and the section
      */
     200: {
         success: true;
         data: {
-            draft: ThemeDraftReceipt;
+            theme: ThemeResource;
             section: ThemeSection;
         };
     };
@@ -42473,6 +43166,256 @@ export type PostApiV1AdminResourcesMenusResponses = {
 };
 
 export type PostApiV1AdminResourcesMenusResponse = PostApiV1AdminResourcesMenusResponses[keyof PostApiV1AdminResourcesMenusResponses];
+
+export type GetApiV1AdminResourcesCategoriesByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/categories/{id}';
+};
+
+export type GetApiV1AdminResourcesCategoriesByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesCategoriesByIdError = GetApiV1AdminResourcesCategoriesByIdErrors[keyof GetApiV1AdminResourcesCategoriesByIdErrors];
+
+export type GetApiV1AdminResourcesCategoriesByIdResponses = {
+    /**
+     * The category
+     */
+    200: {
+        success: true;
+        data: {
+            category: CategoryResource;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesCategoriesByIdResponse = GetApiV1AdminResourcesCategoriesByIdResponses[keyof GetApiV1AdminResourcesCategoriesByIdResponses];
+
+export type GetApiV1AdminResourcesCategoriesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many records; a page may hold fewer to stay within the response budget.
+         */
+        limit?: number;
+        /**
+         * Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.
+         */
+        updatedSince?: string;
+        /**
+         * Only the direct children of this category; `root` lists the top level.
+         */
+        parentId?: string;
+        /**
+         * true lists trashed categories instead.
+         */
+        trashed?: 'true' | 'false';
+    };
+    url: '/api/v1/admin/resources/categories';
+};
+
+export type GetApiV1AdminResourcesCategoriesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesCategoriesError = GetApiV1AdminResourcesCategoriesErrors[keyof GetApiV1AdminResourcesCategoriesErrors];
+
+export type GetApiV1AdminResourcesCategoriesResponses = {
+    /**
+     * A page of categories
+     */
+    200: {
+        success: true;
+        data: {
+            categories: Array<CategoryResource>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesCategoriesResponse = GetApiV1AdminResourcesCategoriesResponses[keyof GetApiV1AdminResourcesCategoriesResponses];
+
+export type GetApiV1AdminResourcesCollectionsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/collections/{id}';
+};
+
+export type GetApiV1AdminResourcesCollectionsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesCollectionsByIdError = GetApiV1AdminResourcesCollectionsByIdErrors[keyof GetApiV1AdminResourcesCollectionsByIdErrors];
+
+export type GetApiV1AdminResourcesCollectionsByIdResponses = {
+    /**
+     * The collection
+     */
+    200: {
+        success: true;
+        data: {
+            collection: CollectionResource;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesCollectionsByIdResponse = GetApiV1AdminResourcesCollectionsByIdResponses[keyof GetApiV1AdminResourcesCollectionsByIdResponses];
+
+export type GetApiV1AdminResourcesCollectionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many records; a page may hold fewer to stay within the response budget.
+         */
+        limit?: number;
+        /**
+         * Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.
+         */
+        updatedSince?: string;
+        /**
+         * true lists trashed collections instead.
+         */
+        trashed?: 'true' | 'false';
+    };
+    url: '/api/v1/admin/resources/collections';
+};
+
+export type GetApiV1AdminResourcesCollectionsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesCollectionsError = GetApiV1AdminResourcesCollectionsErrors[keyof GetApiV1AdminResourcesCollectionsErrors];
+
+export type GetApiV1AdminResourcesCollectionsResponses = {
+    /**
+     * A page of collections
+     */
+    200: {
+        success: true;
+        data: {
+            collections: Array<CollectionResource>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesCollectionsResponse = GetApiV1AdminResourcesCollectionsResponses[keyof GetApiV1AdminResourcesCollectionsResponses];
 
 export type GetApiV1AdminTranslationsResourcesData = {
     body?: never;
@@ -50390,7 +51333,16 @@ export type GetApiV1AdminSettingsSalesChannelsByIdProductsResponse = GetApiV1Adm
 export type GetApiV1AdminSettingsLanguagesData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many items (default and maximum 200).
+         */
+        limit?: number;
+    };
     url: '/api/v1/admin/settings/languages';
 };
 
@@ -50430,7 +51382,11 @@ export type GetApiV1AdminSettingsLanguagesResponses = {
     200: {
         success: true;
         data: {
-            items: Array<StoreLanguage>;
+            languages: Array<StoreLanguage>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
         };
     };
 };
@@ -53310,9 +54266,9 @@ export type PutApiV1AdminOrdersByIdStatusData = {
         status: 'pending' | 'processing' | 'confirmed' | 'shipped' | 'delivered' | 'completed' | 'cancelled' | 'returned' | 'refunded' | 'incomplete';
         reason?: 'customer_changed_mind' | 'unreachable' | 'fake_order' | 'out_of_stock' | 'other';
         /**
-         * The order version you read (`version` on the order). A change since is refused with 409 and nothing changes. Omit to change it whatever happened since.
+         * The order `revision` you read. A change since is refused with 409 and nothing changes. Omit to change it whatever happened since.
          */
-        expectedVersion?: number;
+        expectedRevision?: number;
     };
     headers?: {
         /**
@@ -53354,12 +54310,12 @@ export type PutApiV1AdminOrdersByIdStatusError = PutApiV1AdminOrdersByIdStatusEr
 
 export type PutApiV1AdminOrdersByIdStatusResponses = {
     /**
-     * Status updated
+     * The order after the change
      */
     200: {
         success: true;
         data: {
-            message: string;
+            order: OrderResource;
         };
     };
 };
@@ -53367,7 +54323,12 @@ export type PutApiV1AdminOrdersByIdStatusResponses = {
 export type PutApiV1AdminOrdersByIdStatusResponse = PutApiV1AdminOrdersByIdStatusResponses[keyof PutApiV1AdminOrdersByIdStatusResponses];
 
 export type PostApiV1AdminOrdersByIdMarkDeliveredData = {
-    body?: never;
+    body: {
+        /**
+         * The order `revision` you read; a change since is refused with 409. Omit to mark it whatever happened since.
+         */
+        expectedRevision?: number;
+    };
     headers?: {
         /**
          * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
@@ -53377,12 +54338,7 @@ export type PostApiV1AdminOrdersByIdMarkDeliveredData = {
     path: {
         id: string;
     };
-    query?: {
-        /**
-         * The order version you read; a change since is refused with 409. Omit to mark it whatever happened since.
-         */
-        expectedVersion?: number;
-    };
+    query?: never;
     url: '/api/v1/admin/orders/{id}/mark-delivered';
 };
 
@@ -53413,12 +54369,12 @@ export type PostApiV1AdminOrdersByIdMarkDeliveredError = PostApiV1AdminOrdersByI
 
 export type PostApiV1AdminOrdersByIdMarkDeliveredResponses = {
     /**
-     * Order delivered
+     * The delivered order
      */
     200: {
         success: true;
         data: {
-            message: string;
+            order: OrderResource;
         };
     };
 };
@@ -57612,12 +58568,6 @@ export type PutApiV1AdminOrdersByIdDetailsData = {
         billingPostalCode?: string | null;
         expectedVersion: number;
     };
-    headers?: {
-        /**
-         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
-         */
-        'idempotency-key'?: string;
-    };
     path: {
         id: string;
     };
@@ -58441,9 +59391,9 @@ export type PostApiV1AdminOrdersByIdFulfillmentsResponse = PostApiV1AdminOrdersB
 export type PostApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoidData = {
     body: {
         /**
-         * The order version you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since.
+         * The order `revision` you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since.
          */
-        expectedVersion?: number;
+        expectedRevision?: number;
     };
     headers?: {
         /**
@@ -58490,11 +59440,13 @@ export type PostApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoidError = PostA
 
 export type PostApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoidResponses = {
     /**
-     * Fulfilment voided
+     * The voided fulfilment and the order after it
      */
     200: {
         success: true;
         data: {
+            order: OrderResource;
+            fulfillment: FulfillmentResource;
             orderId: string;
             fulfillmentId: string;
             quantity: number;
@@ -58508,9 +59460,9 @@ export type PostApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoidResponse = Po
 export type PostApiV1AdminOrdersByIdPickupReadyData = {
     body: {
         /**
-         * The order version you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since.
+         * The order `revision` you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since.
          */
-        expectedVersion?: number;
+        expectedRevision?: number;
     };
     headers?: {
         /**
@@ -58556,11 +59508,12 @@ export type PostApiV1AdminOrdersByIdPickupReadyError = PostApiV1AdminOrdersByIdP
 
 export type PostApiV1AdminOrdersByIdPickupReadyResponses = {
     /**
-     * Order marked ready for pickup
+     * The order, marked ready for pickup
      */
     200: {
         success: true;
         data: {
+            order: OrderResource;
             orderId: string;
             pickupReadyAt: string;
             replayed: boolean;
@@ -61429,11 +62382,12 @@ export type PutApiV1AdminProductsByIdPublicationsError = PutApiV1AdminProductsBy
 
 export type PutApiV1AdminProductsByIdPublicationsResponses = {
     /**
-     * The channels the product is published to
+     * The product and the channels it is published to
      */
     200: {
         success: true;
         data: {
+            product: ProductResource;
             salesChannelIds: Array<string>;
         };
     };
@@ -61941,7 +62895,10 @@ export type DeleteApiV1AdminProductsByIdData = {
         id: string;
     };
     query: {
-        expectedAggregateRevision: number;
+        /**
+         * The product `revision` you read; a change since is refused with 409 and nothing changes.
+         */
+        expectedRevision: number;
     };
     url: '/api/v1/admin/products/{id}';
 };
@@ -61981,12 +62938,12 @@ export type DeleteApiV1AdminProductsByIdError = DeleteApiV1AdminProductsByIdErro
 
 export type DeleteApiV1AdminProductsByIdResponses = {
     /**
-     * Product moved to trash
+     * The product, in the trash
      */
     200: {
         success: true;
         data: {
-            aggregateRevision: number;
+            product: ProductResource;
         };
     };
 };
@@ -62417,7 +63374,12 @@ export type PutApiV1AdminProductsByIdResponses = {
 export type PutApiV1AdminProductsByIdResponse = PutApiV1AdminProductsByIdResponses[keyof PutApiV1AdminProductsByIdResponses];
 
 export type PostApiV1AdminProductsByIdRestoreData = {
-    body?: never;
+    body: {
+        /**
+         * The product `revision` you read; a change since is refused with 409 and nothing changes.
+         */
+        expectedRevision: number;
+    };
     headers?: {
         /**
          * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
@@ -62427,9 +63389,7 @@ export type PostApiV1AdminProductsByIdRestoreData = {
     path: {
         id: string;
     };
-    query: {
-        expectedAggregateRevision: number;
-    };
+    query?: never;
     url: '/api/v1/admin/products/{id}/restore';
 };
 
@@ -62468,12 +63428,12 @@ export type PostApiV1AdminProductsByIdRestoreError = PostApiV1AdminProductsByIdR
 
 export type PostApiV1AdminProductsByIdRestoreResponses = {
     /**
-     * Product restored
+     * The restored product
      */
     200: {
         success: true;
         data: {
-            aggregateRevision: number;
+            product: ProductResource;
         };
     };
 };
@@ -62486,7 +63446,10 @@ export type DeleteApiV1AdminProductsByIdPermanentData = {
         id: string;
     };
     query: {
-        expectedAggregateRevision: number;
+        /**
+         * The product `revision` you read; a change since is refused with 409 and nothing changes.
+         */
+        expectedRevision: number;
     };
     url: '/api/v1/admin/products/{id}/permanent';
 };
@@ -62764,7 +63727,10 @@ export type DeleteApiV1AdminProductsByIdVariantsByVariantIdData = {
         variantId: string;
     };
     query: {
-        expectedAggregateRevision: number;
+        /**
+         * The product `revision` you read; a change since is refused with 409 and nothing changes.
+         */
+        expectedRevision: number;
     };
     url: '/api/v1/admin/products/{id}/variants/{variantId}';
 };
@@ -62804,12 +63770,12 @@ export type DeleteApiV1AdminProductsByIdVariantsByVariantIdError = DeleteApiV1Ad
 
 export type DeleteApiV1AdminProductsByIdVariantsByVariantIdResponses = {
     /**
-     * Variant deleted
+     * The product without the retired SKU
      */
     200: {
         success: true;
         data: {
-            aggregateRevision: number;
+            product: ProductResource;
         };
     };
 };
@@ -70434,6 +71400,14 @@ export type GetApiV1AdminCustomFieldDefinitionsData = {
     path?: never;
     query?: {
         ownerType?: 'product' | 'variant' | 'customer' | 'order' | 'category' | 'collection' | 'brand' | 'page';
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many items (default and maximum 800).
+         */
+        limit?: number;
     };
     url: '/api/v1/admin/custom-field-definitions';
 };
@@ -70469,7 +71443,7 @@ export type GetApiV1AdminCustomFieldDefinitionsError = GetApiV1AdminCustomFieldD
 
 export type GetApiV1AdminCustomFieldDefinitionsResponses = {
     /**
-     * Definitions
+     * A page of definitions
      */
     200: {
         success: true;
@@ -70480,6 +71454,10 @@ export type GetApiV1AdminCustomFieldDefinitionsResponses = {
                  */
                 valueCount: number;
             }>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
         };
     };
 };

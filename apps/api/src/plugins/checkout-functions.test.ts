@@ -268,7 +268,7 @@ describe("checkout app functions (real schema, bundled and test apps)", () => {
     // acme.bulk-discount (priority 100) counts the cart: an order discount, 10% at 2 units.
     await installBulk({ count_by: "cart", tier1_quantity: 2, tier1_percent: 10 });
     await installTestApp("acme.picky", [{ point: "checkout.discounts", priority: 200 }]);
-    let combinesWith: Record<string, boolean> | undefined = { orderDiscounts: false };
+    let combinesWith: Record<string, boolean> | undefined = { order: false };
     answers["acme.picky"] = () => ok({ discounts: [{
       title: "Mug deal", code: "MUG", target: { kind: "lines", lineIds: ["cart:1:v_mug"] },
       value: { type: "fixed_amount", amountMinor: 5_000 }, ...(combinesWith ? { combinesWith } : {}),

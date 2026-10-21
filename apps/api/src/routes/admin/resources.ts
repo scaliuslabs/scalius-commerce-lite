@@ -6,11 +6,15 @@
 // order and stop early before a page passes the response budget, so a sync
 // walks every change once without offsets or counts.
 import { linePurchaseOptionInputSchema } from "../../schemas/order-lines";
+import { postalAddressLinesInputSchema } from "../../schemas/postal-address";
+import { boundedPage, boundedPageQuery, nextCursorSchema } from "../../utils/bounded-page";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 import type { Context, MiddlewareHandler } from "hono";
 import { and, asc, eq, gte, inArray, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
-import { customerTagLinks, customers, orders, productVariants, products } from "@scalius/database/schema";
+import { customerTagLinks, customers, INVENTORY_LOCATION_KINDS, INVENTORY_LOCATION_STATUSES, orders, productVariants, products } from "@scalius/database/schema";
+import { canViewLocationDetails, listInventoryLocations } from "@scalius/core/modules/inventory";
+import { isoTimestampSchema } from "../../schemas/timestamps";
 import { EVENT_REPRESENTATION_SCHEMAS } from "@scalius/shared/events";
 import { MANUAL_FULFILLMENT_TYPES } from "@scalius/shared/fulfilment";
 import { encodeListCursorOrNull, type ListCursorShape } from "@scalius/shared/pagination";
@@ -27,10 +31,12 @@ import {
   readCustomerRepresentations,
   readOrderFulfillmentRepresentations,
   readOrderPaymentRepresentations,
+  readOrderReturnRepresentations,
   readOrderRepresentations,
   readOrderShipmentRepresentations,
   readPaymentRepresentation,
   readProductRepresentations,
+  readReturnRepresentation,
   readShipmentRepresentation,
   readVariantRepresentation,
   readVariantRepresentations,
@@ -48,7 +54,7 @@ import {
 } from "@scalius/core/modules/price-lists";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { getDecimalPlaces } from "@scalius/shared/currency";
-import { MAX_PRICE_LIST_QUANTITY_BREAKS, PRICE_LIST_MIN_QUANTITY_MAX } from "@scalius/shared/market-pricing";
+import { MAX_PRICE_LIST_QUANTITY_BREAKS, MAX_PRICE_LISTS, PRICE_LIST_MIN_QUANTITY_MAX } from "@scalius/shared/market-pricing";
 import { createPriceListSchema, scheduleInstant, updatePriceListSchema } from "../../schemas/price-lists";
 import { assertContactFilterAllowed } from "./contact-access";
 import { handOverOrderLines } from "./orders/fulfilments";
@@ -71,6 +77,7 @@ const CustomerResource = namedSharedSchema(EVENT_REPRESENTATION_SCHEMAS.customer
 const FulfillmentResource = namedSharedSchema(EVENT_REPRESENTATION_SCHEMAS.fulfillment, "FulfillmentResource");
 const ShipmentResource = namedSharedSchema(EVENT_REPRESENTATION_SCHEMAS.shipment, "ShipmentResource");
 const PaymentResource = namedSharedSchema(EVENT_REPRESENTATION_SCHEMAS.payment, "PaymentResource");
+const ReturnResource = namedSharedSchema(EVENT_REPRESENTATION_SCHEMAS.return, "ReturnResource");
 
 /** A page stops before its JSON passes this, so a list always fits an app or agent result (64 KiB). */
 const PAGE_BYTE_BUDGET = 56 * 1024;
@@ -88,7 +95,20 @@ const pageQuery = {
     .openapi({ description: "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync." }),
 };
 
-const nextCursorSchema = z.string().nullable().openapi({ description: "Pass it as `cursor` for the next page; null on the last page." });
+/** An order's fulfilments, shipments, payments or returns: read whole (in creation order) and cut into cursor pages. */
+const ORDER_CHILD_BOUND = 100;
+const orderChildQuery = z.object(boundedPageQuery(ORDER_CHILD_BOUND));
+
+/** One page of an order's children, oldest first (`createdAt`, then `id`). */
+function orderChildPage<T extends { id: string; createdAt: string }>(name: string, items: readonly T[], query: { cursor?: string; limit: number }) {
+  return boundedPage(items, {
+    name,
+    cursor: query.cursor,
+    limit: query.limit,
+    id: (item) => item.id,
+    sort: { kind: "text", value: (item) => item.createdAt },
+  });
+}
 
 function seconds(iso: string): number {
   return Math.floor(Date.parse(iso) / 1000);
@@ -202,35 +222,21 @@ app.openapi(createRoute({
   description: "The order as webhooks carry it: totals and lines in integer minor units of `currency`.",
   request: { params: idParam },
   responses: {
-    200: { description: "The order", content: { "application/json": { schema: successEnvelope(OrderResource) } } },
+    200: { description: "The order", content: { "application/json": { schema: successEnvelope(z.object({ order: OrderResource })) } } },
     ...readResponses,
   },
 }), async (c) => {
   const [order] = await readOrderRepresentations(c.get("db"), [c.req.valid("param").id]);
   if (!order) throw new NotFoundError("Order not found");
-  return ok(c, order);
+  return ok(c, { order });
 });
 
 // ─── Placing an order ────────────────────────────────────────────────────────
 
 const optionalText = (max: number) => z.string().trim().max(max).nullable().optional();
 
-/** A postal address in the canonical fields (AGENTS.md address rules); Bangladesh may add its delivery place ids. */
-const addressInputSchema = z.object({
-  countryCode: z.string().trim().length(2).openapi({ description: "ISO 3166-1 alpha-2." }),
-  company: optionalText(100),
-  line1: z.string().trim().min(1).max(500),
-  line2: optionalText(200),
-  dependentLocality: optionalText(120),
-  locality: optionalText(120),
-  adminArea: optionalText(120),
-  postalCode: optionalText(20),
-  placeIds: z.object({
-    city: z.string().trim().min(1).max(180).nullable().optional(),
-    zone: z.string().trim().min(1).max(180).nullable().optional(),
-    area: z.string().trim().min(1).max(180).nullable().optional(),
-  }).strict().optional().openapi({ description: "The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them." }),
-}).strict();
+/** The order's addresses: the one stable address shape; the recipient comes from the contact (shipping) or `name` (billing). */
+const addressInputSchema = postalAddressLinesInputSchema;
 
 const orderCreateBody = z.object({
   customerId: z.string().trim().min(1).max(128).optional().openapi({
@@ -390,7 +396,7 @@ const recordPaymentBody = z.object({
   via: z.enum(RECORDED_PAYMENT_VIAS).openapi({ description: "How it was received." }),
   reference: z.string().trim().max(120).nullable().optional().openapi({ description: "The bank, cheque or transfer reference." }),
   note: z.string().trim().max(500).nullable().optional(),
-  expectedVersion: z.number().int().min(1).optional().openapi({ description: "The order `version` you read; a different one is refused with 409." }),
+  expectedRevision: z.number().int().min(1).optional().openapi({ description: "The order `revision` you read; a different one is refused with 409." }),
 }).strict();
 
 app.openapi(createRoute({
@@ -425,7 +431,7 @@ app.openapi(createRoute({
     note: body.note ?? null,
     recordedBy,
     requestKey: await scopedRequestKey(c, "dashboard.resources.payments.create", c.req.valid("header")["idempotency-key"]),
-    ...(body.expectedVersion !== undefined ? { expectedVersion: body.expectedVersion } : {}),
+    ...(body.expectedRevision !== undefined ? { expectedVersion: body.expectedRevision } : {}),
     // The timeline line commits with the payment, once per payment: in the
     // order's currency (the dashboard words it, like a cash collection).
     timelineLine: async ({ paymentId, currency, landed }) => ({ statement: buildOrderEventInsert(db, {
@@ -471,15 +477,16 @@ app.openapi(createRoute({
   tags: ["App API - Orders"],
   summary: "List an order's payments and refunds",
   description: "Every payment and refund of the order, oldest first, in integer minor units of `currency` (and of `settlementCurrency` as settled).",
-  request: { params: idParam },
+  request: { params: idParam, query: orderChildQuery },
   responses: {
-    200: { description: "The payments", content: { "application/json": { schema: successEnvelope(z.object({ payments: z.array(PaymentResource) })) } } },
+    200: { description: "The payments", content: { "application/json": { schema: successEnvelope(z.object({ payments: z.array(PaymentResource), nextCursor: nextCursorSchema })) } } },
     ...readResponses,
   },
 }), async (c) => {
   const orderId = c.req.valid("param").id;
   await requireOrderCurrency(c, orderId);
-  return ok(c, { payments: await readOrderPaymentRepresentations(c.get("db"), orderId) });
+  const page = orderChildPage("payments", await readOrderPaymentRepresentations(c.get("db"), orderId), c.req.valid("query"));
+  return ok(c, { payments: page.items, nextCursor: page.nextCursor });
 });
 
 app.openapi(createRoute({
@@ -489,15 +496,16 @@ app.openapi(createRoute({
   tags: ["App API - Orders"],
   summary: "List an order's fulfilments",
   description: "Every hand-over of the order (sent, picked up, performed, voided), oldest first, with its lines.",
-  request: { params: idParam },
+  request: { params: idParam, query: orderChildQuery },
   responses: {
-    200: { description: "The fulfilments", content: { "application/json": { schema: successEnvelope(z.object({ fulfillments: z.array(FulfillmentResource) })) } } },
+    200: { description: "The fulfilments", content: { "application/json": { schema: successEnvelope(z.object({ fulfillments: z.array(FulfillmentResource), nextCursor: nextCursorSchema })) } } },
     ...readResponses,
   },
 }), async (c) => {
   const orderId = c.req.valid("param").id;
   await requireOrderCurrency(c, orderId);
-  return ok(c, { fulfillments: await readOrderFulfillmentRepresentations(c.get("db"), orderId) });
+  const page = orderChildPage("fulfillments", await readOrderFulfillmentRepresentations(c.get("db"), orderId), c.req.valid("query"));
+  return ok(c, { fulfillments: page.items, nextCursor: page.nextCursor });
 });
 
 const minorAmount = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
@@ -574,15 +582,16 @@ app.openapi(createRoute({
   tags: ["App API - Orders"],
   summary: "List an order's shipments",
   description: "Every courier or own-rider parcel of the order, oldest first, with its tracking and cost in minor units of `currency`.",
-  request: { params: idParam },
+  request: { params: idParam, query: orderChildQuery },
   responses: {
-    200: { description: "The shipments", content: { "application/json": { schema: successEnvelope(z.object({ shipments: z.array(ShipmentResource) })) } } },
+    200: { description: "The shipments", content: { "application/json": { schema: successEnvelope(z.object({ shipments: z.array(ShipmentResource), nextCursor: nextCursorSchema })) } } },
     ...readResponses,
   },
 }), async (c) => {
   const orderId = c.req.valid("param").id;
   await requireOrderCurrency(c, orderId);
-  return ok(c, { shipments: await readOrderShipmentRepresentations(c.get("db"), orderId) });
+  const page = orderChildPage("shipments", await readOrderShipmentRepresentations(c.get("db"), orderId), c.req.valid("query"));
+  return ok(c, { shipments: page.items, nextCursor: page.nextCursor });
 });
 
 app.openapi(createRoute({
@@ -619,13 +628,152 @@ app.openapi(createRoute({
   summary: "Get a shipment",
   request: { params: idParam },
   responses: {
-    200: { description: "The shipment", content: { "application/json": { schema: successEnvelope(ShipmentResource) } } },
+    200: { description: "The shipment", content: { "application/json": { schema: successEnvelope(z.object({ shipment: ShipmentResource })) } } },
     ...readResponses,
   },
 }), async (c) => {
   const shipment = await readShipmentRepresentation(c.get("db"), c.req.valid("param").id);
   if (!shipment) throw new NotFoundError("Shipment not found");
-  return ok(c, shipment);
+  return ok(c, { shipment });
+});
+
+// ─── Returns ─────────────────────────────────────────────────────────────────
+// Item returns as webhooks carry them (`return.*`); the dashboard's return
+// screens and their writes stay on /admin/orders/{id}/returns (beta).
+
+app.openapi(createRoute({
+  operationId: "dashboard.resources.returns.list",
+  method: "get",
+  path: "/orders/{id}/returns",
+  tags: ["App API - Orders"],
+  summary: "List an order's item returns",
+  description: "Every return of the order (requested, approved, received, rejected or cancelled), oldest first, with its lines and quantities.",
+  request: { params: idParam, query: orderChildQuery },
+  responses: {
+    200: { description: "The returns", content: { "application/json": { schema: successEnvelope(z.object({ returns: z.array(ReturnResource), nextCursor: nextCursorSchema })) } } },
+    ...readResponses,
+  },
+}), async (c) => {
+  const orderId = c.req.valid("param").id;
+  await requireOrderCurrency(c, orderId);
+  const page = orderChildPage("returns", await readOrderReturnRepresentations(c.get("db"), orderId), c.req.valid("query"));
+  return ok(c, { returns: page.items, nextCursor: page.nextCursor });
+});
+
+app.openapi(createRoute({
+  operationId: "dashboard.resources.returns.get",
+  method: "get",
+  path: "/returns/{id}",
+  tags: ["App API - Orders"],
+  summary: "Get an item return",
+  description: "The return as webhooks carry it, with its lines and quantities.",
+  request: { params: idParam },
+  responses: {
+    200: { description: "The return", content: { "application/json": { schema: successEnvelope(z.object({ return: ReturnResource })) } } },
+    ...readResponses,
+  },
+}), async (c) => {
+  const found = await readReturnRepresentation(c.get("db"), c.req.valid("param").id);
+  if (!found) throw new NotFoundError("Return not found");
+  return ok(c, { return: found });
+});
+
+// ─── Inventory locations ─────────────────────────────────────────────────────
+// Where the store holds stock. A location's address is the store's own (not a
+// buyer's: no protected-data markers), in the stable address fields; its
+// details read null to a caller who may not see them (inventory.view or
+// settings.general.view), as on the dashboard's list.
+
+const InventoryLocationAddress = z.object({
+  name: z.string().nullable(),
+  phone: z.string().nullable(),
+  company: z.string().nullable(),
+  line1: z.string().nullable(),
+  line2: z.string().nullable(),
+  dependentLocality: z.string().nullable(),
+  locality: z.string().nullable(),
+  adminArea: z.string().nullable(),
+  postalCode: z.string().nullable(),
+  countryCode: z.string().length(2),
+  placeIds: z.object({ city: z.string().nullable(), zone: z.string().nullable(), area: z.string().nullable() }),
+}).openapi("InventoryLocationAddress");
+
+const InventoryLocationResource = z.object({
+  id: z.string(),
+  name: z.string(),
+  code: z.string(),
+  kind: z.enum(INVENTORY_LOCATION_KINDS),
+  isDefault: z.boolean(),
+  status: z.enum(INVENTORY_LOCATION_STATUSES),
+  position: z.number().int(),
+  /** Advances with every change: the `expectedRevision` a write takes. */
+  revision: z.number().int().min(1),
+  address: InventoryLocationAddress.openapi({ description: "The store's address there; the street, city, postal code and phone read null without inventory.view or settings.general.view." }),
+  createdAt: isoTimestampSchema,
+  updatedAt: isoTimestampSchema,
+}).openapi("InventoryLocationResource");
+
+/** Locations one page holds by default (a store keeps a handful; more page by cursor). */
+const LOCATION_BOUND = 100;
+
+app.openapi(createRoute({
+  operationId: "dashboard.resources.inventory_locations.list",
+  method: "get",
+  path: "/inventory-locations",
+  tags: ["App API - Products"],
+  summary: "List the store's inventory locations",
+  description: "Where stock is held, active and archived, in the merchant's order (`position`, then `id`). `variants.get` reads a SKU's units per location by these ids.",
+  request: {
+    query: z.object({
+      ...boundedPageQuery(LOCATION_BOUND),
+      status: z.enum(INVENTORY_LOCATION_STATUSES).optional().openapi({ description: "Only locations in this status." }),
+    }),
+  },
+  responses: {
+    200: { description: "The locations", content: { "application/json": { schema: successEnvelope(z.object({ locations: z.array(InventoryLocationResource), nextCursor: nextCursorSchema })) } } },
+    ...readResponses,
+  },
+}), async (c) => {
+  const query = c.req.valid("query");
+  const details = canViewLocationDetails(c.get("adminPermissions"));
+  const rows = (await listInventoryLocations(c.get("db"), { includeArchived: true }))
+    .filter((row) => !query.status || row.status === query.status)
+    .sort((a, b) => a.position - b.position || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const page = boundedPage(rows, {
+    name: "inventory_locations",
+    cursor: query.cursor,
+    limit: query.limit,
+    id: (row) => row.id,
+    sort: { kind: "number", value: (row) => row.position },
+  });
+  return ok(c, {
+    locations: page.items.map((row): z.infer<typeof InventoryLocationResource> => ({
+      id: row.id,
+      name: row.name,
+      code: row.code,
+      kind: row.kind,
+      isDefault: row.isDefault,
+      status: row.status,
+      position: row.position,
+      revision: row.version,
+      address: {
+        name: null,
+        phone: details ? row.phone ?? null : null,
+        company: null,
+        line1: details ? row.addressLine1 ?? null : null,
+        line2: details ? row.addressLine2 ?? null : null,
+        dependentLocality: null,
+        locality: details ? row.city ?? null : null,
+        adminArea: null,
+        postalCode: details ? row.postalCode ?? null : null,
+        countryCode: row.countryCode,
+        placeIds: { city: null, zone: null, area: null },
+      },
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    })),
+    nextCursor: page.nextCursor,
+  });
 });
 
 // ─── Products and variants ───────────────────────────────────────────────────
@@ -695,13 +843,13 @@ app.openapi(createRoute({
   description: "The product with its live SKUs as webhooks carry it; prices in integer minor units of `currency`.",
   request: { params: idParam },
   responses: {
-    200: { description: "The product", content: { "application/json": { schema: successEnvelope(ProductResource) } } },
+    200: { description: "The product", content: { "application/json": { schema: successEnvelope(z.object({ product: ProductResource })) } } },
     ...readResponses,
   },
 }), async (c) => {
   const [product] = await readProductRepresentations(c.get("db"), [c.req.valid("param").id]);
   if (!product) throw new NotFoundError("Product not found");
-  return ok(c, product);
+  return ok(c, { product });
 });
 
 app.openapi(createRoute({
@@ -713,13 +861,13 @@ app.openapi(createRoute({
   description: "The SKU's on-hand units in total and per location, as `variant.inventory_changed` carries it.",
   request: { params: idParam },
   responses: {
-    200: { description: "The SKU", content: { "application/json": { schema: successEnvelope(VariantResource) } } },
+    200: { description: "The SKU", content: { "application/json": { schema: successEnvelope(z.object({ variant: VariantResource })) } } },
     ...readResponses,
   },
 }), async (c) => {
   const variant = await readVariantRepresentation(c.get("db"), c.req.valid("param").id);
   if (!variant) throw new NotFoundError("Variant not found");
-  return ok(c, variant);
+  return ok(c, { variant });
 });
 
 /** SKUs one lookup reads: one bound list within D1's 100 parameters. */
@@ -802,13 +950,13 @@ app.openapi(createRoute({
   description: "The customer as webhooks carry it, with tags and marketing consent. Contact fields read null without the matching read_customer_* scope.",
   request: { params: idParam },
   responses: {
-    200: { description: "The customer", content: { "application/json": { schema: successEnvelope(CustomerResource) } } },
+    200: { description: "The customer", content: { "application/json": { schema: successEnvelope(z.object({ customer: CustomerResource })) } } },
     ...readResponses,
   },
 }), async (c) => {
   const [customer] = await readCustomerRepresentations(c.get("db"), [c.req.valid("param").id]);
   if (!customer) throw new NotFoundError("Customer not found");
-  return ok(c, customer);
+  return ok(c, { customer });
 });
 
 // ─── Price lists ─────────────────────────────────────────────────────────────
@@ -872,14 +1020,18 @@ app.openapi(createRoute({
   tags: ["App API - Products"],
   summary: "List price lists, by name",
   description: "Every price list (a store keeps at most 100) with its market, segment, schedule state and how many SKUs it prices. `marketId` narrows to one market.",
-  request: { query: z.object({ marketId: z.string().min(1).max(64).optional() }) },
+  request: { query: z.object({ ...boundedPageQuery(MAX_PRICE_LISTS), marketId: z.string().min(1).max(64).optional() }) },
   responses: {
-    200: { description: "Price lists", content: { "application/json": { schema: successEnvelope(z.object({ priceLists: z.array(PriceListResource) })) } } },
+    200: { description: "Price lists", content: { "application/json": { schema: successEnvelope(z.object({ priceLists: z.array(PriceListResource), nextCursor: nextCursorSchema })) } } },
     ...readResponses,
   },
 }), async (c) => {
-  const { marketId } = c.req.valid("query");
-  return ok(c, { priceLists: (await listPriceLists(c.get("db"), { marketId })).map(priceListResource) });
+  const { marketId, cursor, limit } = c.req.valid("query");
+  // By name then id, compared as the cursor compares them.
+  const lists = (await listPriceLists(c.get("db"), { marketId }))
+    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const page = boundedPage(lists, { name: "price_lists", cursor, limit, id: (list) => list.id, sort: { kind: "text", value: (list) => list.name } });
+  return ok(c, { priceLists: page.items.map(priceListResource), nextCursor: page.nextCursor });
 });
 
 app.openapi(createRoute({
@@ -948,13 +1100,13 @@ app.openapi(createRoute({
   description: "Orders keep the prices they were placed at; the list's SKUs price by the next rule (another list, FX or the product price).",
   request: { params: priceListId, query: z.object({ expectedRevision: z.coerce.number().int().positive() }) },
   responses: {
-    200: { description: "Deleted", content: { "application/json": { schema: successEnvelope(z.object({ id: z.string() })) } } },
+    200: { description: "Deleted", content: { "application/json": { schema: successEnvelope(z.object({ id: z.string(), deleted: z.literal(true) })) } } },
     ...writeResponses,
   },
 }), async (c) => {
   const { id } = c.req.valid("param");
   await deletePriceList(c.get("db"), id, c.req.valid("query").expectedRevision);
-  return ok(c, { id });
+  return ok(c, { id, deleted: true as const });
 });
 
 const PriceListSku = z.object({

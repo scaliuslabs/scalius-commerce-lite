@@ -88,7 +88,7 @@ describe("policies", () => {
     }));
     sdk.getApiV1AdminSettingsStorefrontUrl.mockImplementation(() => envelope({ storefrontUrl: "https://storefront.scalius.com" }));
     sdk.getApiV1AdminSettingsCurrency.mockImplementation(() => envelope({ currencyCode: "BDT", currencySymbol: "৳" }));
-    sdk.postApiV1AdminPages.mockImplementation(() => envelope({ id: "page_new", revision: 1 }));
+    sdk.postApiV1AdminPages.mockImplementation(() => envelope({ page: { id: "page_new", revision: 1 } }));
   });
 
   afterEach(() => {
@@ -157,7 +157,7 @@ describe("policies", () => {
         error: { success: false, error: { code: "conflict", message: "A page with this slug already exists, including in trash." } },
         response: { status: 409 },
       }))
-      .mockImplementation(() => envelope({ id: "page_new", revision: 1 }));
+      .mockImplementation(() => envelope({ page: { id: "page_new", revision: 1 } }));
     await render(["settings.seo.edit", "pages.view", "pages.create"]);
     await openRefundPolicy();
     await createFromTemplate();

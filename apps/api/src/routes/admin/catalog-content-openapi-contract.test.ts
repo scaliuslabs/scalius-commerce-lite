@@ -114,8 +114,9 @@ describe("admin catalog/content mutation OpenAPI responses", () => {
             "403",
             "404",
         ]);
+        // Trash answers the trashed collection (stable: `{ collection }`).
         expectResponseStatuses(spec, "/api/v1/admin/collections/{id}", "delete", [
-            "204",
+            "200",
             "401",
             "403",
             "404",
@@ -160,7 +161,7 @@ describe("admin catalog/content mutation OpenAPI responses", () => {
 
         expectResponseStatuses(spec, "/api/v1/admin/discounts", "post", ["201", "400", "401", "403", "409"]);
         expectResponseStatuses(spec, "/api/v1/admin/discounts/{id}", "put", ["200", "400", "401", "403", "404", "409"]);
-        expectResponseStatuses(spec, "/api/v1/admin/discounts/{id}", "delete", ["204", "401", "403", "409"]);
+        expectResponseStatuses(spec, "/api/v1/admin/discounts/{id}", "delete", ["200", "401", "403", "409"]);
         for (const command of ["activate", "pause"]) {
             expectResponseStatuses(spec, `/api/v1/admin/discounts/{id}/${command}`, "post", ["200", "400", "401", "403", "404", "409"]);
             expect(spec.paths?.[`/api/v1/admin/discounts/{id}/${command}`]?.post?.requestBody)

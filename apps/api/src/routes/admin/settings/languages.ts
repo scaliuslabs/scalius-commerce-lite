@@ -16,6 +16,7 @@ import {
   setStoreLanguagePublished,
 } from "@scalius/core/modules/translations";
 import { created, ok } from "../../../utils/api-response";
+import { boundedPage, boundedPageQuery, nextCursorSchema } from "../../../utils/bounded-page";
 import { conflictResponse, errorResponses, successEnvelope } from "../../../schemas/responses";
 import {
   createStoreLanguageSchema,
@@ -27,6 +28,8 @@ import {
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const TAG = "Admin - Languages";
+/** ISO 639-1 has fewer two-letter codes than this. */
+const LANGUAGES_BOUND = 200;
 const languageEnvelope = successEnvelope(z.object({ language: storeLanguageSchema }));
 const writeResponses = { ...errorResponses, 409: conflictResponse };
 
@@ -40,14 +43,25 @@ app.openapi(createRoute({
   path: "/",
   tags: [TAG],
   summary: "The store's languages: the default first",
-  description: "Each language with whether it is published, whether it is the default (the store's own URL and the source text), the market web addresses in it and how many resources have a translation in it.",
+  description: "Each language with whether it is published, whether it is the default (the store's own URL and the source text), the market web addresses in it and how many resources have a translation in it. The default comes first, then the others by code.",
+  request: { query: z.object(boundedPageQuery(LANGUAGES_BOUND)) },
   responses: {
-    200: { description: "Languages", content: { "application/json": { schema: successEnvelope(z.object({ items: z.array(storeLanguageSchema) })) } } },
+    200: { description: "Languages", content: { "application/json": { schema: successEnvelope(z.object({ languages: z.array(storeLanguageSchema), nextCursor: nextCursorSchema })) } } },
     ...errorResponses,
   },
 }), async (c) => {
   noStore(c);
-  return ok(c, { items: await listStoreLanguages(c.get("db")) });
+  const query = c.req.valid("query");
+  const order = (language: { isDefault: boolean; locale: string }) => `${language.isDefault ? 0 : 1}:${language.locale}`;
+  const languages = (await listStoreLanguages(c.get("db"))).sort((a, b) => (order(a) < order(b) ? -1 : order(a) > order(b) ? 1 : 0));
+  const page = boundedPage(languages, {
+    name: "languages",
+    cursor: query.cursor,
+    limit: query.limit,
+    id: (language) => language.locale,
+    sort: { kind: "text", value: order },
+  });
+  return ok(c, { languages: page.items, nextCursor: page.nextCursor });
 });
 
 app.openapi(createRoute({

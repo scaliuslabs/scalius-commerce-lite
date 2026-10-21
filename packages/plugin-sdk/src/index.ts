@@ -49,6 +49,8 @@ export {
 // only its own logic; `@scalius/plugin-sdk/manifest` has the manifest parser.
 export { PLUGIN_API_VERSION } from "@scalius/shared/plugins/api-version";
 export { ProviderError, type ProviderErrorCategory } from "@scalius/shared/plugins/providers/kinds";
+/** The sealed app-facing error codes: `PluginPlatformError.code` and a refused `ctx.api.call`'s `error.code`, each with its status. */
+export { APP_ERROR_CODES, isAppErrorCode, type AppErrorCode, type AppErrorCodeEntry } from "@scalius/shared/plugins/app-errors";
 export type {
   CourierFind,
   CourierRecipient,

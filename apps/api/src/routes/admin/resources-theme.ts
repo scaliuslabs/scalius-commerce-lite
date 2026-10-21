@@ -15,9 +15,14 @@
 //     (`@scalius/shared/storefront-theme` handles); a section naming a handle
 //     the store lacks is left out and reported. The draft it replaces is kept
 //     as a restore point.
-//   - `theme.section_settings_set`: merges settings into one section of the
+//   - `theme.set_section_settings`: merges settings into one section of the
 //     home or a landing page (an app section: into its values), resolves
 //     handles, and saves after the section and the whole document validate.
+//
+// Every answer carries the theme as `theme.get` reads it (`{ theme }`), the
+// writes with their own receipt fields beside it, and every write takes the
+// draft's `revision` as `expectedRevision` (plus `basePublishedRevision`, the
+// live theme the draft was based on).
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import {
@@ -54,7 +59,7 @@ export const THEME_SECTION_SETTINGS_MAX_BYTES = 32_768;
 
 const revision = z.number().int().nonnegative();
 const draftPreconditions = {
-  expectedDraftRevision: revision.openapi({ description: "The draft `revision` you read (`theme.get`); 0 when no draft was ever saved. A draft changed since is refused with 409 and nothing is saved." }),
+  expectedRevision: revision.openapi({ description: "The draft `revision` you read (`theme.draft.revision`); 0 when no draft was ever saved. A draft changed since is refused with 409 and nothing is saved." }),
   basePublishedRevision: revision.openapi({ description: "The draft's `basePublishedRevision` you read: the live theme it was based on." }),
 };
 
@@ -101,8 +106,8 @@ function draftReceipt(draft: { revision: number; basePublishedRevision: number; 
   return { revision: draft.revision, basePublishedRevision: draft.basePublishedRevision, updatedAt: draft.updatedAt ? draft.updatedAt.toISOString() : null };
 }
 
-function pagePreconditions(workspace: Awaited<ReturnType<typeof getThemeWorkspace>>, body: { expectedDraftRevision: number; basePublishedRevision: number }) {
-  if (workspace.draft.revision !== body.expectedDraftRevision || workspace.draft.basePublishedRevision !== body.basePublishedRevision) {
+function pagePreconditions(workspace: ThemeWorkspace, body: { expectedRevision: number; basePublishedRevision: number }) {
+  if (workspace.draft.revision !== body.expectedRevision || workspace.draft.basePublishedRevision !== body.basePublishedRevision) {
     throw new ConflictError("The theme draft changed since you read it. Read it again (theme.get) and retry.");
   }
 }
@@ -116,6 +121,40 @@ function callingApp(c: Context): string | null {
 function actorOf(c: Context): string | null {
   const user = c.get("user" as never) as { id?: string } | undefined;
   return user?.id ?? null;
+}
+
+type ThemeWorkspace = Awaited<ReturnType<typeof getThemeWorkspace>>;
+
+const themeSchema = z.object({
+  documentVersion: z.number().int().positive().openapi({ description: "The theme document version section settings follow." }),
+  publishedRevision: revision,
+  draft: draftSchema,
+  draftDiffersFromLive: z.boolean(),
+  template: z.string().nullable().openapi({ description: "The template the draft came from (`<app id>/<template id>`), if any." }),
+  page: z.enum(["home", "landing"]),
+  slug: z.string().nullable(),
+  sections: z.array(sectionSchema).max(24),
+  landingPages: z.array(z.object({ slug: z.string(), title: z.string() })).max(20),
+  readAt: isoTimestampSchema,
+}).openapi("ThemeResource");
+
+/** The draft as `theme.get` reads it, with one page's sections (the homepage, or the landing page `landing`). */
+function themeView(workspace: ThemeWorkspace, landing: string | undefined): z.infer<typeof themeSchema> {
+  const document = workspace.draft.theme;
+  const sections = landing === undefined ? document.pages.home : document.pages.landing[landing]?.sections;
+  if (!sections) throw new NotFoundError("That landing page is not in the draft.");
+  return {
+    documentVersion: STOREFRONT_THEME_DOCUMENT_VERSION,
+    publishedRevision: workspace.published.revision,
+    draft: draftReceipt(workspace.draft),
+    draftDiffersFromLive: workspace.draftDiffersFromLive,
+    template: document.apps?.template ?? null,
+    page: landing === undefined ? "home" : "landing",
+    slug: landing ?? null,
+    sections: sections.map(presentSection),
+    landingPages: Object.entries(document.pages.landing).map(([slug, page]) => ({ slug, title: page.title })),
+    readAt: new Date().toISOString(),
+  };
 }
 
 // ── theme.get ──
@@ -137,20 +176,7 @@ app.openapi(createRoute({
       description: "The theme draft",
       content: {
         "application/json": {
-          schema: successEnvelope(z.object({
-            theme: z.object({
-              documentVersion: z.number().int().positive().openapi({ description: "The theme document version section settings follow." }),
-              publishedRevision: revision,
-              draft: draftSchema,
-              draftDiffersFromLive: z.boolean(),
-              template: z.string().nullable().openapi({ description: "The template the draft came from (`<app id>/<template id>`), if any." }),
-              page: z.enum(["home", "landing"]),
-              slug: z.string().nullable(),
-              sections: z.array(sectionSchema).max(24),
-              landingPages: z.array(z.object({ slug: z.string(), title: z.string() })).max(20),
-              readAt: isoTimestampSchema,
-            }),
-          })),
+          schema: successEnvelope(z.object({ theme: themeSchema })),
         },
       },
     },
@@ -158,24 +184,7 @@ app.openapi(createRoute({
   },
 }), async (c) => {
   const { landing } = c.req.valid("query");
-  const workspace = await getThemeWorkspace(c.get("db"));
-  const document = workspace.draft.theme;
-  const sections = landing === undefined ? document.pages.home : document.pages.landing[landing]?.sections;
-  if (!sections) throw new NotFoundError("That landing page is not in the draft.");
-  return ok(c, {
-    theme: {
-      documentVersion: STOREFRONT_THEME_DOCUMENT_VERSION,
-      publishedRevision: workspace.published.revision,
-      draft: draftReceipt(workspace.draft),
-      draftDiffersFromLive: workspace.draftDiffersFromLive,
-      template: document.apps?.template ?? null,
-      page: landing === undefined ? "home" as const : "landing" as const,
-      slug: landing ?? null,
-      sections: sections.map(presentSection),
-      landingPages: Object.entries(document.pages.landing).map(([slug, page]) => ({ slug, title: page.title })),
-      readAt: new Date().toISOString(),
-    },
-  });
+  return ok(c, { theme: themeView(await getThemeWorkspace(c.get("db")), landing) });
 });
 
 // ── theme.apply_template ──
@@ -200,11 +209,11 @@ app.openapi(createRoute({
   },
   responses: {
     200: {
-      description: "The draft with the template applied",
+      description: "The theme with the template applied (its homepage), the template and the handles left out",
       content: {
         "application/json": {
           schema: successEnvelope(z.object({
-            draft: draftSchema,
+            theme: themeSchema,
             template: z.string(),
             unresolved: z.array(unresolvedSchema).max(200),
           })),
@@ -237,15 +246,15 @@ app.openapi(createRoute({
   const workspace = await getThemeWorkspace(db);
   pagePreconditions(workspace, body);
   const applied: StorefrontThemeDocument = applyStorefrontAppTemplate(workspace.draft.theme, key, read.value);
-  const saved = await replaceThemeDraft(db, applied, workspace.draft.theme, body.expectedDraftRevision, body.basePublishedRevision, actorOf(c));
+  await replaceThemeDraft(db, applied, workspace.draft.theme, body.expectedRevision, body.basePublishedRevision, actorOf(c));
   return ok(c, {
-    draft: draftReceipt({ revision: saved.revision, basePublishedRevision: saved.basePublishedRevision, updatedAt: saved.updatedAt ?? null }),
+    theme: themeView(await getThemeWorkspace(db), undefined),
     template: key,
     unresolved: read.unresolved.slice(0, 200),
   });
 });
 
-// ── theme.section_settings_set ──
+// ── theme.set_section_settings ──
 
 const settingsBody = z.object({
   page: z.enum(["home", "landing"]).default("home"),
@@ -271,8 +280,8 @@ app.openapi(createRoute({
   },
   responses: {
     200: {
-      description: "The saved draft and the section as it now reads",
-      content: { "application/json": { schema: successEnvelope(z.object({ draft: draftSchema, section: sectionSchema })) } },
+      description: "The theme as it now reads (the section's page) and the section",
+      content: { "application/json": { schema: successEnvelope(z.object({ theme: themeSchema, section: sectionSchema })) } },
     },
     409: conflictResponse,
     ...errorResponses,
@@ -305,9 +314,9 @@ app.openapi(createRoute({
   const parsed = storefrontSectionSchema.safeParse({ ...current, settings });
   if (!parsed.success) throw issuesError(parsed.error, "These settings do not fit the section");
   sections[index] = parsed.data;
-  const saved = await saveThemeDraft(db, theme, body.expectedDraftRevision, body.basePublishedRevision, actorOf(c));
+  await saveThemeDraft(db, theme, body.expectedRevision, body.basePublishedRevision, actorOf(c));
   return ok(c, {
-    draft: draftReceipt({ revision: saved.revision, basePublishedRevision: saved.basePublishedRevision, updatedAt: saved.updatedAt ?? null }),
+    theme: themeView(await getThemeWorkspace(db), body.page === "landing" ? body.slug : undefined),
     section: presentSection(parsed.data),
   });
 });

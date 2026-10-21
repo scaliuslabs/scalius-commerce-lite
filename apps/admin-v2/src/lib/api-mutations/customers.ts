@@ -26,8 +26,10 @@ export const bulkUpdateCustomerTags = (body: BulkCustomerTagsBody) =>
   apiData(postApiV1AdminCustomersTagsBulk({ body }));
 
 /** Replaces one customer's tags; resolves with the tags as stored. */
-export const saveCustomerTags = (id: string, tags: string[]) =>
-  apiData(putApiV1AdminCustomersByIdTags({ path: { id }, body: { tags } }));
+export const saveCustomerTags = async (id: string, tags: string[]) => {
+  const { customer } = await apiData(putApiV1AdminCustomersByIdTags({ path: { id }, body: { tags } }));
+  return { tags: customer.tags };
+};
 
 /** Records consent a customer gave (or withdrew) outside the store; resolves with the new consent payload. */
 export const setCustomerConsent = (id: string, body: CustomerConsentBody) =>

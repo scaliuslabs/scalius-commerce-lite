@@ -19,8 +19,8 @@ export const DASHBOARD_CONTENT_OPERATIONS = {
     revision: "required",
     limits: { response: 16_384 },
   },
-  "dashboard.content.create": { stability: "stable" },
-  "dashboard.content.get": { stability: "stable" },
+  "dashboard.content.create": {},
+  "dashboard.content.get": {},
   // Page-numbered (dashboard-shaped): beta until a cursor list joins the stable API.
   "dashboard.content.list": {},
   "dashboard.content.permanently_delete": {
@@ -37,7 +37,7 @@ export const DASHBOARD_CONTENT_OPERATIONS = {
     revision: "required",
     limits: { response: 16_384 },
   },
-  "dashboard.content.update": { stability: "stable", revision: "required" },
+  "dashboard.content.update": { revision: "required" },
   "dashboard.media_folders.create": {},
   "dashboard.media_folders.delete": {
     risk: "destructive",
@@ -47,12 +47,11 @@ export const DASHBOARD_CONTENT_OPERATIONS = {
   "dashboard.media_folders.list": {},
   "dashboard.media_folders.update": { revision: "required" },
   "dashboard.media.import_url": {
-    stability: "stable",
     openWorld: true,
     batch: "forbidden",
   },
-  "dashboard.media.get": { stability: "stable" },
-  "dashboard.media.list": { stability: "stable" },
+  "dashboard.media.get": {},
+  "dashboard.media.list": {},
   "dashboard.media.move": { revision: "required" },
   "dashboard.media.original": {
     exposure: "excluded",
@@ -65,12 +64,11 @@ export const DASHBOARD_CONTENT_OPERATIONS = {
   },
   "dashboard.media.restore": { revision: "required" },
   "dashboard.media.trash": {
-    stability: "stable",
     risk: "destructive",
     revision: "required",
     limits: { response: 16_384 },
   },
-  "dashboard.media.update": { stability: "stable", revision: "required" },
+  "dashboard.media.update": { revision: "required" },
   "dashboard.media.usage": {},
   "dashboard.media.upload_abort": { limits: { response: 16_384 } },
   "dashboard.media.upload_complete": {},

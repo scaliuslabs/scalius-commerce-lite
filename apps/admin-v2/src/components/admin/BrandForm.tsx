@@ -23,7 +23,7 @@ import { SearchListingCard } from "@/components/admin/search-listing/SearchListi
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissions";
 import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";
-import { apiData, type ApiResult } from "@/lib/api";
+import { apiData } from "@/lib/api";
 import { brandQueryOptions, type BrandDetail } from "@/lib/api-query-options/brands";
 import { brandFormSchema, type BrandFormInput, type BrandFormValues } from "@/lib/brand-form-schema";
 import { getPlainText } from "@/lib/format-utils";
@@ -116,13 +116,13 @@ export function BrandForm({ defaultValues }: { defaultValues?: BrandFormInput })
     isEdit,
     entityId: defaultValues?.id,
     // An empty address is made from the name on the server, with a number added if it is taken.
-    createFn: (data) => apiData(postApiV1AdminBrands({ body: { ...toBrandInput(data), slug: data.slug || undefined } })),
+    createFn: async (data) => (await apiData(postApiV1AdminBrands({ body: { ...toBrandInput(data), slug: data.slug || undefined } }))).brand,
     updateFn: (data) => {
       if (!data.revision) throw new Error(t("reloadToSave"));
       return apiData(putApiV1AdminBrandsById({
         path: { id: data.id },
         body: { ...toBrandInput(data), slug: data.slug, expectedRevision: data.revision },
-      }));
+      })).then(({ brand }) => brand);
     },
     invalidateKeys: [
       queryKeys.brands.list(),
@@ -130,7 +130,7 @@ export function BrandForm({ defaultValues }: { defaultValues?: BrandFormInput })
       ...(defaultValues?.id ? [queryKeys.brands.detail(defaultValues.id)] : []),
     ],
     onSuccess: (result) => {
-      const saved = result as Partial<ApiResult<typeof postApiV1AdminBrands>>;
+      const saved = result as Partial<BrandDetail>;
       if (!isEdit && saved.id) {
         void navigate({ to: "/admin/brands/$brandId/edit", params: { brandId: saved.id }, replace: true });
       }
@@ -163,7 +163,7 @@ export function BrandForm({ defaultValues }: { defaultValues?: BrandFormInput })
       form={form}
       onSave={handleSubmit}
       savedValues={(result) => {
-        const saved = result as Partial<ApiResult<typeof postApiV1AdminBrands>>;
+        const saved = result as Partial<BrandDetail>;
         return { ...(saved.id ? { id: saved.id } : {}), ...(saved.slug ? { slug: saved.slug } : {}), revision: saved.revision, status: saved.status };
       }}
       reload={defaultValues?.id ? async () => {

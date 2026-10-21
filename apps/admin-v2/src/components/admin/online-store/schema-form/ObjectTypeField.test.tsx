@@ -62,7 +62,7 @@ const defaults = () => storefrontSectionDefault("objects", "probe").settings as 
 
 describe("Objects section form", () => {
   it("lists the object types the store may show and writes the chosen one as typeId", async () => {
-    sdk.getObjects.mockImplementation(() => envelope({ items: [type("faq", "Questions and answers", true), type("secret", "Staff notes", false)] }));
+    sdk.getObjects.mockImplementation(() => envelope({ nextCursor: null, types: [type("faq", "Questions and answers", true), type("secret", "Staff notes", false)] }));
     await render(defaults());
     await vi.waitFor(() => expect(sdk.getObjects).toHaveBeenCalled());
     await act(async () => container.querySelector<HTMLElement>("button#section-objects-typeId")!.click());
@@ -75,7 +75,7 @@ describe("Objects section form", () => {
   });
 
   it("draws the heading, layout and number of entries", async () => {
-    sdk.getObjects.mockImplementation(() => envelope({ items: [] }));
+    sdk.getObjects.mockImplementation(() => envelope({ nextCursor: null, types: [] }));
     await render(defaults());
     const text = container.textContent ?? "";
     expect(text).toContain("Heading");
@@ -86,20 +86,20 @@ describe("Objects section form", () => {
   });
 
   it("points to Objects when there is none to show", async () => {
-    sdk.getObjects.mockImplementation(() => envelope({ items: [type("secret", "Staff notes", false)] }));
+    sdk.getObjects.mockImplementation(() => envelope({ nextCursor: null, types: [type("secret", "Staff notes", false)] }));
     await render(defaults());
     await vi.waitFor(() => expect(container.textContent).toContain("No object type is shown on your store yet."));
     expect(container.querySelector('a[href="/admin/objects"]')).not.toBeNull();
   });
 
   it("warns when the chosen object type is private, and when it is gone", async () => {
-    sdk.getObjects.mockImplementation(() => envelope({ items: [type("secret", "Staff notes", false)] }));
+    sdk.getObjects.mockImplementation(() => envelope({ nextCursor: null, types: [type("secret", "Staff notes", false)] }));
     await render({ ...defaults(), typeId: "custom.secret" });
     await vi.waitFor(() => expect(container.textContent).toContain("This object type is private"));
     expect(container.querySelector("button#section-objects-typeId")!.textContent).toContain("Staff notes");
     expect(container.querySelector('a[href="/admin/objects"]')).not.toBeNull();
     await act(async () => root.render(<></>));
-    sdk.getObjects.mockImplementation(() => envelope({ items: [] }));
+    sdk.getObjects.mockImplementation(() => envelope({ nextCursor: null, types: [] }));
     await render({ ...defaults(), typeId: "removed" });
     await vi.waitFor(() => expect(container.textContent).toContain("no longer exists"));
   });

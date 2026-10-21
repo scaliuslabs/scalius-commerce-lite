@@ -185,12 +185,13 @@ export const checkoutDiscountsOutputSchema = z.object({
      * combines with the other's class; the platform's own discounts combine
      * with everything, but an app discount that does not combine with their
      * class is skipped when they discounted that class. A skipped discount
-     * claims no code and spends no `commit`.
+     * claims no code and spends no `commit`. The same shape as a store
+     * discount's `combinesWith` (`discounts.create`), keys optional here.
      */
     combinesWith: z.object({
-      productDiscounts: z.boolean().optional(),
-      orderDiscounts: z.boolean().optional(),
-      shippingDiscounts: z.boolean().optional(),
+      product: z.boolean().optional(),
+      order: z.boolean().optional(),
+      shipping: z.boolean().optional(),
     }).strict().optional(),
   }).strict()).max(10),
   /**

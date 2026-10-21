@@ -22,6 +22,7 @@ import { PLUGIN_EXTENSION_SCHEMAS, PLUGIN_FUNCTION_SCHEMAS } from "./functions";
 import { PROVIDER_PORTS } from "./providers";
 import { PROVIDER_PORT_TIERS, type ProviderKind } from "./providers/kinds";
 import { PLUGIN_SCOPES } from "./scopes";
+import { APP_ERROR_CODES } from "./app-errors";
 import * as protocol from "./storefront-protocol";
 import { PLUGIN_UI_SURFACES, pluginUiDocumentSchema } from "./ui";
 
@@ -101,7 +102,7 @@ describe("the versioned plugin ABI", () => {
     await sealCompatibly("./abi.manifest.snapshot.json", { apiVersion: PLUGIN_API_VERSION, schema: schema(pluginManifestSchema) }, manifestBreakingChanges);
   });
 
-  it("seals functions, stable provider ports, UI, scopes, events and storefront protocol constants", async () => {
+  it("seals functions, stable provider ports, UI, scopes, error codes, events and storefront protocol constants", async () => {
     await sealCompatibly("./abi.protocol.snapshot.json", {
       apiVersion: PLUGIN_API_VERSION,
       functions: Object.fromEntries(Object.entries(PLUGIN_FUNCTION_SCHEMAS).map(([name, value]) => [name, port(value)])),
@@ -109,6 +110,7 @@ describe("the versioned plugin ABI", () => {
       providerTiers: PROVIDER_PORT_TIERS,
       providers: portsOfTier("stable"),
       ui: { document: schema(pluginUiDocumentSchema("admin")), surfaces: PLUGIN_UI_SURFACES }, scopes: PLUGIN_SCOPES,
+      errors: APP_ERROR_CODES,
       events: { apiVersion: EVENTS_API_VERSION, resources: EVENT_TOPIC_RESOURCE,
         facts: Object.fromEntries(Object.entries(EVENT_FACT_SCHEMAS).map(([topic, value]) => [topic, schema(value, "output")])),
       },

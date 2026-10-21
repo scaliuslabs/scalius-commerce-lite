@@ -56,7 +56,12 @@ describe("object operations", () => {
     expect((await call("PUT", "/custom.faq/faq_1", { expectedRevision: 1, data: { question: "Within seven days" } })).status).toBe(200);
     expect((await call("DELETE", "/custom.faq/faq_1?expectedRevision=1")).status).toBe(409);
     expect((await call("GET", "/custom.faq")).body!.data.records).toHaveLength(1);
-    expect((await call("DELETE", "/custom.faq/faq_1?expectedRevision=2")).status).toBe(204);
+    const deleted = await call("DELETE", "/custom.faq/faq_1?expectedRevision=2");
+    expect(deleted.status).toBe(200);
+    expect(deleted.body!.data).toEqual({ id: "faq_1", deleted: true });
+    expect((await call("GET", "/custom.faq")).body!.data).toEqual({ records: [], nextCursor: null });
+    const type = (await call("GET", "/types/custom.faq")).body!.data.type;
+    expect((await call("DELETE", `/types/custom.faq?expectedRevision=${type.revision}`)).body!.data).toEqual({ id: type.id, deleted: true });
   });
 
   it("bounds serialized list pages and continues after the last emitted record", async () => {
@@ -78,13 +83,14 @@ describe("object operations", () => {
   it("hides private app types and prevents manifest edits or writes to read-only types", async () => {
     await syncAppObjectTypes(db, "acme.loyalty", { hidden: objectTypeDeclarationSchema.parse({ ...FAQ, admin: "none" }), history: objectTypeDeclarationSchema.parse({ ...FAQ, admin: "read" }) });
     const listed = await call("GET", "/types");
-    expect(listed.body!.data.items.map((item: { handle: string }) => item.handle)).toEqual(["acme.loyalty.history"]);
+    expect(listed.body!.data.types.map((item: { handle: string }) => item.handle)).toEqual(["acme.loyalty.history"]);
+    expect(listed.body!.data.nextCursor).toBeNull();
     expect((await call("GET", "/types/acme.loyalty.hidden")).status).toBe(404);
     expect((await call("GET", "/acme.loyalty.hidden")).status).toBe(404);
     expect((await call("PUT", "/acme.loyalty.history/one", { expectedRevision: null, data: { question: "Hi" } })).status).toBe(403);
     expect((await call("PATCH", "/types/acme.loyalty.history", { ...FAQ, expectedRevision: 1 })).status).toBe(403);
     principal = { pluginId: "acme.other" };
-    expect((await call("GET", "/types")).body!.data.items).toEqual([]);
+    expect((await call("GET", "/types")).body!.data.types).toEqual([]);
     expect((await call("GET", "/acme.loyalty.history")).status).toBe(403);
   });
 

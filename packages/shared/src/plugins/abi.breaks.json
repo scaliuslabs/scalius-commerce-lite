@@ -262,5 +262,23 @@
   "from": "f3eda0275e4f3ae9",
   "change": "manifest timeline: the field is no longer accepted.",
   "reason": "Contract seal (beta criterion 1, R2 item 14): the order timeline kinds and the settings page sections are dashboard surfaces, so they move under admin (admin.timeline, admin.settingsGroups); stored manifests are read in the new shape (upgradeStoredPluginManifest)."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "e6a54bd9176794ef",
+  "change": "functions.checkout.discounts output discounts[].combinesWith.productDiscounts: the field is no longer accepted.",
+  "reason": "Pre-lock (audit L6): one spelling per concept. A discount's combination classes are `combinesWith: { product, order, shipping }` everywhere, as the stable discounts.create/get carry them; the checkout.discounts function's `productDiscounts`/`orderDiscounts`/`shippingDiscounts` keys are now `product`/`order`/`shipping` (each still optional, default true)."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "e6a54bd9176794ef",
+  "change": "functions.checkout.discounts output discounts[].combinesWith.orderDiscounts: the field is no longer accepted.",
+  "reason": "Pre-lock (audit L6): one spelling per concept. A discount's combination classes are `combinesWith: { product, order, shipping }` everywhere, as the stable discounts.create/get carry them; the checkout.discounts function's `productDiscounts`/`orderDiscounts`/`shippingDiscounts` keys are now `product`/`order`/`shipping` (each still optional, default true)."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "e6a54bd9176794ef",
+  "change": "functions.checkout.discounts output discounts[].combinesWith.shippingDiscounts: the field is no longer accepted.",
+  "reason": "Pre-lock (audit L6): one spelling per concept. A discount's combination classes are `combinesWith: { product, order, shipping }` everywhere, as the stable discounts.create/get carry them; the checkout.discounts function's `productDiscounts`/`orderDiscounts`/`shippingDiscounts` keys are now `product`/`order`/`shipping` (each still optional, default true)."
  }
 ]

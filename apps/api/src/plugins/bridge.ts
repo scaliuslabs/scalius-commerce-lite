@@ -158,7 +158,7 @@ export function toBridgeError(error: unknown, pluginId: string, method: string):
   // Never forward internals; log masked metadata only.
   const name = error instanceof Error ? error.name : typeof error;
   console.warn(`[plugins] ${pluginId} bridge ${method} failed (${name})`);
-  return new Error("[internal] The platform could not complete the request.");
+  return new Error("[internal_error] The platform could not complete the request.");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

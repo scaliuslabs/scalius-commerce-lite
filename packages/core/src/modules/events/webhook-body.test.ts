@@ -39,7 +39,7 @@ describe("the webhook body", () => {
     expect(new TextEncoder().encode(body).byteLength).toBeLessThan(WEBHOOK_MAX_BODY_BYTES);
     const envelope = JSON.parse(body);
     expect(eventDataTruncationSchema.parse(envelope.data)).toEqual({
-      truncated: true, id: "cus_1", fetch: { operationId: "dashboard.resources.customers.get", method: "GET", path: "/api/v1/admin/resources/customers/cus_1" },
+      truncated: true, id: "cus_1", fetch: { appOperation: "customers.get", operationId: "dashboard.resources.customers.get", method: "GET", path: "/api/v1/admin/resources/customers/cus_1" },
     });
     expect(JSON.parse(buildWebhookBody({ ...event, topic: "customer.updated" }, "2026-10", null)).data).toBeNull();
   });

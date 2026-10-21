@@ -28,11 +28,11 @@ const OWNER: WebhookOwner = { pluginId: "acme.erp", access: ACCESS };
 const OTHER: WebhookOwner = { pluginId: "acme.other", access: ACCESS };
 
 const ORDER = buildEventRepresentation("order", {
-  id: "ord_1", orderNumber: 1, status: "pending", paymentStatus: "unpaid", fulfillmentStatus: "unfulfilled", channel: "online_store",
+  id: "ord_1", orderNumber: 1, status: "pending", paymentStatus: "unpaid", fulfillmentStatus: "pending", channel: "online_store",
   salesChannelId: "sc_online_store", marketId: null, currency: "BDT", subtotalMinor: 1000, shippingMinor: 0, discountMinor: 0, taxMinor: 0,
   totalMinor: 1000, paidMinor: 0, balanceDueMinor: 1000, pricesIncludeTax: false, paymentMethod: "cod", paymentTerms: null, customerId: null, accountCustomerId: null,
   contact: { name: "Rahim", email: "rahim@buyer.test", phone: "+8801711111111" },
-  requiresShipping: false, shippingMethodId: null, shippingAddress: null, billingAddress: null, fulfillmentLocationId: null, version: 1, lines: [],
+  requiresShipping: false, shippingMethodId: null, shippingAddress: null, billingAddress: null, fulfillmentLocationId: null, revision: 1, lines: [],
   createdAt: "2026-10-19T00:00:00.000Z", updatedAt: "2026-10-19T00:00:00.000Z", deletedAt: null,
 }, allProtectedData());
 

@@ -74,9 +74,11 @@ describe("theme.apply_template", () => {
   it("applies the app's own template with its handles resolved, leaving out the section naming a missing one", async () => {
     const before = await read();
     expect(before.draft).toMatchObject({ revision: 0, basePublishedRevision: 0 });
-    const applied = await call("POST", "/theme/apply-template", { template: "volt", expectedDraftRevision: 0, basePublishedRevision: 0 });
+    const applied = await call("POST", "/theme/apply-template", { template: "volt", expectedRevision: 0, basePublishedRevision: 0 });
     expect(applied.status).toBe(200);
     expect(applied.body.data.template).toBe("acme.look/volt");
+    // The write answers the theme as theme.get reads it.
+    expect(applied.body.data.theme).toMatchObject({ page: "home", template: "acme.look/volt", draft: { revision: 1, basePublishedRevision: 0 } });
     expect(applied.body.data.unresolved).toEqual([{ kind: "category", handle: "tablets", sectionId: "gone" }]);
     const after = await read();
     expect(after.template).toBe("acme.look/volt");
@@ -85,43 +87,44 @@ describe("theme.apply_template", () => {
     expect(after.sections[1].settings.source).toEqual({ kind: "collection", collectionId: "col_hot" });
 
     // Applied again over a saved draft: the draft it replaces becomes a restore point.
-    const again = await call("POST", "/theme/apply-template", { template: "acme.look/volt", ...{ expectedDraftRevision: after.draft.revision, basePublishedRevision: 0 } });
+    const again = await call("POST", "/theme/apply-template", { template: "acme.look/volt", ...{ expectedRevision: after.draft.revision, basePublishedRevision: 0 } });
     expect(again.status).toBe(200);
     expect(sqlite.prepare("SELECT reason, draft_revision AS revision FROM theme_restore_points").all()).toEqual([{ reason: "app", revision: 1 }]);
   });
 
   it("refuses another app's template, a stale draft revision, and an unknown template", async () => {
-    expect((await call("POST", "/theme/apply-template", { template: "other.app/rival", expectedDraftRevision: 0, basePublishedRevision: 0 })).body.error.code).toBe("template_not_owned");
-    await call("POST", "/theme/apply-template", { template: "volt", expectedDraftRevision: 0, basePublishedRevision: 0 });
-    const stale = await call("POST", "/theme/apply-template", { template: "volt", expectedDraftRevision: 0, basePublishedRevision: 0 });
+    expect((await call("POST", "/theme/apply-template", { template: "other.app/rival", expectedRevision: 0, basePublishedRevision: 0 })).body.error.code).toBe("template_not_owned");
+    await call("POST", "/theme/apply-template", { template: "volt", expectedRevision: 0, basePublishedRevision: 0 });
+    const stale = await call("POST", "/theme/apply-template", { template: "volt", expectedRevision: 0, basePublishedRevision: 0 });
     expect(stale.status).toBe(409);
-    expect((await call("POST", "/theme/apply-template", { template: "nope", expectedDraftRevision: 1, basePublishedRevision: 0 })).status).toBe(404);
+    expect((await call("POST", "/theme/apply-template", { template: "nope", expectedRevision: 1, basePublishedRevision: 0 })).status).toBe(404);
     // Staff name any active app's template by its key.
-    expect((await call("POST", "/theme/apply-template", { template: "other.app/rival", expectedDraftRevision: 1, basePublishedRevision: 0 }, null)).status).toBe(200);
+    expect((await call("POST", "/theme/apply-template", { template: "other.app/rival", expectedRevision: 1, basePublishedRevision: 0 }, null)).status).toBe(200);
   });
 });
 
-describe("theme.section_settings_set", () => {
+describe("theme.set_section_settings", () => {
   it("merges settings into one section, resolves handles and saves under the revision", async () => {
-    await call("POST", "/theme/apply-template", { template: "volt", expectedDraftRevision: 0, basePublishedRevision: 0 });
+    await call("POST", "/theme/apply-template", { template: "volt", expectedRevision: 0, basePublishedRevision: 0 });
     const set = await call("POST", "/theme/section-settings", {
       sectionId: "deals",
       settings: { title: "Laptops on sale", source: { kind: "category", handle: "laptops" } },
-      expectedDraftRevision: 1,
+      expectedRevision: 1,
       basePublishedRevision: 0,
     });
     expect(set.status).toBe(200);
-    expect(set.body.data.draft.revision).toBe(2);
+    expect(set.body.data.theme.draft.revision).toBe(2);
+    expect(set.body.data.theme.sections.find((section: { id: string }) => section.id === "deals").settings.title).toBe("Laptops on sale");
     expect(set.body.data.section.settings).toEqual({ title: "Laptops on sale", source: { kind: "category", categoryId: "cat_laptops" }, limit: 8 });
   });
 
   it("refuses settings the section's schema rejects, an unknown handle, a missing section and a stale revision", async () => {
-    await call("POST", "/theme/apply-template", { template: "volt", expectedDraftRevision: 0, basePublishedRevision: 0 });
-    const base = { expectedDraftRevision: 1, basePublishedRevision: 0 };
+    await call("POST", "/theme/apply-template", { template: "volt", expectedRevision: 0, basePublishedRevision: 0 });
+    const base = { expectedRevision: 1, basePublishedRevision: 0 };
     expect((await call("POST", "/theme/section-settings", { ...base, sectionId: "deals", settings: { limit: 500 } })).status).toBe(400);
     expect((await call("POST", "/theme/section-settings", { ...base, sectionId: "deals", settings: { source: { kind: "collection", handle: "gone" } } })).body.error.code).toBe("handle_unresolved");
     expect((await call("POST", "/theme/section-settings", { ...base, sectionId: "nope", settings: { title: "x" } })).body.error.code).toBe("section_not_found");
-    expect((await call("POST", "/theme/section-settings", { ...base, expectedDraftRevision: 0, sectionId: "deals", settings: { title: "x" } })).status).toBe(409);
+    expect((await call("POST", "/theme/section-settings", { ...base, expectedRevision: 0, sectionId: "deals", settings: { title: "x" } })).status).toBe(409);
     expect((await read()).draft.revision).toBe(1);
   });
 });

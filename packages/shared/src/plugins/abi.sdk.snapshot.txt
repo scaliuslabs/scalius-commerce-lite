@@ -406,6 +406,7 @@ export type * from "./context";
 export { defineManifest, type DefinedManifest, type ObjectFieldValue, type ObjectRecordOf, type PluginContextOf, type PluginObjectsOf, type PluginSettingsOf, type SettingsOf, type SettingValueOf, type StorefrontSettingsOf, } from "./manifest-types";
 export { PLUGIN_API_VERSION } from "@scalius/shared/plugins/api-version";
 export { ProviderError, type ProviderErrorCategory } from "@scalius/shared/plugins/providers/kinds";
+export { APP_ERROR_CODES, isAppErrorCode, type AppErrorCode, type AppErrorCodeEntry } from "@scalius/shared/plugins/app-errors";
 export type { CourierFind, CourierRecipient, CourierShipment, CourierShipmentInput, CourierRatesInput, CourierRates, CourierShipmentStatus, CourierTracking, CourierWebhook, CourierWebhookReply, EmailSend, EmailSendInput, CourierHistory, CourierHistoryInput, MessageStatus, PaymentCapability, PaymentCapture, PaymentCaptureInput, PaymentCharge, PaymentChargeInput, PaymentDeleteSavedMethod, PaymentDeleteSavedMethodInput, PaymentEvent, PaymentVoid, PaymentVoidInput, SavedPaymentMethod, PaymentQuery, PaymentQueryInput, PaymentRefund, PaymentRefundInput, PaymentRefundProbe, PaymentRefundProbeInput, PaymentSession, PaymentSessionInput, PaymentSettlement, PaymentVerification, ProviderConnection, ProviderHttpRequest, ProviderImplementation, ProviderKind, ProviderOperationInput, ProviderOperationOutput, ProviderWireAmount, SmsSend, SmsSendInput, TaxAddress, TaxCalculateInput, TaxCalculation, TaxCalculationLine, } from "@scalius/shared/plugins/providers";
 export type { PluginFeature, PluginFeatureInput, PluginManifest, PluginManifestInput, PluginUiAction, PluginUiActionResult, PluginUiDocument, PluginUiNode, PluginUiSurface, PluginUiTarget, } from "@scalius/shared/plugins";
 export { adminContext, adminLocale, ui, wantsPage, type PluginAdminContext, type PluginAdminLocale } from "./ui";
@@ -652,6 +653,7 @@ import type { PluginSettingValue } from "@scalius/shared/plugins/settings-schema
 import { type PluginHandlerInventory, type PluginLifecycleHook } from "@scalius/shared/plugins/handlers";
 import { type ProviderErrorCategory } from "@scalius/shared/plugins/providers/kinds";
 import type { PluginJobStepInput } from "@scalius/shared/plugins/jobs";
+import { type AppErrorCode } from "@scalius/shared/plugins/app-errors";
 export interface PluginContextSeed {
     plugin: {
         id: string;
@@ -772,8 +774,8 @@ export interface PluginRuntimeBridge {
     jobsCancel?(id: unknown): Promise<unknown>;
 }
 export declare class PluginPlatformError extends Error {
-    readonly code: string;
-    constructor(code: string, message: string);
+    readonly code: AppErrorCode;
+    constructor(code: AppErrorCode, message: string);
 }
 export declare function invokePluginDefinition(module: unknown, invocation: PluginInvocation, seed: PluginContextSeed, bridge: PluginRuntimeBridge | null): Promise<PluginInvocationResult>;
 

@@ -160,26 +160,11 @@
            "description": "`created` now; `replayed` was created earlier under this key (nothing was created); `failed` was refused, see `error` (the other items are unaffected)."
           },
           "brand": {
-           "type": "object",
-           "nullable": true,
-           "properties": {
-            "id": {
-             "type": "string",
-             "maxLength": 160
+           "allOf": [
+            {
+             "$ref": "#/components/schemas/BrandResource"
             },
-            "slug": {
-             "type": "string",
-             "maxLength": 160
-            },
-            "revision": {
-             "type": "integer",
-             "minimum": 1
-            }
-           },
-           "required": [
-            "id",
-            "slug",
-            "revision"
+            {}
            ]
           },
           "error": {
@@ -342,29 +327,12 @@
      "data": {
       "type": "object",
       "properties": {
-       "id": {
-        "type": "string"
-       },
-       "slug": {
-        "type": "string"
-       },
-       "revision": {
-        "type": "integer",
-        "minimum": 1
-       },
-       "status": {
-        "type": "string",
-        "enum": [
-         "draft",
-         "published"
-        ]
+       "brand": {
+        "$ref": "#/components/schemas/BrandResource"
        }
       },
       "required": [
-       "id",
-       "slug",
-       "revision",
-       "status"
+       "brand"
       ]
      }
     },
@@ -411,129 +379,12 @@
      "data": {
       "type": "object",
       "properties": {
-       "id": {
-        "type": "string"
-       },
-       "name": {
-        "type": "string"
-       },
-       "slug": {
-        "type": "string"
-       },
-       "status": {
-        "type": "string",
-        "enum": [
-         "draft",
-         "published"
-        ]
-       },
-       "sortOrder": {
-        "type": "integer"
-       },
-       "revision": {
-        "type": "integer",
-        "minimum": 1
-       },
-       "noIndex": {
-        "type": "boolean"
-       },
-       "excludeFromSitemap": {
-        "type": "boolean"
-       },
-       "productCount": {
-        "type": "integer",
-        "minimum": 0
-       },
-       "logo": {
-        "type": "object",
-        "nullable": true,
-        "properties": {
-         "mediaId": {
-          "type": "string"
-         },
-         "url": {
-          "type": "string"
-         },
-         "alt": {
-          "type": "string"
-         },
-         "width": {
-          "type": "integer",
-          "nullable": true
-         },
-         "height": {
-          "type": "integer",
-          "nullable": true
-         }
-        },
-        "required": [
-         "mediaId",
-         "url",
-         "alt",
-         "width",
-         "height"
-        ]
-       },
-       "createdAt": {
-        "type": "string",
-        "nullable": true,
-        "format": "date-time"
-       },
-       "updatedAt": {
-        "type": "string",
-        "nullable": true,
-        "format": "date-time"
-       },
-       "deletedAt": {
-        "type": "string",
-        "nullable": true,
-        "format": "date-time"
-       },
-       "description": {
-        "type": "string",
-        "nullable": true
-       },
-       "metaTitle": {
-        "type": "string",
-        "nullable": true
-       },
-       "metaDescription": {
-        "type": "string",
-        "nullable": true
-       },
-       "canonicalPath": {
-        "type": "string",
-        "nullable": true
-       },
-       "listingTemplate": {
-        "type": "string",
-        "nullable": true
-       },
-       "logoMediaId": {
-        "type": "string",
-        "nullable": true
+       "brand": {
+        "$ref": "#/components/schemas/BrandResource"
        }
       },
       "required": [
-       "id",
-       "name",
-       "slug",
-       "status",
-       "sortOrder",
-       "revision",
-       "noIndex",
-       "excludeFromSitemap",
-       "productCount",
-       "logo",
-       "createdAt",
-       "updatedAt",
-       "deletedAt",
-       "description",
-       "metaTitle",
-       "metaDescription",
-       "canonicalPath",
-       "listingTemplate",
-       "logoMediaId"
+       "brand"
       ]
      }
     },
@@ -619,13 +470,16 @@
      "data": {
       "type": "object",
       "properties": {
-       "count": {
-        "type": "integer",
-        "minimum": 1
+       "brands": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/BrandResource"
+        },
+        "maxItems": 90
        }
       },
       "required": [
-       "count"
+       "brands"
       ]
      }
     },
@@ -710,21 +564,12 @@
      "data": {
       "type": "object",
       "properties": {
-       "revision": {
-        "type": "integer",
-        "minimum": 1
-       },
-       "status": {
-        "type": "string",
-        "enum": [
-         "draft",
-         "published"
-        ]
+       "brand": {
+        "$ref": "#/components/schemas/BrandResource"
        }
       },
       "required": [
-       "revision",
-       "status"
+       "brand"
       ]
      }
     },
@@ -810,13 +655,16 @@
      "data": {
       "type": "object",
       "properties": {
-       "count": {
-        "type": "integer",
-        "minimum": 1
+       "brands": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/BrandResource"
+        },
+        "maxItems": 90
        }
       },
       "required": [
-       "count"
+       "brands"
       ]
      }
     },
@@ -961,21 +809,12 @@
      "data": {
       "type": "object",
       "properties": {
-       "revision": {
-        "type": "integer",
-        "minimum": 1
-       },
-       "status": {
-        "type": "string",
-        "enum": [
-         "draft",
-         "published"
-        ]
+       "brand": {
+        "$ref": "#/components/schemas/BrandResource"
        }
       },
       "required": [
-       "revision",
-       "status"
+       "brand"
       ]
      }
     },
@@ -1179,26 +1018,11 @@
            "description": "`created` now; `replayed` was created earlier under this key (nothing was created); `failed` was refused, see `error` (the other items are unaffected)."
           },
           "category": {
-           "type": "object",
-           "nullable": true,
-           "properties": {
-            "id": {
-             "type": "string",
-             "maxLength": 160
+           "allOf": [
+            {
+             "$ref": "#/components/schemas/CategoryResource"
             },
-            "slug": {
-             "type": "string",
-             "maxLength": 160
-            },
-            "revision": {
-             "type": "integer",
-             "minimum": 1
-            }
-           },
-           "required": [
-            "id",
-            "slug",
-            "revision"
+            {}
            ]
           },
           "error": {
@@ -1395,139 +1219,12 @@
      "data": {
       "type": "object",
       "properties": {
-       "id": {
-        "type": "string"
-       },
-       "revision": {
-        "type": "integer",
-        "minimum": 1
-       },
-       "status": {
-        "type": "string",
-        "enum": [
-         "draft",
-         "published",
-         "internal"
-        ]
+       "category": {
+        "$ref": "#/components/schemas/CategoryResource"
        }
       },
       "required": [
-       "id",
-       "revision",
-       "status"
-      ]
-     }
-    },
-    "required": [
-     "success",
-     "data"
-    ]
-   }
-  },
-  "categories.list_children": {
-   "operationId": "dashboard.categories.list_children",
-   "method": "GET",
-   "path": "/api/v1/admin/categories/children",
-   "risk": "read",
-   "idempotency": "none",
-   "revision": "none",
-   "scopes": [
-    "read_products",
-    "write_products"
-   ],
-   "input": {
-    "parameters": [
-     {
-      "schema": {
-       "type": "string",
-       "minLength": 1,
-       "maxLength": 180
-      },
-      "required": false,
-      "name": "parentId",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "integer",
-       "minimum": 1,
-       "maximum": 100,
-       "default": 100
-      },
-      "required": false,
-      "name": "limit",
-      "in": "query"
-     }
-    ]
-   },
-   "output": {
-    "type": "object",
-    "properties": {
-     "success": {
-      "type": "boolean",
-      "enum": [
-       true
-      ]
-     },
-     "data": {
-      "type": "object",
-      "properties": {
-       "categories": {
-        "type": "array",
-        "items": {
-         "type": "object",
-         "properties": {
-          "id": {
-           "type": "string"
-          },
-          "name": {
-           "type": "string"
-          },
-          "slug": {
-           "type": "string"
-          },
-          "status": {
-           "type": "string",
-           "enum": [
-            "draft",
-            "published",
-            "internal"
-           ]
-          },
-          "revision": {
-           "type": "integer",
-           "minimum": 1
-          },
-          "parentId": {
-           "type": "string",
-           "nullable": true
-          },
-          "depth": {
-           "type": "integer",
-           "minimum": 0,
-           "maximum": 3
-          },
-          "childCount": {
-           "type": "integer",
-           "minimum": 0
-          }
-         },
-         "required": [
-          "id",
-          "name",
-          "slug",
-          "status",
-          "revision",
-          "parentId",
-          "depth",
-          "childCount"
-         ]
-        },
-        "maxItems": 100
-       }
-      },
-      "required": [
-       "categories"
+       "category"
       ]
      }
     },
@@ -1580,7 +1277,8 @@
         "properties": {
          "expectedRevision": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "description": "The category's `revision` you read; a category changed since is refused with 409 and nothing changes."
          }
         },
         "required": [
@@ -1603,7 +1301,14 @@
      },
      "data": {
       "type": "object",
-      "properties": {}
+      "properties": {
+       "category": {
+        "$ref": "#/components/schemas/CategoryResource"
+       }
+      },
+      "required": [
+       "category"
+      ]
      }
     },
     "required": [
@@ -1688,22 +1393,12 @@
      "data": {
       "type": "object",
       "properties": {
-       "revision": {
-        "type": "integer",
-        "minimum": 1
-       },
-       "status": {
-        "type": "string",
-        "enum": [
-         "draft",
-         "published",
-         "internal"
-        ]
+       "category": {
+        "$ref": "#/components/schemas/CategoryResource"
        }
       },
       "required": [
-       "revision",
-       "status"
+       "category"
       ]
      }
     },
@@ -1737,6 +1432,17 @@
      },
      {
       "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "description": "The category's `revision` you read; a category changed since is refused with 409 and nothing changes."
+      },
+      "required": true,
+      "description": "The category's `revision` you read; a category changed since is refused with 409 and nothing changes.",
+      "name": "expectedRevision",
+      "in": "query"
+     },
+     {
+      "schema": {
        "type": "string",
        "pattern": "^[\\x20-\\x7E]{8,200}$",
        "minLength": 8,
@@ -1747,28 +1453,34 @@
       "name": "idempotency-key",
       "in": "header"
      }
-    ],
-    "requestBody": {
-     "content": {
-      "application/json": {
-       "schema": {
-        "type": "object",
-        "properties": {
-         "expectedRevision": {
-          "type": "integer",
-          "minimum": 1
-         }
-        },
-        "required": [
-         "expectedRevision"
-        ]
-       }
-      }
-     },
-     "required": true
-    }
+    ]
    },
-   "output": null
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "category": {
+        "$ref": "#/components/schemas/CategoryResource"
+       }
+      },
+      "required": [
+       "category"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
   },
   "categories.update": {
    "operationId": "dashboard.categories.update",
@@ -1943,22 +1655,12 @@
      "data": {
       "type": "object",
       "properties": {
-       "revision": {
-        "type": "integer",
-        "minimum": 1
-       },
-       "status": {
-        "type": "string",
-        "enum": [
-         "draft",
-         "published",
-         "internal"
-        ]
+       "category": {
+        "$ref": "#/components/schemas/CategoryResource"
        }
       },
       "required": [
-       "revision",
-       "status"
+       "category"
       ]
      }
     },
@@ -2137,98 +1839,12 @@
      "data": {
       "type": "object",
       "properties": {
-       "id": {
-        "type": "string"
-       },
-       "version": {
-        "type": "integer",
-        "minimum": 1
-       },
-       "slug": {
-        "type": "string",
-        "nullable": true
+       "collection": {
+        "$ref": "#/components/schemas/CollectionResource"
        }
       },
       "required": [
-       "id",
-       "version",
-       "slug"
-      ]
-     }
-    },
-    "required": [
-     "success",
-     "data"
-    ]
-   }
-  },
-  "collections.get_by_ids": {
-   "operationId": "dashboard.collections.get_by_ids",
-   "method": "GET",
-   "path": "/api/v1/admin/collections/by-ids",
-   "risk": "read",
-   "idempotency": "none",
-   "revision": "none",
-   "scopes": [
-    "read_products",
-    "write_products"
-   ],
-   "input": {
-    "parameters": [
-     {
-      "schema": {
-       "type": "string",
-       "default": "",
-       "description": "Comma-separated collection IDs. At most 90 IDs are resolved."
-      },
-      "required": false,
-      "description": "Comma-separated collection IDs. At most 90 IDs are resolved.",
-      "name": "ids",
-      "in": "query"
-     }
-    ]
-   },
-   "output": {
-    "type": "object",
-    "properties": {
-     "success": {
-      "type": "boolean",
-      "enum": [
-       true
-      ]
-     },
-     "data": {
-      "type": "object",
-      "properties": {
-       "collections": {
-        "type": "array",
-        "items": {
-         "type": "object",
-         "properties": {
-          "id": {
-           "type": "string"
-          },
-          "name": {
-           "type": "string"
-          },
-          "presentation": {
-           "type": "string",
-           "enum": [
-            "grid",
-            "carousel"
-           ]
-          }
-         },
-         "required": [
-          "id",
-          "name",
-          "presentation"
-         ]
-        }
-       }
-      },
-      "required": [
-       "collections"
+       "collection"
       ]
      }
     },
@@ -2244,7 +1860,88 @@
    "path": "/api/v1/admin/collections/{id}/restore",
    "risk": "write",
    "idempotency": "supported",
-   "revision": "optional",
+   "revision": "required",
+   "scopes": [
+    "write_products"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string"
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "expectedRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The collection's `revision` you read; a collection changed since is refused with 409 and nothing changes."
+         }
+        },
+        "required": [
+         "expectedRevision"
+        ]
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "collection": {
+        "$ref": "#/components/schemas/CollectionResource"
+       }
+      },
+      "required": [
+       "collection"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "collections.trash": {
+   "operationId": "dashboard.collections.trash",
+   "method": "DELETE",
+   "path": "/api/v1/admin/collections/{id}",
+   "risk": "destructive",
+   "idempotency": "supported",
+   "revision": "required",
    "scopes": [
     "write_products"
    ],
@@ -2262,11 +1959,11 @@
       "schema": {
        "type": "integer",
        "minimum": 1,
-       "description": "The collection version you read; a change since is refused with 409. Omit to act whatever happened since."
+       "description": "The collection's `revision` you read; a collection changed since is refused with 409 and nothing changes."
       },
-      "required": false,
-      "description": "The collection version you read; a change since is refused with 409. Omit to act whatever happened since.",
-      "name": "expectedVersion",
+      "required": true,
+      "description": "The collection's `revision` you read; a collection changed since is refused with 409 and nothing changes.",
+      "name": "expectedRevision",
       "in": "query"
      },
      {
@@ -2295,12 +1992,12 @@
      "data": {
       "type": "object",
       "properties": {
-       "message": {
-        "type": "string"
+       "collection": {
+        "$ref": "#/components/schemas/CollectionResource"
        }
       },
       "required": [
-       "message"
+       "collection"
       ]
      }
     },
@@ -2309,53 +2006,6 @@
      "data"
     ]
    }
-  },
-  "collections.trash": {
-   "operationId": "dashboard.collections.trash",
-   "method": "DELETE",
-   "path": "/api/v1/admin/collections/{id}",
-   "risk": "destructive",
-   "idempotency": "supported",
-   "revision": "optional",
-   "scopes": [
-    "write_products"
-   ],
-   "input": {
-    "parameters": [
-     {
-      "schema": {
-       "type": "string"
-      },
-      "required": true,
-      "name": "id",
-      "in": "path"
-     },
-     {
-      "schema": {
-       "type": "integer",
-       "minimum": 1,
-       "description": "The collection version you read; a change since is refused with 409. Omit to act whatever happened since."
-      },
-      "required": false,
-      "description": "The collection version you read; a change since is refused with 409. Omit to act whatever happened since.",
-      "name": "expectedVersion",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "pattern": "^[\\x20-\\x7E]{8,200}$",
-       "minLength": 8,
-       "maxLength": 200
-      },
-      "required": false,
-      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
-      "name": "idempotency-key",
-      "in": "header"
-     }
-    ]
-   },
-   "output": null
   },
   "collections.update": {
    "operationId": "dashboard.collections.update",
@@ -2396,10 +2046,6 @@
        "schema": {
         "type": "object",
         "properties": {
-         "expectedVersion": {
-          "type": "integer",
-          "minimum": 1
-         },
          "name": {
           "type": "string",
           "minLength": 3,
@@ -2504,10 +2150,15 @@
           "nullable": true,
           "pattern": "^[a-z0-9][a-z0-9-]{0,39}$",
           "description": "A listing template id from the theme, or null for the theme's default collection listing."
+         },
+         "expectedRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The collection's `revision` you read; a collection changed since is refused with 409 and nothing changes."
          }
         },
         "required": [
-         "expectedVersion"
+         "expectedRevision"
         ]
        }
       }
@@ -2527,22 +2178,12 @@
      "data": {
       "type": "object",
       "properties": {
-       "id": {
-        "type": "string"
-       },
-       "version": {
-        "type": "integer",
-        "minimum": 1
-       },
-       "slug": {
-        "type": "string",
-        "nullable": true
+       "collection": {
+        "$ref": "#/components/schemas/CollectionResource"
        }
       },
       "required": [
-       "id",
-       "version",
-       "slug"
+       "collection"
       ]
      }
     },
@@ -2591,10 +2232,6 @@
        "schema": {
         "type": "object",
         "properties": {
-         "expectedVersion": {
-          "type": "integer",
-          "minimum": 1
-         },
          "add": {
           "type": "array",
           "items": {
@@ -2614,10 +2251,15 @@
           },
           "maxItems": 90,
           "default": []
+         },
+         "expectedRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The collection's `revision` you read; a collection changed since is refused with 409 and nothing changes."
          }
         },
         "required": [
-         "expectedVersion"
+         "expectedRevision"
         ]
        }
       }
@@ -2637,22 +2279,12 @@
      "data": {
       "type": "object",
       "properties": {
-       "id": {
-        "type": "string"
-       },
-       "version": {
-        "type": "integer",
-        "minimum": 1
-       },
-       "slug": {
-        "type": "string",
-        "nullable": true
+       "collection": {
+        "$ref": "#/components/schemas/CollectionResource"
        }
       },
       "required": [
-       "id",
-       "version",
-       "slug"
+       "collection"
       ]
      }
     },
@@ -2662,7 +2294,7 @@
     ]
    }
   },
-  "content.create": {
+  "pages.create": {
    "operationId": "dashboard.content.create",
    "method": "POST",
    "path": "/api/v1/admin/pages",
@@ -2852,17 +2484,12 @@
      "data": {
       "type": "object",
       "properties": {
-       "revision": {
-        "type": "integer",
-        "minimum": 1
-       },
-       "id": {
-        "type": "string"
+       "page": {
+        "$ref": "#/components/schemas/PageResource"
        }
       },
       "required": [
-       "revision",
-       "id"
+       "page"
       ]
      }
     },
@@ -2872,7 +2499,7 @@
     ]
    }
   },
-  "content.get": {
+  "pages.get": {
    "operationId": "dashboard.content.get",
    "method": "GET",
    "path": "/api/v1/admin/pages/{id}",
@@ -2907,164 +2534,12 @@
      "data": {
       "type": "object",
       "properties": {
-       "id": {
-        "type": "string"
-       },
-       "contentType": {
-        "type": "string",
-        "enum": [
-         "page",
-         "article"
-        ]
-       },
-       "title": {
-        "type": "string"
-       },
-       "slug": {
-        "type": "string"
-       },
-       "content": {
-        "type": "string"
-       },
-       "excerpt": {
-        "type": "string",
-        "nullable": true
-       },
-       "author": {
-        "type": "string",
-        "nullable": true
-       },
-       "tags": {
-        "type": "array",
-        "items": {
-         "type": "string"
-        }
-       },
-       "metaTitle": {
-        "type": "string",
-        "nullable": true
-       },
-       "metaDescription": {
-        "type": "string",
-        "nullable": true
-       },
-       "canonicalPath": {
-        "type": "string",
-        "nullable": true
-       },
-       "noIndex": {
-        "type": "boolean"
-       },
-       "excludeFromSitemap": {
-        "type": "boolean"
-       },
-       "isPublished": {
-        "type": "boolean"
-       },
-       "hideHeader": {
-        "type": "boolean"
-       },
-       "hideFooter": {
-        "type": "boolean"
-       },
-       "hideTitle": {
-        "type": "boolean"
-       },
-       "featuredImage": {
-        "type": "object",
-        "nullable": true,
-        "properties": {
-         "id": {
-          "type": "string"
-         },
-         "url": {
-          "type": "string"
-         },
-         "filename": {
-          "type": "string"
-         },
-         "size": {
-          "type": "number"
-         },
-         "mimeType": {
-          "type": "string"
-         },
-         "altText": {
-          "type": "string",
-          "nullable": true
-         },
-         "width": {
-          "type": "number",
-          "nullable": true
-         },
-         "height": {
-          "type": "number",
-          "nullable": true
-         },
-         "folderId": {
-          "type": "string",
-          "nullable": true
-         }
-        },
-        "required": [
-         "id",
-         "url",
-         "filename",
-         "size"
-        ],
-        "additionalProperties": {}
-       },
-       "publishedAt": {
-        "type": "string",
-        "nullable": true,
-        "format": "date-time"
-       },
-       "sortOrder": {
-        "type": "number"
-       },
-       "revision": {
-        "type": "integer",
-        "minimum": 1
-       },
-       "createdAt": {
-        "type": "string",
-        "nullable": true,
-        "format": "date-time"
-       },
-       "updatedAt": {
-        "type": "string",
-        "nullable": true,
-        "format": "date-time"
-       },
-       "deletedAt": {
-        "type": "string",
-        "nullable": true,
-        "format": "date-time"
+       "page": {
+        "$ref": "#/components/schemas/PageResource"
        }
       },
       "required": [
-       "id",
-       "contentType",
-       "title",
-       "slug",
-       "content",
-       "excerpt",
-       "author",
-       "tags",
-       "metaTitle",
-       "metaDescription",
-       "canonicalPath",
-       "noIndex",
-       "excludeFromSitemap",
-       "isPublished",
-       "hideHeader",
-       "hideFooter",
-       "hideTitle",
-       "sortOrder",
-       "revision",
-       "createdAt",
-       "updatedAt",
-       "deletedAt"
+       "page"
       ]
      }
     },
@@ -3074,7 +2549,7 @@
     ]
    }
   },
-  "content.update": {
+  "pages.update": {
    "operationId": "dashboard.content.update",
    "method": "PUT",
    "path": "/api/v1/admin/pages/{id}",
@@ -3255,13 +2730,12 @@
      "data": {
       "type": "object",
       "properties": {
-       "revision": {
-        "type": "integer",
-        "minimum": 1
+       "page": {
+        "$ref": "#/components/schemas/PageResource"
        }
       },
       "required": [
-       "revision"
+       "page"
       ]
      }
     },
@@ -3351,6 +2825,30 @@
       "required": false,
       "name": "ownerType",
       "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 800,
+       "default": 800,
+       "description": "At most this many items (default and maximum 800)."
+      },
+      "required": false,
+      "description": "At most this many items (default and maximum 800).",
+      "name": "limit",
+      "in": "query"
      }
     ]
    },
@@ -3388,10 +2886,16 @@
           }
          ]
         }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
        }
       },
       "required": [
-       "definitions"
+       "definitions",
+       "nextCursor"
       ]
      }
     },
@@ -5245,184 +4749,6 @@
     ]
    }
   },
-  "customers.addresses_list": {
-   "operationId": "dashboard.customers.addresses_list",
-   "method": "GET",
-   "path": "/api/v1/admin/customers/{id}/addresses",
-   "risk": "read",
-   "idempotency": "none",
-   "revision": "none",
-   "scopes": [
-    "read_customers",
-    "write_customers"
-   ],
-   "input": {
-    "parameters": [
-     {
-      "schema": {
-       "type": "string"
-      },
-      "required": true,
-      "name": "id",
-      "in": "path"
-     }
-    ]
-   },
-   "output": {
-    "type": "object",
-    "properties": {
-     "success": {
-      "type": "boolean",
-      "enum": [
-       true
-      ]
-     },
-     "data": {
-      "type": "object",
-      "properties": {
-       "addresses": {
-        "type": "array",
-        "items": {
-         "type": "object",
-         "properties": {
-          "id": {
-           "type": "string"
-          },
-          "customerId": {
-           "type": "string"
-          },
-          "isDefault": {
-           "type": "boolean"
-          },
-          "isDefaultBilling": {
-           "type": "boolean"
-          },
-          "countryCode": {
-           "type": "string"
-          },
-          "name": {
-           "type": "string",
-           "nullable": true,
-           "x-scalius-protected": "name"
-          },
-          "company": {
-           "type": "string",
-           "nullable": true,
-           "x-scalius-protected": "address"
-          },
-          "line1": {
-           "type": "string",
-           "nullable": true,
-           "x-scalius-protected": "address"
-          },
-          "line2": {
-           "type": "string",
-           "nullable": true,
-           "x-scalius-protected": "address"
-          },
-          "dependentLocality": {
-           "type": "string",
-           "nullable": true,
-           "x-scalius-protected": "address"
-          },
-          "locality": {
-           "type": "string",
-           "nullable": true
-          },
-          "adminArea": {
-           "type": "string",
-           "nullable": true
-          },
-          "postalCode": {
-           "type": "string",
-           "nullable": true
-          },
-          "phone": {
-           "type": "string",
-           "nullable": true,
-           "x-scalius-protected": "phone"
-          },
-          "phoneRaw": {
-           "type": "string",
-           "nullable": true,
-           "x-scalius-protected": "phone"
-          },
-          "city": {
-           "type": "string",
-           "nullable": true
-          },
-          "zone": {
-           "type": "string",
-           "nullable": true
-          },
-          "area": {
-           "type": "string",
-           "nullable": true
-          },
-          "cityName": {
-           "type": "string",
-           "nullable": true
-          },
-          "zoneName": {
-           "type": "string",
-           "nullable": true
-          },
-          "areaName": {
-           "type": "string",
-           "nullable": true
-          },
-          "validationSkipped": {
-           "type": "boolean"
-          },
-          "createdAt": {
-           "type": "string",
-           "format": "date-time"
-          },
-          "updatedAt": {
-           "type": "string",
-           "format": "date-time"
-          }
-         },
-         "required": [
-          "id",
-          "customerId",
-          "isDefault",
-          "isDefaultBilling",
-          "countryCode",
-          "name",
-          "company",
-          "line1",
-          "line2",
-          "dependentLocality",
-          "locality",
-          "adminArea",
-          "postalCode",
-          "phone",
-          "phoneRaw",
-          "city",
-          "zone",
-          "area",
-          "cityName",
-          "zoneName",
-          "areaName",
-          "validationSkipped",
-          "createdAt",
-          "updatedAt"
-         ]
-        }
-       }
-      },
-      "required": [
-       "addresses"
-      ]
-     }
-    },
-    "required": [
-     "success",
-     "data"
-    ]
-   }
-  },
   "customers.create": {
    "operationId": "dashboard.customers.create",
    "method": "POST",
@@ -5476,14 +4802,9 @@
           "properties": {
            "countryCode": {
             "type": "string",
-            "nullable": true,
             "minLength": 2,
-            "maxLength": 2
-           },
-           "name": {
-            "type": "string",
-            "nullable": true,
-            "maxLength": 100
+            "maxLength": 2,
+            "description": "ISO 3166-1 alpha-2."
            },
            "company": {
             "type": "string",
@@ -5492,7 +4813,7 @@
            },
            "line1": {
             "type": "string",
-            "nullable": true,
+            "minLength": 1,
             "maxLength": 500
            },
            "line2": {
@@ -5520,31 +4841,52 @@
             "nullable": true,
             "maxLength": 20
            },
+           "placeIds": {
+            "type": "object",
+            "properties": {
+             "city": {
+              "type": "string",
+              "nullable": true,
+              "minLength": 1,
+              "maxLength": 180
+             },
+             "zone": {
+              "type": "string",
+              "nullable": true,
+              "minLength": 1,
+              "maxLength": 180
+             },
+             "area": {
+              "type": "string",
+              "nullable": true,
+              "minLength": 1,
+              "maxLength": 180
+             }
+            },
+            "additionalProperties": false,
+            "description": "The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them."
+           },
+           "name": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 100
+           },
            "phone": {
             "type": "string",
             "nullable": true,
             "maxLength": 32
-           },
-           "city": {
-            "type": "string",
-            "nullable": true,
-            "maxLength": 180
-           },
-           "zone": {
-            "type": "string",
-            "nullable": true,
-            "maxLength": 180
-           },
-           "area": {
-            "type": "string",
-            "nullable": true,
-            "maxLength": 180
-           },
-           "skipValidation": {
-            "type": "boolean"
            }
           },
-          "additionalProperties": false
+          "required": [
+           "countryCode",
+           "line1"
+          ],
+          "additionalProperties": false,
+          "description": "The first address, which becomes the default."
+         },
+         "skipAddressValidation": {
+          "type": "boolean",
+          "description": "Save the address as given, without the country's address rules."
          }
         },
         "required": [
@@ -5570,12 +4912,12 @@
      "data": {
       "type": "object",
       "properties": {
-       "id": {
-        "type": "string"
+       "customer": {
+        "$ref": "#/components/schemas/CustomerResource"
        }
       },
       "required": [
-       "id"
+       "customer"
       ]
      }
     },
@@ -5585,347 +4927,7 @@
     ]
    }
   },
-  "customers.marketing_get": {
-   "operationId": "dashboard.customers.marketing_get",
-   "method": "GET",
-   "path": "/api/v1/admin/customers/{id}/marketing",
-   "risk": "read",
-   "idempotency": "none",
-   "revision": "none",
-   "scopes": [
-    "read_customers",
-    "write_customers"
-   ],
-   "input": {
-    "parameters": [
-     {
-      "schema": {
-       "type": "string",
-       "minLength": 1,
-       "maxLength": 128
-      },
-      "required": true,
-      "name": "id",
-      "in": "path"
-     }
-    ]
-   },
-   "output": {
-    "type": "object",
-    "properties": {
-     "success": {
-      "type": "boolean",
-      "enum": [
-       true
-      ]
-     },
-     "data": {
-      "type": "object",
-      "properties": {
-       "consents": {
-        "type": "array",
-        "items": {
-         "type": "object",
-         "properties": {
-          "channel": {
-           "type": "string",
-           "enum": [
-            "email",
-            "sms",
-            "whatsapp",
-            "push"
-           ]
-          },
-          "status": {
-           "type": "string",
-           "enum": [
-            "subscribed",
-            "pending",
-            "unsubscribed",
-            "not_subscribed"
-           ]
-          },
-          "state": {
-           "type": "string",
-           "nullable": true,
-           "enum": [
-            "subscribed",
-            "unsubscribed",
-            "pending",
-            null
-           ]
-          },
-          "contact": {
-           "type": "string",
-           "nullable": true,
-           "x-scalius-protected": [
-            "email",
-            "phone"
-           ]
-          },
-          "consentContact": {
-           "type": "string",
-           "nullable": true,
-           "x-scalius-protected": [
-            "email",
-            "phone"
-           ]
-          },
-          "source": {
-           "type": "string",
-           "nullable": true,
-           "enum": [
-            "checkout",
-            "account",
-            "newsletter",
-            "admin",
-            "import",
-            "plugin",
-            "link",
-            null
-           ]
-          },
-          "consentTextVersion": {
-           "type": "string",
-           "nullable": true
-          },
-          "subscribedAt": {
-           "type": "string",
-           "nullable": true,
-           "format": "date-time"
-          },
-          "unsubscribedAt": {
-           "type": "string",
-           "nullable": true,
-           "format": "date-time"
-          },
-          "requestedAt": {
-           "type": "string",
-           "nullable": true,
-           "format": "date-time"
-          },
-          "updatedAt": {
-           "type": "string",
-           "nullable": true,
-           "format": "date-time"
-          }
-         },
-         "required": [
-          "channel",
-          "status",
-          "state",
-          "contact",
-          "consentContact",
-          "source",
-          "consentTextVersion",
-          "subscribedAt",
-          "unsubscribedAt",
-          "requestedAt",
-          "updatedAt"
-         ]
-        }
-       },
-       "events": {
-        "type": "array",
-        "items": {
-         "type": "object",
-         "properties": {
-          "id": {
-           "type": "string"
-          },
-          "channel": {
-           "type": "string",
-           "enum": [
-            "email",
-            "sms",
-            "whatsapp",
-            "push"
-           ]
-          },
-          "previousState": {
-           "type": "string",
-           "nullable": true,
-           "enum": [
-            "subscribed",
-            "unsubscribed",
-            "pending",
-            null
-           ]
-          },
-          "state": {
-           "type": "string",
-           "enum": [
-            "subscribed",
-            "unsubscribed",
-            "pending"
-           ]
-          },
-          "source": {
-           "type": "string",
-           "enum": [
-            "checkout",
-            "account",
-            "newsletter",
-            "admin",
-            "import",
-            "plugin",
-            "link"
-           ]
-          },
-          "actor": {
-           "type": "string",
-           "enum": [
-            "buyer",
-            "staff",
-            "plugin",
-            "system"
-           ]
-          },
-          "actorName": {
-           "type": "string",
-           "nullable": true
-          },
-          "note": {
-           "type": "string",
-           "nullable": true
-          },
-          "contact": {
-           "type": "string",
-           "x-scalius-protected": [
-            "email",
-            "phone"
-           ],
-           "nullable": true
-          },
-          "consentTextVersion": {
-           "type": "string",
-           "nullable": true
-          },
-          "consentText": {
-           "type": "string",
-           "nullable": true
-          },
-          "createdAt": {
-           "type": "string",
-           "format": "date-time"
-          }
-         },
-         "required": [
-          "id",
-          "channel",
-          "previousState",
-          "state",
-          "source",
-          "actor",
-          "actorName",
-          "note",
-          "contact",
-          "consentTextVersion",
-          "consentText",
-          "createdAt"
-         ]
-        }
-       },
-       "tags": {
-        "type": "array",
-        "items": {
-         "type": "string"
-        }
-       }
-      },
-      "required": [
-       "consents",
-       "events",
-       "tags"
-      ]
-     }
-    },
-    "required": [
-     "success",
-     "data"
-    ]
-   }
-  },
-  "customers.tags_list": {
-   "operationId": "dashboard.customers.tags_list",
-   "method": "GET",
-   "path": "/api/v1/admin/customers/tags",
-   "risk": "read",
-   "idempotency": "none",
-   "revision": "none",
-   "scopes": [
-    "read_customers",
-    "write_customers"
-   ],
-   "input": {
-    "parameters": [
-     {
-      "schema": {
-       "type": "string",
-       "maxLength": 40,
-       "description": "Part of a tag"
-      },
-      "required": false,
-      "description": "Part of a tag",
-      "name": "q",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "integer",
-       "minimum": 1,
-       "maximum": 200,
-       "default": 50
-      },
-      "required": false,
-      "name": "limit",
-      "in": "query"
-     }
-    ]
-   },
-   "output": {
-    "type": "object",
-    "properties": {
-     "success": {
-      "type": "boolean",
-      "enum": [
-       true
-      ]
-     },
-     "data": {
-      "type": "object",
-      "properties": {
-       "tags": {
-        "type": "array",
-        "items": {
-         "type": "object",
-         "properties": {
-          "tag": {
-           "type": "string"
-          },
-          "customers": {
-           "type": "integer"
-          }
-         },
-         "required": [
-          "tag",
-          "customers"
-         ]
-        }
-       }
-      },
-      "required": [
-       "tags"
-      ]
-     }
-    },
-    "required": [
-     "success",
-     "data"
-    ]
-   }
-  },
-  "customers.tags_set": {
+  "customers.set_tags": {
    "operationId": "dashboard.customers.tags_set",
    "method": "PUT",
    "path": "/api/v1/admin/customers/{id}/tags",
@@ -5997,15 +4999,12 @@
      "data": {
       "type": "object",
       "properties": {
-       "tags": {
-        "type": "array",
-        "items": {
-         "type": "string"
-        }
+       "customer": {
+        "$ref": "#/components/schemas/CustomerResource"
        }
       },
       "required": [
-       "tags"
+       "customer"
       ]
      }
     },
@@ -6087,7 +5086,14 @@
      },
      "data": {
       "type": "object",
-      "properties": {}
+      "properties": {
+       "customer": {
+        "$ref": "#/components/schemas/CustomerResource"
+       }
+      },
+      "required": [
+       "customer"
+      ]
      }
     },
     "required": [
@@ -6342,7 +5348,8 @@
          "expectedRevision": {
           "type": "integer",
           "minimum": 0,
-          "exclusiveMinimum": true
+          "exclusiveMinimum": true,
+          "description": "The discount's `revision` you read; a discount changed since is refused with 409 and nothing changes."
          }
         },
         "required": [
@@ -6366,28 +5373,12 @@
      "data": {
       "type": "object",
       "properties": {
-       "id": {
-        "type": "string"
-       },
-       "revision": {
-        "type": "integer",
-        "minimum": 0,
-        "exclusiveMinimum": true
-       },
-       "status": {
-        "type": "string",
-        "enum": [
-         "draft",
-         "active",
-         "paused",
-         "archived"
-        ]
+       "discount": {
+        "$ref": "#/components/schemas/DiscountResource"
        }
       },
       "required": [
-       "id",
-       "revision",
-       "status"
+       "discount"
       ]
      }
     },
@@ -6421,6 +5412,18 @@
      },
      {
       "schema": {
+       "type": "integer",
+       "minimum": 0,
+       "exclusiveMinimum": true,
+       "description": "The discount's `revision` you read; a discount changed since is refused with 409 and nothing changes."
+      },
+      "required": true,
+      "description": "The discount's `revision` you read; a discount changed since is refused with 409 and nothing changes.",
+      "name": "expectedRevision",
+      "in": "query"
+     },
+     {
+      "schema": {
        "type": "string",
        "pattern": "^[\\x20-\\x7E]{8,200}$",
        "minLength": 8,
@@ -6431,30 +5434,34 @@
       "name": "idempotency-key",
       "in": "header"
      }
-    ],
-    "requestBody": {
-     "required": true,
-     "content": {
-      "application/json": {
-       "schema": {
-        "type": "object",
-        "properties": {
-         "expectedRevision": {
-          "type": "integer",
-          "minimum": 0,
-          "exclusiveMinimum": true
-         }
-        },
-        "required": [
-         "expectedRevision"
-        ],
-        "additionalProperties": false
-       }
-      }
-     }
-    }
+    ]
    },
-   "output": null
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "discount": {
+        "$ref": "#/components/schemas/DiscountResource"
+       }
+      },
+      "required": [
+       "discount"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
   },
   "discounts.create": {
    "operationId": "dashboard.discounts.create",
@@ -6542,25 +5549,28 @@
            "order",
            "shipping"
           ],
-          "additionalProperties": false
+          "additionalProperties": false,
+          "description": "Which other discount classes may apply to the same order (both sides must allow it)."
          },
          "startsAt": {
           "type": "string",
           "nullable": true,
           "format": "date-time",
-          "default": null
+          "default": null,
+          "description": "When it starts; null: now."
          },
          "endsAt": {
           "type": "string",
           "nullable": true,
           "format": "date-time",
-          "default": null
+          "default": null,
+          "description": "When it ends; null: never."
          },
-         "timezone": {
+         "timeZone": {
           "type": "string",
           "minLength": 1,
           "maxLength": 80,
-          "default": "Asia/Dhaka"
+          "description": "The schedule's IANA time zone, such as Europe/London. Omit it for the store's zone (Settings → Store details)."
          },
          "maxRedemptions": {
           "type": "integer",
@@ -6584,11 +5594,12 @@
           "maximum": 9007199254740991,
           "default": null
          },
-         "budgetCurrencyCode": {
+         "budgetCurrency": {
           "type": "string",
           "nullable": true,
           "pattern": "^[A-Z]{3}$",
-          "default": null
+          "default": null,
+          "description": "The spend budget's currency (ISO 4217), with maxDiscountSpendMinor."
          },
          "codes": {
           "type": "array",
@@ -6599,7 +5610,8 @@
              "type": "string",
              "minLength": 3,
              "maxLength": 50,
-             "pattern": "^[A-Za-z0-9_-]+$"
+             "pattern": "^[A-Za-z0-9_-]+$",
+             "description": "Saved upper-case."
             },
             "isActive": {
              "type": "boolean",
@@ -6636,9 +5648,10 @@
                  "exclusiveMinimum": true,
                  "maximum": 9007199254740991
                 },
-                "currencyCode": {
+                "currency": {
                  "type": "string",
-                 "pattern": "^[A-Z]{3}$"
+                 "pattern": "^[A-Z]{3}$",
+                 "description": "ISO 4217, the store currency."
                 },
                 "productIds": {
                  "type": "array",
@@ -6659,12 +5672,13 @@
                  "maxItems": 90
                 },
                 "shippingOnly": {
-                 "type": "boolean"
+                 "type": "boolean",
+                 "description": "The minimum for the discount's bundled free shipping, after its savings."
                 }
                },
                "required": [
                 "amountMinor",
-                "currencyCode"
+                "currency"
                ],
                "additionalProperties": false
               }
@@ -6798,9 +5812,10 @@
                    "exclusiveMinimum": true,
                    "maximum": 9007199254740991
                   },
-                  "currencyCode": {
+                  "currency": {
                    "type": "string",
-                   "pattern": "^[A-Z]{3}$"
+                   "pattern": "^[A-Z]{3}$",
+                   "description": "ISO 4217, the store currency."
                   },
                   "productIds": {
                    "type": "array",
@@ -6821,7 +5836,8 @@
                    "maxItems": 90
                   }
                  },
-                 "additionalProperties": false
+                 "additionalProperties": false,
+                 "description": "Buy X get Y: what the customer buys, a quantity or an amount (with its currency)."
                 },
                 "getQuantity": {
                  "type": "integer",
@@ -6883,9 +5899,10 @@
                  "exclusiveMinimum": true,
                  "maximum": 9007199254740991
                 },
-                "currencyCode": {
+                "currency": {
                  "type": "string",
-                 "pattern": "^[A-Z]{3}$"
+                 "pattern": "^[A-Z]{3}$",
+                 "description": "ISO 4217, the store currency."
                 },
                 "productIds": {
                  "type": "array",
@@ -6911,7 +5928,7 @@
                },
                "required": [
                 "amountMinor",
-                "currencyCode"
+                "currency"
                ],
                "additionalProperties": false
               }
@@ -6962,7 +5979,8 @@
            ]
           },
           "minItems": 1,
-          "maxItems": 2
+          "maxItems": 2,
+          "description": "One value; a product or order value may add free shipping as a second effect."
          },
          "customerSegmentIds": {
           "type": "array",
@@ -6972,7 +5990,8 @@
            "maxLength": 40
           },
           "maxItems": 5,
-          "default": []
+          "default": [],
+          "description": "Only signed-in customers in any of these customer segments get this discount; empty means every customer."
          }
         },
         "required": [
@@ -6998,28 +6017,12 @@
      "data": {
       "type": "object",
       "properties": {
-       "id": {
-        "type": "string"
-       },
-       "revision": {
-        "type": "integer",
-        "minimum": 0,
-        "exclusiveMinimum": true
-       },
-       "status": {
-        "type": "string",
-        "enum": [
-         "draft",
-         "active",
-         "paused",
-         "archived"
-        ]
+       "discount": {
+        "$ref": "#/components/schemas/DiscountResource"
        }
       },
       "required": [
-       "id",
-       "revision",
-       "status"
+       "discount"
       ]
      }
     },
@@ -7066,259 +6069,12 @@
      "data": {
       "type": "object",
       "properties": {
-       "id": {
-        "type": "string"
-       },
-       "revision": {
-        "type": "integer",
-        "minimum": 0,
-        "exclusiveMinimum": true
-       },
-       "name": {
-        "type": "string"
-       },
-       "title": {
-        "type": "string",
-        "nullable": true
-       },
-       "method": {
-        "type": "string",
-        "enum": [
-         "automatic",
-         "code"
-        ]
-       },
-       "status": {
-        "type": "string",
-        "enum": [
-         "draft",
-         "active",
-         "paused",
-         "archived"
-        ]
-       },
-       "priority": {
-        "type": "integer"
-       },
-       "conflictPolicy": {
-        "type": "string",
-        "enum": [
-         "best"
-        ]
-       },
-       "combinesWith": {
-        "type": "object",
-        "properties": {
-         "product": {
-          "type": "boolean"
-         },
-         "order": {
-          "type": "boolean"
-         },
-         "shipping": {
-          "type": "boolean"
-         }
-        },
-        "required": [
-         "product",
-         "order",
-         "shipping"
-        ]
-       },
-       "startsAt": {
-        "type": "string",
-        "nullable": true,
-        "format": "date-time"
-       },
-       "endsAt": {
-        "type": "string",
-        "nullable": true,
-        "format": "date-time"
-       },
-       "timezone": {
-        "type": "string"
-       },
-       "maxRedemptions": {
-        "type": "integer",
-        "nullable": true,
-        "minimum": 0,
-        "exclusiveMinimum": true
-       },
-       "maxRedemptionsPerCustomer": {
-        "type": "integer",
-        "nullable": true,
-        "minimum": 0,
-        "exclusiveMinimum": true
-       },
-       "currency": {
-        "type": "string",
-        "minLength": 3,
-        "maxLength": 3,
-        "description": "The store currency: rule amounts (amountMinor) and the spend are integer minor units of it."
-       },
-       "maxDiscountSpendMinor": {
-        "type": "integer",
-        "nullable": true,
-        "minimum": 0,
-        "exclusiveMinimum": true
-       },
-       "budgetCurrencyCode": {
-        "type": "string",
-        "nullable": true
-       },
-       "redemptionCount": {
-        "type": "integer",
-        "minimum": 0,
-        "description": "Orders that used this discount."
-       },
-       "customerRedemptionCount": {
-        "type": "integer",
-        "minimum": 0
-       },
-       "discountSpendMinor": {
-        "type": "integer",
-        "minimum": 0,
-        "description": "Total savings given, in minor units."
-       },
-       "createdAt": {
-        "type": "string",
-        "format": "date-time"
-       },
-       "updatedAt": {
-        "type": "string",
-        "format": "date-time"
-       },
-       "deletedAt": {
-        "type": "string",
-        "nullable": true,
-        "format": "date-time"
-       },
-       "codes": {
-        "type": "array",
-        "items": {
-         "type": "object",
-         "properties": {
-          "code": {
-           "type": "string"
-          },
-          "isActive": {
-           "type": "boolean"
-          }
-         },
-         "required": [
-          "code",
-          "isActive"
-         ]
-        }
-       },
-       "conditions": {
-        "type": "array",
-        "items": {
-         "type": "object",
-         "properties": {
-          "id": {
-           "type": "string"
-          },
-          "kind": {
-           "type": "string",
-           "enum": [
-            "minimum_merchandise_subtotal",
-            "minimum_item_quantity"
-           ]
-          },
-          "config": {
-           "type": "object",
-           "additionalProperties": {}
-          }
-         },
-         "required": [
-          "id",
-          "kind",
-          "config"
-         ]
-        }
-       },
-       "effects": {
-        "type": "array",
-        "items": {
-         "type": "object",
-         "properties": {
-          "id": {
-           "type": "string"
-          },
-          "kind": {
-           "type": "string",
-           "enum": [
-            "percentage_off",
-            "fixed_amount_off",
-            "free"
-           ]
-          },
-          "target": {
-           "type": "string",
-           "enum": [
-            "line",
-            "order",
-            "shipping"
-           ]
-          },
-          "allocation": {
-           "type": "string",
-           "enum": [
-            "across",
-            "once"
-           ]
-          },
-          "config": {
-           "type": "object",
-           "additionalProperties": {}
-          }
-         },
-         "required": [
-          "id",
-          "kind",
-          "target",
-          "allocation",
-          "config"
-         ]
-        }
-       },
-       "customerSegmentIds": {
-        "type": "array",
-        "items": {
-         "type": "string"
-        },
-        "description": "Only signed-in customers in any of these customer segments get this discount; empty means every customer."
+       "discount": {
+        "$ref": "#/components/schemas/DiscountResource"
        }
       },
       "required": [
-       "id",
-       "revision",
-       "name",
-       "title",
-       "method",
-       "status",
-       "priority",
-       "conflictPolicy",
-       "combinesWith",
-       "startsAt",
-       "endsAt",
-       "timezone",
-       "maxRedemptions",
-       "maxRedemptionsPerCustomer",
-       "currency",
-       "maxDiscountSpendMinor",
-       "budgetCurrencyCode",
-       "redemptionCount",
-       "customerRedemptionCount",
-       "discountSpendMinor",
-       "createdAt",
-       "updatedAt",
-       "deletedAt",
-       "codes",
-       "conditions",
-       "effects",
-       "customerSegmentIds"
+       "discount"
       ]
      }
     },
@@ -7373,7 +6129,8 @@
          "expectedRevision": {
           "type": "integer",
           "minimum": 0,
-          "exclusiveMinimum": true
+          "exclusiveMinimum": true,
+          "description": "The discount's `revision` you read; a discount changed since is refused with 409 and nothing changes."
          }
         },
         "required": [
@@ -7397,28 +6154,12 @@
      "data": {
       "type": "object",
       "properties": {
-       "id": {
-        "type": "string"
-       },
-       "revision": {
-        "type": "integer",
-        "minimum": 0,
-        "exclusiveMinimum": true
-       },
-       "status": {
-        "type": "string",
-        "enum": [
-         "draft",
-         "active",
-         "paused",
-         "archived"
-        ]
+       "discount": {
+        "$ref": "#/components/schemas/DiscountResource"
        }
       },
       "required": [
-       "id",
-       "revision",
-       "status"
+       "discount"
       ]
      }
     },
@@ -7473,7 +6214,8 @@
          "expectedRevision": {
           "type": "integer",
           "minimum": 0,
-          "exclusiveMinimum": true
+          "exclusiveMinimum": true,
+          "description": "The discount's `revision` you read; a discount changed since is refused with 409 and nothing changes."
          },
          "name": {
           "type": "string",
@@ -7529,25 +6271,28 @@
            "order",
            "shipping"
           ],
-          "additionalProperties": false
+          "additionalProperties": false,
+          "description": "Which other discount classes may apply to the same order (both sides must allow it)."
          },
          "startsAt": {
           "type": "string",
           "nullable": true,
           "format": "date-time",
-          "default": null
+          "default": null,
+          "description": "When it starts; null: now."
          },
          "endsAt": {
           "type": "string",
           "nullable": true,
           "format": "date-time",
-          "default": null
+          "default": null,
+          "description": "When it ends; null: never."
          },
-         "timezone": {
+         "timeZone": {
           "type": "string",
           "minLength": 1,
           "maxLength": 80,
-          "default": "Asia/Dhaka"
+          "description": "The schedule's IANA time zone, such as Europe/London. Omit it for the store's zone (Settings → Store details)."
          },
          "maxRedemptions": {
           "type": "integer",
@@ -7571,11 +6316,12 @@
           "maximum": 9007199254740991,
           "default": null
          },
-         "budgetCurrencyCode": {
+         "budgetCurrency": {
           "type": "string",
           "nullable": true,
           "pattern": "^[A-Z]{3}$",
-          "default": null
+          "default": null,
+          "description": "The spend budget's currency (ISO 4217), with maxDiscountSpendMinor."
          },
          "codes": {
           "type": "array",
@@ -7586,7 +6332,8 @@
              "type": "string",
              "minLength": 3,
              "maxLength": 50,
-             "pattern": "^[A-Za-z0-9_-]+$"
+             "pattern": "^[A-Za-z0-9_-]+$",
+             "description": "Saved upper-case."
             },
             "isActive": {
              "type": "boolean",
@@ -7623,9 +6370,10 @@
                  "exclusiveMinimum": true,
                  "maximum": 9007199254740991
                 },
-                "currencyCode": {
+                "currency": {
                  "type": "string",
-                 "pattern": "^[A-Z]{3}$"
+                 "pattern": "^[A-Z]{3}$",
+                 "description": "ISO 4217, the store currency."
                 },
                 "productIds": {
                  "type": "array",
@@ -7646,12 +6394,13 @@
                  "maxItems": 90
                 },
                 "shippingOnly": {
-                 "type": "boolean"
+                 "type": "boolean",
+                 "description": "The minimum for the discount's bundled free shipping, after its savings."
                 }
                },
                "required": [
                 "amountMinor",
-                "currencyCode"
+                "currency"
                ],
                "additionalProperties": false
               }
@@ -7785,9 +6534,10 @@
                    "exclusiveMinimum": true,
                    "maximum": 9007199254740991
                   },
-                  "currencyCode": {
+                  "currency": {
                    "type": "string",
-                   "pattern": "^[A-Z]{3}$"
+                   "pattern": "^[A-Z]{3}$",
+                   "description": "ISO 4217, the store currency."
                   },
                   "productIds": {
                    "type": "array",
@@ -7808,7 +6558,8 @@
                    "maxItems": 90
                   }
                  },
-                 "additionalProperties": false
+                 "additionalProperties": false,
+                 "description": "Buy X get Y: what the customer buys, a quantity or an amount (with its currency)."
                 },
                 "getQuantity": {
                  "type": "integer",
@@ -7870,9 +6621,10 @@
                  "exclusiveMinimum": true,
                  "maximum": 9007199254740991
                 },
-                "currencyCode": {
+                "currency": {
                  "type": "string",
-                 "pattern": "^[A-Z]{3}$"
+                 "pattern": "^[A-Z]{3}$",
+                 "description": "ISO 4217, the store currency."
                 },
                 "productIds": {
                  "type": "array",
@@ -7898,7 +6650,7 @@
                },
                "required": [
                 "amountMinor",
-                "currencyCode"
+                "currency"
                ],
                "additionalProperties": false
               }
@@ -7949,7 +6701,8 @@
            ]
           },
           "minItems": 1,
-          "maxItems": 2
+          "maxItems": 2,
+          "description": "One value; a product or order value may add free shipping as a second effect."
          },
          "customerSegmentIds": {
           "type": "array",
@@ -7959,7 +6712,8 @@
            "maxLength": 40
           },
           "maxItems": 5,
-          "default": []
+          "default": [],
+          "description": "Only signed-in customers in any of these customer segments get this discount; empty means every customer."
          }
         },
         "required": [
@@ -7986,181 +6740,12 @@
      "data": {
       "type": "object",
       "properties": {
-       "id": {
-        "type": "string"
-       },
-       "revision": {
-        "type": "integer",
-        "minimum": 0,
-        "exclusiveMinimum": true
-       },
-       "status": {
-        "type": "string",
-        "enum": [
-         "draft",
-         "active",
-         "paused",
-         "archived"
-        ]
+       "discount": {
+        "$ref": "#/components/schemas/DiscountResource"
        }
       },
       "required": [
-       "id",
-       "revision",
-       "status"
-      ]
-     }
-    },
-    "required": [
-     "success",
-     "data"
-    ]
-   }
-  },
-  "inventory_locations.list": {
-   "operationId": "dashboard.inventory_locations.list",
-   "method": "GET",
-   "path": "/api/v1/admin/inventory/locations",
-   "risk": "read",
-   "idempotency": "none",
-   "revision": "none",
-   "scopes": [
-    "read_products",
-    "write_products",
-    "read_inventory",
-    "write_inventory",
-    "read_settings"
-   ],
-   "input": {
-    "parameters": [
-     {
-      "schema": {
-       "type": "string",
-       "enum": [
-        "true",
-        "false"
-       ],
-       "default": "false",
-       "description": "Also list archived locations"
-      },
-      "required": false,
-      "description": "Also list archived locations",
-      "name": "includeArchived",
-      "in": "query"
-     }
-    ]
-   },
-   "output": {
-    "type": "object",
-    "properties": {
-     "success": {
-      "type": "boolean",
-      "enum": [
-       true
-      ]
-     },
-     "data": {
-      "type": "object",
-      "properties": {
-       "locations": {
-        "type": "array",
-        "items": {
-         "type": "object",
-         "properties": {
-          "id": {
-           "type": "string"
-          },
-          "name": {
-           "type": "string"
-          },
-          "code": {
-           "type": "string"
-          },
-          "kind": {
-           "type": "string",
-           "enum": [
-            "warehouse",
-            "store",
-            "other"
-           ]
-          },
-          "addressLine1": {
-           "type": "string",
-           "nullable": true
-          },
-          "addressLine2": {
-           "type": "string",
-           "nullable": true
-          },
-          "city": {
-           "type": "string",
-           "nullable": true
-          },
-          "postalCode": {
-           "type": "string",
-           "nullable": true
-          },
-          "countryCode": {
-           "type": "string"
-          },
-          "phone": {
-           "type": "string",
-           "nullable": true
-          },
-          "isDefault": {
-           "type": "boolean"
-          },
-          "status": {
-           "type": "string",
-           "enum": [
-            "active",
-            "archived"
-           ]
-          },
-          "position": {
-           "type": "integer"
-          },
-          "version": {
-           "type": "integer",
-           "minimum": 1
-          },
-          "onHand": {
-           "type": "integer",
-           "description": "Units on hand there, every SKU"
-          },
-          "stockedSkus": {
-           "type": "integer",
-           "description": "SKUs with units on hand there"
-          },
-          "createdAt": {
-           "type": "string",
-           "format": "date-time"
-          },
-          "updatedAt": {
-           "type": "string",
-           "format": "date-time"
-          }
-         },
-         "required": [
-          "id",
-          "name",
-          "code",
-          "kind",
-          "countryCode",
-          "isDefault",
-          "status",
-          "position",
-          "version",
-          "onHand",
-          "stockedSkus",
-          "createdAt",
-          "updatedAt"
-         ]
-        }
-       }
-      },
-      "required": [
-       "locations"
+       "discount"
       ]
      }
     },
@@ -8293,223 +6878,19 @@
        "locationNewStock": {
         "type": "integer",
         "description": "That location's on-hand after"
+       },
+       "variant": {
+        "$ref": "#/components/schemas/VariantResource"
        }
       },
       "required": [
        "variantId",
        "previousStock",
        "newStock",
-       "delta"
+       "delta",
+       "variant"
       ],
       "additionalProperties": {}
-     }
-    },
-    "required": [
-     "success",
-     "data"
-    ]
-   }
-  },
-  "inventory.levels": {
-   "operationId": "dashboard.inventory.levels",
-   "method": "GET",
-   "path": "/api/v1/admin/inventory/{variantId}/levels",
-   "risk": "read",
-   "idempotency": "none",
-   "revision": "none",
-   "scopes": [
-    "read_products",
-    "write_products",
-    "read_inventory",
-    "write_inventory"
-   ],
-   "input": {
-    "parameters": [
-     {
-      "schema": {
-       "type": "string"
-      },
-      "required": true,
-      "name": "variantId",
-      "in": "path"
-     }
-    ]
-   },
-   "output": {
-    "type": "object",
-    "properties": {
-     "success": {
-      "type": "boolean",
-      "enum": [
-       true
-      ]
-     },
-     "data": {
-      "type": "object",
-      "properties": {
-       "variantId": {
-        "type": "string"
-       },
-       "stock": {
-        "type": "integer"
-       },
-       "reservedStock": {
-        "type": "integer"
-       },
-       "levels": {
-        "type": "array",
-        "items": {
-         "type": "object",
-         "properties": {
-          "locationId": {
-           "type": "string"
-          },
-          "name": {
-           "type": "string"
-          },
-          "code": {
-           "type": "string"
-          },
-          "isDefault": {
-           "type": "boolean"
-          },
-          "status": {
-           "type": "string",
-           "enum": [
-            "active",
-            "archived"
-           ]
-          },
-          "onHand": {
-           "type": "integer"
-          }
-         },
-         "required": [
-          "locationId",
-          "name",
-          "code",
-          "isDefault",
-          "status",
-          "onHand"
-         ]
-        }
-       }
-      },
-      "required": [
-       "variantId",
-       "stock",
-       "reservedStock",
-       "levels"
-      ]
-     }
-    },
-    "required": [
-     "success",
-     "data"
-    ]
-   }
-  },
-  "inventory.product_levels": {
-   "operationId": "dashboard.inventory.product_levels",
-   "method": "GET",
-   "path": "/api/v1/admin/inventory/levels",
-   "risk": "read",
-   "idempotency": "none",
-   "revision": "none",
-   "scopes": [
-    "read_products",
-    "write_products",
-    "read_inventory",
-    "write_inventory"
-   ],
-   "input": {
-    "parameters": [
-     {
-      "schema": {
-       "type": "string",
-       "minLength": 1,
-       "maxLength": 100,
-       "description": "Product whose live SKUs to read"
-      },
-      "required": true,
-      "description": "Product whose live SKUs to read",
-      "name": "productId",
-      "in": "query"
-     }
-    ]
-   },
-   "output": {
-    "type": "object",
-    "properties": {
-     "success": {
-      "type": "boolean",
-      "enum": [
-       true
-      ]
-     },
-     "data": {
-      "type": "object",
-      "properties": {
-       "productId": {
-        "type": "string"
-       },
-       "levels": {
-        "type": "array",
-        "items": {
-         "type": "object",
-         "properties": {
-          "variantId": {
-           "type": "string"
-          },
-          "locationId": {
-           "type": "string"
-          },
-          "onHand": {
-           "type": "integer"
-          }
-         },
-         "required": [
-          "variantId",
-          "locationId",
-          "onHand"
-         ]
-        }
-       },
-       "incoming": {
-        "type": "array",
-        "items": {
-         "type": "object",
-         "properties": {
-          "variantId": {
-           "type": "string"
-          },
-          "locationId": {
-           "type": "string"
-          },
-          "purchaseOrders": {
-           "type": "integer",
-           "description": "Open purchase order units arriving there"
-          },
-          "transfers": {
-           "type": "integer",
-           "description": "Units in transit to there"
-          }
-         },
-         "required": [
-          "variantId",
-          "locationId",
-          "purchaseOrders",
-          "transfers"
-         ]
-        },
-        "description": "Units coming to each location (not on hand); rows with nothing incoming are omitted"
-       }
-      },
-      "required": [
-       "productId",
-       "levels",
-       "incoming"
-      ]
      }
     },
     "required": [
@@ -8621,13 +7002,17 @@
        "locationNewStock": {
         "type": "integer",
         "description": "That location's on-hand after"
+       },
+       "variant": {
+        "$ref": "#/components/schemas/VariantResource"
        }
       },
       "required": [
        "variantId",
        "previousStock",
        "newStock",
-       "delta"
+       "delta",
+       "variant"
       ]
      }
     },
@@ -8647,7 +7032,34 @@
    "scopes": [
     "read_settings"
    ],
-   "input": {},
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 200,
+       "default": 200,
+       "description": "At most this many items (default and maximum 200)."
+      },
+      "required": false,
+      "description": "At most this many items (default and maximum 200).",
+      "name": "limit",
+      "in": "query"
+     }
+    ]
+   },
    "output": {
     "type": "object",
     "properties": {
@@ -8660,15 +7072,21 @@
      "data": {
       "type": "object",
       "properties": {
-       "items": {
+       "languages": {
         "type": "array",
         "items": {
          "$ref": "#/components/schemas/StoreLanguage"
         }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
        }
       },
       "required": [
-       "items"
+       "languages",
+       "nextCursor"
       ]
      }
     },
@@ -8788,9 +7206,10 @@
            "deleted"
           ]
          },
-         "version": {
+         "revision": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "description": "Send it as `expectedRevision` to change the file; every change advances it."
          },
          "createdAt": {
           "type": "string",
@@ -8822,7 +7241,7 @@
          "posterUrl",
          "folderId",
          "status",
-         "version",
+         "revision",
          "createdAt",
          "updatedAt",
          "trashedAt",
@@ -8983,9 +7402,10 @@
            "deleted"
           ]
          },
-         "version": {
+         "revision": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "description": "Send it as `expectedRevision` to change the file; every change advances it."
          },
          "createdAt": {
           "type": "string",
@@ -9017,7 +7437,7 @@
          "posterUrl",
          "folderId",
          "status",
-         "version",
+         "revision",
          "createdAt",
          "updatedAt",
          "trashedAt",
@@ -9250,9 +7670,10 @@
             "deleted"
            ]
           },
-          "version": {
+          "revision": {
            "type": "integer",
-           "minimum": 1
+           "minimum": 1,
+           "description": "Send it as `expectedRevision` to change the file; every change advances it."
           },
           "createdAt": {
            "type": "string",
@@ -9293,7 +7714,7 @@
           "posterUrl",
           "folderId",
           "status",
-          "version",
+          "revision",
           "createdAt",
           "updatedAt",
           "trashedAt",
@@ -9362,13 +7783,14 @@
        "schema": {
         "type": "object",
         "properties": {
-         "expectedVersion": {
+         "expectedRevision": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "description": "The file's `revision` you read; a file changed since is refused with 409 and nothing changes."
          }
         },
         "required": [
-         "expectedVersion"
+         "expectedRevision"
         ]
        }
       }
@@ -9461,9 +7883,10 @@
            "deleted"
           ]
          },
-         "version": {
+         "revision": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "description": "Send it as `expectedRevision` to change the file; every change advances it."
          },
          "createdAt": {
           "type": "string",
@@ -9495,7 +7918,7 @@
          "posterUrl",
          "folderId",
          "status",
-         "version",
+         "revision",
          "createdAt",
          "updatedAt",
          "trashedAt",
@@ -9555,9 +7978,10 @@
        "schema": {
         "type": "object",
         "properties": {
-         "expectedVersion": {
+         "expectedRevision": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "description": "The file's `revision` you read; a file changed since is refused with 409 and nothing changes."
          },
          "filename": {
           "type": "string",
@@ -9608,7 +8032,7 @@
          }
         },
         "required": [
-         "expectedVersion"
+         "expectedRevision"
         ]
        }
       }
@@ -9701,9 +8125,10 @@
            "deleted"
           ]
          },
-         "version": {
+         "revision": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "description": "Send it as `expectedRevision` to change the file; every change advances it."
          },
          "createdAt": {
           "type": "string",
@@ -9735,7 +8160,7 @@
          "posterUrl",
          "folderId",
          "status",
-         "version",
+         "revision",
          "createdAt",
          "updatedAt",
          "trashedAt",
@@ -9754,7 +8179,7 @@
     ]
    }
   },
-  "orders.fulfillment_void": {
+  "fulfillments.void": {
    "operationId": "dashboard.orders.fulfillment_void",
    "method": "POST",
    "path": "/api/v1/admin/orders/{id}/fulfillments/{fulfillmentId}/void",
@@ -9802,10 +8227,10 @@
        "schema": {
         "type": "object",
         "properties": {
-         "expectedVersion": {
+         "expectedRevision": {
           "type": "integer",
           "minimum": 1,
-          "description": "The order version you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
+          "description": "The order `revision` you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
          }
         },
         "additionalProperties": false
@@ -9826,6 +8251,12 @@
      "data": {
       "type": "object",
       "properties": {
+       "order": {
+        "$ref": "#/components/schemas/OrderResource"
+       },
+       "fulfillment": {
+        "$ref": "#/components/schemas/FulfillmentResource"
+       },
        "orderId": {
         "type": "string"
        },
@@ -9840,6 +8271,8 @@
        }
       },
       "required": [
+       "order",
+       "fulfillment",
        "orderId",
        "fulfillmentId",
        "quantity",
@@ -9875,17 +8308,6 @@
      },
      {
       "schema": {
-       "type": "integer",
-       "minimum": 1,
-       "description": "The order version you read; a change since is refused with 409. Omit to mark it whatever happened since."
-      },
-      "required": false,
-      "description": "The order version you read; a change since is refused with 409. Omit to mark it whatever happened since.",
-      "name": "expectedVersion",
-      "in": "query"
-     },
-     {
-      "schema": {
        "type": "string",
        "pattern": "^[\\x20-\\x7E]{8,200}$",
        "minLength": 8,
@@ -9896,7 +8318,25 @@
       "name": "idempotency-key",
       "in": "header"
      }
-    ]
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "expectedRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The order `revision` you read; a change since is refused with 409. Omit to mark it whatever happened since."
+         }
+        },
+        "additionalProperties": false
+       }
+      }
+     }
+    }
    },
    "output": {
     "type": "object",
@@ -9910,12 +8350,12 @@
      "data": {
       "type": "object",
       "properties": {
-       "message": {
-        "type": "string"
+       "order": {
+        "$ref": "#/components/schemas/OrderResource"
        }
       },
       "required": [
-       "message"
+       "order"
       ]
      }
     },
@@ -9925,7 +8365,7 @@
     ]
    }
   },
-  "orders.pickup_ready": {
+  "orders.mark_pickup_ready": {
    "operationId": "dashboard.orders.pickup_ready",
    "method": "POST",
    "path": "/api/v1/admin/orders/{id}/pickup-ready",
@@ -9965,10 +8405,10 @@
        "schema": {
         "type": "object",
         "properties": {
-         "expectedVersion": {
+         "expectedRevision": {
           "type": "integer",
           "minimum": 1,
-          "description": "The order version you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
+          "description": "The order `revision` you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
          }
         },
         "additionalProperties": false
@@ -9989,6 +8429,9 @@
      "data": {
       "type": "object",
       "properties": {
+       "order": {
+        "$ref": "#/components/schemas/OrderResource"
+       },
        "orderId": {
         "type": "string"
        },
@@ -10001,6 +8444,7 @@
        }
       },
       "required": [
+       "order",
        "orderId",
        "pickupReadyAt",
        "replayed"
@@ -10013,644 +8457,7 @@
     ]
    }
   },
-  "orders.return_get": {
-   "operationId": "dashboard.orders.return_get",
-   "method": "GET",
-   "path": "/api/v1/admin/orders/{id}/returns/{returnId}",
-   "risk": "read",
-   "idempotency": "none",
-   "revision": "none",
-   "scopes": [
-    "read_orders",
-    "write_orders",
-    "write_payments",
-    "write_payment_methods",
-    "write_refunds",
-    "write_fulfillments"
-   ],
-   "input": {
-    "parameters": [
-     {
-      "schema": {
-       "type": "string"
-      },
-      "required": true,
-      "name": "id",
-      "in": "path"
-     },
-     {
-      "schema": {
-       "type": "string"
-      },
-      "required": true,
-      "name": "returnId",
-      "in": "path"
-     }
-    ]
-   },
-   "output": {
-    "type": "object",
-    "properties": {
-     "success": {
-      "type": "boolean",
-      "enum": [
-       true
-      ]
-     },
-     "data": {
-      "type": "object",
-      "properties": {
-       "return": {
-        "type": "object",
-        "properties": {
-         "id": {
-          "type": "string"
-         },
-         "orderId": {
-          "type": "string"
-         },
-         "status": {
-          "type": "string",
-          "enum": [
-           "requested",
-           "approved",
-           "receiving",
-           "completed",
-           "rejected",
-           "cancelled"
-          ]
-         },
-         "reason": {
-          "type": "string"
-         },
-         "notes": {
-          "type": "string",
-          "nullable": true
-         },
-         "actorType": {
-          "type": "string"
-         },
-         "actorId": {
-          "type": "string",
-          "nullable": true
-         },
-         "source": {
-          "type": "string",
-          "enum": [
-           "admin",
-           "support_request",
-           "cod_return_to_sender"
-          ]
-         },
-         "sourceReferenceId": {
-          "type": "string",
-          "nullable": true
-         },
-         "version": {
-          "type": "integer"
-         },
-         "requestedAt": {
-          "type": "string",
-          "nullable": true,
-          "format": "date-time"
-         },
-         "approvedAt": {
-          "type": "string",
-          "nullable": true,
-          "format": "date-time"
-         },
-         "receivingStartedAt": {
-          "type": "string",
-          "nullable": true,
-          "format": "date-time"
-         },
-         "completedAt": {
-          "type": "string",
-          "nullable": true,
-          "format": "date-time"
-         },
-         "rejectedAt": {
-          "type": "string",
-          "nullable": true,
-          "format": "date-time"
-         },
-         "cancelledAt": {
-          "type": "string",
-          "nullable": true,
-          "format": "date-time"
-         },
-         "createdAt": {
-          "type": "string",
-          "nullable": true,
-          "format": "date-time"
-         },
-         "updatedAt": {
-          "type": "string",
-          "nullable": true,
-          "format": "date-time"
-         },
-         "receiptRecovery": {
-          "type": "object",
-          "nullable": true,
-          "properties": {
-           "required": {
-            "type": "boolean",
-            "enum": [
-             true
-            ]
-           },
-           "startedAt": {
-            "type": "string",
-            "nullable": true,
-            "format": "date-time"
-           }
-          },
-          "required": [
-           "required",
-           "startedAt"
-          ]
-         },
-         "receipts": {
-          "type": "array",
-          "items": {
-           "type": "object",
-           "properties": {
-            "id": {
-             "type": "string"
-            },
-            "returnLineId": {
-             "type": "string"
-            },
-            "receivedQuantity": {
-             "type": "integer"
-            },
-            "restockQuantity": {
-             "type": "integer"
-            },
-            "damagedQuantity": {
-             "type": "integer"
-            },
-            "actorType": {
-             "type": "string"
-            },
-            "actorId": {
-             "type": "string",
-             "nullable": true
-            },
-            "inventoryMovementId": {
-             "type": "string",
-             "nullable": true
-            },
-            "restockLocationId": {
-             "type": "string",
-             "nullable": true,
-             "description": "Location the restocked units went to; null when nothing was restocked."
-            },
-            "notes": {
-             "type": "string",
-             "nullable": true
-            },
-            "createdAt": {
-             "type": "string",
-             "nullable": true,
-             "format": "date-time"
-            }
-           },
-           "required": [
-            "id",
-            "returnLineId",
-            "receivedQuantity",
-            "restockQuantity",
-            "damagedQuantity",
-            "actorType",
-            "actorId",
-            "inventoryMovementId",
-            "restockLocationId",
-            "notes",
-            "createdAt"
-           ]
-          }
-         },
-         "lines": {
-          "type": "array",
-          "items": {
-           "type": "object",
-           "properties": {
-            "id": {
-             "type": "string"
-            },
-            "orderItemId": {
-             "type": "string"
-            },
-            "variantId": {
-             "type": "string",
-             "nullable": true
-            },
-            "inventoryTracked": {
-             "type": "boolean"
-            },
-            "requestedQuantity": {
-             "type": "integer"
-            },
-            "approvedQuantity": {
-             "type": "integer"
-            },
-            "receivedQuantity": {
-             "type": "integer"
-            },
-            "restockQuantity": {
-             "type": "integer"
-            },
-            "damagedQuantity": {
-             "type": "integer"
-            },
-            "rejectedQuantity": {
-             "type": "integer"
-            },
-            "remainingReturnableQuantity": {
-             "type": "integer",
-             "minimum": 0
-            },
-            "reason": {
-             "type": "string",
-             "nullable": true
-            },
-            "notes": {
-             "type": "string",
-             "nullable": true
-            }
-           },
-           "required": [
-            "id",
-            "orderItemId",
-            "variantId",
-            "inventoryTracked",
-            "requestedQuantity",
-            "approvedQuantity",
-            "receivedQuantity",
-            "restockQuantity",
-            "damagedQuantity",
-            "rejectedQuantity",
-            "remainingReturnableQuantity",
-            "reason",
-            "notes"
-           ]
-          }
-         }
-        },
-        "required": [
-         "id",
-         "orderId",
-         "status",
-         "reason",
-         "notes",
-         "actorType",
-         "actorId",
-         "source",
-         "sourceReferenceId",
-         "version",
-         "requestedAt",
-         "approvedAt",
-         "receivingStartedAt",
-         "completedAt",
-         "rejectedAt",
-         "cancelledAt",
-         "createdAt",
-         "updatedAt",
-         "receiptRecovery",
-         "receipts",
-         "lines"
-        ]
-       }
-      },
-      "required": [
-       "return"
-      ]
-     }
-    },
-    "required": [
-     "success",
-     "data"
-    ]
-   }
-  },
-  "orders.returns": {
-   "operationId": "dashboard.orders.returns",
-   "method": "GET",
-   "path": "/api/v1/admin/orders/{id}/returns",
-   "risk": "read",
-   "idempotency": "none",
-   "revision": "none",
-   "scopes": [
-    "read_orders",
-    "write_orders",
-    "write_payments",
-    "write_payment_methods",
-    "write_refunds",
-    "write_fulfillments"
-   ],
-   "input": {
-    "parameters": [
-     {
-      "schema": {
-       "type": "string"
-      },
-      "required": true,
-      "name": "id",
-      "in": "path"
-     }
-    ]
-   },
-   "output": {
-    "type": "object",
-    "properties": {
-     "success": {
-      "type": "boolean",
-      "enum": [
-       true
-      ]
-     },
-     "data": {
-      "type": "object",
-      "properties": {
-       "returns": {
-        "type": "array",
-        "items": {
-         "type": "object",
-         "properties": {
-          "id": {
-           "type": "string"
-          },
-          "orderId": {
-           "type": "string"
-          },
-          "status": {
-           "type": "string",
-           "enum": [
-            "requested",
-            "approved",
-            "receiving",
-            "completed",
-            "rejected",
-            "cancelled"
-           ]
-          },
-          "reason": {
-           "type": "string"
-          },
-          "notes": {
-           "type": "string",
-           "nullable": true
-          },
-          "actorType": {
-           "type": "string"
-          },
-          "actorId": {
-           "type": "string",
-           "nullable": true
-          },
-          "source": {
-           "type": "string",
-           "enum": [
-            "admin",
-            "support_request",
-            "cod_return_to_sender"
-           ]
-          },
-          "sourceReferenceId": {
-           "type": "string",
-           "nullable": true
-          },
-          "version": {
-           "type": "integer"
-          },
-          "requestedAt": {
-           "type": "string",
-           "nullable": true,
-           "format": "date-time"
-          },
-          "approvedAt": {
-           "type": "string",
-           "nullable": true,
-           "format": "date-time"
-          },
-          "receivingStartedAt": {
-           "type": "string",
-           "nullable": true,
-           "format": "date-time"
-          },
-          "completedAt": {
-           "type": "string",
-           "nullable": true,
-           "format": "date-time"
-          },
-          "rejectedAt": {
-           "type": "string",
-           "nullable": true,
-           "format": "date-time"
-          },
-          "cancelledAt": {
-           "type": "string",
-           "nullable": true,
-           "format": "date-time"
-          },
-          "createdAt": {
-           "type": "string",
-           "nullable": true,
-           "format": "date-time"
-          },
-          "updatedAt": {
-           "type": "string",
-           "nullable": true,
-           "format": "date-time"
-          },
-          "receiptRecovery": {
-           "type": "object",
-           "nullable": true,
-           "properties": {
-            "required": {
-             "type": "boolean",
-             "enum": [
-              true
-             ]
-            },
-            "startedAt": {
-             "type": "string",
-             "nullable": true,
-             "format": "date-time"
-            }
-           },
-           "required": [
-            "required",
-            "startedAt"
-           ]
-          },
-          "receipts": {
-           "type": "array",
-           "items": {
-            "type": "object",
-            "properties": {
-             "id": {
-              "type": "string"
-             },
-             "returnLineId": {
-              "type": "string"
-             },
-             "receivedQuantity": {
-              "type": "integer"
-             },
-             "restockQuantity": {
-              "type": "integer"
-             },
-             "damagedQuantity": {
-              "type": "integer"
-             },
-             "actorType": {
-              "type": "string"
-             },
-             "actorId": {
-              "type": "string",
-              "nullable": true
-             },
-             "inventoryMovementId": {
-              "type": "string",
-              "nullable": true
-             },
-             "restockLocationId": {
-              "type": "string",
-              "nullable": true,
-              "description": "Location the restocked units went to; null when nothing was restocked."
-             },
-             "notes": {
-              "type": "string",
-              "nullable": true
-             },
-             "createdAt": {
-              "type": "string",
-              "nullable": true,
-              "format": "date-time"
-             }
-            },
-            "required": [
-             "id",
-             "returnLineId",
-             "receivedQuantity",
-             "restockQuantity",
-             "damagedQuantity",
-             "actorType",
-             "actorId",
-             "inventoryMovementId",
-             "restockLocationId",
-             "notes",
-             "createdAt"
-            ]
-           }
-          },
-          "lines": {
-           "type": "array",
-           "items": {
-            "type": "object",
-            "properties": {
-             "id": {
-              "type": "string"
-             },
-             "orderItemId": {
-              "type": "string"
-             },
-             "variantId": {
-              "type": "string",
-              "nullable": true
-             },
-             "inventoryTracked": {
-              "type": "boolean"
-             },
-             "requestedQuantity": {
-              "type": "integer"
-             },
-             "approvedQuantity": {
-              "type": "integer"
-             },
-             "receivedQuantity": {
-              "type": "integer"
-             },
-             "restockQuantity": {
-              "type": "integer"
-             },
-             "damagedQuantity": {
-              "type": "integer"
-             },
-             "rejectedQuantity": {
-              "type": "integer"
-             },
-             "remainingReturnableQuantity": {
-              "type": "integer",
-              "minimum": 0
-             },
-             "reason": {
-              "type": "string",
-              "nullable": true
-             },
-             "notes": {
-              "type": "string",
-              "nullable": true
-             }
-            },
-            "required": [
-             "id",
-             "orderItemId",
-             "variantId",
-             "inventoryTracked",
-             "requestedQuantity",
-             "approvedQuantity",
-             "receivedQuantity",
-             "restockQuantity",
-             "damagedQuantity",
-             "rejectedQuantity",
-             "remainingReturnableQuantity",
-             "reason",
-             "notes"
-            ]
-           }
-          }
-         },
-         "required": [
-          "id",
-          "orderId",
-          "status",
-          "reason",
-          "notes",
-          "actorType",
-          "actorId",
-          "source",
-          "sourceReferenceId",
-          "version",
-          "requestedAt",
-          "approvedAt",
-          "receivingStartedAt",
-          "completedAt",
-          "rejectedAt",
-          "cancelledAt",
-          "createdAt",
-          "updatedAt",
-          "receiptRecovery",
-          "receipts",
-          "lines"
-         ]
-        }
-       }
-      },
-      "required": [
-       "returns"
-      ]
-     }
-    },
-    "required": [
-     "success",
-     "data"
-    ]
-   }
-  },
-  "orders.timeline": {
+  "order_timeline.list": {
    "operationId": "dashboard.orders.timeline",
    "method": "GET",
    "path": "/api/v1/admin/orders/{id}/timeline",
@@ -10797,218 +8604,7 @@
     ]
    }
   },
-  "orders.update_details": {
-   "operationId": "dashboard.orders.update_details",
-   "method": "PUT",
-   "path": "/api/v1/admin/orders/{id}/details",
-   "risk": "write",
-   "idempotency": "supported",
-   "revision": "required",
-   "scopes": [
-    "write_orders"
-   ],
-   "input": {
-    "parameters": [
-     {
-      "schema": {
-       "type": "string"
-      },
-      "required": true,
-      "name": "id",
-      "in": "path"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "pattern": "^[\\x20-\\x7E]{8,200}$",
-       "minLength": 8,
-       "maxLength": 200
-      },
-      "required": false,
-      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
-      "name": "idempotency-key",
-      "in": "header"
-     }
-    ],
-    "requestBody": {
-     "content": {
-      "application/json": {
-       "schema": {
-        "type": "object",
-        "properties": {
-         "customerName": {
-          "type": "string",
-          "minLength": 3,
-          "maxLength": 100
-         },
-         "customerPhone": {
-          "type": "string",
-          "minLength": 7,
-          "maxLength": 16
-         },
-         "customerEmail": {
-          "type": "string",
-          "nullable": true,
-          "format": "email"
-         },
-         "shippingCountryCode": {
-          "type": "string",
-          "nullable": true,
-          "minLength": 2,
-          "maxLength": 2
-         },
-         "shippingAddress": {
-          "type": "string",
-          "nullable": true,
-          "maxLength": 500
-         },
-         "shippingAddressLine2": {
-          "type": "string",
-          "nullable": true,
-          "maxLength": 200
-         },
-         "shippingDependentLocality": {
-          "type": "string",
-          "nullable": true,
-          "maxLength": 120
-         },
-         "shippingLocality": {
-          "type": "string",
-          "nullable": true,
-          "maxLength": 120
-         },
-         "shippingAdminArea": {
-          "type": "string",
-          "nullable": true,
-          "maxLength": 120
-         },
-         "shippingPostalCode": {
-          "type": "string",
-          "nullable": true,
-          "maxLength": 20
-         },
-         "shippingCompany": {
-          "type": "string",
-          "nullable": true,
-          "maxLength": 100
-         },
-         "skipAddressValidation": {
-          "type": "boolean"
-         },
-         "city": {
-          "type": "string",
-          "nullable": true,
-          "minLength": 1
-         },
-         "zone": {
-          "type": "string",
-          "nullable": true,
-          "minLength": 1
-         },
-         "area": {
-          "type": "string",
-          "nullable": true
-         },
-         "billingSameAsShipping": {
-          "type": "boolean",
-          "nullable": true
-         },
-         "billingCountryCode": {
-          "type": "string",
-          "nullable": true,
-          "minLength": 2,
-          "maxLength": 2
-         },
-         "billingName": {
-          "type": "string",
-          "nullable": true,
-          "maxLength": 100
-         },
-         "billingCompany": {
-          "type": "string",
-          "nullable": true,
-          "maxLength": 100
-         },
-         "billingAddress": {
-          "type": "string",
-          "nullable": true,
-          "maxLength": 500
-         },
-         "billingAddressLine2": {
-          "type": "string",
-          "nullable": true,
-          "maxLength": 200
-         },
-         "billingDependentLocality": {
-          "type": "string",
-          "nullable": true,
-          "maxLength": 120
-         },
-         "billingLocality": {
-          "type": "string",
-          "nullable": true,
-          "maxLength": 120
-         },
-         "billingAdminArea": {
-          "type": "string",
-          "nullable": true,
-          "maxLength": 120
-         },
-         "billingPostalCode": {
-          "type": "string",
-          "nullable": true,
-          "maxLength": 20
-         },
-         "expectedVersion": {
-          "type": "integer",
-          "minimum": 1
-         }
-        },
-        "required": [
-         "customerName",
-         "customerPhone",
-         "customerEmail",
-         "expectedVersion"
-        ]
-       }
-      }
-     },
-     "required": true
-    }
-   },
-   "output": {
-    "type": "object",
-    "properties": {
-     "success": {
-      "type": "boolean",
-      "enum": [
-       true
-      ]
-     },
-     "data": {
-      "type": "object",
-      "properties": {
-       "id": {
-        "type": "string"
-       },
-       "version": {
-        "type": "integer",
-        "minimum": 1
-       }
-      },
-      "required": [
-       "id",
-       "version"
-      ]
-     }
-    },
-    "required": [
-     "success",
-     "data"
-    ]
-   }
-  },
-  "orders.update_status": {
+  "orders.set_status": {
    "operationId": "dashboard.orders.update_status",
    "method": "PUT",
    "path": "/api/v1/admin/orders/{id}/status",
@@ -11072,10 +8668,10 @@
            "other"
           ]
          },
-         "expectedVersion": {
+         "expectedRevision": {
           "type": "integer",
           "minimum": 1,
-          "description": "The order version you read (`version` on the order). A change since is refused with 409 and nothing changes. Omit to change it whatever happened since."
+          "description": "The order `revision` you read. A change since is refused with 409 and nothing changes. Omit to change it whatever happened since."
          }
         },
         "required": [
@@ -11099,12 +8695,12 @@
      "data": {
       "type": "object",
       "properties": {
-       "message": {
-        "type": "string"
+       "order": {
+        "$ref": "#/components/schemas/OrderResource"
        }
       },
       "required": [
-       "message"
+       "order"
       ]
      }
     },
@@ -11114,7 +8710,7 @@
     ]
    }
   },
-  "product_variants.retire": {
+  "variants.retire": {
    "operationId": "dashboard.product_variants.retire",
    "method": "DELETE",
    "path": "/api/v1/admin/products/{id}/variants/{variantId}",
@@ -11145,10 +8741,12 @@
      {
       "schema": {
        "type": "integer",
-       "minimum": 1
+       "minimum": 1,
+       "description": "The product `revision` you read; a change since is refused with 409 and nothing changes."
       },
       "required": true,
-      "name": "expectedAggregateRevision",
+      "description": "The product `revision` you read; a change since is refused with 409 and nothing changes.",
+      "name": "expectedRevision",
       "in": "query"
      },
      {
@@ -11177,13 +8775,12 @@
      "data": {
       "type": "object",
       "properties": {
-       "aggregateRevision": {
-        "type": "integer",
-        "minimum": 1
+       "product": {
+        "$ref": "#/components/schemas/ProductResource"
        }
       },
       "required": [
-       "aggregateRevision"
+       "product"
       ]
      }
     },
@@ -11193,7 +8790,7 @@
     ]
    }
   },
-  "products.publications_set": {
+  "products.set_publications": {
    "operationId": "dashboard.products.publications_set",
    "method": "PUT",
    "path": "/api/v1/admin/products/{id}/publications",
@@ -11267,6 +8864,9 @@
      "data": {
       "type": "object",
       "properties": {
+       "product": {
+        "$ref": "#/components/schemas/ProductResource"
+       },
        "salesChannelIds": {
         "type": "array",
         "items": {
@@ -11275,6 +8875,7 @@
        }
       },
       "required": [
+       "product",
        "salesChannelIds"
       ]
      }
@@ -11307,15 +8908,6 @@
      },
      {
       "schema": {
-       "type": "integer",
-       "minimum": 1
-      },
-      "required": true,
-      "name": "expectedAggregateRevision",
-      "in": "query"
-     },
-     {
-      "schema": {
        "type": "string",
        "pattern": "^[\\x20-\\x7E]{8,200}$",
        "minLength": 8,
@@ -11326,7 +8918,28 @@
       "name": "idempotency-key",
       "in": "header"
      }
-    ]
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "expectedRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The product `revision` you read; a change since is refused with 409 and nothing changes."
+         }
+        },
+        "required": [
+         "expectedRevision"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
    },
    "output": {
     "type": "object",
@@ -11340,13 +8953,12 @@
      "data": {
       "type": "object",
       "properties": {
-       "aggregateRevision": {
-        "type": "integer",
-        "minimum": 1
+       "product": {
+        "$ref": "#/components/schemas/ProductResource"
        }
       },
       "required": [
-       "aggregateRevision"
+       "product"
       ]
      }
     },
@@ -11379,10 +8991,12 @@
      {
       "schema": {
        "type": "integer",
-       "minimum": 1
+       "minimum": 1,
+       "description": "The product `revision` you read; a change since is refused with 409 and nothing changes."
       },
       "required": true,
-      "name": "expectedAggregateRevision",
+      "description": "The product `revision` you read; a change since is refused with 409 and nothing changes.",
+      "name": "expectedRevision",
       "in": "query"
      },
      {
@@ -11411,13 +9025,12 @@
      "data": {
       "type": "object",
       "properties": {
-       "aggregateRevision": {
-        "type": "integer",
-        "minimum": 1
+       "product": {
+        "$ref": "#/components/schemas/ProductResource"
        }
       },
       "required": [
-       "aggregateRevision"
+       "product"
       ]
      }
     },
@@ -11614,7 +9227,15 @@
       ]
      },
      "data": {
-      "$ref": "#/components/schemas/BulkRun"
+      "type": "object",
+      "properties": {
+       "run": {
+        "$ref": "#/components/schemas/BulkRun"
+       }
+      },
+      "required": [
+       "run"
+      ]
      }
     },
     "required": [
@@ -11703,6 +9324,322 @@
       },
       "required": [
        "runs",
+       "nextCursor"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "categories.get": {
+   "operationId": "dashboard.resources.categories.get",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/categories/{id}",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_products",
+    "write_products"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 180
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "category": {
+        "$ref": "#/components/schemas/CategoryResource"
+       }
+      },
+      "required": [
+       "category"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "categories.list": {
+   "operationId": "dashboard.resources.categories.list",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/categories",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_products",
+    "write_products"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 50,
+       "default": 20,
+       "description": "At most this many records; a page may hold fewer to stay within the response budget."
+      },
+      "required": false,
+      "description": "At most this many records; a page may hold fewer to stay within the response budget.",
+      "name": "limit",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "format": "date-time",
+       "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync."
+      },
+      "required": false,
+      "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.",
+      "name": "updatedSince",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 180,
+       "description": "Only the direct children of this category; `root` lists the top level."
+      },
+      "required": false,
+      "description": "Only the direct children of this category; `root` lists the top level.",
+      "name": "parentId",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "enum": [
+        "true",
+        "false"
+       ],
+       "description": "true lists trashed categories instead."
+      },
+      "required": false,
+      "description": "true lists trashed categories instead.",
+      "name": "trashed",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "categories": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/CategoryResource"
+        }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
+       }
+      },
+      "required": [
+       "categories",
+       "nextCursor"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "collections.get": {
+   "operationId": "dashboard.resources.collections.get",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/collections/{id}",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_products",
+    "write_products"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 180
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "collection": {
+        "$ref": "#/components/schemas/CollectionResource"
+       }
+      },
+      "required": [
+       "collection"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "collections.list": {
+   "operationId": "dashboard.resources.collections.list",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/collections",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_products",
+    "write_products"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 50,
+       "default": 20,
+       "description": "At most this many records; a page may hold fewer to stay within the response budget."
+      },
+      "required": false,
+      "description": "At most this many records; a page may hold fewer to stay within the response budget.",
+      "name": "limit",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "format": "date-time",
+       "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync."
+      },
+      "required": false,
+      "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.",
+      "name": "updatedSince",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "enum": [
+        "true",
+        "false"
+       ],
+       "description": "true lists trashed collections instead."
+      },
+      "required": false,
+      "description": "true lists trashed collections instead.",
+      "name": "trashed",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "collections": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/CollectionResource"
+        }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
+       }
+      },
+      "required": [
+       "collections",
        "nextCursor"
       ]
      }
@@ -11821,7 +9758,15 @@
       ]
      },
      "data": {
-      "$ref": "#/components/schemas/BulkRun"
+      "type": "object",
+      "properties": {
+       "run": {
+        "$ref": "#/components/schemas/BulkRun"
+       }
+      },
+      "required": [
+       "run"
+      ]
      }
     },
     "required": [
@@ -11865,7 +9810,15 @@
       ]
      },
      "data": {
-      "$ref": "#/components/schemas/CustomerResource"
+      "type": "object",
+      "properties": {
+       "customer": {
+        "$ref": "#/components/schemas/CustomerResource"
+       }
+      },
+      "required": [
+       "customer"
+      ]
      }
     },
     "required": [
@@ -12187,6 +10140,30 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 100,
+       "default": 100,
+       "description": "At most this many items (default and maximum 100)."
+      },
+      "required": false,
+      "description": "At most this many items (default and maximum 100).",
+      "name": "limit",
+      "in": "query"
      }
     ]
    },
@@ -12207,10 +10184,16 @@
         "items": {
          "$ref": "#/components/schemas/FulfillmentResource"
         }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
        }
       },
       "required": [
-       "fulfillments"
+       "fulfillments",
+       "nextCursor"
       ]
      }
     },
@@ -12262,11 +10245,11 @@
        "schema": {
         "type": "object",
         "properties": {
-         "expectedVersion": {
+         "expectedRevision": {
           "type": "integer",
           "minimum": 0,
           "exclusiveMinimum": true,
-          "description": "The card's `version` you read; a card changed since is refused with 409."
+          "description": "The card's `revision` you read; a card changed since is refused with 409."
          },
          "amountMinor": {
           "type": "integer",
@@ -12280,7 +10263,7 @@
          }
         },
         "required": [
-         "expectedVersion",
+         "expectedRevision",
          "amountMinor",
          "reason"
         ],
@@ -12623,11 +10606,11 @@
        "schema": {
         "type": "object",
         "properties": {
-         "expectedVersion": {
+         "expectedRevision": {
           "type": "integer",
           "minimum": 0,
           "exclusiveMinimum": true,
-          "description": "The card's `version` you read; a card changed since is refused with 409."
+          "description": "The card's `revision` you read; a card changed since is refused with 409."
          },
          "status": {
           "type": "string",
@@ -12655,7 +10638,7 @@
          }
         },
         "required": [
-         "expectedVersion"
+         "expectedRevision"
         ],
         "additionalProperties": false
        }
@@ -12681,6 +10664,98 @@
       },
       "required": [
        "giftCard"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "inventory_locations.list": {
+   "operationId": "dashboard.resources.inventory_locations.list",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/inventory-locations",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_products",
+    "write_products",
+    "read_inventory",
+    "write_inventory",
+    "read_settings"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 100,
+       "default": 100,
+       "description": "At most this many items (default and maximum 100)."
+      },
+      "required": false,
+      "description": "At most this many items (default and maximum 100).",
+      "name": "limit",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "enum": [
+        "active",
+        "archived"
+       ],
+       "description": "Only locations in this status."
+      },
+      "required": false,
+      "description": "Only locations in this status.",
+      "name": "status",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "locations": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/InventoryLocationResource"
+        }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
+       }
+      },
+      "required": [
+       "locations",
+       "nextCursor"
       ]
      }
     },
@@ -13434,7 +11509,15 @@
       ]
      },
      "data": {
-      "$ref": "#/components/schemas/OrderResource"
+      "type": "object",
+      "properties": {
+       "order": {
+        "$ref": "#/components/schemas/OrderResource"
+       }
+      },
+      "required": [
+       "order"
+      ]
      }
     },
     "required": [
@@ -13717,6 +11800,30 @@
       "required": true,
       "name": "customerId",
       "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 50,
+       "default": 50,
+       "description": "At most this many items (default and maximum 50)."
+      },
+      "required": false,
+      "description": "At most this many items (default and maximum 50).",
+      "name": "limit",
+      "in": "query"
      }
     ]
    },
@@ -13737,10 +11844,16 @@
         "items": {
          "$ref": "#/components/schemas/PaymentMethodResource"
         }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
        }
       },
       "required": [
-       "paymentMethods"
+       "paymentMethods",
+       "nextCursor"
       ]
      }
     },
@@ -13798,7 +11911,58 @@
       ]
      },
      "data": {
-      "$ref": "#/components/schemas/PaymentOutcomeResource"
+      "type": "object",
+      "properties": {
+       "outcome": {
+        "type": "string",
+        "enum": [
+         "succeeded",
+         "authorized",
+         "pending",
+         "voided"
+        ],
+        "description": "`succeeded`: captured and credited to the order. `authorized`: held, capture it with payments.capture. `pending`: the provider answers later by webhook; read the order. `voided`: the hold was released."
+       },
+       "orderId": {
+        "type": "string"
+       },
+       "providerId": {
+        "type": "string"
+       },
+       "amountMinor": {
+        "type": "integer",
+        "description": "In minor units of `currency`."
+       },
+       "currency": {
+        "type": "string",
+        "minLength": 3,
+        "maxLength": 3
+       },
+       "payment": {
+        "allOf": [
+         {
+          "$ref": "#/components/schemas/PaymentResource"
+         },
+         {
+          "nullable": true,
+          "description": "The order payment, once the provider's answer landed."
+         }
+        ]
+       },
+       "replayed": {
+        "type": "boolean",
+        "description": "True when this answers a request already handled (the same Idempotency-Key, or an authorization already settled)."
+       }
+      },
+      "required": [
+       "outcome",
+       "orderId",
+       "providerId",
+       "amountMinor",
+       "currency",
+       "payment",
+       "replayed"
+      ]
      }
     },
     "required": [
@@ -13870,10 +12034,10 @@
           "default": "automatic",
           "description": "`manual` only authorizes (money held): capture it with payments.capture or release it with payments.void. Needs a provider that authorizes."
          },
-         "expectedVersion": {
+         "expectedRevision": {
           "type": "integer",
           "minimum": 1,
-          "description": "The order `version` you read; a different one is refused with 409 before the provider is called."
+          "description": "The order `revision` you read; a different one is refused with 409 before the provider is called."
          }
         },
         "required": [
@@ -13895,7 +12059,58 @@
       ]
      },
      "data": {
-      "$ref": "#/components/schemas/PaymentOutcomeResource"
+      "type": "object",
+      "properties": {
+       "outcome": {
+        "type": "string",
+        "enum": [
+         "succeeded",
+         "authorized",
+         "pending",
+         "voided"
+        ],
+        "description": "`succeeded`: captured and credited to the order. `authorized`: held, capture it with payments.capture. `pending`: the provider answers later by webhook; read the order. `voided`: the hold was released."
+       },
+       "orderId": {
+        "type": "string"
+       },
+       "providerId": {
+        "type": "string"
+       },
+       "amountMinor": {
+        "type": "integer",
+        "description": "In minor units of `currency`."
+       },
+       "currency": {
+        "type": "string",
+        "minLength": 3,
+        "maxLength": 3
+       },
+       "payment": {
+        "allOf": [
+         {
+          "$ref": "#/components/schemas/PaymentResource"
+         },
+         {
+          "nullable": true,
+          "description": "The order payment, once the provider's answer landed."
+         }
+        ]
+       },
+       "replayed": {
+        "type": "boolean",
+        "description": "True when this answers a request already handled (the same Idempotency-Key, or an authorization already settled)."
+       }
+      },
+      "required": [
+       "outcome",
+       "orderId",
+       "providerId",
+       "amountMinor",
+       "currency",
+       "payment",
+       "replayed"
+      ]
      }
     },
     "required": [
@@ -13975,10 +12190,10 @@
           "nullable": true,
           "maxLength": 500
          },
-         "expectedVersion": {
+         "expectedRevision": {
           "type": "integer",
           "minimum": 1,
-          "description": "The order `version` you read; a different one is refused with 409."
+          "description": "The order `revision` you read; a different one is refused with 409."
          }
         },
         "required": [
@@ -14044,6 +12259,30 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 100,
+       "default": 100,
+       "description": "At most this many items (default and maximum 100)."
+      },
+      "required": false,
+      "description": "At most this many items (default and maximum 100).",
+      "name": "limit",
+      "in": "query"
      }
     ]
    },
@@ -14064,10 +12303,16 @@
         "items": {
          "$ref": "#/components/schemas/PaymentResource"
         }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
        }
       },
       "required": [
-       "payments"
+       "payments",
+       "nextCursor"
       ]
      }
     },
@@ -14125,7 +12370,58 @@
       ]
      },
      "data": {
-      "$ref": "#/components/schemas/PaymentOutcomeResource"
+      "type": "object",
+      "properties": {
+       "outcome": {
+        "type": "string",
+        "enum": [
+         "succeeded",
+         "authorized",
+         "pending",
+         "voided"
+        ],
+        "description": "`succeeded`: captured and credited to the order. `authorized`: held, capture it with payments.capture. `pending`: the provider answers later by webhook; read the order. `voided`: the hold was released."
+       },
+       "orderId": {
+        "type": "string"
+       },
+       "providerId": {
+        "type": "string"
+       },
+       "amountMinor": {
+        "type": "integer",
+        "description": "In minor units of `currency`."
+       },
+       "currency": {
+        "type": "string",
+        "minLength": 3,
+        "maxLength": 3
+       },
+       "payment": {
+        "allOf": [
+         {
+          "$ref": "#/components/schemas/PaymentResource"
+         },
+         {
+          "nullable": true,
+          "description": "The order payment, once the provider's answer landed."
+         }
+        ]
+       },
+       "replayed": {
+        "type": "boolean",
+        "description": "True when this answers a request already handled (the same Idempotency-Key, or an authorization already settled)."
+       }
+      },
+      "required": [
+       "outcome",
+       "orderId",
+       "providerId",
+       "amountMinor",
+       "currency",
+       "payment",
+       "replayed"
+      ]
      }
     },
     "required": [
@@ -14321,10 +12617,17 @@
       "properties": {
        "id": {
         "type": "string"
+       },
+       "deleted": {
+        "type": "boolean",
+        "enum": [
+         true
+        ]
        }
       },
       "required": [
-       "id"
+       "id",
+       "deleted"
       ]
      }
     },
@@ -14402,6 +12705,30 @@
      {
       "schema": {
        "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 100,
+       "default": 100,
+       "description": "At most this many items (default and maximum 100)."
+      },
+      "required": false,
+      "description": "At most this many items (default and maximum 100).",
+      "name": "limit",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
        "minLength": 1,
        "maxLength": 64
       },
@@ -14428,10 +12755,16 @@
         "items": {
          "$ref": "#/components/schemas/PriceListResource"
         }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
        }
       },
       "required": [
-       "priceLists"
+       "priceLists",
+       "nextCursor"
       ]
      }
     },
@@ -14441,7 +12774,7 @@
     ]
    }
   },
-  "price_lists.prices_list": {
+  "price_lists.list_prices": {
    "operationId": "dashboard.resources.price_lists.prices_list",
    "method": "GET",
    "path": "/api/v1/admin/resources/price-lists/{id}/prices",
@@ -14533,7 +12866,7 @@
     ]
    }
   },
-  "price_lists.prices_set": {
+  "price_lists.set_prices": {
    "operationId": "dashboard.resources.price_lists.prices_set",
    "method": "PUT",
    "path": "/api/v1/admin/resources/price-lists/{id}/prices",
@@ -15284,7 +13617,15 @@
       ]
      },
      "data": {
-      "$ref": "#/components/schemas/BulkRun"
+      "type": "object",
+      "properties": {
+       "run": {
+        "$ref": "#/components/schemas/BulkRun"
+       }
+      },
+      "required": [
+       "run"
+      ]
      }
     },
     "required": [
@@ -15335,7 +13676,7 @@
              "minLength": 1,
              "maxLength": 180
             },
-            "expectedAggregateRevision": {
+            "expectedRevision": {
              "type": "integer",
              "minimum": 1,
              "description": "The product revision you read; a product changed since is left alone (a failure)."
@@ -15411,7 +13752,15 @@
       ]
      },
      "data": {
-      "$ref": "#/components/schemas/BulkRun"
+      "type": "object",
+      "properties": {
+       "run": {
+        "$ref": "#/components/schemas/BulkRun"
+       }
+      },
+      "required": [
+       "run"
+      ]
      }
     },
     "required": [
@@ -15715,7 +14064,15 @@
       ]
      },
      "data": {
-      "$ref": "#/components/schemas/ProductResource"
+      "type": "object",
+      "properties": {
+       "product": {
+        "$ref": "#/components/schemas/ProductResource"
+       }
+      },
+      "required": [
+       "product"
+      ]
      }
     },
     "required": [
@@ -16179,6 +14536,30 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 100,
+       "default": 100,
+       "description": "At most this many items (default and maximum 100)."
+      },
+      "required": false,
+      "description": "At most this many items (default and maximum 100).",
+      "name": "limit",
+      "in": "query"
      }
     ]
    },
@@ -16199,10 +14580,161 @@
         "items": {
          "$ref": "#/components/schemas/RefundResource"
         }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
        }
       },
       "required": [
-       "refunds"
+       "refunds",
+       "nextCursor"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "returns.get": {
+   "operationId": "dashboard.resources.returns.get",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/returns/{id}",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_orders",
+    "write_orders",
+    "write_payments",
+    "write_payment_methods",
+    "write_refunds",
+    "write_fulfillments"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "return": {
+        "$ref": "#/components/schemas/ReturnResource"
+       }
+      },
+      "required": [
+       "return"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "returns.list": {
+   "operationId": "dashboard.resources.returns.list",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/orders/{id}/returns",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_orders",
+    "write_orders",
+    "write_payments",
+    "write_payment_methods",
+    "write_refunds",
+    "write_fulfillments"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 100,
+       "default": 100,
+       "description": "At most this many items (default and maximum 100)."
+      },
+      "required": false,
+      "description": "At most this many items (default and maximum 100).",
+      "name": "limit",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "returns": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/ReturnResource"
+        }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
+       }
+      },
+      "required": [
+       "returns",
+       "nextCursor"
       ]
      }
     },
@@ -16361,7 +14893,15 @@
       ]
      },
      "data": {
-      "$ref": "#/components/schemas/ShipmentResource"
+      "type": "object",
+      "properties": {
+       "shipment": {
+        "$ref": "#/components/schemas/ShipmentResource"
+       }
+      },
+      "required": [
+       "shipment"
+      ]
      }
     },
     "required": [
@@ -16396,6 +14936,30 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 100,
+       "default": 100,
+       "description": "At most this many items (default and maximum 100)."
+      },
+      "required": false,
+      "description": "At most this many items (default and maximum 100).",
+      "name": "limit",
+      "in": "query"
      }
     ]
    },
@@ -16416,10 +14980,16 @@
         "items": {
          "$ref": "#/components/schemas/ShipmentResource"
         }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
        }
       },
       "required": [
-       "shipments"
+       "shipments",
+       "nextCursor"
       ]
      }
     },
@@ -16467,10 +15037,10 @@
           "maxLength": 160,
           "description": "The template: its id in the calling app's manifest (`storefront.templates[].id`), or `<app id>/<template id>`. An app applies only its own templates."
          },
-         "expectedDraftRevision": {
+         "expectedRevision": {
           "type": "integer",
           "minimum": 0,
-          "description": "The draft `revision` you read (`theme.get`); 0 when no draft was ever saved. A draft changed since is refused with 409 and nothing is saved."
+          "description": "The draft `revision` you read (`theme.draft.revision`); 0 when no draft was ever saved. A draft changed since is refused with 409 and nothing is saved."
          },
          "basePublishedRevision": {
           "type": "integer",
@@ -16480,7 +15050,7 @@
         },
         "required": [
          "template",
-         "expectedDraftRevision",
+         "expectedRevision",
          "basePublishedRevision"
         ],
         "additionalProperties": false
@@ -16501,8 +15071,8 @@
      "data": {
       "type": "object",
       "properties": {
-       "draft": {
-        "$ref": "#/components/schemas/ThemeDraftReceipt"
+       "theme": {
+        "$ref": "#/components/schemas/ThemeResource"
        },
        "template": {
         "type": "string"
@@ -16516,7 +15086,7 @@
        }
       },
       "required": [
-       "draft",
+       "theme",
        "template",
        "unresolved"
       ]
@@ -16568,83 +15138,7 @@
       "type": "object",
       "properties": {
        "theme": {
-        "type": "object",
-        "properties": {
-         "documentVersion": {
-          "type": "integer",
-          "minimum": 0,
-          "exclusiveMinimum": true,
-          "description": "The theme document version section settings follow."
-         },
-         "publishedRevision": {
-          "type": "integer",
-          "minimum": 0
-         },
-         "draft": {
-          "$ref": "#/components/schemas/ThemeDraftReceipt"
-         },
-         "draftDiffersFromLive": {
-          "type": "boolean"
-         },
-         "template": {
-          "type": "string",
-          "nullable": true,
-          "description": "The template the draft came from (`<app id>/<template id>`), if any."
-         },
-         "page": {
-          "type": "string",
-          "enum": [
-           "home",
-           "landing"
-          ]
-         },
-         "slug": {
-          "type": "string",
-          "nullable": true
-         },
-         "sections": {
-          "type": "array",
-          "items": {
-           "$ref": "#/components/schemas/ThemeSection"
-          },
-          "maxItems": 24
-         },
-         "landingPages": {
-          "type": "array",
-          "items": {
-           "type": "object",
-           "properties": {
-            "slug": {
-             "type": "string"
-            },
-            "title": {
-             "type": "string"
-            }
-           },
-           "required": [
-            "slug",
-            "title"
-           ]
-          },
-          "maxItems": 20
-         },
-         "readAt": {
-          "type": "string",
-          "format": "date-time"
-         }
-        },
-        "required": [
-         "documentVersion",
-         "publishedRevision",
-         "draft",
-         "draftDiffersFromLive",
-         "template",
-         "page",
-         "slug",
-         "sections",
-         "landingPages",
-         "readAt"
-        ]
+        "$ref": "#/components/schemas/ThemeResource"
        }
       },
       "required": [
@@ -16658,7 +15152,7 @@
     ]
    }
   },
-  "theme.section_settings_set": {
+  "theme.set_section_settings": {
    "operationId": "dashboard.resources.theme.section_settings_set",
    "method": "POST",
    "path": "/api/v1/admin/resources/theme/section-settings",
@@ -16714,10 +15208,10 @@
           "additionalProperties": {},
           "description": "Settings to merge at the top level (an app section: into its values). Catalogue handles resolve as in apply_template."
          },
-         "expectedDraftRevision": {
+         "expectedRevision": {
           "type": "integer",
           "minimum": 0,
-          "description": "The draft `revision` you read (`theme.get`); 0 when no draft was ever saved. A draft changed since is refused with 409 and nothing is saved."
+          "description": "The draft `revision` you read (`theme.draft.revision`); 0 when no draft was ever saved. A draft changed since is refused with 409 and nothing is saved."
          },
          "basePublishedRevision": {
           "type": "integer",
@@ -16728,7 +15222,7 @@
         "required": [
          "sectionId",
          "settings",
-         "expectedDraftRevision",
+         "expectedRevision",
          "basePublishedRevision"
         ],
         "additionalProperties": false
@@ -16749,15 +15243,15 @@
      "data": {
       "type": "object",
       "properties": {
-       "draft": {
-        "$ref": "#/components/schemas/ThemeDraftReceipt"
+       "theme": {
+        "$ref": "#/components/schemas/ThemeResource"
        },
        "section": {
         "$ref": "#/components/schemas/ThemeSection"
        }
       },
       "required": [
-       "draft",
+       "theme",
        "section"
       ]
      }
@@ -16947,7 +15441,15 @@
       ]
      },
      "data": {
-      "$ref": "#/components/schemas/BulkRun"
+      "type": "object",
+      "properties": {
+       "run": {
+        "$ref": "#/components/schemas/BulkRun"
+       }
+      },
+      "required": [
+       "run"
+      ]
      }
     },
     "required": [
@@ -17053,7 +15555,15 @@
       ]
      },
      "data": {
-      "$ref": "#/components/schemas/BulkRun"
+      "type": "object",
+      "properties": {
+       "run": {
+        "$ref": "#/components/schemas/BulkRun"
+       }
+      },
+      "required": [
+       "run"
+      ]
      }
     },
     "required": [
@@ -17099,7 +15609,15 @@
       ]
      },
      "data": {
-      "$ref": "#/components/schemas/VariantResource"
+      "type": "object",
+      "properties": {
+       "variant": {
+        "$ref": "#/components/schemas/VariantResource"
+       }
+      },
+      "required": [
+       "variant"
+      ]
      }
     },
     "required": [
@@ -17374,7 +15892,7 @@
        "exclusiveMinimum": true
       },
       "required": true,
-      "name": "expectedVersion",
+      "name": "expectedRevision",
       "in": "query"
      },
      {
@@ -17435,7 +15953,34 @@
    "scopes": [
     "write_webhooks"
    ],
-   "input": {},
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 5,
+       "default": 5,
+       "description": "At most this many items (default and maximum 5)."
+      },
+      "required": false,
+      "description": "At most this many items (default and maximum 5).",
+      "name": "limit",
+      "in": "query"
+     }
+    ]
+   },
    "output": {
     "type": "object",
     "properties": {
@@ -17455,18 +16000,15 @@
         },
         "maxItems": 5
        },
-       "maxSubscriptions": {
-        "type": "integer",
-        "description": "How many one app may keep."
-       },
-       "apiVersion": {
-        "type": "string"
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
        }
       },
       "required": [
        "subscriptions",
-       "maxSubscriptions",
-       "apiVersion"
+       "nextCursor"
       ]
      }
     },
@@ -17518,11 +16060,11 @@
        "schema": {
         "type": "object",
         "properties": {
-         "expectedVersion": {
+         "expectedRevision": {
           "type": "integer",
           "minimum": 0,
           "exclusiveMinimum": true,
-          "description": "The subscription's `version` you read; a stale one is refused with 409."
+          "description": "The subscription's `revision` you read; a stale one is refused with 409."
          },
          "url": {
           "type": "string",
@@ -17625,7 +16167,7 @@
          }
         },
         "required": [
-         "expectedVersion"
+         "expectedRevision"
         ],
         "additionalProperties": false
        }
@@ -17660,7 +16202,7 @@
     ]
    }
   },
-  "sales_channels.products": {
+  "sales_channels.list_products": {
    "operationId": "dashboard.sales_channels.products",
    "method": "GET",
    "path": "/api/v1/admin/settings/sales-channels/{id}/products",
@@ -17743,149 +16285,6 @@
     ]
    }
   },
-  "settings.business_get": {
-   "operationId": "dashboard.settings.business_get",
-   "method": "GET",
-   "path": "/api/v1/admin/settings/business",
-   "risk": "read",
-   "idempotency": "none",
-   "revision": "none",
-   "scopes": [
-    "read_settings"
-   ],
-   "input": {},
-   "output": {
-    "type": "object",
-    "properties": {
-     "success": {
-      "type": "boolean",
-      "enum": [
-       true
-      ]
-     },
-     "data": {
-      "type": "object",
-      "properties": {
-       "companyName": {
-        "type": "string",
-        "maxLength": 200
-       },
-       "legalName": {
-        "type": "string",
-        "maxLength": 200
-       },
-       "addressLine1": {
-        "type": "string",
-        "maxLength": 300
-       },
-       "addressLine2": {
-        "type": "string",
-        "maxLength": 300
-       },
-       "city": {
-        "type": "string",
-        "maxLength": 120
-       },
-       "stateRegion": {
-        "type": "string",
-        "maxLength": 120
-       },
-       "postalCode": {
-        "type": "string",
-        "maxLength": 32
-       },
-       "country": {
-        "type": "string",
-        "maxLength": 120
-       },
-       "phone": {
-        "type": "string",
-        "maxLength": 64
-       },
-       "email": {
-        "type": "string",
-        "maxLength": 320
-       },
-       "taxId": {
-        "type": "string",
-        "maxLength": 128
-       },
-       "invoicePrefix": {
-        "type": "string",
-        "maxLength": 32
-       },
-       "invoiceFooterText": {
-        "type": "string",
-        "maxLength": 4000
-       },
-       "invoiceLogoUrl": {
-        "type": "string",
-        "maxLength": 2048
-       },
-       "socialLinks": {
-        "type": "array",
-        "items": {
-         "type": "object",
-         "properties": {
-          "id": {
-           "type": "string",
-           "minLength": 1,
-           "maxLength": 128
-          },
-          "label": {
-           "type": "string",
-           "maxLength": 200
-          },
-          "url": {
-           "type": "string",
-           "maxLength": 2048,
-           "description": "The profile's https:// address (no credentials)."
-          },
-          "iconUrl": {
-           "type": "string",
-           "maxLength": 2048,
-           "description": "An icon image from Files."
-          }
-         },
-         "required": [
-          "id",
-          "label",
-          "url"
-         ]
-        },
-        "maxItems": 8
-       },
-       "revision": {
-        "type": "integer",
-        "minimum": 0
-       }
-      },
-      "required": [
-       "companyName",
-       "legalName",
-       "addressLine1",
-       "addressLine2",
-       "city",
-       "stateRegion",
-       "postalCode",
-       "country",
-       "phone",
-       "email",
-       "taxId",
-       "invoicePrefix",
-       "invoiceFooterText",
-       "invoiceLogoUrl",
-       "socialLinks",
-       "revision"
-      ]
-     }
-    },
-    "required": [
-     "success",
-     "data"
-    ]
-   }
-  },
   "objects.delete": {
    "operationId": "objects.delete",
    "method": "DELETE",
@@ -17941,7 +16340,39 @@
      }
     ]
    },
-   "output": null
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "id": {
+        "type": "string"
+       },
+       "deleted": {
+        "type": "boolean",
+        "enum": [
+         true
+        ]
+       }
+      },
+      "required": [
+       "id",
+       "deleted"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
   },
   "objects.get": {
    "operationId": "objects.get",
@@ -18105,9 +16536,6 @@
      "data": {
       "type": "object",
       "properties": {
-       "type": {
-        "$ref": "#/components/schemas/ObjectType"
-       },
        "records": {
         "type": "array",
         "items": {
@@ -18116,17 +16544,13 @@
        },
        "nextCursor": {
         "type": "string",
-        "nullable": true
-       },
-       "total": {
-        "type": "integer"
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
        }
       },
       "required": [
-       "type",
        "records",
-       "nextCursor",
-       "total"
+       "nextCursor"
       ]
      }
     },
@@ -18136,7 +16560,7 @@
     ]
    }
   },
-  "objects.types.create": {
+  "object_types.create": {
    "operationId": "objects.types.create",
    "method": "POST",
    "path": "/api/v1/admin/objects/types",
@@ -18286,7 +16710,7 @@
     ]
    }
   },
-  "objects.types.delete": {
+  "object_types.delete": {
    "operationId": "objects.types.delete",
    "method": "DELETE",
    "path": "/api/v1/admin/objects/types/{type}",
@@ -18331,9 +16755,41 @@
      }
     ]
    },
-   "output": null
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "id": {
+        "type": "string"
+       },
+       "deleted": {
+        "type": "boolean",
+        "enum": [
+         true
+        ]
+       }
+      },
+      "required": [
+       "id",
+       "deleted"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
   },
-  "objects.types.get": {
+  "object_types.get": {
    "operationId": "objects.types.get",
    "method": "GET",
    "path": "/api/v1/admin/objects/types/{type}",
@@ -18390,7 +16846,7 @@
     ]
    }
   },
-  "objects.types.list": {
+  "object_types.list": {
    "operationId": "objects.types.list",
    "method": "GET",
    "path": "/api/v1/admin/objects/types",
@@ -18401,7 +16857,34 @@
     "read_objects",
     "write_objects"
    ],
-   "input": {},
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 100,
+       "default": 100,
+       "description": "At most this many items (default and maximum 100)."
+      },
+      "required": false,
+      "description": "At most this many items (default and maximum 100).",
+      "name": "limit",
+      "in": "query"
+     }
+    ]
+   },
    "output": {
     "type": "object",
     "properties": {
@@ -18414,15 +16897,21 @@
      "data": {
       "type": "object",
       "properties": {
-       "items": {
+       "types": {
         "type": "array",
         "items": {
          "$ref": "#/components/schemas/ObjectType"
         }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
        }
       },
       "required": [
-       "items"
+       "types",
+       "nextCursor"
       ]
      }
     },
@@ -18432,7 +16921,7 @@
     ]
    }
   },
-  "objects.types.update": {
+  "object_types.update": {
    "operationId": "objects.types.update",
    "method": "PATCH",
    "path": "/api/v1/admin/objects/types/{type}",
@@ -18928,11 +17417,11 @@
      "type": "string",
      "description": "The signing secret's last four characters."
     },
-    "version": {
+    "revision": {
      "type": "integer",
      "minimum": 0,
      "exclusiveMinimum": true,
-     "description": "Send it as `expectedVersion` to change or delete it."
+     "description": "Send it as `expectedRevision` to change or delete it."
     },
     "createdAt": {
      "type": "string",
@@ -18957,9 +17446,137 @@
     "lastSuccessAt",
     "lastFailureAt",
     "secretHint",
-    "version",
+    "revision",
     "createdAt",
     "updatedAt"
+   ]
+  },
+  "BrandResource": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "name": {
+     "type": "string"
+    },
+    "slug": {
+     "type": "string"
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "draft",
+      "published"
+     ]
+    },
+    "sortOrder": {
+     "type": "integer"
+    },
+    "revision": {
+     "type": "integer",
+     "minimum": 1
+    },
+    "noIndex": {
+     "type": "boolean"
+    },
+    "excludeFromSitemap": {
+     "type": "boolean"
+    },
+    "productCount": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "logo": {
+     "type": "object",
+     "nullable": true,
+     "properties": {
+      "mediaId": {
+       "type": "string"
+      },
+      "url": {
+       "type": "string"
+      },
+      "alt": {
+       "type": "string"
+      },
+      "width": {
+       "type": "integer",
+       "nullable": true
+      },
+      "height": {
+       "type": "integer",
+       "nullable": true
+      }
+     },
+     "required": [
+      "mediaId",
+      "url",
+      "alt",
+      "width",
+      "height"
+     ]
+    },
+    "createdAt": {
+     "type": "string",
+     "nullable": true,
+     "format": "date-time"
+    },
+    "updatedAt": {
+     "type": "string",
+     "nullable": true,
+     "format": "date-time"
+    },
+    "deletedAt": {
+     "type": "string",
+     "nullable": true,
+     "format": "date-time"
+    },
+    "description": {
+     "type": "string",
+     "nullable": true
+    },
+    "metaTitle": {
+     "type": "string",
+     "nullable": true
+    },
+    "metaDescription": {
+     "type": "string",
+     "nullable": true
+    },
+    "canonicalPath": {
+     "type": "string",
+     "nullable": true
+    },
+    "listingTemplate": {
+     "type": "string",
+     "nullable": true
+    },
+    "logoMediaId": {
+     "type": "string",
+     "nullable": true
+    }
+   },
+   "required": [
+    "id",
+    "name",
+    "slug",
+    "status",
+    "sortOrder",
+    "revision",
+    "noIndex",
+    "excludeFromSitemap",
+    "productCount",
+    "logo",
+    "createdAt",
+    "updatedAt",
+    "deletedAt",
+    "description",
+    "metaTitle",
+    "metaDescription",
+    "canonicalPath",
+    "listingTemplate",
+    "logoMediaId"
    ]
   },
   "BulkRun": {
@@ -19090,6 +17707,266 @@
     "finishedAt"
    ]
   },
+  "CategoryResource": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "name": {
+     "type": "string"
+    },
+    "slug": {
+     "type": "string"
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "draft",
+      "published",
+      "internal"
+     ],
+     "description": "`published` is public; `draft` and `internal` are not."
+    },
+    "revision": {
+     "type": "integer",
+     "minimum": 1,
+     "description": "Send it as `expectedRevision` to change the category; every change advances it."
+    },
+    "parentId": {
+     "type": "string",
+     "nullable": true,
+     "description": "The parent category; null at the top level."
+    },
+    "depth": {
+     "type": "integer",
+     "minimum": 0,
+     "maximum": 3,
+     "description": "0 at the top level, at most 3."
+    },
+    "description": {
+     "type": "string",
+     "nullable": true
+    },
+    "content": {
+     "type": "string",
+     "nullable": true,
+     "description": "The category page's rich text below the products."
+    },
+    "imageUrl": {
+     "type": "string",
+     "nullable": true
+    },
+    "metaTitle": {
+     "type": "string",
+     "nullable": true
+    },
+    "metaDescription": {
+     "type": "string",
+     "nullable": true
+    },
+    "canonicalPath": {
+     "type": "string",
+     "nullable": true
+    },
+    "noIndex": {
+     "type": "boolean"
+    },
+    "excludeFromSitemap": {
+     "type": "boolean"
+    },
+    "listingTemplate": {
+     "type": "string",
+     "nullable": true,
+     "description": "A listing template id from the theme; null is the theme's default category listing."
+    },
+    "createdAt": {
+     "type": "string",
+     "format": "date-time"
+    },
+    "updatedAt": {
+     "type": "string",
+     "format": "date-time"
+    },
+    "deletedAt": {
+     "type": "string",
+     "nullable": true,
+     "format": "date-time",
+     "description": "When it was moved to the trash; null when it is not in the trash."
+    }
+   },
+   "required": [
+    "id",
+    "name",
+    "slug",
+    "status",
+    "revision",
+    "parentId",
+    "depth",
+    "description",
+    "content",
+    "imageUrl",
+    "metaTitle",
+    "metaDescription",
+    "canonicalPath",
+    "noIndex",
+    "excludeFromSitemap",
+    "listingTemplate",
+    "createdAt",
+    "updatedAt",
+    "deletedAt"
+   ]
+  },
+  "CollectionResource": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "name": {
+     "type": "string"
+    },
+    "slug": {
+     "type": "string",
+     "nullable": true,
+     "description": "The collection's handle (`@collection:<handle>` in templates); null only on a row written outside the dashboard."
+    },
+    "revision": {
+     "type": "integer",
+     "minimum": 1,
+     "description": "Send it as `expectedRevision` to change the collection; every change advances it."
+    },
+    "isActive": {
+     "type": "boolean",
+     "description": "Whether buyers see it."
+    },
+    "presentation": {
+     "type": "string",
+     "enum": [
+      "grid",
+      "carousel"
+     ]
+    },
+    "sortOrder": {
+     "type": "integer"
+    },
+    "config": {
+     "type": "object",
+     "properties": {
+      "source": {
+       "type": "string",
+       "enum": [
+        "manual",
+        "dynamic"
+       ],
+       "description": "`manual`: exactly `productIds`; `dynamic`: the products of `categoryIds`."
+      },
+      "productIds": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "categoryIds": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "featuredProductId": {
+       "type": "string",
+       "nullable": true
+      },
+      "maxProducts": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 24
+      },
+      "title": {
+       "type": "string"
+      },
+      "subtitle": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "source",
+      "productIds",
+      "categoryIds",
+      "featuredProductId",
+      "maxProducts",
+      "title",
+      "subtitle"
+     ]
+    },
+    "description": {
+     "type": "string",
+     "nullable": true
+    },
+    "content": {
+     "type": "string",
+     "nullable": true
+    },
+    "metaTitle": {
+     "type": "string",
+     "nullable": true
+    },
+    "metaDescription": {
+     "type": "string",
+     "nullable": true
+    },
+    "canonicalPath": {
+     "type": "string",
+     "nullable": true
+    },
+    "noIndex": {
+     "type": "boolean"
+    },
+    "excludeFromSitemap": {
+     "type": "boolean"
+    },
+    "listingTemplate": {
+     "type": "string",
+     "nullable": true,
+     "description": "A listing template id from the theme; null is the theme's default collection listing."
+    },
+    "createdAt": {
+     "type": "string",
+     "format": "date-time"
+    },
+    "updatedAt": {
+     "type": "string",
+     "format": "date-time"
+    },
+    "deletedAt": {
+     "type": "string",
+     "nullable": true,
+     "format": "date-time",
+     "description": "When it was moved to the trash; null when it is not in the trash."
+    }
+   },
+   "required": [
+    "id",
+    "name",
+    "slug",
+    "revision",
+    "isActive",
+    "presentation",
+    "sortOrder",
+    "config",
+    "description",
+    "content",
+    "metaTitle",
+    "metaDescription",
+    "canonicalPath",
+    "noIndex",
+    "excludeFromSitemap",
+    "listingTemplate",
+    "createdAt",
+    "updatedAt",
+    "deletedAt"
+   ]
+  },
   "CustomerResource": {
    "type": "object",
    "properties": {
@@ -19217,6 +18094,268 @@
     "deletedAt"
    ]
   },
+  "DiscountResource": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "revision": {
+     "type": "integer",
+     "minimum": 0,
+     "exclusiveMinimum": true
+    },
+    "name": {
+     "type": "string"
+    },
+    "title": {
+     "type": "string",
+     "nullable": true
+    },
+    "method": {
+     "type": "string",
+     "enum": [
+      "automatic",
+      "code"
+     ]
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "draft",
+      "active",
+      "paused",
+      "archived"
+     ]
+    },
+    "priority": {
+     "type": "integer"
+    },
+    "conflictPolicy": {
+     "type": "string",
+     "enum": [
+      "best"
+     ]
+    },
+    "combinesWith": {
+     "type": "object",
+     "properties": {
+      "product": {
+       "type": "boolean"
+      },
+      "order": {
+       "type": "boolean"
+      },
+      "shipping": {
+       "type": "boolean"
+      }
+     },
+     "required": [
+      "product",
+      "order",
+      "shipping"
+     ]
+    },
+    "startsAt": {
+     "type": "string",
+     "nullable": true,
+     "format": "date-time"
+    },
+    "endsAt": {
+     "type": "string",
+     "nullable": true,
+     "format": "date-time"
+    },
+    "timeZone": {
+     "type": "string",
+     "description": "The schedule's IANA time zone."
+    },
+    "maxRedemptions": {
+     "type": "integer",
+     "nullable": true,
+     "minimum": 0,
+     "exclusiveMinimum": true
+    },
+    "maxRedemptionsPerCustomer": {
+     "type": "integer",
+     "nullable": true,
+     "minimum": 0,
+     "exclusiveMinimum": true
+    },
+    "currency": {
+     "type": "string",
+     "minLength": 3,
+     "maxLength": 3,
+     "description": "The store currency: rule amounts (amountMinor) and the spend are integer minor units of it."
+    },
+    "maxDiscountSpendMinor": {
+     "type": "integer",
+     "nullable": true,
+     "minimum": 0,
+     "exclusiveMinimum": true
+    },
+    "budgetCurrency": {
+     "type": "string",
+     "nullable": true,
+     "description": "The spend budget's currency, with maxDiscountSpendMinor."
+    },
+    "redemptionCount": {
+     "type": "integer",
+     "minimum": 0,
+     "description": "Orders that used this discount."
+    },
+    "customerRedemptionCount": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "discountSpendMinor": {
+     "type": "integer",
+     "minimum": 0,
+     "description": "Total savings given, in minor units."
+    },
+    "createdAt": {
+     "type": "string",
+     "format": "date-time"
+    },
+    "updatedAt": {
+     "type": "string",
+     "format": "date-time"
+    },
+    "deletedAt": {
+     "type": "string",
+     "nullable": true,
+     "format": "date-time"
+    },
+    "codes": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "code": {
+        "type": "string"
+       },
+       "isActive": {
+        "type": "boolean"
+       }
+      },
+      "required": [
+       "code",
+       "isActive"
+      ]
+     }
+    },
+    "conditions": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "id": {
+        "type": "string"
+       },
+       "kind": {
+        "type": "string",
+        "enum": [
+         "minimum_merchandise_subtotal",
+         "minimum_item_quantity"
+        ]
+       },
+       "config": {
+        "type": "object",
+        "additionalProperties": {},
+        "description": "As `discounts.create` takes it: an amount beside its `currency`."
+       }
+      },
+      "required": [
+       "id",
+       "kind",
+       "config"
+      ]
+     }
+    },
+    "effects": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "id": {
+        "type": "string"
+       },
+       "kind": {
+        "type": "string",
+        "enum": [
+         "percentage_off",
+         "fixed_amount_off",
+         "free"
+        ]
+       },
+       "target": {
+        "type": "string",
+        "enum": [
+         "line",
+         "order",
+         "shipping"
+        ]
+       },
+       "allocation": {
+        "type": "string",
+        "enum": [
+         "across",
+         "once"
+        ]
+       },
+       "config": {
+        "type": "object",
+        "additionalProperties": {},
+        "description": "As `discounts.create` takes it: an amount beside its `currency`."
+       }
+      },
+      "required": [
+       "id",
+       "kind",
+       "target",
+       "allocation",
+       "config"
+      ]
+     }
+    },
+    "customerSegmentIds": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     },
+     "description": "Only signed-in customers in any of these customer segments get this discount; empty means every customer."
+    }
+   },
+   "required": [
+    "id",
+    "revision",
+    "name",
+    "title",
+    "method",
+    "status",
+    "priority",
+    "conflictPolicy",
+    "combinesWith",
+    "startsAt",
+    "endsAt",
+    "timeZone",
+    "maxRedemptions",
+    "maxRedemptionsPerCustomer",
+    "currency",
+    "maxDiscountSpendMinor",
+    "budgetCurrency",
+    "redemptionCount",
+    "customerRedemptionCount",
+    "discountSpendMinor",
+    "createdAt",
+    "updatedAt",
+    "deletedAt",
+    "codes",
+    "conditions",
+    "effects",
+    "customerSegmentIds"
+   ]
+  },
   "FulfillmentResource": {
    "type": "object",
    "properties": {
@@ -19232,13 +18371,20 @@
     },
     "kind": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "ship",
+      "pickup",
+      "digital",
+      "gift_card",
+      "service"
+     ]
     },
     "status": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "active",
+      "voided"
+     ]
     },
     "shipmentId": {
      "type": "string",
@@ -19371,11 +18517,11 @@
      "nullable": true,
      "x-scalius-protected": "name"
     },
-    "version": {
+    "revision": {
      "type": "integer",
      "minimum": 0,
      "exclusiveMinimum": true,
-     "description": "Send it as `expectedVersion` to change the card; every balance movement advances it."
+     "description": "Send it as `expectedRevision` to change the card; every balance movement advances it."
     },
     "createdAt": {
      "type": "string",
@@ -19426,7 +18572,7 @@
     "source",
     "customerId",
     "recipientName",
-    "version",
+    "revision",
     "createdAt",
     "recipientEmail",
     "recipientPhone",
@@ -19492,11 +18638,11 @@
      "nullable": true,
      "x-scalius-protected": "name"
     },
-    "version": {
+    "revision": {
      "type": "integer",
      "minimum": 0,
      "exclusiveMinimum": true,
-     "description": "Send it as `expectedVersion` to change the card; every balance movement advances it."
+     "description": "Send it as `expectedRevision` to change the card; every balance movement advances it."
     },
     "createdAt": {
      "type": "string",
@@ -19515,7 +18661,7 @@
     "source",
     "customerId",
     "recipientName",
-    "version",
+    "revision",
     "createdAt"
    ]
   },
@@ -19572,6 +18718,151 @@
     "actorType",
     "reason",
     "createdAt"
+   ]
+  },
+  "InventoryLocationAddress": {
+   "type": "object",
+   "properties": {
+    "name": {
+     "type": "string",
+     "nullable": true
+    },
+    "phone": {
+     "type": "string",
+     "nullable": true
+    },
+    "company": {
+     "type": "string",
+     "nullable": true
+    },
+    "line1": {
+     "type": "string",
+     "nullable": true
+    },
+    "line2": {
+     "type": "string",
+     "nullable": true
+    },
+    "dependentLocality": {
+     "type": "string",
+     "nullable": true
+    },
+    "locality": {
+     "type": "string",
+     "nullable": true
+    },
+    "adminArea": {
+     "type": "string",
+     "nullable": true
+    },
+    "postalCode": {
+     "type": "string",
+     "nullable": true
+    },
+    "countryCode": {
+     "type": "string",
+     "minLength": 2,
+     "maxLength": 2
+    },
+    "placeIds": {
+     "type": "object",
+     "properties": {
+      "city": {
+       "type": "string",
+       "nullable": true
+      },
+      "zone": {
+       "type": "string",
+       "nullable": true
+      },
+      "area": {
+       "type": "string",
+       "nullable": true
+      }
+     },
+     "required": [
+      "city",
+      "zone",
+      "area"
+     ]
+    }
+   },
+   "required": [
+    "name",
+    "phone",
+    "company",
+    "line1",
+    "line2",
+    "dependentLocality",
+    "locality",
+    "adminArea",
+    "postalCode",
+    "countryCode",
+    "placeIds"
+   ],
+   "description": "The store's address there; the street, city, postal code and phone read null without inventory.view or settings.general.view."
+  },
+  "InventoryLocationResource": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "name": {
+     "type": "string"
+    },
+    "code": {
+     "type": "string"
+    },
+    "kind": {
+     "type": "string",
+     "enum": [
+      "warehouse",
+      "store",
+      "other"
+     ]
+    },
+    "isDefault": {
+     "type": "boolean"
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "active",
+      "archived"
+     ]
+    },
+    "position": {
+     "type": "integer"
+    },
+    "revision": {
+     "type": "integer",
+     "minimum": 1
+    },
+    "address": {
+     "$ref": "#/components/schemas/InventoryLocationAddress"
+    },
+    "createdAt": {
+     "type": "string",
+     "format": "date-time"
+    },
+    "updatedAt": {
+     "type": "string",
+     "format": "date-time"
+    }
+   },
+   "required": [
+    "id",
+    "name",
+    "code",
+    "kind",
+    "isDefault",
+    "status",
+    "position",
+    "revision",
+    "address",
+    "createdAt",
+    "updatedAt"
    ]
   },
   "MenuLinkInput": {
@@ -20260,23 +19551,47 @@
     },
     "status": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "pending",
+      "processing",
+      "confirmed",
+      "shipped",
+      "delivered",
+      "completed",
+      "cancelled",
+      "returned",
+      "refunded",
+      "incomplete"
+     ]
     },
     "paymentStatus": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "unpaid",
+      "partial",
+      "paid",
+      "partially_refunded",
+      "refunded",
+      "failed"
+     ]
     },
     "fulfillmentStatus": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "pending",
+      "partial",
+      "complete"
+     ]
     },
     "channel": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "online_store",
+      "admin",
+      "pos",
+      "agent",
+      "app"
+     ]
     },
     "salesChannelId": {
      "type": "string",
@@ -20612,7 +19927,7 @@
      "minLength": 1,
      "maxLength": 128
     },
-    "version": {
+    "revision": {
      "type": "integer"
     },
     "lines": {
@@ -20735,8 +20050,171 @@
     "shippingAddress",
     "billingAddress",
     "fulfillmentLocationId",
-    "version",
+    "revision",
     "lines",
+    "createdAt",
+    "updatedAt",
+    "deletedAt"
+   ]
+  },
+  "PageResource": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "contentType": {
+     "type": "string",
+     "enum": [
+      "page",
+      "article"
+     ]
+    },
+    "title": {
+     "type": "string"
+    },
+    "slug": {
+     "type": "string"
+    },
+    "content": {
+     "type": "string"
+    },
+    "excerpt": {
+     "type": "string",
+     "nullable": true
+    },
+    "author": {
+     "type": "string",
+     "nullable": true
+    },
+    "tags": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "metaTitle": {
+     "type": "string",
+     "nullable": true
+    },
+    "metaDescription": {
+     "type": "string",
+     "nullable": true
+    },
+    "canonicalPath": {
+     "type": "string",
+     "nullable": true
+    },
+    "noIndex": {
+     "type": "boolean"
+    },
+    "excludeFromSitemap": {
+     "type": "boolean"
+    },
+    "isPublished": {
+     "type": "boolean"
+    },
+    "hideHeader": {
+     "type": "boolean"
+    },
+    "hideFooter": {
+     "type": "boolean"
+    },
+    "hideTitle": {
+     "type": "boolean"
+    },
+    "featuredImage": {
+     "type": "object",
+     "nullable": true,
+     "properties": {
+      "id": {
+       "type": "string"
+      },
+      "url": {
+       "type": "string"
+      },
+      "filename": {
+       "type": "string"
+      },
+      "size": {
+       "type": "number"
+      },
+      "mimeType": {
+       "type": "string"
+      },
+      "altText": {
+       "type": "string",
+       "nullable": true
+      },
+      "width": {
+       "type": "number",
+       "nullable": true
+      },
+      "height": {
+       "type": "number",
+       "nullable": true
+      },
+      "folderId": {
+       "type": "string",
+       "nullable": true
+      }
+     },
+     "required": [
+      "id",
+      "url",
+      "filename",
+      "size"
+     ],
+     "additionalProperties": {}
+    },
+    "publishedAt": {
+     "type": "string",
+     "nullable": true,
+     "format": "date-time"
+    },
+    "sortOrder": {
+     "type": "number"
+    },
+    "revision": {
+     "type": "integer",
+     "minimum": 1
+    },
+    "createdAt": {
+     "type": "string",
+     "nullable": true,
+     "format": "date-time"
+    },
+    "updatedAt": {
+     "type": "string",
+     "nullable": true,
+     "format": "date-time"
+    },
+    "deletedAt": {
+     "type": "string",
+     "nullable": true,
+     "format": "date-time"
+    }
+   },
+   "required": [
+    "id",
+    "contentType",
+    "title",
+    "slug",
+    "content",
+    "excerpt",
+    "author",
+    "tags",
+    "metaTitle",
+    "metaDescription",
+    "canonicalPath",
+    "noIndex",
+    "excludeFromSitemap",
+    "isPublished",
+    "hideHeader",
+    "hideFooter",
+    "hideTitle",
+    "sortOrder",
+    "revision",
     "createdAt",
     "updatedAt",
     "deletedAt"
@@ -20826,60 +20304,6 @@
     "updatedAt"
    ]
   },
-  "PaymentOutcomeResource": {
-   "type": "object",
-   "properties": {
-    "outcome": {
-     "type": "string",
-     "enum": [
-      "succeeded",
-      "authorized",
-      "pending",
-      "voided"
-     ],
-     "description": "`succeeded`: captured and credited to the order. `authorized`: held, capture it with payments.capture. `pending`: the provider answers later by webhook; read the order. `voided`: the hold was released."
-    },
-    "orderId": {
-     "type": "string"
-    },
-    "providerId": {
-     "type": "string"
-    },
-    "amountMinor": {
-     "type": "integer",
-     "description": "In minor units of `currency`."
-    },
-    "currency": {
-     "type": "string",
-     "minLength": 3,
-     "maxLength": 3
-    },
-    "payment": {
-     "allOf": [
-      {
-       "$ref": "#/components/schemas/PaymentResource"
-      },
-      {
-       "nullable": true,
-       "description": "The order payment, once the provider's answer landed."
-      }
-     ]
-    },
-    "replayed": {
-     "type": "boolean",
-     "description": "True when this answers a request already handled (the same Idempotency-Key, or an authorization already settled)."
-    }
-   },
-   "required": [
-    "outcome",
-    "orderId",
-    "providerId",
-    "amountMinor",
-    "currency",
-    "payment",
-    "replayed"
-   ]
-  },
   "PaymentResource": {
    "type": "object",
    "properties": {
@@ -20895,8 +20319,15 @@
     },
     "status": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "pending",
+      "confirmed",
+      "succeeded",
+      "failed",
+      "refunded",
+      "cancelled",
+      "authorized"
+     ]
     },
     "method": {
      "type": "string",
@@ -20904,8 +20335,12 @@
     },
     "type": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "full",
+      "deposit",
+      "balance",
+      "refund"
+     ]
     },
     "currency": {
      "type": "string",
@@ -21281,8 +20716,12 @@
     },
     "status": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "pending",
+      "refunded",
+      "failed",
+      "partial"
+     ]
     },
     "currency": {
      "type": "string",
@@ -21294,8 +20733,10 @@
     },
     "settlement": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "original",
+      "store_credit"
+     ]
     },
     "lines": {
      "type": "array",
@@ -21358,6 +20799,162 @@
     "updatedAt"
    ]
   },
+  "ReturnResource": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "orderId": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "requested",
+      "approved",
+      "receiving",
+      "completed",
+      "rejected",
+      "cancelled"
+     ]
+    },
+    "reason": {
+     "type": "string",
+     "maxLength": 4000
+    },
+    "source": {
+     "type": "string",
+     "enum": [
+      "admin",
+      "support_request",
+      "cod_return_to_sender"
+     ]
+    },
+    "revision": {
+     "type": "integer"
+    },
+    "requestedAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "approvedAt": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "completedAt": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "rejectedAt": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "cancelledAt": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "lines": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "id": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+       },
+       "orderItemId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+       },
+       "variantId": {
+        "type": "string",
+        "nullable": true,
+        "minLength": 1,
+        "maxLength": 128
+       },
+       "requestedQuantity": {
+        "type": "integer"
+       },
+       "approvedQuantity": {
+        "type": "integer"
+       },
+       "receivedQuantity": {
+        "type": "integer"
+       },
+       "restockQuantity": {
+        "type": "integer"
+       },
+       "damagedQuantity": {
+        "type": "integer"
+       },
+       "rejectedQuantity": {
+        "type": "integer"
+       }
+      },
+      "required": [
+       "id",
+       "orderItemId",
+       "variantId",
+       "requestedQuantity",
+       "approvedQuantity",
+       "receivedQuantity",
+       "restockQuantity",
+       "damagedQuantity",
+       "rejectedQuantity"
+      ]
+     }
+    },
+    "createdAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "updatedAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    }
+   },
+   "required": [
+    "id",
+    "orderId",
+    "status",
+    "reason",
+    "source",
+    "revision",
+    "requestedAt",
+    "approvedAt",
+    "completedAt",
+    "rejectedAt",
+    "cancelledAt",
+    "lines",
+    "createdAt",
+    "updatedAt"
+   ]
+  },
   "ShipmentResource": {
    "type": "object",
    "properties": {
@@ -21384,8 +20981,25 @@
     },
     "status": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "pending",
+      "pickup_assigned",
+      "picked_up",
+      "pickup_failed",
+      "in_transit",
+      "out_for_delivery",
+      "delivered",
+      "partial_delivered",
+      "delivery_failed",
+      "on_hold",
+      "failed",
+      "cancelled",
+      "returned",
+      "unknown",
+      "creating",
+      "processing",
+      "reconcile_required"
+     ]
     },
     "rawStatus": {
      "type": "string",
@@ -21522,6 +21136,85 @@
     "revision",
     "basePublishedRevision",
     "updatedAt"
+   ]
+  },
+  "ThemeResource": {
+   "type": "object",
+   "properties": {
+    "documentVersion": {
+     "type": "integer",
+     "minimum": 0,
+     "exclusiveMinimum": true,
+     "description": "The theme document version section settings follow."
+    },
+    "publishedRevision": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "draft": {
+     "$ref": "#/components/schemas/ThemeDraftReceipt"
+    },
+    "draftDiffersFromLive": {
+     "type": "boolean"
+    },
+    "template": {
+     "type": "string",
+     "nullable": true,
+     "description": "The template the draft came from (`<app id>/<template id>`), if any."
+    },
+    "page": {
+     "type": "string",
+     "enum": [
+      "home",
+      "landing"
+     ]
+    },
+    "slug": {
+     "type": "string",
+     "nullable": true
+    },
+    "sections": {
+     "type": "array",
+     "items": {
+      "$ref": "#/components/schemas/ThemeSection"
+     },
+     "maxItems": 24
+    },
+    "landingPages": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "slug": {
+        "type": "string"
+       },
+       "title": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "slug",
+       "title"
+      ]
+     },
+     "maxItems": 20
+    },
+    "readAt": {
+     "type": "string",
+     "format": "date-time"
+    }
+   },
+   "required": [
+    "documentVersion",
+    "publishedRevision",
+    "draft",
+    "draftDiffersFromLive",
+    "template",
+    "page",
+    "slug",
+    "sections",
+    "landingPages",
+    "readAt"
    ]
   },
   "ThemeSection": {

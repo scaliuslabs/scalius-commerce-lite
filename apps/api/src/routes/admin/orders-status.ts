@@ -29,7 +29,8 @@ import { fromMinor } from "@scalius/shared/money";
 import { NotFoundError, ForbiddenError, ValidationError } from "../../utils/api-error";
 import { ok, created } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
-import { successEnvelope, messageResponse, errorResponses, conflictResponse, serviceUnavailableResponse } from "../../schemas/responses";
+import { successEnvelope, errorResponses, conflictResponse, serviceUnavailableResponse } from "../../schemas/responses";
+import { orderResourceSchema, readOrderResource } from "./order-resource";
 import { deliveryShipmentSchema } from "../../schemas/entities";
 import { nullableTimestampSchema } from "../../schemas/timestamps";
 
@@ -157,8 +158,8 @@ const updateStatusRoute = createRoute({
                         status: z.enum(ORDER_STATUSES),
                         /** Why an order is cancelled; recorded on the timeline. */
                         reason: z.enum(["customer_changed_mind", "unreachable", "fake_order", "out_of_stock", "other"]).optional(),
-                        expectedVersion: z.number().int().min(1).optional().openapi({
-                            description: "The order version you read (`version` on the order). A change since is refused with 409 and nothing changes. Omit to change it whatever happened since.",
+                        expectedRevision: z.number().int().min(1).optional().openapi({
+                            description: "The order `revision` you read. A change since is refused with 409 and nothing changes. Omit to change it whatever happened since.",
                         }),
                     }),
                 },
@@ -167,8 +168,8 @@ const updateStatusRoute = createRoute({
     },
     responses: {
         200: {
-            description: "Status updated",
-            content: { "application/json": { schema: messageResponse } },
+            description: "The order after the change",
+            content: { "application/json": { schema: successEnvelope(orderResourceSchema) } },
         },
         ...adminMutationErrorResponses,
     }
@@ -183,7 +184,7 @@ app.openapi(updateStatusRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
     const before = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, orderId)).get();
-    const result = await updateOrderStatus(db, orderId, data.status, { expectedVersion: data.expectedVersion });
+    const result = await updateOrderStatus(db, orderId, data.status, { expectedVersion: data.expectedRevision });
     if (before && before.status !== data.status) {
         await recordOrderEvent(db, {
             orderId,
@@ -211,7 +212,7 @@ app.openapi(updateStatusRoute, async (c) => {
         });
     }
 
-    return ok(c, { message: result.message });
+    return ok(c, { order: await readOrderResource(db, orderId) });
 });
 
 // ─── POST /:id/mark-delivered ────────────────────────────────────────────────
@@ -225,16 +226,23 @@ const markDeliveredRoute = createRoute({
     description: "Cash-on-delivery orders are delivered by recording the cash (POST /{id}/cod). Refused while anything is unsent or money is due.",
     request: {
         params: z.object({ id: z.string() }),
-        query: z.object({
-            expectedVersion: z.coerce.number().int().min(1).optional().openapi({
-                description: "The order version you read; a change since is refused with 409. Omit to mark it whatever happened since.",
-            }),
-        }),
+        body: {
+            required: true,
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        expectedRevision: z.number().int().min(1).optional().openapi({
+                            description: "The order `revision` you read; a change since is refused with 409. Omit to mark it whatever happened since.",
+                        }),
+                    }).strict(),
+                },
+            },
+        },
     },
     responses: {
         200: {
-            description: "Order delivered",
-            content: { "application/json": { schema: messageResponse } },
+            description: "The delivered order",
+            content: { "application/json": { schema: successEnvelope(orderResourceSchema) } },
         },
         ...adminMutationErrorResponses,
     },
@@ -243,7 +251,7 @@ const markDeliveredRoute = createRoute({
 app.openapi(markDeliveredRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
-    const result = await markOrderDelivered(db, orderId, { expectedVersion: c.req.valid("query").expectedVersion });
+    const result = await markOrderDelivered(db, orderId, { expectedVersion: c.req.valid("json").expectedRevision });
     if (result.notification) {
         await recordOrderEvent(db, {
             orderId,
@@ -262,7 +270,7 @@ app.openapi(markDeliveredRoute, async (c) => {
         });
     }
 
-    return ok(c, { message: result.message });
+    return ok(c, { order: await readOrderResource(db, orderId) });
 });
 
 // ─── GET /:id/cod ────────────────────────────────────────────────────────────

@@ -23,6 +23,7 @@ import {
 } from "@scalius/shared/plugins/handlers";
 import { providerErrorOf, type ProviderErrorCategory } from "@scalius/shared/plugins/providers/kinds";
 import type { PluginJobStepInput } from "@scalius/shared/plugins/jobs";
+import { isAppErrorCode, type AppErrorCode } from "@scalius/shared/plugins/app-errors";
 
 /** What the host hands every invocation: identity, store facts, settings, declared objects, handler inventory. */
 export interface PluginContextSeed {
@@ -111,11 +112,14 @@ export interface PluginRuntimeBridge {
 const MAX_LOGS = 100;
 const MAX_ERROR_MESSAGE = 300;
 
-/** A refusal from the platform, as plugin code sees it: `error.code` is stable (`object_unique_violation`). */
+/**
+ * A refusal from the platform, as plugin code sees it: `error.code` is one of
+ * the sealed `APP_ERROR_CODES` (`object_unique_violation`), only ever added to.
+ */
 export class PluginPlatformError extends Error {
-  readonly code: string;
+  readonly code: AppErrorCode;
 
-  constructor(code: string, message: string) {
+  constructor(code: AppErrorCode, message: string) {
     super(message);
     this.name = "PluginPlatformError";
     this.code = code;
@@ -125,7 +129,8 @@ export class PluginPlatformError extends Error {
 function rehydrate(error: unknown): Error {
   const message = error instanceof Error ? error.message : String(error);
   const match = /^\[([a-z_.]+)\] ([\s\S]*)$/.exec(message);
-  return match ? new PluginPlatformError(match[1]!, match[2]!) : new PluginPlatformError("internal", message);
+  // The bridge forwards sealed codes only; anything else is the platform's own failure.
+  return match && isAppErrorCode(match[1]) ? new PluginPlatformError(match[1], match[2]!) : new PluginPlatformError("internal_error", match ? match[2]! : message);
 }
 
 /** Read-check-write attempts of `update` and `increment` before they report the conflict. */
@@ -176,7 +181,7 @@ function objectOf(name: string, bridge: PluginRuntimeBridge, call: <T>(work: () 
     },
     async update(id: string, patch: unknown, options?: unknown) {
       if (typeof patch !== "object" || patch === null || Array.isArray(patch)) {
-        throw new PluginPlatformError("object_invalid_record", "A patch is a plain object of top-level fields.");
+        throw new PluginPlatformError("object_invalid", "A patch is a plain object of top-level fields.");
       }
       const pinned = condition(options);
       for (let attempt = 1; ; attempt += 1) {
@@ -196,12 +201,12 @@ function objectOf(name: string, bridge: PluginRuntimeBridge, call: <T>(work: () 
     async increment(id: string, field: string, delta: number, options: { min?: number; max?: number } = {}) {
       const whole = (value: unknown) => typeof value === "number" && Number.isSafeInteger(value);
       if (typeof field !== "string" || !whole(delta) || (options.min !== undefined && !whole(options.min)) || (options.max !== undefined && !whole(options.max))) {
-        throw new PluginPlatformError("object_invalid_record", "increment takes a field name, a whole-number delta and whole-number bounds.");
+        throw new PluginPlatformError("object_invalid", "increment takes a field name, a whole-number delta and whole-number bounds.");
       }
       for (let attempt = 1; ; attempt += 1) {
         const current = await getVersion(id);
         const before = current?.data[field] ?? 0;
-        if (!whole(before)) throw new PluginPlatformError("object_invalid_record", `${name}/${id}.${field} is not a whole number.`);
+        if (!whole(before)) throw new PluginPlatformError("object_invalid", `${name}/${id}.${field} is not a whole number.`);
         const value = (before as number) + delta;
         if (!Number.isSafeInteger(value) || (options.min !== undefined && value < options.min) || (options.max !== undefined && value > options.max)) {
           throw new PluginPlatformError("object_out_of_range", `${field} would be ${value}, outside its bounds; nothing changed.`);
@@ -464,6 +469,6 @@ export async function invokePluginDefinition(
 }
 
 function requireBridge(bridge: PluginRuntimeBridge | null): PluginRuntimeBridge {
-  if (!bridge) throw new PluginPlatformError("internal", "This invocation has no platform bridge.");
+  if (!bridge) throw new PluginPlatformError("internal_error", "This invocation has no platform bridge.");
   return bridge;
 }

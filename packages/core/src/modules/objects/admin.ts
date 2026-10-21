@@ -4,7 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { OBJECT_OPERATION_RESPONSE_MAX_BYTES, objectTypeDeclarationSchema, type ObjectTypeView, type ObjectRecordView, type ObjectStatus } from "@scalius/shared/plugins/objects";
 import { ObjectError } from "./errors";
 import { getObjectType } from "./types";
-import { queryObjectRecords, objectCursorAfter, countObjectRecords, getObjectRecordVersion, writeObjectRecords, deleteObjectRecord, type ObjectQueryInput } from "./records";
+import { queryObjectRecords, objectCursorAfter, getObjectRecordVersion, writeObjectRecords, deleteObjectRecord, type ObjectQueryInput } from "./records";
 
 export type { ObjectRecordView } from "@scalius/shared/plugins/objects";
 export function objectDeclaration(type: ObjectTypeView) {
@@ -30,7 +30,8 @@ async function present(db: Database, type: ObjectTypeView, id: string): Promise<
     displayName: typeof display === "string" || typeof display === "number" ? String(display).slice(0, 200) : version.handle ?? id,
     position: row.position, revision: version.revision, createdAt: iso(row.createdAt), updatedAt: iso(row.updatedAt) };
 }
-export async function listObjectRecords(db: Database, id: string, options: ObjectQueryInput = {}): Promise<{ type: ObjectTypeView; records: ObjectRecordView[]; total: number; nextCursor: string | null }> {
+/** One page of a type's records: the stable list shape, `{ records, nextCursor }` (no count is read). */
+export async function listObjectRecords(db: Database, id: string, options: ObjectQueryInput = {}): Promise<{ records: ObjectRecordView[]; nextCursor: string | null }> {
   const type = await visibleType(db, id);
   const page = await queryObjectRecords(db, type.namespace, type.type, objectDeclaration(type), options);
   const ids = page.records.map((row) => row.id);
@@ -44,9 +45,7 @@ export async function listObjectRecords(db: Database, id: string, options: Objec
       displayName: typeof display === "string" || typeof display === "number" ? String(display).slice(0, 200) : row.handle ?? recordId,
       position: row.position, revision: row.revision, createdAt: iso(row.createdAt), updatedAt: iso(row.updatedAt) }];
   });
-  const total = options.status || Object.keys(options.where ?? {}).length
-    ? await countObjectRecords(db, type.namespace, type.type, objectDeclaration(type), options.where, options.status) : type.recordCount;
-  const result = { type, records, total, nextCursor: page.nextCursor };
+  const result = { records, nextCursor: page.nextCursor };
   // Reserve room for the continuation cursor and the MCP dispatch envelope.
   const budget = OBJECT_OPERATION_RESPONSE_MAX_BYTES - 4096;
   const bytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).byteLength;

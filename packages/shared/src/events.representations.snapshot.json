@@ -17,23 +17,47 @@
     },
     "status": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "pending",
+      "processing",
+      "confirmed",
+      "shipped",
+      "delivered",
+      "completed",
+      "cancelled",
+      "returned",
+      "refunded",
+      "incomplete"
+     ]
     },
     "paymentStatus": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "unpaid",
+      "partial",
+      "paid",
+      "partially_refunded",
+      "refunded",
+      "failed"
+     ]
     },
     "fulfillmentStatus": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "pending",
+      "partial",
+      "complete"
+     ]
     },
     "channel": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "online_store",
+      "admin",
+      "pos",
+      "agent",
+      "app"
+     ]
     },
     "salesChannelId": {
      "type": "string",
@@ -385,7 +409,7 @@
      "minLength": 1,
      "maxLength": 128
     },
-    "version": {
+    "revision": {
      "type": "integer",
      "minimum": -9007199254740991,
      "maximum": 9007199254740991
@@ -522,7 +546,7 @@
     "shippingAddress",
     "billingAddress",
     "fulfillmentLocationId",
-    "version",
+    "revision",
     "lines",
     "createdAt",
     "updatedAt",
@@ -544,8 +568,14 @@
     },
     "status": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "requested",
+      "approved",
+      "receiving",
+      "completed",
+      "rejected",
+      "cancelled"
+     ]
     },
     "reason": {
      "type": "string",
@@ -553,10 +583,13 @@
     },
     "source": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "admin",
+      "support_request",
+      "cod_return_to_sender"
+     ]
     },
-    "version": {
+    "revision": {
      "type": "integer",
      "minimum": -9007199254740991,
      "maximum": 9007199254740991
@@ -679,7 +712,7 @@
     "status",
     "reason",
     "source",
-    "version",
+    "revision",
     "requestedAt",
     "approvedAt",
     "completedAt",
@@ -1347,13 +1380,20 @@
     },
     "kind": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "ship",
+      "pickup",
+      "digital",
+      "gift_card",
+      "service"
+     ]
     },
     "status": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "active",
+      "voided"
+     ]
     },
     "shipmentId": {
      "nullable": true,
@@ -1449,8 +1489,12 @@
     },
     "status": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "pending",
+      "refunded",
+      "failed",
+      "partial"
+     ]
     },
     "currency": {
      "type": "string",
@@ -1464,8 +1508,10 @@
     },
     "settlement": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "original",
+      "store_credit"
+     ]
     },
     "lines": {
      "type": "array",
@@ -1556,8 +1602,25 @@
     },
     "status": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "pending",
+      "pickup_assigned",
+      "picked_up",
+      "pickup_failed",
+      "in_transit",
+      "out_for_delivery",
+      "delivered",
+      "partial_delivered",
+      "delivery_failed",
+      "on_hold",
+      "failed",
+      "cancelled",
+      "returned",
+      "unknown",
+      "creating",
+      "processing",
+      "reconcile_required"
+     ]
     },
     "rawStatus": {
      "nullable": true,
@@ -1652,8 +1715,15 @@
     },
     "status": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "pending",
+      "confirmed",
+      "succeeded",
+      "failed",
+      "refunded",
+      "cancelled",
+      "authorized"
+     ]
     },
     "method": {
      "type": "string",
@@ -1661,8 +1731,12 @@
     },
     "type": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "full",
+      "deposit",
+      "balance",
+      "refund"
+     ]
     },
     "currency": {
      "type": "string",
@@ -1940,7 +2014,7 @@
      "maxLength": 40,
      "format": "date-time"
     },
-    "version": {
+    "revision": {
      "type": "integer",
      "minimum": -9007199254740991,
      "maximum": 9007199254740991
@@ -1971,7 +2045,7 @@
     "authorDisplayName",
     "publishedAt",
     "repliedAt",
-    "version",
+    "revision",
     "createdAt",
     "updatedAt"
    ]
@@ -2060,7 +2134,7 @@
      "maxLength": 40,
      "format": "date-time"
     },
-    "version": {
+    "revision": {
      "type": "integer",
      "minimum": -9007199254740991,
      "maximum": 9007199254740991
@@ -2090,7 +2164,7 @@
     "customerId",
     "recipient",
     "expiresAt",
-    "version",
+    "revision",
     "createdAt",
     "updatedAt"
    ]
@@ -2230,8 +2304,14 @@
     "maxLength": 128
    },
    "fetch": {
+    "nullable": true,
     "type": "object",
     "properties": {
+     "appOperation": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+     },
      "operationId": {
       "type": "string",
       "minLength": 1,
@@ -2250,6 +2330,7 @@
      }
     },
     "required": [
+     "appOperation",
      "operationId",
      "method",
      "path"

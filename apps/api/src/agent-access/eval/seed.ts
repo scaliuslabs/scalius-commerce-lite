@@ -104,7 +104,7 @@ export async function seedEvalStore(store: EvalStore): Promise<EvalFixtures> {
     ] as const;
     for (const [key, name, phone] of people) {
       const created = await write("dashboard.customers.create", { body: { name, email: null, phone } });
-      customers[key] = String(created.id);
+      customers[key] = String((created.customer as { id: string }).id);
     }
 
     const placeOrder = async (customerId: string, items: Array<{ product: string; quantity: number }>) => {

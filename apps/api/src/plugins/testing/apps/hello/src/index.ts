@@ -128,13 +128,13 @@ export default definePlugin({
   events: {
     "order.paid": async (event, ctx) => {
       const orderId = event.resource.id;
-      const order = await ctx.api.call<{ id?: string; status?: string }>("orders.get", { path: { id: orderId } });
+      const order = await ctx.api.call<{ order?: { id?: string; status?: string } }>("orders.get", { path: { id: orderId } });
       await greetings(ctx).put(orderId, {
         order_id: orderId,
         kind: "paid",
         created_at: Date.parse(event.occurredAt) || 0,
         greeting: String(ctx.settings.greeting ?? "Hello"),
-        order_status: order.ok ? order.data?.status ?? null : null,
+        order_status: order.ok ? order.data?.order?.status ?? null : null,
       });
       const paid = (await ctx.kv.get<number>("paid_count")) ?? 0;
       await ctx.kv.set("paid_count", paid + 1);

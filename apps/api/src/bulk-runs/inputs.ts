@@ -77,7 +77,7 @@ export const bulkTagCustomersSchema = z.object({
 export const bulkSetProductStatusSchema = z.object({
   products: z.array(z.object({
     id,
-    expectedAggregateRevision: z.number().int().min(1).optional()
+    expectedRevision: z.number().int().min(1).optional()
       .openapi({ description: "The product revision you read; a product changed since is left alone (a failure)." }),
   })).min(1).max(BULK_RUN_MAX_ITEMS).optional().openapi({ description: "Products by id (send this or filter)." }),
   filter: bulkProductFilterSchema.optional(),

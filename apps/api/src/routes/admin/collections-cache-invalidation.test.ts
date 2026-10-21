@@ -42,6 +42,9 @@ vi.mock("@scalius/core/modules/collections", async () => {
 
 import { adminCollectionRoutes } from "./collections";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- assertions inspect the wire envelope.
+type WireBody = { data: any; error: any };
+
 function createCollectionBody(overrides: Record<string, unknown> = {}) {
   return {
     name: "Homepage Deals",
@@ -53,6 +56,18 @@ function createCollectionBody(overrides: Record<string, unknown> = {}) {
       productIds: ["prod_1"],
       maxProducts: 8,
     },
+    ...overrides,
+  };
+}
+
+/** A stored collection row, as the collections service returns it. */
+function collectionRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "col_1", name: "Homepage Deals", slug: "homepage-deals", description: null, content: null,
+    presentation: "grid", config: JSON.stringify({ source: "manual", productIds: ["prod_1"] }), sortOrder: 0,
+    isActive: true, version: 1, metaTitle: null, metaDescription: null, canonicalPath: null,
+    noIndex: false, excludeFromSitemap: false, listingTemplate: null,
+    createdAt: new Date("2026-10-21T00:00:00.000Z"), updatedAt: new Date("2026-10-21T00:00:00.000Z"), deletedAt: null,
     ...overrides,
   };
 }
@@ -75,14 +90,8 @@ function createTestApp() {
   const env = {
   } as unknown as Env;
 
-  mocks.createCollection.mockResolvedValue({
-    id: "col_1",
-    ...createCollectionBody(),
-  });
-  mocks.updateCollection.mockResolvedValue({
-    id: "col_1",
-    ...createCollectionBody({ name: "Updated Deals" }),
-  });
+  mocks.createCollection.mockResolvedValue(collectionRow());
+  mocks.updateCollection.mockResolvedValue(collectionRow({ name: "Updated Deals", version: 2 }));
   mocks.deleteCollection.mockResolvedValue(undefined);
   mocks.bulkDeleteCollections.mockResolvedValue(undefined);
   mocks.bulkActivateCollections.mockResolvedValue(undefined);
@@ -138,7 +147,10 @@ describe("admin collection write behavior", () => {
     );
 
     expect(response.status).toBe(201);
-
+    const { collection } = (await response.json() as WireBody).data;
+    expect(collection).toMatchObject({ id: "col_1", slug: "homepage-deals", revision: 1, isActive: true, createdAt: "2026-10-21T00:00:00.000Z", deletedAt: null });
+    expect(collection.config).toMatchObject({ source: "manual", productIds: ["prod_1"], featuredProductId: null });
+    expect(collection).not.toHaveProperty("version");
   });
 
   it("returns success after collection activation changes", async () => {

@@ -37,6 +37,14 @@ export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/resources/orders/*/fulfillments": { GET: orders, POST: shipments },
   "/api/v1/admin/resources/orders/*/shipments": { GET: orders, POST: shipments },
   "/api/v1/admin/resources/shipments/*": { GET: orders },
+  "/api/v1/admin/resources/orders/*/returns": { GET: orders },
+  "/api/v1/admin/resources/returns/*": { GET: orders },
+  // Stock screens read locations by name; their addresses need inventory.view
+  // or settings.general.view (the handler nulls them otherwise), as on
+  // /admin/inventory/locations.
+  "/api/v1/admin/resources/inventory-locations": {
+    GET: { anyOf: [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.INVENTORY_VIEW, PERMISSIONS.SETTINGS_GENERAL_VIEW] },
+  },
   // PIM sync creates and edits products as the editor does; stock stays with inventory.
   "/api/v1/admin/resources/products": { GET: products, POST: { permission: PERMISSIONS.PRODUCTS_CREATE } },
   // An importer creates many products in one call, under the same permission as one.

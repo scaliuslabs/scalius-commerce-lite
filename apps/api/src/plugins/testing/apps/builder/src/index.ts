@@ -13,7 +13,7 @@
 //   (`products.batch_create`);
 // - step 3 applies the app's template, whose sections name the categories and
 //   the collection by handle (`theme.get`, `theme.apply_template`), and points
-//   a section at another category by handle (`theme.section_settings_set`);
+//   a section at another category by handle (`theme.set_section_settings`);
 // - step 4 creates and publishes the footer menu, a category linked by handle
 //   (`menus.create`), and gives the store owner's customer the app's
 //   `founder` role (`ctx.customers.roles`), which the app's page reads back.
@@ -104,15 +104,15 @@ const steps: Array<(ctx: PluginContext, input: SetupInput, jobId: string) => Pro
   },
   async (ctx) => {
     const { theme } = await call<{ theme: { draft: { revision: number; basePublishedRevision: number } } }>(ctx, "theme.get", {});
-    const applied = await call<{ draft: { revision: number; basePublishedRevision: number } }>(ctx, "theme.apply_template", {
-      body: { template: "launch", expectedDraftRevision: theme.draft.revision, basePublishedRevision: theme.draft.basePublishedRevision },
+    const applied = await call<{ theme: { draft: { revision: number; basePublishedRevision: number } } }>(ctx, "theme.apply_template", {
+      body: { template: "launch", expectedRevision: theme.draft.revision, basePublishedRevision: theme.draft.basePublishedRevision },
     });
-    await call(ctx, "theme.section_settings_set", {
+    await call(ctx, "theme.set_section_settings", {
       body: {
         sectionId: "laptops",
         settings: { title: "Phones", source: { kind: "category", handle: "phones" } },
-        expectedDraftRevision: applied.draft.revision,
-        basePublishedRevision: applied.draft.basePublishedRevision,
+        expectedRevision: applied.theme.draft.revision,
+        basePublishedRevision: applied.theme.draft.basePublishedRevision,
       },
     });
     return "Home page drafted";

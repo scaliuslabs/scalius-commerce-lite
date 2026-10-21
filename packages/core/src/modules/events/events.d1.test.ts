@@ -46,7 +46,7 @@ function eventIds(sqlite: DatabaseSync, topic?: string): string[] {
 }
 
 const ORDER_REPRESENTATION = buildEventRepresentation("order", {
-  id: "ord_1", orderNumber: 1, status: "pending", paymentStatus: "unpaid", fulfillmentStatus: "unfulfilled", channel: "online_store",
+  id: "ord_1", orderNumber: 1, status: "pending", paymentStatus: "unpaid", fulfillmentStatus: "pending", channel: "online_store",
   salesChannelId: "sc_online_store", marketId: null, currency: "BDT", subtotalMinor: 1000, shippingMinor: 0, discountMinor: 0, taxMinor: 0,
   totalMinor: 1000, paidMinor: 0, balanceDueMinor: 1000, pricesIncludeTax: false, paymentMethod: "cod", paymentTerms: null, customerId: null, accountCustomerId: null,
   contact: { name: "Rahim", email: "rahim@buyer.test", phone: "+8801711111111" },
@@ -55,7 +55,7 @@ const ORDER_REPRESENTATION = buildEventRepresentation("order", {
     name: "Rahim", phone: "+8801711111111", company: null, line1: "House 1", line2: null, dependentLocality: null,
     locality: "Dhaka", adminArea: null, postalCode: null, countryCode: "BD", placeIds: { city: "city", zone: "zone", area: null },
   },
-  billingAddress: null, fulfillmentLocationId: null, version: 1, lines: [],
+  billingAddress: null, fulfillmentLocationId: null, revision: 1, lines: [],
   createdAt: "2026-10-19T00:00:00.000Z", updatedAt: "2026-10-19T00:00:00.000Z", deletedAt: null,
 }, allProtectedData());
 const representation = vi.fn(async () => ORDER_REPRESENTATION);

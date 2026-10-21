@@ -66,6 +66,15 @@ function sealed<T extends EventRepresentationType>(type: T, value: EventRepresen
   return buildEventRepresentation(type, value, allProtectedData());
 }
 
+/**
+ * A stored state column read as its sealed enum. The sealed parse in `sealed`
+ * refuses a value outside the enum (a bug, never a guess); the stored lists
+ * mirror the sealed ones (`packages/database/__tests__/resource-states.test.ts`).
+ */
+function storedState<T extends EventRepresentationType, K extends keyof EventRepresentationInput<T>>(_type: T, _field: K, value: string): EventRepresentationInput<T>[K] {
+  return value as EventRepresentationInput<T>[K];
+}
+
 type OrderRow = typeof orders.$inferSelect;
 
 function shippingAddress(order: OrderRow) {
@@ -175,9 +184,9 @@ function orderFrom(order: OrderRow, lines: readonly OrderLineRow[]) {
   return sealed("order", {
     id: order.id,
     orderNumber: order.orderNumber ?? null,
-    status: order.status,
-    paymentStatus: order.paymentStatus,
-    fulfillmentStatus: order.fulfillmentStatus,
+    status: storedState("order", "status", order.status),
+    paymentStatus: storedState("order", "paymentStatus", order.paymentStatus),
+    fulfillmentStatus: storedState("order", "fulfillmentStatus", order.fulfillmentStatus),
     channel: order.channel,
     salesChannelId: order.salesChannelId,
     marketId: order.marketId ?? null,
@@ -202,7 +211,7 @@ function orderFrom(order: OrderRow, lines: readonly OrderLineRow[]) {
     shippingAddress: order.requiresShipping ? shippingAddress(order) : null,
     billingAddress: billingAddress(order),
     fulfillmentLocationId: order.fulfillmentLocationId ?? null,
-    version: order.version,
+    revision: order.version,
     lines: lines.map(({ orderId: _orderId, properties, ...line }) => ({
       ...line,
       purchaseOption: readLinePurchaseOption(properties),
@@ -218,17 +227,40 @@ function orderFrom(order: OrderRow, lines: readonly OrderLineRow[]) {
   });
 }
 
-async function returnRepresentation(db: Database, returnId: string) {
-  const row = await db.select().from(orderReturns).where(eq(orderReturns.id, returnId)).get();
-  if (!row) return null;
-  const lines = await db.select().from(orderReturnLines).where(eq(orderReturnLines.returnId, returnId)).limit(MAX_LINES).all();
+/**
+ * Returns (one by id, or an order's, oldest first) with their lines: two
+ * reads, whichever the count (the API's per-order list and its single read).
+ */
+async function readReturnRepresentations(db: Database, where: { id: string } | { orderId: string }) {
+  const rows = await db.select().from(orderReturns)
+    .where("id" in where ? eq(orderReturns.id, where.id) : eq(orderReturns.orderId, where.orderId))
+    .orderBy(asc(orderReturns.createdAt), asc(orderReturns.id)).limit(MAX_LINES).all();
+  if (rows.length === 0) return [];
+  const lineRows = await db.select().from(orderReturnLines)
+    .where(inArray(orderReturnLines.returnId, rows.map((row) => row.id)))
+    .orderBy(asc(orderReturnLines.returnId), asc(orderReturnLines.createdAt), asc(orderReturnLines.id)).all();
+  const linesByReturn = groupBy(lineRows, (line) => line.returnId);
+  return rows.map((row) => returnFrom(row, linesByReturn.get(row.id) ?? []));
+}
+
+/** An order's returns, oldest first (the API's per-order list). */
+export function readOrderReturnRepresentations(db: Database, orderId: string) {
+  return readReturnRepresentations(db, { orderId });
+}
+
+/** One return as webhooks carry it (ReturnResource), or null. */
+export async function readReturnRepresentation(db: Database, returnId: string) {
+  return (await readReturnRepresentations(db, { id: returnId }))[0] ?? null;
+}
+
+function returnFrom(row: typeof orderReturns.$inferSelect, lines: readonly (typeof orderReturnLines.$inferSelect)[]) {
   return sealed("return", {
     id: row.id,
     orderId: row.orderId,
     status: row.status,
     reason: row.reason,
     source: row.source,
-    version: row.version,
+    revision: row.version,
     requestedAt: isoRequired(row.requestedAt),
     approvedAt: iso(row.approvedAt),
     completedAt: iso(row.completedAt),
@@ -318,23 +350,25 @@ async function productRepresentation(db: Database, productId: string) {
 export async function readVariantRepresentations(db: Database, where: { ids: readonly string[] } | { skus: readonly string[] }) {
   const keys = "ids" in where ? where.ids : where.skus.map((sku) => sku.trim().toLowerCase());
   if (keys.length === 0) return [];
-  const rows = await db.select({
-    id: productVariants.id,
-    productId: productVariants.productId,
-    sku: productVariants.sku,
-    trackInventory: productVariants.trackInventory,
-    stock: productVariants.stock,
-    stockVersion: productVariants.stockVersion,
-    updatedAt: productVariants.updatedAt,
-  }).from(productVariants)
-    .where("ids" in where
-      ? inArray(productVariants.id, [...keys])
-      : inArray(sql`lower(trim(${productVariants.sku}))`, [...keys]))
-    .all();
+  const matches = "ids" in where
+    ? inArray(productVariants.id, [...keys])
+    : inArray(sql`lower(trim(${productVariants.sku}))`, [...keys]);
+  // The SKUs and their levels in one batch (one D1 call): a stock write answers its SKU at no extra round trip.
+  const [rows, levelRows] = await db.batch([
+    db.select({
+      id: productVariants.id,
+      productId: productVariants.productId,
+      sku: productVariants.sku,
+      trackInventory: productVariants.trackInventory,
+      stock: productVariants.stock,
+      stockVersion: productVariants.stockVersion,
+      updatedAt: productVariants.updatedAt,
+    }).from(productVariants).where(matches),
+    db.select({ variantId: inventoryLevels.variantId, locationId: inventoryLevels.locationId, onHand: inventoryLevels.onHand })
+      .from(inventoryLevels).innerJoin(productVariants, eq(productVariants.id, inventoryLevels.variantId)).where(matches)
+      .orderBy(asc(inventoryLevels.variantId), asc(inventoryLevels.locationId)),
+  ]);
   if (rows.length === 0) return [];
-  const levelRows = await db.select({ variantId: inventoryLevels.variantId, locationId: inventoryLevels.locationId, onHand: inventoryLevels.onHand })
-    .from(inventoryLevels).where(inArray(inventoryLevels.variantId, rows.map((row) => row.id)))
-    .orderBy(asc(inventoryLevels.variantId), asc(inventoryLevels.locationId)).all();
   const levels = groupBy(levelRows, (level) => level.variantId);
   const byKey = new Map(rows.map((variant) => ["ids" in where ? variant.id : variant.sku.trim().toLowerCase(), sealed("variant", {
     id: variant.id,
@@ -506,7 +540,8 @@ export function readOrderFulfillmentRepresentations(db: Database, orderId: strin
   return readFulfillmentRepresentations(db, { orderId });
 }
 
-async function fulfillmentRepresentation(db: Database, fulfillmentId: string) {
+/** One fulfilment as webhooks carry it (FulfillmentResource), or null. */
+export async function readFulfillmentRepresentation(db: Database, fulfillmentId: string) {
   return (await readFulfillmentRepresentations(db, { id: fulfillmentId }))[0] ?? null;
 }
 
@@ -536,6 +571,7 @@ async function readShipmentRepresentations(db: Database, where: { id: string } |
     .orderBy(asc(deliveryShipments.createdAt), asc(deliveryShipments.id)).limit(MAX_LINES).all();
   return rows.map(({ lastChecked, ...fields }) => sealed("shipment", {
     ...fields,
+    status: storedState("shipment", "status", fields.status),
     providerId: fields.providerId ?? null,
     rawStatus: fields.rawStatus ?? null,
     externalId: fields.externalId ?? null,
@@ -566,9 +602,9 @@ async function readPaymentRepresentations(db: Database, where: { id: string } | 
   return rows.map((row) => sealed("payment", {
     id: row.id,
     orderId: row.orderId,
-    status: row.status,
+    status: storedState("payment", "status", row.status),
     method: row.paymentMethod,
-    type: row.paymentType,
+    type: storedState("payment", "type", row.paymentType),
     currency: row.currency,
     amountMinor: row.amountMinor,
     settlementCurrency: row.settlementCurrency,
@@ -698,7 +734,7 @@ async function reviewRepresentation(db: Database, reviewId: string) {
     authorDisplayName: review.authorDisplayName ?? null,
     publishedAt: iso(review.publishedAt),
     repliedAt: iso(review.repliedAt),
-    version: review.version,
+    revision: review.version,
     createdAt: isoRequired(review.createdAt),
     updatedAt: isoRequired(review.updatedAt),
   });
@@ -719,7 +755,7 @@ async function giftCardRepresentation(db: Database, giftCardId: string) {
     customerId: card.customerId ?? null,
     recipient: { name: card.recipientName ?? null, email: card.recipientEmail ?? null, phone: card.recipientPhone ?? null },
     expiresAt: iso(card.expiresAt),
-    version: card.version,
+    revision: card.version,
     createdAt: isoRequired(card.createdAt),
     updatedAt: isoRequired(card.updatedAt),
   });
@@ -769,7 +805,7 @@ export function createWebhookRepresentationResolver(db: Database): WebhookRepres
       case "order":
         return orderRepresentation(db, event.resourceId);
       case "return":
-        return returnRepresentation(db, event.resourceId);
+        return readReturnRepresentation(db, event.resourceId);
       case "product":
         return productRepresentation(db, event.resourceId);
       case "variant":
@@ -781,7 +817,7 @@ export function createWebhookRepresentationResolver(db: Database): WebhookRepres
       case "inventory_transfer":
         return transferRepresentation(db, event.resourceId);
       case "fulfillment":
-        return fulfillmentRepresentation(db, event.resourceId);
+        return readFulfillmentRepresentation(db, event.resourceId);
       case "refund":
         return readRefundRepresentation(db, event.resourceId);
       case "shipment":

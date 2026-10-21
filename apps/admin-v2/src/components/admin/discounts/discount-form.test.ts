@@ -46,12 +46,12 @@ function record(input: ReturnType<typeof draftToInput>): DiscountRecord {
     title: null,
     startsAt: input.startsAt ?? null,
     endsAt: input.endsAt ?? null,
-    timezone: "Asia/Dhaka",
+    timeZone: "Asia/Dhaka",
     maxRedemptions: input.maxRedemptions ?? null,
     maxRedemptionsPerCustomer: input.maxRedemptionsPerCustomer ?? null,
     maxDiscountSpendMinor: input.maxDiscountSpendMinor ?? null,
     currency: "BDT",
-    budgetCurrencyCode: input.budgetCurrencyCode ?? null,
+    budgetCurrency: input.budgetCurrency ?? null,
     redemptionCount: 0,
     customerRedemptionCount: 0,
     discountSpendMinor: 0,
@@ -299,7 +299,7 @@ describe("discount form model", () => {
       { kind: "free", target: "shipping", allocation: "once", config: {} },
     ]);
     expect(input.conditions).toEqual([
-      { kind: "minimum_merchandise_subtotal", config: { amountMinor: 150_000, currencyCode: "BDT", shippingOnly: true } },
+      { kind: "minimum_merchandise_subtotal", config: { amountMinor: 150_000, currency: "BDT", shippingOnly: true } },
     ]);
     // Bundling takes the shipping slot, so "combine with shipping" is off.
     expect(input.combinesWith).toEqual({ product: false, order: true, shipping: false });

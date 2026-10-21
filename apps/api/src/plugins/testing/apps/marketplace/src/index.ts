@@ -87,9 +87,9 @@ export function payableMinor(split: Split): number {
 
 async function splitOrder(event: PluginEvent, ctx: PluginContext): Promise<void> {
   const orderId = event.resource.id;
-  const read = await ctx.api.call<{ currency: string; lines: OrderLine[] }>("orders.get", { path: { id: orderId } });
-  if (!read.ok || !read.data) throw new Error(`orders.get failed: ${read.error?.code ?? "unknown"}`);
-  const { currency, lines } = read.data;
+  const read = await ctx.api.call<{ order: { currency: string; lines: OrderLine[] } }>("orders.get", { path: { id: orderId } });
+  if (!read.ok || !read.data?.order) throw new Error(`orders.get failed: ${read.error?.code ?? "unknown"}`);
+  const { currency, lines } = read.data.order;
   const bySeller = new Map<string, Split>();
   for (const line of lines) {
     const listing = await ctx.objects.listings!.get(line.productId) as { seller_id?: string } | null;

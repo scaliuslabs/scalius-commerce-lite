@@ -97,9 +97,9 @@ describe("ctx.api.call as a plugin principal", () => {
 
   it("runs a granted read and a granted write, recording the write as the approving Super Admin", async () => {
     const read = await call("orders.get", { path: { id: "ord_rbac1" } });
-    expect(read).toMatchObject({ ok: true, status: 200, error: null, data: { id: "ord_rbac1", status: "pending" } });
+    expect(read).toMatchObject({ ok: true, status: 200, error: null, data: { order: { id: "ord_rbac1", status: "pending" } } });
 
-    const write = await call("orders.update_status", { path: { id: "ord_rbac1" }, body: { status: "confirmed" }, idempotencyKey: "plugin-status-1" });
+    const write = await call("orders.set_status", { path: { id: "ord_rbac1" }, body: { status: "confirmed" }, idempotencyKey: "plugin-status-1" });
     expect(write.error).toBeNull();
     expect(sqlite.prepare("SELECT actor_id FROM order_events WHERE order_id = 'ord_rbac1' AND actor_id IS NOT NULL").all())
       .toContainEqual({ actor_id: "owner" });
@@ -124,7 +124,7 @@ describe("ctx.api.call as a plugin principal", () => {
   });
 
   it("names a schema refusal validation_error, as the SDK's contract double does", async () => {
-    const refused = await call("orders.update_status", { path: { id: "ord_rbac1" }, body: { status: 42 }, idempotencyKey: "plugin-status-bad" });
+    const refused = await call("orders.set_status", { path: { id: "ord_rbac1" }, body: { status: 42 }, idempotencyKey: "plugin-status-bad" });
     expect(refused).toMatchObject({ ok: false, status: 400, error: { code: "validation_error" } });
   });
 
@@ -134,9 +134,11 @@ describe("ctx.api.call as a plugin principal", () => {
     expect(hidden).toMatchObject({
       ok: true,
       data: {
-        id: "ord_rbac1",
-        contact: { name: null, phone: null, email: null },
-        shippingAddress: { name: null, phone: null, line1: null, placeIds: { city: "city_1", zone: "zone_1" } },
+        order: {
+          id: "ord_rbac1",
+          contact: { name: null, phone: null, email: null },
+          shippingAddress: { name: null, phone: null, line1: null, placeIds: { city: "city_1", zone: "zone_1" } },
+        },
       },
     });
     // Field by field: names and phones granted, emails and street addresses not.
@@ -151,8 +153,10 @@ describe("ctx.api.call as a plugin principal", () => {
     expect(partial).toMatchObject({
       ok: true,
       data: {
-        contact: { name: "Rahim", phone: "+8801711111111", email: null },
-        shippingAddress: { name: "Rahim", line1: null, placeIds: { city: "city_1" } },
+        order: {
+          contact: { name: "Rahim", phone: "+8801711111111", email: null },
+          shippingAddress: { name: "Rahim", line1: null, placeIds: { city: "city_1" } },
+        },
       },
     });
     const list = await callPluginOperation({
@@ -164,7 +168,7 @@ describe("ctx.api.call as a plugin principal", () => {
       kind: "plugin", pluginId: "acme.rbac", version: "1.0.0", pluginName: "Acme RBAC", actorUserId: "owner", firstParty: false,
       permissions: new Set(["orders.view"]), protectedData: new Set(), riskCeiling: "read",
     }), pluginTestCtx());
-    expect(((await route.json()) as { data: Record<string, unknown> }).data).toMatchObject({ contact: { email: "rahim@buyer.test" } });
+    expect(((await route.json()) as { data: Record<string, unknown> }).data).toMatchObject({ order: { contact: { email: "rahim@buyer.test" } } });
   });
 
   it("refuses looking a buyer up by contact data the grant does not reveal", async () => {
@@ -225,7 +229,9 @@ describe("ctx.api.call as a plugin principal", () => {
     expect(await call("settings.email_get")).toMatchObject({ ok: false, status: 403, error: { code: "api_operation_not_stable" } });
     expect(await call("team.users.list")).toMatchObject({ ok: false, status: 403, error: { code: "api_operation_not_stable" } });
     expect(audit()).toContainEqual({ plugin_id: "acme.rbac", operation_id: "dashboard.orders.invoice_get", outcome: "denied", http_status: 403, error_class: "operation_forbidden" });
-    expect((await call("settings.business_get")).ok).toBe(true);
+    // The business settings form is the dashboard's (beta); the store's languages are stable.
+    expect(await call("settings.business_get")).toMatchObject({ ok: false, status: 403, error: { code: "api_operation_not_stable" } });
+    expect((await call("languages.list")).ok).toBe(true);
   });
 
   it("lets a bundled first-party app call beta operations, never internal or security ones", async () => {

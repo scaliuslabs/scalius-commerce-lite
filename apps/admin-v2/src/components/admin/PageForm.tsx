@@ -17,13 +17,13 @@ import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEdito
 import { FormContainer } from "@/components/admin/shared/FormContainer";
 import { SaveConflict } from "@/components/admin/shared/SaveBar";
 import { copyValues, rebaseForm } from "@/components/admin/shared/use-form-save-bar";
-import { pageQueryOptions } from "@/lib/api-query-options/pages";
+import { pageQueryOptions, type PageDto } from "@/lib/api-query-options/pages";
 import { toPageFormValues } from "@/lib/page-form-values";
 import { FormImageUploadField } from "@/components/admin/shared/FormImageUploadField";
 import { SearchListingCard, autoHandleFor } from "@/components/admin/search-listing/SearchListingCard";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { postApiV1AdminPages, putApiV1AdminPagesById } from "@scalius/api-client/sdk";
-import { apiData, type ApiResult } from "@/lib/api";
+import { apiData } from "@/lib/api";
 import { AdminApiResponseError } from "@/lib/admin-api-error";
 import { pageFormSchema, type PageFormInput, type PageFormValues } from "@/lib/form-schemas";
 import { getPlainText } from "@/lib/format-utils";
@@ -118,7 +118,7 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
   const { isSubmitting, handleSubmit: submitEntity } = useEntityFormSubmit<PageFormValues>({
     isEdit,
     entityId: defaultValues?.id,
-    createFn: (data) => apiData(postApiV1AdminPages({ body: toCreatePageInput(data) })),
+    createFn: async (data) => (await apiData(postApiV1AdminPages({ body: toCreatePageInput(data) }))).page,
     updateFn: (data) => {
       if (!data.revision || !Number.isInteger(data.revision) || data.revision < 1) {
         throw new Error(t("reloadToSave"));
@@ -126,15 +126,14 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
       return apiData(putApiV1AdminPagesById({
         path: { id: data.id },
         body: { expectedRevision: data.revision, ...toUpdatePageInput(data) },
-      }));
+      })).then(({ page }) => page);
     },
     invalidateKeys: [
       queryKeys.pages.list(),
       ...(isEdit && defaultValues?.id ? [queryKeys.pages.detail(defaultValues.id)] : []),
     ],
     onSuccess: (result) => {
-      const mutation = result as ApiResult<typeof putApiV1AdminPagesById> &
-        Partial<ApiResult<typeof postApiV1AdminPages>>;
+      const mutation = result as Partial<PageDto>;
       if (!isEdit && mutation.id) {
         if (isArticle) {
           void navigate({
@@ -198,8 +197,7 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
       form={form}
       onSave={submitEntity}
       savedValues={(result) => {
-        const saved = result as ApiResult<typeof putApiV1AdminPagesById> &
-          Partial<ApiResult<typeof postApiV1AdminPages>>;
+        const saved = result as Partial<PageDto>;
         return { ...(saved.id ? { id: saved.id } : {}), revision: saved.revision };
       }}
       reload={isEdit && defaultValues?.id ? async () => {

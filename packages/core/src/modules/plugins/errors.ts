@@ -1,16 +1,20 @@
 import { AppError } from "../../errors";
+import type { AppErrorCode } from "@scalius/shared/plugins/app-errors";
 
 /**
- * Stable, dotted error codes a plugin can branch on (`error.code` inside the
- * plugin). Part of the versioned plugin API: codes are only ever added.
+ * A plugin platform refusal's code. What an app's code can see is the sealed
+ * `AppErrorCode` table (`@scalius/shared/plugins/app-errors`, part of the
+ * versioned plugin ABI: codes are only ever added); the rest are refusals of
+ * the store's own app management (install, update, registry, signatures),
+ * which only staff see.
  */
 export type PluginErrorCode =
+  | AppErrorCode
   | "manifest_invalid"
   | "manifest_reserved_vendor"
   | "installation_exists"
   | "installation_not_found"
   | "installation_revision_conflict"
-  | "installation_inactive"
   | "installation_settings_incomplete"
   | "installation_objects_invalid"
   | "installation_grant_changed"
@@ -21,64 +25,6 @@ export type PluginErrorCode =
   | "delivery_not_found"
   | "delivery_not_retryable"
   | "settings_invalid"
-  | "settings_key_unavailable"
-  | "object_undeclared_type"
-  | "object_invalid_id"
-  | "object_invalid_record"
-  | "object_record_too_large"
-  | "object_invalid_index_value"
-  | "object_unindexed_query"
-  | "object_invalid_cursor"
-  | "object_unique_violation"
-  /** A conditional write found the record changed (or present when it must not be). */
-  | "object_conflict"
-  | "object_invalid_batch"
-  | "kv_invalid_key"
-  | "kv_value_too_large"
-  | "kv_invalid_ttl"
-  /** compareAndSet found another revision: the entry changed since it was read. */
-  | "kv_conflict"
-  | "kv_invalid_revision"
-  | "api_unknown_operation"
-  | "api_operation_forbidden"
-  | "api_invalid_input"
-  | "http_not_allowed"
-  | "http_invalid_request"
-  | "http_too_many_redirects"
-  | "http_timeout"
-  | "http_failed"
-  | "custom_fields_undeclared"
-  | "custom_fields_invalid"
-  | "messaging_not_allowed"
-  /** `to` is not a customer, a staff member or a declared recipient (`messaging.recipients`), and the app lacks `send_messages_any`. */
-  | "messaging_recipient_not_allowed"
-  | "messaging_invalid"
-  | "messaging_unavailable"
-  /** Order timeline entries (`ctx.timeline.add`). */
-  | "timeline_not_allowed"
-  | "timeline_undeclared"
-  | "timeline_invalid"
-  | "timeline_not_found"
-  /** Order actions from event handlers (`ctx.orders`). */
-  | "orders_not_allowed"
-  | "orders_invalid"
-  | "orders_not_found"
-  /** App customer roles (`ctx.customers.roles`). */
-  | "customers_not_allowed"
-  | "customers_invalid"
-  | "customers_not_found"
-  | "customer_roles_limit"
-  /** Background jobs (`ctx.jobs`). */
-  | "jobs_undeclared"
-  | "jobs_invalid"
-  | "jobs_limit"
-  | "jobs_not_found"
-  | "jobs_key_reused"
-  /** Rendering storefront output: only the app's settings and the section's declared collections are readable. */
-  | "rate_limited"
-  /** Quotas (docs/platform/PLUGINS.md, "Quotas"): over the plan's storage size or calls per run. */
-  | "quota_storage"
-  | "quota_subrequests"
   /** Registry and upload installs. */
   | "registry_not_configured"
   | "registry_unavailable"
@@ -94,8 +40,7 @@ export type PluginErrorCode =
   | "retained_data_other_developer"
   | "installation_incompatible"
   | "installation_sandbox_required"
-  | "installation_source_conflict"
-  | "internal";
+  | "installation_source_conflict";
 
 const STATUS: Partial<Record<PluginErrorCode, number>> = {
   "installation_exists": 409,
@@ -153,7 +98,7 @@ const STATUS: Partial<Record<PluginErrorCode, number>> = {
   "installation_incompatible": 409,
   "installation_sandbox_required": 409,
   "installation_source_conflict": 409,
-  internal: 500,
+  internal_error: 500,
 };
 
 /** A plugin platform refusal. `pluginCode` crosses the bridge as `[code] message`. */

@@ -8,8 +8,9 @@ metadata; the plugin dispatch, the MCP server and the CLI read that metadata.
 
 `x-scalius-agent.stability` puts every operation in one tier:
 
-- **stable**: the frozen app API (v2.0). A third-party app calls only these
-  through `ctx.api.call`. `stable-operations.snapshot.json` records their
+- **stable**: the frozen app API (v2.0), exactly the operations the sealed
+  app-name table `STABLE_APP_OPERATIONS` lists. A third-party app calls only
+  these through `ctx.api.call`. `stable-operations.snapshot.json` records their
   request and response schemas and `stable-operations.test.ts` accepts only
   additive changes. A breaking change is a new operation.
 - **beta**: may change in any release. Bundled first-party apps may call it;
@@ -32,9 +33,15 @@ mirror a dashboard screen, an editor section or a summary card.
   `EVENT_REPRESENTATION_SCHEMAS[type]` (`@scalius/shared/events`), the shape a
   webhook delivery carries in `data` under `EVENTS_API_VERSION`. A webhook
   receiver and an API reader see one representation, and a truncated
-  delivery's `fetch` names the matching `get`. Lists page by cursor in
+  delivery's `fetch` names the stable read of it by app name (`appOperation`,
+  beside the HTTP `operationId` and `path`), or is null where none exists yet. Lists page by cursor in
   `updatedAt, id` order (`updatedSince` starts a sync) and stop early before a
-  page would pass the response budget.
+  page would pass the response budget. Order, payment, refund, return,
+  shipment and fulfilment states are sealed enums
+  (`@scalius/shared/resource-states`): a new state is a reviewed additive
+  change. `paymentStatus` answers money questions and `fulfillmentStatus`
+  (with the fulfilments) hand-over questions; the order `status` is the
+  workflow stage that summarises both for people.
 - **Apps place orders for customers.** `dashboard.resources.orders.create`
   places a confirmed order the way staff do (stock reserved, tax and app
   discounts priced, app attributes checked) for a `customerId`, whose contact
@@ -54,7 +61,7 @@ mirror a dashboard screen, an editor section or a summary card.
   patches its fields under `expectedRevision` in one write. Gift cards
   (`gift_cards.*`, `read_gift_cards` / the Sensitive `write_gift_cards`, within the
   merchant's daily app limit; an app never re-owns a funded card)
-  issue, adjust under `expectedVersion` and disable; the code never reaches
+  issue, adjust under `expectedRevision` and disable; the code never reaches
   an app (`notify` has the store send it). `webhook_subscriptions.*`
   (`write_webhooks`, Sensitive) reach only the calling app's own
   subscriptions (`webhook_subscriptions.plugin_id`), on its approved hosts,
@@ -85,14 +92,18 @@ mirror a dashboard screen, an editor section or a summary card.
   never stops the others). An item's id derives from its key, per caller and
   operation, so a retry with any `Idempotency-Key`, or a call racing it, creates
   nothing twice (`routes/admin/resources-batch.ts`).
-- **Apps name an operation by resource and verb.** `ctx.api.call` takes the
-  app name (`orders.get`, `products.create`, `objects.upsert`), never the
-  operation id: `dashboard.resources.` or `dashboard.` is dropped, and where
-  the dashboard has its own operation beside the resource one
-  (`dashboard.products.create`), the resource owns the name and the
-  dashboard's has none (`@scalius/shared/plugins/app-operations`).
-  `stable-operations.snapshot.json` is keyed by app name, so the alias table
-  is sealed with the contract. Agents, MCP and the CLI keep operation ids.
+- **Apps name an operation by resource and verb, from one sealed table.**
+  `ctx.api.call` takes the app name (`orders.get`, `fulfillments.void`,
+  `price_lists.set_prices`, `object_types.create`), never the operation id.
+  `STABLE_APP_OPERATIONS` (`@scalius/shared/plugins/app-operations`) maps
+  each designed name, `<resource>.<verb phrase>` with the phrase starting
+  with a verb from the closed `APP_OPERATION_VERBS` list, to one operation,
+  and is the stable tier itself: a registry row never says `stable`. Adding
+  a route never moves a sealed name. Beta operations keep a derived name
+  (`dashboard.resources.` or `dashboard.` dropped, the resource twin owning
+  the name), which never takes a sealed one.
+  `stable-operations.snapshot.json` is keyed by app name, so the table is
+  sealed with the contract. Agents, MCP and the CLI keep operation ids.
 - **One lane per owner.** Operations reach the merchant's data; an app's
   own data goes through `ctx`. An app writes typed order timeline lines with
   `ctx.timeline.add` (`orders.comment_add`, the staff note, is beta), and its
@@ -104,10 +115,36 @@ mirror a dashboard screen, an editor section or a summary card.
   `apps/api/src/error-vocabulary.test.ts` holds every producer to it. Batch
   guard markers stay upper-case inside SQL (`buildBatchGuard` spells them so);
   the dashboard's sign-in and account-security flows keep Better Auth's codes.
-- **Lists page one way**: `cursor` + `limit` in, `{ <plural>, nextCursor }` out.
-  Page-numbered and offset lists (the dashboard's brands, categories,
-  collections, content and discounts lists, `*.get_section`) are beta; a
-  bounded lookup (`limit` without a cursor) returns at most `limit`.
+  What an app can branch on is sealed: `APP_ERROR_CODES`
+  (`@scalius/shared/plugins/app-errors`, exported by the SDK) lists every
+  `ctx.*` refusal code and every refused `ctx.api.call` code with its HTTP
+  status, one code per fact (`object_invalid`, `installation_inactive`,
+  `internal_error`, `app_principal_required`). It is part of
+  `abi.protocol.snapshot.json` (codes are only added, statuses never change);
+  `apps/api/src/app-error-codes.test.ts` holds the ctx hosts, the dispatch and
+  every stable route module to it, and the dispatch translates its own
+  refusals into it (`dispatchRefusalCode`).
+- **Lists page one way**: `cursor` + `limit` in, `{ <plural>, nextCursor }` out
+  and nothing else, a bounded list included (read whole and cut by
+  `utils/bounded-page.ts`; its limit defaults to the bound, so `nextCursor` is
+  null unless a smaller page is asked). Page-numbered and offset lists (the
+  dashboard's brands, categories, collections, content and discounts lists,
+  `*.get_section`) are beta.
+- **One answer shape per kind.** A single resource, read or written, answers
+  `{ <singular>: Resource }` (`{ order }`, `{ product }`, `{ run }` for a bulk
+  run), the same component its get returns; a write may keep receipt fields
+  beside it (`replayed`, `unresolved`). A permanent delete answers `{ id,
+  deleted: true }`. No stable answer is a bare resource, `{}`, `{ message }` or
+  an empty 204.
+- **One address shape.** Every stable address is the representation's
+  `PostalAddress` fields (`name, phone, company, line1, line2,
+  dependentLocality, locality, adminArea, postalCode, countryCode`), with the
+  store's delivery place ids only under `placeIds: { city, zone, area }`;
+  inputs use `schemas/postal-address.ts`. A store-owned address uses the same
+  names without the buyer-data markers.
+
+`stable-operations.test.ts` checks the list, answer, precondition and address
+rules on every stable operation.
 - **Regional and editor fields stay out.** `emiEligible`, product-level
   `freeDelivery` and product-level discount fields belong to the dashboard's
   editor routes (beta); no stable schema carries them.
@@ -134,12 +171,13 @@ mirror a dashboard screen, an editor section or a summary card.
   `routes/admin/idempotency.ts` is the rule; its test holds every stable
   write to it. The batch creates key each item, so an importer that must
   never lose a create uses them.
-- **Writes take a precondition.** Every stable write that is not a create
-  takes the revision it was based on (`expectedRevision`, `expectedVersion`,
-  `expectedAggregateRevision` or `expectedStockVersion`, required or
-  optional); a stale value is refused with 409 and changes nothing. Reads
-  return them (`version` on orders, `stockVersion` on SKUs, `revision`
-  elsewhere). The few writes with no revision to compare yet (custom field
+- **Writes take a precondition, one name.** Every stable write that is not a
+  create takes the `revision` it was based on as `expectedRevision` (in the
+  JSON body; a DELETE takes it in the query), required or optional; a stale
+  value is refused with 409 and changes nothing. Every resource exposes
+  `revision`. The named exceptions guard another counter: a SKU's stock moves
+  take `expectedStockVersion` (its `stockVersion`), and theme writes add the
+  live theme's `basePublishedRevision`. The few writes with no revision to compare yet (custom field
   values, customers, the place import, publications) are listed in
   `stable-operations.test.ts`; an optional precondition added later is
   additive.

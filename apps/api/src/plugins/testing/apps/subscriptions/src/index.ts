@@ -255,9 +255,9 @@ export default definePlugin({
   events: {
     // One contract per subscribed line of an account customer's order (a guest cannot be renewed).
     "order.created": async (event, ctx) => {
-      const read = await ctx.api.call<Order>("orders.get", { path: { id: event.resource.id } });
-      if (!read.ok || !read.data) throw new Error(`The order could not be read (${read.error?.code ?? read.status}).`);
-      const order = read.data;
+      const read = await ctx.api.call<{ order: Order }>("orders.get", { path: { id: event.resource.id } });
+      if (!read.ok || !read.data?.order) throw new Error(`The order could not be read (${read.error?.code ?? read.status}).`);
+      const order = read.data.order;
       if (!order.accountCustomerId) return;
       const intervalDays = Number(ctx.settings.interval_days ?? 30) || 30;
       const placedAt = Date.parse(event.occurredAt) || 0;

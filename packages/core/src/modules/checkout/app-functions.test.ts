@@ -337,7 +337,7 @@ describe("the app cart's channel, shipping and purchase facts", () => {
 });
 
 describe("discount classes and combinesWith", () => {
-  const notWith = (key: "productDiscounts" | "orderDiscounts" | "shippingDiscounts"): Partial<Discount> => ({ combinesWith: { [key]: false } });
+  const notWith = (key: "product" | "order" | "shipping"): Partial<Discount> => ({ combinesWith: { [key]: false } });
   const lineTarget = { kind: "lines" as const, lineIds: ["cart:1:v_b"] };
   const noPlatform = { lines: LINES.map((entry) => ({ ...entry, platformDiscountMinor: 0 })) };
 
@@ -352,7 +352,7 @@ describe("discount classes and combinesWith", () => {
   it("applies a pair only when each combines with the other's class, in priority then output order", () => {
     // [first's class, second's class, the key the second turns off, the key the first turns off] → both apply?
     const classes = { product: lineTarget, order: { kind: "order" as const }, shipping: { kind: "shipping" as const } } as const;
-    const keyOf = { product: "productDiscounts", order: "orderDiscounts", shipping: "shippingDiscounts" } as const;
+    const keyOf = { product: "product", order: "order", shipping: "shipping" } as const;
     for (const first of ["product", "order", "shipping"] as const) {
       for (const second of ["product", "order", "shipping"] as const) {
         const both = resolve([discounts("a.first", fixedOff(1_000, classes[first])), discounts("b.second", fixedOff(1_000, classes[second]))], noPlatform);
@@ -375,18 +375,18 @@ describe("discount classes and combinesWith", () => {
 
   it("checks a candidate against every discount already applied, the platform's included", () => {
     // The platform took 10,000 off a line (a product discount): an app discount that does not combine with product discounts is skipped.
-    const skipped = resolve([discounts("a.order", fixedOff(1_000, { kind: "order" }, notWith("productDiscounts")))]);
+    const skipped = resolve([discounts("a.order", fixedOff(1_000, { kind: "order" }, notWith("product")))]);
     expect(skipped.applied).toEqual([]);
     // An order-level promotion counts as an order discount, not a product one.
-    const orderPromotion = resolve([discounts("a.order", fixedOff(1_000, { kind: "order" }, notWith("productDiscounts")))], { platformClasses: ["order"] });
+    const orderPromotion = resolve([discounts("a.order", fixedOff(1_000, { kind: "order" }, notWith("product")))], { platformClasses: ["order"] });
     expect(orderPromotion.applied.map((entry) => entry.pluginId)).toEqual(["a.order"]);
     // No platform discount: nothing constrains it.
-    expect(resolve([discounts("a.order", fixedOff(1_000, { kind: "order" }, notWith("productDiscounts")))], noPlatform).applied).toHaveLength(1);
+    expect(resolve([discounts("a.order", fixedOff(1_000, { kind: "order" }, notWith("product")))], noPlatform).applied).toHaveLength(1);
     // A skipped discount constrains nothing after it.
     const chain = resolve([
       discounts("a.ship", fixedOff(1_000, { kind: "shipping" })),
-      discounts("b.picky", fixedOff(1_000, { kind: "order" }, notWith("shippingDiscounts"))),
-      discounts("c.plain", fixedOff(1_000, lineTarget, notWith("orderDiscounts"))),
+      discounts("b.picky", fixedOff(1_000, { kind: "order" }, notWith("shipping"))),
+      discounts("c.plain", fixedOff(1_000, lineTarget, notWith("order"))),
     ], noPlatform);
     expect(chain.applied.map((entry) => entry.pluginId)).toEqual(["a.ship", "c.plain"]);
   });
@@ -394,7 +394,7 @@ describe("discount classes and combinesWith", () => {
   it("lets a skipped code-driven discount claim no code and spend no commit", () => {
     const commit = { pluginId: "a.loyalty", object: "balance", public: false, events: false, id: "cust_1", expectedRevision: 1, dataJson: "{}", columns: {} };
     const resolution = resolve([
-      { ...discounts("a.loyalty", fixedOff(1_000, { kind: "order" }, { code: "POINTS", ...notWith("productDiscounts") })), commits: [commit] },
+      { ...discounts("a.loyalty", fixedOff(1_000, { kind: "order" }, { code: "POINTS", ...notWith("product") })), commits: [commit] },
     ], { submittedCodes: ["points"] });
     expect(resolution.applied).toEqual([]);
     expect(resolution.claimedCodes).toEqual([]);

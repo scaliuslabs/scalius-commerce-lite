@@ -24,6 +24,7 @@ import type { Context } from "hono";
 import { and, eq, isNull } from "drizzle-orm";
 import { customers } from "@scalius/database/schema";
 import {
+  CUSTOMER_PAYMENT_METHODS_LIST_LIMIT,
   captureAuthorizedPayment,
   chargeSavedPaymentMethod,
   listCustomerPaymentMethods,
@@ -40,6 +41,7 @@ import { AppError, NotFoundError } from "../../utils/api-error";
 import { created, ok } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { conflictResponse, errorResponses, namedSharedSchema, serviceUnavailableResponse, successEnvelope } from "../../schemas/responses";
+import { boundedPage, boundedPageQuery, nextCursorSchema } from "../../utils/bounded-page";
 import { readPaymentRepresentation } from "../../events/representations";
 import { requestPaymentProviders } from "../../plugins/providers/payment";
 import { claimAndApplyPaymentEventNow } from "../payment/payment-events";
@@ -74,7 +76,12 @@ const PaymentMethodResource = z.object({
   updatedAt: isoTimestamp,
 }).openapi("PaymentMethodResource");
 
-const PaymentOutcomeResource = z.object({
+/**
+ * A charge, capture or void answers the order payment (`{ payment }`, null
+ * while the provider has not answered) with the attempt's outcome beside it
+ * (audit L1: a write answers its resource).
+ */
+const paymentOutcomeSchema = z.object({
   outcome: z.enum(["succeeded", "authorized", "pending", "voided"]).openapi({
     description: "`succeeded`: captured and credited to the order. `authorized`: held, capture it with payments.capture. `pending`: the provider answers later by webhook; read the order. `voided`: the hold was released.",
   }),
@@ -84,7 +91,7 @@ const PaymentOutcomeResource = z.object({
   currency: z.string().length(3),
   payment: PaymentResource.nullable().openapi({ description: "The order payment, once the provider's answer landed." }),
   replayed: z.boolean().openapi({ description: "True when this answers a request already handled (the same Idempotency-Key, or an authorization already settled)." }),
-}).openapi("PaymentOutcomeResource");
+});
 
 function methodResource(method: CustomerPaymentMethodView): z.infer<typeof PaymentMethodResource> {
   return {
@@ -165,9 +172,9 @@ app.openapi(createRoute({
   tags: ["App API - Payments"],
   summary: "List a customer's saved payment methods",
   description: "The customer's active payment methods kept by their providers (a card or wallet saved with a subscription's first payment), oldest first, at most 50. An app sees only the methods kept for its own purchase options. The provider's own reference never leaves the store.",
-  request: { query: z.object({ customerId: z.string().min(1).max(128) }) },
+  request: { query: z.object({ customerId: z.string().min(1).max(128), ...boundedPageQuery(CUSTOMER_PAYMENT_METHODS_LIST_LIMIT) }) },
   responses: {
-    200: { description: "The saved methods", content: { "application/json": { schema: successEnvelope(z.object({ paymentMethods: z.array(PaymentMethodResource) })) } } },
+    200: { description: "The saved methods, oldest first", content: { "application/json": { schema: successEnvelope(z.object({ paymentMethods: z.array(PaymentMethodResource), nextCursor: nextCursorSchema })) } } },
     ...errorResponses,
   },
 }), async (c) => {
@@ -175,7 +182,15 @@ app.openapi(createRoute({
   const { customerId } = c.req.valid("query");
   const customer = await db.select({ id: customers.id }).from(customers).where(and(eq(customers.id, customerId), isNull(customers.deletedAt))).get();
   if (!customer) throw new NotFoundError("Customer not found");
-  return ok(c, { paymentMethods: (await listCustomerPaymentMethods(db, customerId, actorOf(c))).map(methodResource) });
+  const query = c.req.valid("query");
+  const page = boundedPage((await listCustomerPaymentMethods(db, customerId, actorOf(c))).map(methodResource), {
+    name: "payment_methods",
+    cursor: query.cursor,
+    limit: query.limit,
+    id: (method) => method.id,
+    sort: { kind: "text", value: (method) => method.createdAt },
+  });
+  return ok(c, { paymentMethods: page.items, nextCursor: page.nextCursor });
 });
 
 app.openapi(createRoute({
@@ -207,7 +222,7 @@ const chargeBody = z.object({
   capture: z.enum(["automatic", "manual"]).default("automatic").openapi({
     description: "`manual` only authorizes (money held): capture it with payments.capture or release it with payments.void. Needs a provider that authorizes.",
   }),
-  expectedVersion: z.number().int().min(1).optional().openapi({ description: "The order `version` you read; a different one is refused with 409 before the provider is called." }),
+  expectedRevision: z.number().int().min(1).optional().openapi({ description: "The order `revision` you read; a different one is refused with 409 before the provider is called." }),
 }).strict();
 
 app.openapi(createRoute({
@@ -223,7 +238,7 @@ app.openapi(createRoute({
     body: { required: true, content: { "application/json": { schema: chargeBody } } },
   },
   responses: {
-    201: { description: "The outcome", content: { "application/json": { schema: successEnvelope(PaymentOutcomeResource) } } },
+    201: { description: "The outcome", content: { "application/json": { schema: successEnvelope(paymentOutcomeSchema) } } },
     ...writeResponses,
   },
 }), async (c) => {
@@ -234,7 +249,7 @@ app.openapi(createRoute({
     actor: actorOf(c),
     ...(body.amountMinor !== undefined ? { amountMinor: body.amountMinor } : {}),
     capture: body.capture,
-    ...(body.expectedVersion !== undefined ? { expectedVersion: body.expectedVersion } : {}),
+    ...(body.expectedRevision !== undefined ? { expectedVersion: body.expectedRevision } : {}),
     requestKey: await scopedRequestKey(c, "dashboard.resources.payments.charge", c.req.valid("header")["idempotency-key"]),
     ...deps(c),
   });
@@ -252,7 +267,7 @@ app.openapi(createRoute({
   description: "Captures an authorization in full: the payment becomes `succeeded` and is credited to its order (`payment.updated`, `order.paid` once nothing is due). One capture per authorization whatever the key: a repeat answers the first outcome. Send an Idempotency-Key.",
   request: { params: paymentIdParam, headers: requiredKeyHeaders },
   responses: {
-    200: { description: "The outcome", content: { "application/json": { schema: successEnvelope(PaymentOutcomeResource) } } },
+    200: { description: "The outcome", content: { "application/json": { schema: successEnvelope(paymentOutcomeSchema) } } },
     ...writeResponses,
   },
 }), async (c) => {
@@ -269,7 +284,7 @@ app.openapi(createRoute({
   description: "Releases an authorization at its provider: the payment becomes `cancelled` (`payment.updated`) and the order stays unpaid. A captured payment is refunded instead. Send an Idempotency-Key.",
   request: { params: paymentIdParam, headers: requiredKeyHeaders },
   responses: {
-    200: { description: "The outcome", content: { "application/json": { schema: successEnvelope(PaymentOutcomeResource) } } },
+    200: { description: "The outcome", content: { "application/json": { schema: successEnvelope(paymentOutcomeSchema) } } },
     ...writeResponses,
   },
 }), async (c) => {

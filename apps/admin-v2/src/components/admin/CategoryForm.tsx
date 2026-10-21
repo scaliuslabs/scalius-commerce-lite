@@ -53,6 +53,8 @@ interface CategoryFormProps {
 }
 
 type CategoryInput = Omit<ApiBody<typeof putApiV1AdminCategoriesById>, "expectedRevision" | "status">;
+/** A category write's answer: the category as saved. */
+type SavedCategory = ApiResult<typeof putApiV1AdminCategoriesById>["category"];
 function toCategoryInput(values: CategoryFormValues): CategoryInput {
   const { image } = values;
   return {
@@ -113,9 +115,9 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
     isEdit,
     entityId: defaultValues?.id,
     // An empty address is made from the name on the server, with a number added if it is taken.
-    createFn: (data) => apiData(postApiV1AdminCategories({
+    createFn: async (data) => (await apiData(postApiV1AdminCategories({
       body: { status: data.status, ...toCategoryInput(data), slug: data.slug || undefined },
-    })),
+    }))).category,
     updateFn: (data) => {
       if (!data.revision || !Number.isInteger(data.revision) || data.revision < 1) {
         throw new Error(t("reloadToSave"));
@@ -123,7 +125,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
       return apiData(putApiV1AdminCategoriesById({
         path: { id: data.id },
         body: { expectedRevision: data.revision, status: data.status, ...toCategoryInput(data) },
-      }));
+      })).then(({ category }) => category);
     },
     invalidateKeys: [
       queryKeys.categories.list(),
@@ -133,8 +135,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
       ...(isEdit && defaultValues?.id ? [queryKeys.categories.detail(defaultValues.id)] : []),
     ],
     onSuccess: (result) => {
-      const mutation = result as ApiResult<typeof putApiV1AdminCategoriesById> &
-        Partial<ApiResult<typeof postApiV1AdminCategories>>;
+      const mutation = result as Partial<SavedCategory>;
       if (!isEdit && mutation.id) {
         void navigate({
           to: "/admin/categories/$categoryId/edit",
@@ -179,8 +180,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
       form={form}
       onSave={submitEntity}
       savedValues={(result) => {
-        const saved = result as ApiResult<typeof putApiV1AdminCategoriesById> &
-          Partial<ApiResult<typeof postApiV1AdminCategories>>;
+        const saved = result as Partial<SavedCategory>;
         return { ...(saved.id ? { id: saved.id } : {}), revision: saved.revision, status: saved.status };
       }}
       reload={isEdit && defaultValues?.id ? async () => {

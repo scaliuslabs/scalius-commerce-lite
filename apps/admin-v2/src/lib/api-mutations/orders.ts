@@ -383,7 +383,7 @@ export function useMarkOrderDelivered() {
   const queryClient = useQueryClient();
   return useSingleFlightMutation({
     mutationFn: ({ orderId }: { orderId: string }) =>
-      apiData(postApiV1AdminOrdersByIdMarkDelivered({ path: { id: orderId } })),
+      apiData(postApiV1AdminOrdersByIdMarkDelivered({ path: { id: orderId }, body: {} })),
     onSuccess: (_data, variables) => {
       invalidateOrder(queryClient, variables.orderId);
       toast.success(msg("toast.status.delivered"));
