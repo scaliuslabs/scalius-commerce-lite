@@ -9,6 +9,7 @@ import { ltr } from "@/lib/bidi";
 import { mediaImageUrl } from "@/lib/media-url";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { storefrontCopy } from "@/lib/storefront-copy";
+import { formatCount } from "@/lib/store-time-zone";
 
 interface Props {
   model: FooterModel;
@@ -77,7 +78,7 @@ const copy = storefrontCopy(language).chrome;
               {compact && (
                 <details class="directory-more">
                   <summary>
-                    <span class="when-closed">{copy.footer.showMoreLinks(more.length, menu.title)}</span>
+                    <span class="when-closed">{copy.footer.showMoreLinks(formatCount(more.length), menu.title)}</span>
                     <span class="when-open">{copy.footer.hideExtraLinks(menu.title)}</span>
                   </summary>
                   <ul>

@@ -75,10 +75,10 @@ export interface ChromeCopy {
     trackOrder: string;
     backToTop: string;
     call: (phone: string) => string;
-    showMoreLinks: (count: number, title: string) => string;
+    showMoreLinks: (count: string, title: string) => string;
     hideExtraLinks: (title: string) => string;
-    rights: (year: number, name: string) => string;
-    rightsNoName: (year: number) => string;
+    rights: (year: string, name: string) => string;
+    rightsNoName: (year: string) => string;
     social: string;
   };
 }

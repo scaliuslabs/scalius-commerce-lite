@@ -14,6 +14,7 @@ import {
   getPriceIncrementMinor,
 } from "@/lib/currency";
 import { isVariantAvailable } from "@/lib/product-sellable-variants";
+import { formatCount } from "@/lib/store-time-zone";
 import {
   discountedPriceMinor,
   fromMinor,
@@ -180,7 +181,7 @@ export function formatPrice(price: number, currencySymbol?: string): string {
 export function formatDiscountBadge(originalPrice: number, finalPrice: number): string | null {
   if (!(originalPrice > 0) || !(finalPrice < originalPrice)) return null;
   const percent = Math.floor(((originalPrice - Math.max(finalPrice, 0)) / originalPrice) * 100);
-  return `-${Math.max(1, percent)}%`;
+  return `-${formatCount(Math.max(1, percent))}%`;
 }
 
 /** Final price of one SKU; see `calculateVariantPrice`. */

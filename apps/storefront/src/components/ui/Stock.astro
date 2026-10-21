@@ -4,6 +4,7 @@
 // decorative (the words say it); the words are ink, or muted when sold out.
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { storefrontCopy } from "@/lib/storefront-copy";
+import { formatCount } from "@/lib/store-time-zone";
 
 interface Props {
   state: "in-stock" | "low" | "sold-out" | "pre-order";
@@ -18,7 +19,7 @@ const { language } = await currentRequestTheme(Astro.locals);
 const copy = storefrontCopy(language).stock;
 const text = state === "in-stock"
   ? copy.inStock
-  : state === "low" ? copy.low(Math.max(1, Math.floor(count)))
+  : state === "low" ? copy.low(formatCount(Math.max(1, Math.floor(count))))
   : state === "sold-out" ? copy.soldOut : copy.preOrder;
 ---
 

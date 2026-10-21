@@ -16,6 +16,7 @@ import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { buildStorefrontThemeTokens } from "@scalius/shared/storefront-theme";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { storefrontCopy } from "@/lib/storefront-copy";
+import { formatCount } from "@/lib/store-time-zone";
 import {
   listingFilterColumnPx,
   productCardImageMaxCssWidth,
@@ -113,12 +114,14 @@ const model = productCardModel(product, {
 });
 const { facts } = model;
 const TitleTag = headingLevel;
-const details = [facts.packSize, model.condition].filter(Boolean).join(" · ");
+const condition = product.productCondition ? copy.condition[product.productCondition] : null;
+const details = [facts.packSize, condition].filter(Boolean).join(" · ");
 const keySpecs = card.facts === "key-specs" ? facts.keySpecs : [];
 const swatches = card.facts === "swatches" ? facts.swatches : { items: [], more: 0 };
 const delivery = card.facts === "delivery" ? facts.delivery : null;
+const moreSwatches = formatCount(swatches.more);
 const swatchWords = swatches.items.length > 0
-  ? copy.colours([...swatches.items.map((swatch) => swatch.label), ...(swatches.more > 0 ? [copy.moreColours(swatches.more)] : [])].join(", "))
+  ? copy.colours([...swatches.items.map((swatch) => swatch.label), ...(swatches.more > 0 ? [copy.moreColours(moreSwatches, swatches.more)] : [])].join(", "))
   : "";
 // Apps' card slots (`product_card.badges`, `.meta`): ProductCard fills the named slots when an app targets them.
 const appBadges = Astro.props.appBadges === true;
@@ -166,7 +169,7 @@ const appBadges = Astro.props.appBadges === true;
     {swatches.items.length > 0 && (
       <p class="product-card-swatches" data-card-fact="swatches">
         {swatches.items.map((swatch) => <span class="product-card-swatch" style={`--swatch:${swatch.colour}`} aria-hidden="true"></span>)}
-        {swatches.more > 0 && <span class="product-card-swatch-more" aria-hidden="true">+{swatches.more}</span>}
+        {swatches.more > 0 && <span class="product-card-swatch-more" aria-hidden="true">+{moreSwatches}</span>}
         <span class="sr-only">{swatchWords}</span>
       </p>
     )}

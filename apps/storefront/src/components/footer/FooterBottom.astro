@@ -7,6 +7,7 @@ import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 import { TRACK_ORDER_PATH } from "@/lib/footer-links";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { storefrontCopy } from "@/lib/storefront-copy";
+import { formatPageYear } from "@/lib/store-time-zone";
 import { socialGlyph, socialGlyphMarkup } from "./social-icons";
 import type { FooterModel } from "./footer-model";
 
@@ -20,7 +21,7 @@ const { model, showPolicies = true, marketplace = false } = Astro.props;
 const { policyLinks, copyrightName, trackOrderInBottomRow, social } = model;
 const { language } = await currentRequestTheme(Astro.locals);
 const copy = storefrontCopy(language).chrome;
-const year = new Date().getFullYear();
+const year = formatPageYear(new Date().getFullYear(), language);
 const rights = copyrightName ? copy.footer.rights(year, copyrightName) : copy.footer.rightsNoName(year);
 ---
 

@@ -65,6 +65,11 @@ export function formatPageNumber(value: number, language: string): string {
   return formatNumber(value, numberLocale(language || "en", storeRegion()));
 }
 
+/** A calendar year in the page's digits, never grouped ("২০২৬", not "২,০২৬"). */
+export function formatPageYear(year: number, language: string): string {
+  return formatNumber(year, numberLocale(language || "en", storeRegion()), { useGrouping: false });
+}
+
 /** A buyer-facing instant in store time, in the page's language ("Oct 7, 2026, 3:42 PM"; Bangla on the 24-hour clock). */
 export function formatStoreDateTime(
   value: Date | number,
