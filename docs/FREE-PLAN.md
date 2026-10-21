@@ -33,6 +33,7 @@ Code reads values from the profile and never branches on the plan name. Paid val
 | Each sweep's row limit | 20% | 100% |
 | List total counted up to (`countCap`) | 1,000 | 10,000 |
 | Deepest numbered page (`maxOffset`) | 1,000 rows | 10,000 rows |
+| Products a narrowed listing counts its facets over (`facetLiveProducts`) | 300 | 5,000 |
 
 The profile also sets the bulk page, the products refreshed after a catalogue write, the nightly sold-products refresh, the catalogue rebuild and band-refresh chunks, the nightly projection drift window and the backfill image limit.
 
@@ -71,7 +72,7 @@ The daily quota model charges each order with a 3-line checkout, its notificatio
 
 Every deploy empties the public cache (each key carries the Worker version), so a crawler then misses every page. Free's 5M rows read a day must pay for at least 200 cold misses of each storefront read: a miss may read at most 25,000 D1 rows. `scripts/scale-proof.mjs` fails a run whose D1 read is over that (`FREE_MISS_ROWS_CEILING`) and prints the reads that are, with their misses a day.
 
-At 50,000 products and 156,244 SKUs (SCALE.md, 2026-10-14) three reads are over it: product page without a stored recommendation list (118,253 rows, 42 misses a day; audit R2 B1), all products by newest (183,735, 27; A9) and search (52,134, 95; A9). Home (908), category page 1 (10,210) and a feed page (12,655) fit. Until those reads are bounded, Free supports a catalogue of up to 10,000 SKUs. That figure scales the 156k-SKU reads linearly and is unverified until a scale proof runs at that size; Paid has no such ceiling.
+At 50,000 products and 156,244 SKUs with 1,000,000 orders (SCALE.md, 2026-10-21) every read the proof measures fits: home 907 rows, product page 8,677, category page 1 10,014 and page 40 8,261, all products by newest 15,579, search 14,415 and a feed page 12,786. They are bounded by the page, the scope's categories and the facet vocabulary, not by the number of products (SCALE.md, finding 2). Known limits on Free: a narrowed listing (a filter or a search) counts its attribute and option facets live only up to 300 products (`facetLiveProducts`; past that a category or brand shows its own counts and a search its brand, category and rating facets), a category subtree of many large categories reads its categories' facet rows (a 6,400-product root of the seed: about 28,000 rows), and a deep numbered page reads its offset.
 
 ## Rules by area
 
