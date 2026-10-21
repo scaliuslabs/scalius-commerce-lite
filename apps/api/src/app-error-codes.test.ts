@@ -23,7 +23,7 @@ const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 /** Where a literal becomes an error code. */
 const PRODUCERS = [
   /\bnew [A-Z]\w*Error\(\s*\d{3}\s*,\s*["']([a-z][a-z0-9_]*)["']/g,
-  /\b(?:refusal|jsonError)\(\s*\d{3}\s*,\s*["']([a-z][a-z0-9_]*)["']/g,
+  /\b(?:refusal|jsonError|refuse)\(\s*\d{3}\s*,\s*["']([a-z][a-z0-9_]*)["']/g,
   /\bnew (?:PluginError|ObjectError|PluginPlatformError)\(\s*["']([a-z][a-z0-9_]*)["']/g,
   /\b(?:fail|refuse)\(\s*["']([a-z][a-z0-9_]*)["']\s*,/g,
   /\berror:\s*\{\s*code:\s*["']([a-z][a-z0-9_]*)["']/g,

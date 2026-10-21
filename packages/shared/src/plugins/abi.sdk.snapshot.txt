@@ -2745,6 +2745,7 @@ export interface StorefrontProductState {
     variantId: string | null;
     quantity: number;
     inputs: Record<string, string>;
+    purchaseOption?: string | null;
 }
 export interface StorefrontListingPage {
     kind: "category" | "collection" | "brand" | "search";
@@ -3133,6 +3134,11 @@ export interface StorefrontIslandContext {
     }): string;
     openCart(): void;
     quickAdd(productUrl: string): Promise<boolean>;
+    addLine?(line: {
+        variantId: string;
+        quantity?: number;
+        purchaseOption?: string;
+    }): Promise<boolean>;
     onCart(listener: (cart: {
         count: number;
         total: StorefrontMoney;

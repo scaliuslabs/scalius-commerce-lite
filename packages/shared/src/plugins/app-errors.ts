@@ -54,6 +54,7 @@ export const APP_ERROR_CODES = {
   idempotency_key_invalid: { status: 400, meaning: "The Idempotency-Key is not 8 to 200 printable characters." },
   idempotency_key_reused: { status: 422, meaning: "The key was used for a different request; use a new key." },
   idempotency_in_progress: { status: 409, meaning: "The first request with this key is still running; retry shortly." },
+  idempotency_outcome_unknown: { status: 409, meaning: "A first request with this key may have committed before its answer was lost; read to check, and repeat with a new key only if it is missing." },
   idempotency_secret_not_replayed: { status: 409, meaning: "The first response carried a one-time secret, which is never replayed." },
 
   // ── Revisions and states (409: read the resource again, then retry) ──

@@ -15018,6 +15018,10 @@
    "status": 409,
    "meaning": "The first request with this key is still running; retry shortly."
   },
+  "idempotency_outcome_unknown": {
+   "status": 409,
+   "meaning": "A first request with this key may have committed before its answer was lost; read to check, and repeat with a new key only if it is missing."
+  },
   "idempotency_secret_not_replayed": {
    "status": 409,
    "meaning": "The first response carried a one-time secret, which is never replayed."

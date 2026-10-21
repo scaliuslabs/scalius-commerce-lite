@@ -425,6 +425,9 @@ describe("the stable contract's shapes", () => {
     const published = await call("PUT", "/products/p_tea/publications", { body: { channelIds: [] } });
     expect(published.status).toBe(200);
     expect(published.body.data).toEqual({ product: expect.objectContaining({ id: "p_tea" }), salesChannelIds: [] });
+  });
+});
+
 describe("a Worker that dies after the write commits and before its response is kept", () => {
   /** Puts every kept response back to the claim its run left: the write committed, the response did not. */
   function loseResponses(leaseUntil: number | null) {
@@ -475,7 +478,7 @@ describe("a Worker that dies after the write commits and before its response is 
     const recovered = await call("POST", "/inventory/v_tea/adjust", { body, headers });
     expect(recovered.status).toBe(200);
     expect(recovered.replayed).toBeNull();
-    expect((await call("GET", "/resources/variants/v_tea")).body.data).toMatchObject({ onHand: 105 });
+    expect((await call("GET", "/resources/variants/v_tea")).body.data.variant).toMatchObject({ onHand: 105 });
   });
 
   it("never creates twice: a create without a key of its own answers outcome unknown", async () => {
