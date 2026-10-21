@@ -70,7 +70,7 @@ Additions to the sealed contract (all additive; the snapshots were updated and r
 
 The contract seal (2026-10-21) fixed the app API's shape before the first release; breaks made then are recorded in `abi.breaks.json` and `stable-operations.breaks.json`:
 
-- Apps name operations by resource and verb (`orders.get`, `products.create`); every error code is lower_snake; stable lists page by `cursor` and `nextCursor`; every stable instant is an ISO 8601 string; `StorefrontMoney` is `{ amountMinor, currency, formatted }`; core storefront names are snake_case (theme document v12); buyer UI is a storefront extension, not a checkout function; one lane per capability (`ctx.timeline`, `ctx.customFields`).
+- Apps name operations by resource and verb from one sealed table (`STABLE_APP_OPERATIONS`: `orders.get`, `fulfillments.void`); every app-facing error code is in the sealed `APP_ERROR_CODES` table with its status; a single resource answers `{ <singular>: Resource }`, every write takes `expectedRevision`, every address is `PostalAddress` (place ids under `placeIds`) and resource states are sealed enums; stable lists page by `cursor` and answer `{ <plural>, nextCursor }`; every stable instant is an ISO 8601 string; `StorefrontMoney` is `{ amountMinor, currency, formatted }`; core storefront names are snake_case (theme document v12); buyer UI is a storefront extension, not a checkout function; one lane per capability (`ctx.timeline`, `ctx.customFields`).
 
 Additive since then (the stable app API is 144 operations):
 
