@@ -202,7 +202,7 @@ export function ThemeHistory({ open, onOpenChange, draft, liveRevision, previewR
   const restorePoints = points.data?.restorePoints ?? [];
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="flex flex-col">
+      <SheetContent side="right" bar="editor" className="flex flex-col">
         <SheetHeader>
           <SheetTitle>{t("versions")}</SheetTitle>
           <SheetDescription>{retained ? t("versionsHelp", { count: retained }) : t("versionsHelpShort")}</SheetDescription>

@@ -568,16 +568,6 @@ html:lang(bn) {
 body:has([data-leave-guard][data-state="open"]) [data-save-bar] {
   animation: save-bar-shake 320ms ease-in-out;
 }
-
-/* The top bar's height: side sheets and their backdrop open under it (DESIGN Overlays). */
-:root {
-  --app-bar-height: 3.5rem;
-}
-
-:root:has([data-theme-editor]) {
-  --app-bar-height: 3rem;
-}
-
 body:has([data-leave-guard][data-state="open"]) [data-save-bar]::after {
   animation: save-bar-flash-again 700ms ease-out;
 }

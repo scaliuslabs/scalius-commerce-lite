@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useMatch, useNavigate } from "@tanstack/react-router";
 import { toast } from "~/lib/toast";
-import { ExternalLink, ShoppingCart, Trash2 } from "lucide-react";
+import { ExternalLink, ShoppingBag, Trash2 } from "lucide-react";
 import { deleteApiV1AdminAbandonedCheckouts } from "@scalius/api-client/sdk";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { getStoreRegion } from "~/lib/store-time-zone";
@@ -457,7 +457,7 @@ export function AbandonedCheckoutList({
   return (
     <>
       {nothingYet ? (
-        <EmptyState card={false} icon={ShoppingCart} title={t("abandonedEmptyTitle")} description={t("abandonedEmptyBody")} />
+        <EmptyState card={false} icon={ShoppingBag} title={t("abandonedEmptyTitle")} description={t("abandonedEmptyBody")} />
       ) : (
       <DataTable
         variant="bare"

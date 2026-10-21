@@ -3,9 +3,8 @@ import * as SheetPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 
 import { cn } from "@scalius/shared/utils";
-import { useMessages } from "~/i18n";
-import { resourceMessages } from "~/i18n/resource";
-import { ModalInertBackground } from "./overlay";
+// Only through ./dialog, as before: new direct edges split shared chunks out of every route's download.
+import { CloseLabel, ModalInertBackground } from "./dialog";
 
 const Sheet = SheetPrimitive.Root;
 
@@ -14,14 +13,15 @@ const SheetTrigger = SheetPrimitive.Trigger;
 const SheetClose = SheetPrimitive.Close;
 
 /**
- * Side sheets open under the shell's top bar (`--app-bar-height`, global.css),
- * and so does their backdrop: overlays never cover the top bar (DESIGN Overlays).
+ * Side sheets and their backdrop open under the top bar: overlays never cover
+ * it (DESIGN Overlays). The dashboard's bar is 56px; the theme editor's is 48px.
  */
-const sheetOverlayClassName =
-  "fixed inset-x-0 bottom-0 top-(--app-bar-height) z-50 bg-overlay data-[state=closed]:pointer-events-none data-[state=closed]:invisible";
+const BAR_TOP = { app: "top-14", editor: "top-12" } as const;
 
 interface SheetContentProps extends React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content> {
   side?: "left" | "right";
+  /** Whose top bar the sheet opens under. */
+  bar?: keyof typeof BAR_TOP;
 }
 
 /**
@@ -30,14 +30,15 @@ interface SheetContentProps extends React.ComponentPropsWithoutRef<typeof SheetP
  * body (`min-h-0 flex-1 overflow-y-auto`) and an optional `SheetFooter`.
  */
 const SheetContent = React.forwardRef<React.ComponentRef<typeof SheetPrimitive.Content>, SheetContentProps>(
-  ({ side = "right", className, children, ...props }, ref) => (
+  ({ side = "right", bar = "app", className, children, ...props }, ref) => (
     <SheetPrimitive.Portal>
-      <SheetPrimitive.Overlay className={sheetOverlayClassName} />
+      <SheetPrimitive.Overlay className={cn("fixed inset-x-0 bottom-0 z-50 bg-overlay data-[state=closed]:pointer-events-none data-[state=closed]:invisible", BAR_TOP[bar])} />
       <SheetPrimitive.Content
         ref={ref}
         data-slot="sheet-content"
         className={cn(
-          "fixed bottom-0 top-(--app-bar-height) z-50 w-full bg-card text-card-foreground shadow-modal focus:outline-none data-[state=closed]:pointer-events-none data-[state=closed]:invisible sm:max-w-md",
+          "fixed bottom-0 z-50 w-full bg-card text-card-foreground shadow-modal focus:outline-none data-[state=closed]:pointer-events-none data-[state=closed]:invisible sm:max-w-md",
+          BAR_TOP[bar],
           side === "right" ? "inset-e-0" : "inset-s-0",
           className,
         )}
@@ -61,7 +62,6 @@ interface SheetHeaderProps extends React.HTMLAttributes<HTMLDivElement> {
  * the one close button on the title line at the end. Every sheet closes the same way.
  */
 const SheetHeader = ({ className, children, closeDisabled, ...props }: SheetHeaderProps) => {
-  const t = useMessages(resourceMessages);
   return (
     <div data-slot="sheet-header" className={cn("flex shrink-0 items-start gap-2 border-b p-4", className)} {...props}>
       <div className="flex min-w-0 flex-1 flex-col gap-1 text-start">{children}</div>
@@ -71,7 +71,7 @@ const SheetHeader = ({ className, children, closeDisabled, ...props }: SheetHead
           className="-me-2 flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground active:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 sm:size-8"
         >
           <X className="size-4" aria-hidden />
-          <span className="sr-only">{t("close")}</span>
+          <CloseLabel />
         </SheetPrimitive.Close>
       </div>
     </div>

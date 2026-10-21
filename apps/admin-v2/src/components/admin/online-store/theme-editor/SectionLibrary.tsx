@@ -187,7 +187,7 @@ export function SectionLibrary({ open, onOpenChange, theme, options, apps, previ
   const categories: Category[] = ["all", "banners", "products", "text", ...(entries.some((entry) => entry.category === "apps") ? ["apps" as const] : [])];
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="left" className="flex flex-col sm:max-w-6xl" data-section-library>
+      <SheetContent side="left" bar="editor" className="flex flex-col sm:max-w-6xl" data-section-library>
         <SheetHeader>
           <SheetTitle>{t("libraryTitle")}</SheetTitle>
           <SheetDescription>{t("libraryHelp")}</SheetDescription>

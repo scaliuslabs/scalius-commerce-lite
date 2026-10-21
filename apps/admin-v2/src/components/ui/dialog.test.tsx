@@ -157,7 +157,7 @@ describe("modal top anchor", () => {
     expect(top()).toBe("max(4rem, -50px)");
     // The cap stops 1rem above the bottom edge, measured from the pinned top
     // (on phones, from under the top bar: a bottom sheet never covers it).
-    expect(panel()?.className).toContain("max-h-[calc(100dvh-var(--dialog-top,var(--app-bar-height))-1rem)]");
+    expect(panel()?.className).toContain("max-h-[calc(100dvh-var(--dialog-top,3.5rem)-1rem)]");
     expect(panel()?.className).toContain("overflow-y-auto");
   });
 

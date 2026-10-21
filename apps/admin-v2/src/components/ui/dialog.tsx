@@ -25,7 +25,7 @@ export const overlayClassName =
  * sets its own `max-h` replaces it.
  */
 export const modalClassName =
-  "fixed inset-x-0 bottom-0 z-50 grid max-h-[calc(100dvh-var(--dialog-top,var(--app-bar-height))-1rem)] w-full gap-4 overflow-y-auto rounded-t-2xl bg-card p-5 max-sm:pb-safe text-card-foreground shadow-modal data-[state=closed]:pointer-events-none data-[state=closed]:invisible sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:data-anchored:top-(--dialog-top) sm:data-anchored:translate-y-0";
+  "fixed inset-x-0 bottom-0 z-50 grid max-h-[calc(100dvh-var(--dialog-top,3.5rem)-1rem)] w-full gap-4 overflow-y-auto rounded-t-2xl bg-card p-5 max-sm:pb-safe text-card-foreground shadow-modal data-[state=closed]:pointer-events-none data-[state=closed]:invisible sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:data-anchored:top-(--dialog-top) sm:data-anchored:translate-y-0";
 
 /** Tailwind's `sm` breakpoint: from here a modal is centred, below it a bottom sheet. */
 const CENTRED_MODAL = "(min-width: 40rem)";
@@ -106,8 +106,8 @@ export function useModalTopAnchor<T extends HTMLElement>(forwardedRef: React.For
 const paletteClassName =
   "fixed inset-x-0 top-0 z-50 grid max-h-[calc(100dvh-1rem)] w-full overflow-hidden rounded-b-2xl bg-card text-card-foreground shadow-modal data-[state=closed]:pointer-events-none data-[state=closed]:invisible sm:inset-x-auto sm:left-1/2 sm:top-2.5 sm:max-w-160 sm:-translate-x-1/2 sm:rounded-xl";
 
-/** The close button's name in the dashboard language. */
-function CloseLabel() {
+/** The close button's name in the dashboard language (also the sheet header's). */
+export function CloseLabel() {
   const t = useMessages(resourceMessages);
   return <span className="sr-only">{t("close")}</span>;
 }
@@ -196,3 +196,5 @@ const DialogDescription = React.forwardRef<
 DialogDescription.displayName = DialogPrimitive.Description.displayName;
 
 export { Dialog, DialogTrigger, DialogClose, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription };
+// The sheet reuses the modal's pieces through this module only, so both stay in one chunk.
+export { ModalInertBackground };
