@@ -6373,7 +6373,7 @@ export const getApiV1AdminProducts = <ThrowOnError extends boolean = false>(opti
 /**
  * Create a product
  *
- * Create the complete product atomically. Discover categoryId with dashboard.categories.form_options and attributeId with dashboard.attributes.list_summaries. Media must first be committed through dashboard.media.upload_initiate, upload_part, and upload_complete. Product-media IDs (pmed_*) are caller-local association IDs; option/value/variant draft IDs only correlate this request. Each variant selectedOptionValueIds must follow option order, and variant imageId references a pmed_* association rather than a media_* asset.
+ * Create the complete product atomically. Discover categoryId with dashboard.categories.form_options and attributeId with dashboard.attributes.list_summaries. Media must first be committed through dashboard.media.upload_initiate, upload_part, and upload_complete (or `scalius media upload`). Each media[] item names its file by mediaId, the id the upload returns; its attachment id (pmed_*) is optional and only needed when a variant's imageId names that image (variant imageId is the pmed_* id, never the media file's id); without isPrimary the first item is featured. Option/value/variant draft IDs only correlate this request. Each variant selectedOptionValueIds must follow option order.
  */
 export const postApiV1AdminProducts = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminProductsData, ThrowOnError>): RequestResult<PostApiV1AdminProductsResponses, PostApiV1AdminProductsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminProductsResponses, PostApiV1AdminProductsErrors, ThrowOnError>({
     url: '/api/v1/admin/products',

@@ -61576,11 +61576,20 @@ export type PostApiV1AdminProductsData = {
          * Omit to derive the web address from the name; a taken one gets a -2, -3… suffix.
          */
         slug?: string;
-        media: Array<{
-            id: string;
+        media?: Array<{
+            /**
+             * Optional pmed_ id of your choosing, for a SKU's imageId to name this attachment. Omit it and one is made.
+             */
+            id?: string;
+            /**
+             * The media file's id: the id a media upload or URL import returns.
+             */
             mediaId: string;
-            altText: string | null;
-            isPrimary: boolean;
+            altText?: string | null;
+            /**
+             * The featured image. Omit on every item and the first is featured.
+             */
+            isPrimary?: boolean;
         }>;
         attributes?: Array<{
             attributeId: string;
@@ -62788,6 +62797,9 @@ export type PatchApiV1AdminProductsByIdSectionsBySectionData = {
         expectedAggregateRevision: number;
         media: Array<{
             id: string;
+            /**
+             * The media file's id: the id a media upload or URL import returns.
+             */
             mediaId: string;
             altText: string | null;
             isPrimary: boolean;
@@ -63177,6 +63189,9 @@ export type PutApiV1AdminProductsByIdData = {
         slug: string;
         media: Array<{
             id: string;
+            /**
+             * The media file's id: the id a media upload or URL import returns.
+             */
             mediaId: string;
             altText: string | null;
             isPrimary: boolean;

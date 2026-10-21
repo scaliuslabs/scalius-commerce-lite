@@ -6,6 +6,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { errorResponseFromError, logApiError } from "../utils/api-response";
 import { RateLimitError } from "../utils/api-error";
+import { requestValidationErrorMiddleware } from "../utils/request-validation-error";
 import { withTrackedPlatformEnv } from "./runtime-env";
 import { withStoreTimeZone } from "@scalius/core/utils/store-time-zone";
 import { eventDispatchMiddleware } from "../middleware/event-dispatch";
@@ -130,6 +131,9 @@ function configureApiApp(app: Hono<{ Bindings: Env }>): void {
     await next();
   });
 
+  // Innermost: a route's raw request-schema refusal becomes the ErrorResponse
+  // (validation_error, the field and what it expects) before the headers above.
+  app.use("*", requestValidationErrorMiddleware);
 }
 
 /**

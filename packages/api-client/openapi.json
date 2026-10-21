@@ -219465,7 +219465,7 @@
           "Admin - Products"
         ],
         "summary": "Create a product",
-        "description": "Create the complete product atomically. Discover categoryId with dashboard.categories.form_options and attributeId with dashboard.attributes.list_summaries. Media must first be committed through dashboard.media.upload_initiate, upload_part, and upload_complete. Product-media IDs (pmed_*) are caller-local association IDs; option/value/variant draft IDs only correlate this request. Each variant selectedOptionValueIds must follow option order, and variant imageId references a pmed_* association rather than a media_* asset.",
+        "description": "Create the complete product atomically. Discover categoryId with dashboard.categories.form_options and attributeId with dashboard.attributes.list_summaries. Media must first be committed through dashboard.media.upload_initiate, upload_part, and upload_complete (or `scalius media upload`). Each media[] item names its file by mediaId, the id the upload returns; its attachment id (pmed_*) is optional and only needed when a variant's imageId names that image (variant imageId is the pmed_* id, never the media file's id); without isPrimary the first item is featured. Option/value/variant draft IDs only correlate this request. Each variant selectedOptionValueIds must follow option order.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -219565,13 +219565,15 @@
                           "type": "string",
                           "minLength": 10,
                           "maxLength": 80,
-                          "pattern": "^pmed_[A-Za-z0-9_-]+$"
+                          "pattern": "^pmed_[A-Za-z0-9_-]+$",
+                          "description": "Optional pmed_ id of your choosing, for a SKU's imageId to name this attachment. Omit it and one is made."
                         },
                         "mediaId": {
                           "type": "string",
                           "minLength": 8,
                           "maxLength": 160,
-                          "pattern": "^[A-Za-z0-9_-]+$"
+                          "pattern": "^[A-Za-z0-9_-]+$",
+                          "description": "The media file's id: the id a media upload or URL import returns."
                         },
                         "altText": {
                           "type": "string",
@@ -219579,17 +219581,16 @@
                           "maxLength": 500
                         },
                         "isPrimary": {
-                          "type": "boolean"
+                          "type": "boolean",
+                          "description": "The featured image. Omit on every item and the first is featured."
                         }
                       },
                       "required": [
-                        "id",
-                        "mediaId",
-                        "altText",
-                        "isPrimary"
+                        "mediaId"
                       ]
                     },
-                    "maxItems": 250
+                    "maxItems": 250,
+                    "default": []
                   },
                   "attributes": {
                     "type": "array",
@@ -220032,8 +220033,7 @@
                   "freeDelivery",
                   "metaTitle",
                   "metaDescription",
-                  "productCondition",
-                  "media"
+                  "productCondition"
                 ]
               }
             }
@@ -223918,7 +223918,8 @@
                               "type": "string",
                               "minLength": 8,
                               "maxLength": 160,
-                              "pattern": "^[A-Za-z0-9_-]+$"
+                              "pattern": "^[A-Za-z0-9_-]+$",
+                              "description": "The media file's id: the id a media upload or URL import returns."
                             },
                             "altText": {
                               "type": "string",
@@ -225352,7 +225353,8 @@
                           "type": "string",
                           "minLength": 8,
                           "maxLength": 160,
-                          "pattern": "^[A-Za-z0-9_-]+$"
+                          "pattern": "^[A-Za-z0-9_-]+$",
+                          "description": "The media file's id: the id a media upload or URL import returns."
                         },
                         "altText": {
                           "type": "string",
