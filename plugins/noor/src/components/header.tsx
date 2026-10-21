@@ -301,7 +301,7 @@ export function Header({ data, settings, context }: HeaderProps<HeaderSettings>)
           </div>
         </header>
       </Island>
-      <div id="noor-drawer" popover="auto" class={cx("noor-drawer", data.phoneNavigation?.menu === "drill" && "is-drill")}
+      <div id="noor-drawer" popover="auto" role="dialog" aria-modal="true" class={cx("noor-drawer", data.phoneNavigation?.menu === "drill" && "is-drill")}
         aria-label={t(context, { en: "Menu", bn: "মেনু" })} {...menuDrawer()}>
         <div class="noor-drawer-top">
           <span class="noor-drawer-title">{data.store.name}</span>
