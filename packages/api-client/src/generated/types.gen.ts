@@ -25162,6 +25162,74 @@ export type GetApiV1AdminResourcesOrdersByIdResponses = {
 
 export type GetApiV1AdminResourcesOrdersByIdResponse = GetApiV1AdminResourcesOrdersByIdResponses[keyof GetApiV1AdminResourcesOrdersByIdResponses];
 
+export type PostApiV1AdminResourcesOrdersByIdReleaseHoldData = {
+    body: {
+        /**
+         * The order `revision` you read; a change since is refused with 409 and the hold stays. Releasing a released hold answers it again whatever the revision.
+         */
+        expectedRevision: number;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/orders/{id}/release-hold';
+};
+
+export type PostApiV1AdminResourcesOrdersByIdReleaseHoldErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesOrdersByIdReleaseHoldError = PostApiV1AdminResourcesOrdersByIdReleaseHoldErrors[keyof PostApiV1AdminResourcesOrdersByIdReleaseHoldErrors];
+
+export type PostApiV1AdminResourcesOrdersByIdReleaseHoldResponses = {
+    /**
+     * The order, with whether the hold was already released
+     */
+    200: {
+        success: true;
+        data: {
+            order: OrderResource;
+            replayed: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesOrdersByIdReleaseHoldResponse = PostApiV1AdminResourcesOrdersByIdReleaseHoldResponses[keyof PostApiV1AdminResourcesOrdersByIdReleaseHoldResponses];
+
 export type GetApiV1AdminResourcesOrdersByIdPaymentsData = {
     body?: never;
     path: {

@@ -53,6 +53,7 @@ const BRIDGE_METHODS = [
   "messagingPush",
   "timelineAdd",
   "ordersHold",
+  "ordersRelease",
   "ordersAssessRisk",
   "ordersRiskHistory",
   "customerRolesGrant",

@@ -51,6 +51,7 @@ export const APP_OPERATION_VERBS = [
   "import",
   "apply",
   "mark",
+  "release",
   "bulk",
 ] as const;
 
@@ -72,6 +73,7 @@ export const STABLE_APP_OPERATIONS = {
   "orders.set_status": "dashboard.orders.update_status",
   "orders.mark_delivered": "dashboard.orders.mark_delivered",
   "orders.mark_pickup_ready": "dashboard.orders.pickup_ready",
+  "orders.release_hold": "dashboard.resources.orders.release_hold",
   "order_timeline.list": "dashboard.orders.timeline",
   "returns.list": "dashboard.resources.returns.list",
   "returns.get": "dashboard.resources.returns.get",

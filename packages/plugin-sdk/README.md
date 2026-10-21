@@ -56,7 +56,7 @@ Worked examples that no store bundles are test fixtures in `apps/api/src/plugins
 | Admin routes, pages, cards, actions, widgets | `routes.admin`, `admin.*` | `routes.admin[name]` with `ui.*` |
 | Admin list columns and filters | `admin.listColumns` | object records or your custom fields (no code) |
 | Order timeline entries | `admin.timeline` | `ctx.timeline.add(…)` |
-| Order risk and holds (after commit) | `events: ["order.created"]`, `write_orders` | `ctx.orders.assessRisk(…)`, `ctx.orders.hold(…)` |
+| Order risk and holds (after commit) | `events: ["order.created"]`, `write_orders` | `ctx.orders.assessRisk(…)`, `ctx.orders.hold(…)`, and `ctx.orders.release({ orderId, expectedRevision })` (or `orders.release_hold`) for an approval flow: only the app's own hold |
 | Objects and custom fields | `objects`, `customFields` | `ctx.objects`, `ctx.customFields` |
 | Buyer UI | `storefront.extensions: [{ target, reads }]`, `checkout.attributes` | `extensions[target]`, a pure render returning `{ ui }` |
 | Storefront components: sections, components in slots and app pages, skins (header, footer, product card, product page, listing, core sections), templates | `storefront.sections`, `components`, `skins`, `templates` | `defineStorefront` in `src/storefront.tsx` (`@scalius/plugin-sdk/storefront`) |

@@ -201,6 +201,7 @@ export const DASHBOARD_WHEN_B: Readonly<Record<string, string>> = {
   "dashboard.resources.orders.create": "Use when creating or placing an order for a customer with products and quantities: a cash on delivery (COD) order, or an invoice paid later (net terms, net 30); prices in minor units.",
   "dashboard.resources.orders.get": "Use when an app or sync reads one order in its webhook representation (minor units).",
   "dashboard.resources.orders.list": "Use when syncing orders page by page by updatedAt (webhook representation), or listing overdue invoices (overdue=true).",
+  "dashboard.resources.orders.release_hold": "Use when an app approves an order it held for review (a company manager said yes) and releases its own hold.",
   "dashboard.resources.payments.list": "Use when reading an order's payments and refunds in minor units.",
   "dashboard.resources.refunds.create": "Use when an app gives money back on an order, in minor units, naming the order lines it is for.",
   "dashboard.resources.refunds.list": "Use when reading an order's refunds with their lines and status in minor units.",

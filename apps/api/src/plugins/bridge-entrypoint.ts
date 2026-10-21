@@ -148,6 +148,10 @@ export class PluginBridge extends WorkerEntrypoint<Env, PluginBridgeProps> imple
     return (await this.#host()).ordersHold(input);
   }
 
+  async ordersRelease(input: Parameters<PluginBridgeApi["ordersRelease"]>[0]): Promise<{ revision: number; replayed: boolean }> {
+    return (await this.#host()).ordersRelease(input);
+  }
+
   async ordersAssessRisk(input: Parameters<PluginBridgeApi["ordersAssessRisk"]>[0]): Promise<void> {
     return (await this.#host()).ordersAssessRisk(input);
   }
