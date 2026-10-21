@@ -109,7 +109,7 @@ function SkinPicker({ target, offered, chosen, update, media, idPrefix, choiceLa
         <RadioGroup value={chosen?.app ?? BUILT_IN} aria-labelledby={labelId} onValueChange={choose}>
           {options.map((option) => (
             <label key={option.value} className="flex min-h-11 items-start gap-2 py-1 text-body">
-              <span className="flex h-lh items-center"><RadioGroupItem value={option.value} /></span>
+              <span className="flex h-lh items-center"><RadioGroupItem value={option.value} aria-label={option.label} /></span>
               <span className="min-w-0">
                 <span className="block font-medium">{option.label}</span>
                 <span className="block text-muted-foreground">{option.help}</span>

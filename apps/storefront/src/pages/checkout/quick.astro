@@ -514,7 +514,7 @@ const secondaryButtonClass =
                   <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {rates.map((rate) => (
                       <label class="flex cursor-pointer gap-3 rounded-lg border border-border bg-background p-3 text-sm has-[:checked]:border-primary has-[:checked]:ring-1 has-[:checked]:ring-primary">
-                        <input type="radio" name="shippingLocation" value={rate.id} checked={rate.id === rateId} class="mt-0.5 h-4 w-4 shrink-0 accent-primary" />
+                        <input type="radio" name="shippingLocation" value={rate.id} aria-label={rate.name} checked={rate.id === rateId} class="mt-0.5 h-4 w-4 shrink-0 accent-primary" />
                         <span class="min-w-0 flex-1">
                           <span class="flex justify-between gap-2 font-medium text-foreground">
                             <span>{rate.name}</span>

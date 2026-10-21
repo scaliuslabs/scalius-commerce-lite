@@ -208,7 +208,7 @@ export function UninstallAppDialog({ app, open, onOpenChange }: DialogProps) {
           {choices.map((choice) => (
             <label key={choice.value} className="flex min-h-11 items-start gap-2 py-1 text-body">
               <span className="flex h-lh items-center">
-                <RadioGroupItem value={choice.value} />
+                <RadioGroupItem value={choice.value} aria-label={choice.label} />
               </span>
               <span>
                 <span className="block font-medium">{choice.label}</span>
