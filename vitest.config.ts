@@ -77,6 +77,8 @@ export default defineConfig({
   },
   test: {
     globals: true,
+    // Lets the bundled loader's egress guard follow tests' fetch stubs.
+    setupFiles: [fromRoot("./scripts/vitest-setup.mjs")],
     maxWorkers: testWorkers,
     // One limit sized for a loaded host, instead of per-file overrides. A
     // test that is long by design (a property or race gate, a scale run)

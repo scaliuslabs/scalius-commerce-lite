@@ -11,13 +11,16 @@
 //   - it is a native dry run (`dryRun: true`, which writes nothing), or
 //   - on the REST lane, the request carries a `Scalius-Approval` header naming
 //     an approval the grant's owner gave in the dashboard for exactly this
-//     grant, operation and input (one use; audit R2 F3).
+//     grant, operation and request: its parsed input plus the raw query
+//     string, Content-Type and body bytes, so a retry that parses alike but
+//     differs runs nothing (one use; audit R2 F3, N2).
 // Otherwise nothing runs: the answer is 428 `confirmation_required` with the
 // summary and an approval link for the owner. The agent never receives
 // anything it could redeem by itself.
 import type { Context } from "hono";
 import { AppError } from "@scalius/core/errors";
 import { getDb } from "@scalius/database/client";
+import { sha256Hex } from "@scalius/shared/hash";
 import type { AgentOperationPolicy } from "../openapi/agent-operation-manifest";
 import type { OperationDispatchClearance } from "./dispatch-context";
 import { AgentDispatchError, type AgentOperationInput } from "./dispatch-error";
@@ -34,30 +37,71 @@ function pathParams(template: string, pathname: string): Record<string, string> 
   return params;
 }
 
-/** The request as the operation input an approval binds (path, query, JSON body). */
-async function requestInput(c: Context, operation: AgentOperationPolicy, pathname: string): Promise<AgentOperationInput> {
+/**
+ * Every content type a route's JSON validator parses (`application/json` and
+ * any `application/<x>+json`, as Hono and @hono/zod-openapi match it).
+ */
+const JSON_CONTENT_TYPE = /^application\/([a-z0-9!#$&^_.+-]+\+)?json\s*(;|$)/i;
+
+interface RequestFacts {
+  /** What the owner reads: path, query and the parsed JSON body. */
+  input: AgentOperationInput;
+  /** What runs, byte for byte: the raw query string, the content type and the body's SHA-256. */
+  raw: { search: string; contentType: string; bodySha256: string | null; bodyBytes: number };
+}
+
+/**
+ * The request an approval binds (security audit N2): the parsed input the
+ * owner is shown, plus the raw query string and the exact body bytes,
+ * whatever the Content-Type, so the request that runs after approval is the
+ * one that was approved, not one that only parses alike.
+ */
+async function requestFacts(c: Context, operation: AgentOperationPolicy, pathname: string): Promise<RequestFacts> {
   const url = new URL(c.req.url);
   const query = Object.fromEntries(url.searchParams.entries());
+  const contentType = (c.req.header("Content-Type") ?? "").trim().toLowerCase();
   let body: unknown;
-  if (c.req.raw.body !== null && (c.req.header("Content-Type") ?? "").toLowerCase().includes("application/json")) {
-    try {
-      body = await c.req.raw.clone().json();
-    } catch {
-      body = undefined;
+  let bodySha256: string | null = null;
+  let bodyBytes = 0;
+  if (c.req.raw.body !== null) {
+    const buffer = await c.req.raw.clone().arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    bodyBytes = bytes.byteLength;
+    if (bytes.byteLength > 0) {
+      bodySha256 = await sha256Hex(buffer);
+      if (JSON_CONTENT_TYPE.test(contentType)) {
+        try {
+          body = JSON.parse(new TextDecoder().decode(bytes));
+        } catch {
+          body = undefined;
+        }
+      }
     }
   }
   return {
-    path: pathParams(operation.pathTemplate, pathname),
-    ...(Object.keys(query).length > 0 ? { query } : {}),
-    ...(body !== undefined ? { body } : {}),
-  } as AgentOperationInput;
+    input: {
+      path: pathParams(operation.pathTemplate, pathname),
+      ...(Object.keys(query).length > 0 ? { query } : {}),
+      ...(body !== undefined ? { body } : {}),
+    } as AgentOperationInput,
+    raw: { search: url.search, contentType, bodySha256, bodyBytes },
+  };
 }
 
-function isNativeDryRun(operation: AgentOperationPolicy, input: AgentOperationInput): boolean {
+/**
+ * A native dry run, read where the route reads it: the JSON body's `dryRun`
+ * for a request with a body, the query only for a bodyless method (the
+ * dispatcher's `withNativeDryRun` sends it the same way). A `?dryRun=true`
+ * on a POST would preview here and run for real in the route.
+ */
+function isNativeDryRun(operation: AgentOperationPolicy, method: string, input: AgentOperationInput): boolean {
   if (operation.dryRun !== "native") return false;
+  const verb = method.toUpperCase();
+  if (verb === "GET" || verb === "HEAD" || verb === "DELETE") {
+    return (input.query as Record<string, unknown> | undefined)?.dryRun === "true";
+  }
   const body = input.body;
-  if (typeof body === "object" && body !== null && !Array.isArray(body) && (body as Record<string, unknown>).dryRun === true) return true;
-  return (input.query as Record<string, unknown> | undefined)?.dryRun === "true";
+  return typeof body === "object" && body !== null && !Array.isArray(body) && (body as Record<string, unknown>).dryRun === true;
 }
 
 /**
@@ -81,11 +125,16 @@ export async function enforceAgentConfirmation(
     // The dispatcher sent a gated write it did not settle: refuse, never guess.
     throw new AppError(428, "confirmation_required", "This change needs the merchant's approval before it runs.");
   }
-  const input = await requestInput(c, operation, pathname);
-  if (isNativeDryRun(operation, input)) return;
+  const { input, raw } = await requestFacts(c, operation, pathname);
+  if (isNativeDryRun(operation, c.req.method, input)) return;
   const approvals = await import("./approvals");
   const steps = [{ operation, input }];
-  const binding = await confirm.confirmBinding(steps);
+  const binding = await sha256Hex(JSON.stringify([
+    await confirm.confirmBinding(steps),
+    raw.search,
+    raw.contentType,
+    raw.bodySha256,
+  ]));
   const db = getDb(env);
   const approvalId = c.req.header(approvals.APPROVAL_HEADER)?.trim();
   if (approvalId) {
@@ -103,7 +152,10 @@ export async function enforceAgentConfirmation(
     }
     return;
   }
-  const summary = confirm.confirmSummary(steps);
+  // A body the dashboard cannot show is still bound; the owner is told it is there.
+  const summary = raw.bodySha256 && input.body === undefined
+    ? `${confirm.confirmSummary(steps)} (with a ${raw.bodyBytes}-byte ${raw.contentType.slice(0, 60) || "untyped"} body)`
+    : confirm.confirmSummary(steps);
   let link: Awaited<ReturnType<typeof approvals.requestAgentApproval>>;
   try {
     link = await approvals.requestAgentApproval(db, env, principal, {

@@ -8,7 +8,9 @@
 // A method is written in the batch that applies the confirmed or authorized
 // payment that kept it, for the order's account customer only. One row per
 // provider method (`UNIQUE(provider_id, provider_method_ref)`): a repeat
-// refreshes its facts and never moves it to another customer. Removing it
+// refreshes its facts and never moves it to another customer or app (0175:
+// the app whose purchase option kept it is the only app that may charge it;
+// the buyer sees and removes it in their account). Removing it
 // detaches it at the provider first, then marks it `removed` (kept for the
 // audit of the orders it paid).
 import { sql } from "drizzle-orm";
@@ -40,6 +42,18 @@ export const customerPaymentMethods = sqliteTable("customer_payment_methods", {
     sourceOrderId: text("source_order_id").references(() => orders.id, { onDelete: "set null" }),
     createdAt: integer("created_at").notNull().default(UNIX_NOW),
     updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
+    /**
+     * The app whose purchase option the buyer agreed to keep the method for
+     * (migration 0175, security audit N3): the only app that may charge it
+     * without the buyer. Null when no single app owns the order's purchase
+     * options: then only staff may charge it. Set once, never moved. Last,
+     * as 0175 added it (the upsert's INSERT … SELECT follows table order).
+     */
+    ownerPluginId: text("owner_plugin_id"),
+    /** That purchase option's public id (`<app id>.<key>`), when the order named exactly one. */
+    purchaseOptionId: text("purchase_option_id"),
+    /** Its title as the buyer chose it (frozen on the order line): what the buyer's account says the method is kept for. */
+    purchaseOptionTitle: text("purchase_option_title"),
 }, (table) => [
     uniqueIndex("customer_payment_methods_provider_ref_unique").on(table.providerId, table.providerMethodRef),
     index("customer_payment_methods_customer_idx").on(table.customerId, table.status),

@@ -95,7 +95,7 @@ export const PRESENCE_PREFIXES = Object.keys(PRESENCE_KEY_TOPICS) as PresenceKey
 const PRESENCE_KEY = /^([a-z-]+):[A-Za-z0-9_.-]{1,80}$/;
 
 const PRESENCE_EDIT_PERMISSIONS: Readonly<Record<PresenceKeyPrefix, readonly string[] | "settings">> = {
-  order: ["orders.edit", "orders.change_status", "orders.manage_shipments", "orders.refund", "orders.record_payment", "orders.issue_invoice"],
+  order: ["orders.edit", "orders.change_status", "orders.manage_shipments", "orders.refund", "orders.record_payment", "orders.charge_saved_methods", "orders.issue_invoice"],
   product: ["products.edit"],
   category: ["categories.edit"],
   collection: ["collections.edit", "collections.toggle_status"],

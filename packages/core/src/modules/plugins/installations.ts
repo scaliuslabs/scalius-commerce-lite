@@ -554,10 +554,12 @@ export async function installPlugin(db: Database, input: InstallPluginInput): Pr
   if (await getPluginInstallation(db, manifest.id)) {
     throw new PluginError("installation_exists", `Plugin ${manifest.id} is already installed.`);
   }
-  // Data kept by an earlier uninstall comes back with it, settings included.
+  // Data kept by an earlier uninstall comes back with it, settings included,
+  // but only to code from the developer who wrote it (security audit N4).
   const retained = (await readRetainedApp(db, manifest.id))?.app ?? null;
+  if (retained) requireRetainedDataSigner(retained, input.signerKeyId ?? null);
   const settings = retained
-    ? retainedSettings(retained, manifest.settings, input.signerKeyId ?? null)
+    ? migrateStoredSettings(retained.settings, manifest.settings)
     : pluginSettingDefaults(manifest.settings);
   try {
     await safeBatch(db, [
@@ -797,15 +799,22 @@ async function syncInstallationObjects(db: Database, pluginId: string, manifest:
 }
 
 /**
- * The settings a reinstall gets back from a keep-data uninstall: the values
- * still valid under its schema. Secrets come back only to code from the same
- * developer key the app was removed with; otherwise they are left unset.
+ * Data kept by a keep-data uninstall belongs to the developer whose code
+ * wrote it (security audit N4). Everything an app owns is keyed by its
+ * plugin id (its key/value data, records, custom fields, customer roles and
+ * catalogue ownership), so a release under the same id from another signer
+ * would read all of it. Such a release is refused while the data is kept:
+ * the data stays listed under removed apps, where a Super Admin can delete
+ * it, and the release then installs clean. The same signer (or the same
+ * unsigned source) reclaims everything, settings included.
  */
-function retainedSettings(retained: RetainedApp, schema: readonly PluginSettingField[], signerKeyId: string | null): Record<string, unknown> {
-  const restored = migrateStoredSettings(retained.settings, schema);
-  if (retained.signerKeyId === signerKeyId) return restored;
-  for (const field of schema) if (field.type === "secret") delete restored[field.key];
-  return restored;
+function requireRetainedDataSigner(retained: RetainedApp, signerKeyId: string | null): void {
+  if (retained.signerKeyId === signerKeyId) return;
+  throw new PluginError(
+    "retained_data_other_developer",
+    `${retained.name} left data in this store that belongs to the developer who made it, and this release comes from another developer. Delete that data first (Apps, Data from removed apps); this release then starts clean.`,
+    { retainedSigner: retained.signerKeyId, releaseSigner: signerKeyId },
+  );
 }
 
 /** Whether any stored setting differs from its default (a sealed secret always does). */
@@ -845,8 +854,9 @@ export interface UpdatePluginInput {
  * F6): a registry or uploaded update must be signed by the same key, so a
  * developer trusted for one app cannot ship code under another app's id and
  * grant. An app installed unsigned takes the key of its first signed update.
- * Moving an app to another developer is a reinstall (uninstall keeping its
- * data, then install), which asks for approval again.
+ * Another developer's release under this id installs only after the app is
+ * uninstalled and its data deleted (`requireRetainedDataSigner`): one
+ * developer's stored data never passes to another's code.
  */
 export function requirePinnedSigner(
   current: { signerKeyId: string | null; manifest: { name: string } | null; pluginId: string },
@@ -859,7 +869,7 @@ export function requirePinnedSigner(
     "signature_signer_changed",
     update.signerKeyId === null
       ? `${name} was installed from a signed release; an update must be signed by the same developer.`
-      : `${name} was installed from a release signed by another developer. To move it to this developer, uninstall it (keeping its data) and install this release.`,
+      : `${name} was installed from a release signed by another developer. An update must come from the same developer.`,
     { installedSigner: current.signerKeyId, releaseSigner: update.signerKeyId },
   );
 }

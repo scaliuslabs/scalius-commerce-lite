@@ -211,7 +211,11 @@ Routing and gating fields (`x-scalius-agent`, every manifest entry):
   at the admin boundary (`agent-access/confirm-gate.ts`): MCP settles it with
   the owner's dashboard approval or a client dialog, direct REST with the
   `Scalius-Approval` header naming the approval its owner gave at the
-  `approvalUrl` of a 428 `confirmation_required` answer.
+  `approvalUrl` of a 428 `confirmation_required` answer. A REST approval
+  binds the exact request: its query string, Content-Type and body bytes,
+  so the retry must repeat them byte for byte. A native dry run on that lane
+  is read where the route reads it (the body's `dryRun`; the query only for
+  a bodyless method).
 - `grantScope`: `customer_conversations` (the inbox) or `review_moderation`.
   No preset grant reaches them; a Custom grant that selected their permissions
   does (`agent-access/grant-scopes.ts`, checked on both lanes).

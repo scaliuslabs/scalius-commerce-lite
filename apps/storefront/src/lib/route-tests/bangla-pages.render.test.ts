@@ -168,6 +168,9 @@ const ACCOUNT_ANSWERS: Record<string, unknown> = {
   },
   "/customer-auth/me": { authenticated: true, customer: CUSTOMER },
   "/customer-auth/marketing": { channels: [{ channel: "email", status: "not_subscribed", available: false }, { channel: "sms", status: "subscribed", available: true }] },
+  "/customer-auth/payment-methods": { paymentMethods: [{
+    id: "cpm_1", brand: "visa", last4: "4242", expiryMonth: 8, expiryYear: 2099, label: null, savedFor: "সাবস্ক্রাইব করে সাশ্রয়", createdAt: "2026-09-12T08:00:00.000Z",
+  }] },
   "/customer-auth/addresses": { addresses: [{
     id: "adr_1", countryCode: "BD", line1: "বাড়ি ১২, রোড ৫", line2: null, city: "dhaka", zone: "mirpur", area: null, cityName: "ঢাকা",
     zoneName: "মিরপুর", areaName: null, dependentLocality: null, locality: null, adminArea: null, postalCode: null,
@@ -304,7 +307,10 @@ describe("a Bangla store's pages speak Bangla", () => {
       if (kind === "product") expect(document.querySelector("[data-product-summary]"), template).not.toBeNull();
       if (kind.startsWith("account-")) expect(document.querySelector("[data-account-shell][data-account-state=ok]"), template).not.toBeNull();
       if (kind === "account-orders") expect(document.querySelectorAll("a[data-buy-again]"), template).toHaveLength(2);
-      if (kind === "account-profile") expect(document.querySelector("form[data-address-form]"), template).not.toBeNull();
+      if (kind === "account-profile") {
+        expect(document.querySelector("form[data-address-form]"), template).not.toBeNull();
+        expect(document.querySelector("[data-account-payment-methods] [data-payment-method]"), template).not.toBeNull();
+      }
       if (kind === "account-thread") expect(document.querySelectorAll("#conversationMessages > li"), template).not.toHaveLength(0);
       if (kind === "account-downloads") expect(document.querySelector("form[action='/account/licence-key']"), template).not.toBeNull();
       if (kind === "account-gift-cards") expect(document.querySelector("details"), template).not.toBeNull();

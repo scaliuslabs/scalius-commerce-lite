@@ -126,6 +126,8 @@ export const queryKeys = {
       q !== undefined ? (["customers", "tags", q] as const) : (["customers", "tags"] as const),
     /** One customer's consent per channel, consent log and tags. */
     marketing: (id: string) => ["customers", "marketing", id] as const,
+    /** One customer's saved payment methods. */
+    paymentMethods: (id: string) => ["customers", "payment-methods", id] as const,
     /** Saved segments: the list, and (below it) each segment, its count and previews. */
     segments: () => ["customers", "segments"] as const,
     segment: (id: string) => ["customers", "segments", "detail", id] as const,

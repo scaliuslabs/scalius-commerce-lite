@@ -42,7 +42,7 @@ const refundCreateBody = z.object({
   lines: refundLinesSchema.optional(),
   reason: z.string().trim().min(1).max(300).openapi({ description: "Why, for the order timeline (staff read it)." }),
   settlement: z.enum(["original", "store_credit"]).default("original").openapi({
-    description: "`original`: back to the payments it came from. `store_credit`: one new gift card for the whole amount, sent to the order contact.",
+    description: "`original`: back to the payments it came from. `store_credit`: one new gift card for the whole amount, sent to the order contact. An app or agent may give store credit only for money a provider captured (or gift-card value); over a cash-on-delivery or recorded payment it is refused with reason `store_credit_needs_staff`.",
   }),
   gateway: z.string().trim().min(1).max(160).optional().openapi({
     description: "Refund only payments taken by this method (`cod`, a gateway id or an app provider's `<plugin id>:<provider id>`).",

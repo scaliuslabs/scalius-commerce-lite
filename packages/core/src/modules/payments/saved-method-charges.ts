@@ -40,7 +40,7 @@ import { gatewayHasCapability, type GatewaySettings, type PaymentEvent, type Pay
 import { getGatewayAmountIssue, paymentProvidersFor, type PaymentProviders, type PaymentProvidersSource } from "./gateways/registry";
 import { getUnpayableOrderReason } from "./payable-order";
 import { acceptsProviderPayment, inferPaymentType, releaseAuthorization, validateIncomingPaymentState } from "./process-payment";
-import { readCustomerPaymentMethod } from "./saved-payment-methods";
+import { readCustomerPaymentMethod, savedMethodVisibleTo, type SavedMethodActor } from "./saved-payment-methods";
 import { resolveOrderCurrencySnapshot } from "./order-currency";
 import { hasActiveShipmentClaim, SHIPMENT_CLAIM_CONFLICT_MESSAGE } from "../order-kernel";
 
@@ -320,6 +320,12 @@ async function applyOutcome(
 export interface ChargeSavedPaymentMethodInput extends CommandDeps {
   orderId: string;
   paymentMethodId: string;
+  /**
+   * Who charges (security audit N3): staff any method; an app only a method
+   * kept for its own purchase option (another app's, or one no app owns,
+   * reads as not found). A buyer never charges off-session.
+   */
+  actor: Exclude<SavedMethodActor, { kind: "customer" }>;
   /** Default: the order's balance due. It must be an amount the order takes (its balance, or its deposit). */
   amountMinor?: number;
   /** `manual` only authorizes; capture it later. Default `automatic`. */
@@ -361,7 +367,7 @@ export async function chargeSavedPaymentMethod(
   }
 
   const method = await readCustomerPaymentMethod(db, input.paymentMethodId);
-  if (!method) throw new NotFoundError("Saved payment method not found");
+  if (!method || !savedMethodVisibleTo(method, input.actor)) throw new NotFoundError("Saved payment method not found");
   // A charge whose outcome is unknown is asked again exactly as it was sent.
   const resuming = existing !== undefined && existing.status !== "failed";
 

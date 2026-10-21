@@ -173,6 +173,8 @@ export const DASHBOARD_WHEN_A: Readonly<Record<string, string>> = {
   "dashboard.customers.addresses_set_default": "Use when making one address the customer's default shipping address.",
   "dashboard.customers.addresses_set_default_billing": "Use when making one address the customer's default billing address.",
   "dashboard.customers.addresses_update": "Use when correcting one address in a customer's address book.",
+  "dashboard.customers.payment_methods_list": "Use when reading which cards or wallets a customer saved for later charges, and which app may charge each.",
+  "dashboard.customers.payment_methods_delete": "Use when a customer asks to remove a saved card so nothing charges it again.",
   "dashboard.customers.bulk_delete": "Use when moving several customers to trash at once.",
   "dashboard.customers.bulk_restore": "Use when restoring several trashed customers, by ids or by a filter.",
   "dashboard.customers.create": "Use when adding a new customer record (name, phone, email) by hand.",

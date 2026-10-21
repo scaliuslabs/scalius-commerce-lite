@@ -5,7 +5,9 @@
 // default first and marked Default, with Edit, Remove and Make default.
 // Every edit is a plain POST handled here (Post/Redirect/Get), so it works
 // without JavaScript; with it, the thana and area lists follow the city and
-// another country's fields follow its rules. Only an outcome flag enters a URL.
+// another country's fields follow its rules. Saved payment methods (cards a
+// provider kept for a subscription's renewals) show while there are any, each
+// removable behind a confirm popover. Only an outcome flag enters a URL.
 import Layout from "@/layouts/Layout.astro";
 import AccountShell from "@/components/account/AccountShell.astro";
 import AccountDialog from "@/components/account/AccountDialog.astro";
@@ -18,7 +20,9 @@ import {
   readAccountAddresses,
   readAccountCustomer,
   readAccountMarketing,
+  readAccountPaymentMethods,
   readAccountSummaryForRequest,
+  removeAccountPaymentMethod,
   saveAccountMarketing,
   saveAccountProfile,
   type AddressBookResult,
@@ -32,6 +36,19 @@ import {
   readAccountMarketingFlag,
   readAccountMarketingForm,
 } from "@/lib/account-marketing";
+import {
+  ACCOUNT_PAYMENT_METHOD_INTENT,
+  ACCOUNT_PAYMENT_METHODS_ANCHOR,
+  accountPaymentMethodCopy,
+  accountPaymentMethodLocation,
+  paymentMethodBrand,
+  paymentMethodEnding,
+  paymentMethodExpiry,
+  paymentMethodRemoveFailureText,
+  paymentMethodSavedFor,
+  readAccountPaymentMethodFlag,
+  readAccountPaymentMethodForm,
+} from "@/lib/account-payment-methods";
 import { newsletterCopy, newsletterLanguage } from "@/lib/newsletter-copy";
 import { accountPushCopy } from "@/lib/account-push-copy";
 import {
@@ -66,6 +83,7 @@ let posted: ProfileForm | null = null;
 let fieldErrors: Partial<Record<AddressDraftField | "name", string>> = {};
 let formMessage: string | null = null;
 let marketingFailure: "invalid" | "unavailable" | null = null;
+let paymentMethodFailure: "refused" | "unavailable" | null = null;
 
 // A Bangladesh form lists the cities, its city's thanas and its thana's areas (another country lists none).
 const locationsFor = async (draft: Pick<AddressDraft, "countryCode" | "city" | "zone">) => {
@@ -100,9 +118,21 @@ if (Astro.request.method === "POST") {
     // Answered at the News and offers section below.
     marketingFailure = saved.reason;
   }
-  posted = form && !marketingFailure ? readProfileForm(form) : null;
+  // Remove a saved payment method: the provider detaches it, then the page reads the rest.
+  if (form?.get("intent") === ACCOUNT_PAYMENT_METHOD_INTENT) {
+    const methodId = readAccountPaymentMethodForm(form);
+    const removed = methodId ? await removeAccountPaymentMethod(Astro.request, methodId) : { ok: false as const, reason: "refused" as const };
+    if (removed.ok) {
+      return new Response(null, { status: 303, headers: { Location: accountPaymentMethodLocation("removed"), ...noStore } });
+    }
+    if (removed.reason === "signed_out") return new Response(null, { status: 303, headers: { Location: "/account/profile", ...noStore } });
+    // Answered at the Saved payment methods section below.
+    paymentMethodFailure = removed.reason;
+  }
+  const otherFailure = marketingFailure ?? paymentMethodFailure;
+  posted = form && !otherFailure ? readProfileForm(form) : null;
   let saved: ProfileSaveResult | AddressBookResult | null = null;
-  if (marketingFailure) {
+  if (otherFailure) {
     // Nothing else was posted.
   } else if (posted?.intent === "name") {
     const error = nameError(posted.name);
@@ -140,17 +170,18 @@ if (Astro.request.method === "POST") {
     if (saved.reason === "signed_out") return new Response(null, { status: 303, headers: { Location: "/account/profile", ...noStore } });
     formMessage = saved.reason === "invalid" && saved.message ? saved.message : offlineMessage;
   }
-  Astro.response.status = marketingFailure
-    ? (marketingFailure === "invalid" ? 422 : 503)
+  Astro.response.status = otherFailure
+    ? (otherFailure === "unavailable" ? 503 : 422)
     : formMessage === offlineMessage ? 503 : 422;
 }
 
-const [layoutData, read, summary, marketingRead, addressesRead] = await Promise.all([
+const [layoutData, read, summary, marketingRead, addressesRead, paymentMethodsRead] = await Promise.all([
   getLayoutData(),
   readAccountCustomer(Astro.request),
   readAccountSummaryForRequest(Astro.request),
   readAccountMarketing(Astro.request),
   readAccountAddresses(Astro.request),
+  readAccountPaymentMethods(Astro.request),
 ]);
 // The whole page speaks the store's language: the account's words, News and offers, notifications.
 const words = accountCopy().profile;
@@ -161,6 +192,14 @@ const marketingCopy = newsletterCopy(marketingLanguage).account;
 const pushCopy = accountPushCopy(marketingLanguage);
 const marketing = marketingRead.ok ? marketingRead.data : null;
 const marketingFlag = posted || marketingFailure ? null : readAccountMarketingFlag(Astro.url.searchParams);
+// Saved payment methods: shown while the account has any, after a removal (its outcome) and when the read failed.
+const paymentWords = accountPaymentMethodCopy();
+const paymentMethods = paymentMethodsRead.ok ? paymentMethodsRead.data : null;
+const paymentMethodFlag = Astro.request.method === "POST" ? null : readAccountPaymentMethodFlag(Astro.url.searchParams);
+const showPaymentMethods = Boolean(paymentMethods?.length)
+  || paymentMethodFlag !== null
+  || paymentMethodFailure !== null
+  || (!paymentMethodsRead.ok && paymentMethodsRead.reason === "unavailable");
 if (!read.ok && read.reason === "unavailable") Astro.response.status = 503;
 const customer = read.ok ? read.data : null;
 const savedFlag = posted ? null : readProfileSavedFlag(Astro.url.searchParams);
@@ -341,6 +380,58 @@ const row = "flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0";
             ))}
           </div>
         </section>
+
+        {showPaymentMethods && (
+          <section id={ACCOUNT_PAYMENT_METHODS_ANCHOR} class={ui.card} aria-labelledby="paymentMethodsHeading" data-account-payment-methods>
+            <h2 id="paymentMethodsHeading" class={`${ui.cardTitle} flex min-h-12 items-center border-b border-border px-4 sm:px-5`}>{paymentWords.heading}</h2>
+            <div class={ui.cardBody}>
+              {paymentMethodFlag && <p role="status" class={`${ui.notice} mb-4`}>{paymentWords.removed}</p>}
+              {paymentMethodFailure && <p role="alert" class={`${ui.errorNotice} mb-4`}>{paymentMethodRemoveFailureText(paymentMethodFailure)}</p>}
+              <p class={ui.muted}>{paymentWords.text}</p>
+              {!paymentMethods ? (
+                <p class={`${ui.muted} mt-4`}>{offlineText}</p>
+              ) : paymentMethods.length > 0 && (
+                <ul class="mt-4 grid gap-3 sm:grid-cols-2">
+                  {paymentMethods.map((method) => {
+                    const ending = paymentMethodEnding(method.last4);
+                    const expiry = paymentMethodExpiry(method);
+                    const savedFor = paymentMethodSavedFor(method.savedFor);
+                    const titleId = `paymentMethod-${method.id}`;
+                    return (
+                      <li class="rounded-lg border border-border p-4" data-payment-method>
+                        <article aria-labelledby={titleId}>
+                          <p id={titleId} class="break-words font-medium text-foreground">
+                            {paymentMethodBrand(method)}
+                            {ending && <span class="font-normal text-muted-foreground"><span aria-hidden="true"> · <span class="tabular-nums">•••• {method.last4}</span></span><span class="sr-only">, {ending}</span></span>}
+                          </p>
+                          {expiry && (
+                            <p class:list={["mt-1 text-sm tabular-nums", expiry.expired ? "text-destructive" : "text-muted-foreground"]}>{expiry.text}</p>
+                          )}
+                          {savedFor && <p class="mt-1 break-words text-sm text-muted-foreground">{savedFor}</p>}
+                          <button type="button" popovertarget={`removePaymentMethod-${method.id}`} class="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-destructive hover:underline">{paymentWords.remove}</button>
+                        </article>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {paymentMethods?.map((method) => (
+                <AccountDialog id={`removePaymentMethod-${method.id}`} title={paymentWords.removeTitle}>
+                  <p class="font-medium text-foreground">
+                    {paymentMethodBrand(method)}{paymentMethodEnding(method.last4) && <span class="tabular-nums"> •••• {method.last4}</span>}
+                  </p>
+                  <p class="mt-2 text-sm text-muted-foreground">{paymentWords.removeNote}</p>
+                  <form method="post" action="/account/profile" class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <input type="hidden" name="intent" value={ACCOUNT_PAYMENT_METHOD_INTENT} />
+                    <input type="hidden" name="methodId" value={method.id} />
+                    <button type="button" popovertarget={`removePaymentMethod-${method.id}`} popovertargetaction="hide" class={ui.secondaryButton}>{words.cancel}</button>
+                    <button type="submit" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-destructive px-5 text-sm font-medium text-destructive-foreground hover:bg-destructive/90">{paymentWords.removeConfirm}</button>
+                  </form>
+                </AccountDialog>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section id={ACCOUNT_MARKETING_ANCHOR} class={ui.card} aria-labelledby="marketingHeading" lang={marketingLanguage} data-account-marketing>
           <h2 id="marketingHeading" class={`${ui.cardTitle} flex min-h-12 items-center border-b border-border px-4 sm:px-5`}>{marketingCopy.heading}</h2>

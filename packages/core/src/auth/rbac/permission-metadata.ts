@@ -348,6 +348,15 @@ export const PERMISSION_METADATA: Record<
     category: "Orders",
     isSensitive: true,
   },
+  [PERMISSIONS.ORDERS_CHARGE_SAVED_METHODS]: {
+    name: PERMISSIONS.ORDERS_CHARGE_SAVED_METHODS,
+    displayName: "Charge Saved Payment Methods",
+    description: "Charge a customer's saved card or wallet without them, and capture or void an authorization",
+    resource: "orders",
+    action: "charge_saved_methods",
+    category: "Orders",
+    isSensitive: true,
+  },
   [PERMISSIONS.ORDERS_ISSUE_INVOICE]: {
     name: PERMISSIONS.ORDERS_ISSUE_INVOICE,
     displayName: "Issue Invoices",

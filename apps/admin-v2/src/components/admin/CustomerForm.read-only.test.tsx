@@ -63,6 +63,7 @@ vi.mock("./address/AddressFields", () => ({
 }));
 vi.mock("./customers/CustomerAddressesCard", () => ({ CustomerAddressesCard: () => <div data-testid="saved-addresses" /> }));
 vi.mock("./customers/CustomerMarketingCard", () => ({ CustomerMarketingCard: () => <div data-testid="marketing" /> }));
+vi.mock("./customers/CustomerPaymentMethodsCard", () => ({ CustomerPaymentMethodsCard: () => <div data-testid="payment-methods" /> }));
 vi.mock("./custom-fields/CustomFieldsCard", () => ({ CustomFieldsCard: () => null }));
 vi.mock("./apps/ui/AppActions", () => ({ AppActionsMenu: () => <div data-testid="app-actions" /> }));
 vi.mock("./apps/ui/AppResourceCards", () => ({ AppResourceCards: () => null }));

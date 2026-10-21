@@ -3,6 +3,7 @@
 // screens refresh the queries they show.
 import {
   deleteApiV1AdminCustomersByIdAddressesByAddressId,
+  deleteApiV1AdminCustomersByIdPaymentMethodsByMethodId,
   deleteApiV1AdminCustomersSegmentsBySegmentId,
   postApiV1AdminCustomersByIdAddresses,
   postApiV1AdminCustomersByIdAddressesByAddressIdDefault,
@@ -33,6 +34,10 @@ export const saveCustomerTags = async (id: string, tags: string[]) => {
 /** Records consent a customer gave (or withdrew) outside the store; resolves with the new consent payload. */
 export const setCustomerConsent = (id: string, body: CustomerConsentBody) =>
   apiData(putApiV1AdminCustomersByIdMarketing({ path: { id }, body }));
+
+/** Detaches a saved payment method at its provider and removes it; resolves with the customer's remaining methods. */
+export const removeCustomerPaymentMethod = (id: string, methodId: string) =>
+  apiData(deleteApiV1AdminCustomersByIdPaymentMethodsByMethodId({ path: { id, methodId } }));
 
 export const createCustomerSegment = (body: CustomerSegmentBody) =>
   apiData(postApiV1AdminCustomersSegments({ body }));

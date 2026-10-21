@@ -100,6 +100,20 @@ export const STOREFRONT_CUSTOMER_OPERATIONS = {
   "storefront.customer_auth_addresses.set_default": addressBook(),
   "storefront.customer_auth_addresses.set_default_billing": addressBook(),
   "storefront.customer_auth_addresses.delete": addressBook(),
+  // The buyer's saved cards (security audit N3): theirs to see and revoke in the hosted account page.
+  "storefront.customer_auth_payment_methods.list": {
+    exposure: "excluded",
+    principals: ["customer"],
+    sensitive: true,
+    reason: "Customer-cookie list of the buyer's saved cards for the hosted account page.",
+  },
+  "storefront.customer_auth_payment_methods.delete": {
+    exposure: "excluded",
+    principals: ["customer"],
+    risk: "destructive",
+    openWorld: true,
+    reason: "The buyer revokes their own saved card in the hosted account page (it detaches it at the provider); agents never remove it for them.",
+  },
   "storefront.customer_auth_profile.replace_profile": {
     exposure: "excluded",
     principals: ["customer"],

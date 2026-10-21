@@ -46,8 +46,9 @@ export function RegistryAppDialog({ app, installMode, open, onOpenChange }: Regi
       toast.error(
         code === "installation_sandbox_required" ? t("sandboxRequired")
           : code === "installation_exists" ? t("installExists")
-            : code === "signature_untrusted" || code === "signature_invalid" || code === "signature_missing" || code === "package_invalid" ? t("installUnverified")
-              : t("installFailed"),
+            : code === "retained_data_other_developer" ? t("retainedDataOtherDeveloper")
+              : code === "signature_untrusted" || code === "signature_invalid" || code === "signature_missing" || code === "package_invalid" ? t("installUnverified")
+                : t("installFailed"),
       );
     },
   });

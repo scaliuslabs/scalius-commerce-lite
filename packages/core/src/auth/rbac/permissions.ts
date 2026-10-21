@@ -62,7 +62,7 @@ export const PERMISSIONS = {
   COLLECTIONS_TOGGLE_STATUS: "collections.toggle_status",
 
   // =============================================
-  // Orders (9 permissions)
+  // Orders (11 permissions)
   // =============================================
   ORDERS_VIEW: "orders.view",
   ORDERS_CREATE: "orders.create",
@@ -73,6 +73,7 @@ export const PERMISSIONS = {
   ORDERS_MANAGE_SHIPMENTS: "orders.manage_shipments",
   ORDERS_REFUND: "orders.refund",
   ORDERS_RECORD_PAYMENT: "orders.record_payment",
+  ORDERS_CHARGE_SAVED_METHODS: "orders.charge_saved_methods",
   ORDERS_ISSUE_INVOICE: "orders.issue_invoice",
 
   // =============================================

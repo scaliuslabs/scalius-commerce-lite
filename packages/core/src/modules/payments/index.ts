@@ -67,8 +67,12 @@ export {
   buildSavedPaymentMethodUpsert,
   CUSTOMER_PAYMENT_METHODS_LIST_LIMIT,
   listCustomerPaymentMethods,
+  readSavedPaymentMethodOwner,
   removeCustomerPaymentMethod,
+  savedMethodVisibleTo,
   type CustomerPaymentMethodView,
+  type SavedMethodActor,
+  type SavedPaymentMethodOwner,
 } from "./saved-payment-methods";
 export {
   captureAuthorizedPayment,
@@ -85,9 +89,10 @@ export type {
 } from "./payment-state";
 
 // --- Refund service ---
-export { finalizeAcceptedRefundAttemptIds, processRefund } from "./refund-service";
+export { finalizeAcceptedRefundAttemptIds, processRefund, STORE_CREDIT_NEEDS_STAFF_REASON } from "./refund-service";
 export type {
   FinalizeAcceptedRefundAttemptsResult,
+  RefundCaller,
   RefundLineInput,
   RefundNotificationFact,
   RefundRequest,

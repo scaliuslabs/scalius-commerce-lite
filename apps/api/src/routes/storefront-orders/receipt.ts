@@ -9,7 +9,7 @@ import {
   listOrderCodeOptions,
   readCustomerIdentity,
 } from "@scalius/core/modules/customers";
-import { buyerOrderShippingAddress, issueAccountOwnerReceipt, orderShippingAddressSelection } from "@scalius/core/modules/orders";
+import { buyerOrderShippingAddress, issueAccountOwnerReceipt, orderReferenceKey, orderShippingAddressSelection } from "@scalius/core/modules/orders";
 import { buyerOrderShippingAddressShape } from "../../schemas/entities";
 import { getBuyerOrderTracking, getCustomerVisibleBalanceDueMinor, presentBuyerPaymentTerms } from "@scalius/core/modules/orders";
 import { buyerOrderTrackingSchema } from "../../schemas/order-tracking";
@@ -216,7 +216,8 @@ const orderLookupStatusSchema = z.object({
 
 async function enforceOrderLookupRateLimit(env: Env, ip: string, reference: string): Promise<void> {
   // Per order as well as per IP: guessing an order's contact from many IPs stays slow.
-  const orderKey = reference.replace(/^#\s*/, "").trim().toUpperCase();
+  // Keyed by the order the text resolves to, never by how it is spelled.
+  const orderKey = orderReferenceKey(reference);
   const [strict, standard, perOrder] = await Promise.all([
     isWithinRateLimit(env, "RL_STRICT", "order-lookup-ip", ip),
     isWithinRateLimit(env, "RL_STANDARD", "order-lookup-ip-minute", ip),
