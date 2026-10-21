@@ -32,6 +32,7 @@ import {
   withoutInboundPresence,
 } from "./lib/market-presence";
 import { withAppFormTokens } from "./lib/app-form-tokens";
+import { listingFilterRedirect } from "./lib/listing-filter-redirect";
 
 /**
  * Honours a signed front proxy's forwarded host, proto, and client IP. The
@@ -106,6 +107,10 @@ export default class StorefrontGateway extends WorkerEntrypoint<Env> {
     if (media) return media;
     // A presence serves its pages and its own sitemaps and feeds, nothing else.
     if (presenceRenderTarget(request) === "not_found") return PRESENCE_NOT_FOUND();
+    // A listing's filter form posts (so crawlers cannot enumerate it): answer
+    // with the GET listing URL it describes, before any render.
+    const filtered = await listingFilterRedirect(request);
+    if (filtered) return filtered;
     // A buyer's explicit market choice; never geo, never a crawler.
     const choice = await marketChoiceRedirect(request, () => readMarketMatrix(this.env));
     if (choice) return choice;

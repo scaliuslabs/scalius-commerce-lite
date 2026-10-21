@@ -1,7 +1,10 @@
 ---
-// Server-rendered listing filters: a plain GET form of native controls, so a
+// Server-rendered listing filters: a plain form of native controls, so a
 // tap or Space works the moment the HTML arrives (no hydration) and filtering
-// works without JavaScript. `setupCatalogFilters()` adds instant apply on
+// works without JavaScript. It posts: the gateway answers with a 303 to the
+// GET listing URL (lib/listing-filter-redirect.ts), because crawlers
+// enumerate a GET form's checkboxes into endless uncached URLs; with
+// JavaScript the form navigates to that URL directly. `setupCatalogFilters()` adds instant apply on
 // computers, the live "Show N products" count in the phone sheet and the
 // filter drawer, "See more" in place, the price slider and the bar's
 // dropdown behaviour.
@@ -195,7 +198,7 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
 
 <form
   id="filterForm"
-  method="get"
+  method="post"
   action={pathname}
   autocomplete="off"
   data-catalog-filters
