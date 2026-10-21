@@ -7,7 +7,7 @@ import type { Database } from "@scalius/database/client";
 import { pluginInstallations, pluginRegistrations } from "@scalius/database/schema";
 import type { PluginRunPoint } from "@scalius/shared/plugins";
 import type { ProviderKind } from "@scalius/shared/plugins/providers/kinds";
-import { and, asc, eq, inArray, or } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, or } from "drizzle-orm";
 import { toPluginInstallation, type PluginInstallation } from "./installations";
 
 export interface RegisteredPlugin {
@@ -109,20 +109,42 @@ export async function listActiveFunctionRegistrations(db: Database): Promise<Reg
   return resolveActiveFunctionRegistrations(await selectActiveFunctionRegistrations(db).all());
 }
 
-/** Active plugins subscribed to a topic through its exact name, its resource wildcard or `*` (one row per plugin). */
-export async function listActiveEventPlugins(db: Database, topic: string): Promise<RegisteredPlugin[]> {
+/**
+ * Approved plugins subscribed to a topic through its exact name, its
+ * resource wildcard or `*` (one row per plugin), running or not: an app that
+ * is stopped, failed or waiting for an update's approval keeps its events
+ * as held deliveries (event-deliveries.ts), as event demand does.
+ */
+export async function listApprovedEventPlugins(db: Database, topic: string): Promise<RegisteredPlugin[]> {
   const prefix = topic.split(".", 1)[0];
-  const rows = await activeRegistrations(db, "event", [topic, `${prefix}.*`, "*"]);
+  const rows = await db.select({ priority: pluginRegistrations.priority, name: pluginRegistrations.name, installation: pluginInstallations })
+    .from(pluginRegistrations)
+    .innerJoin(pluginInstallations, eq(pluginInstallations.pluginId, pluginRegistrations.pluginId))
+    .where(and(
+      eq(pluginRegistrations.kind, "event"),
+      inArray(pluginRegistrations.name, [topic, `${prefix}.*`, "*"]),
+      isNotNull(pluginInstallations.grantJson),
+    ))
+    .orderBy(asc(pluginRegistrations.priority), asc(pluginRegistrations.pluginId))
+    .all();
   const seen = new Set<string>();
-  return rows.filter((row) => !seen.has(row.installation.pluginId) && Boolean(seen.add(row.installation.pluginId)));
+  const result: RegisteredPlugin[] = [];
+  for (const row of rows) {
+    if (seen.has(row.installation.pluginId)) continue;
+    const installation = toPluginInstallation(row.installation);
+    if (!installation) continue;
+    seen.add(installation.pluginId);
+    result.push({ installation, priority: row.priority, name: row.name });
+  }
+  return result;
 }
 
-/** Whether any active plugin subscribes to any topic: the event pipeline's "nobody listens" check. */
-export async function hasActiveEventPlugins(db: Database): Promise<boolean> {
+/** Whether any approved plugin subscribes to any topic: the event pipeline's "nobody listens" check. */
+export async function hasApprovedEventPlugins(db: Database): Promise<boolean> {
   const row = await db.select({ pluginId: pluginRegistrations.pluginId })
     .from(pluginRegistrations)
     .innerJoin(pluginInstallations, eq(pluginInstallations.pluginId, pluginRegistrations.pluginId))
-    .where(and(eq(pluginRegistrations.kind, "event"), eq(pluginInstallations.status, "active")))
+    .where(and(eq(pluginRegistrations.kind, "event"), isNotNull(pluginInstallations.grantJson)))
     .limit(1)
     .get();
   return Boolean(row);

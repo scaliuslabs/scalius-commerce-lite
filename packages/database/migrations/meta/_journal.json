@@ -1233,6 +1233,13 @@
       "when": 1792580517786,
       "tag": "0175_promotions_automatic_live",
       "breakpoints": true
+    },
+    {
+      "idx": 176,
+      "version": "6",
+      "when": 1792590000000,
+      "tag": "0176_event_demand_approved_apps",
+      "breakpoints": true
     }
   ]
 }

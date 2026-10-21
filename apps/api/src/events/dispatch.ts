@@ -96,7 +96,9 @@ export async function runScheduledEventMaintenance(db: Database, env: Env, ctx: 
 
 /** Scheduled sweep: retention of settled events and deliveries (no one is waiting on it, so it rides a slice). */
 export async function runScheduledEventRetention(db: Database): Promise<Awaited<ReturnType<typeof pruneEventsAndDeliveries>> & { pluginDeliveries: number }> {
-  const { prunePluginEventDeliveries } = await import("@scalius/core/modules/plugins");
+  const { dropExpiredHeldPluginDeliveries, prunePluginEventDeliveries } = await import("@scalius/core/modules/plugins");
+  // What apps that are off keep stays inside the plan's bound (their events are kept while they wait).
+  await dropExpiredHeldPluginDeliveries(db);
   // Plugin deliveries first: they reference events by id (set null on prune).
   const prunedPluginDeliveries = await prunePluginEventDeliveries(db);
   const pruned = await pruneEventsAndDeliveries(db);

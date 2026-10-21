@@ -580,7 +580,7 @@ export async function compileCanonicalPostgresSchema(
       }
       const cacheDep = cacheDepPostgresTrigger(definition.name, definition.sql);
       if (cacheDep === null) return [];
-      return [cacheDep ?? eventOutboxPostgresTrigger(definition.name, definition.sql) ?? eventDemandPostgresTrigger(definition.name) ?? compileSqliteTriggerForPostgres(definition)];
+      return [cacheDep ?? eventOutboxPostgresTrigger(definition.name, definition.sql) ?? eventDemandPostgresTrigger(definition.name, definition.sql) ?? compileSqliteTriggerForPostgres(definition)];
     });
     const since0151 = !options.beforeMigration || options.beforeMigration > POSTGRES_SCALE_MIGRATION;
     const preDataSql = [

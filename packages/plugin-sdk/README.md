@@ -257,7 +257,8 @@ Definition keys match the manifest. The host rejects an undeclared handler, and 
 
 - Delivery is at least once. `event.id` is stable across attempts: use it as your idempotency key.
 - A handler that throws or times out is retried after 1 min, 5 min, 30 min, 1 h, 3 h, 6 h and 12 h. After 8 attempts the delivery is exhausted and the merchant can retry it from the app's page.
-- An app gets only events after its activation, including those its own writes cause. Write only when something changes, so the handler converges.
+- An app gets only events after its first activation, including those its own writes cause. Write only when something changes, so the handler converges.
+- Events are not lost while the app is off. When it is turned off, stopped by its limits or an emergency stop, failed, or waiting for an update's approval, its events wait and are delivered, oldest first, when it runs again. It keeps at most the plan's bound: 7 days and 2,000 events on Free, 30 days and 50,000 on Paid; past it the oldest are dropped (the app's page shows them cancelled). Uninstalling drops them. To catch up after a longer gap, read with `updatedSince` (orders, products, customers).
 
 **Cron.** A schedule has five fields and runs in the store's time zone (`Asia/Dhaka`). The API checks schedules every 15 minutes on Workers Paid and every 23 minutes on Free. A slot runs once and never overlaps the job's previous run. After downtime only the latest missed slot runs (within 24 hours). Use `scheduledAt`, not the clock, for time windows.
 

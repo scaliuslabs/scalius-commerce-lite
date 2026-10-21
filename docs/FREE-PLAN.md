@@ -36,6 +36,7 @@ Code reads values from the profile and never branches on the plan name. Paid val
 | Bulk-run and app-job chunks per drain (`bulkRunChunksPerDrain`) | 3 | 12 |
 | Items per app batch create (`batchCreates`: products, categories, brands) | 4, 12, 19 | 20, 50, 50 |
 | App jobs running at once (`plugins.runningJobs`) | 3 | 10 |
+| Events an app that is not running keeps (`plugins.heldEventDays`, `heldEvents`) | 7 days, 2,000 | 30 days, 50,000 |
 | Products a narrowed listing counts its facets over (`facetLiveProducts`) | 300 | 5,000 |
 
 The profile also sets the bulk page, the products refreshed after a catalogue write, the nightly sold-products refresh, the catalogue rebuild and band-refresh chunks, the nightly projection drift window and the backfill image limit.
