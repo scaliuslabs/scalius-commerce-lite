@@ -18,6 +18,8 @@ import { EMPTY_HOMEPAGE_SECTION_DATA, homepageContent, homepageLeadSection } fro
 import { readStoreShape, requestThemeFor } from "@/lib/storefront-theme-context";
 import { readThemePreviewContent } from "@/lib/theme-preview-content";
 import { THEME_PREVIEW_ROUTE_HEADERS, readThemePreviewPost, themePreviewRefusal } from "@/lib/theme-preview-post";
+import { themeAppStylesheets } from "@/lib/extensions/stylesheets";
+import { readStorefrontExtensions } from "@scalius/shared/plugins/storefront-components";
 
 const post = await readThemePreviewPost(Astro, storefrontPreviewRenderSchema);
 if (post instanceof Response) return post;
@@ -47,7 +49,12 @@ if (!data) return themePreviewRefusal(503);
 const { content, currencySymbol, currencyCode } = data;
 // The layout is the previewed market's (lib/theme-preview-post.ts): its language's words.
 const languageCode = layoutData.storefrontCopy?.languageCode;
+// The stylesheets of the apps these sections name (an app section or a
+// section skin just added): the bridge links those the page's head lacks.
+const appStylesheets = themeAppStylesheets(draft, readStorefrontExtensions(layoutData.appExtensions), "/");
 ---
+
+{appStylesheets.map((href) => <link rel="stylesheet" href={href} data-app-stylesheet />)}
 
 {only
   ? target && (
