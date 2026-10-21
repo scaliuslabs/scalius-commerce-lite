@@ -11,7 +11,7 @@ import { ChevronDown } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { useMessages } from "~/i18n";
-import { themeEditorMessages } from "~/i18n/theme-editor";
+import { themeEditorFull } from "~/i18n/theme-editor-panes";
 import type { ThemeApp } from "~/lib/api-query-options/online-store";
 import { appSettingDefaults, themeAppFields } from "../schema-form/app-settings";
 import { AppSettingFields } from "../schema-form/AppSettingFields";
@@ -30,7 +30,7 @@ export type SkinSettingsPlace = "alone" | "below" | "fallback";
 
 /** The built-in settings as the store's fallback, folded until opened. */
 function Fallback({ children }: { children: ReactNode }) {
-  const t = useMessages(themeEditorMessages);
+  const t = useMessages(themeEditorFull);
   const id = useId();
   const [open, setOpen] = useState(false);
   return (
@@ -66,7 +66,7 @@ export function AppSkinSettings({ unit, theme, apps, media, setDraft, children }
   /** The built-in unit's settings, for where they sit. */
   children: (place: SkinSettingsPlace) => ReactNode;
 }) {
-  const t = useMessages(themeEditorMessages);
+  const t = useMessages(themeEditorFull);
   const labelId = useId();
   const offered: AppSkinEntry[] = apps.flatMap((app) => app.skins.filter((each) => each.target === unit).map((each) => ({ app, skin: each })));
   const chosen = themeAppSkin(theme, unit);

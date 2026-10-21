@@ -24,7 +24,7 @@ import { Label } from "~/components/ui/label";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Textarea } from "~/components/ui/textarea";
 import { useMessages } from "~/i18n";
-import { themeEditorMessages } from "~/i18n/theme-editor";
+import { themeEditorFull } from "~/i18n/theme-editor-panes";
 import { apiData } from "~/lib/api";
 import { actionErrorText } from "../shared";
 import { Field } from "~/components/ui/field";
@@ -45,7 +45,7 @@ export function AiDraftDialog({ open, onOpenChange, page, locale, canConnectAgen
   canConnectAgent: boolean;
   onDrafted: (sections: StorefrontSection[], note: string | null, rejected: number) => void;
 }) {
-  const t = useMessages(themeEditorMessages);
+  const t = useMessages(themeEditorFull);
   const query = useQuery({
     queryKey: ["theme-editor", "ai-providers"],
     queryFn: async () => (await apiData(getApiV1AdminSettingsThemeAiProviders())).items,

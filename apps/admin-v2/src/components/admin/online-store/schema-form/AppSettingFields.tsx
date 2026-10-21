@@ -29,7 +29,7 @@ import { Textarea } from "~/components/ui/textarea";
 import { useServerFieldError } from "~/components/admin/shared/SaveBar";
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
-import { themeEditorMessages } from "~/i18n/theme-editor";
+import { themeEditorFull } from "~/i18n/theme-editor-panes";
 import { themeSettingMessages } from "~/i18n/theme-settings";
 import type { ThemeAppSettingField } from "~/lib/api-query-options/online-store";
 import { productsByIdsQueryOptions } from "~/lib/api-query-options/products";
@@ -49,7 +49,7 @@ import { CategorySelect, CollectionSelect, LinkField, MediaField, ProductSelect,
 import { moveAt, removeAt, replaceAt } from "./media-previews";
 import { Field } from "~/components/ui/field";
 
-type Messages = (key: keyof (typeof themeEditorMessages)["en"], vars?: Record<string, string | number>) => string;
+type Messages = (key: keyof (typeof themeEditorFull)["en"], vars?: Record<string, string | number>) => string;
 
 /** The DOM id of one app setting (`theme-section-app-values-title`). */
 export const appSettingFieldId = (idPrefix: string, key: string) => `${idPrefix}-${key}`;
@@ -75,7 +75,7 @@ function problemText(t: Messages, problem: AppSettingProblem): string {
 
 /** Each field's problem with its values, as shown messages, by setting key. */
 export function useAppSettingErrors(fields: readonly ThemeAppSettingField[], values: Readonly<Record<string, unknown>>): ReadonlyMap<string, string> {
-  const t = useMessages(themeEditorMessages);
+  const t = useMessages(themeEditorFull);
   return new Map([...appSettingProblems(fields, values)].map(([key, problem]) => [key, problemText(t, problem)]));
 }
 
@@ -91,7 +91,7 @@ const described = (id: string, help: string | null, error?: string) => ({
 });
 
 function FieldLabel({ id, field }: { id: string; field: ThemeAppSettingField }) {
-  const t = useMessages(themeEditorMessages);
+  const t = useMessages(themeEditorFull);
   return (
     <Label htmlFor={id}>
       {field.label}
@@ -125,7 +125,7 @@ function ProductSourceControl({ id, field, value, error, onChange }: {
   error?: string;
   onChange: (value: string | null) => void;
 }) {
-  const t = useMessages(themeEditorMessages);
+  const t = useMessages(themeEditorFull);
   const labels = useMessages(themeSettingMessages);
   const [kind = "", record = ""] = value.split(":");
   const choosing = kind === "collection" || kind === "category";
@@ -167,7 +167,7 @@ function ProductControl({ id, field, value, error, onChange }: {
   error?: string;
   onChange: (value: string | null) => void;
 }) {
-  const t = useMessages(themeEditorMessages);
+  const t = useMessages(themeEditorFull);
   const lookup = useQuery({ ...productsByIdsQueryOptions(value ? [value] : []), enabled: Boolean(value) });
   const product = lookup.data?.products.find((each) => each.id === value);
   const gone = Boolean(value) && lookup.isSuccess && !lookup.isPlaceholderData && !product;
@@ -230,7 +230,7 @@ function ListControl({ id, field, value, error, media, onChange }: {
   media: MediaPreviews;
   onChange: (value: AppSettingItem[]) => void;
 }) {
-  const t = useMessages(themeEditorMessages);
+  const t = useMessages(themeEditorFull);
   const labels = useMessages(themeSettingMessages);
   const items = Array.isArray(value) ? (value as AppSettingItem[]) : [];
   const { keys, update, fresh } = useItemKeys(items.length);
@@ -372,7 +372,7 @@ function AppSettingInput({ id, field, value, error, media, onChange }: {
   media: MediaPreviews;
   onChange: (value: AppSettingValue | undefined) => void;
 }) {
-  const t = useMessages(themeEditorMessages);
+  const t = useMessages(themeEditorFull);
   const store = useMessages(onlineStoreMessages);
   const server = useServerFieldError(id);
   const shown = error ?? server.error;

@@ -16,7 +16,7 @@ import { Button } from "~/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
-import { themeEditorMessages } from "~/i18n/theme-editor";
+import { themeEditorFull } from "~/i18n/theme-editor-panes";
 import { productsByIdsQueryOptions } from "~/lib/api-query-options/products";
 import { ProductSelect } from "../schema-form/resource-fields";
 import { Field } from "../shared";
@@ -87,7 +87,7 @@ export function LandingPageSettings({ theme, slug, setDraft, onRemove }: {
   setDraft: SetTheme;
   onRemove: () => void;
 }) {
-  const t = useMessages(themeEditorMessages);
+  const t = useMessages(themeEditorFull);
   const page = theme.pages.landing[slug];
   if (!page) return null;
   const update = (patch: Partial<typeof page>) => setDraft((current) => {
@@ -119,7 +119,7 @@ export function LandingPageSettings({ theme, slug, setDraft, onRemove }: {
 
 /** The cart and checkout form: their fields and words follow the checkout settings; the template adds sections around them. */
 export function CartContent() {
-  const t = useMessages(themeEditorMessages);
+  const t = useMessages(themeEditorFull);
   return (
     <div className="space-y-3">
       <p className="text-body text-muted-foreground">{t("cartMainHelp")}</p>
@@ -132,7 +132,7 @@ export function CartContent() {
 
 /** A CMS page's words are a page in Content; the editor shows it in the store's header and footer. */
 export function CmsPageContent({ pageId }: { pageId: string | null }) {
-  const t = useMessages(themeEditorMessages);
+  const t = useMessages(themeEditorFull);
   return (
     <div className="space-y-3">
       <p className="text-body text-muted-foreground">{t("pageContentHelp")}</p>

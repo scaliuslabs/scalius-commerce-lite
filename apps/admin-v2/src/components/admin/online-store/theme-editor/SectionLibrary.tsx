@@ -18,7 +18,7 @@ import { Input } from "~/components/ui/input";
 import { useMediaQuery } from "~/hooks/use-media-query";
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
-import { themeEditorMessages } from "~/i18n/theme-editor";
+import { themeEditorFull } from "~/i18n/theme-editor-panes";
 import type { ThemeApp } from "~/lib/api-query-options/online-store";
 import { Sketch, type SketchPalette } from "../ThemeChoices";
 import { SectionLibraryPreview, type LibraryPreviewContext } from "./SectionLibraryPreview";
@@ -133,7 +133,7 @@ export function SectionLibrary({ open, onOpenChange, theme, options, apps, previ
   onAdd: (choice: LibraryChoice) => void;
   onDraftWithAi: () => void;
 }) {
-  const t = useMessages(themeEditorMessages);
+  const t = useMessages(themeEditorFull);
   const store = useMessages(onlineStoreMessages);
   const desktop = useMediaQuery("(min-width: 768px)");
   const [detail, setDetail] = useState(false);

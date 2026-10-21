@@ -12,7 +12,7 @@ import { Button } from "~/components/ui/button";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
-import { themeEditorMessages } from "~/i18n/theme-editor";
+import { themeEditorFull } from "~/i18n/theme-editor-panes";
 import type { ThemeApp, ThemeAppBlock } from "~/lib/api-query-options/online-store";
 import { appSettingDefaults, themeAppFields } from "../schema-form/app-settings";
 import { AppSettingFields } from "../schema-form/AppSettingFields";
@@ -31,7 +31,7 @@ import {
 } from "../theme-settings";
 
 function usePlacementName() {
-  const t = useMessages(themeEditorMessages);
+  const t = useMessages(themeEditorFull);
   return (placement: ThemeAppBlock["placement"]) => t(placement === "product.buy_box.before" ? "appBlockPlacement_buyBoxBefore" : placement === "product.buy_box.after" ? "appBlockPlacement_buyBox" : "appBlockPlacement_below");
 }
 
@@ -43,7 +43,7 @@ function AppBlockItem({ block, entry, index, count, media, setDraft }: {
   media: MediaPreviews;
   setDraft: SetTheme;
 }) {
-  const t = useMessages(themeEditorMessages);
+  const t = useMessages(themeEditorFull);
   const store = useMessages(onlineStoreMessages);
   const placement = usePlacementName();
   const name = entry?.block.name ?? block.app;
@@ -86,7 +86,7 @@ function AppBlockItem({ block, entry, index, count, media, setDraft }: {
 }
 
 export function ProductAppBlocksSettings({ theme, apps, media, setDraft }: { theme: Theme; apps: readonly ThemeApp[]; media: MediaPreviews; setDraft: SetTheme }) {
-  const t = useMessages(themeEditorMessages);
+  const t = useMessages(themeEditorFull);
   const placement = usePlacementName();
   const byKey = appBlocksByKey(apps);
   const blocks = productAppBlocks(theme);

@@ -30,7 +30,7 @@ import { SearchableSelect } from "~/components/ui/searchable-select";
 import { cn } from "@scalius/shared/utils";
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
-import { themeEditorMessages } from "~/i18n/theme-editor";
+import { themeEditorFull } from "~/i18n/theme-editor-panes";
 import type { ThemeApp } from "~/lib/api-query-options/online-store";
 import { MediaField, type MediaPreviews, type SectionMediaPreview } from "../schema-form/resource-fields";
 import { BlockSettingsFields, ColorFields, FitNote, useFitReason, variantRenders, type SetTheme, type Theme } from "../theme-fields";
@@ -97,7 +97,7 @@ function SettingsGroup({ title, description, action, defaultOpen = false, name, 
 
 /** Page width, corners and buttons: the store's layout tokens. */
 function LayoutFields({ theme, setDraft }: { theme: Theme; setDraft: SetTheme }) {
-  const t = useMessages(themeEditorMessages);
+  const t = useMessages(themeEditorFull);
   const set = <Key extends "container" | "radius" | "buttonShape">(key: Key, value: Theme["tokens"][Key]) =>
     setDraft((current) => ({ ...current, tokens: { ...current.tokens, [key]: value } }));
   const select = <Key extends "container" | "radius" | "buttonShape">(key: Key, values: readonly Theme["tokens"][Key][]) => (
@@ -203,7 +203,7 @@ export function ThemeSettingsPanel({ theme, resolved, media, apps, setDraft, rev
   setDraft: SetTheme;
 }) {
   const t = useMessages(onlineStoreMessages);
-  const editor = useMessages(themeEditorMessages);
+  const editor = useMessages(themeEditorFull);
   const block = useBlockChoice(theme, resolved, setDraft, media);
   // One group open at a time; the panel opens as a short list of its groups.
   const [open, setOpen] = useState<string | null>(null);
@@ -277,7 +277,7 @@ export function HeaderSettings({ theme, resolved, media, apps, setDraft }: PartP
 function BuiltInHeaderSettings({ theme, resolved, media, setDraft, place }: Omit<PartProps, "apps"> & { place: SkinSettingsPlace }) {
   const t = useMessages(onlineStoreMessages);
   const fitReason = useFitReason(resolved.facts);
-  const editor = useMessages(themeEditorMessages);
+  const editor = useMessages(themeEditorFull);
   const block = useBlockChoice(theme, resolved, setDraft, media);
   const [open, setOpen] = useState<string | null | undefined>(undefined);
   return (

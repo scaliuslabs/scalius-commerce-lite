@@ -5,7 +5,7 @@
  */
 import type { StorefrontAppSection } from "@scalius/shared/storefront-theme";
 import { useMessages } from "~/i18n";
-import { themeEditorMessages } from "~/i18n/theme-editor";
+import { themeEditorFull } from "~/i18n/theme-editor-panes";
 import { sectionFieldPrefix } from "../SectionSettings";
 import { themeAppFields, type AppSettingValues } from "../schema-form/app-settings";
 import { AppSettingFields } from "../schema-form/AppSettingFields";
@@ -41,7 +41,7 @@ export function AppSectionSettings({ section, entry, issues, media, onChange }: 
   media: MediaPreviews;
   onChange: (values: AppSettingValues) => void;
 }) {
-  const t = useMessages(themeEditorMessages);
+  const t = useMessages(themeEditorFull);
   if (!entry) return <p role="status" className="text-body text-muted-foreground">{t("appInactiveHelp")}</p>;
   const { fields, other } = issuesByKey(issues);
   const description = entry.section.description;

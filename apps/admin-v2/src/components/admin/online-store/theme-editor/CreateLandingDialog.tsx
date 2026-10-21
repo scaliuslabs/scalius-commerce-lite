@@ -7,7 +7,7 @@ import { Field } from "~/components/ui/field";
 import { Badge } from "~/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { useMessages } from "~/i18n";
-import { themeEditorMessages } from "~/i18n/theme-editor";
+import { themeEditorFull } from "~/i18n/theme-editor-panes";
 import type { Theme } from "../theme-fields";
 import type { LandingPreset } from "./landing-presets";
 
@@ -27,7 +27,7 @@ export function CreateLandingDialogContent({ open, theme, presets = [], onCreate
   onCreate: (slug: string, title: string, start: { preset: LandingPreset; productId: string | null } | null) => void;
   onCloseAutoFocus?: (event: Event) => void;
 }) {
-  const t = useMessages(themeEditorMessages);
+  const t = useMessages(themeEditorFull);
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [slugEdited, setSlugEdited] = useState(false);

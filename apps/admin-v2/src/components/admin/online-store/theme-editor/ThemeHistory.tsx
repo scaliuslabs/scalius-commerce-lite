@@ -26,7 +26,7 @@ import { Button } from "~/components/ui/button";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "~/components/ui/sheet";
 import { formatDateTime, useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
-import { themeEditorMessages } from "~/i18n/theme-editor";
+import { themeEditorFull } from "~/i18n/theme-editor-panes";
 import { apiData, type ApiResult } from "~/lib/api";
 import { themeVersionDocumentQuery, themeVersionsKey } from "./theme-history-queries";
 
@@ -43,7 +43,7 @@ const restorePointDocumentQuery = (id: string | null) => ({
 
 /** A change as a sentence in the dashboard language, naming sections by their heading or kind. */
 export function useChangeText(documents: readonly StorefrontThemeDocument[], sectionName: (section: StorefrontSection) => string) {
-  const t = useMessages(themeEditorMessages);
+  const t = useMessages(themeEditorFull);
   const store = useMessages(onlineStoreMessages);
   const pageName = (page: string) => {
     if (page === "home") return t("page_home");
@@ -78,7 +78,7 @@ export function useChangeText(documents: readonly StorefrontThemeDocument[], sec
 }
 
 function ChangeList({ changes, more, text, label }: { changes: readonly ThemeDocumentChange[]; more: number; text: (change: ThemeDocumentChange) => string; label?: string }) {
-  const t = useMessages(themeEditorMessages);
+  const t = useMessages(themeEditorFull);
   if (changes.length === 0) return <p className="text-body text-muted-foreground">{t("versionSame")}</p>;
   return (
     <ul aria-label={label} className="list-disc space-y-1 ps-5 text-body">
@@ -94,7 +94,7 @@ function Compare({ document, draft, sectionName }: {
   draft: StorefrontThemeDocument;
   sectionName: (section: StorefrontSection) => string;
 }) {
-  const t = useMessages(themeEditorMessages);
+  const t = useMessages(themeEditorFull);
   const text = useChangeText(document.data ? [draft, document.data] : [draft], sectionName);
   return (
     <div className="space-y-1 rounded-lg bg-muted px-3 py-2">
@@ -116,7 +116,7 @@ function VersionItem({ version, live, draft, previewing, busy, sectionName, onPr
   onPreview: () => void;
   onRestore: () => void;
 }) {
-  const t = useMessages(themeEditorMessages);
+  const t = useMessages(themeEditorFull);
   const [comparing, setComparing] = useState(false);
   const document = useQuery(themeVersionDocumentQuery(comparing ? version.revision : null));
   const text = useChangeText([draft], sectionName);
@@ -152,7 +152,7 @@ function RestorePointItem({ point, draft, busy, sectionName, onRestore }: {
   sectionName: (section: StorefrontSection) => string;
   onRestore: () => void;
 }) {
-  const t = useMessages(themeEditorMessages);
+  const t = useMessages(themeEditorFull);
   const [comparing, setComparing] = useState(false);
   const document = useQuery(restorePointDocumentQuery(comparing ? point.id : null));
   return (
@@ -185,7 +185,7 @@ export function ThemeHistory({ open, onOpenChange, draft, liveRevision, previewR
   onRestore: (revision: number) => void;
   onRestorePoint: (id: string) => void;
 }) {
-  const t = useMessages(themeEditorMessages);
+  const t = useMessages(themeEditorFull);
   const query = useInfiniteQuery({
     queryKey: themeVersionsKey,
     queryFn: ({ pageParam }) => apiData(getApiV1AdminSettingsThemeVersions({ query: pageParam ? { beforeRevision: pageParam } : {} })),

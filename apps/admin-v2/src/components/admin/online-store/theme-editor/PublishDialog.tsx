@@ -15,7 +15,7 @@ import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { Textarea } from "~/components/ui/textarea";
 import { useMessages } from "~/i18n";
-import { themeEditorMessages } from "~/i18n/theme-editor";
+import { themeEditorFull } from "~/i18n/theme-editor-panes";
 import { useChangeText } from "./ThemeHistory";
 import { Field } from "~/components/ui/field";
 import { ThemeAppsUnavailableAlert } from "~/components/admin/apps/ThemeAppParts";
@@ -39,7 +39,7 @@ export function PublishDialog({ open, onOpenChange, live, draft, held, unopenedA
   onShowProblem: () => void;
   onPublish: (note: string) => void;
 }) {
-  const t = useMessages(themeEditorMessages);
+  const t = useMessages(themeEditorFull);
   const [note, setNote] = useState("");
   useEffect(() => {
     if (!open) setNote("");

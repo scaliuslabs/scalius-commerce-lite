@@ -21,7 +21,7 @@ import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Switch } from "~/components/ui/switch";
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
-import { themeEditorMessages } from "~/i18n/theme-editor";
+import { themeEditorFull } from "~/i18n/theme-editor-panes";
 import type { MediaPreviews } from "../schema-form/resource-fields";
 import { BlockSettingsFields, type SetTheme, type Theme } from "../theme-fields";
 import { DensitySketch, Sketch, VisualChoice } from "../ThemeChoices";
@@ -122,7 +122,7 @@ function toggleToolbarPiece(toolbar: readonly StorefrontListingToolbarPiece[], p
 
 /** The title band: breadcrumb, banner, count, sort and the other toolbar pieces. */
 export function ListingToolbarSettings({ theme, setDraft }: { theme: Theme; setDraft: SetTheme }) {
-  const t = useMessages(themeEditorMessages);
+  const t = useMessages(themeEditorFull);
   const store = useMessages(onlineStoreMessages);
   const listing = theme.blocks.listing;
   return (
@@ -166,7 +166,7 @@ export function ListingToolbarSettings({ theme, setDraft }: { theme: Theme; setD
 /** How the filters look, whether their groups start open, and their order. */
 export function ListingFilterSettings({ theme, setDraft, search }: { theme: Theme; setDraft: SetTheme; search: boolean }) {
   const t = useMessages(onlineStoreMessages);
-  const editor = useMessages(themeEditorMessages);
+  const editor = useMessages(themeEditorFull);
   const filters = theme.blocks.listing.filters;
   const order = filters.order ?? storefrontListingFilterDefaultOrder(filters.style);
   const groupName = (group: StorefrontListingFilterGroup) => t(`filterGroup_${group}` as MessageKey);
@@ -248,7 +248,7 @@ export function ListingFilterSettings({ theme, setDraft, search }: { theme: Them
 /** The product grid: arrangement, density, phone layout, paging and, for search, its own layout. */
 export function ListingGridSettings({ theme, setDraft, media, search }: { theme: Theme; setDraft: SetTheme; media: MediaPreviews; search: boolean }) {
   const t = useMessages(onlineStoreMessages);
-  const editor = useMessages(themeEditorMessages);
+  const editor = useMessages(themeEditorFull);
   const listing = theme.blocks.listing;
   return (
     <div className="space-y-4" data-listing-default>

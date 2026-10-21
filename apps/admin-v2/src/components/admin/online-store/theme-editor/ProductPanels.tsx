@@ -14,7 +14,7 @@ import {
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
-import { themeEditorMessages } from "~/i18n/theme-editor";
+import { themeEditorFull } from "~/i18n/theme-editor-panes";
 import type { MediaPreviews } from "../schema-form/resource-fields";
 import { BlockSettingsFields, FitNote, useFitReason, variantRenders, type SetTheme, type Theme } from "../theme-fields";
 import { BuyBoxSketch, ProductPageSketch, VisualChoice } from "../ThemeChoices";
@@ -36,7 +36,7 @@ export function ProductMainSettings({ theme, resolved, media, setDraft }: {
   setDraft: SetTheme;
 }) {
   const t = useMessages(onlineStoreMessages);
-  const editor = useMessages(themeEditorMessages);
+  const editor = useMessages(themeEditorFull);
   const fitReason = useFitReason(resolved.facts);
   const sticky = theme.blocks.product.sticky;
   const setSticky = (next: Partial<Product["sticky"]>) =>
@@ -106,7 +106,7 @@ export function ProductMainSettings({ theme, resolved, media, setDraft }: {
 
 /** One module below the product: what it shows, and whether product pages show it. */
 export function ProductModuleSettings({ theme, module, setDraft }: { theme: Theme; module: StorefrontProductModule; setDraft: SetTheme }) {
-  const editor = useMessages(themeEditorMessages);
+  const editor = useMessages(themeEditorFull);
   const shown = theme.blocks.product.below.includes(module);
   return (
     <div className="space-y-4">

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { useMessages } from "~/i18n";
-import { themeEditorMessages } from "~/i18n/theme-editor";
+import { themeEditorFull } from "~/i18n/theme-editor-panes";
 
 export interface LibraryPreviewContext {
   origin: string | null;
@@ -17,7 +17,7 @@ export function SectionLibraryPreview({ selection, name, preview }: {
   name: string;
   preview: LibraryPreviewContext;
 }) {
-  const t = useMessages(themeEditorMessages);
+  const t = useMessages(themeEditorFull);
   const frame = useRef<HTMLIFrameElement>(null);
   const [attempt, setAttempt] = useState(0);
   const [document, setDocument] = useState<{ key: string; url: string; nonce: string } | null>(null);

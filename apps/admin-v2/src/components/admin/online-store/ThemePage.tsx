@@ -29,7 +29,7 @@ import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { formatDateTime, useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
-import { themeEditorMessages } from "~/i18n/theme-editor";
+import { themeEditorFull } from "~/i18n/theme-editor-panes";
 import { isAdminApiConflictError } from "~/lib/admin-api-error";
 import { apiData } from "~/lib/api";
 import { themeWorkspaceQueryOptions, type ThemeWorkspaceDocument } from "~/lib/api-query-options/online-store";
@@ -123,7 +123,7 @@ function ThemeOverview({ workspace, refetch }: {
   refetch: () => Promise<unknown>;
 }) {
   const t = useMessages(onlineStoreMessages);
-  const editor = useMessages(themeEditorMessages);
+  const editor = useMessages(themeEditorFull);
   const queryClient = useQueryClient();
   const openPreview = useOpenThemePreview();
   // Staff who may view settings but not edit them see the theme, preview it and open the editor read-only.
