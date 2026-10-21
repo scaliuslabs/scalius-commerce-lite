@@ -9,6 +9,7 @@ import {
   Image,
   Island,
   Price,
+  Slot,
   asset,
   defineStorefront,
   editable,
@@ -90,12 +91,14 @@ function Footer({ data, settings }: FooterProps<{ tagline: string | null }>) {
 
 // ── The card ──────────────────────────────────────────────────────────────
 
-function Card({ product, context, ratio = "portrait", showRating = true, eager = false }: {
+function Card({ product, context, ratio = "portrait", showRating = true, eager = false, slots = false }: {
   product: StorefrontProductCard;
   context: StorefrontRenderContext;
   ratio?: string;
   showRating?: boolean;
   eager?: boolean;
+  /** The store's product card (the card skin): other apps' badges and lines go in its slots. */
+  slots?: boolean;
 }) {
   return (
     <article class={["studio-card", `ratio-${ratio}`, product.soldOut && "is-sold-out"]}>
@@ -103,9 +106,11 @@ function Card({ product, context, ratio = "portrait", showRating = true, eager =
         <Image image={product.image} sizes="(min-width: 1024px) 22vw, (min-width: 640px) 33vw, 50vw" loading={eager ? "eager" : "lazy"} alt="" />
         {product.percentOff ? <span class="studio-badge">-{product.percentOff}%</span> : null}
       </a>
+      {slots ? <div class="studio-card-badges"><Slot name="product_card.badges" /></div> : null}
       <h3 class="studio-card-title"><a href={product.url}>{product.title}</a></h3>
       <Price price={product.price} compareAt={product.compareAt} from={product.priceVaries} context={context} class="studio-price" />
       {showRating && product.rating ? <p class="studio-rating">★ {product.rating.average.toFixed(1)} ({product.rating.count})</p> : null}
+      {slots ? <Slot name="product_card.meta" /> : null}
       {product.soldOut
         ? <p class="studio-sold-out">{t(context, { en: "Sold out", bn: "স্টক শেষ" })}</p>
         : <a class="studio-add" {...quickAdd(product)}>{product.quickAdd ? t(context, { en: "Add to cart", bn: "কার্টে যোগ করুন" }) : t(context, { en: "Choose options", bn: "অপশন বাছুন" })}</a>}
@@ -114,7 +119,7 @@ function Card({ product, context, ratio = "portrait", showRating = true, eager =
 }
 
 function ProductCardSkin({ data, settings, context }: ProductCardProps<{ ratio: string; show_rating: boolean }>) {
-  return <Card product={data.product} context={context} ratio={settings.ratio} showRating={settings.show_rating} eager={data.aboveFold} />;
+  return <Card product={data.product} context={context} ratio={settings.ratio} showRating={settings.show_rating} eager={data.aboveFold} slots />;
 }
 
 // ── Sections ──────────────────────────────────────────────────────────────

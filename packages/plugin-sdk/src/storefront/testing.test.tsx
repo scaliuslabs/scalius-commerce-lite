@@ -38,7 +38,7 @@ describe("skins and blocks", () => {
       ),
     },
     components: {
-      guide: (props: ComponentProps) => props.target.startsWith("product.") && "data" in props
+      guide: (props: ComponentProps) => "instanceId" in props
         ? <aside data-target={props.target}>{props.data.product.options.map((option) => option.name).join(", ")}</aside>
         : <span data-target={props.target}>Guide</span>,
       vendor: (props: ComponentProps<Record<string, never>, { name: string }>) => props.target === "page" ? <h2>{props.props.name}</h2> : null,

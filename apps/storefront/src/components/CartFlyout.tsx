@@ -55,6 +55,8 @@ import {
 } from "@/lib/recommendations";
 import { formatDiscountLineLabel } from "@scalius/shared/checkout-language-format";
 import { currentPresence, pagePath } from "@/lib/presence-url";
+import { readBuyerAttributes } from "@/lib/buyer-ui/state";
+import { browserBuyerUiLocaleHeaders } from "@/lib/buyer-ui/browser-locale";
 
 export const cartOpenState = atom<boolean>(false);
 
@@ -129,6 +131,9 @@ interface Props {
   onReady?: () => void;
 }
 
+/** No buyer UI blocks (one array, so an unchanged answer redraws nothing). */
+const NO_BLOCKS: unknown[] = [];
+
 export function setCartOpen(value: boolean) {
   if (typeof window !== "undefined") {
     try {
@@ -141,14 +146,20 @@ export function setCartOpen(value: boolean) {
 
 /**
  * Live facts for the open drawer: automatic savings and offers from the
- * server, and per-line stock problems, so a buyer hears about them before
- * reaching checkout.
+ * server, per-line stock problems, so a buyer hears about them before
+ * reaching checkout, and the store apps' blocks for the drawer's footer
+ * (the same check answers them: no request of their own).
  */
 function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
   const [discounts, setDiscounts] = useState<CheckoutDiscountFacts & { totalDiscount: number } | null>(null);
   const [issues, setIssues] = useState<Record<string, CartValidationIssue>>({});
   /** Store app rules that block checkout, in the app's own words. */
   const [ruleErrors, setRuleErrors] = useState<CartRuleError[]>([]);
+  /** The apps' buyer UI blocks, as the check answered them (parsed where they are drawn). */
+  const [buyerUi, setBuyerUi] = useState<unknown[]>(NO_BLOCKS);
+  /** Bumped when a block changed what the check reads (an answer it set). */
+  const [revision, setRevision] = useState(0);
+  const recheck = useCallback(() => setRevision((value) => value + 1), []);
   useEffect(() => {
     const items = Object.entries(cart.items);
     if (!isOpen || items.length === 0) return;
@@ -157,9 +168,10 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
       void previewCartDiscounts(cart.discountCodes, items.map(([, item]) => item)).then((preview) => {
         if (current) setDiscounts(preview.ok ? preview : null);
       });
+      const attributes = readBuyerAttributes();
       void fetch("/api/checkout/validate-cart", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...browserBuyerUiLocaleHeaders() },
         body: JSON.stringify({
           items: items.map(([cartKey, item]) => ({
             cartKey,
@@ -171,16 +183,21 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
             variantLabel: cartItemVariantLabel(item.options),
             ...(item.properties?.length ? { properties: cartLinePropertyInputs(item) } : {}),
           })),
+          // Answers to the apps' checkout questions: their rules and blocks read them.
+          ...(Object.keys(attributes).length > 0 ? { attributes } : {}),
           // The page's market prices the cart (MARKETS-DESIGN D5).
           ...(currentPresence() ? { presence: currentPresence() } : {}),
         }),
       })
         .then((response) => response.json())
-        .then((json: { data?: { issues?: CartValidationIssue[]; ruleErrors?: unknown }; details?: { itemIssues?: CartValidationIssue[] } }) => {
+        .then((json: { data?: { issues?: CartValidationIssue[]; ruleErrors?: unknown; buyerUi?: unknown }; details?: { itemIssues?: CartValidationIssue[] } }) => {
           if (!current) return;
           const found = json?.data?.issues ?? json?.details?.itemIssues ?? [];
           setIssues(Object.fromEntries(found.flatMap((issue) => issue.cartKey ? [[issue.cartKey, issue]] : [])));
           setRuleErrors(parseCartRuleErrors(json?.data?.ruleErrors));
+          // A refused check keeps no blocks: they belong to a cart the store read.
+          const blocks = json?.data?.buyerUi;
+          setBuyerUi(Array.isArray(blocks) && blocks.length > 0 ? blocks : NO_BLOCKS);
         })
         .catch(() => undefined);
     }, 300);
@@ -188,8 +205,29 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
       current = false;
       window.clearTimeout(timer);
     };
-  }, [cart.items, cart.discountCodes, isOpen]);
-  return { discounts: Object.keys(cart.items).length > 0 ? discounts : null, issues, ruleErrors };
+  }, [cart.items, cart.discountCodes, isOpen, revision]);
+  const hasItems = Object.keys(cart.items).length > 0;
+  return { discounts: hasItems ? discounts : null, issues, ruleErrors, buyerUi: hasItems ? buyerUi : NO_BLOCKS, recheck };
+}
+
+/**
+ * The drawer's own buyer UI mount (`cart_drawer.footer`): hidden until a
+ * block lands, so a drawer without one never shifts. It is its own scope, so
+ * the page's renders (the cart page's) never clear it, nor it theirs. The
+ * renderer loads only once there is something to draw.
+ */
+function DrawerBuyerUi({ blocks, onChange }: { blocks: unknown[]; onChange: () => void }) {
+  const mount = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const element = mount.current;
+    if (!element || (blocks.length === 0 && element.childElementCount === 0)) return;
+    let current = true;
+    void import("@/lib/buyer-ui").then(({ renderBuyerUi }) => {
+      if (current && element.isConnected) renderBuyerUi(blocks, { root: element, onChange });
+    });
+    return () => { current = false; };
+  }, [blocks, onChange]);
+  return <div ref={mount} data-buyer-ui-scope="" data-buyer-ui-target="cart_drawer.footer" className="space-y-2 text-sm" hidden />;
 }
 
 /**
@@ -248,7 +286,7 @@ export default function CartFlyout({ onReady }: Props) {
   const priceCopy = storefrontCopy(storefrontLanguage(pageLanguage())).price;
   const cart = useStore(cartStore);
   const isOpen = useStore(cartOpenState);
-  const { discounts, issues, ruleErrors } = useDrawerCartFacts(cart, isOpen);
+  const { discounts, issues, ruleErrors, buyerUi, recheck } = useDrawerCartFacts(cart, isOpen);
   const recommendations = useCartRecommendations(cart, isOpen);
   // A line that can't be bought as is blocks Checkout here, like on the cart page,
   // and so does a store app's rule (on its line, or about the whole cart).
@@ -811,6 +849,7 @@ export default function CartFlyout({ onReady }: Props) {
               {checkoutBlocked && (
                 <p id="drawerCheckoutBlocked" className="text-sm text-destructive" role="status">{blockedText}</p>
               )}
+              <DrawerBuyerUi blocks={buyerUi} onChange={recheck} />
               {/* One primary action (Shopify): Check out. The cart page is a link beside Continue shopping; Clear cart lives there. */}
               {checkoutBlocked ? (
                 <Button

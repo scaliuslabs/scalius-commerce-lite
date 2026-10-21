@@ -7,11 +7,15 @@ import type { PluginUiButton, PluginUiImageSource, PluginUiNode, PluginUiTarget 
 import { formatNumber } from "@scalius/shared/locale-format";
 import { pagePath } from "@/lib/presence-url";
 import { buyerFieldModel } from "./field";
-import { isCheckoutSlot, readBuyerAttributes, writeBuyerAttribute } from "./state";
+import { isCartSlot, isCheckoutSlot, readBuyerAttributes, writeBuyerAttribute } from "./state";
 import { runBuyerUiAction, type RunnableAction } from "./actions";
 
 export { readBuyerAttributes, clearBuyerAttributes } from "./state";
-export interface BuyerUiOptions { root?: ParentNode; onChange?: () => void | Promise<void> }
+export interface BuyerUiOptions {
+  /** Where the render's mounts are (default: the page's unscoped mounts); a scoped mount is drawn only by a render rooted in its scope. */
+  root?: ParentNode;
+  onChange?: () => void | Promise<void>;
+}
 
 const controlClass = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 const toneClasses = {
@@ -30,7 +34,8 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = "", 
 function fieldNode(attribute: CheckoutAttribute, block: BuyerUiBlock, options: BuyerUiOptions): HTMLElement {
   const name = `${block.appId}.${attribute.key}`;
   const checkout = isCheckoutSlot(block.target);
-  const value = (checkout ? readBuyerAttributes()[name] : undefined) ?? block.values[attribute.key] ?? "";
+  // A cart surface shows the buyer's current answer; an order page the one it kept.
+  const value = (isCartSlot(block.target) ? readBuyerAttributes()[name] : undefined) ?? block.values[attribute.key] ?? "";
   const model = buyerFieldModel(attribute, name, value);
   const wrapper = element("div", "space-y-1");
   const label = element("label", "block text-sm font-medium text-foreground", attribute.label);
@@ -87,7 +92,7 @@ function storeHref(to: PluginUiTarget): string | null {
 
 function buttonNode(node: PluginUiButton, block: BuyerUiBlock, options: BuyerUiOptions): HTMLElement | null {
   const action = node.action;
-  if (action.kind === "cart" && !isCheckoutSlot(block.target)) return null;
+  if (action.kind === "cart" && !isCartSlot(block.target)) return null;
   const buttonClass = "rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50";
   if (action.kind === "navigate") {
     const href = storeHref(action.to);
@@ -171,13 +176,28 @@ function renderNode(node: PluginUiNode, block: BuyerUiBlock, options: BuyerUiOpt
   }
 }
 
-/** Replaces only the private mounts; app content is always text or core-owned controls. */
+const SCOPE = "[data-buyer-ui-scope]";
+
+/**
+ * The mounts one render owns: those under `root` (and `root` itself, when it
+ * is a mount) whose nearest scope (`data-buyer-ui-scope`, e.g. the cart
+ * drawer's mount) is the root's own, so a document-wide render never clears
+ * a scoped mount it did not draw, nor a scoped render the page's mounts.
+ */
+function ownedMounts(root: ParentNode): HTMLElement[] {
+  const scope = root instanceof Element ? root.closest(SCOPE) : null;
+  const mounts = [...root.querySelectorAll<HTMLElement>("[data-buyer-ui-target]")];
+  if (root instanceof HTMLElement && root.matches("[data-buyer-ui-target]")) mounts.unshift(root);
+  return mounts.filter((mount) => mount.closest(SCOPE) === scope);
+}
+
+/** Replaces only the private mounts it owns; app content is always text or core-owned controls. */
 export function renderBuyerUi(value: unknown, options: BuyerUiOptions = {}): void {
   const root = options.root ?? document;
   const blocks = (Array.isArray(value) ? value.slice(0, 12) : []).flatMap((block) => {
     const parsed = buyerUiBlockSchema.safeParse(block); return parsed.success ? [parsed.data] : [];
   });
-  for (const mount of root.querySelectorAll<HTMLElement>("[data-buyer-ui-target]")) {
+  for (const mount of ownedMounts(root)) {
     const nodes: HTMLElement[] = [];
     for (const block of blocks) {
       if (block.target !== mount.dataset.buyerUiTarget) continue;
