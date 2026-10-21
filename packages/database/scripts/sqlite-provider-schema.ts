@@ -79,16 +79,25 @@ export async function loadSqliteSqlFile(
 /**
  * A database holding the schema the provider's migrations build (before
  * `beforeMigration`, for sidecar parity tests), at `location`: memory, or a
- * new file. The chain is replayed once per digest of its compiled script and
- * cached as an image (`src/testing/migrated-image.ts`, shared with the test
- * harness); each call restores a copy of it.
+ * new file. Tests restore a copy of a cached image of the chain, replayed once
+ * per digest of its compiled script (`src/testing/migrated-image.ts`, shared
+ * with the test harness). A production tool replays the chain instead
+ * (`replay`, the default outside tests), so the timestamps the migrations seed
+ * (`applied_at`, `created_at`) are real, not the cached image's build time.
  */
+export interface ProviderSchemaOptions {
+  /** Replay the migration chain rather than restore the cached image. Default: replay unless running under Vitest. */
+  replay?: boolean;
+}
+
 export async function createProviderSchemaDatabase(
   provider: DatabaseProvider,
   location = ":memory:",
   beforeMigration?: string,
+  options: ProviderSchemaOptions = {},
 ): Promise<DatabaseSync> {
-  const image = migratedImage(provider, beforeMigration);
+  const replay = options.replay ?? !process.env.VITEST;
+  const image = replay ? undefined : migratedImage(provider, beforeMigration);
   if (image && location !== ":memory:") {
     // "wx": the file must be new, as replaying the chain onto it required.
     await writeFile(location, image, { flag: "wx" });
