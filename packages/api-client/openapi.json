@@ -246386,6 +246386,68 @@
                         },
                         "expiresAt": {
                           "type": "string"
+                        },
+                        "requester": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "client": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "oauth",
+                                "pat",
+                                "cli"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "client",
+                            "kind"
+                          ]
+                        },
+                        "targets": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "product",
+                                  "variant",
+                                  "order",
+                                  "customer"
+                                ]
+                              },
+                              "total": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "names": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "matching": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "total",
+                              "names",
+                              "matching"
+                            ]
+                          }
                         }
                       },
                       "required": [
@@ -246393,7 +246455,9 @@
                         "status",
                         "summary",
                         "operationIds",
-                        "expiresAt"
+                        "expiresAt",
+                        "requester",
+                        "targets"
                       ]
                     }
                   },

@@ -69524,6 +69524,17 @@ export type GetApiV1AdminAgentAccessApprovalsByApprovalIdResponses = {
             summary: string;
             operationIds: Array<string>;
             expiresAt: string;
+            requester: {
+                name: string;
+                client: string | null;
+                kind: 'oauth' | 'pat' | 'cli';
+            } | null;
+            targets: Array<{
+                kind: 'product' | 'variant' | 'order' | 'customer';
+                total: number;
+                names: Array<string>;
+                matching: boolean;
+            }>;
         };
     };
 };

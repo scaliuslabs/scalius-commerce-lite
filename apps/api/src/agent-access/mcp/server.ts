@@ -37,6 +37,7 @@ import {
 import {
   confirmBinding,
   confirmSummary,
+  confirmTargets,
   consumeConfirmToken,
   isConfirmGated,
   mintConfirmToken,
@@ -606,6 +607,38 @@ async function singleResult(
 
 // ─── Confirmation ────────────────────────────────────────────────────────────
 
+/**
+ * Asks each route whether it would take its step's input, before anyone is
+ * asked to approve the change (black-box M7): a step the route refuses (its
+ * schema, an undeclared body property, its content type) answers with that
+ * refusal and no approval is requested. Nothing runs, and the check is not a
+ * call (no rate charge, no audit row). A step whose input reads an earlier
+ * step's result is validated when it runs.
+ */
+async function validateBeforeApproval(
+  deps: McpServerDependencies,
+  principal: AgentPrincipal,
+  prepared: readonly PreparedStep[],
+  options: ShapeOptions,
+): Promise<ReturnType<typeof agentErrorResult> | null> {
+  if (deps.surface !== "dashboard") return null;
+  for (const step of prepared) {
+    const { operation } = step;
+    if (containsStepReference(step.input) || operation.requiredClientAction) continue;
+    if (operation.transport !== "json" && operation.transport !== "continuation") continue;
+    try {
+      const input = await withIdempotencyKey(operation, step.input, `validate:${step.id}`);
+      const result = await dispatchAgentOperation({
+        operation, input, principal, env: deps.env, ctx: deps.ctx, validateOnly: true,
+      });
+      if (!result.ok) return agentErrorResult(shapeOperationResult(operation, result, options).error!);
+    } catch (error) {
+      return agentErrorResult(errorFromUnknown(error, operation.operationId));
+    }
+  }
+  return null;
+}
+
 const confirmAnswerSchema = z.object({ confirm: z.boolean() });
 
 interface ToolContextLike {
@@ -737,6 +770,7 @@ async function resolveConfirmation(
     binding,
     summary,
     operationIds: steps.filter((step) => isConfirmGated(step.operation)).map((step) => step.operation.operationId),
+    targets: confirmTargets(steps),
   });
   return {
     kind: "respond",
@@ -922,6 +956,8 @@ async function runWrite(deps: McpServerDependencies, args: WriteArgs, ctx: ToolC
 
   let confirmation: { by: AgentConfirmation; token: string } | null = null;
   if (gated && policy !== "none") {
+    const invalid = await validateBeforeApproval(deps, principal, prepared, options);
+    if (invalid) return invalid;
     const outcome = await resolveConfirmation(deps, principal, confirmSteps, args.approvalId, ctx);
     if (outcome.kind === "respond") return outcome.result;
     confirmation = { by: outcome.by, token: outcome.token };

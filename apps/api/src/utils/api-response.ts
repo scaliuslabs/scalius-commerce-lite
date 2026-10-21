@@ -1,4 +1,5 @@
 import type { Context } from "hono";
+import { HTTPException } from "hono/http-exception";
 import { isPostgresSerializationError } from "@scalius/database/postgres-adapter";
 import { AppError, ServiceUnavailableError } from "./api-error";
 import { logOpsEvent } from "./ops-log";
@@ -26,7 +27,7 @@ export interface ApiErrorResponse {
   };
 }
 
-type ErrorStatusCode = 400 | 401 | 403 | 404 | 409 | 413 | 422 | 428 | 429 | 500 | 503;
+type ErrorStatusCode = 400 | 401 | 403 | 404 | 409 | 413 | 415 | 422 | 428 | 429 | 500 | 503;
 
 const INTERNAL_ERROR_MESSAGE = "Internal Server Error";
 
@@ -65,6 +66,7 @@ function toErrorStatusCode(status: number): ErrorStatusCode {
     404,
     409,
     413,
+    415,
     422,
     428,
     429,
@@ -96,6 +98,21 @@ export function errorResponseFromError(err: unknown): {
           code: err.code,
           message: err.message,
           details: err.details,
+        },
+      },
+      status: toErrorStatusCode(err.status),
+    };
+  }
+  // Hono's own request refusals (malformed JSON, a content type the route
+  // does not take) are the caller's to fix, not a platform failure.
+  if (err instanceof HTTPException && err.status >= 400 && err.status < 500) {
+    const unsupported = err.status === 415;
+    return {
+      body: {
+        success: false,
+        error: {
+          code: unsupported ? "unsupported_media_type" : "invalid_request",
+          message: unsupported ? "This operation does not take that Content-Type." : err.message || "The request is malformed.",
         },
       },
       status: toErrorStatusCode(err.status),
@@ -138,6 +155,7 @@ export function logApiError(
     logOpsEvent("error", "api.error", metadata);
     return;
   }
+  if (err instanceof HTTPException && err.status >= 400 && err.status < 500) return;
 
   logOpsEvent("error", "api.error", {
     status: 500,

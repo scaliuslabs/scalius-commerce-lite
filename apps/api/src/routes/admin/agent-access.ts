@@ -657,6 +657,19 @@ const approvalSchema = z.object({
   summary: z.string(),
   operationIds: z.array(z.string()),
   expiresAt: z.string(),
+  /** The connection that asks: its name and the client it runs in (null for an access key). */
+  requester: z.object({
+    name: z.string(),
+    client: z.string().nullable(),
+    kind: z.enum(["oauth", "pat", "cli"]),
+  }).nullable(),
+  /** The records the change acts on, by kind: readable names (at most 20), the total, or every match of a filter. */
+  targets: z.array(z.object({
+    kind: z.enum(["product", "variant", "order", "customer"]),
+    total: z.number().int().min(0),
+    names: z.array(z.string()),
+    matching: z.boolean(),
+  })),
 });
 const getApprovalRoute = createRoute({
   method: "get",
