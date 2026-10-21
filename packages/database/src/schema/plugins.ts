@@ -127,6 +127,13 @@ export const pluginRegistrations = sqliteTable("plugin_registrations", {
     circuitFailures: integer("circuit_failures").notNull().default(0),
     circuitWindowAt: integer("circuit_window_at"),
     circuitOpenUntil: integer("circuit_open_until"),
+    /**
+     * Set just before a sandboxed function runs and cleared when it answers
+     * (or fails): one still set long after the wall limit means the run never
+     * returned (it held its thread), and the next checkout stops the app
+     * instead of running it again.
+     */
+    circuitInflightAt: integer("circuit_inflight_at"),
 }, (table) => [
     primaryKey({ columns: [table.kind, table.name, table.pluginId] }),
     index("plugin_registrations_plugin_idx").on(table.pluginId),

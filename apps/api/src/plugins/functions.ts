@@ -38,13 +38,17 @@
 import type { Database } from "@scalius/database/client";
 import { getDb } from "@scalius/database/client";
 import {
+  clearFunctionInflight,
   FUNCTION_CIRCUIT,
   functionCircuitDirty,
   functionCircuitOpen,
+  functionHung,
   listActiveFunctionPlugins,
+  markFunctionInflight,
   PluginError,
   recordFunctionFailure,
   recordFunctionSuccess,
+  stopPlugin,
   type RegisteredPlugin,
 } from "@scalius/core/modules/plugins";
 import { prepareAppObjectCommit, ObjectError } from "@scalius/core/modules/objects";
@@ -226,6 +230,12 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
         const own = Object.fromEntries(Object.entries(buyer.attributes).filter(([key]) => key.startsWith(prefix)));
         scopedInput = { ...buyer, attributes: Object.fromEntries(Object.entries(own).map(([key, value]) => [key.slice(prefix.length), value])), cart: buyer.cart ? { ...buyer.cart, attributes: own } : null };
       }
+      // A run that never returned (it held its thread): stop the app rather than freeze the store again.
+      // A stopped app neither answers nor blocks, so it is left out here too.
+      if (functionHung(registration.circuit, nowSeconds)) {
+        await stopHungApp(db, env, host, installation, point);
+        continue;
+      }
       // An open circuit: the failure policy at once, without calling the app (or logging again).
       if (functionCircuitOpen(registration.circuit, nowSeconds)) {
         fail();
@@ -244,7 +254,11 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
         continue;
       }
       const reads = readNames ? Object.fromEntries(Object.entries(read.reads).filter(([as]) => readNames.has(as))) : read.reads;
+      // A sandboxed run is marked in flight first (function-circuit.ts): if it never returns, the next checkout knows.
+      const sandboxed = installation.source !== "bundled";
+      if (sandboxed) await markFunctionInflight(db, { pluginId: installation.pluginId, point });
       const outcome = await host.invokeFunction(installation, point, { ...scopedInput, reads });
+      if (sandboxed) await clearFunctionInflight(db, { pluginId: installation.pluginId, point }).catch(() => console.warn("[plugins] function in-flight clear failed"));
       if (!outcome.ok || !outcome.value) {
         // A run the platform cut short for its own reasons (the app was just updated or stopped) is no failure of the app's.
         if (!outcome.ok && (outcome.failure === "outdated" || outcome.failure === "inactive")) fail();
@@ -343,5 +357,34 @@ async function noticeOpenCircuit(
     });
   } catch {
     console.warn(`[plugins] ${installation.pluginId} circuit notice failed`);
+  }
+}
+
+/**
+ * A sandboxed function run never returned (function-circuit.ts): the app is
+ * stopped with its reason, its log says why, and the staff are told. Starting
+ * it again (after a fix) is the merchant's call.
+ */
+async function stopHungApp(
+  db: Database,
+  env: Env,
+  host: PluginHost,
+  installation: RegisteredPlugin["installation"],
+  point: PluginRunPoint,
+): Promise<void> {
+  const reason = `Its ${point} function started and never returned, holding the store's Worker. It was stopped so it cannot freeze checkout again.`;
+  const stopped = await stopPlugin(db, installation.pluginId, reason).catch(() => false);
+  if (!stopped) return;
+  await host.incident(installation, `function:${point}`, reason);
+  try {
+    const { resolveDashboardLink, sendAdminPushNotice } = await import("@scalius/core/modules/notifications");
+    await sendAdminPushNotice(db, env, {
+      title: `${installation.manifest.name} was stopped`,
+      body: `Its ${point} answer never came back. Fix the app, then start it again.`,
+      link: resolveDashboardLink(env, `/admin/apps/${installation.pluginId}`),
+      data: { pluginId: installation.pluginId, notificationType: "plugin_stopped" },
+    });
+  } catch {
+    console.warn(`[plugins] ${installation.pluginId} stop notice failed`);
   }
 }

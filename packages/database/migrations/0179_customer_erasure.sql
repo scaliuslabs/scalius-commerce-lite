@@ -18,7 +18,8 @@
 --   plugin_registrations circuit (final audit I11): a function's failed
 --     answers in a window, and until when its circuit is open. Bookkeeping
 --     only: its columns are noise to the cache dependencies, and a
---     re-registration starts closed.
+--     re-registration starts closed. circuit_inflight_at marks a sandboxed
+--     run in flight, so a run that never returned stops its app.
 ALTER TABLE `customers` ADD `erased_at` integer;
 --> statement-breakpoint
 ALTER TABLE `order_items` ADD `sku` text;
@@ -28,6 +29,8 @@ ALTER TABLE `plugin_registrations` ADD `circuit_failures` integer DEFAULT 0 NOT 
 ALTER TABLE `plugin_registrations` ADD `circuit_window_at` integer;
 --> statement-breakpoint
 ALTER TABLE `plugin_registrations` ADD `circuit_open_until` integer;
+--> statement-breakpoint
+ALTER TABLE `plugin_registrations` ADD `circuit_inflight_at` integer;
 --> statement-breakpoint
 DROP TRIGGER IF EXISTS `order_items_unit_cost_snapshot`;
 --> statement-breakpoint
@@ -77,4 +80,4 @@ BEGIN
   INSERT INTO `event_outbox` (`id`, `topic`, `resource_type`, `resource_id`, `data`) VALUES ('evt_' || CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) || lower(hex(randomblob(6))), 'customer.updated', 'customer', OLD.`customer_id`, json_object('customerId', OLD.`customer_id`));
 END;
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (179, '0179_customer_erasure', 'bf9a9563960802364a6a6356137484e921c44b7f8c71f1753e5631315d67dea3');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (179, '0179_customer_erasure', 'bd9b9dd1c075e34a20a3b89f2aa72e5a3a013d0d1739a3e23b62d523145c332a');

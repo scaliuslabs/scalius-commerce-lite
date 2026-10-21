@@ -85,9 +85,9 @@ At 50,000 products and 156,244 SKUs with 1,000,000 orders (SCALE.md, 2026-10-21)
 Free has no Worker Loader, so every app runs bundled: compiled into the store's own API and storefront Workers from `scalius.plugins.json`. A bundled app is trusted deployment code, not a sandbox. It runs with the Worker's access (the `fetch` guard covers honest apps only), its CPU and wall time come out of the request or cron run it is in, and a crash or a long synchronous loop affects that invocation. The storefront host's timeout cannot preempt synchronous bundled code.
 
 - First-party apps (`scalius.*`, built and reviewed with Scalius) are bundled on both plans.
-- An app from another developer is safe to bundle only when you trust that developer as you trust your own code. The dashboard says so on the consent screen of every bundled app that is not first-party, before you approve it.
-- Workers Paid runs registry and uploaded apps sandboxed (`pnpm run deploy --plugin-sandbox`): each in its own Dynamic Worker with no network but its approved hosts, and its own CPU limit.
-- On either plan a checkout function that keeps failing trips its circuit (`packages/core/src/modules/plugins/function-circuit.ts`): checkout stops calling it for five minutes and applies its failure policy at once, and the staff are told.
+- An app from another developer is safe to bundle only when you trust that developer as you trust your own code, like a plugin. The activation dialog of a bundled app that is not first-party says so in one line. Free has no isolation mechanism, by design.
+- Workers Paid runs registry and uploaded apps sandboxed (`pnpm run deploy --plugin-sandbox`). Each runs in its own Dynamic Worker, with no network beyond its approved hosts and its own CPU limit. The plugin SDK README ("Two loaders") says which guarantees hold in production and which hold in local development.
+- On either plan, a checkout function that keeps failing trips its circuit (`packages/core/src/modules/plugins/function-circuit.ts`). Checkout stops calling it for five minutes, applies its failure policy at once and tells the staff. A sandboxed run that never returns stops its app at the next checkout.
 
 ### Password hashing
 

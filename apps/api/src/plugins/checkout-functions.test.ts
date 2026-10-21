@@ -494,6 +494,32 @@ describe("checkout app functions (real schema, bundled and test apps)", () => {
       expect(calls("acme.flaky")).toBe(before);
     });
 
+    it("marks a sandboxed run in flight and clears it when it answers", async () => {
+      await installTestApp("acme.flaky", [{ point: "checkout.discounts" }]);
+      let markedDuringRun: unknown = null;
+      answers["acme.flaky"] = () => {
+        markedDuringRun = one("SELECT circuit_inflight_at IS NOT NULL AS marked FROM plugin_registrations WHERE plugin_id = 'acme.flaky'");
+        return ok({ discounts: [] });
+      };
+      await quote(data(), await apps());
+      expect(markedDuringRun).toEqual({ marked: 1 });
+      expect(one("SELECT circuit_inflight_at AS at FROM plugin_registrations WHERE plugin_id = 'acme.flaky'")).toEqual({ at: null });
+    });
+
+    it("a run that never returned (still in flight after a restart) stops the app instead of running it again; checkout goes on", async () => {
+      await installTestApp("acme.gate", [{ point: "cart.validate", onError: "block" } as { point: string }]);
+      answers["acme.gate"] = () => ok({ errors: [] });
+      // What a hung run leaves behind: its mark, long past the wall limit (the Worker was restarted).
+      sqlite.exec(`UPDATE plugin_registrations SET circuit_inflight_at = unixepoch() - ${FUNCTION_CIRCUIT.hangSeconds + 50} WHERE plugin_id = 'acme.gate'`);
+      await expect(quote(data(), await apps())).resolves.toMatchObject({ ruleErrors: [] });
+      expect(calls("acme.gate")).toBe(0);
+      expect(one("SELECT status FROM plugin_installations WHERE plugin_id = 'acme.gate'")).toEqual({ status: "disabled" });
+      expect(await logs("acme.gate")).toContain("never returned");
+      // Stopped: the next checkout neither calls it nor waits on it.
+      await expect(quote(data(), await apps())).resolves.toMatchObject({ ruleErrors: [] });
+      expect(calls("acme.gate")).toBe(0);
+    });
+
     it("failures outside the window start a new count", async () => {
       await installTestApp("acme.flaky", [{ point: "checkout.discounts" }]);
       answers["acme.flaky"] = () => ({ ok: false, value: null, error: { code: null, message: "Error: flaky" }, logs: [], droppedLogs: 0 });

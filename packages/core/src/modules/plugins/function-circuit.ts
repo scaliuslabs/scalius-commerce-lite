@@ -12,9 +12,18 @@
 // waiting on the app. After the cooldown the next checkout tries the app
 // once: a good answer closes the circuit, a failure opens it again at once.
 //
+// A run that never returns is worse than a failure: a busy loop the isolate's
+// CPU limit does not end (local development's Worker Loader enforces none)
+// holds the thread, so no timer, no failure count and no other request runs
+// until the Worker restarts. A sandboxed run is therefore marked in flight
+// before it starts and cleared when it answers; a mark still set well past
+// the wall limit means it hung, and the next checkout stops the app (the
+// emergency stop, with its reason) instead of running it again, so one hang
+// never freezes the store a second time after a restart.
+//
 // The state lives on the registration row checkout already reads in its own
 // batch, so a closed circuit costs nothing; only a failure, and the first
-// good answer after one, write. Opening (and reopening) tells the staff and
+// good answer after one, write (and a sandboxed run its two in-flight marks). Opening (and reopening) tells the staff and
 // writes the app's log; the app page shows the open circuits.
 
 import type { Database } from "@scalius/database/client";
@@ -28,6 +37,11 @@ export const FUNCTION_CIRCUIT = {
   windowSeconds: 120,
   /** How long an open circuit keeps checkout from calling the app. */
   openSeconds: 300,
+  /**
+   * A sandboxed run still marked in flight this long after it started never
+   * returned (far past the 1.5 s function wall limit): it held its thread.
+   */
+  hangSeconds: 10,
 } as const;
 
 /** A registration's circuit as checkout read it. */
@@ -35,11 +49,24 @@ export interface FunctionCircuitState {
   failures: number;
   /** Unix seconds; null when closed. A past time is half-open: the next run tries the app. */
   openUntil: number | null;
+  /** Unix seconds a sandboxed run started and has not answered yet; null when none is in flight. */
+  inflightAt?: number | null;
 }
 
 /** Whether the circuit keeps checkout from calling the app now. */
 export function functionCircuitOpen(circuit: FunctionCircuitState | null | undefined, nowSeconds: number): boolean {
   return circuit?.openUntil !== null && circuit?.openUntil !== undefined && circuit.openUntil > nowSeconds;
+}
+
+/**
+ * Whether a sandboxed run started long ago and never answered: it held its
+ * thread (a busy loop the isolate's CPU limit did not end, as in local
+ * development) and the Worker was restarted or gave up. Running it again
+ * would freeze the store again.
+ */
+export function functionHung(circuit: FunctionCircuitState | null | undefined, nowSeconds: number): boolean {
+  const started = circuit?.inflightAt;
+  return started !== null && started !== undefined && nowSeconds - started > FUNCTION_CIRCUIT.hangSeconds;
 }
 
 /** Whether a good answer has something to close (no write otherwise). */
@@ -99,6 +126,20 @@ export async function recordFunctionSuccess(db: Database, input: { pluginId: str
       registration(input.pluginId, input.point),
       or(gt(pluginRegistrations.circuitFailures, 0), isNotNull(pluginRegistrations.circuitOpenUntil)),
     ));
+}
+
+/**
+ * Marks a sandboxed run in flight before it starts, committed before the app
+ * gets the thread, so a run that never returns is known after a restart.
+ */
+export async function markFunctionInflight(db: Database, input: { pluginId: string; point: string }): Promise<void> {
+  await db.update(pluginRegistrations).set({ circuitInflightAt: sql`unixepoch()` }).where(registration(input.pluginId, input.point));
+}
+
+/** The run answered (or failed): it is no longer in flight. */
+export async function clearFunctionInflight(db: Database, input: { pluginId: string; point: string }): Promise<void> {
+  await db.update(pluginRegistrations).set({ circuitInflightAt: null })
+    .where(and(registration(input.pluginId, input.point), isNotNull(pluginRegistrations.circuitInflightAt)));
 }
 
 /** An app's function circuits that are open or counting failures, for its dashboard page. */

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "e866b580-1337-40f0-9eea-840f43269f7c",
+  "id": "bdf21a79-e681-43df-bdd7-b76d7b6ae79c",
   "prevId": "1cafbc23-73d5-498f-87bb-a958c1665ea5",
   "tables": {
     "account": {
@@ -30643,6 +30643,13 @@
         },
         "circuit_open_until": {
           "name": "circuit_open_until",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "circuit_inflight_at": {
+          "name": "circuit_inflight_at",
           "type": "integer",
           "primaryKey": false,
           "notNull": false,

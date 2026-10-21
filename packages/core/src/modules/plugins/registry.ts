@@ -12,10 +12,16 @@ import { toPluginInstallation, type PluginInstallation } from "./installations";
 import type { FunctionCircuitState } from "./function-circuit";
 
 /** The registration's circuit columns, selected beside it (no extra read). */
-const circuitColumns = { circuitFailures: pluginRegistrations.circuitFailures, circuitOpenUntil: pluginRegistrations.circuitOpenUntil };
-const circuitOf = (row: { circuitFailures?: number | null; circuitOpenUntil?: number | null }): FunctionCircuitState => ({
+const circuitColumns = {
+  circuitFailures: pluginRegistrations.circuitFailures,
+  circuitOpenUntil: pluginRegistrations.circuitOpenUntil,
+  circuitInflightAt: pluginRegistrations.circuitInflightAt,
+};
+const seconds = (value: number | null | undefined): number | null => (value === null || value === undefined ? null : Number(value));
+const circuitOf = (row: { circuitFailures?: number | null; circuitOpenUntil?: number | null; circuitInflightAt?: number | null }): FunctionCircuitState => ({
   failures: Number(row.circuitFailures ?? 0),
-  openUntil: row.circuitOpenUntil === null || row.circuitOpenUntil === undefined ? null : Number(row.circuitOpenUntil),
+  openUntil: seconds(row.circuitOpenUntil),
+  inflightAt: seconds(row.circuitInflightAt),
 });
 
 export interface RegisteredPlugin {
@@ -73,6 +79,7 @@ export interface ActiveFunctionRegistrationRow {
   kind?: RegisteredPlugin["kind"];
   circuitFailures?: number | null;
   circuitOpenUntil?: number | null;
+  circuitInflightAt?: number | null;
   installation: typeof pluginInstallations.$inferSelect;
 }
 

@@ -675,7 +675,7 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
   {
     version: 179,
     name: "0179_customer_erasure",
-    sourceSha256: "bf9a9563960802364a6a6356137484e921c44b7f8c71f1753e5631315d67dea3",
+    sourceSha256: "bd9b9dd1c075e34a20a3b89f2aa72e5a3a013d0d1739a3e23b62d523145c332a",
   },
 ] as const;
 
