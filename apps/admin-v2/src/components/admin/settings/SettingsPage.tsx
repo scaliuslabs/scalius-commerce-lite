@@ -1,7 +1,7 @@
 import { ReadOnlyNotice } from "~/components/admin/states/ReadOnlyNotice";
 import { cloneElement, createContext, isValidElement, useContext, useState, type ComponentPropsWithoutRef, type ReactElement, type ReactNode } from "react";
 import { useLocation } from "@tanstack/react-router";
-import { ChevronRight, Loader2, X } from "lucide-react";
+import { ChevronRight, Loader2 } from "lucide-react";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { Button } from "~/components/ui/button";
 import { Card, CardHeading } from "~/components/ui/card";
@@ -14,7 +14,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "~/components/ui/dialog";
-import { SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "~/components/ui/sheet";
 import { Field } from "~/components/ui/field";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { SaveErrorBanner, SaveScope, useSaveScope, useServerFieldError, type SaveScopeState } from "../shared/SaveBar";
@@ -243,20 +242,30 @@ export function useCloseSettingsDialog(): (() => void) | null {
   return useContext(CloseDialogContext);
 }
 
+/** What a SettingsDialog layout draws: its own content element around these parts. */
+export interface SettingsDialogParts {
+  title: ReactNode;
+  description?: ReactNode;
+  body: ReactNode;
+  actions: ReactNode;
+  busy: boolean;
+  onClose: () => void;
+}
+
 /**
- * A multi-field edit in a dialog, or (`layout="sheet"`) in a right-hand sheet
- * for a form longer than a dialog's five fields (DESIGN O2, O4). Editors
- * inside register with its save scope (`useSaveBar` / `useSettingsForm`);
- * Save saves them and closes. Cancel, Esc, ✕ or a click outside closes a clean
- * one, and asks before discarding edits. A failed save keeps it open with the
- * problems listed.
+ * A multi-field edit in a dialog, or, with `layout={settingsSheet}`
+ * (`./SettingsSheet`), in a right-hand sheet for a form longer than a dialog's
+ * five fields (DESIGN O2, O4). Editors inside register with its save scope
+ * (`useSaveBar` / `useSettingsForm`); Save saves them and closes. Cancel, Esc,
+ * ✕ or a click outside closes a clean one, and asks before discarding edits.
+ * A failed save keeps it open with the problems listed.
  */
 export function SettingsDialog({
   title,
   description,
   trigger,
   savedMessage,
-  layout = "dialog",
+  layout,
   children,
 }: {
   title: ReactNode;
@@ -264,7 +273,8 @@ export function SettingsDialog({
   trigger: ReactElement;
   /** The success toast instead of "Changes saved", e.g. "Invite sent". */
   savedMessage?: string;
-  layout?: "dialog" | "sheet";
+  /** Draws the content instead of the centred dialog; the sheet lives in its own module so pages without one never load it. */
+  layout?: (parts: SettingsDialogParts) => ReactNode;
   children: ReactNode;
 }) {
   const t = useMessages(settingsMessages);
@@ -309,24 +319,10 @@ export function SettingsDialog({
       savedMessage={savedMessage}
       render={(state) => (
         <>
-          {/* One mounted root (a sheet is a Radix dialog too); the layout picks its content. */}
+          {/* One mounted root (a sheet is a Radix dialog too); `layout` draws other content. */}
           <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : requestClose(state))}>
             <DialogTrigger asChild>{trigger}</DialogTrigger>
-            {layout === "sheet" ? (
-              <SheetContent className="flex flex-col" {...(description ? {} : { "aria-describedby": undefined })}>
-                <div className="flex shrink-0 items-start gap-2 border-b px-6 py-4">
-                  <SheetHeader className="min-w-0 flex-1">
-                    <SheetTitle>{title}</SheetTitle>
-                    {description ? <SheetDescription>{description}</SheetDescription> : null}
-                  </SheetHeader>
-                  <Button type="button" variant="ghost" size="icon" className="-me-2 shrink-0" aria-label={t("closePanel")} disabled={state.busy} onClick={() => requestClose(state)}>
-                    <X aria-hidden />
-                  </Button>
-                </div>
-                <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-6 py-4">{body(state)}</div>
-                <SheetFooter>{actions(state)}</SheetFooter>
-              </SheetContent>
-            ) : (
+            {layout ? layout({ title, description, body: body(state), actions: actions(state), busy: state.busy, onClose: () => requestClose(state) }) : (
               <DialogContent className="sm:max-w-160">
                 <DialogHeader>
                   <DialogTitle>{title}</DialogTitle>

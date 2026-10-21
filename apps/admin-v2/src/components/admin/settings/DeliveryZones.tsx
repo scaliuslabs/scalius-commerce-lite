@@ -48,6 +48,7 @@ import { useSaveBar } from "../shared/SaveBar";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { InlineError } from "~/components/admin/states/InlineError";
 import { SettingsCard, SettingsCardLoading, SettingsDialog, SettingsField, SettingsRow } from "./SettingsPage";
+import { settingsSheet } from "./SettingsSheet";
 
 type Zone = DeliveryZones["zones"][number];
 type Rate = Zone["rates"][number];
@@ -973,14 +974,14 @@ export function DeliveryZonesCard() {
       title={t("zonesTitle")}
       description={data.zones.length ? t("zonesDescription") : t(suggestsSetups ? "noZones" : "noZonesOwn")}
       action={
-        <SettingsDialog layout="sheet" title={t("addZone")} trigger={<Button type="button" variant="outline" size="sm" disabled={!canEdit}>{t("addZone")}</Button>}>
+        <SettingsDialog layout={settingsSheet} title={t("addZone")} trigger={<Button type="button" variant="outline" size="sm" disabled={!canEdit}>{t("addZone")}</Button>}>
           <ZoneForm zone={null} zones={data.zones} />
         </SettingsDialog>
       }
       rows={
         <>
           {data.zones.map((zone) => (
-            <SettingsDialog layout="sheet" key={zone.id} title={t("editZone", { name: zone.name })} trigger={
+            <SettingsDialog layout={settingsSheet} key={zone.id} title={t("editZone", { name: zone.name })} trigger={
               <SettingsRow disabled={!canEdit} label={zone.name} value={`${regionSummary(zone, t)} · ${summary(zone.rates)}`} />
             }>
               <ZoneForm zone={zone} zones={data.zones} />
