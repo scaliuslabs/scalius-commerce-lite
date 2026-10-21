@@ -85,6 +85,12 @@ export async function processPluginEventDelivery(options: {
   const durationMs = Date.now() - started;
   if (outcome.ok) {
     await completePluginEventDelivery(db, delivery, claimId, { durationMs });
+    if (delivery.topic === "order.created" && installation.grant.scopes.includes("write_orders")) {
+      // This app may have held the order; its automatic lines waited for it
+      // (fulfilment/hold-window.ts) and go out now unless it did.
+      const { autoFulfilAfterResponse } = await import("../background/auto-fulfil");
+      await autoFulfilAfterResponse({ env, executionCtx: options.ctx }, db, delivery.resourceId, "app hold window");
+    }
     return { status: "succeeded", deliveryId, retryInSeconds: null };
   }
   if (outcome.failure === "outdated") {
