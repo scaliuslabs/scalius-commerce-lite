@@ -551,7 +551,7 @@ const tokens = {
   buttonShape: "radius",
   surface: "flat",
   imageRatio: "portrait",
-  imageFit: "cover",
+  imageFit: "contain",
   headerTone: "light",
   container: "1360",
 };
@@ -571,7 +571,7 @@ const templates = [
   {
     id: "noor",
     name: "Noor",
-    description: "An editorial store with a hero, product rows, collection tiles and a featured product. Add your own story, reviews and policies from the section library.",
+    description: "An editorial store: product rows from the start, then a hero, category tiles and a featured product as soon as you add a slide photo, pick categories and choose the product. Add your own story, reviews and policies from the section library.",
     // The theme document version these values are written for; the store upgrades them from here.
     themeVersion: 12,
     theme: {
@@ -631,7 +631,7 @@ const pagePresets = [
 export const manifest = {
   id: "scalius.noor",
   name: "Noor theme",
-  version: "2.0.1",
+  version: "2.0.2",
   apiVersion: PLUGIN_API_VERSION,
   description: "An editorial storefront theme with its own header, footer, product card and product page, a look for the store's own sections, nine sections of its own, and a landing kit for single-product campaign pages. The order form follows the store’s checkout readiness. Everything is customisable in the theme editor.",
   tagline: "An editorial theme with campaign landing pages",
