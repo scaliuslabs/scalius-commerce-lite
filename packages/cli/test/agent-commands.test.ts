@@ -63,6 +63,19 @@ describe("agent commands over the store's MCP tools", () => {
     expect(() => JSON.parse(terminal.stdoutText())).toThrow();
   });
 
+  it("a workflow search returns opens with scalius describe: its steps and what to describe next", async () => {
+    const terminal = await pairedRuntime({ tty: true });
+    expect(await runProgram(terminal, ["describe", "dashboard.order-refund"])).toBe(0);
+    const text = terminal.stdoutText();
+    expect(text).toContain("dashboard.order-refund [workflow]");
+    expect(text).toContain("Steps: dashboard.orders.payments -> dashboard.orders.refund");
+    expect(text).toContain("Next: scalius describe dashboard.orders.payments dashboard.orders.refund");
+
+    const piped = await pairedRuntime();
+    expect(await runProgram(piped, ["describe", "dashboard.order-refund"])).toBe(0);
+    expect(JSON.parse(piped.stdoutText())).toMatchObject({ ok: true, data: { operations: [{ id: "dashboard.order-refund", kind: "workflow" }] } });
+  });
+
   it("(b) streams every row of a 3-page read as NDJSON: line count equals the server total", async () => {
     const runtime = await pairedRuntime();
     expect(await runProgram(runtime, ["read", "dashboard.orders.list", "--all", "--ndjson"])).toBe(0);

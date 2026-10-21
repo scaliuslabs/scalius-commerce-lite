@@ -460,7 +460,7 @@ export function createProgram(runtime: Runtime): Command {
       const result = await readWorkflow(runtime, profileValue, document, { prompt: request, surface: options.surface });
       const human = result.kind === "result"
         ? `${result.workflowId}\n${JSON.stringify(result.outputs, null, 2)}`
-        : `${result.classification.reason} Use scalius search for ranked options.`;
+        : `${result.classification.reason} workflow read answers reviewed data questions in words; open a workflow id from scalius search with scalius describe <id>.`;
       writeResult(runtime, mode(command), result, human);
     });
 

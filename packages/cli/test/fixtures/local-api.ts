@@ -172,7 +172,10 @@ function buildMcpServer(api: LocalApi): McpServer {
   }));
   server.registerTool("scalius_describe", { description: "describe", inputSchema: anyObject }, async (args) => result({
     ok: true,
-    operations: (args.ids as string[]).map((id) => ({ operationId: id, purpose: id, risk: id.endsWith("refund") ? "financial" : "read", inputs: {}, example: {} })),
+    // A workflow id (as scalius_search returns it) answers its steps; an operation id its contract.
+    operations: (args.ids as string[]).map((id) => id === "dashboard.order-refund"
+      ? { id, kind: "workflow", title: "Refund an order", purpose: "Refund an order", steps: ["dashboard.orders.payments", "dashboard.orders.refund"], rules: ["Read the payments first."], next: "Describe the steps for their inputs" }
+      : { operationId: id, purpose: id, risk: id.endsWith("refund") ? "financial" : "read", inputs: {}, example: {} }),
   }));
   server.registerTool("scalius_answer", { description: "answer", inputSchema: anyObject }, async () => result({
     ok: true,
