@@ -73,7 +73,7 @@ describe("theme parts an app draws", () => {
       "Header (skin 'Noor header')",
       "Home page: section 3 'Studio hero'",
       "Landing page /pages/eid: section 1 (skin)",
-      "Product page app block 'Size chart'",
+      "Product page app component 'Size chart'",
       "Collection pages: section 2",
       "And 2 more parts",
     ]);

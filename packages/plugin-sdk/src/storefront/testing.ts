@@ -19,6 +19,7 @@ import {
   type StorefrontListingPage,
   type StorefrontModule,
   type StorefrontProductCard,
+  type StorefrontProductCardData,
   type StorefrontProductPage,
   type StorefrontRenderContext,
   type StorefrontRenderJob,
@@ -260,22 +261,25 @@ export function renderSection(module: StorefrontModule, type: string, settings: 
 
 /**
  * A component's HTML at one of its targets: in a product slot over the
- * fixture product page (or `data`), on `page` with `props` (what the proxy
- * route answers). Throws when the storefront would drop it: a component
- * places no embed (not even a slot).
+ * fixture product page (or `data`), in a card slot over the fixture card (or
+ * `data`), on `page` with `props` (what the proxy route answers). Throws
+ * when the storefront would drop it: a component places no embed (not even
+ * a slot).
  */
 export function renderComponent(
   module: StorefrontModule,
   type: string,
   target: StorefrontComponentTarget,
   settings: StorefrontResolvedSettings = {},
-  options: RenderOptions & { data?: StorefrontProductPage; props?: Record<string, unknown> } = {},
+  options: RenderOptions & { data?: StorefrontProductPage | StorefrontProductCardData; props?: Record<string, unknown> } = {},
 ): string {
   const job = (target === "page"
     ? { target, props: options.props ?? {} }
     : target.startsWith("product.")
       ? { target, instanceId: `app-${type}`, data: options.data ?? fixtureProductPage() }
-      : { target }) as Omit<StorefrontComponentJob, "id" | "kind" | "type" | "settings">;
+      : target.startsWith("product_card.")
+        ? { target, data: options.data ?? fixtureSkinData("product_card") }
+        : { target }) as Omit<StorefrontComponentJob, "id" | "kind" | "type" | "settings">;
   const html = renderOne(module, { id: "job_1", kind: "component", type, settings, ...job } as StorefrontComponentJob, options);
   const split = splitStorefrontEmbeds(html, storefrontEmbedRule("component"));
   if (split.dropped > 0) throw new Error(`Component ${JSON.stringify(type)} (${target}): ${split.dropped} embed(s) render nothing in a component.`);

@@ -13,16 +13,16 @@ const isRecord = (value) => typeof value === "object" && value !== null && !Arra
 
 /**
  * A preview fixture (`--fixture <json>`): what the default fixtures leave
- * out, such as the custom fields a block reads.
+ * out, such as the custom fields a component reads.
  *
  *   {
  *     "product": { "fields": { "engraving": true } },          // over the fixture product page
- *     "settings": { "block:preview": { "maxLetters": 12 } },   // over a view's default settings
+ *     "settings": { "component:preview": { "maxLetters": 12 } },   // over a view's default settings
  *     "objects": { "section:lookbook": { "looks": { "records": [], "fields": {} } } },
  *     "context": { "page": { "kind": "product", "path": "/products/shirt" } }
  *   }
  *
- * Views are keyed like the preview's headings: `section:<type>`, `block:<type>`, `skin:<id>`.
+ * Views are keyed like the preview's headings: `section:<type>`, `component:<type>`, `skin:<id>`.
  */
 export function readPreviewFixture(path) {
   let fixture;

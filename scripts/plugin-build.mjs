@@ -44,6 +44,8 @@ export function componentJobs(contract, components, instanceId) {
     id: `component:${component.type}@${target}`, kind: "component", type: component.type, target,
     settings: smokeSettings(contract, component.settings),
     ...(target.startsWith("product.") ? { instanceId, data: contract.fixtureProductPage() } : {}),
+    // A card slot draws over the card it sits on.
+    ...(target.startsWith("product_card.") ? { data: contract.fixtureSkinData("product_card") } : {}),
   })));
 }
 

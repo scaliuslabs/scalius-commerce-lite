@@ -467,7 +467,7 @@ export interface PluginRouteResponse {
   /**
    * JSON for API routes; a UI document (`ui.page(...)`) for admin pages,
    * cards and widgets; an action result (`ui.result(...)`) for buttons and
-   * forms; `{ html, head? }` for sections and product blocks; `{ page }` or
+   * forms; `{ html, head? }` for sections and product-slot components; `{ page }` or
    * `{ redirect }` for a proxied page navigation.
    */
   body?: unknown;

@@ -124,7 +124,7 @@ const PRODUCT_SLOTS = new Set<string>(STOREFRONT_PRODUCT_SLOTS);
  * app markup at each of its `targets`, a component slot (storefront-protocol.ts)
  * or `page` (an app page its proxy route answers with `{ page: { component } }`).
  * In a product slot it renders where the merchant places it (the product
- * page's app blocks, with their values) and gets the product page; in the
+ * page's app components, with their values) and gets the product page; in the
  * other slots it renders for every page with its default values. At most one
  * product slot. Like a skin, it reads nothing: its settings name no images
  * or products.
@@ -255,7 +255,7 @@ export function resolveStorefrontSettings(schema: PluginSettingsSchema, stored: 
 
 /**
  * One active app with storefront components, as the layout read lists it:
- * enough for the storefront to load its module, resolve skin and block
+ * enough for the storefront to load its module, resolve skin and component
  * settings and name its files, with no further read.
  */
 export interface StorefrontExtension {
