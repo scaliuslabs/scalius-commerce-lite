@@ -804,7 +804,7 @@ export const collectionSummarySchema = z.object({
   config: z.string(),
   sortOrder: z.number(),
   isActive: z.boolean(),
-  version: z.number().int().min(1),
+  revision: z.number().int().min(1),
   /** A listing template id from the theme; null is the theme's default collection listing. */
   listingTemplate: z.string().nullable(),
   canonicalPath: z.string().nullable(),
@@ -917,7 +917,7 @@ export const mediaSchema = z.object({
   posterUrl: z.string().nullable(),
   folderId: z.string().nullable(),
   status: z.enum(["ready", "trashed", "deleting", "deleted"]),
-  version: z.number().int().min(1),
+  revision: z.number().int().min(1).openapi({ description: "Send it as `expectedRevision` to change the file; every change advances it." }),
   createdAt: isoTimestampSchema,
   updatedAt: isoTimestampSchema,
   trashedAt: nullableIsoTimestampSchema,

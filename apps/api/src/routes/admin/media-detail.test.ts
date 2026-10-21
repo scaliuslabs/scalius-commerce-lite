@@ -31,7 +31,7 @@ describe("authoritative admin media detail", () => {
     const response = await app.request("/media/media_fresh");
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(await response.json()).toMatchObject({ success: true, data: { file: { id: "media_fresh", filename: "Renamed.webp", version: 7, altText: "Current alt text", status } } });
+    expect(await response.json()).toMatchObject({ success: true, data: { file: { id: "media_fresh", filename: "Renamed.webp", revision: 7, altText: "Current alt text", status } } });
   });
 
   it.each(["deleting", "deleted"] as const)("does not return %s file metadata as available", async (status) => {

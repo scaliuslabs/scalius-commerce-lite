@@ -33,6 +33,9 @@ vi.mock("@scalius/core/modules/media", async () => {
 
 import { adminMediaRoutes } from "./media";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- assertions inspect the wire envelope.
+type WireBody = { data: any; error: any };
+
 const presentedMedia = {
     id: "media_123",
     filename: "lamp.webp",
@@ -109,21 +112,21 @@ describe("admin media write behavior", () => {
             label: "metadata update",
             path: "/media_123",
             method: "PATCH" as const,
-            body: { expectedVersion: 1, altText: "A lamp" },
+            body: { expectedRevision: 1, altText: "A lamp" },
             coreCall: () => mocks.updateMediaFile,
         },
         {
             label: "trash",
             path: "/media_123/trash",
             method: "POST" as const,
-            body: { expectedVersion: 1 },
+            body: { expectedRevision: 1 },
             coreCall: () => mocks.trashMediaFile,
         },
         {
             label: "restore",
             path: "/media_123/restore",
             method: "POST" as const,
-            body: { expectedVersion: 1 },
+            body: { expectedRevision: 1 },
             coreCall: () => mocks.restoreMediaFile,
         },
     ])("returns success after $label commits", async ({ path, method, body, coreCall }) => {
@@ -133,7 +136,10 @@ describe("admin media write behavior", () => {
 
         expect(response.status).toBe(200);
         expect(coreCall()).toHaveBeenCalled();
-
+        // The file exposes `revision`; the service's `version` stays inside.
+        const { file } = (await response.json() as WireBody).data;
+        expect(file.revision).toEqual(expect.any(Number));
+        expect(file).not.toHaveProperty("version");
     });
 
     it("reports failure when a media write fails", async () => {
@@ -141,7 +147,7 @@ describe("admin media write behavior", () => {
         mocks.updateMediaFile.mockRejectedValueOnce(new Error("conflict"));
 
         const response = await mutate(app, env, "/media_123", "PATCH", {
-            expectedVersion: 1,
+            expectedRevision: 1,
             caption: "Updated",
         });
 
