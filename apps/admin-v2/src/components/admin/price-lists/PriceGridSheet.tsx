@@ -131,19 +131,14 @@ export function PriceGridSheet({ open, onOpenChange, list, onSaved }: {
   return (
     <>
       <Sheet open={open} onOpenChange={(next) => (next ? onOpenChange(true) : requestClose())}>
-        <SheetContent className="flex flex-col gap-0 p-0 sm:max-w-3xl">
-          <div className="flex items-start gap-2 border-b p-6 pb-4">
-            <SheetHeader className="min-w-0 flex-1">
-              <SheetTitle>{t("gridTitle")}</SheetTitle>
-              <SheetDescription>
-                {t("gridDescription")} {t("pricesDescription", { currency: list.currencyCode })}
-              </SheetDescription>
-            </SheetHeader>
-            <Button type="button" variant="ghost" size="icon" className="-me-2 -mt-2 shrink-0" aria-label={t("close")} onClick={requestClose}>
-              <X className="size-4" />
-            </Button>
-          </div>
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
+        <SheetContent className="flex flex-col sm:max-w-3xl">
+          <SheetHeader>
+            <SheetTitle>{t("gridTitle")}</SheetTitle>
+            <SheetDescription>
+              {t("gridDescription")} {t("pricesDescription", { currency: list.currencyCode })}
+            </SheetDescription>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
             {save.error ? <Alert variant="destructive"><AlertDescription>{getServerFnError(save.error, t("pricesSaveFailed"))}</AlertDescription></Alert> : null}
             <div className="grid gap-2 sm:grid-cols-2">
               <SkuPicker

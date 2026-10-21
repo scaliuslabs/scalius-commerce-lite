@@ -7,7 +7,6 @@
  * restore point, so a restore can be undone.
  */
 import { useState } from "react";
-import { X } from "lucide-react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import {
   getApiV1AdminSettingsThemeDocument,
@@ -23,7 +22,7 @@ import {
 import { StatusBadge } from "~/components/admin/resource/StatusBadge";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "~/components/ui/sheet";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "~/components/ui/sheet";
 import { formatDateTime, useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { themeEditorFull } from "~/i18n/theme-editor-panes";
@@ -203,16 +202,11 @@ export function ThemeHistory({ open, onOpenChange, draft, liveRevision, previewR
   const restorePoints = points.data?.restorePoints ?? [];
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
-        <div className="flex items-start gap-2 border-b border-border p-4">
-          <SheetHeader className="min-w-0 flex-1">
-            <SheetTitle>{t("versions")}</SheetTitle>
-            <SheetDescription>{retained ? t("versionsHelp", { count: retained }) : t("versionsHelpShort")}</SheetDescription>
-          </SheetHeader>
-          <SheetClose asChild>
-            <Button type="button" variant="ghost" size="icon-sm" aria-label={t("close")}><X aria-hidden="true" /></Button>
-          </SheetClose>
-        </div>
+      <SheetContent side="right" className="flex flex-col">
+        <SheetHeader>
+          <SheetTitle>{t("versions")}</SheetTitle>
+          <SheetDescription>{retained ? t("versionsHelp", { count: retained }) : t("versionsHelpShort")}</SheetDescription>
+        </SheetHeader>
         <div className="min-h-0 flex-1 overflow-y-auto">
           {previewRevision !== null ? (
             <div className="border-b border-border p-4">

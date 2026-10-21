@@ -1,14 +1,13 @@
 import { useEffect, useId, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { X } from "lucide-react";
 import { toast } from "~/lib/toast";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { REVIEW_LIMITS } from "@scalius/shared/reviews";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { Sheet, SheetClose, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "~/components/ui/sheet";
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "~/components/ui/sheet";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Textarea } from "~/components/ui/textarea";
 import { useHasPermission } from "~/contexts/PermissionContext";
@@ -52,32 +51,25 @@ export function ReviewSheet({
   return (
     <Sheet open={reviewId !== null} onOpenChange={(next) => !next && onClose()}>
       <SheetContent className="flex flex-col sm:max-w-lg">
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
-          <div className="flex items-start gap-2 p-6 pb-4">
-            <SheetHeader className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <SheetTitle>{t("review")}</SheetTitle>
-                {review ? <ReviewStatusBadge status={review.status} /> : null}
-              </div>
-              <SheetDescription>
-                {review ? t("byline", { name: review.authorName, date: formatOrderDate(review.createdAt) ?? "" }) : " "}
-              </SheetDescription>
-            </SheetHeader>
-            <SheetClose asChild>
-              <Button variant="ghost" size="icon" className="-me-2 -mt-2 shrink-0" aria-label={t("close")}>
-                <X className="size-4" />
-              </Button>
-            </SheetClose>
+        <SheetHeader>
+          <div className="flex flex-wrap items-center gap-2">
+            <SheetTitle>{t("review")}</SheetTitle>
+            {review ? <ReviewStatusBadge status={review.status} /> : null}
           </div>
+          <SheetDescription>
+            {review ? t("byline", { name: review.authorName, date: formatOrderDate(review.createdAt) ?? "" }) : " "}
+          </SheetDescription>
+        </SheetHeader>
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
           {review ? (
             <ReviewDetail key={review.id} review={review} />
           ) : detail.isError ? (
-            <div className="flex flex-col items-start gap-2 px-6">
+            <div className="flex flex-col items-start gap-2 p-4">
               <p className="text-body text-destructive">{t("loadFailed")}</p>
               <Button type="button" size="sm" variant="outline" onClick={() => void detail.refetch()}>{t("retry")}</Button>
             </div>
           ) : (
-            <div aria-busy className="flex flex-col gap-3 px-6">
+            <div aria-busy className="flex flex-col gap-3 p-4">
               <Skeleton className="h-4 w-24" />
               <Skeleton className="h-4 w-2/3" />
               <Skeleton className="h-16 w-full" />
@@ -103,7 +95,7 @@ function ReviewDetail({ review }: { review: AdminReview }) {
 
   return (
     <div className="flex flex-col divide-y">
-      <section className="flex flex-col gap-2 px-6 pb-4">
+      <section className="flex flex-col gap-2 p-4">
         <div className="flex flex-wrap items-center gap-2">
           <ReviewStars rating={review.rating} />
           <Badge variant="success">{t("verified")}</Badge>
@@ -121,7 +113,7 @@ function ReviewDetail({ review }: { review: AdminReview }) {
         {review.status === "withdrawn" ? <p className="text-body text-muted-foreground">{t("withdrawnNote")}</p> : null}
       </section>
 
-      <section className="flex flex-col gap-3 p-6 py-4">
+      <section className="flex flex-col gap-3 p-4">
         <div className="flex items-start gap-3">
           <ProductThumb imageUrl={review.product.imageUrl} />
           <div className="flex min-w-0 flex-col gap-1">
@@ -145,13 +137,13 @@ function ReviewDetail({ review }: { review: AdminReview }) {
       {canModerate ? (
         <ReplyEditor review={review} />
       ) : review.reply ? (
-        <section className="flex flex-col gap-1 p-6 py-4">
+        <section className="flex flex-col gap-1 p-4">
           <h3 className="text-heading-sm">{t("reply")}</h3>
           <p className="whitespace-pre-line break-words">{review.reply.body}</p>
         </section>
       ) : null}
 
-      <section className="flex flex-col gap-2 p-6 py-4">
+      <section className="flex flex-col gap-2 p-4">
         <h3 className="text-heading-sm">{t("history")}</h3>
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
           {history.map(([label, at]) =>
@@ -196,7 +188,7 @@ function ReplyEditor({ review }: { review: AdminReview }) {
   };
 
   return (
-    <section className="flex flex-col gap-2 p-6 py-4">
+    <section className="flex flex-col gap-2 p-4">
       <h3 className="text-heading-sm">
         <label htmlFor={fieldId}>{t("reply")}</label>
       </h3>

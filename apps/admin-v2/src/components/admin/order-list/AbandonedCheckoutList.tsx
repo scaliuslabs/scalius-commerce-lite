@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useMatch, useNavigate } from "@tanstack/react-router";
 import { toast } from "~/lib/toast";
-import { ExternalLink, Trash2, X } from "lucide-react";
+import { ExternalLink, Trash2 } from "lucide-react";
 import { deleteApiV1AdminAbandonedCheckouts } from "@scalius/api-client/sdk";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { getStoreRegion } from "~/lib/store-time-zone";
@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Sheet,
-  SheetClose,
   SheetContent,
   SheetDescription,
   SheetFooter,
@@ -159,7 +158,6 @@ function CheckoutSheet({
   onClose: () => void;
 }) {
   const t = useMessages(orderListMessages);
-  const tr = useMessages(resourceMessages);
   const td = useMessages(orderDetailMessages);
   const { fmt } = useCurrency();
   const navigate = useNavigate();
@@ -181,24 +179,17 @@ function CheckoutSheet({
   return (
     <Sheet open={open} onOpenChange={(next) => !next && onClose()}>
       <SheetContent className="flex flex-col">
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-6">
-          <div className="flex items-start gap-2">
-            <SheetHeader className="min-w-0 flex-1">
-              <SheetTitle className="break-words">{name}</SheetTitle>
-              <SheetDescription>
-                {checkout ? (
-                  <>
-                    <Reference checkout={checkout} /> · <ListDate value={checkout.updatedAt} />
-                  </>
-                ) : null}
-              </SheetDescription>
-            </SheetHeader>
-            <SheetClose asChild>
-              <Button variant="ghost" size="icon" className="-me-2 -mt-2 shrink-0" aria-label={tr("close")}>
-                <X className="size-4" />
-              </Button>
-            </SheetClose>
-          </div>
+        <SheetHeader>
+          <SheetTitle className="break-words">{name}</SheetTitle>
+          <SheetDescription>
+            {checkout ? (
+              <>
+                <Reference checkout={checkout} /> · <ListDate value={checkout.updatedAt} />
+              </>
+            ) : null}
+          </SheetDescription>
+        </SheetHeader>
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-4">
           {checkout && display ? (
             <>
               <div className="flex flex-wrap items-center gap-2">
