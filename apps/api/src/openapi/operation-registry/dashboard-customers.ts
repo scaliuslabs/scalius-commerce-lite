@@ -25,6 +25,9 @@ export const DASHBOARD_CUSTOMER_OPERATIONS = {
   "dashboard.customers.addresses_set_default": {},
   "dashboard.customers.addresses_set_default_billing": {},
   "dashboard.customers.addresses_update": {},
+  // Saved cards on the customer page (security audit N3); apps use the stable payment_methods operations.
+  "dashboard.customers.payment_methods_list": { stability: "internal" },
+  "dashboard.customers.payment_methods_delete": { stability: "internal", risk: "destructive", openWorld: true, batch: "forbidden" },
   // Customers & marketing.
   "dashboard.customers.export": {
     batch: "forbidden",

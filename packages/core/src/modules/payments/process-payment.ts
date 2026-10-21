@@ -28,7 +28,7 @@ import {
 } from "../inventory";
 import type { PaymentType, ProcessPaymentParams } from "./types";
 import { GIFT_CARD_TENDER_METHOD, isOnlinePaymentMethod, NET_TERMS_PAYMENT_METHOD } from "./gateways/registry";
-import { buildSavedPaymentMethodUpsert } from "./saved-payment-methods";
+import { buildSavedPaymentMethodUpsert, readSavedPaymentMethodOwner } from "./saved-payment-methods";
 import {
   assertNoActiveShipmentClaim,
   hasActiveShipmentClaim,
@@ -756,6 +756,7 @@ export async function processPaymentConfirmed(
           orderId: params.orderId,
           providerId: params.provider,
           method: params.savedPaymentMethod,
+          owner: await readSavedPaymentMethodOwner(db, params.orderId),
           landed: sql`EXISTS (
             SELECT 1 FROM order_payments
             WHERE id = ${paymentId}
@@ -1283,6 +1284,7 @@ export async function processPaymentAuthorized(
         orderId: params.orderId,
         providerId: params.provider,
         method: params.savedPaymentMethod,
+        owner: await readSavedPaymentMethodOwner(db, params.orderId),
         landed: sql`EXISTS (
           SELECT 1 FROM order_payments
           WHERE id = ${paymentId} AND order_id = ${params.orderId} AND status = ${PaymentRecordStatus.AUTHORIZED}

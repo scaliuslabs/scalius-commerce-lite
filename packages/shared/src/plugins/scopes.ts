@@ -91,13 +91,24 @@ export const PLUGIN_SCOPES = {
    * Record money received against an invoice (pay-later) order: a bank
    * transfer, cheque or cash. Sensitive: a recorded payment settles the order
    * with no money passing through the store. Gift cards and downloads on an
-   * order an app marked paid wait for staff to release a review hold. Also
-   * charge a customer's saved payment method for an order with money due
-   * (off-session, through its provider), capture or void an authorized
-   * payment, and list and remove a customer's saved methods (brand, last
-   * four digits and expiry; never the provider's reference).
+   * order an app marked paid wait for staff to release a review hold.
+   * Charging a saved card is `write_payment_methods`.
    */
   write_payments: { rbac: ["orders.view", "orders.record_payment"], staff: "orders.record_payment", sensitive: true },
+  /**
+   * Charge a customer's saved payment method for an order with money due,
+   * without the customer (a subscription renewal, through its provider), and
+   * capture or void an authorized payment. Only the methods kept for this
+   * app's own purchase option: an app never sees or charges a method another
+   * app (or staff) kept. Lists and removes those methods (brand, last four
+   * digits and expiry; never the provider's reference). Sensitive: it takes
+   * a buyer's money while they are away.
+   */
+  write_payment_methods: {
+    rbac: ["orders.view", "orders.charge_saved_methods"],
+    staff: "orders.charge_saved_methods",
+    sensitive: true,
+  },
   /**
    * Give money back on an order (`refunds.create`): through the payments it
    * came from or as store credit, never to a destination the app names, with

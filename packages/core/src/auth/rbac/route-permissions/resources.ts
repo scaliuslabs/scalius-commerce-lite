@@ -22,15 +22,16 @@ export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   // over its gift cards and downloads): its own sensitive permission.
   "/api/v1/admin/resources/orders/*/payments": { GET: orders, POST: { permission: PERMISSIONS.ORDERS_RECORD_PAYMENT } },
   // Payments without the buyer (a saved method charged, an authorization
-  // captured or voided) move money like a recorded payment: the same
-  // sensitive permission (an app: write_payments). Reading a customer's saved
-  // methods belongs to the same permission: whoever may charge them lists them,
-  // and no other scope sees them.
-  "/api/v1/admin/resources/orders/*/payments/charge": { POST: { permission: PERMISSIONS.ORDERS_RECORD_PAYMENT } },
-  "/api/v1/admin/resources/payments/*/capture": { POST: { permission: PERMISSIONS.ORDERS_RECORD_PAYMENT } },
-  "/api/v1/admin/resources/payments/*/void": { POST: { permission: PERMISSIONS.ORDERS_RECORD_PAYMENT } },
-  "/api/v1/admin/resources/payment-methods": { GET: { permission: PERMISSIONS.ORDERS_RECORD_PAYMENT } },
-  "/api/v1/admin/resources/payment-methods/*": { DELETE: { permission: PERMISSIONS.ORDERS_RECORD_PAYMENT } },
+  // captured or voided) take a card's money without its owner: their own
+  // sensitive permission, separate from recording a payment (an app:
+  // write_payment_methods; security audit N3). Reading a customer's
+  // saved methods belongs to the same permission: whoever may charge them
+  // lists them, and no other scope sees them.
+  "/api/v1/admin/resources/orders/*/payments/charge": { POST: { permission: PERMISSIONS.ORDERS_CHARGE_SAVED_METHODS } },
+  "/api/v1/admin/resources/payments/*/capture": { POST: { permission: PERMISSIONS.ORDERS_CHARGE_SAVED_METHODS } },
+  "/api/v1/admin/resources/payments/*/void": { POST: { permission: PERMISSIONS.ORDERS_CHARGE_SAVED_METHODS } },
+  "/api/v1/admin/resources/payment-methods": { GET: { permission: PERMISSIONS.ORDERS_CHARGE_SAVED_METHODS } },
+  "/api/v1/admin/resources/payment-methods/*": { DELETE: { permission: PERMISSIONS.ORDERS_CHARGE_SAVED_METHODS } },
   // A refund gives money back: the dashboard refund permission (an app: Sensitive write_refunds).
   "/api/v1/admin/resources/orders/*/refunds": { GET: orders, POST: { permission: PERMISSIONS.ORDERS_REFUND } },
   "/api/v1/admin/resources/orders/*/fulfillments": { GET: orders, POST: shipments },

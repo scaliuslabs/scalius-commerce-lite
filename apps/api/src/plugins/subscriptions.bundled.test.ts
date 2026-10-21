@@ -162,22 +162,40 @@ describe("subscriptions renewing through the host", () => {
     expect(sqlite.prepare("SELECT count(*) AS n FROM orders").get()).toEqual({ n: 2 });
   });
 
-  it("lists saved methods without the provider reference, and keeps charging behind write_payments", async () => {
+  it("lists saved methods without the provider reference, and keeps charging to the app that kept them", async () => {
     await subscribe();
     const call = (pluginId: string, operation: string, input: unknown, version = "1.0.0") =>
       callPluginOperation({ pluginId, version, operationId: operation, input, db, env, ctx: pluginTestCtx() });
     const listed = await call("acme.subscriptions", "payment_methods.list", { query: { customerId: "cust_1" } });
-    expect(listed).toMatchObject({ ok: true, data: { paymentMethods: [{ customerId: "cust_1", providerId: CARD_PROVIDER, brand: "visa", last4: "4242" }] } });
+    expect(listed).toMatchObject({ ok: true, data: { paymentMethods: [{
+      customerId: "cust_1", providerId: CARD_PROVIDER, brand: "visa", last4: "4242",
+      ownerAppId: "acme.subscriptions", purchaseOptionId: SUBSCRIBE_OPTION,
+    }] } });
     expect(JSON.stringify(listed)).not.toContain("pm_card_ok");
+    const methodId = (listed.data as { paymentMethods: Array<{ id: string }> }).paymentMethods[0]!.id;
 
-    // An app that only writes orders cannot charge a card.
+    // Security audit N3: another app that writes orders and records payments
+    // (write_payments) cannot charge a card; with the charge scope it still
+    // cannot see or charge a card another app's purchase option kept.
     const tagger = BUNDLED_PLUGINS["acme.order-tagger"]!;
     const { manifest: taggerManifest } = await import("./testing/apps/order-tagger/src/index");
-    const installedTagger = await installPlugin(db, { manifest: taggerManifest, source: "bundled", bundleSha256: tagger.sha256, actorUserId: "owner" });
+    const recordOnly = { ...taggerManifest, scopes: [...taggerManifest.scopes, "write_payments"] } as typeof taggerManifest;
+    const installedTagger = await installPlugin(db, { manifest: recordOnly, source: "bundled", bundleSha256: tagger.sha256, actorUserId: "owner" });
     await activatePlugin(db, "acme.order-tagger", { actorUserId: "owner", expectedRevision: installedTagger.revision });
-    const methodId = (listed.data as { paymentMethods: Array<{ id: string }> }).paymentMethods[0]!.id;
     expect(await call("acme.order-tagger", "payments.charge", { path: { id: "ord_first" }, body: { paymentMethodId: methodId }, idempotencyKey: "tagger-charge-1" }, taggerManifest.version))
       .toMatchObject({ ok: false, status: 403 });
+
+    const guard = BUNDLED_PLUGINS["acme.risk-guard"]!;
+    const { manifest: guardManifest } = await import("./testing/apps/risk-guard/src/index");
+    const charger = { ...guardManifest, scopes: [...guardManifest.scopes, "write_payments", "write_payment_methods"] } as typeof guardManifest;
+    const installedGuard = await installPlugin(db, { manifest: charger, source: "bundled", bundleSha256: guard.sha256, actorUserId: "owner" });
+    await activatePlugin(db, "acme.risk-guard", { actorUserId: "owner", expectedRevision: installedGuard.revision });
+    expect(await call("acme.risk-guard", "payment_methods.list", { query: { customerId: "cust_1" } }, guardManifest.version))
+      .toMatchObject({ ok: true, data: { paymentMethods: [] } });
+    expect(await call("acme.risk-guard", "payments.charge", { path: { id: "ord_first" }, body: { paymentMethodId: methodId }, idempotencyKey: "guard-charge-1" }, guardManifest.version))
+      .toMatchObject({ ok: false, status: 404 });
+    expect(await call("acme.risk-guard", "payment_methods.delete", { path: { id: methodId }, idempotencyKey: "guard-delete-1" }, guardManifest.version))
+      .toMatchObject({ ok: false, status: 404 });
     // Charging needs the key.
     expect(await call("acme.subscriptions", "payments.charge", { path: { id: "ord_first" }, body: { paymentMethodId: methodId } }))
       .toMatchObject({ ok: false, status: 400, error: { code: "idempotency_key_required" } });

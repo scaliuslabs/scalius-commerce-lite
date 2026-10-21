@@ -67,8 +67,12 @@ export {
   buildSavedPaymentMethodUpsert,
   CUSTOMER_PAYMENT_METHODS_LIST_LIMIT,
   listCustomerPaymentMethods,
+  readSavedPaymentMethodOwner,
   removeCustomerPaymentMethod,
+  savedMethodVisibleTo,
   type CustomerPaymentMethodView,
+  type SavedMethodActor,
+  type SavedPaymentMethodOwner,
 } from "./saved-payment-methods";
 export {
   captureAuthorizedPayment,

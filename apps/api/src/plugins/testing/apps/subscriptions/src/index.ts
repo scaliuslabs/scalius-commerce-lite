@@ -36,7 +36,7 @@ export const manifest = {
   apiVersion: PLUGIN_API_VERSION,
   description: "Subscribe and save: renews subscribed products on schedule and charges the buyer's saved card.",
   author: { name: "Acme" },
-  scopes: ["read_orders", "write_orders", "write_payments"],
+  scopes: ["read_orders", "write_orders", "write_payments", "write_payment_methods"],
   events: ["order.created"],
   checkout: {
     purchaseOptions: [{ key: "subscribe", title: "Subscribe and save", description: "Delivered again every month; cancel any time." }],

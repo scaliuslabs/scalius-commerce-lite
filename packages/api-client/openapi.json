@@ -13944,6 +13944,56 @@
           "created"
         ]
       },
+      "CustomerSavedPaymentMethod": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The saved method (`cpm_…`)."
+          },
+          "brand": {
+            "type": "string",
+            "nullable": true,
+            "description": "The card network or wallet, lower case (`visa`)."
+          },
+          "last4": {
+            "type": "string",
+            "nullable": true,
+            "description": "The last four digits; the full number never reaches the store."
+          },
+          "expiryMonth": {
+            "type": "integer",
+            "nullable": true
+          },
+          "expiryYear": {
+            "type": "integer",
+            "nullable": true
+          },
+          "label": {
+            "type": "string",
+            "nullable": true
+          },
+          "savedFor": {
+            "type": "string",
+            "nullable": true,
+            "description": "The purchase option it was kept for, as the buyer chose it at checkout (\"Subscribe and save\")."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "brand",
+          "last4",
+          "expiryMonth",
+          "expiryYear",
+          "label",
+          "savedFor",
+          "createdAt"
+        ]
+      },
       "ProductPageContentBlock": {
         "oneOf": [
           {
@@ -17039,6 +17089,16 @@
             "nullable": true,
             "description": "The order whose payment kept it."
           },
+          "ownerAppId": {
+            "type": "string",
+            "nullable": true,
+            "description": "The app whose purchase option the buyer kept it for: the only app that may charge it (null: only staff may). An app lists and charges only its own."
+          },
+          "purchaseOptionId": {
+            "type": "string",
+            "nullable": true,
+            "description": "That purchase option (`<app id>.<key>`), when the order named exactly one."
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -17059,6 +17119,8 @@
           "label",
           "status",
           "sourceOrderId",
+          "ownerAppId",
+          "purchaseOptionId",
           "createdAt",
           "updatedAt"
         ]
@@ -18383,6 +18445,42 @@
           "conditions"
         ],
         "additionalProperties": false
+      },
+      "StaffSavedPaymentMethod": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CustomerSavedPaymentMethod"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "providerId": {
+                "type": "string",
+                "description": "The payment provider that keeps it (`<app id>:<provider id>`, or a built-in gateway)."
+              },
+              "ownerAppId": {
+                "type": "string",
+                "nullable": true,
+                "description": "The app whose purchase option kept it: the only app that may charge it. Null: only staff may."
+              },
+              "purchaseOptionId": {
+                "type": "string",
+                "nullable": true
+              },
+              "sourceOrderId": {
+                "type": "string",
+                "nullable": true,
+                "description": "The order whose payment kept it."
+              }
+            },
+            "required": [
+              "providerId",
+              "ownerAppId",
+              "purchaseOptionId",
+              "sourceOrderId"
+            ]
+          }
+        ]
       },
       "PurchaseOrder": {
         "type": "object",
@@ -22751,6 +22849,7 @@
                         "read_orders",
                         "write_orders",
                         "write_payments",
+                        "write_payment_methods",
                         "write_refunds",
                         "write_fulfillments",
                         "read_customers",
@@ -23624,6 +23723,7 @@
                 "read_orders",
                 "write_orders",
                 "write_payments",
+                "write_payment_methods",
                 "write_refunds",
                 "write_fulfillments",
                 "read_customers",
@@ -23791,6 +23891,7 @@
                         "read_orders",
                         "write_orders",
                         "write_payments",
+                        "write_payment_methods",
                         "write_refunds",
                         "write_fulfillments",
                         "read_customers",
@@ -61856,6 +61957,284 @@
           "exclusionReason": "The identity provider's browser redirect back to the store: it consumes a single-use code, issues the customer session cookie and redirects.",
           "dryRun": "none",
           "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
+    "/api/v1/customer-auth/payment-methods": {
+      "get": {
+        "operationId": "storefront.customer_auth_payment_methods.list",
+        "tags": [
+          "Customer Auth"
+        ],
+        "summary": "List the account's saved payment methods",
+        "description": "Cards or wallets kept by a payment provider for charges without the buyer (a subscription's renewals): brand, last four digits, expiry and what each was kept for. Never a card number.",
+        "responses": {
+          "200": {
+            "description": "The account's saved payment methods, oldest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "paymentMethods": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/CustomerSavedPaymentMethod"
+                          }
+                        }
+                      },
+                      "required": [
+                        "paymentMethods"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "excluded",
+          "stability": "internal",
+          "principals": [
+            "customer"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": true,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Customer-cookie list of the buyer's saved cards for the hosted account page.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
+    "/api/v1/customer-auth/payment-methods/{methodId}": {
+      "delete": {
+        "operationId": "storefront.customer_auth_payment_methods.delete",
+        "tags": [
+          "Customer Auth"
+        ],
+        "summary": "Remove a saved payment method",
+        "description": "Detaches the method at its provider, then removes it: nothing can charge it again (a subscription that used it must be paid another way). Removing one already removed changes nothing.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "methodId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The account's saved payment methods, oldest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "paymentMethods": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/CustomerSavedPaymentMethod"
+                          }
+                        }
+                      },
+                      "required": [
+                        "paymentMethods"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "excluded",
+          "stability": "internal",
+          "principals": [
+            "customer"
+          ],
+          "risk": "destructive",
+          "openWorld": true,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "The buyer revokes their own saved card in the hosted account page (it detaches it at the provider); agents never remove it for them.",
+          "dryRun": "none",
+          "confirmation": "required"
         },
         "x-scalius-rbac": {
           "type": "public"
@@ -103380,7 +103759,7 @@
           "App API - Payments"
         ],
         "summary": "List a customer's saved payment methods",
-        "description": "The customer's active payment methods kept by their providers (a card or wallet saved with a subscription's first payment), oldest first, at most 50. The provider's own reference never leaves the store.",
+        "description": "The customer's active payment methods kept by their providers (a card or wallet saved with a subscription's first payment), oldest first, at most 50. An app sees only the methods kept for its own purchase options. The provider's own reference never leaves the store.",
         "parameters": [
           {
             "schema": {
@@ -103522,7 +103901,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "orders.record_payment"
+          "permission": "orders.charge_saved_methods"
         }
       }
     },
@@ -103714,7 +104093,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "orders.record_payment"
+          "permission": "orders.charge_saved_methods"
         }
       }
     },
@@ -103725,7 +104104,7 @@
           "App API - Payments"
         ],
         "summary": "Charge a customer's saved payment method for an order",
-        "description": "Charges the order's customer's saved payment method without the buyer (a subscription renewal): the order must have money due, not be cancelled, and take a provider payment (its own provider, or an invoice with nothing paid yet, which the payment switches to the provider). The payment lands through the same kernel as a webhook: `payment.updated`, and `order.paid` once nothing is due. A decline is 422 `payment_declined`. When the provider gave no answer, 503 `payment_outcome_unknown`: send the same request again with the same Idempotency-Key; until then the order takes no other charge. Amounts are minor units of the order's currency.",
+        "description": "Charges the order's customer's saved payment method without the buyer (a subscription renewal). An app may charge only a method kept for its own purchase option (`ownerAppId`); any other reads as 404. The order must have money due, not be cancelled, and take a provider payment (its own provider, or an invoice with nothing paid yet, which the payment switches to the provider). The payment lands through the same kernel as a webhook: `payment.updated`, and `order.paid` once nothing is due. A decline is 422 `payment_declined`. When the provider gave no answer, 503 `payment_outcome_unknown`: send the same request again with the same Idempotency-Key; until then the order takes no other charge. Amounts are minor units of the order's currency.",
         "parameters": [
           {
             "schema": {
@@ -103940,7 +104319,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "orders.record_payment"
+          "permission": "orders.charge_saved_methods"
         }
       }
     },
@@ -104126,7 +104505,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "orders.record_payment"
+          "permission": "orders.charge_saved_methods"
         }
       }
     },
@@ -104312,7 +104691,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "orders.record_payment"
+          "permission": "orders.charge_saved_methods"
         }
       }
     },
@@ -125394,6 +125773,318 @@
           "when": "Use when making one address the customer's default billing address.",
           "dryRun": "none",
           "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "customers.edit"
+        }
+      }
+    },
+    "/api/v1/admin/customers/{id}/payment-methods": {
+      "get": {
+        "operationId": "dashboard.customers.payment_methods_list",
+        "tags": [
+          "Admin - Customers"
+        ],
+        "summary": "List a customer's saved payment methods",
+        "description": "Active cards or wallets kept by a payment provider for charges without the buyer, oldest first: brand, last four digits, expiry, what each was kept for and the app that may charge it. Never the provider's reference.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Saved payment methods",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "paymentMethods": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/StaffSavedPaymentMethod"
+                          }
+                        }
+                      },
+                      "required": [
+                        "paymentMethods"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when reading which cards or wallets a customer saved for later charges, and which app may charge each.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "customers.view"
+        }
+      }
+    },
+    "/api/v1/admin/customers/{id}/payment-methods/{methodId}": {
+      "delete": {
+        "operationId": "dashboard.customers.payment_methods_delete",
+        "tags": [
+          "Admin - Customers"
+        ],
+        "summary": "Remove a customer's saved payment method",
+        "description": "Detaches the method at its provider, then removes it: nothing can charge it again. Answers the customer's remaining methods.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "methodId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Saved payment methods",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "paymentMethods": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/StaffSavedPaymentMethod"
+                          }
+                        }
+                      },
+                      "required": [
+                        "paymentMethods"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "destructive",
+          "openWorld": true,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when a customer asks to remove a saved card so nothing charges it again.",
+          "dryRun": "none",
+          "confirmation": "required"
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -162631,6 +163322,7 @@
             "objects.edit",
             "objects.view",
             "orders.change_status",
+            "orders.charge_saved_methods",
             "orders.create",
             "orders.delete",
             "orders.edit",
@@ -165947,6 +166639,7 @@
             "objects.edit",
             "objects.view",
             "orders.change_status",
+            "orders.charge_saved_methods",
             "orders.create",
             "orders.delete",
             "orders.edit",
@@ -167058,6 +167751,7 @@
             "objects.edit",
             "objects.view",
             "orders.change_status",
+            "orders.charge_saved_methods",
             "orders.create",
             "orders.delete",
             "orders.edit",
@@ -174498,6 +175192,7 @@
             "objects.edit",
             "objects.view",
             "orders.change_status",
+            "orders.charge_saved_methods",
             "orders.create",
             "orders.delete",
             "orders.edit",
@@ -245349,6 +246044,7 @@
             "objects.edit",
             "objects.view",
             "orders.change_status",
+            "orders.charge_saved_methods",
             "orders.create",
             "orders.delete",
             "orders.edit",
@@ -277905,6 +278601,22 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.customers.marketing_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.customers.payment_methods_delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.customers.payment_methods_delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.customers.payment_methods_list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.customers.payment_methods_list"
           ]
         },
         {

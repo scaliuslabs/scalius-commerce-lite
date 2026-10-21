@@ -3776,6 +3776,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_payment_methods",
     "write_refunds",
     "write_fulfillments"
    ],
@@ -10023,6 +10024,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_payment_methods",
     "write_refunds",
     "write_fulfillments"
    ],
@@ -10343,6 +10345,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_payment_methods",
     "write_refunds",
     "write_fulfillments"
    ],
@@ -10658,6 +10661,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_payment_methods",
     "write_refunds",
     "write_fulfillments"
    ],
@@ -12168,6 +12172,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_payment_methods",
     "write_refunds",
     "write_fulfillments"
    ],
@@ -13401,6 +13406,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_payment_methods",
     "write_refunds",
     "write_fulfillments"
    ],
@@ -13448,6 +13454,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_payment_methods",
     "write_refunds",
     "write_fulfillments"
    ],
@@ -13634,7 +13641,7 @@
    "idempotency": "required",
    "revision": "none",
    "scopes": [
-    "write_payments"
+    "write_payment_methods"
    ],
    "input": {
     "parameters": [
@@ -13697,7 +13704,7 @@
    "idempotency": "none",
    "revision": "none",
    "scopes": [
-    "write_payments"
+    "write_payment_methods"
    ],
    "input": {
     "parameters": [
@@ -13751,7 +13758,7 @@
    "idempotency": "required",
    "revision": "none",
    "scopes": [
-    "write_payments"
+    "write_payment_methods"
    ],
    "input": {
     "parameters": [
@@ -13808,7 +13815,7 @@
    "idempotency": "required",
    "revision": "optional",
    "scopes": [
-    "write_payments"
+    "write_payment_methods"
    ],
    "input": {
     "parameters": [
@@ -14022,6 +14029,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_payment_methods",
     "write_refunds",
     "write_fulfillments"
    ],
@@ -14077,7 +14085,7 @@
    "idempotency": "required",
    "revision": "none",
    "scopes": [
-    "write_payments"
+    "write_payment_methods"
    ],
    "input": {
     "parameters": [
@@ -16156,6 +16164,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_payment_methods",
     "write_refunds",
     "write_fulfillments"
    ],
@@ -16324,6 +16333,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_payment_methods",
     "write_refunds",
     "write_fulfillments"
    ],
@@ -16371,6 +16381,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_payment_methods",
     "write_refunds",
     "write_fulfillments"
    ],
@@ -20779,6 +20790,16 @@
      "nullable": true,
      "description": "The order whose payment kept it."
     },
+    "ownerAppId": {
+     "type": "string",
+     "nullable": true,
+     "description": "The app whose purchase option the buyer kept it for: the only app that may charge it (null: only staff may). An app lists and charges only its own."
+    },
+    "purchaseOptionId": {
+     "type": "string",
+     "nullable": true,
+     "description": "That purchase option (`<app id>.<key>`), when the order named exactly one."
+    },
     "createdAt": {
      "type": "string",
      "format": "date-time"
@@ -20799,6 +20820,8 @@
     "label",
     "status",
     "sourceOrderId",
+    "ownerAppId",
+    "purchaseOptionId",
     "createdAt",
     "updatedAt"
    ]

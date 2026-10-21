@@ -155,6 +155,15 @@ with descriptor capabilities: `vault` (`chargeSavedMethod`,
   confirmed or authorized event's `savedPaymentMethod` is upserted in the
   batch that applies the payment, for the account customer only, never moved
   to another customer. Removing detaches at the provider first.
+- **Ownership** (migration 0175, security audit N3): a method belongs to the
+  app whose purchase option kept it (`owner_plugin_id`, plus the option and
+  its title when the order named exactly one; options of two apps own
+  nothing). `SavedMethodActor` decides reach: an app lists, charges and
+  removes only its own (another's reads as not found), staff reach every
+  method, and the buyer lists and removes their own
+  (`/customer-auth/payment-methods`; staff on the customer page). The app
+  scope is the Sensitive `write_payment_methods`
+  (`orders.charge_saved_methods`), separate from recording a payment.
 - **Authorizations**: an `authorized` event records an `order_payments` row
   `authorized` (`processPaymentAuthorized`): money held, nothing paid (the
   ledger counts `succeeded` only); an open checkout it holds is placed. Like

@@ -352,6 +352,20 @@ describe("route permissions", () => {
     expect(allowed([PERMISSIONS.ORDERS_VIEW], path)).toBe(true);
   });
 
+  // Security audit N3: charging a card without its owner is not recording a bank transfer.
+  it("keeps off-session charges, capture, void and saved methods behind their own permission", () => {
+    for (const [path, method] of [
+      ["/api/v1/admin/resources/orders/order_1/payments/charge", "POST"],
+      ["/api/v1/admin/resources/payments/pay_1/capture", "POST"],
+      ["/api/v1/admin/resources/payments/pay_1/void", "POST"],
+      ["/api/v1/admin/resources/payment-methods", "GET"],
+      ["/api/v1/admin/resources/payment-methods/cpm_1", "DELETE"],
+    ] as const) {
+      expect(allowed([PERMISSIONS.ORDERS_VIEW, PERMISSIONS.ORDERS_RECORD_PAYMENT], path, method), path).toBe(false);
+      expect(allowed([PERMISSIONS.ORDERS_CHARGE_SAVED_METHODS], path, method), path).toBe(true);
+    }
+  });
+
   // Security audit S2: what apps may add to gift cards a day is stored-value policy.
   it("keeps the app gift card limit readable with gift card view and changeable only with manage", () => {
     const path = "/api/v1/admin/gift-cards/settings";

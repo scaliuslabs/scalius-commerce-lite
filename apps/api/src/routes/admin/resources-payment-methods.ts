@@ -5,7 +5,10 @@
 // - `payment_methods.list` / `payment_methods.delete`: a customer's methods
 //   kept by their providers. The provider's reference never leaves the store:
 //   an app sees the method id, the provider, brand, last four digits, expiry
-//   and label.
+//   and label, and only the methods kept for its own purchase options.
+// - Every operation here needs the Sensitive `write_payment_methods`
+//   (orders.charge_saved_methods), not `write_payments` (security audit N3);
+//   an app charges only a method it owns.
 // - `payments.charge`: charges a saved method for an order with money due,
 //   off-session; `capture: "manual"` only authorizes.
 // - `payments.capture` / `payments.void`: settle or release an authorization.
@@ -29,6 +32,7 @@ import {
   type ApplyProviderPaymentEvent,
   type CustomerPaymentMethodView,
   type PaymentProvidersSource,
+  type SavedMethodActor,
   type SavedMethodPaymentOutcome,
 } from "@scalius/core/modules/payments";
 import { EVENT_REPRESENTATION_SCHEMAS } from "@scalius/shared/events";
@@ -64,6 +68,8 @@ const PaymentMethodResource = z.object({
   label: z.string().nullable(),
   status: z.enum(["active", "removed"]),
   sourceOrderId: z.string().nullable().openapi({ description: "The order whose payment kept it." }),
+  ownerAppId: z.string().nullable().openapi({ description: "The app whose purchase option the buyer kept it for: the only app that may charge it (null: only staff may). An app lists and charges only its own." }),
+  purchaseOptionId: z.string().nullable().openapi({ description: "That purchase option (`<app id>.<key>`), when the order named exactly one." }),
   createdAt: isoTimestamp,
   updatedAt: isoTimestamp,
 }).openapi("PaymentMethodResource");
@@ -92,6 +98,8 @@ function methodResource(method: CustomerPaymentMethodView): z.infer<typeof Payme
     label: method.label,
     status: method.status,
     sourceOrderId: method.sourceOrderId,
+    ownerAppId: method.ownerPluginId,
+    purchaseOptionId: method.purchaseOptionId,
     createdAt: iso(method.createdAt),
     updatedAt: iso(method.updatedAt),
   };
@@ -109,6 +117,16 @@ const writeResponses = {
   409: conflictResponse,
   503: serviceUnavailableResponse,
 };
+
+/**
+ * Who asks, from the request's principal (security audit N3): an app reaches
+ * only the methods kept for its own purchase options; staff and agents
+ * acting for them reach every method.
+ */
+function actorOf(c: Context<{ Bindings: Env }>): Exclude<SavedMethodActor, { kind: "customer" }> {
+  const plugin = c.get("pluginPrincipal");
+  return plugin ? { kind: "app", pluginId: plugin.pluginId } : { kind: "staff" };
+}
 
 /** The command's dependencies: the request's gateways, credentials and the one event claim. */
 function deps(c: Context<{ Bindings: Env }>): { providers: PaymentProvidersSource; encryptionKey: string | undefined; applyEvent: ApplyProviderPaymentEvent } {
@@ -146,7 +164,7 @@ app.openapi(createRoute({
   path: "/payment-methods",
   tags: ["App API - Payments"],
   summary: "List a customer's saved payment methods",
-  description: "The customer's active payment methods kept by their providers (a card or wallet saved with a subscription's first payment), oldest first, at most 50. The provider's own reference never leaves the store.",
+  description: "The customer's active payment methods kept by their providers (a card or wallet saved with a subscription's first payment), oldest first, at most 50. An app sees only the methods kept for its own purchase options. The provider's own reference never leaves the store.",
   request: { query: z.object({ customerId: z.string().min(1).max(128) }) },
   responses: {
     200: { description: "The saved methods", content: { "application/json": { schema: successEnvelope(z.object({ paymentMethods: z.array(PaymentMethodResource) })) } } },
@@ -157,7 +175,7 @@ app.openapi(createRoute({
   const { customerId } = c.req.valid("query");
   const customer = await db.select({ id: customers.id }).from(customers).where(and(eq(customers.id, customerId), isNull(customers.deletedAt))).get();
   if (!customer) throw new NotFoundError("Customer not found");
-  return ok(c, { paymentMethods: (await listCustomerPaymentMethods(db, customerId)).map(methodResource) });
+  return ok(c, { paymentMethods: (await listCustomerPaymentMethods(db, customerId, actorOf(c))).map(methodResource) });
 });
 
 app.openapi(createRoute({
@@ -175,6 +193,7 @@ app.openapi(createRoute({
 }), async (c) => {
   const removed = await removeCustomerPaymentMethod(c.get("db"), {
     methodId: c.req.valid("param").id,
+    actor: actorOf(c),
     ...deps(c),
   });
   return ok(c, { paymentMethod: methodResource(removed) });
@@ -197,7 +216,7 @@ app.openapi(createRoute({
   path: "/orders/{id}/payments/charge",
   tags: ["App API - Payments"],
   summary: "Charge a customer's saved payment method for an order",
-  description: "Charges the order's customer's saved payment method without the buyer (a subscription renewal): the order must have money due, not be cancelled, and take a provider payment (its own provider, or an invoice with nothing paid yet, which the payment switches to the provider). The payment lands through the same kernel as a webhook: `payment.updated`, and `order.paid` once nothing is due. A decline is 422 `payment_declined`. When the provider gave no answer, 503 `payment_outcome_unknown`: send the same request again with the same Idempotency-Key; until then the order takes no other charge. Amounts are minor units of the order's currency.",
+  description: "Charges the order's customer's saved payment method without the buyer (a subscription renewal). An app may charge only a method kept for its own purchase option (`ownerAppId`); any other reads as 404. The order must have money due, not be cancelled, and take a provider payment (its own provider, or an invoice with nothing paid yet, which the payment switches to the provider). The payment lands through the same kernel as a webhook: `payment.updated`, and `order.paid` once nothing is due. A decline is 422 `payment_declined`. When the provider gave no answer, 503 `payment_outcome_unknown`: send the same request again with the same Idempotency-Key; until then the order takes no other charge. Amounts are minor units of the order's currency.",
   request: {
     params: z.object({ id: z.string().min(1).max(128) }),
     headers: requiredKeyHeaders,
@@ -212,6 +231,7 @@ app.openapi(createRoute({
   const outcome = await chargeSavedPaymentMethod(c.get("db"), {
     orderId: c.req.valid("param").id,
     paymentMethodId: body.paymentMethodId,
+    actor: actorOf(c),
     ...(body.amountMinor !== undefined ? { amountMinor: body.amountMinor } : {}),
     capture: body.capture,
     ...(body.expectedVersion !== undefined ? { expectedVersion: body.expectedVersion } : {}),

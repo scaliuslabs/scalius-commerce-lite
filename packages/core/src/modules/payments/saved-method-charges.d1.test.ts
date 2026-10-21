@@ -18,9 +18,10 @@ import {
   voidAuthorizedPayment,
   type ApplyProviderPaymentEvent,
 } from "./saved-method-charges";
-import { listCustomerPaymentMethods, removeCustomerPaymentMethod } from "./saved-payment-methods";
+import { listCustomerPaymentMethods, readSavedPaymentMethodOwner, removeCustomerPaymentMethod } from "./saved-payment-methods";
 
 const PROVIDER = "acme.fake:pay";
+const STAFF = { kind: "staff" } as const;
 
 function vaultGateway() {
   const fake = createFakeGateway(PROVIDER);
@@ -127,7 +128,7 @@ describe("saved-method charges and authorizations", () => {
   ).all(id);
   const charge = (requestKey: string, overrides: Partial<Parameters<typeof chargeSavedPaymentMethod>[1]> = {}) =>
     chargeSavedPaymentMethod(db, {
-      orderId: "ord_1", paymentMethodId: "cpm_1", requestKey,
+      orderId: "ord_1", paymentMethodId: "cpm_1", requestKey, actor: STAFF,
       providers: vault.providers, encryptionKey: undefined, applyEvent, ...overrides,
     });
 
@@ -249,10 +250,10 @@ describe("saved-method charges and authorizations", () => {
     expect((await processPaymentConfirmed(db, {
       orderId: "ord_1", provider: PROVIDER, amountMinor: 150000, currency: "BDT", paymentType: "full", providerRef: "pi_hosted_1", savedPaymentMethod: kept,
     })).success).toBe(true);
-    expect((await listCustomerPaymentMethods(db, "cust_1")).map((method) => ({ brand: method.brand, last4: method.last4, sourceOrderId: method.sourceOrderId })))
+    expect((await listCustomerPaymentMethods(db, "cust_1", STAFF)).map((method) => ({ brand: method.brand, last4: method.last4, sourceOrderId: method.sourceOrderId })))
       .toEqual([{ brand: "visa", last4: "4242", sourceOrderId: null }, { brand: "mastercard", last4: "5555", sourceOrderId: "ord_1" }]);
     // The method list never carries the provider reference.
-    expect(JSON.stringify(await listCustomerPaymentMethods(db, "cust_1"))).not.toContain("pm_new");
+    expect(JSON.stringify(await listCustomerPaymentMethods(db, "cust_1", STAFF))).not.toContain("pm_new");
 
     // A guest's payment keeps nothing; another customer's reference is never moved.
     expect((await processPaymentConfirmed(db, {
@@ -265,12 +266,68 @@ describe("saved-method charges and authorizations", () => {
   });
 
   it("removes a saved method after the provider detaches it, and the removed method is never charged", async () => {
-    const removed = await removeCustomerPaymentMethod(db, { methodId: "cpm_1", providers: vault.providers, encryptionKey: undefined });
+    const removed = await removeCustomerPaymentMethod(db, { methodId: "cpm_1", actor: STAFF, providers: vault.providers, encryptionKey: undefined });
     expect(removed).toMatchObject({ id: "cpm_1", status: "removed" });
     expect(vault.calls.delete).toBe(1);
-    expect(await removeCustomerPaymentMethod(db, { methodId: "cpm_1", providers: vault.providers, encryptionKey: undefined })).toMatchObject({ status: "removed" });
+    expect(await removeCustomerPaymentMethod(db, { methodId: "cpm_1", actor: STAFF, providers: vault.providers, encryptionKey: undefined })).toMatchObject({ status: "removed" });
     expect(vault.calls.delete).toBe(1);
-    expect(await listCustomerPaymentMethods(db, "cust_1")).toEqual([]);
+    expect(await listCustomerPaymentMethods(db, "cust_1", STAFF)).toEqual([]);
     await expect(charge("renewal-removed")).rejects.toThrow(/not found/);
+  });
+
+  // Security audit N3: any app with the payments scope could charge any
+  // customer's saved card for an order it created.
+  describe("a method belongs to the app that kept it", () => {
+    const SUBS = { kind: "app", pluginId: "acme.subs" } as const;
+    const OTHER = { kind: "app", pluginId: "evil.invoices" } as const;
+    beforeEach(() => {
+      sqlite.exec("UPDATE customer_payment_methods SET owner_plugin_id = 'acme.subs', purchase_option_id = 'acme.subs.monthly' WHERE id = 'cpm_1'");
+    });
+
+    it("lets only the owning app charge, list and remove it; staff reach every method", async () => {
+      await expect(charge("renewal-other-app", { actor: OTHER })).rejects.toThrow(/not found/);
+      expect(vault.calls.charge).toHaveLength(0);
+      expect(await listCustomerPaymentMethods(db, "cust_1", OTHER)).toEqual([]);
+      await expect(removeCustomerPaymentMethod(db, { methodId: "cpm_1", actor: OTHER, providers: vault.providers, encryptionKey: undefined }))
+        .rejects.toThrow(/not found/);
+      expect(vault.calls.delete).toBe(0);
+
+      expect((await listCustomerPaymentMethods(db, "cust_1", SUBS)).map((method) => method.id)).toEqual(["cpm_1"]);
+      expect(await charge("renewal-owner", { actor: SUBS })).toMatchObject({ outcome: "succeeded" });
+      expect(vault.calls.charge).toHaveLength(1);
+    });
+
+    it("lets no app charge a method no app owns", async () => {
+      sqlite.exec("UPDATE customer_payment_methods SET owner_plugin_id = NULL WHERE id = 'cpm_1'");
+      await expect(charge("renewal-unowned", { actor: SUBS })).rejects.toThrow(/not found/);
+      expect(await charge("renewal-staff")).toMatchObject({ outcome: "succeeded" });
+    });
+
+    it("lets a buyer see and remove only their own methods", async () => {
+      expect((await listCustomerPaymentMethods(db, "cust_1", { kind: "customer", customerId: "cust_1" })).map((method) => method.id)).toEqual(["cpm_1"]);
+      expect(await listCustomerPaymentMethods(db, "cust_1", { kind: "customer", customerId: "cust_2" })).toEqual([]);
+      await expect(removeCustomerPaymentMethod(db, { methodId: "cpm_1", actor: { kind: "customer", customerId: "cust_2" }, providers: vault.providers, encryptionKey: undefined }))
+        .rejects.toThrow(/not found/);
+      expect(await removeCustomerPaymentMethod(db, { methodId: "cpm_1", actor: { kind: "customer", customerId: "cust_1" }, providers: vault.providers, encryptionKey: undefined }))
+        .toMatchObject({ status: "removed" });
+    });
+
+    it("records the app whose purchase option kept a method, and none when two apps' options share the order", async () => {
+      sqlite.exec("INSERT INTO products (id, name, slug, price_minor, is_active) VALUES ('prod_1', 'Box', 'box', 150000, 1)");
+      const option = (value: string) => JSON.stringify([{ key: "_purchase_option", type: "text", label: "Purchase option", value, displayValue: "Monthly", priceMinor: 0 }]);
+      sqlite.prepare(`INSERT INTO order_items (id, order_id, product_id, quantity, product_name, unit_price_minor, base_unit_price_minor, line_subtotal_minor, properties, inventory_tracked) VALUES ('item_1', 'ord_1', 'prod_1', 1, 'Box', 150000, 150000, 150000, ?, 0)`)
+        .run(option("acme.subs.monthly"));
+      sqlite.exec("UPDATE orders SET payment_method = 'acme.fake:pay' WHERE id = 'ord_1'");
+      expect((await processPaymentConfirmed(db, {
+        orderId: "ord_1", provider: PROVIDER, amountMinor: 150000, currency: "BDT", paymentType: "full", providerRef: "pi_owned_1",
+        savedPaymentMethod: { ref: "pm_owned", last4: "1111" },
+      })).success).toBe(true);
+      expect(sqlite.prepare("SELECT owner_plugin_id, purchase_option_id, purchase_option_title FROM customer_payment_methods WHERE provider_method_ref = 'pm_owned'").get())
+        .toEqual({ owner_plugin_id: "acme.subs", purchase_option_id: "acme.subs.monthly", purchase_option_title: "Monthly" });
+
+      sqlite.prepare(`INSERT INTO order_items (id, order_id, product_id, quantity, product_name, unit_price_minor, base_unit_price_minor, line_subtotal_minor, properties, inventory_tracked) VALUES ('item_2', 'ord_1', 'prod_1', 1, 'Rental', 0, 0, 0, ?, 0)`)
+        .run(option("other.rentals.weekly"));
+      expect(await readSavedPaymentMethodOwner(db, "ord_1")).toEqual({ ownerPluginId: null, purchaseOptionId: null, purchaseOptionTitle: null });
+    });
   });
 });
