@@ -157,6 +157,21 @@ export function addressDraftInput(draft: AddressDraft) {
   };
 }
 
+/**
+ * The stable postal address input (`postalAddressInputSchema`): the canonical
+ * fields, Bangladesh's location ids under `placeIds`. Null without a first
+ * line, which every postal address needs.
+ */
+export function postalAddressDraftInput(draft: AddressDraft) {
+  const { city, zone, area, ...lines } = { city: null, zone: null, area: null, ...addressDraftInput(draft) };
+  if (!lines.line1) return null;
+  return {
+    ...lines,
+    line1: lines.line1,
+    ...(usesLocationPicker(draft.countryCode) ? { placeIds: { city, zone, area } } : {}),
+  };
+}
+
 /** The order write's address fields (`shipping*` plus Bangladesh's ids). */
 export function orderAddressInput(draft: AddressDraft) {
   const input = addressDraftInput(draft);
