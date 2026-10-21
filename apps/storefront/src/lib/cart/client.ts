@@ -195,7 +195,7 @@ let latestAllowedPaymentMethods: string[] | null = null;
  * The names of the validated lines paid only online (digital items, gift
  * cards), and whether every line is one: the cash-on-delivery refusal names them.
  */
-let latestOnlineOnlyLines: { names: string[]; all: boolean } = { names: [], all: false };
+let latestOnlineOnlyLines: { names: string[] } = { names: [] };
 let latestCheckoutLocation: {
   cityId: string;
   cityName: string;
@@ -274,7 +274,7 @@ function resetCartRuntimeListeners(): AbortSignal {
   pendingDiscountValidation = null;
   latestDiscountFacts = null;
   latestAllowedPaymentMethods = null;
-  latestOnlineOnlyLines = { names: [], all: false };
+  latestOnlineOnlyLines = { names: [] };
   latestCheckoutLocation = null;
   cartQuantityLimits = {};
   validationRuleErrors = [];
@@ -902,11 +902,10 @@ function codRefusedForCart(): boolean {
 }
 
 /** The lines nothing but an online payment can pay for (digital items and gift cards). */
-function onlineOnlyLines(items: readonly CartValidationItem[]): { names: string[]; all: boolean } {
+function onlineOnlyLines(items: readonly CartValidationItem[]): { names: string[] } {
   const online = items.filter((item) => item.fulfillmentType === "digital" || item.fulfillmentType === "gift_card");
   return {
     names: [...new Set(online.map((item) => item.productName.trim()).filter(Boolean))],
-    all: items.length > 0 && online.length === items.length,
   };
 }
 
@@ -918,8 +917,9 @@ function onlineOnlyLines(items: readonly CartValidationItem[]): { names: string[
  */
 function codRefusedMessage(): string {
   const copy = activeCheckoutCopy();
-  const { names, all } = latestOnlineOnlyLines;
-  if (!all || names.length === 0) return copy.noPaymentMethodsText;
+  // One online-only line refuses cash for the whole order: name those lines.
+  const { names } = latestOnlineOnlyLines;
+  if (names.length === 0) return copy.noPaymentMethodsText;
   const language = pageCheckoutLanguage().code;
   return formatCheckoutLanguageText(copy.cartOnlinePaymentRequiredText, {
     items: formatList(names, numberLocale(language || "en", storeRegion())),

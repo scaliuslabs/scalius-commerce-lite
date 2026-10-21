@@ -16,6 +16,9 @@ export function quickAddCartLine(data: ProductPageData, currencyCode: string): C
   const resolution = resolveBuyerVariants(variants);
   const variant = resolution.mode === "simple" ? resolution.variants[0] : null;
   if (!variant || !isVariantAvailable(variant)) return null;
+  // A digital item is paid online only: its page says whether this store can
+  // take that payment, so the card opens it instead of adding (buyer QA M1).
+  if (variant.fulfillmentKind === "digital") return null;
   const price = calculateVariantPrice({
     basePrice: product.price,
     discountType: product.discountType,

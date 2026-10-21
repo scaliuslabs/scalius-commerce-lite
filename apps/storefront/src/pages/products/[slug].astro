@@ -475,7 +475,7 @@ const fulfilmentBadge =
 // Digital items and gift cards are paid online, never in cash: on a store
 // whose checkout takes only cash on delivery the page says so instead of
 // starting a purchase checkout must refuse. A product with a physical or
-// service SKU stays buyable, since such a cart can be paid in cash.
+// service SKU stays buyable; a cart that also holds a digital item is refused cash at checkout.
 const onlinePaymentUnavailable =
   productFulfilment(product, buyerVariants) === "digital" && !takesOnlinePayment(checkoutConfig);
 const merchantReturnPolicyJsonLd = buildMerchantReturnPolicyJsonLd({

@@ -338,6 +338,15 @@ describe("Wave A checkout", () => {
             allowsCashOnDelivery: summarizeStorefrontCartFulfilment({ items: [{ fulfillmentKind: "digital", isGiftCard: false }] }, null)
                 .allowsCashOnDelivery,
         })).toEqual(["stripe"]);
+        // Buyer QA M1: an e-book beside a vase is still paid online only.
+        expect(resolveCartPaymentMethods(methods, summarizeStorefrontCartFulfilment({ items: [
+            { fulfillmentKind: "digital", isGiftCard: false },
+            { fulfillmentKind: "physical", isGiftCard: false },
+        ] }, "delivery"))).toEqual(["stripe"]);
+        expect(resolveCartPaymentMethods(methods, summarizeStorefrontCartFulfilment({ items: [
+            { fulfillmentKind: "physical", isGiftCard: false },
+            { fulfillmentKind: "service", isGiftCard: false },
+        ] }, "delivery"))).toEqual(["cod", "stripe"]);
         expect(ValidationError).toBeDefined();
     });
 });
