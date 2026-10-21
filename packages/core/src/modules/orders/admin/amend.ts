@@ -441,8 +441,9 @@ export async function confirmManualOrderAmendment(
         { releaseKey: inventoryKey, requireExact: true },
     );
     if (!releasePlan.success) {
+        // The ledger's reason names internal ids; the merchant reads what to do instead.
         throw new ConflictError(
-            releasePlan.error ?? "The existing reservation must be reconciled before amending.",
+            "The stock held for this order doesn't match its items, so they can't be changed. Create a new order instead.",
         );
     }
 
