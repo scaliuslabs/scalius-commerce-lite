@@ -8,6 +8,9 @@ import { LazyFraudCheckIndicator } from "~/components/admin/order-list/LazyFraud
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
+import { orderMessages } from "~/i18n/orders";
+import { isErasedText } from "@scalius/shared/customer-erasure";
+import { shownText } from "~/lib/erased-text";
 import { formatBillingAddressLines, formatShippingAddress } from "~/lib/location-presentation";
 import { countryName } from "~/lib/country-name";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
@@ -101,22 +104,35 @@ function AppRiskChecks({ checks, released }: { checks: OrderAppRiskCheck[]; rele
  */
 export function OrderCustomerCard({ order }: { order: Order }) {
   const t = useMessages(orderDetailMessages);
+  const to = useMessages(orderMessages);
   const actions = useOrderActionPermissions();
   const [editing, setEditing] = useState(false);
+  // An erased customer's order keeps "[erased]" in its name and street lines: they read as a translated word.
+  const erased = to("erasedValue");
+  const customerName = shownText(order.customerName, to("erasedCustomer"));
   // An order placed without a phone (a digital or service order) has no call, SMS or fraud check.
   const contact = order.customerPhone ? customerContactLinks(order.customerPhone) : null;
   // WhatsApp goes to the separate number the buyer gave, when there is one.
   const whatsappLink = order.customerWhatsapp ? customerContactLinks(order.customerWhatsapp).whatsapp : contact?.whatsapp ?? null;
-  const address = formatShippingAddress(order, countryName);
+  const address = formatShippingAddress({
+    ...order,
+    shippingAddress: shownText(order.shippingAddress, erased),
+    shippingDependentLocality: shownText(order.shippingDependentLocality, erased),
+  }, countryName);
   // The recipient when the order ships to someone other than its contact.
   const recipient = [order.shippingName, order.shippingCompany].filter(Boolean).join(", ");
   // The billing address (Shopify's rule): its own lines, or "same as delivery"; none on older orders.
-  const billingLines = formatBillingAddressLines(order, countryName);
+  const billingLines = formatBillingAddressLines({
+    ...order,
+    billingAddress: shownText(order.billingAddress, erased),
+    billingDependentLocality: shownText(order.billingDependentLocality, erased),
+  }, countryName);
   const billingRecipient = [order.billingName, order.billingCompany].filter(Boolean).join(", ");
   const canEditDetails = actions.canEditOrders && order.editReadiness.details.allowed;
   const record = order.customerRecord ?? null;
   // An account or merchant-added customer named differently from this order: say so, so the mismatch is seen.
-  const orderedAs = record !== null && record.kind !== "guest" && !sameName(record.name, order.customerName);
+  const orderedAs = record !== null && record.kind !== "guest" && !isErasedText(record.name) && !isErasedText(order.customerName)
+    && !sameName(record.name, order.customerName);
   const released = (order.holds ?? []).filter((hold) => hold.releasedAt !== null);
 
   return (
@@ -131,14 +147,16 @@ export function OrderCustomerCard({ order }: { order: Order }) {
               </Button>
             ) : null}
           </div>
-          <p className="font-medium">{order.customerName}</p>
+          <p className="font-medium">{customerName}</p>
           {record ? (
             <Link
               to="/admin/customers/$customerId/edit"
               params={{ customerId: record.id }}
               className="flex min-h-11 min-w-6 items-center text-link hover:underline sm:min-h-6"
             >
-              {record.kind !== "guest"
+              {isErasedText(record.name)
+                ? to("erasedCustomer")
+                : record.kind !== "guest"
                 ? record.name
                 : record.phone
                   ? t("customer.guestRecord", { phone: formatPhoneForDisplay(record.phone, getStoreRegion()) })
@@ -148,7 +166,8 @@ export function OrderCustomerCard({ order }: { order: Order }) {
           {orderedAs ? <p className="text-muted-foreground">{t("customer.orderedAs", { name: order.customerName })}</p> : null}
           {order.customerPhone ? (
             <p className="font-mono text-muted-foreground">{formatPhoneForDisplay(order.customerPhone, getStoreRegion())}</p>
-          ) : (
+          ) : isErasedText(order.customerName) ? null : (
+            // An erased order has no phone because it was erased, not because it is digital.
             <p className="text-muted-foreground">{t("customer.noPhone")}</p>
           )}
           {order.customerWhatsapp ? (

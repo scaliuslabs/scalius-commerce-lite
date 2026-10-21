@@ -56,7 +56,13 @@ rate) is logged the same way. An app registered with `onError: "block"`
 (cart.validate and checkout.payment_methods only) instead stops checkout on
 every channel: `400 details.reason = "checkout_app_unavailable"` with the
 store's `checkoutAppUnavailableText` (`store-copy.ts`, the active checkout
-language with the merchant's edits).
+language with the merchant's edits). Each failed answer counts toward the
+app's circuit at that point (`plugins/function-circuit.ts`, state on the
+registration row the checkout read already carries): five within two
+minutes open it for five minutes, during which checkout applies the same
+policy without calling the app (left out, or refused at once for an
+approved blocking function); then one trial call closes or reopens it. The
+staff get a push when it opens and the app page lists open circuits.
 
 - **The cart apps see** (`functionCartSchema`): lines keyed by the tax
   allocation line id, unit price and the line total after the platform's

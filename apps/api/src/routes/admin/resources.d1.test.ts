@@ -9,7 +9,7 @@ import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { paymentMethodsDocument } from "@scalius/core/modules/settings";
 import { autoFulfilOrder, FULFILLER_REGISTRY, type FulfillerRegistry } from "@scalius/core/modules/fulfilment";
-import { APP_PAYMENT_REVIEW_REASON } from "@scalius/core/modules/orders";
+import { APP_PAYMENT_REVIEW_REASON, assertOrderNotOnHold, placeAppOrderHolds } from "@scalius/core/modules/orders";
 import { EVENT_REPRESENTATION_SCHEMAS } from "@scalius/shared/events";
 import type { ProtectedCustomerData } from "@scalius/shared/plugins/protected-data";
 import { errorResponseFromError } from "../../utils/api-response";
@@ -222,8 +222,10 @@ describe("the stable app API's resources", () => {
     // Nothing is handed over, by the route's own run or any later one.
     expect(sqlite.prepare("SELECT fulfilled_quantity FROM order_items WHERE id = 'i_o_app'").get()).toEqual({ fulfilled_quantity: 0 });
     expect(await autoFulfilOrder(db, "o_app", registry)).toMatchObject({ skipped: "on_hold", fulfilledTypes: [] });
-    // The app cannot clear the review it triggered.
+    // The app cannot clear the review it triggered, by its id or as its own hold.
     expect((await call("POST", `/orders/o_app/holds/${hold!.id}/release`)).status).toBe(403);
+    const version = (sqlite.prepare("SELECT version FROM orders WHERE id = 'o_app'").get() as { version: number }).version;
+    expect((await call("POST", "/resources/orders/o_app/release-hold", { body: { expectedRevision: version } })).status).toBe(404);
     expect(openHolds("o_app")).toHaveLength(1);
     // Staff check the bank and release it: the download goes out.
     principal = null;
@@ -235,6 +237,48 @@ describe("the stable app API's resources", () => {
     invoice("o_staff");
     expect((await payInFull("o_staff", "staff payment 0001")).status).toBe(201);
     expect(openHolds("o_staff")).toEqual([]);
+  });
+
+  it("lets an app release only its own hold, under the order revision, and never staff through this operation", async () => {
+    await placeAppOrderHolds(db, "ord_b", [
+      { pluginId: "acme.b2b", appName: "Acme B2B", reasons: ["Waiting for the company's approver."] },
+      { pluginId: "acme.risk", appName: "Acme Risk", reasons: ["Velocity"] },
+    ]);
+    const openHolds = () => (sqlite.prepare("SELECT plugin_id FROM order_holds WHERE order_id = 'ord_b' AND released_at IS NULL ORDER BY plugin_id").all() as Array<{ plugin_id: string }>).map((row) => row.plugin_id);
+    const version = () => (sqlite.prepare("SELECT version FROM orders WHERE id = 'ord_b'").get() as { version: number }).version;
+    const read = version();
+    const release = (expectedRevision: number, key?: string) => call("POST", "/resources/orders/ord_b/release-hold", {
+      body: { expectedRevision },
+      ...(key ? { headers: { "Idempotency-Key": key } } : {}),
+    });
+
+    // Staff release holds on the order page, not here.
+    const staff = await release(read);
+    expect(staff.status).toBe(403);
+    expect(staff.body.error.code).toBe("app_principal_required");
+    // An app with no hold of its own on the order has nothing to release.
+    principal = { pluginId: "acme.crm", protectedData: new Set() };
+    expect((await release(read)).status).toBe(404);
+
+    principal = { pluginId: "acme.b2b", protectedData: new Set() };
+    const stale = await release(read + 1);
+    expect(stale.status).toBe(409);
+    expect(version()).toBe(read);
+    expect(openHolds()).toEqual(["acme.b2b", "acme.risk"]);
+
+    const released = await release(read, "approval ord_b 0001");
+    expect(released.status).toBe(200);
+    expect(released.body.data).toMatchObject({ replayed: false, order: { id: "ord_b", revision: read + 1 } });
+    expect(EVENT_REPRESENTATION_SCHEMAS.order.safeParse(released.body.data.order).success).toBe(true);
+    expect(openHolds()).toEqual(["acme.risk"]);
+    // The same key replays the first answer; a new request answers the released hold.
+    expect((await release(read, "approval ord_b 0001")).replayed).toBe("true");
+    const again = await release(read);
+    expect(again.status).toBe(200);
+    expect(again.body.data).toMatchObject({ replayed: true, order: { revision: read + 1 } });
+    expect(version()).toBe(read + 1);
+    // Another app's hold still stops the order.
+    await expect(assertOrderNotOnHold(db, "ord_b")).rejects.toThrow(/Acme Risk/);
   });
 
   it("refuses a status change made on a stale order revision, changing nothing, and answers the order it changed", async () => {

@@ -72,6 +72,8 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 type CheckoutCustomerIdentity = {
   customerId: string;
   source: "authenticated";
+  /** The account is tax-exempt (read with its session); null: it pays tax. */
+  taxExemption: { exemptionId: string | null } | null;
 } | null;
 type CheckoutSettingsSnapshot = StorefrontCheckoutSettingsSnapshot;
 type CheckoutOrderPolicyResult = {
@@ -145,7 +147,7 @@ function assertCheckoutOrderPolicy(
   >,
   providers: PaymentProviders,
   /** The request's session, read in the checkout's batch: whether one was sent and whom it signs in. */
-  session: { sent: boolean; customerId: string | null },
+  session: { sent: boolean; customerId: string | null; taxExemption?: { exemptionId: string | null } | null },
 ): CheckoutOrderPolicyResult {
   const checkoutSettings = authority.checkoutSettings;
   const checkoutSettingsSnapshot = paymentMethod === GIFT_CARD_PAYMENT_METHOD
@@ -159,7 +161,7 @@ function assertCheckoutOrderPolicy(
 
   if (session.customerId) {
     return {
-      customerIdentity: { customerId: session.customerId, source: "authenticated" },
+      customerIdentity: { customerId: session.customerId, source: "authenticated", taxExemption: session.taxExemption ?? null },
       checkoutSettings: checkoutSettingsSnapshot,
       sessionEnded: false,
     };
@@ -569,7 +571,9 @@ app.openapi(createOrderRoute, async (c) => {
       data.paymentMethod as CheckoutPaymentMethodId,
       checkoutAuthority,
       paymentProviders,
-      { sent: sessionToken !== null, customerId: sessionToken ? checkoutReads.session()?.customerId ?? null : null },
+      sessionToken
+        ? { sent: true, customerId: checkoutReads.session()?.customerId ?? null, taxExemption: checkoutReads.session()?.taxExemption ?? null }
+        : { sent: false, customerId: null },
     );
     // A gateway must charge the order's currency: its market's (MARKETS-DESIGN step 6).
     // (A cart validated before step 6 carries no money: the authority's shop currency.)

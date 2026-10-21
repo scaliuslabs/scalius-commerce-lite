@@ -186,6 +186,9 @@ export const CUSTOMER_UPDATED_COLUMNS = [
   "origin",
   "merged_into_customer_id",
   "deleted_at",
+  // Tax exemption (0178), announced from 0179.
+  "tax_exempt",
+  "tax_exemption_id",
 ] as const;
 
 /** Address-book columns whose change is a `customer.updated` of its customer (not timestamps). */
@@ -581,8 +584,18 @@ const LEGACY_EVENT_TRIGGER_SPECS: readonly EventTriggerSpec[] = [
     name: "customers_updated",
     table: "customers",
     event: "update",
-    when: changed(...CUSTOMER_UPDATED_COLUMNS),
+    // An erased record (0179) announces customer.erased, never an update.
+    when: and(isNull(NEW("erased_at")), changed(...CUSTOMER_UPDATED_COLUMNS)),
     topic: "customer.updated",
+    resourceId: NEW("id"),
+    facts: [["customerId", NEW("id")]],
+  },
+  {
+    name: "customers_erased",
+    table: "customers",
+    event: "update",
+    when: and(isNull(OLD("erased_at")), notNull(NEW("erased_at"))),
+    topic: "customer.erased",
     resourceId: NEW("id"),
     facts: [["customerId", NEW("id")]],
   },
@@ -612,8 +625,11 @@ const LEGACY_EVENT_TRIGGER_SPECS: readonly EventTriggerSpec[] = [
     name: "customer_addresses_deleted",
     table: "customer_addresses",
     event: "delete",
-    // Not when its customer is being deleted (the cascade): that is no update.
-    when: notNull(lookup("customers", "id", "id", OLD("customer_id"))),
+    // Not when its customer is being deleted (the cascade) or erased (0179): that is no update.
+    when: and(
+      notNull(lookup("customers", "id", "id", OLD("customer_id"))),
+      isNull(lookup("customers", "erased_at", "id", OLD("customer_id"))),
+    ),
     topic: "customer.updated",
     resourceId: OLD("customer_id"),
     facts: [["customerId", OLD("customer_id")]],
@@ -922,7 +938,28 @@ const INSTALLED_IN_0172: ReadonlySet<string> = new Set([
   ...EVENT_AMENDMENT_SPECS.map((spec) => spec.name),
 ]);
 
+/**
+ * 0179 added customer erasure: `customer.erased` fires when `erased_at` is
+ * set, and an erased record announces nothing else (no `customer.updated`
+ * for its scrubbed profile or its deleted address book). It re-creates the
+ * two guarded triggers (and `customers_updated` now also announces 0178's
+ * tax exemption); their guards before 0179.
+ */
+export const CUSTOMER_ERASURE_MIGRATION = "0179_customer_erasure";
+export const EVENT_WHEN_BEFORE_0179: Readonly<Record<string, EventCondition>> = {
+  customers_updated: changed(...CUSTOMER_UPDATED_COLUMNS.filter((column) => column !== "tax_exempt" && column !== "tax_exemption_id")),
+  customer_addresses_deleted: notNull(lookup("customers", "id", "id", OLD("customer_id"))),
+};
+/** Triggers 0179 installed for the first time (no earlier form exists). */
+const NEW_IN_0179: ReadonlySet<string> = new Set(["customers_erased"]);
+const INSTALLED_IN_0179: ReadonlySet<string> = new Set([...Object.keys(EVENT_WHEN_BEFORE_0179), ...NEW_IN_0179]);
+
 const current = (spec: EventTriggerSpec): RenderedSpec => ({ ...spec, resourceType: EVENT_TOPIC_RESOURCE[spec.topic] });
+/** A spec as the migrations before 0179 installed it: with its earlier guard. */
+const before0179 = (spec: EventTriggerSpec): EventTriggerSpec => {
+  const when = EVENT_WHEN_BEFORE_0179[spec.name];
+  return when ? { ...spec, when } : spec;
+};
 /** A spec as the migrations before 0172 installed it: without the facts 0172 added. */
 const before0172 = (spec: EventTriggerSpec): EventTriggerSpec => {
   const added = EVENT_FACTS_ADDED_IN_0172[spec.name];
@@ -940,6 +977,7 @@ export const EVENT_TRIGGER_MIGRATIONS: Readonly<Record<string, string>> = Object
 
 /** The migration file name (without `.sql`) that installs the current trigger. */
 export function eventTriggerMigration(spec: Pick<EventTriggerSpec, "name">): string {
+  if (INSTALLED_IN_0179.has(spec.name)) return CUSTOMER_ERASURE_MIGRATION;
   if (INSTALLED_IN_0172.has(spec.name)) return LINE_FACTS_MIGRATION;
   return renamedIn0164(spec.name) ? EVENT_TOPIC_RENAME_MIGRATION : EVENT_DEMAND_MIGRATION;
 }
@@ -1265,9 +1303,9 @@ const postgresByName = new Map(generated.map((trigger) => [trigger.name, trigger
 const normalizeTriggerSql = (sql: string) => sql.trim().replace(/;$/, "").replace(/\s+/g, " ");
 const superseded = [
   ...SUPERSEDED_EVENT_TRIGGER_SPECS.map(({ migration, spec }) => ({ migration, spec: before0164(spec), demandGated: false })),
-  ...LEGACY_EVENT_TRIGGER_SPECS.map((spec) => ({
+  ...LEGACY_EVENT_TRIGGER_SPECS.filter((spec) => !NEW_IN_0179.has(spec.name)).map((spec) => ({
     migration: HISTORICAL_EVENT_TRIGGER_MIGRATIONS[spec.name] ?? "0103_order_channel_event_outbox",
-    spec: before0164(spec),
+    spec: before0164(before0179(spec)),
     demandGated: false,
   })),
   // The demand-gated forms 0155 installed for the topics 0164 renamed.
@@ -1280,6 +1318,12 @@ const superseded = [
   ...EVENT_TRIGGER_SPECS.filter((spec) => EVENT_FACTS_ADDED_IN_0172[spec.name] !== undefined).map((spec) => ({
     migration: EVENT_DEMAND_MIGRATION,
     spec: current(before0172(spec)),
+    demandGated: true,
+  })),
+  // The demand-gated forms 0155 installed for the triggers 0179 re-created.
+  ...EVENT_TRIGGER_SPECS.filter((spec) => EVENT_WHEN_BEFORE_0179[spec.name] !== undefined).map((spec) => ({
+    migration: EVENT_DEMAND_MIGRATION,
+    spec: current(before0179(spec)),
     demandGated: true,
   })),
 ].map(({ migration, spec, demandGated }) => ({

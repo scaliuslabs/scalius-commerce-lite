@@ -661,6 +661,50 @@ describe("App page", () => {
     expect(toasts.warning).toHaveBeenCalledWith("Loyalty points reported a problem", expect.objectContaining({ description: "Couldn't reach the points service." }));
   });
 
+  it("says in one line at consent that a third-party bundled app runs as trusted code, not in a sandbox", async () => {
+    const line = "This app runs as trusted code in your store (like a plugin), not in a sandbox.";
+    await renderApp(detail({ thirdParty: true }), [], true);
+    expect(text()).not.toContain(line);
+    await click(button("Review and activate"));
+    expect(dialog().textContent).toContain(line);
+  });
+
+  it("warns for each open checkout function circuit: danger when it blocks checkout, a warning when checkout goes on", async () => {
+    const until = "2026-10-22T10:05:00.000Z";
+    await renderApp(detail({
+      status: "active",
+      functionCircuits: [
+        { point: "checkout.discounts", failures: 5, open: true, openUntil: until, blocking: true },
+        { point: "cart.validate", failures: 6, open: true, openUntil: until, blocking: false },
+        { point: "checkout.shipping_rates", failures: 2, open: false, openUntil: null, blocking: false },
+      ],
+    }), MANAGER);
+    const alerts = [...document.querySelectorAll<HTMLElement>('[data-slot="alert"]')].filter((alert) => alert.querySelector("code"));
+    expect(alerts).toHaveLength(2);
+    const [blocking, paused] = alerts;
+    expect(blocking!.className).toContain("border-critical");
+    expect(blocking!.textContent).toMatch(/^Loyalty points is blocking checkout: its checkout\.discounts answer kept failing, so checkout refuses orders until .+, then tries it again\. Fix the app or Stop it\.$/);
+    expect(paused!.className).toContain("border-warning");
+    expect(paused!.textContent).toMatch(/^Loyalty points is paused at checkout until .+: its cart\.validate answer kept failing; checkout goes on without it\.$/);
+    expect(text()).not.toContain("checkout.shipping_rates answer");
+  });
+
+  it("keeps first-party bundled apps and sandboxed apps quiet about trusted code at consent", async () => {
+    await renderApp(detail({ id: "scalius.loyalty", thirdParty: false }), [], true);
+    await click(button("Review and activate"));
+    expect(dialog().textContent).not.toContain("trusted code");
+
+    act(() => root.unmount());
+    document.body.innerHTML = "";
+    queryClient.clear();
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await renderApp(detail({ thirdParty: true, source: "registry", runtime: "sandbox" }), [], true);
+    await click(button("Review and activate"));
+    expect(dialog().textContent).not.toContain("trusted code");
+  });
+
   it("agrees to nothing when the app asks for no access: no 'what is listed' sentence under an empty list", async () => {
     const none = grant({ scopes: [], allowedHosts: [], events: [], functions: [], publicRoutes: false, customFieldOwners: [] });
     await renderApp(detail({ request: none, added: none, scopes: [] }), [], true);

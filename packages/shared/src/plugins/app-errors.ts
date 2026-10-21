@@ -132,6 +132,8 @@ export const APP_ERROR_CODES = {
   orders_not_allowed: { status: 403, meaning: "The grant does not allow the order action." },
   orders_invalid: { status: 422, meaning: "The order action is malformed." },
   orders_not_found: { status: 404, meaning: "The order does not exist." },
+  orders_hold_not_found: { status: 404, meaning: "The app placed no hold on the order." },
+  orders_conflict: { status: 409, meaning: "The order changed since its revision was read; read it again." },
   customers_not_allowed: { status: 403, meaning: "The grant does not allow the customer action." },
   customers_invalid: { status: 422, meaning: "The customer action is malformed." },
   customers_not_found: { status: 404, meaning: "The customer does not exist." },

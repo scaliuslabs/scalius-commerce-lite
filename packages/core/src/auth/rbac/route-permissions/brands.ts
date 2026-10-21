@@ -6,6 +6,10 @@ import { PERMISSIONS } from "../permissions";
 import type { RoutePermissionMap } from "./shared";
 
 export const BRAND_ROUTE_PERMISSIONS: RoutePermissionMap = {
+  // The stable app API's brand list (resources-catalog-content.ts).
+  "/api/v1/admin/resources/brands": {
+    GET: { permission: PERMISSIONS.CATEGORIES_VIEW },
+  },
   "/api/v1/admin/brands": {
     GET: { permission: PERMISSIONS.CATEGORIES_VIEW },
     POST: { permission: PERMISSIONS.CATEGORIES_CREATE },

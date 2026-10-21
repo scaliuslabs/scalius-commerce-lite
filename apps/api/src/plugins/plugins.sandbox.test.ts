@@ -306,4 +306,40 @@ describe("plugins in the sandbox loader (Miniflare workerLoaders)", () => {
     expect(sqlite.prepare("SELECT count(*) AS n FROM plugin_event_deliveries").get()).toEqual({ n: 1 });
     expect(await getPluginKv(db, "acme.hello", "created_count")).toBe(1);
   });
+
+  // Black-box B2: a function that never returns. Measured with this workerd
+  // (1.20261006.1): the local Worker Loader does not enforce `limits.cpuMs`,
+  // and the host's wall-clock race cannot fire while the isolate holds the
+  // thread, so the call never answers. What must hold locally: the run was
+  // marked in flight in the database before the app got the thread, so after
+  // a restart the next checkout stops the app instead of running it again
+  // (checkout-functions.test.ts proves that half on the same rows). A loader
+  // that enforces the limit (production's) ends the run instead.
+  it("marks a sandboxed checkout function in flight before it runs, so a run that never returns is known after a restart", async () => {
+    const SPIN = `export default { manifest: { id: "acme.spin", version: "1.0.0" }, functions: { "checkout.discounts": () => { for (;;) {} } } };`;
+    const spinSha = sha256(SPIN);
+    const bucket = await mf.getR2Bucket("BUCKET");
+    await bucket.put(pluginBundleKey("acme.spin", "1.0.0", spinSha), SPIN);
+    await installPlugin(db, {
+      manifest: {
+        id: "acme.spin", name: "Spin", version: "1.0.0", apiVersion: PLUGIN_API_VERSION, description: "Never answers.",
+        author: { name: "Acme" }, functions: [{ point: "checkout.discounts", priority: 1 }], limits: { cpuMs: 50, wallMs: 1000 },
+      },
+      source: "upload",
+      bundleSha256: spinSha,
+      actorUserId: "owner",
+    });
+    await activatePlugin(db, "acme.spin", { actorUserId: "owner", expectedRevision: 1 });
+    const answer = await Promise.race([
+      send({ action: "function", pluginId: "acme.spin", point: "checkout.discounts", input: { cart: testCart(5000) } }),
+      new Promise((resolve) => setTimeout(() => resolve("hung"), 8_000)),
+    ]);
+    if (answer !== "hung") {
+      // The limit ended it: the spinning app is left out and the others answer.
+      expect((answer as Array<{ pluginId: string }>).map((result) => result.pluginId)).not.toContain("acme.spin");
+      return;
+    }
+    expect(sqlite.prepare("SELECT circuit_inflight_at IS NOT NULL AS marked FROM plugin_registrations WHERE plugin_id = 'acme.spin'").get())
+      .toEqual({ marked: 1 });
+  }, 60_000);
 });

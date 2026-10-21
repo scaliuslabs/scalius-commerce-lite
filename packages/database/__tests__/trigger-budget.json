@@ -2,7 +2,7 @@
   "maxBytes": 5700,
   "maxWritesPerTrigger": 1,
   "maxWritesPerEvent": 19,
-  "total": 817,
+  "total": 818,
   "tables": {
     "abandoned_checkouts": 5,
     "admin_fcm_tokens": 3,
@@ -25,7 +25,7 @@
     "custom_field_values": 24,
     "customer_addresses": 3,
     "customer_marketing_consents": 4,
-    "customers": 8,
+    "customers": 9,
     "delivery_shipments": 1,
     "delivery_zone_locations": 6,
     "delivery_zone_regions": 6,

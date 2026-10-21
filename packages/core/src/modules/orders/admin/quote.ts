@@ -1,7 +1,7 @@
 // Manual order quotes: SKU resolution, inventory facts and money for staff-created orders.
 import type { AppProviders } from "../../../integrations/provider-port";
 import type { Database } from "@scalius/database/client";
-import { products, productVariants, shippingMethods } from "@scalius/database/schema";
+import { customers, products, productVariants, shippingMethods } from "@scalius/database/schema";
 import { orderPricePolicy, storeCurrencyCodeSql, toStoreMinor } from "../../settings";
 import { readStoreCurrency, storeCurrencyFromSql, storePriceIncrementSql } from "../../markets";
 import { and, sql, eq, inArray, isNull } from "drizzle-orm";
@@ -43,7 +43,7 @@ import {
 } from "../../payments";
 import { buildStorefrontTaxAllocationLineId, calculateStorefrontTaxQuote, taxAddressSource } from "../../tax";
 import { billingTaxLocation } from "../billing-address";
-import { type TaxQuote } from "../../tax/browser";
+import { type TaxQuote, type TaxQuoteCustomer } from "../../tax/browser";
 import {
   loadProductMediaProjections,
   resolveSkuImageRepresentation,
@@ -252,6 +252,21 @@ export interface ManualOrderQuoteOptions {
     /** Who places the order and the sales channel it sells from, as the create resolved them (apps see both). */
     channel?: "admin" | "app";
     salesChannelId?: string | null;
+    /**
+     * The buyer as tax sees them (an amendment keeps the exemption the order
+     * was priced with). `undefined`: read from `data.customerId` (a
+     * tax-exempt customer's order pays no tax); none: a guest.
+     */
+    taxCustomer?: TaxQuoteCustomer | null;
+}
+
+/** The customer an order is filed under, as tax sees them (one read, only for a named customer). */
+async function readManualOrderTaxCustomer(db: Database, customerId: string | null | undefined): Promise<TaxQuoteCustomer | null> {
+    if (!customerId) return null;
+    const row = await db.select({ id: customers.id, taxExempt: customers.taxExempt, taxExemptionId: customers.taxExemptionId })
+        .from(customers).where(and(eq(customers.id, customerId), isNull(customers.deletedAt))).get();
+    if (!row) return null;
+    return { id: row.id, exemption: row.taxExempt ? { exemptionId: row.taxExemptionId ?? null } : null };
 }
 
 /** No app work: the staff discount and charge stand as entered. */
@@ -564,6 +579,7 @@ export async function prepareManualOrderQuote(
             decimalPlaces: currency.decimalPlaces,
             priceIncrementMinor: currency.priceIncrementMinor,
         },
+        customer: options.taxCustomer !== undefined ? options.taxCustomer : await readManualOrderTaxCustomer(db, data.customerId),
     }, undefined, { apps: options.appProviders });
     // Cash on delivery collects cash amounts (whole taka in BDT): a total it
     // cannot collect exactly is refused here, so the quote, the create and

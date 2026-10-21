@@ -60,12 +60,39 @@ describe("order risk from an event handler (ctx.orders)", () => {
     await expect(assertOrderNotOnHold(db, "ord_new")).rejects.toThrow(/on hold for review/);
   });
 
+  it("releases only the app's own hold, under the order revision, once", async () => {
+    const guard = await installGuard();
+    const after: Array<() => Promise<unknown>> = [];
+    const runtime = { env: pluginTestEnv(binding), ctx: pluginTestCtx(), db: () => db, composedEnv: async () => pluginTestEnv(binding), afterResponse: (work: () => Promise<unknown>) => void after.push(work) };
+    const bridge = new PluginBridgeHost({ pluginId: guard.pluginId, version: guard.version, authority: pluginBridgeAuthority(guard) }, runtime);
+    // Nothing held yet: nothing to release.
+    await expect(bridge.ordersRelease({ orderId: "ord_new", expectedRevision: 1 })).rejects.toThrow("[orders_hold_not_found]");
+    await bridge.ordersHold({ orderId: "ord_new", reason: "Waiting for the buyer's manager." });
+    // Another app's hold and the platform's payment review stay with staff.
+    sqlite.exec(`INSERT INTO order_holds (id, order_id, plugin_id, app_name, reason) VALUES
+      ('ohd_${"a".repeat(32)}', 'ord_new', 'acme.other', 'Other', 'Its own review'),
+      ('ohd_${"b".repeat(32)}', 'ord_new', 'acme.risk-guard', 'Risk guard', 'Payment review')`);
+    const version = () => (sqlite.prepare("SELECT version FROM orders WHERE id = 'ord_new'").get() as { version: number }).version;
+    const before = version();
+    await expect(bridge.ordersRelease({ orderId: "ord_new", expectedRevision: before + 5 })).rejects.toThrow("[orders_conflict]");
+    await expect(bridge.ordersRelease({ orderId: "ord_new", expectedRevision: 0 })).rejects.toThrow("[orders_invalid]");
+    expect(await bridge.ordersRelease({ orderId: "ord_new", expectedRevision: before })).toEqual({ revision: before + 1, replayed: false });
+    expect(after).toHaveLength(1);
+    // A repeat (any revision) answers the release and changes nothing.
+    expect(await bridge.ordersRelease({ orderId: "ord_new", expectedRevision: before })).toEqual({ revision: before + 1, replayed: true });
+    expect(version()).toBe(before + 1);
+    const open = sqlite.prepare("SELECT id FROM order_holds WHERE order_id = 'ord_new' AND released_at IS NULL ORDER BY id").all() as Array<{ id: string }>;
+    expect(open.map((row) => row.id)).toEqual([`ohd_${"a".repeat(32)}`, `ohd_${"b".repeat(32)}`]);
+    await expect(assertOrderNotOnHold(db, "ord_new")).rejects.toThrow(/on hold for review/);
+  });
+
   it("refuses an app without the order scopes and an order that does not exist", async () => {
     const hello = await installHello(db, sqlite);
     const runtime = { env: pluginTestEnv(binding), ctx: pluginTestCtx(), db: () => db, composedEnv: async () => pluginTestEnv(binding) };
     const helloBridge = new PluginBridgeHost({ pluginId: hello.pluginId, version: hello.version, authority: pluginBridgeAuthority(hello) }, runtime);
     await expect(helloBridge.ordersHold({ orderId: "ord_new", reason: "No." })).rejects.toThrow("[orders_not_allowed]");
     await expect(helloBridge.ordersAssessRisk({ orderId: "ord_new", level: "low", reasons: [] })).rejects.toThrow("[orders_not_allowed]");
+    await expect(helloBridge.ordersRelease({ orderId: "ord_new", expectedRevision: 1 })).rejects.toThrow("[orders_not_allowed]");
 
     const guard = await installGuard();
     const bridge = new PluginBridgeHost({ pluginId: guard.pluginId, version: guard.version, authority: pluginBridgeAuthority(guard) }, runtime);

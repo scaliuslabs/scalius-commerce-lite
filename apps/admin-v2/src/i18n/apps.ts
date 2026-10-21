@@ -80,6 +80,9 @@ export const installedAppsMessages = defineMessages({
     themeProblem_template: "Template {name}",
     "themeProblem_page-preset": "Page preset {name}",
     superAdminActivates: "Only a Super Admin can activate apps.",
+    trustedCode: "This app runs as trusted code in your store (like a plugin), not in a sandbox.",
+    circuitBlocking: "{app} is blocking checkout: its {point} answer kept failing, so checkout refuses orders until {time}, then tries it again. Fix the app or Stop it.",
+    circuitPaused: "{app} is paused at checkout until {time}: its {point} answer kept failing; checkout goes on without it.",
 
     aboutTitle: "About",
     developer: "Developer",
@@ -354,6 +357,9 @@ export const installedAppsMessages = defineMessages({
     themeProblem_template: "টেমপ্লেট {name}",
     "themeProblem_page-preset": "পেজ প্রিসেট {name}",
     superAdminActivates: "শুধু একজন সুপার অ্যাডমিন অ্যাপ চালু করতে পারেন।",
+    trustedCode: "এই অ্যাপটি স্যান্ডবক্সে নয়, আপনার স্টোরে বিশ্বস্ত কোড হিসেবে (প্লাগইনের মতো) চলে।",
+    circuitBlocking: "{app} চেকআউট আটকে রাখছে: এর {point} উত্তর বারবার ব্যর্থ হচ্ছিল, তাই {time} পর্যন্ত চেকআউট কোনো অর্ডার নেবে না, তারপর আবার চেষ্টা করবে। অ্যাপটি ঠিক করুন বা বন্ধ করুন।",
+    circuitPaused: "{app} {time} পর্যন্ত চেকআউটে থেমে আছে: এর {point} উত্তর বারবার ব্যর্থ হচ্ছিল; চেকআউট এটি ছাড়াই চলছে।",
 
     aboutTitle: "পরিচিতি",
     developer: "ডেভেলপার",

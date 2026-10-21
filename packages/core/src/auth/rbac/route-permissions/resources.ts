@@ -18,6 +18,8 @@ const webhooksManage = { permission: PERMISSIONS.WEBHOOKS_MANAGE };
 export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/resources/orders": { GET: orders, POST: { permission: PERMISSIONS.ORDERS_CREATE } },
   "/api/v1/admin/resources/orders/*": { GET: orders },
+  // An app releases the hold it placed: what releasing any hold needs on the order page.
+  "/api/v1/admin/resources/orders/*/release-hold": { POST: { permission: PERMISSIONS.ORDERS_CHANGE_STATUS } },
   // Recording money received against an invoice settles it (a paid order hands
   // over its gift cards and downloads): its own sensitive permission.
   "/api/v1/admin/resources/orders/*/payments": { GET: orders, POST: { permission: PERMISSIONS.ORDERS_RECORD_PAYMENT } },
@@ -50,6 +52,10 @@ export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   // An importer creates many products in one call, under the same permission as one.
   "/api/v1/admin/resources/products/batch": { POST: { permission: PERMISSIONS.PRODUCTS_CREATE } },
   "/api/v1/admin/resources/products/*": { GET: products, PATCH: productsEdit },
+  // A product's SKUs, one at a time, as the editor's option and SKU edits.
+  "/api/v1/admin/resources/products/*/variants": { POST: productsEdit },
+  "/api/v1/admin/resources/products/*/variants/*": { PATCH: productsEdit },
+  "/api/v1/admin/resources/products/*/variants/*/restore": { POST: productsEdit },
   // An app's own trashed content; each item re-checks its type's delete permission.
   "/api/v1/admin/resources/app-content/delete": {
     POST: { anyOf: [PERMISSIONS.PRODUCTS_DELETE, PERMISSIONS.CATEGORIES_DELETE, PERMISSIONS.COLLECTIONS_DELETE, PERMISSIONS.MEDIA_DELETE] },

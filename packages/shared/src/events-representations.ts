@@ -65,6 +65,12 @@ const orderLineSchema = z.object({
   variantId: id.nullable(),
   title: text.nullable(),
   variantLabel: text.nullable(),
+  /**
+   * The SKU code the line was sold under, frozen when the line was created
+   * (0179); for lines created before 0179, the SKU's current code. Null for a
+   * line without a SKU.
+   */
+  sku: text.nullable(),
   quantity: z.number().int(),
   fulfilledQuantity: z.number().int(),
   unitPriceMinor: minor,
@@ -184,10 +190,44 @@ export const productRepresentationSchema = z.object({
     trackInventory: z.boolean(),
     fulfillmentKind: state,
     isDefault: z.boolean(),
+    /** `ean13`, `upc`, `isbn`, `gtin`, `code128` or `custom`; null without a barcode. */
+    barcodeType: state.nullable(),
+    weightGrams: z.number().nullable(),
+    /** One value of every option, by option name (`{ "Size": "M" }`); empty for a product without options. */
+    optionValues: z.record(z.string().max(40), text),
+    /** The media file of its own image; null shows the product's featured image. */
+    mediaId: id.nullable(),
   })),
   createdAt: iso,
   updatedAt: iso,
   deletedAt: iso.nullable(),
+  /** The product page's description as the editor saved it (rich text); null for none. */
+  description: z.string().nullable(),
+  /** `new`, `refurbished` or `used`; null when not stated. */
+  condition: state.nullable(),
+  metaTitle: z.string().nullable(),
+  metaDescription: z.string().nullable(),
+  /** The sales channels it is published to, sorted. */
+  salesChannelIds: z.array(id),
+  /** The gallery in order; `featured` is its main image or video. */
+  media: z.array(z.object({
+    /** This product's use of the file. */
+    id,
+    mediaId: id,
+    kind: state,
+    url: z.string().max(2048),
+    /** The alt text this product gives the file; null uses the file's own. */
+    altText: z.string().nullable(),
+    featured: z.boolean(),
+  })),
+  /** Merchant-named options (at most five) and their values, in order; empty for a product sold as one SKU. */
+  options: z.array(z.object({
+    id,
+    name: text,
+    /** `size`, `color`, `material`, `pattern` or `none`: which standard attribute it is for catalog feeds. */
+    standardMapping: state,
+    values: z.array(text),
+  })),
 });
 
 /** `variant.inventory_changed` is about one SKU: its on-hand units per location. */
@@ -201,6 +241,9 @@ export const variantRepresentationSchema = z.object({
   /** Advances with every stock change: the `expectedStockVersion` a stock write takes. */
   stockVersion: z.number().int(),
   updatedAt: iso,
+  barcode: text.nullable(),
+  /** When it was retired from its product (`variants.retire`; `variants.restore` brings it back); null while it sells. */
+  retiredAt: iso.nullable(),
 });
 
 export const customerRepresentationSchema = z.object({
@@ -221,9 +264,18 @@ export const customerRepresentationSchema = z.object({
     contact: pii(["email", "phone"], text.nullable()),
     updatedAt: iso,
   })),
+  /**
+   * The merchant (or an app) marked the buyer tax-exempt: their orders pay
+   * no tax. `taxExemptionId` is the certificate or registration number,
+   * null for none (and always null when not exempt).
+   */
+  taxExempt: z.boolean(),
+  taxExemptionId: z.string().max(64).nullable(),
   createdAt: iso,
   updatedAt: iso,
   deletedAt: iso.nullable(),
+  /** When staff erased the customer's personal data (`customer.erased`); null otherwise. Its contact then reads null or "[erased]". */
+  erasedAt: iso.nullable(),
 });
 
 const stockDocumentLine = z.object({

@@ -127,17 +127,35 @@ export function taxProviderIdFor(
 }
 
 /**
+ * Whether the buyer is tax-exempt (audit I9): a customer the merchant (or an
+ * app, through `customers.update`) marked exempt pays no tax anywhere the
+ * store collects it. The address still decides the region and the provider:
+ * the system provider applies no rate; an app provider is asked with
+ * `customer.exempt` (and the exemption id) so it can record the exempt sale,
+ * and an answer that still charges tax is refused (`tax_unavailable`). An
+ * exempt buyer pays the listed price: in a market whose prices include tax,
+ * nothing is taken off it. Guests are never exempt: the exemption is read
+ * only from a verified identity (`TaxExemption`).
+ */
+export function taxExemptionApplies(customer: { exempt: boolean } | null | undefined): boolean {
+    return customer?.exempt === true;
+}
+
+/**
  * The rates of a tax class at an address (the system provider's rule): the
  * most specific region with rates of the class applies; when every one of
  * its rates is combinable, the next broader region with rates of the class
  * applies too, and so on. In priority order (then id), as compound layers
- * read them. `regionId` is the most specific region that applied.
+ * read them. `regionId` is the most specific region that applied. None for
+ * a tax-exempt buyer (`taxExemptionApplies`).
  */
 export function ratesForTaxClass(
     chain: readonly TaxRegionDefinition[],
     rates: readonly TaxRateDefinition[],
     taxClassId: string,
+    customer?: { exempt: boolean } | null,
 ): { rates: TaxRateDefinition[]; regionId: string | null } {
+    if (taxExemptionApplies(customer)) return { rates: [], regionId: null };
     const applied: TaxRateDefinition[] = [];
     let regionId: string | null = null;
     for (const region of chain) {

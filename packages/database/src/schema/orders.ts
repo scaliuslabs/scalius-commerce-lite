@@ -478,13 +478,21 @@ export const orderItems = sqliteTable("order_items", {
     quantity: integer("quantity").notNull(),
     productName: text("product_name"),
     variantLabel: text("variant_label"),
+    /**
+     * The SKU code when this line was created (migration 0179), so an ERP
+     * posts the sale by the code it was sold under even after the SKU is
+     * renamed. Written by the `order_items_line_snapshot` trigger on every
+     * insert path; NULL for lines created before 0179 (readers fall back to
+     * the SKU's current code) and for lines without a SKU.
+     */
+    sku: text("sku"),
     inventoryTracked: integer("inventory_tracked", { mode: "boolean" }).notNull().default(true),
     /** Integer minor units of the order currency. */
     unitPriceMinor: integer("unit_price_minor").notNull().default(0),
     /**
      * The SKU's `cost_minor` when this line was created (migration 0109), so
      * a later cost change never rewrites past margins. Written by the
-     * `order_items_unit_cost_snapshot` trigger on every insert path (checkout,
+     * `order_items_line_snapshot` trigger (0179) on every insert path (checkout,
      * staff orders, amendments); NULL when the SKU had no cost. Immutable once
      * set. Staff and analytics only: never in a buyer-facing projection.
      */
@@ -820,6 +828,13 @@ export const orderTaxSnapshots = sqliteTable("order_tax_snapshots", {
      * from (pickup, or no address). Null on orders placed before 0119.
      */
     addressSource: text("address_source", { enum: ["shipping", "billing", "origin"] }),
+    /**
+     * The buyer was tax-exempt when the order was priced (migration 0178): no
+     * tax was charged; `tax_exemption_id` is their certificate or
+     * registration number (the invoice shows both).
+     */
+    taxExempt: integer("tax_exempt", { mode: "boolean" }).notNull().default(false),
+    taxExemptionId: text("tax_exemption_id"),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
 }, (table) => [
     index("order_tax_snapshots_created_idx").on(table.createdAt),

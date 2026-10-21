@@ -2,7 +2,7 @@
 // writes. Every write is buyer-visible (brand page, product brand line, feed
 // and JSON-LD brand); database triggers advance the affected dependencies.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { nullableIsoTimestampSchema } from "../../schemas/timestamps";
+import { BrandResource, brandRowSchema } from "../../schemas/catalog-resources";
 import {
   createBrand,
   getBrandById,
@@ -42,40 +42,6 @@ import {
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const TAGS = ["Admin - Brands"];
-
-const logoSchema = z.object({
-  mediaId: z.string(),
-  url: z.string(),
-  alt: z.string(),
-  width: z.number().int().nullable(),
-  height: z.number().int().nullable(),
-});
-
-const brandRowSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  slug: z.string(),
-  status: brandStatusSchema,
-  sortOrder: z.number().int(),
-  revision: z.number().int().min(1),
-  noIndex: z.boolean(),
-  excludeFromSitemap: z.boolean(),
-  productCount: z.number().int().min(0),
-  logo: logoSchema.nullable(),
-  createdAt: nullableIsoTimestampSchema,
-  updatedAt: nullableIsoTimestampSchema,
-  deletedAt: nullableIsoTimestampSchema,
-});
-
-/** A brand as `brands.get` reads it and every brand write answers it (`{ brand }`). */
-const BrandResource = brandRowSchema.extend({
-  description: z.string().nullable(),
-  metaTitle: z.string().nullable(),
-  metaDescription: z.string().nullable(),
-  canonicalPath: z.string().nullable(),
-  listingTemplate: z.string().nullable(),
-  logoMediaId: z.string().nullable(),
-}).openapi("BrandResource");
 
 type BrandResourceData = NonNullable<Awaited<ReturnType<typeof getBrandById>>>;
 

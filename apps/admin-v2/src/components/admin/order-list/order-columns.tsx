@@ -38,6 +38,7 @@ import { LazyFraudCheckIndicator } from "./LazyFraudCheckIndicator";
 import { LazyOrderItemsPopover } from "./LazyOrderItemsPopover";
 import { LIST_DATE_WIDTH, ListDate } from "~/components/admin/data-table/ListDate";
 import { OrderStatusSelector } from "./OrderStatusSelector";
+import { shownText } from "~/lib/erased-text";
 import { ShipmentRefreshButton } from "./ShipmentRefreshButton";
 import {
   deliveryMethod,
@@ -159,11 +160,12 @@ function OrderCell({ order, people }: { order: OrderListItem; people?: readonly 
 }
 
 function CustomerCell({ order }: { order: OrderListItem }) {
+  const o = useMessages(orderMessages);
   return (
     <div data-part="customer" className="flex items-center gap-1">
       {/* Two lines on every row, even without a name or a phone. */}
       <div className="min-w-0 flex-1">
-        <Line text={order.customerName} className="font-medium" />
+        <Line text={shownText(order.customerName, o("erasedCustomer"))} className="font-medium" />
         {order.customerPhone ? (
           <Line text={formatPhoneForDisplay(order.customerPhone, getStoreRegion())} className="font-mono text-muted-foreground" />
         ) : (

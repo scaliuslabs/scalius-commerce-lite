@@ -8,6 +8,14 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.orders.get": { uncurated: true },
   // The manual-order attempt table replays a repeated Idempotency-Key exactly.
   "dashboard.resources.orders.create": { batch: "forbidden", uncurated: true },
+  // An app releases its own hold (staff are refused: app_principal_required)
+  // under the order's required revision; a repeat answers the released hold
+  // (`replayed`).
+  "dashboard.resources.orders.release_hold": {
+    revision: "required",
+    batch: "forbidden",
+    uncurated: true,
+  },
   "dashboard.resources.payments.list": { uncurated: true },
   // A payment received against an invoice: the payment row's id is derived
   // from the required Idempotency-Key, so a repeat records nothing more.
@@ -108,8 +116,15 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.categories.list": { uncurated: true },
   "dashboard.resources.collections.get": { uncurated: true },
   "dashboard.resources.collections.list": { uncurated: true },
+  "dashboard.resources.brands.list": { uncurated: true },
+  "dashboard.resources.pages.list": { uncurated: true },
   "dashboard.resources.variants.get": { uncurated: true },
   "dashboard.resources.variants.lookup": { risk: "read", uncurated: true },
+  // One SKU at a time under the product's revision (routes/admin/resources-products.ts,
+  // product-admin sku-writes.ts); stock stays with inventory.
+  "dashboard.resources.variants.create": { revision: "required", batch: "forbidden", uncurated: true },
+  "dashboard.resources.variants.update": { revision: "required", batch: "forbidden", uncurated: true },
+  "dashboard.resources.variants.restore": { revision: "required", batch: "forbidden", uncurated: true },
   "dashboard.resources.customers.list": { uncurated: true },
   "dashboard.resources.customers.get": { uncurated: true },
   // Price lists (MARKETS-DESIGN D5), in minor units of the list's currency.

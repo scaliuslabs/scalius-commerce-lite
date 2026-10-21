@@ -16,6 +16,7 @@ export const customersMessages = defineMessages({
     lastOrder: "Last order",
     unnamed: "No name",
     guestOrders: "Guest orders",
+    erasedCustomer: "Erased customer",
 
     // List: views and filters
     subscribers: "Subscribers",
@@ -71,6 +72,7 @@ export const customersMessages = defineMessages({
     lastOrder: "শেষ অর্ডার",
     unnamed: "নাম নেই",
     guestOrders: "অতিথি অর্ডার",
+    erasedCustomer: "মুছে ফেলা কাস্টমার",
 
     // List: views and filters
     subscribers: "সাবস্ক্রাইবার",

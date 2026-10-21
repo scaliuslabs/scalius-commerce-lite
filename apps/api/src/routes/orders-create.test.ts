@@ -1974,6 +1974,7 @@ describe("create order commit ordering", () => {
       {
         customerId: "customer_signed_in",
         source: "authenticated",
+        taxExemption: null,
       },
       expect.anything(),
       expect.anything(),
@@ -2044,7 +2045,7 @@ describe("create order commit ordering", () => {
       return;
     }
     expect(mocks.createStorefrontOrder.mock.calls[0]?.[6]).toEqual(customerId
-      ? { customerId, source: "authenticated" }
+      ? { customerId, source: "authenticated", taxExemption: null }
       : undefined);
     expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
   });
@@ -2098,6 +2099,7 @@ describe("create order commit ordering", () => {
       {
         customerId: "customer_signed_in",
         source: "authenticated",
+        taxExemption: null,
       },
       { code: "BDT", decimalPlaces: 2, priceIncrementMinor: 100 },
       expect.objectContaining({ partialPaymentEnabled: false }),
@@ -2144,6 +2146,7 @@ describe("create order commit ordering", () => {
       {
         customerId: "customer_2",
         source: "authenticated",
+        taxExemption: null,
       },
       expect.anything(),
       expect.anything(),
@@ -2188,7 +2191,7 @@ describe("create order commit ordering", () => {
       expect.anything(),
       expect.anything(),
       expect.anything(),
-      { customerId: "customer_3", source: "authenticated" },
+      { customerId: "customer_3", source: "authenticated", taxExemption: null },
       expect.anything(),
       expect.anything(),
       expect.anything(),

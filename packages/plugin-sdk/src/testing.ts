@@ -185,7 +185,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
   const customFields = new Map<string, Record<string, unknown>>();
   const logs: PluginLogRecord[] = [];
   const emailKeys = new Set<string>();
-  const sent = { emails: [] as unknown[], sms: [] as unknown[], notices: [] as unknown[], pushes: [] as unknown[], timeline: [] as unknown[], holds: [] as unknown[], risks: [] as unknown[] };
+  const sent = { emails: [] as unknown[], sms: [] as unknown[], notices: [] as unknown[], pushes: [] as unknown[], timeline: [] as unknown[], holds: [] as unknown[], releases: [] as unknown[], risks: [] as unknown[] };
   /** Customer roles the app granted, by customer id then role (the platform keeps them per app). */
   const roles = new Map<string, Map<string, { ref: string | null; grantedAt: string }>>();
   const liveCustomers = options.customers ? new Set(options.customers) : null;
@@ -485,6 +485,21 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       if (typeof hold.orderId !== "string" || hold.orderId.length < 1 || hold.orderId.length > 128) refuse("orders_invalid", "orderId is an order id.");
       if (typeof hold.reason !== "string" || !hold.reason.trim() || hold.reason.length > 500) refuse("orders_invalid", "reason is text of 1 to 500 characters.");
       if (!sent.holds.some((entry) => (entry as { orderId: string }).orderId === hold.orderId)) sent.holds.push(hold);
+    },
+    // Only the app's own hold; the first release advances the revision, a repeat changes nothing.
+    ordersRelease: async (input) => {
+      const release = copy(input) as { orderId?: unknown; expectedRevision?: unknown };
+      if (!permissions.has("orders.change_status")) refuse("orders_not_allowed", "Releasing holds needs the write_orders scope.");
+      if (typeof release.orderId !== "string" || release.orderId.length < 1 || release.orderId.length > 128) refuse("orders_invalid", "orderId is an order id.");
+      if (typeof release.expectedRevision !== "number" || !Number.isSafeInteger(release.expectedRevision) || release.expectedRevision < 1) {
+        refuse("orders_invalid", "expectedRevision is the order revision you read.");
+      }
+      if (!sent.holds.some((entry) => (entry as { orderId: string }).orderId === release.orderId)) refuse("orders_hold_not_found", "This app placed no hold on the order.");
+      const earlier = sent.releases.find((entry) => (entry as { orderId: string }).orderId === release.orderId) as { revision: number } | undefined;
+      if (earlier) return { revision: earlier.revision, replayed: true };
+      const revision = release.expectedRevision + 1;
+      sent.releases.push({ orderId: release.orderId, revision });
+      return { revision, replayed: false };
     },
     ordersAssessRisk: async (input) => {
       const risk = copy(input) as { orderId?: unknown; level?: unknown; reasons?: unknown };

@@ -18,6 +18,8 @@ import {
   PLUGIN_DELIVERY_LIST_MAX_LIMIT,
   describePluginSettings,
   effectivePluginPermissions,
+  functionCircuitOpen,
+  listFunctionCircuits,
   isFirstPartyBundledPlugin,
   isOfficialPluginKey,
   isThirdPartyPlugin,
@@ -316,6 +318,13 @@ const appDetailSchema = appSummarySchema.extend({
   activatedBy: z.object({ id: z.string(), name: z.string() }).nullable(),
   runtime: z.enum(["bundled", "sandbox"]),
   runtimeAvailable: z.boolean(),
+  functionCircuits: z.array(z.object({
+    point: z.string(),
+    failures: z.number().int().openapi({ description: "Failed answers counted in the current window." }),
+    open: z.boolean().openapi({ description: "Checkout is not calling the function now: it applies its failure policy (refuses checkout when the function is approved as blocking, else goes on without it)." }),
+    openUntil: z.string().nullable().openapi({ description: "When checkout tries the function again (ISO 8601); null when closed." }),
+    blocking: z.boolean().openapi({ description: "Approved as blocking: while open, checkout refuses orders." }),
+  })).openapi({ description: "Checkout functions that failed recently (circuit breaker); empty when every function answers." }),
   settings: z.object({
     fields: z.array(settingFieldSchema),
     values: z.record(z.string(), settingValueSchema),
@@ -578,7 +587,7 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
   const request = pluginGrantRequest(installation.declaredManifest, installation.features);
   const described = describePluginSettings(installation);
   const caps = planLimits().plugins;
-  const [approver, lastRuns, scopes, registrySettings, features, uses, connections, usage] = await Promise.all([
+  const [approver, lastRuns, scopes, registrySettings, features, uses, connections, usage, circuits] = await Promise.all([
     installation.activatedBy
       ? db.select({ id: userTable.id, name: userTable.name }).from(userTable).where(eq(userTable.id, installation.activatedBy)).get()
       : Promise.resolve(undefined),
@@ -589,8 +598,10 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
     providerUse(db, installation),
     providerConnections(db, installation, manifest.providers),
     themeUsage(db, installation),
+    listFunctionCircuits(db, installation.pluginId),
   ]);
   const available = runtimeAvailable(c, installation);
+  const nowSeconds = Math.floor(Date.now() / 1000);
   return {
     ...summary(installation),
     ...listingDetail(installation.pluginId, manifest, installation.bundleSha256),
@@ -603,6 +614,14 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
     activatedBy: approver ? { id: approver.id, name: approver.name } : null,
     runtime: installation.source === "bundled" ? "bundled" as const : "sandbox" as const,
     runtimeAvailable: available,
+    functionCircuits: circuits.map((circuit) => ({
+      point: circuit.point,
+      failures: circuit.failures,
+      open: functionCircuitOpen(circuit, nowSeconds),
+      openUntil: circuit.openUntil === null ? null : new Date(circuit.openUntil * 1000).toISOString(),
+      blocking: manifest.functions.some((fn) => fn.point === circuit.point && fn.onError === "block")
+        && Boolean(installation.grant?.blockingFunctions.some((point) => point === circuit.point)),
+    })),
     settings: {
       fields: manifest.settings.map(settingField),
       values: described.values,

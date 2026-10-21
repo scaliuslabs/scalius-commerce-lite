@@ -58,6 +58,7 @@ export const EVENT_TOPICS = [
   "object.deleted",
   "customer.redact_requested",
   "customer.data_requested",
+  "customer.erased",
 ] as const;
 export type EventTopic = (typeof EVENT_TOPICS)[number];
 
@@ -123,6 +124,7 @@ export const EVENT_TOPIC_RESOURCE: Readonly<Record<EventTopic, EventResourceType
   "object.deleted": "object",
   "customer.redact_requested": "customer",
   "customer.data_requested": "customer",
+  "customer.erased": "customer",
 };
 
 const id = z.string().min(1).max(128);
@@ -398,6 +400,17 @@ export const EVENT_FACT_SCHEMAS = {
     customerId: id,
   }),
   "customer.data_requested": z.object({
+    customerId: id,
+  }),
+  /**
+   * Staff erased the customer's personal data (0179): contact, addresses,
+   * sign-in identities, saved methods and consents, and their words on
+   * orders, reviews and conversations. Orders and money records stay, with
+   * the contact scrubbed. An app erases its own copies of the customer and
+   * keeps only what its books need; `data` carries the scrubbed record. The
+   * record is retired and announces nothing after this.
+   */
+  "customer.erased": z.object({
     customerId: id,
   }),
 } as const satisfies Record<EventTopic, z.ZodType>;

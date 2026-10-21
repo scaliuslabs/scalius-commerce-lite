@@ -35,12 +35,11 @@ import {
   conflictResponse,
 } from "../../schemas/responses";
 import { pageSchema } from "../../schemas/entities";
+import { PageResource } from "../../schemas/catalog-resources";
 
 import { ok, created, noContent } from "../../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
-/** A page as `pages.get` reads it; create and update answer it too (`{ page }`). */
-const PageResource = pageSchema.openapi("PageResource");
 const pageEnvelope = successEnvelope(z.object({ page: PageResource }));
 
 /** The page as it is now (not in the trash). */
