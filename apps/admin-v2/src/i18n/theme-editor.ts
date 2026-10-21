@@ -178,7 +178,7 @@ export const themeEditorMessages = defineMessages({
     appProblem_wholeNumber: "Enter a whole number.",
     appProblem_https: "Use a full https:// address.",
     appProblem_email: "Enter an email address like name@example.com.",
-    appProblem_color: "Use a colour like #1a7f37.",
+    appProblem_color: "Use a color like #1a7f37.",
     appProblem_option: "Choose one of the options.",
     appProblem_invalid: "The app changed this setting. Set it again.",
     appProblem_link: "Use a store path like /collections/new or a full https:// address.",

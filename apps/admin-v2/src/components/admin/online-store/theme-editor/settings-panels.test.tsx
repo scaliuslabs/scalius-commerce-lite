@@ -317,7 +317,7 @@ describe("theme settings", () => {
     chooseOption(field<HTMLButtonElement>("theme-blocks-card-settings-facts"), "Delivery line");
     expect(latest.blocks.card).toEqual({ variant: "standard", settings: { facts: "delivery", action: "full", hoverImage: false } });
     expect(container.querySelectorAll('[data-card-sketch-facts="delivery"]')).toHaveLength(2);
-    chooseOption(field<HTMLButtonElement>("theme-blocks-card-settings-facts"), "Colour swatches");
+    chooseOption(field<HTMLButtonElement>("theme-blocks-card-settings-facts"), "Color swatches");
     expect(container.querySelectorAll('[data-card-sketch-facts="swatches"]')).toHaveLength(2);
     expect(storefrontThemeDocumentSchema.safeParse(latest).success).toBe(true);
   });
