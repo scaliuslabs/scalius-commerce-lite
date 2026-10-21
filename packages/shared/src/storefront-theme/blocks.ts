@@ -388,8 +388,14 @@ export const STOREFRONT_LISTING_FILTER_SPECS = {
 export const STOREFRONT_FILTER_SHEET_WIDTH = 288;
 /** Facet values sent in the HTML per facet; "See more" fetches the rest. */
 export const STOREFRONT_FILTER_VALUES_IN_HTML = 10;
-/** The small-catalogue rule: fewer results than this show no filters. */
+/** The small-catalogue rule: a store with fewer products than this shows no filters. */
 export const STOREFRONT_FILTER_MIN_RESULTS = 8;
+/**
+ * A listing's own floor: once the store is past the small-catalogue rule,
+ * any listing a filter can narrow (Dawn shows availability and price on a
+ * five-product collection) shows them.
+ */
+export const STOREFRONT_FILTER_MIN_LISTING_RESULTS = 2;
 
 /**
  * A template's own facet numbers over its style's (optional): each
@@ -446,10 +452,11 @@ export function storefrontListingFilterSpec(filters: StorefrontListingFilters): 
 }
 
 /**
- * The small-catalogue rule, for one listing: filters show only with at
- * least STOREFRONT_FILTER_MIN_RESULTS results and a facet (or the price
- * range) with two or more values; a buyer who already refined keeps them to
- * undo it. `facetValueCounts` has one entry per facet, the price range
+ * One listing's filters: they show with at least
+ * STOREFRONT_FILTER_MIN_LISTING_RESULTS results and a facet (or the price
+ * range) with two or more values, so a filter always narrows; a buyer who
+ * already refined keeps them to undo it. The store-wide small-catalogue rule
+ * (STOREFRONT_FILTER_MIN_RESULTS) is the resolved listing's `filters.shown`. `facetValueCounts` has one entry per facet, the price range
  * counting 2 when its low and high differ.
  */
 export function storefrontListingFiltersShown(listing: {
@@ -458,7 +465,7 @@ export function storefrontListingFiltersShown(listing: {
   facetValueCounts: readonly number[];
 }): boolean {
   if (listing.refinementCount > 0) return true;
-  return listing.total >= STOREFRONT_FILTER_MIN_RESULTS && listing.facetValueCounts.some((count) => count >= 2);
+  return listing.total >= STOREFRONT_FILTER_MIN_LISTING_RESULTS && listing.facetValueCounts.some((count) => count >= 2);
 }
 
 // ─── Navigation ───────────────────────────────────────────────────────────

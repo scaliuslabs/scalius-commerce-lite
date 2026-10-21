@@ -247,8 +247,8 @@ describe("listing filters", () => {
   it("applies the small-catalogue rule per listing", () => {
     const shown = (total: number, facetValueCounts: number[], refinementCount = 0) =>
       storefrontListingFiltersShown({ total, refinementCount, facetValueCounts });
-    expect(shown(7, [3, 4])).toBe(false);
-    expect(shown(8, [3, 4])).toBe(true);
+    expect(shown(1, [2])).toBe(false);
+    expect(shown(5, [3, 4])).toBe(true); // a five-product category still filters (Dawn)
     expect(shown(3780, [1, 1, 1])).toBe(false); // every facet has one value
     expect(shown(3780, [])).toBe(false);
     expect(shown(3780, [1, 2])).toBe(true);
