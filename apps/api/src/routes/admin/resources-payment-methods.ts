@@ -23,6 +23,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { and, eq, isNull } from "drizzle-orm";
 import { customers } from "@scalius/database/schema";
+import { MAX_MINOR_AMOUNT } from "@scalius/shared/money";
 import {
   CUSTOMER_PAYMENT_METHODS_LIST_LIMIT,
   captureAuthorizedPayment,
@@ -216,7 +217,7 @@ app.openapi(createRoute({
 
 const chargeBody = z.object({
   paymentMethodId: z.string().min(1).max(128).openapi({ description: "A saved method of the order's customer (payment_methods.list)." }),
-  amountMinor: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER).optional().openapi({
+  amountMinor: z.number().int().min(1).max(MAX_MINOR_AMOUNT).optional().openapi({
     description: "What to charge, in minor units of the order's `currency`. Default: its `balanceDueMinor`; another amount must be one the order takes (a deposit).",
   }),
   capture: z.enum(["automatic", "manual"]).default("automatic").openapi({

@@ -1,11 +1,10 @@
 import { z } from "zod";
-import { isIncrementMultipleMinor, priceIncrementMessage } from "@scalius/shared/money";
+import { isIncrementMultipleMinor, MAX_MINOR_AMOUNT, priceIncrementMessage } from "@scalius/shared/money";
 import { isValidTimeZone } from "@scalius/shared/commerce-time";
 import { currentStoreTimeZone } from "../../utils/store-time-zone";
 
 import { checkPromotionRule, PROMOTION_CUSTOMER_SEGMENT_LIMIT, PROMOTION_SCOPE_LIMIT } from "./promotions.evaluator";
 
-const MAX_MINOR_AMOUNT = Number.MAX_SAFE_INTEGER;
 const currencyCodeSchema = z.string().regex(/^[A-Z]{3}$/u);
 const positiveMinorSchema = z.number().int().positive().max(MAX_MINOR_AMOUNT);
 const scopeIdsSchema = z.array(z.string().trim().min(1).max(160))

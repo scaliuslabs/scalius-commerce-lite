@@ -18,7 +18,7 @@ import { isoTimestampSchema } from "../../schemas/timestamps";
 import { EVENT_REPRESENTATION_SCHEMAS } from "@scalius/shared/events";
 import { MANUAL_FULFILLMENT_TYPES } from "@scalius/shared/fulfilment";
 import { encodeListCursorOrNull, type ListCursorShape } from "@scalius/shared/pagination";
-import { fromMinor } from "@scalius/shared/money";
+import { fromMinor, MAX_MINOR_AMOUNT } from "@scalius/shared/money";
 import { keysetCondition, keysetOrderBy, readListCursor, type KeysetOrder } from "@scalius/core/utils/keyset";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 import { buildAppPaymentReviewHoldInsert, buildOrderEventInsert, createOrderSchema, manualOrderPaymentMethodSchema, orderEventIdForRequest, overdueOrderCondition, releaseAppOrderHold } from "@scalius/core/modules/orders";
@@ -252,7 +252,7 @@ const orderCreateBody = z.object({
     productId: z.string().min(1).max(180),
     variantId: z.string().min(1).max(180),
     quantity: z.number().int().min(1).max(MAX_LINE_QUANTITY),
-    unitPriceMinor: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional().openapi({
+    unitPriceMinor: z.number().int().min(0).max(MAX_MINOR_AMOUNT).optional().openapi({
       description: "A unit price set by hand (a quote, an agreed renewal price), in minor units of the store currency at its price increment; it replaces the catalogue price and the order's timeline records it.",
     }),
     properties: z.array(z.object({ key: z.string().min(1).max(40), value: z.string().max(1000) })).max(20).optional(),
@@ -262,8 +262,8 @@ const orderCreateBody = z.object({
   shippingAddress: addressInputSchema.nullable().optional().openapi({ description: "Where it ships; none for pickup, digital and service orders." }),
   billingAddress: addressInputSchema.extend({ name: optionalText(100), line1: z.string().trim().max(500).nullable().optional() })
     .nullable().optional().openapi({ description: "Omit or null when the shipping address bills." }),
-  shippingMinor: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).openapi({ description: "The delivery charge, in minor units of the store currency." }),
-  discountMinor: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional().openapi({ description: "An order discount set by hand, in minor units of the store currency." }),
+  shippingMinor: z.number().int().min(0).max(MAX_MINOR_AMOUNT).openapi({ description: "The delivery charge, in minor units of the store currency." }),
+  discountMinor: z.number().int().min(0).max(MAX_MINOR_AMOUNT).optional().openapi({ description: "An order discount set by hand, in minor units of the store currency." }),
   paymentMethod: manualOrderPaymentMethodSchema.default("cod").openapi({
     description: "How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with dashboard.resources.payments.create).",
   }),
@@ -436,7 +436,7 @@ const recordPaymentHeaders = z.object({
 });
 
 const recordPaymentBody = z.object({
-  amountMinor: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER).openapi({
+  amountMinor: z.number().int().min(1).max(MAX_MINOR_AMOUNT).openapi({
     description: "What was received, in minor units of the order's `currency`; at most its `balanceDueMinor`.",
   }),
   via: z.enum(RECORDED_PAYMENT_VIAS).openapi({ description: "How it was received." }),
@@ -554,7 +554,7 @@ app.openapi(createRoute({
   return ok(c, { fulfillments: page.items, nextCursor: page.nextCursor });
 });
 
-const minorAmount = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
+const minorAmount = z.number().int().min(0).max(MAX_MINOR_AMOUNT);
 
 const fulfillmentCreateBody = z.object({
   kind: z.enum(MANUAL_FULFILLMENT_TYPES).openapi({
@@ -1240,8 +1240,8 @@ app.openapi(createRoute({
 const PRICE_LIST_CURSOR: ListCursorShape = { sort: "productName", direction: "asc", kinds: ["text"] };
 
 const priceTierMinor = z.object({
-  amountMinor: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).openapi({ description: "The price of one unit, in minor units of the list's currency, at its price increment." }),
-  compareAtMinor: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).nullable().optional().openapi({ description: "The struck-through price, above the amount; null for none." }),
+  amountMinor: z.number().int().positive().max(MAX_MINOR_AMOUNT).openapi({ description: "The price of one unit, in minor units of the list's currency, at its price increment." }),
+  compareAtMinor: z.number().int().positive().max(MAX_MINOR_AMOUNT).nullable().optional().openapi({ description: "The struck-through price, above the amount; null for none." }),
   minQuantity: z.number().int().min(1).max(PRICE_LIST_MIN_QUANTITY_MAX).default(1).openapi({ description: "1 is the list's price; a larger value is a quantity break from that many units." }),
 });
 

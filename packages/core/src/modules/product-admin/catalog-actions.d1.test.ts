@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DatabaseSync } from "node:sqlite";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { MAX_PRODUCT_PRICE } from "@scalius/shared/product-options";
+import { MAX_MAJOR_AMOUNT, MAX_MINOR_AMOUNT, maxMajorAmount } from "@scalius/shared/money";
 import { bulkUpdateProducts } from "./lifecycle";
 import { createProduct, duplicateProduct, updateProduct } from "./write";
 import { getProductsByIds, listProducts } from "./read";
@@ -55,9 +55,19 @@ describe("catalog actions on D1 storage", () => {
 
   const create = (input: Record<string, unknown>) => createProduct(db, createProductSchema.parse({ ...base, ...input }));
 
-  it("rejects prices above the supported maximum and active products without a price", () => {
-    expect(createProductSchema.safeParse({ ...base, name: "Too dear", slug: "too-dear", price: 99_999_999_999 }).success).toBe(false);
-    expect(createProductSchema.safeParse({ ...base, name: "Top price", slug: "top-price", price: MAX_PRODUCT_PRICE }).success).toBe(true);
+  it("prices up to the money ceiling in the store currency, and refuses one taka more", async () => {
+    // BDT: MAX_MINOR_AMOUNT paisa is 90 billion taka, a multiple of the whole-taka increment.
+    const top = maxMajorAmount(2);
+    expect(top).toBe(90_000_000_000);
+    const created = await create({ name: "Top price", slug: "top-price", price: top });
+    expect(sqlite.prepare("SELECT price_minor FROM products WHERE id = ?").get(created.id)).toEqual({ price_minor: MAX_MINOR_AMOUNT });
+    await expect(create({ name: "Too dear", slug: "too-dear", price: top + 1 }))
+      .rejects.toMatchObject({ status: 400, message: "Enter 90000000000.00 or less.", details: { reason: "amount_too_large", max: top } });
+    // No currency holds more major units than a zero-decimal one.
+    expect(createProductSchema.safeParse({ ...base, name: "Absurd", slug: "absurd", price: MAX_MAJOR_AMOUNT + 1 }).success).toBe(false);
+  });
+
+  it("rejects active products without a price", () => {
     const free = createProductSchema.safeParse({ ...base, name: "Free tee", slug: "free-tee", price: 0, isActive: true });
     expect(free.success).toBe(false);
     expect(free.error?.issues[0]?.path).toEqual(["price"]);

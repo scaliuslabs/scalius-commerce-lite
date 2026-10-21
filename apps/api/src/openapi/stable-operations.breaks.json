@@ -2842,5 +2842,173 @@
   "from": "6c865754ccc7b29a",
   "change": "payments.void: the write_payments scope no longer covers it.",
   "reason": "Pre-lock security fix (audit N3): see payments.capture."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "8c4006a0d08db00a",
+  "change": "discounts.create input body.maxDiscountSpendMinor: maximum tightened to 9000000000000.",
+  "reason": "Pre-lock (audit I7): one money ceiling. Every stable *Minor input is bounded by MAX_MINOR_AMOUNT (9,000,000,000,000 minor units, @scalius/shared/money), the amount money is stored and computed in; the advertised Number.MAX_SAFE_INTEGER was never accepted (toMinor and the line, tax and promotion math refuse more), so an app learns the true bound from the contract instead of an undocumented 400."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "8c4006a0d08db00a",
+  "change": "discounts.create input body.conditions[][variant 0].config.amountMinor: maximum tightened to 9000000000000.",
+  "reason": "Pre-lock (audit I7): one money ceiling. Every stable *Minor input is bounded by MAX_MINOR_AMOUNT (9,000,000,000,000 minor units, @scalius/shared/money), the amount money is stored and computed in; the advertised Number.MAX_SAFE_INTEGER was never accepted (toMinor and the line, tax and promotion math refuse more), so an app learns the true bound from the contract instead of an undocumented 400."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "8c4006a0d08db00a",
+  "change": "discounts.create input body.effects[][variant 0].config.buy.amountMinor: maximum tightened to 9000000000000.",
+  "reason": "Pre-lock (audit I7): one money ceiling. Every stable *Minor input is bounded by MAX_MINOR_AMOUNT (9,000,000,000,000 minor units, @scalius/shared/money), the amount money is stored and computed in; the advertised Number.MAX_SAFE_INTEGER was never accepted (toMinor and the line, tax and promotion math refuse more), so an app learns the true bound from the contract instead of an undocumented 400."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "8c4006a0d08db00a",
+  "change": "discounts.create input body.effects[][variant 1].config.amountMinor: maximum tightened to 9000000000000.",
+  "reason": "Pre-lock (audit I7): one money ceiling. Every stable *Minor input is bounded by MAX_MINOR_AMOUNT (9,000,000,000,000 minor units, @scalius/shared/money), the amount money is stored and computed in; the advertised Number.MAX_SAFE_INTEGER was never accepted (toMinor and the line, tax and promotion math refuse more), so an app learns the true bound from the contract instead of an undocumented 400."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "8c4006a0d08db00a",
+  "change": "discounts.update input body.maxDiscountSpendMinor: maximum tightened to 9000000000000.",
+  "reason": "Pre-lock (audit I7): one money ceiling. Every stable *Minor input is bounded by MAX_MINOR_AMOUNT (9,000,000,000,000 minor units, @scalius/shared/money), the amount money is stored and computed in; the advertised Number.MAX_SAFE_INTEGER was never accepted (toMinor and the line, tax and promotion math refuse more), so an app learns the true bound from the contract instead of an undocumented 400."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "8c4006a0d08db00a",
+  "change": "discounts.update input body.conditions[][variant 0].config.amountMinor: maximum tightened to 9000000000000.",
+  "reason": "Pre-lock (audit I7): one money ceiling. Every stable *Minor input is bounded by MAX_MINOR_AMOUNT (9,000,000,000,000 minor units, @scalius/shared/money), the amount money is stored and computed in; the advertised Number.MAX_SAFE_INTEGER was never accepted (toMinor and the line, tax and promotion math refuse more), so an app learns the true bound from the contract instead of an undocumented 400."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "8c4006a0d08db00a",
+  "change": "discounts.update input body.effects[][variant 0].config.buy.amountMinor: maximum tightened to 9000000000000.",
+  "reason": "Pre-lock (audit I7): one money ceiling. Every stable *Minor input is bounded by MAX_MINOR_AMOUNT (9,000,000,000,000 minor units, @scalius/shared/money), the amount money is stored and computed in; the advertised Number.MAX_SAFE_INTEGER was never accepted (toMinor and the line, tax and promotion math refuse more), so an app learns the true bound from the contract instead of an undocumented 400."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "8c4006a0d08db00a",
+  "change": "discounts.update input body.effects[][variant 1].config.amountMinor: maximum tightened to 9000000000000.",
+  "reason": "Pre-lock (audit I7): one money ceiling. Every stable *Minor input is bounded by MAX_MINOR_AMOUNT (9,000,000,000,000 minor units, @scalius/shared/money), the amount money is stored and computed in; the advertised Number.MAX_SAFE_INTEGER was never accepted (toMinor and the line, tax and promotion math refuse more), so an app learns the true bound from the contract instead of an undocumented 400."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "8c4006a0d08db00a",
+  "change": "fulfillments.create input body.tracking.amountMinor: maximum tightened to 9000000000000.",
+  "reason": "Pre-lock (audit I7): one money ceiling. Every stable *Minor input is bounded by MAX_MINOR_AMOUNT (9,000,000,000,000 minor units, @scalius/shared/money), the amount money is stored and computed in; the advertised Number.MAX_SAFE_INTEGER was never accepted (toMinor and the line, tax and promotion math refuse more), so an app learns the true bound from the contract instead of an undocumented 400."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "8c4006a0d08db00a",
+  "change": "fulfillments.create input body.cashReceivedMinor: maximum tightened to 9000000000000.",
+  "reason": "Pre-lock (audit I7): one money ceiling. Every stable *Minor input is bounded by MAX_MINOR_AMOUNT (9,000,000,000,000 minor units, @scalius/shared/money), the amount money is stored and computed in; the advertised Number.MAX_SAFE_INTEGER was never accepted (toMinor and the line, tax and promotion math refuse more), so an app learns the true bound from the contract instead of an undocumented 400."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "8c4006a0d08db00a",
+  "change": "gift_cards.adjust input body.amountMinor: maximum tightened to 9000000000000.",
+  "reason": "Pre-lock (audit I7): one money ceiling. Every stable *Minor input is bounded by MAX_MINOR_AMOUNT (9,000,000,000,000 minor units, @scalius/shared/money), the amount money is stored and computed in; the advertised Number.MAX_SAFE_INTEGER was never accepted (toMinor and the line, tax and promotion math refuse more), so an app learns the true bound from the contract instead of an undocumented 400."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "8c4006a0d08db00a",
+  "change": "gift_cards.adjust input body.amountMinor: minimum tightened to -9000000000000.",
+  "reason": "Pre-lock (audit I7): one money ceiling. Every stable *Minor input is bounded by MAX_MINOR_AMOUNT (9,000,000,000,000 minor units, @scalius/shared/money), the amount money is stored and computed in; the advertised Number.MAX_SAFE_INTEGER was never accepted (toMinor and the line, tax and promotion math refuse more), so an app learns the true bound from the contract instead of an undocumented 400."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "8c4006a0d08db00a",
+  "change": "gift_cards.create input body.amountMinor: maximum tightened to 9000000000000.",
+  "reason": "Pre-lock (audit I7): one money ceiling. Every stable *Minor input is bounded by MAX_MINOR_AMOUNT (9,000,000,000,000 minor units, @scalius/shared/money), the amount money is stored and computed in; the advertised Number.MAX_SAFE_INTEGER was never accepted (toMinor and the line, tax and promotion math refuse more), so an app learns the true bound from the contract instead of an undocumented 400."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "8c4006a0d08db00a",
+  "change": "orders.create input body.items[].unitPriceMinor: maximum tightened to 9000000000000.",
+  "reason": "Pre-lock (audit I7): one money ceiling. Every stable *Minor input is bounded by MAX_MINOR_AMOUNT (9,000,000,000,000 minor units, @scalius/shared/money), the amount money is stored and computed in; the advertised Number.MAX_SAFE_INTEGER was never accepted (toMinor and the line, tax and promotion math refuse more), so an app learns the true bound from the contract instead of an undocumented 400."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "8c4006a0d08db00a",
+  "change": "orders.create input body.shippingMinor: maximum tightened to 9000000000000.",
+  "reason": "Pre-lock (audit I7): one money ceiling. Every stable *Minor input is bounded by MAX_MINOR_AMOUNT (9,000,000,000,000 minor units, @scalius/shared/money), the amount money is stored and computed in; the advertised Number.MAX_SAFE_INTEGER was never accepted (toMinor and the line, tax and promotion math refuse more), so an app learns the true bound from the contract instead of an undocumented 400."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "8c4006a0d08db00a",
+  "change": "orders.create input body.discountMinor: maximum tightened to 9000000000000.",
+  "reason": "Pre-lock (audit I7): one money ceiling. Every stable *Minor input is bounded by MAX_MINOR_AMOUNT (9,000,000,000,000 minor units, @scalius/shared/money), the amount money is stored and computed in; the advertised Number.MAX_SAFE_INTEGER was never accepted (toMinor and the line, tax and promotion math refuse more), so an app learns the true bound from the contract instead of an undocumented 400."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "8c4006a0d08db00a",
+  "change": "payments.charge input body.amountMinor: maximum tightened to 9000000000000.",
+  "reason": "Pre-lock (audit I7): one money ceiling. Every stable *Minor input is bounded by MAX_MINOR_AMOUNT (9,000,000,000,000 minor units, @scalius/shared/money), the amount money is stored and computed in; the advertised Number.MAX_SAFE_INTEGER was never accepted (toMinor and the line, tax and promotion math refuse more), so an app learns the true bound from the contract instead of an undocumented 400."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "8c4006a0d08db00a",
+  "change": "payments.create input body.amountMinor: maximum tightened to 9000000000000.",
+  "reason": "Pre-lock (audit I7): one money ceiling. Every stable *Minor input is bounded by MAX_MINOR_AMOUNT (9,000,000,000,000 minor units, @scalius/shared/money), the amount money is stored and computed in; the advertised Number.MAX_SAFE_INTEGER was never accepted (toMinor and the line, tax and promotion math refuse more), so an app learns the true bound from the contract instead of an undocumented 400."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "8c4006a0d08db00a",
+  "change": "price_lists.set_prices input body.set[].prices[].amountMinor: maximum tightened to 9000000000000.",
+  "reason": "Pre-lock (audit I7): one money ceiling. Every stable *Minor input is bounded by MAX_MINOR_AMOUNT (9,000,000,000,000 minor units, @scalius/shared/money), the amount money is stored and computed in; the advertised Number.MAX_SAFE_INTEGER was never accepted (toMinor and the line, tax and promotion math refuse more), so an app learns the true bound from the contract instead of an undocumented 400."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "8c4006a0d08db00a",
+  "change": "price_lists.set_prices input body.set[].prices[].compareAtMinor: maximum tightened to 9000000000000.",
+  "reason": "Pre-lock (audit I7): one money ceiling. Every stable *Minor input is bounded by MAX_MINOR_AMOUNT (9,000,000,000,000 minor units, @scalius/shared/money), the amount money is stored and computed in; the advertised Number.MAX_SAFE_INTEGER was never accepted (toMinor and the line, tax and promotion math refuse more), so an app learns the true bound from the contract instead of an undocumented 400."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "8c4006a0d08db00a",
+  "change": "products.batch_create input body.items[].variants[].priceMinor: maximum tightened to 9000000000000.",
+  "reason": "Pre-lock (audit I7): one money ceiling. Every stable *Minor input is bounded by MAX_MINOR_AMOUNT (9,000,000,000,000 minor units, @scalius/shared/money), the amount money is stored and computed in; the advertised Number.MAX_SAFE_INTEGER was never accepted (toMinor and the line, tax and promotion math refuse more), so an app learns the true bound from the contract instead of an undocumented 400."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "8c4006a0d08db00a",
+  "change": "products.create input body.variants[].priceMinor: maximum tightened to 9000000000000.",
+  "reason": "Pre-lock (audit I7): one money ceiling. Every stable *Minor input is bounded by MAX_MINOR_AMOUNT (9,000,000,000,000 minor units, @scalius/shared/money), the amount money is stored and computed in; the advertised Number.MAX_SAFE_INTEGER was never accepted (toMinor and the line, tax and promotion math refuse more), so an app learns the true bound from the contract instead of an undocumented 400."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "8c4006a0d08db00a",
+  "change": "products.update input body.priceMinor: maximum tightened to 9000000000000.",
+  "reason": "Pre-lock (audit I7): one money ceiling. Every stable *Minor input is bounded by MAX_MINOR_AMOUNT (9,000,000,000,000 minor units, @scalius/shared/money), the amount money is stored and computed in; the advertised Number.MAX_SAFE_INTEGER was never accepted (toMinor and the line, tax and promotion math refuse more), so an app learns the true bound from the contract instead of an undocumented 400."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "8c4006a0d08db00a",
+  "change": "refunds.create input body.amountMinor: maximum tightened to 9000000000000.",
+  "reason": "Pre-lock (audit I7): one money ceiling. Every stable *Minor input is bounded by MAX_MINOR_AMOUNT (9,000,000,000,000 minor units, @scalius/shared/money), the amount money is stored and computed in; the advertised Number.MAX_SAFE_INTEGER was never accepted (toMinor and the line, tax and promotion math refuse more), so an app learns the true bound from the contract instead of an undocumented 400."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "8c4006a0d08db00a",
+  "change": "variants.bulk_set_prices input body.variants[].expectedPriceMinor: maximum tightened to 9000000000000.",
+  "reason": "Pre-lock (audit I7): one money ceiling. Every stable *Minor input is bounded by MAX_MINOR_AMOUNT (9,000,000,000,000 minor units, @scalius/shared/money), the amount money is stored and computed in; the advertised Number.MAX_SAFE_INTEGER was never accepted (toMinor and the line, tax and promotion math refuse more), so an app learns the true bound from the contract instead of an undocumented 400."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "8c4006a0d08db00a",
+  "change": "variants.bulk_set_prices input body.change[variant 0].amountMinor: maximum tightened to 9000000000000.",
+  "reason": "Pre-lock (audit I7): one money ceiling. Every stable *Minor input is bounded by MAX_MINOR_AMOUNT (9,000,000,000,000 minor units, @scalius/shared/money), the amount money is stored and computed in; the advertised Number.MAX_SAFE_INTEGER was never accepted (toMinor and the line, tax and promotion math refuse more), so an app learns the true bound from the contract instead of an undocumented 400."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "8c4006a0d08db00a",
+  "change": "variants.bulk_set_prices input body.change[variant 2].amountMinor: maximum tightened to 9000000000000.",
+  "reason": "Pre-lock (audit I7): one money ceiling. Every stable *Minor input is bounded by MAX_MINOR_AMOUNT (9,000,000,000,000 minor units, @scalius/shared/money), the amount money is stored and computed in; the advertised Number.MAX_SAFE_INTEGER was never accepted (toMinor and the line, tax and promotion math refuse more), so an app learns the true bound from the contract instead of an undocumented 400."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "8c4006a0d08db00a",
+  "change": "variants.bulk_set_prices input body.change[variant 2].amountMinor: minimum tightened to -9000000000000.",
+  "reason": "Pre-lock (audit I7): one money ceiling. Every stable *Minor input is bounded by MAX_MINOR_AMOUNT (9,000,000,000,000 minor units, @scalius/shared/money), the amount money is stored and computed in; the advertised Number.MAX_SAFE_INTEGER was never accepted (toMinor and the line, tax and promotion math refuse more), so an app learns the true bound from the contract instead of an undocumented 400."
  }
 ]

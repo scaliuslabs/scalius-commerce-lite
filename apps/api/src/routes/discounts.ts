@@ -5,7 +5,7 @@ import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { readMarketPriceContext } from "@scalius/core/modules/price-lists";
 import { isMarketSubfolder } from "@scalius/shared/markets";
 import { presentmentPricingCurrency } from "@scalius/shared/presentment";
-import { MAX_PRODUCT_PRICE } from "@scalius/core/modules/products";
+import { MAX_MAJOR_AMOUNT } from "@scalius/shared/money";
 import { quoteStorefrontDiscount } from "@scalius/core/modules/promotions";
 import { getCustomerBySession } from "@scalius/core/modules/customers";
 import {
@@ -40,10 +40,10 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 // Reject null/empty/string coercion so crafted requests cannot turn them into 0.
 const cartItemSchema = z.object({
   id: z.string().trim().min(1).max(100).openapi({ description: "Product id" }),
-  price: z.number().finite().nonnegative().max(MAX_PRODUCT_PRICE),
+  price: z.number().finite().nonnegative().max(MAX_MAJOR_AMOUNT),
   quantity: z.number().int().positive().max(10_000),
   variantId: z.string().trim().min(1).max(100).optional(),
-  basePrice: z.number().finite().nonnegative().max(MAX_PRODUCT_PRICE).optional().openapi({
+  basePrice: z.number().finite().nonnegative().max(MAX_MAJOR_AMOUNT).optional().openapi({
     description: "Unit price before buyer-input surcharges, which quantity bundles price from; defaults to `price`.",
   }),
 });
@@ -51,7 +51,7 @@ const cartItemSchema = z.object({
 const validateDiscountSchema = z.object({
   codes: discountCodesSchema,
   items: z.array(cartItemSchema).max(MAX_ORDER_LINES).optional().openapi({ description: "Cart items" }),
-  shippingCost: z.number().finite().nonnegative().max(MAX_PRODUCT_PRICE).optional().openapi({
+  shippingCost: z.number().finite().nonnegative().max(MAX_MAJOR_AMOUNT).optional().openapi({
     description: "Delivery charge of the chosen delivery option. Omit it before the buyer has one: delivery discounts then wait (`needs_delivery`) instead of failing.",
   }),
   customerPhone: phoneNumberSchema.optional().openapi({ description: "Customer phone for per-customer limits" }),

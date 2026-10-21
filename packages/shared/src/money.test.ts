@@ -106,3 +106,20 @@ describe("price increment amounts", () => {
     expect(() => roundToIncrementMinor(1, 0)).toThrow(RangeError);
   });
 });
+
+describe("the one money ceiling (audit I7)", () => {
+  it("is MAX_MINOR_AMOUNT minor units of any currency, said in its major units", async () => {
+    const { MAX_MAJOR_AMOUNT, MAX_MINOR_AMOUNT, MoneyRangeError, maxMajorAmount, toMinor } = await import("./money");
+    expect(MAX_MINOR_AMOUNT).toBe(9_000_000_000_000);
+    expect(maxMajorAmount(0)).toBe(MAX_MAJOR_AMOUNT);
+    expect(maxMajorAmount(2)).toBe(90_000_000_000);
+    expect(maxMajorAmount(3)).toBe(9_000_000_000);
+    // At the bound, exactly; one minor unit more is a MoneyRangeError (a RangeError).
+    expect(toMinor(maxMajorAmount(2), 2)).toBe(MAX_MINOR_AMOUNT);
+    expect(toMinor(MAX_MAJOR_AMOUNT, 0)).toBe(MAX_MINOR_AMOUNT);
+    expect(() => toMinor(maxMajorAmount(2) + 0.01, 2)).toThrow(MoneyRangeError);
+    expect(() => toMinor(MAX_MAJOR_AMOUNT + 1, 0)).toThrow(RangeError);
+    // 99 lines at the ceiling, plus as much again for shipping and tax, stay exact integers.
+    expect(Number.isSafeInteger(99 * MAX_MINOR_AMOUNT * 2)).toBe(true);
+  });
+});

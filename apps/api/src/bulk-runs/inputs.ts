@@ -5,6 +5,7 @@
 import { z } from "@hono/zod-openapi";
 import { CUSTOMER_TAGS_PER_REQUEST_MAX } from "@scalius/shared/customer-marketing";
 import { PUBLICATION_BULK_MAX_CHANNELS } from "@scalius/shared/sales-channels";
+import { MAX_MINOR_AMOUNT } from "@scalius/shared/money";
 import { salesChannelIdSchema } from "../schemas/sales-channels";
 
 /** Most items one run may hold. */
@@ -32,16 +33,16 @@ export const bulkProductFilterSchema = z.object({
 export const bulkSetPricesSchema = z.object({
   variants: z.array(z.object({
     id,
-    expectedPriceMinor: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional()
+    expectedPriceMinor: z.number().int().min(0).max(MAX_MINOR_AMOUNT).optional()
       .openapi({ description: "The price you read; a SKU whose price changed since is left alone (a failure)." }),
   })).min(1).max(BULK_RUN_MAX_ITEMS).optional().openapi({ description: "SKUs by id (send this or filter)." }),
   filter: bulkProductFilterSchema.optional().openapi({ description: "Every live SKU of the products this filter matches (send this or variants)." }),
   change: z.discriminatedUnion("mode", [
-    z.object({ mode: z.literal("set"), amountMinor: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER) })
+    z.object({ mode: z.literal("set"), amountMinor: z.number().int().min(1).max(MAX_MINOR_AMOUNT) })
       .openapi({ description: "Set every price to this amount (on the store's price increment)." }),
     z.object({ mode: z.literal("percent"), percent: z.number().min(-90).max(1_000).multipleOf(0.01) })
       .openapi({ description: "Change every price by this percent (5 raises 5%, -10 lowers 10%), rounded half up to the price increment." }),
-    z.object({ mode: z.literal("amount"), amountMinor: z.number().int().min(-Number.MAX_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER).refine((value) => value !== 0, "Change the price.") })
+    z.object({ mode: z.literal("amount"), amountMinor: z.number().int().min(-MAX_MINOR_AMOUNT).max(MAX_MINOR_AMOUNT).refine((value) => value !== 0, "Change the price.") })
       .openapi({ description: "Add (or, negative, take off) this many minor units, rounded to the price increment." }),
   ]),
   dryRun,

@@ -5,7 +5,7 @@ import {
     normalizeSupportedCurrencyCode,
 } from "@scalius/shared/currency";
 import { defaultPriceIncrementMinor, type PricingCurrency } from "@scalius/shared/currency-policy";
-import { PriceIncrementError, toIncrementMinor } from "@scalius/shared/money";
+import { maxMajorAmount, MoneyRangeError, PriceIncrementError, toIncrementMinor } from "@scalius/shared/money";
 import { sql } from "drizzle-orm";
 import { ValidationError } from "@scalius/core/errors";
 import { deps } from "../../cache-deps";
@@ -53,6 +53,11 @@ export function toStoreMinor(amount: number, currency: StoreCurrency): number {
         return toIncrementMinor(amount, currency.decimalPlaces, currency.priceIncrementMinor, currency.code);
     } catch (error) {
         if (error instanceof PriceIncrementError) throw new ValidationError(error.message);
+        // The one money ceiling (`MAX_MINOR_AMOUNT`), said in the currency's major units.
+        if (error instanceof MoneyRangeError) {
+            const max = maxMajorAmount(currency.decimalPlaces);
+            throw new ValidationError(`Enter ${max.toFixed(currency.decimalPlaces)} or less.`, { reason: "amount_too_large", max });
+        }
         throw error;
     }
 }

@@ -10,6 +10,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { orders } from "@scalius/database/schema";
 import { EVENT_REPRESENTATION_SCHEMAS } from "@scalius/shared/events";
+import { MAX_MINOR_AMOUNT } from "@scalius/shared/money";
 import { eq } from "drizzle-orm";
 import { created, ok } from "../../utils/api-response";
 import { NotFoundError } from "../../utils/api-error";
@@ -40,7 +41,7 @@ const refundHeaders = z.object({
 });
 
 const refundCreateBody = z.object({
-  amountMinor: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER).openapi({
+  amountMinor: z.number().int().min(1).max(MAX_MINOR_AMOUNT).openapi({
     description: "What goes back, in minor units of the order's `currency`; at most what was paid less what was refunded.",
   }),
   lines: refundLinesSchema.optional(),

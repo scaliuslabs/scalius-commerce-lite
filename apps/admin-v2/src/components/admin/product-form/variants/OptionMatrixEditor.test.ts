@@ -1,6 +1,7 @@
 import { translate } from "~/i18n";
 import { productVariantMessages, type ProductVariantMessageKey } from "~/i18n/product-variants";
 import { describe, expect, it } from "vitest";
+import { MAX_MAJOR_AMOUNT } from "@scalius/shared/money";
 import {
   combinationKey,
   getOptionMatrixIssue,
@@ -231,7 +232,7 @@ describe("option matrix editor model", () => {
     const rows = [variant("one", ["print"]), variant("two", ["digital"])];
     rows[1]!.price = Number.NaN;
     expect(getOptionMatrixIssue(options, rows, [], false)).toEqual({ message: issue("issueNotANumber"), variantId: "two", field: "price" });
-    rows[1]!.price = 100_000_000;
+    rows[1]!.price = MAX_MAJOR_AMOUNT + 1;
     expect(getOptionMatrixIssue(options, rows, [], false)).toMatchObject({ variantId: "two", field: "price" });
     rows[1]!.price = 0;
     expect(getOptionMatrixIssue(options, rows, [], false)).toBeNull();

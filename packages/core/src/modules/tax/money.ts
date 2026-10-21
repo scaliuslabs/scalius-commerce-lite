@@ -1,4 +1,4 @@
-const MAX_MINOR_AMOUNT = 9_000_000_000_000;
+import { MAX_MINOR_AMOUNT } from "@scalius/shared/money";
 
 function assertMinorAmount(value: number, label: string): number {
     if (!Number.isSafeInteger(value) || value < 0 || value > MAX_MINOR_AMOUNT) {

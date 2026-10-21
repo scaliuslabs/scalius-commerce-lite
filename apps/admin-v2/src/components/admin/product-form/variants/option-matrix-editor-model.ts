@@ -1,10 +1,10 @@
 import {
   MAX_PRODUCT_OPTION_AXES,
   MAX_PRODUCT_OPTION_COMBINATIONS,
-  MAX_PRODUCT_PRICE,
   MAX_SKU_STOCK,
   MAX_SKU_WEIGHT_GRAMS,
 } from "@scalius/shared/product-options";
+import { MAX_MAJOR_AMOUNT } from "@scalius/shared/money";
 import { getBarcodeValidationError } from "@scalius/shared/barcode-identity";
 import { toHandle } from "@scalius/shared/handle";
 import type {
@@ -80,8 +80,8 @@ function checkNumber(value: number | null, max: number, integer: boolean): Produ
 /** Problems with one SKU's own numbers and barcode, in the order its fields appear. */
 function skuFieldIssue(sku: SimpleSkuDraft & Partial<DraftVariant>, requirePositivePrice: boolean, weightUnit: WeightUnit = "g"): DraftIssue | null {
   if (sku.price !== undefined) {
-    const priceProblem = checkNumber(sku.price, MAX_PRODUCT_PRICE, false);
-    if (priceProblem) return { message: issue(priceProblem, { max: MAX_PRODUCT_PRICE }), field: "price" };
+    const priceProblem = checkNumber(sku.price, MAX_MAJOR_AMOUNT, false);
+    if (priceProblem) return { message: issue(priceProblem, { max: MAX_MAJOR_AMOUNT }), field: "price" };
     if (requirePositivePrice && sku.price <= 0) return { message: issue("issueVariantNeedsPrice"), field: "price" };
   }
   const stockProblem = checkNumber(sku.stock, MAX_SKU_STOCK, true);

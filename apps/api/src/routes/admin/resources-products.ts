@@ -14,7 +14,7 @@ import { nanoid } from "nanoid";
 import { EVENT_REPRESENTATION_SCHEMAS } from "@scalius/shared/events";
 import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
 import { MAX_PRODUCT_OPTION_AXES, MAX_PRODUCT_OPTION_COMBINATIONS } from "@scalius/shared/product-options";
-import { fromMinor } from "@scalius/shared/money";
+import { fromMinor, MAX_MINOR_AMOUNT } from "@scalius/shared/money";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { addProductSku, createProduct, createProductSchema, restoreProductSku, updateProductResourceSections, updateProductSku } from "@scalius/core/modules/product-admin";
 import type { Context } from "hono";
@@ -44,7 +44,7 @@ const ProductResource = namedSharedSchema(EVENT_REPRESENTATION_SCHEMAS.product, 
 const productEnvelope = successEnvelope(z.object({ product: ProductResource }));
 const writeResponses = { ...errorResponses, 409: conflictResponse };
 
-const priceMinor = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
+const priceMinor = z.number().int().min(0).max(MAX_MINOR_AMOUNT);
 const barcodeTypes = ["ean13", "upc", "isbn", "gtin", "code128", "custom"] as const;
 const slug = z.string().min(3).max(100).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u);
 const idParamSchema = z.object({ id: z.string().min(1).max(128) });

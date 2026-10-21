@@ -27,6 +27,7 @@ import {
     normalizeCanonicalPathInput,
 } from "@scalius/shared/seo-canonical";
 import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
+import { MAX_MAJOR_AMOUNT } from "@scalius/shared/money";
 import { templateAssignmentSchema } from "@scalius/shared/catalog-tree";
 import {
   buildProductBundleReplaceStatements,
@@ -34,7 +35,6 @@ import {
   catalogPriceColumns,
   defaultProductSkuValues,
   MAX_PRODUCT_MEDIA_ASSOCIATIONS,
-  MAX_PRODUCT_PRICE,
   presentCatalogPrice,
   PRODUCT_CONTENT_BLOCK_MEDIA_GUARD,
   PRODUCT_CONTENT_BLOCK_MEDIA_UNAVAILABLE_MESSAGE,
@@ -100,13 +100,13 @@ const canonicalPathPatchSchema = z
 
 const productBasePatchSchema = z.object({
     name: z.string().trim().min(1).max(PRODUCT_NAME_MAX_LENGTH).optional(),
-    price: z.number().min(0).max(MAX_PRODUCT_PRICE).optional(),
+    price: z.number().min(0).max(MAX_MAJOR_AMOUNT).optional(),
     categoryId: z.string().min(1).nullable().optional(),
     brandId: productBrandIdSchema.optional(),
     isActive: z.boolean().optional(),
     discountType: z.enum(["percentage", "flat"]).optional(),
     discountPercentage: z.number().min(0).max(100).nullable().optional(),
-    discountAmount: z.number().min(0).max(MAX_PRODUCT_PRICE).nullable().optional(),
+    discountAmount: z.number().min(0).max(MAX_MAJOR_AMOUNT).nullable().optional(),
     freeDelivery: z.boolean().optional(),
     canonicalPath: canonicalPathPatchSchema,
     noIndex: z.boolean().optional(),

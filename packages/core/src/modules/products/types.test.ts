@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { MAX_MAJOR_AMOUNT } from "@scalius/shared/money";
 import {
-    MAX_PRODUCT_PRICE,
     createVariantSchema,
     updateVariantSchema,
 } from "./types";
@@ -36,8 +36,9 @@ describe("variant price input boundaries", () => {
             variants: [{ ...validVariant, id: "variant_m", price }],
             expectedAggregateRevision: 1,
         })],
-    ] as const)("caps %s prices at the product price maximum", (_label, parse) => {
-        expect(parse(MAX_PRODUCT_PRICE).success).toBe(true);
+    ] as const)("caps %s prices at the money ceiling of any currency", (_label, parse) => {
+        expect(parse(MAX_MAJOR_AMOUNT).success).toBe(true);
+        expect(parse(MAX_MAJOR_AMOUNT + 1).success).toBe(false);
         expect(parse(1e21).success).toBe(false);
     });
 });
