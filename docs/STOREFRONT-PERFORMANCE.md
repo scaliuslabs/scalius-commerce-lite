@@ -170,6 +170,13 @@ Other flags: `--base <origin>` (default `http://localhost:4391`), `--paths "/,/p
 
 Consecutive hits share one storefront frontier, fresh for 1 s (`CACHE_FRONTIER_DELTA_MS`). A quiet store, under one request a second per data center, refreshes it on every hit: a service-binding call to the placed API and one D1 statement. `--sparse` (or `--sparse-ms <n>`, above 1000) times a second set of hits, each after a 1.5 s wait, and holds their median to the hit threshold. Pages that always render are skipped.
 
+That refresh is kept to the round trip itself:
+
+- The API Worker answers the two frontier routes at its entry (`cacheFrontierEndpoint` in `apps/api/src/cache-frontier.ts`), after the migration freeze and master-secret checks and before the Platform settings, the route families and the middleware chain: one key check and one statement. Through the public route family a fresh API isolate first evaluated the `public-config` routes. On one local stack (2026-10-21, `wrangler dev`, a fresh API isolate before each sample, 5 samples) the reported `frontier-wait` went from a median of 413 ms to 87 ms; on a warm isolate (15 sparse hits per page) from 5-10 ms to 3-4 ms.
+- The gateway reads the stored page and the data center's frontier from the Cache API together, so a hit waits for one cache read, not two in a row.
+
+The proof is unchanged: the same statement, the same 1 s freshness rule, and a stale frontier still blocks the hit.
+
 ### Forced misses on a local stack
 
 `--d1-explorer <origin>` advances the store dependency and the clock in the local D1 through the Wrangler local explorer. The first timed request carries that clock as `_sv` and must report `MISS` or `REFRESH`. Hit samples count only verified `HIT` responses with status 200. Both origins must be loopback addresses. Without the option, the script reports the first request as "first" (a miss or a hit, whatever the edge had).

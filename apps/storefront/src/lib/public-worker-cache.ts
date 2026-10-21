@@ -489,9 +489,10 @@ async function freshFrontier(
   client: CacheFrontierClient,
   key: string,
   seenSeq: number | null,
+  storedFrontier: Promise<CacheFrontier | null>,
 ): Promise<{ frontier: CacheFrontier | null; waitedMs: number | null }> {
   const now = context.now ?? Date.now;
-  const stored = await readStoredCacheFrontier(context.cache, key).catch(() => null);
+  const stored = await storedFrontier;
   const started = now();
   if (isCacheFrontierFresh(stored, started, seenSeq)) {
     if (started - stored.sentAt > CACHE_FRONTIER_DELTA_MS / 2) {
@@ -533,11 +534,14 @@ async function serveFrontierValidated(
   const pathname = logicalUrl(canonical).pathname;
   const key = publicStorefrontDvcCacheKey(policy.canonicalUrl, context.buildId, workerVersion);
   const waits: CacheWaits = { frontierMs: null, slowCheckMs: null };
+  const frontierKey = cacheFrontierKey(canonical.origin, context.buildId, workerVersion);
+  // The page and this data center's frontier are read together: a hit needs
+  // both, and the second read no longer waits for the first.
+  const storedFrontier = readStoredCacheFrontier(context.cache, frontierKey).catch(() => null);
   const stored = await context.cache.match(key);
   const entry = stored ? readStoredPageEntry(stored.headers) : null;
   if (stored && entry) {
-    const frontierKey = cacheFrontierKey(canonical.origin, context.buildId, workerVersion);
-    const { frontier, waitedMs } = await freshFrontier(context, client, frontierKey, readStorefrontSeenSeq(new URL(request.url)));
+    const { frontier, waitedMs } = await freshFrontier(context, client, frontierKey, readStorefrontSeenSeq(new URL(request.url)), storedFrontier);
     waits.frontierMs = waitedMs;
     const now = (context.now ?? Date.now)();
     const decision = frontier && isCacheFrontierFresh(frontier, now, null)

@@ -101,6 +101,26 @@ describe("frontier-validated storefront pages", () => {
     expect(t.render).toHaveBeenCalledTimes(1);
   });
 
+  it("reads the page and the frontier together, not one after the other", async () => {
+    const t = setup(() => [part(10, [P1])]);
+    await t.serve();
+    const started: string[] = [];
+    let releasePage!: () => void;
+    const pageGate = new Promise<void>((resolve) => { releasePage = resolve; });
+    const match = t.context.cache.match as ReturnType<typeof vi.fn>;
+    match.mockImplementation(async (key: RequestInfo | URL) => {
+      started.push(String(key));
+      if (String(key) === KEY) await pageGate;
+      return t.store.get(String(key))?.clone();
+    });
+    const pending = t.serve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    // Both reads started while the page read is still outstanding.
+    expect(started).toEqual(expect.arrayContaining([KEY, FRONTIER]));
+    releasePage();
+    expect((await pending).headers.get("X-Cache-Status")).toBe("HIT");
+  });
+
   it.each([30, 365])("validates a retained unchanged object after %i days without logical age expiration", async (days) => {
     const t = setup(() => [part(10, [P1])]);
     delete t.context.mode; // The production default is frontier validation.
