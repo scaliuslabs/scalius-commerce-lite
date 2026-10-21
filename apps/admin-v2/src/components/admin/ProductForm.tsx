@@ -546,8 +546,9 @@ function ProductEditor({
               <LazyAttributesSection form={form} defaultOpen={readOnly} readOnly={readOnly} />
               <fieldset disabled={readOnly} className="min-w-0"><LazyProductSearchListing form={form} disabled={readOnly} /></fieldset>
             </div>
-            {/* On phones the status comes first; the rest of the side column follows the main cards. */}
-            <div className="min-w-0 space-y-4 max-lg:contents">
+            {/* On phones the status comes first; the rest of the side column follows the main cards.
+                A flex gap, not space-y: space-y's margins would stack on the grid's gap once the column is `contents`. */}
+            <div className="flex min-w-0 flex-col gap-4 max-lg:contents">
               <fieldset disabled={readOnly} className="min-w-0 space-y-4 max-lg:order-first">
                 <ProductStatusCard form={form} isEdit={isEdit} getStorefrontPath={getStorefrontPath} readOnly={readOnly} />
               </fieldset>
