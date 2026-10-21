@@ -3,6 +3,7 @@
 // Imported by admin API routes and OrderService.
 
 import { isSalesChannelId, SALES_CHANNEL_ID_MAX_LENGTH } from "@scalius/shared/sales-channels";
+import { PURCHASE_OPTION_ID_MAX_LENGTH, PURCHASE_OPTION_ID_PATTERN } from "@scalius/shared/plugins/ids";
 import { z } from "zod";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { LINE_PROPERTY_INPUT_LIMITS } from "@scalius/shared/line-properties";
@@ -121,6 +122,12 @@ const sellableOrderItemSchema = z.object({
      * records it (`prices_set`). Buyer-input surcharges still apply.
      */
     unitPriceMinor: z.number().int().min(0).max(MAX_MINOR_AMOUNT).optional(),
+    /**
+     * An installed app's purchase option for the line (`<app id>.<key>`, a
+     * subscription renewal); frozen on the line as `_purchase_option`. The
+     * app prices it; one no active app offers is refused.
+     */
+    purchaseOption: z.string().max(PURCHASE_OPTION_ID_MAX_LENGTH).regex(PURCHASE_OPTION_ID_PATTERN, "Use a purchase option id: <app id>.<key>.").nullable().optional(),
 });
 
 const sellableOrderContentSchema = orderBaseContentSchema.extend({

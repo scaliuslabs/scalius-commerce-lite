@@ -17,6 +17,7 @@ import {
   DELIVERY_RATE_UNAVAILABLE_REASON,
   NO_CHECKOUT_APP_FUNCTIONS,
   presentCheckoutRateOptions,
+  platformDiscountClasses,
   previewStorefrontAppDiscounts,
   priceStorefrontCheckout,
   resolveAppPaymentMethods,
@@ -99,6 +100,8 @@ interface AgentStorefrontCartState {
   items: CartValidation["items"];
   subtotalMinor: number;
   hasFreeDeliveryProduct: boolean;
+  /** The buyer's segments that priced the cart (never presented). */
+  pricingSegmentIds?: CartValidation["pricingSegmentIds"];
   delivery?: DeliveryPreflight;
   /** The cart's currency and its rate (MARKETS-DESIGN step 6). */
   money: CartValidation["money"];
@@ -689,6 +692,8 @@ async function loadAgentStorefrontCart(
     items: validation.items,
     subtotalMinor: validation.subtotalMinor,
     hasFreeDeliveryProduct: validation.hasFreeDeliveryProduct,
+    // The buyer's segments that priced the cart: what apps see as `customer.segmentIds`.
+    ...(validation.pricingSegmentIds ? { pricingSegmentIds: validation.pricingSegmentIds } : {}),
     ...(delivery ? { delivery } : {}),
     // The cart's currency: its market's (MARKETS-DESIGN step 6).
     money: validation.money,
@@ -814,6 +819,7 @@ async function quoteAgentStorefrontDiscount(
       ...(line.giftCard ? { giftCard: true } : {}),
     })),
     platformAllocation: interplay.allocation,
+    platformClasses: platformDiscountClasses(interplay),
     shippingMinor,
     discountCodes: [code],
     channel: "agent",

@@ -55,6 +55,12 @@ const orderLineSchema = z.object({
   subtotalMinor: minor,
   discountMinor: minor,
   taxMinor: minor,
+  /**
+   * The app purchase option the line was bought with (`<app id>.<key>`, a
+   * subscription), frozen at checkout as its `_purchase_option` property;
+   * null for a one-time purchase.
+   */
+  purchaseOption: z.string().min(1).max(160).nullable(),
 });
 
 export const orderRepresentationSchema = z.object({

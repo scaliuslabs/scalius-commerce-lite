@@ -33,7 +33,7 @@ import { isPaymentTermsDays } from "@scalius/shared/payment-terms";
 import { PAYMENT_TERMS_UNAVAILABLE_MESSAGE } from "./payment-terms";
 import { BUILT_IN_PAYMENT_PROVIDERS, CASH_ON_DELIVERY_AMOUNT_REASON, type PaymentProviders } from "../payments";
 import { assertDiscountCodesApplied } from "../promotions";
-import { PAYMENT_METHOD_UNAVAILABLE_REASON, type CheckoutAppFunctions } from "./app-functions";
+import { checkoutPurchaseOptions, PAYMENT_METHOD_UNAVAILABLE_REASON, type CheckoutAppFunctions } from "./app-functions";
 import { createAppLinePricer } from "./app-line-prices";
 import { bundleLineProperties, createCartTransformer, presentTransformedCart, ruleErrorsOnBuyerLines } from "./cart-transform";
 import { assertNoCheckoutRuleErrors, priceStorefrontCheckout } from "./pricing";
@@ -74,7 +74,7 @@ import {
     type StorefrontCartItemIssue,
     type StorefrontCartValidationResult,
 } from "./cart-validation";
-import { linePropertiesHash, serializeOrderLineProperties } from "@scalius/shared/line-properties";
+import { lineIdentityProperties, linePropertiesHash, linePurchaseOptionProperty, serializeOrderLineProperties } from "@scalius/shared/line-properties";
 import type { FulfillmentType } from "@scalius/shared/fulfilment";
 import { hasFulfiller } from "../fulfilment";
 import {
@@ -750,11 +750,14 @@ export async function createStorefrontOrder(
             productName: item.productName,
             variantLabel: item.variantLabel,
             properties: item.properties,
+            ...(item.purchaseOption ? { purchaseOption: item.purchaseOption } : {}),
         })),
         {
             inventoryPool: data.inventoryPool,
             currencyCode: requestCurrency.code,
             priceIncrementMinor: requestCurrency.priceIncrementMinor,
+            // A line's purchase option must be one an active app offers.
+            purchaseOptions: checkoutPurchaseOptions(appOptions.apps),
             // The order's sales channel: its publications and its locations' units.
             salesChannelId: defaultOrderSalesChannelId(appOptions.channel ?? "online_store"),
             // The apps' lines and line prices, as the quote saw them.
@@ -874,7 +877,13 @@ export async function createStorefrontOrder(
             isGiftCard: validatedItem.isGiftCard === true,
             // The order line keeps the apps' add-ons with its buyer inputs: unit = base + both.
             propertiesPriceMinor: validatedItem.propertiesPriceMinor + (validatedItem.adjustmentsMinor ?? 0),
-            properties: serializeOrderLineProperties([...validatedItem.properties, ...bundleLineProperties(validatedItem.bundle), ...(validatedItem.adjustments ?? [])]),
+            // Then its purchase option (`_purchase_option`), after the add-ons.
+            properties: serializeOrderLineProperties([
+                ...validatedItem.properties,
+                ...bundleLineProperties(validatedItem.bundle),
+                ...(validatedItem.adjustments ?? []),
+                ...(validatedItem.purchaseOption ? [linePurchaseOptionProperty(validatedItem.purchaseOption.id, validatedItem.purchaseOption.title)] : []),
+            ]),
             fulfillmentType: lineTypeByIndex.get(idx)!,
             productName: validatedItem.productName,
             variantLabel: validatedItem.variantLabel,
@@ -1152,7 +1161,8 @@ export async function createStorefrontOrder(
 export async function storefrontLinePropertiesHashes(
     cartValidation: Pick<StorefrontCartValidationResult, "items">,
 ): Promise<string[]> {
-    return Promise.all(cartValidation.items.map((item) => linePropertiesHash(item.canonicalProperties)));
+    // The purchase option is part of the line's identity (a subscription line is not the one-time line).
+    return Promise.all(cartValidation.items.map((item) => linePropertiesHash(lineIdentityProperties(item.canonicalProperties, item.purchaseOption?.id))));
 }
 
 /** Delivery preflight in the decimal HTTP contract. */

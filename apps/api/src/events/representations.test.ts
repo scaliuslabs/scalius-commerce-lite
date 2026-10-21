@@ -21,7 +21,10 @@ describe("sealed event representations", () => {
     sqlite.exec(`INSERT INTO orders (id, customer_name, customer_phone, customer_email, shipping_address, shipping_country_code, shipping_locality, city, zone, status, requires_shipping, total_amount_minor, currency_code)
       VALUES ('ord_event', 'Buyer', '+8801711000001', 'buyer@shop.test', 'House 1', 'BD', 'Dhaka', 'city', 'zone', 'pending', 1, 12550, 'BDT');
       INSERT INTO order_items (id, order_id, product_id, quantity, product_name, unit_price_minor, line_subtotal_minor)
-      VALUES ('item_1', 'ord_event', 'prod_1', 2, 'Panjabi', 6275, 12550);`);
+      VALUES ('item_1', 'ord_event', 'prod_1', 2, 'Panjabi', 6275, 12550);
+      INSERT INTO order_items (id, order_id, product_id, quantity, product_name, unit_price_minor, line_subtotal_minor, properties)
+      VALUES ('item_2', 'ord_event', 'prod_2', 1, 'Tea club', 0, 0,
+        '[{"key":"_purchase_option","type":"text","label":"Purchase option","value":"acme.subscribe.monthly","displayValue":"Subscribe and save","priceMinor":0}]');`);
     const result = await createWebhookRepresentationResolver(db)(event({
       topic: "order.created", resourceType: "order", resourceId: "ord_event",
       facts: { orderId: "ord_event", status: "pending", paymentStatus: "unpaid", channel: "online_store" },
@@ -31,7 +34,11 @@ describe("sealed event representations", () => {
       id: "ord_event", currency: "BDT", totalMinor: 12550,
       contact: { name: "Buyer", phone: "+8801711000001", email: "buyer@shop.test" },
       shippingAddress: { line1: "House 1", locality: "Dhaka", countryCode: "BD", placeIds: { city: "city", zone: "zone" } },
-      lines: [{ id: "item_1", productId: "prod_1", quantity: 2, unitPriceMinor: 6275, subtotalMinor: 12550, title: "Panjabi" }],
+      lines: [
+        { id: "item_1", productId: "prod_1", quantity: 2, unitPriceMinor: 6275, subtotalMinor: 12550, title: "Panjabi", purchaseOption: null },
+        // The frozen `_purchase_option` property, from the same line read.
+        { id: "item_2", productId: "prod_2", purchaseOption: "acme.subscribe.monthly" },
+      ],
     });
     expect(result).not.toHaveProperty("customerName");
     expect(result).not.toHaveProperty("totalAmount");

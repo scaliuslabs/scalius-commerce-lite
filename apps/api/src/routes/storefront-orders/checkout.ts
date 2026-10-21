@@ -58,7 +58,7 @@ import { getClientIp } from "@scalius/shared/rate-limit";
 import { isWithinRateLimit } from "../../utils/rate-limit";
 import { created } from "../../utils/api-response";
 import { errorResponses, serviceUnavailableResponse, conflictResponse } from "../../schemas/responses";
-import { linePropertiesInputSchema } from "../../schemas/order-lines";
+import { linePropertiesInputSchema, linePurchaseOptionInputSchema } from "../../schemas/order-lines";
 import { billingAddressBodyShape } from "../../schemas/billing-address";
 import {
     getCustomerSessionTokenFromRequest,
@@ -294,6 +294,7 @@ const createOrderSchema = z.object({
       productName: z.string().optional().nullable(),
       variantLabel: z.string().optional().nullable(),
       properties: linePropertiesInputSchema,
+      purchaseOption: linePurchaseOptionInputSchema,
     }),
   ).min(1, "At least one item is required").max(MAX_ORDER_LINES, `Checkout supports at most ${MAX_ORDER_LINES} line items.`),
   discountCodes: discountCodesSchema,
@@ -502,6 +503,7 @@ app.openapi(createOrderRoute, async (c) => {
           productName: item.productName,
           variantLabel: item.variantLabel,
           properties: item.properties,
+          purchaseOption: item.purchaseOption,
         })),
         inventoryPool: data.inventoryPool,
         shippingCountryCode: data.shippingCountryCode,
@@ -603,6 +605,7 @@ app.openapi(createOrderRoute, async (c) => {
             ...(item.productName ? { productName: item.productName } : {}),
             ...(item.variantLabel ? { variantLabel: item.variantLabel } : {}),
             ...(item.properties !== undefined ? { properties: item.properties as typeof data.items[number]["properties"] } : {}),
+            ...(item.purchaseOption ? { purchaseOption: item.purchaseOption } : {}),
           })),
         }
         : data,

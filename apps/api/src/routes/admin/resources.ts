@@ -5,6 +5,7 @@
 // orders, in integer minor units. Lists page by cursor in (updatedAt, id)
 // order and stop early before a page passes the response budget, so a sync
 // walks every change once without offsets or counts.
+import { linePurchaseOptionInputSchema } from "../../schemas/order-lines";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 import type { Context, MiddlewareHandler } from "hono";
@@ -248,6 +249,7 @@ const orderCreateBody = z.object({
       description: "A unit price set by hand (a quote, an agreed renewal price), in minor units of the store currency at its price increment; it replaces the catalogue price and the order's timeline records it.",
     }),
     properties: z.array(z.object({ key: z.string().min(1).max(40), value: z.string().max(1000) })).max(20).optional(),
+    purchaseOption: linePurchaseOptionInputSchema,
   }).strict()).min(1).max(MAX_ORDER_LINES),
   shippingMethodId: z.string().trim().min(1).max(180).nullable().optional().openapi({ description: "The delivery or pickup method; a physical line needs one with an address, or a pickup method." }),
   shippingAddress: addressInputSchema.nullable().optional().openapi({ description: "Where it ships; none for pickup, digital and service orders." }),
@@ -356,6 +358,7 @@ app.openapi(createRoute({
       quantity: item.quantity,
       ...(item.properties ? { properties: item.properties } : {}),
       ...(item.unitPriceMinor !== undefined ? { unitPriceMinor: item.unitPriceMinor } : {}),
+      ...(item.purchaseOption ? { purchaseOption: item.purchaseOption } : {}),
     })),
     shippingMethodId: body.shippingMethodId ?? null,
     channelSource: body.channelSource ?? (appPrincipal ? appPrincipal.pluginId.replace(/[^a-z0-9]+/gu, "_") : null),

@@ -61,7 +61,7 @@ describe("buyer UI runtime", () => {
         ? { ok: true, reads: { note: { revision: 2, data: { text: "hi" } } }, targets: {} }
         : { ok: false, reason: "Read note needs 120 records, more than its max of 100." })),
     };
-    const cart: FunctionCart = { currency: "BDT", decimalPlaces: 2, channel: "online_store", lines: [], subtotalMinor: 0, customer: null, destination: null, discountCodes: [], market: { id: "mkt_backup", country: null }, attributes: {} };
+    const cart: FunctionCart = { currency: "BDT", decimalPlaces: 2, channel: "online_store", salesChannelId: "sc_online_store", lines: [], subtotalMinor: 0, customer: null, destination: null, discountCodes: [], market: { id: "mkt_backup", country: null }, attributes: {} };
     const options = { db: {} as Database, host: { invokeFunction, incident } as unknown as PluginHost, reads: cache as unknown as AppReadsCache };
     expect(await runPluginFunctions("cart.validate", { cart }, {} as Env, {} as ExecutionContext, { ...options, registered: [withReads("test.ok", "skip"), withReads("test.over", "skip")] })).toHaveLength(1);
     expect(invokeFunction).toHaveBeenCalledTimes(1);

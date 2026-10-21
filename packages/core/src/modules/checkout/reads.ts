@@ -23,7 +23,7 @@ import {
   selectActiveCheckoutRegistrations,
 } from "../plugins";
 import { BUILT_IN_PAYMENT_PROVIDERS, type PaymentProviders, resolveAppPaymentUsability } from "../payments";
-import { NO_CHECKOUT_APP_FUNCTIONS, type CheckoutAppFunctions } from "./app-functions";
+import { checkoutPurchaseOptions, NO_CHECKOUT_APP_FUNCTIONS, type CheckoutAppFunctions } from "./app-functions";
 import type { AppLinePricer } from "./app-line-prices";
 import { issuesOnBuyerLines, presentTransformedCart, type CartTransformer, type TransformedCart } from "./cart-transform";
 import type { StorefrontCartItemIssue, StorefrontCartValidationItem } from "./cart-validation";
@@ -200,11 +200,12 @@ async function readCheckoutOnce<TResponse>(
     const customerId: PromiseLike<string | null> = options.session !== undefined
         ? { then: (onFulfilled, onRejected) => Promise.resolve(signedInCustomerId).then(onFulfilled, onRejected) }
         : { then: (onFulfilled, onRejected) => Promise.resolve(authorityInput.customerId ?? null).then(onFulfilled, onRejected) };
-    let bound: Pick<StorefrontCheckoutAuthorityInput, "linePricer" | "deferSubmittedPriceCheck"> = {};
+    let bound: Pick<StorefrontCheckoutAuthorityInput, "linePricer" | "deferSubmittedPriceCheck" | "purchaseOptions"> = {};
     const plan = createStorefrontCheckoutAuthorityReadPlan(db, {
         ...authorityInput,
         customerId,
         linePricer: () => bound.linePricer?.(),
+        purchaseOptions: () => bound.purchaseOptions?.(),
         deferSubmittedPriceCheck: () => bound.deferSubmittedPriceCheck?.() ?? false,
     });
     const contact: OrderContact = { phone: authorityInput.customerPhone, email: authorityInput.customerEmail ?? null };
@@ -244,7 +245,8 @@ async function readCheckoutOnce<TResponse>(
         : BUILT_IN_PAYMENT_PROVIDERS;
     const functionRegistrations = registrations.filter((registration) => registration.kind !== "provider");
     const apps = options.apps?.(functionRegistrations) ?? NO_CHECKOUT_APP_FUNCTIONS;
-    bound = bind(apps, customerId);
+    // A line's purchase option is checked against the apps this batch found.
+    bound = { ...bind(apps, customerId), purchaseOptions: () => checkoutPurchaseOptions(apps) };
     const settled: SettledAuthority = existingAttempt
         ? { ok: false, error: new Error("Replayed checkout does not resolve authority.") }
         : await plan.resolve(

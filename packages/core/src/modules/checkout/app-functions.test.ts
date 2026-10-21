@@ -10,6 +10,7 @@ import {
   buildAppFunctionCart,
   collectCheckoutRuleErrors,
   combineDiscountAllocations,
+  platformDiscountClasses,
   resolveAppDiscounts,
   type CheckoutAppFunctionResult,
   type CheckoutRateOption,
@@ -263,13 +264,149 @@ describe("the app cart", () => {
         lineId: "cart:0:v_a", productId: "p_a", variantId: "v_a", sku: "TEE-M", title: "Tee (M)", quantity: 2,
         unitPriceMinor: 50_000, lineTotalMinor: 90_000, categoryIds: ["cat_child", "cat_root"], collectionIds: ["col_1"],
         brandId: "brand_1", properties: { engraving: "Anika" },
+        // No SKU facts: read as a physical good of unknown weight; a one-time purchase.
+        requiresShipping: true, weightGrams: null, purchaseOption: null,
       }],
+      salesChannelId: "sc_online_store",
       subtotalMinor: 90_000,
-      customer: { id: "cust_1", tags: ["vip", "wholesale"], orderCount: 3, totalSpentMinor: 250_000 },
+      customer: { id: "cust_1", tags: ["vip", "wholesale"], segmentIds: [], orderCount: 3, totalSpentMinor: 250_000 },
       destination: { country: "BD", city: "Dhaka", zone: null },
       discountCodes: ["BULK10"],
       market: { id: "mkt_backup", country: "BD" },
       attributes: {},
     });
+  });
+});
+
+describe("the app cart's channel, shipping and purchase facts", () => {
+  const facts = {
+    products: new Map([
+      ["p_tee", { categoryIds: [], collectionIds: [], brandId: null, isGiftCard: false }],
+      ["p_card", { categoryIds: [], collectionIds: [], brandId: null, isGiftCard: true }],
+      ["p_ebook", { categoryIds: [], collectionIds: [], brandId: null, isGiftCard: false }],
+    ]),
+    skus: new Map<string, string | null>(),
+    variants: new Map([
+      ["v_tee", { weightGrams: 250, physical: true }],
+      ["v_card", { weightGrams: null, physical: true }],
+      ["v_ebook", { weightGrams: null, physical: false }],
+    ]),
+    customer: { id: "cust_1", tags: [], orderCount: 0, totalSpentMinor: 0 },
+    market: { id: "mkt_backup", country: null },
+  };
+  const line = (productId: string, variantId: string, extra: { purchaseOption?: string | null } = {}) => ({
+    lineId: `cart:0:${variantId}`, productId, variantId, title: productId, quantity: 1, unitPriceMinor: 1_000, discountMinor: 0, properties: [], ...extra,
+  });
+
+  it("says which lines ship and what they weigh: a gift card and a digital SKU require no shipping", () => {
+    const cart = buildAppFunctionCart({
+      currency: { code: "BDT", decimalPlaces: 2 }, channel: "online_store",
+      lines: [line("p_tee", "v_tee", { purchaseOption: "acme.subscribe.monthly" }), line("p_card", "v_card"), line("p_ebook", "v_ebook")],
+      facts, destination: null, discountCodes: [],
+    });
+    expect(cart.lines.map(({ requiresShipping, weightGrams, purchaseOption }) => ({ requiresShipping, weightGrams, purchaseOption }))).toEqual([
+      { requiresShipping: true, weightGrams: 250, purchaseOption: "acme.subscribe.monthly" },
+      { requiresShipping: false, weightGrams: null, purchaseOption: null },
+      { requiresShipping: false, weightGrams: null, purchaseOption: null },
+    ]);
+  });
+
+  it("names the sales channel the commit derives (agents sell the agents channel) unless the caller resolved one", () => {
+    const build = (channel: "online_store" | "agent" | "admin", salesChannelId?: string) => buildAppFunctionCart({
+      currency: { code: "BDT", decimalPlaces: 2 }, channel, ...(salesChannelId ? { salesChannelId } : {}),
+      lines: [line("p_tee", "v_tee")], facts, destination: null, discountCodes: [],
+    }).salesChannelId;
+    expect(build("online_store")).toBe("sc_online_store");
+    expect(build("agent")).toBe("sc_agents");
+    expect(build("admin")).toBe("sc_online_store");
+    expect(build("admin", "acme.tiktok:shop")).toBe("acme.tiktok:shop");
+  });
+
+  it("gives a signed-in buyer the segments that price the cart, sorted and unique, and a guest none", () => {
+    const signedIn = buildAppFunctionCart({
+      currency: { code: "BDT", decimalPlaces: 2 }, channel: "online_store", segmentIds: ["seg_wholesale", "seg_vip", "seg_vip"],
+      lines: [line("p_tee", "v_tee")], facts, destination: null, discountCodes: [],
+    });
+    expect(signedIn.customer?.segmentIds).toEqual(["seg_vip", "seg_wholesale"]);
+    const guest = buildAppFunctionCart({
+      currency: { code: "BDT", decimalPlaces: 2 }, channel: "online_store", segmentIds: ["seg_vip"],
+      lines: [line("p_tee", "v_tee")], facts: { ...facts, customer: null }, destination: null, discountCodes: [],
+    });
+    expect(guest.customer).toBeNull();
+  });
+});
+
+describe("discount classes and combinesWith", () => {
+  const notWith = (key: "productDiscounts" | "orderDiscounts" | "shippingDiscounts"): Partial<Discount> => ({ combinesWith: { [key]: false } });
+  const lineTarget = { kind: "lines" as const, lineIds: ["cart:1:v_b"] };
+  const noPlatform = { lines: LINES.map((entry) => ({ ...entry, platformDiscountMinor: 0 })) };
+
+  it("stacks everything when no discount says otherwise (today's behaviour)", () => {
+    const resolution = resolve([
+      discounts("a.first", fixedOff(1_000, lineTarget), fixedOff(1_000), fixedOff(1_000, { kind: "shipping" })),
+      discounts("b.second", fixedOff(1_000, lineTarget), fixedOff(1_000), fixedOff(1_000, { kind: "shipping" })),
+    ]);
+    expect(resolution.applied).toHaveLength(6);
+  });
+
+  it("applies a pair only when each combines with the other's class, in priority then output order", () => {
+    // [first's class, second's class, the key the second turns off, the key the first turns off] → both apply?
+    const classes = { product: lineTarget, order: { kind: "order" as const }, shipping: { kind: "shipping" as const } } as const;
+    const keyOf = { product: "productDiscounts", order: "orderDiscounts", shipping: "shippingDiscounts" } as const;
+    for (const first of ["product", "order", "shipping"] as const) {
+      for (const second of ["product", "order", "shipping"] as const) {
+        const both = resolve([discounts("a.first", fixedOff(1_000, classes[first])), discounts("b.second", fixedOff(1_000, classes[second]))], noPlatform);
+        expect(both.applied.map((entry) => entry.pluginId), `${first}+${second}`).toEqual(["a.first", "b.second"]);
+        // The second refuses the first's class: it is skipped.
+        const refusedBySecond = resolve([
+          discounts("a.first", fixedOff(1_000, classes[first])),
+          discounts("b.second", fixedOff(1_000, classes[second], notWith(keyOf[first]))),
+        ], noPlatform);
+        expect(refusedBySecond.applied.map((entry) => entry.pluginId), `${first}+${second} refused by second`).toEqual(["a.first"]);
+        // The first refuses the second's class: the second is skipped, the first stands.
+        const refusedByFirst = resolve([
+          discounts("a.first", fixedOff(1_000, classes[first], notWith(keyOf[second]))),
+          discounts("b.second", fixedOff(1_000, classes[second])),
+        ], noPlatform);
+        expect(refusedByFirst.applied.map((entry) => entry.pluginId), `${first}+${second} refused by first`).toEqual(["a.first"]);
+      }
+    }
+  });
+
+  it("checks a candidate against every discount already applied, the platform's included", () => {
+    // The platform took 10,000 off a line (a product discount): an app discount that does not combine with product discounts is skipped.
+    const skipped = resolve([discounts("a.order", fixedOff(1_000, { kind: "order" }, notWith("productDiscounts")))]);
+    expect(skipped.applied).toEqual([]);
+    // An order-level promotion counts as an order discount, not a product one.
+    const orderPromotion = resolve([discounts("a.order", fixedOff(1_000, { kind: "order" }, notWith("productDiscounts")))], { platformClasses: ["order"] });
+    expect(orderPromotion.applied.map((entry) => entry.pluginId)).toEqual(["a.order"]);
+    // No platform discount: nothing constrains it.
+    expect(resolve([discounts("a.order", fixedOff(1_000, { kind: "order" }, notWith("productDiscounts")))], noPlatform).applied).toHaveLength(1);
+    // A skipped discount constrains nothing after it.
+    const chain = resolve([
+      discounts("a.ship", fixedOff(1_000, { kind: "shipping" })),
+      discounts("b.picky", fixedOff(1_000, { kind: "order" }, notWith("shippingDiscounts"))),
+      discounts("c.plain", fixedOff(1_000, lineTarget, notWith("orderDiscounts"))),
+    ], noPlatform);
+    expect(chain.applied.map((entry) => entry.pluginId)).toEqual(["a.ship", "c.plain"]);
+  });
+
+  it("lets a skipped code-driven discount claim no code and spend no commit", () => {
+    const commit = { pluginId: "a.loyalty", object: "balance", public: false, events: false, id: "cust_1", expectedRevision: 1, dataJson: "{}", columns: {} };
+    const resolution = resolve([
+      { ...discounts("a.loyalty", fixedOff(1_000, { kind: "order" }, { code: "POINTS", ...notWith("productDiscounts") })), commits: [commit] },
+    ], { submittedCodes: ["points"] });
+    expect(resolution.applied).toEqual([]);
+    expect(resolution.claimedCodes).toEqual([]);
+    expect(resolution.commits).toEqual([]);
+  });
+
+  it("reads the platform's classes from what it applied", () => {
+    const promotion = (discountClass: "product" | "order" | "shipping", totalDiscountMinor: number) => ({ discountClass, totalDiscountMinor });
+    expect(platformDiscountClasses({ discount: { applied: null }, bundleLines: [], allocation: undefined })).toEqual([]);
+    expect(platformDiscountClasses({ discount: { applied: { discounts: [promotion("order", 500), promotion("shipping", 0)] } }, bundleLines: [], allocation: { lines: [], shippingMinor: 0 } })).toEqual(["order"]);
+    expect(platformDiscountClasses({ discount: { applied: null }, bundleLines: [{ lineId: "l", amountMinor: 100 }], allocation: { lines: [], shippingMinor: 0 } })).toEqual(["product"]);
+    // Free shipping bundled with an item discount counts as a shipping discount too.
+    expect(platformDiscountClasses({ discount: { applied: { discounts: [promotion("product", 500)] } }, bundleLines: [], allocation: { lines: [], shippingMinor: 300 } }).sort()).toEqual(["product", "shipping"]);
   });
 });

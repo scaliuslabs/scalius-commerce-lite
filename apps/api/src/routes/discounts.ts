@@ -9,6 +9,7 @@ import { MAX_PRODUCT_PRICE } from "@scalius/core/modules/products";
 import { quoteStorefrontDiscount } from "@scalius/core/modules/promotions";
 import { getCustomerBySession } from "@scalius/core/modules/customers";
 import {
+  platformDiscountClasses,
   previewStorefrontAppDiscounts,
   previewStorefrontBundleSavings,
   resolveBundlePromotionInterplay,
@@ -182,6 +183,7 @@ app.openapi(validateDiscountRoute, async (c) => {
       ...(giftCardProductIds.has(item.id) ? { giftCard: true } : {}),
     })),
     platformAllocation: interplay.allocation,
+    platformClasses: platformDiscountClasses(interplay),
     shippingMinor: toMinor(shippingCost ?? 0, currency.decimalPlaces),
     discountCodes: codes,
   });

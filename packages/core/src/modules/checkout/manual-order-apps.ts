@@ -44,11 +44,13 @@ import type {
     ManualOrderAppOutcome,
 } from "@scalius/shared/checkout-app-facts";
 import { ValidationError } from "@scalius/core/errors";
+import { LINE_PURCHASE_OPTION_PROPERTY_KEY, readLinePurchaseOption } from "@scalius/shared/line-properties";
 import {
     applyAppPaymentMethodOperations,
     applyAppShippingRateOperations,
     appCartMarketCountry,
     buildAppFunctionCart,
+    checkoutPurchaseOptions,
     CHECKOUT_RULES_FAILED_REASON,
     collectCheckoutRuleErrors,
     combineDiscountAllocations,
@@ -72,6 +74,7 @@ export const MANUAL_ORDER_PAYMENT_METHOD = "cod";
 export function createManualOrderAppFunctions(db: Database, apps: CheckoutAppFunctions): ManualOrderAppFunctions {
     return {
         price: (input) => applyManualOrderAppFunctions(db, apps, input),
+        purchaseOptions: checkoutPurchaseOptions(apps),
     };
 }
 
@@ -85,6 +88,8 @@ function parseLineInputs(serialized: string | null): Array<{ key: string; value:
         return parsed.flatMap((entry: unknown) => {
             if (!entry || typeof entry !== "object") return [];
             const { key, value } = entry as { key?: unknown; value?: unknown };
+            // The purchase option is the line's own field, not a buyer input.
+            if (key === LINE_PURCHASE_OPTION_PROPERTY_KEY) return [];
             return typeof key === "string" && typeof value === "string" ? [{ key, value }] : [];
         });
     } catch {
@@ -102,7 +107,7 @@ function manualDiscountAllocation(lines: readonly ManualOrderAppLine[], discount
     }).allocation;
 }
 
-type CartSource = Pick<ManualOrderAppInput, "currency" | "lines" | "requiresShipping" | "shippingCountryCode" | "locationNames">;
+type CartSource = Pick<ManualOrderAppInput, "currency" | "lines" | "requiresShipping" | "shippingCountryCode" | "locationNames" | "channel" | "salesChannelId">;
 
 /** Where a manual order ships; null when it ships nothing. */
 function destinationOf(input: CartSource) {
@@ -130,7 +135,10 @@ function cartOf(
 ): FunctionCart {
     return buildAppFunctionCart({
         currency: input.currency,
-        channel: "admin",
+        channel: input.channel ?? "admin",
+        // The channel the create resolved (staff's pick, else the online store).
+        salesChannelId: input.salesChannelId,
+        // A staff order belongs to no signed-in account: no segments.
         lines: input.lines.map((line) => ({
             lineId: line.lineId,
             productId: line.productId,
@@ -140,6 +148,7 @@ function cartOf(
             unitPriceMinor: line.unitPriceMinor,
             discountMinor: platformLine.get(line.lineId) ?? 0,
             properties: parseLineInputs(line.properties),
+            purchaseOption: readLinePurchaseOption(line.properties),
         })),
         facts,
         destination: destinationOf(input),
@@ -298,6 +307,8 @@ export async function applyManualOrderAppFunctions(
             platformShippingDiscountMinor: 0,
             submittedCodes: [],
             results: discounts,
+            // The staff discount is an order discount (rule 10).
+            platformClasses: input.manualDiscountMinor > 0 ? ["order"] : [],
             apps,
         })
         : null;

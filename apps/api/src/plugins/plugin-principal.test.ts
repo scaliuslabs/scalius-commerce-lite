@@ -57,8 +57,8 @@ describe("plugin-available operations (operation metadata)", () => {
     expect(derivePluginRiskCeiling(new Set(), false)).toBe("read");
     expect(derivePluginRiskCeiling(new Set(["orders.view"]), false)).toBe("read");
     expect(derivePluginRiskCeiling(new Set(["products.delete"]), false)).toBe("destructive");
-    // Refunds are not in the stable app API: only a first-party app reaches them.
-    expect(derivePluginRiskCeiling(new Set(["orders.refund"]), false)).toBe("read");
+    // Refunds are in the stable app API (refunds.create, 0172): the refund permission unlocks financial risk for any app.
+    expect(derivePluginRiskCeiling(new Set(["orders.refund"]), false)).toBe("financial");
     expect(derivePluginRiskCeiling(new Set(["orders.refund"]), true)).toBe("financial");
     expect(derivePluginRiskCeiling(new Set(["team.manage_roles", "agent_access.manage"]), true)).toBe("read");
     const get = AGENT_OPERATIONS.find((operation) => operation.operationId === "dashboard.resources.orders.get")!;

@@ -21,6 +21,21 @@ export const checkoutAttributeSchema = z.object({
   if (field.min !== undefined && field.max !== undefined && field.min > field.max) ctx.addIssue({ code: "custom", message: "Minimum exceeds maximum." });
 });
 export type CheckoutAttribute = z.infer<typeof checkoutAttributeSchema>;
+
+/** The most purchase options one app declares. */
+export const PURCHASE_OPTIONS_MAX = 10;
+/**
+ * A way to buy a line the app offers ("Subscribe and save", "Rent"): manifest
+ * `checkout.purchaseOptions`. Its public id is `<app id>.<key>` (a cart line's
+ * `purchaseOption`). Core prices nothing for it; the app's functions do.
+ */
+export const purchaseOptionDeclarationSchema = z.object({
+  key,
+  /** What the buyer sees on the line, the cart and the order ("Subscribe and save"). */
+  title: z.string().trim().min(1).max(80),
+  description: z.string().trim().min(1).max(300).optional(),
+}).strict();
+export type PurchaseOptionDeclaration = z.infer<typeof purchaseOptionDeclarationSchema>;
 export const CHECKOUT_ATTRIBUTES_MAX_BYTES = 8 * 1024;
 export const checkoutAttributesSchema = z.record(z.string().max(160), z.string().max(500)).refine(
   (value) => new TextEncoder().encode(JSON.stringify(value)).byteLength <= CHECKOUT_ATTRIBUTES_MAX_BYTES,

@@ -463,6 +463,21 @@ describe("plugin functions", () => {
     expect(transform.safeParse({ operations: [{ op: "merge", lineIds: ["cart:0:v"], title: "Set" }] }).success).toBe(false);
   });
 
+  it("takes purchase options: snake_case keys, unique, at most ten, titled", () => {
+    const withOptions = (purchaseOptions: unknown) => parsePluginManifest({ ...FULL, checkout: { purchaseOptions } as never });
+    const parsed = withOptions([{ key: "subscribe_monthly", title: "Subscribe and save", description: "Every month, 10% off." }]);
+    expect(parsed.ok).toBe(true);
+    // Attributes default to none beside purchase options.
+    if (parsed.ok) expect(parsed.manifest.checkout).toEqual({ attributes: [], purchaseOptions: [{ key: "subscribe_monthly", title: "Subscribe and save", description: "Every month, 10% off." }] });
+    expect(withOptions([{ key: "Subscribe", title: "Subscribe" }]).ok).toBe(false);
+    expect(withOptions([{ key: "monthly", title: " " }]).ok).toBe(false);
+    expect(withOptions([{ key: "monthly", title: "A" }, { key: "monthly", title: "B" }]).ok).toBe(false);
+    expect(withOptions(Array.from({ length: 11 }, (_, index) => ({ key: `option_${index}`, title: `Option ${index}` }))).ok).toBe(false);
+    expect(withOptions([{ key: "monthly", title: "Monthly", price: 10 }]).ok).toBe(false);
+    // A manifest that declares only attributes still parses as before.
+    expect(parsePluginManifest({ ...FULL, checkout: { attributes: [{ key: "company", label: "Company", type: "text" }] } }).ok).toBe(true);
+  });
+
   it("checks declared reads against the app's objects, custom fields and attributes", () => {
     const manifest = {
       ...FULL,

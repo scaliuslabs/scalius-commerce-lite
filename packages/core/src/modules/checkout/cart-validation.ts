@@ -68,7 +68,9 @@ export type StorefrontCartIssueCode =
     /** A buyer input is unknown, too long, or not one of the choices. */
     | "properties_invalid"
     /** The store cannot hand this kind of item over yet (e.g. digital before Wave B). */
-    | "fulfilment_unavailable";
+    | "fulfilment_unavailable"
+    /** The line's purchase option is not offered by any active app (`checkout.purchaseOptions`). */
+    | "purchase_option_unavailable";
 
 export type StorefrontCartIssueAction =
     | "remove"
@@ -89,6 +91,12 @@ export interface StorefrontCartValidationItem {
     variantLabel?: string | null;
     /** Buyer inputs `[{ key, value }]`; resolved against the product's schema. */
     properties?: unknown;
+    /**
+     * The purchase option the buyer chose (`<app id>.<key>`, an active app's
+     * `checkout.purchaseOptions`); absent or null: a one-time purchase. Part
+     * of the line's identity.
+     */
+    purchaseOption?: string | null;
     /**
      * Set by `cart.transform` (cart-transform.ts): the bundle the line
      * belongs to (an expanded line's components, merged lines) and the
@@ -154,6 +162,12 @@ export interface StorefrontCartValidatedItem {
     adjustmentsMinor?: number;
     /** Identity form for the cart line key and the quote fingerprint. */
     canonicalProperties: CanonicalLineProperty[];
+    /**
+     * The line's purchase option and its title (an active app's declaration);
+     * absent: a one-time purchase. Core prices nothing for it: the owning
+     * app's functions do. Frozen on the order line as `_purchase_option`.
+     */
+    purchaseOption?: { id: string; title: string };
     fulfillmentKind: FulfillmentKind;
     isGiftCard: boolean;
     productName: string;
@@ -200,6 +214,12 @@ export interface StorefrontCartValidationResult {
     hasFreeDeliveryProduct: boolean;
     /** Products whose quantity reached a bundle tier; absent means none. */
     bundles?: StorefrontCartBundleSaving[];
+    /**
+     * The signed-in buyer's segments that priced the cart (its market's live
+     * segment price lists on these SKUs, `resolveCheckoutPriceScope`), sorted;
+     * absent: none. What app functions see as `cart.customer.segmentIds`.
+     */
+    pricingSegmentIds?: string[];
     /**
      * Set when `cart.transform` rewrote the buyer's lines: `items` and
      * `issues` are then the rewritten lines' (what checkout orders), and
@@ -493,6 +513,8 @@ export function resolveStorefrontCartValidationFromRows(
         appPrices?: ReadonlyMap<number, AppLinePrice>;
         /** `cart.line_prices` add-ons by line index, already rounded and bounded. */
         appAdjustments?: ReadonlyMap<number, ResolvedLineProperty[]>;
+        /** The purchase options the active apps declare, id → title (`checkoutPurchaseOptions`); absent: none. */
+        purchaseOptions?: ReadonlyMap<string, string>;
         /**
          * Skip the submitted-price check: the first pass of an app-priced
          * cart, whose final prices are not known yet (never a final answer).
@@ -652,6 +674,19 @@ export function resolveStorefrontCartValidationFromRows(
         }
 
         const variant = requestedVariant;
+        // A purchase option is an app's offer: one no active app declares is refused, never dropped.
+        const purchaseOptionId = typeof item.purchaseOption === "string" && item.purchaseOption ? item.purchaseOption : null;
+        const purchaseOptionTitle = purchaseOptionId ? options.purchaseOptions?.get(purchaseOptionId) : undefined;
+        if (purchaseOptionId && purchaseOptionTitle === undefined) {
+            addIssue(issues, item, index, {
+                code: "purchase_option_unavailable",
+                action: "remove",
+                message: `${product.name}${requestedVariantLabel ? ` (${requestedVariantLabel})` : ""} can't be bought this way any more. Remove it and add it again.`,
+                productName: product.name,
+                variantLabel: requestedVariantLabel,
+            });
+            return;
+        }
         const fulfillmentKind: FulfillmentKind = isFulfillmentKind(variant.fulfillmentKind)
             ? variant.fulfillmentKind
             : "physical";
@@ -832,6 +867,7 @@ export function resolveStorefrontCartValidationFromRows(
             properties: resolvedProperties.properties,
             ...(adjustments.length > 0 ? { adjustments, adjustmentsMinor } : {}),
             canonicalProperties: resolvedProperties.canonical,
+            ...(purchaseOptionId && purchaseOptionTitle !== undefined ? { purchaseOption: { id: purchaseOptionId, title: purchaseOptionTitle } } : {}),
             fulfillmentKind,
             isGiftCard,
             productName: product.name,
@@ -848,6 +884,7 @@ export function resolveStorefrontCartValidationFromRows(
 
     const bundles = resolveCartBundleSavings(validatedItems, presentBundleRows(bundleRows, money), priceIncrementMinor);
 
+    const pricingSegmentIds = [...(options.priceScope?.segmentIds ?? [])].sort();
     return markTrustedStorefrontCartValidationResult({
         money,
         valid: issues.length === 0,
@@ -856,6 +893,7 @@ export function resolveStorefrontCartValidationFromRows(
         subtotalMinor,
         hasFreeDeliveryProduct,
         bundles,
+        ...(pricingSegmentIds.length > 0 ? { pricingSegmentIds } : {}),
     });
 }
 
@@ -975,6 +1013,8 @@ export async function validateStorefrontCartItems(
         linePricer?: AppLinePricer;
         /** The apps' `cart.transform` (cart-transform.ts); absent: the buyer's lines as they are. */
         transformer?: CartTransformer;
+        /** The purchase options the active apps declare, id → title (`checkoutPurchaseOptions`); absent: none, so a line naming one is refused. */
+        purchaseOptions?: ReadonlyMap<string, string>;
     } = {},
 ): Promise<StorefrontCartValidationResult> {
     if (items.length === 0 || items.some((item) => !isPersistedVariantId(item.variantId))) {
@@ -1002,6 +1042,7 @@ async function validateCartLines(
         salesChannelId?: string;
         linePricer?: AppLinePricer;
         deferSubmittedPriceCheck?: boolean;
+        purchaseOptions?: ReadonlyMap<string, string>;
     },
 ): Promise<StorefrontCartValidationResult> {
     const productIds = [...new Set(items.map((item) => item.productId))];
@@ -1048,7 +1089,7 @@ export function presentStorefrontCartValidation(
     propertiesHashes: readonly string[] = [],
 ) {
     // Bundle savings are checkout discounts: the tax quote shows them.
-    const { subtotalMinor, items, bundles: _bundles, money, transform: _transform, ...rest } = result;
+    const { subtotalMinor, items, bundles: _bundles, money, transform: _transform, pricingSegmentIds: _pricingSegmentIds, ...rest } = result;
     // Amounts are in the cart's currency (its market's), with its places.
     decimalPlaces = money?.decimalPlaces ?? decimalPlaces;
     return {
@@ -1080,7 +1121,7 @@ export function presentStorefrontCartValidation(
                 price: fromMinor(adjustment.priceMinor, decimalPlaces),
             })),
             propertiesHash: propertiesHashes[position]
-                ?? (canonicalProperties.length === 0 ? NO_PROPERTIES_HASH : ""),
+                ?? (canonicalProperties.length === 0 && !item.purchaseOption ? NO_PROPERTIES_HASH : ""),
             fulfillmentType: fulfilment.lineTypes[position] ?? null,
         })),
         subtotal: fromMinor(subtotalMinor, decimalPlaces),

@@ -103,6 +103,7 @@ export function createAppLinePricer(
             cart = buildAppFunctionCart({
                 currency: { code: preliminary.money.currencyCode, decimalPlaces: preliminary.money.decimalPlaces },
                 channel: context.channel,
+                segmentIds: preliminary.pricingSegmentIds,
                 lines: items.map((item, position) => ({
                     lineId: lineIds[position]!,
                     productId: item.productId,
@@ -112,6 +113,7 @@ export function createAppLinePricer(
                     unitPriceMinor: item.unitPriceMinor,
                     discountMinor: 0,
                     properties: item.properties,
+                    purchaseOption: item.purchaseOption?.id ?? null,
                 })),
                 facts,
                 destination: context.destination ?? null,

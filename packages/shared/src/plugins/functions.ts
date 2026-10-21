@@ -21,7 +21,10 @@ import { z } from "zod";
 import { buyerUiOutputSchema, checkoutAttributesSchema } from "./buyer-ui";
 import { FUNCTION_READ_AS_PATTERN, FUNCTION_READS_MAX, functionReadsSchema } from "./function-reads";
 import { STOREFRONT_UI_SLOTS } from "./storefront-protocol";
+import { PURCHASE_OPTION_ID_MAX_LENGTH, PURCHASE_OPTION_ID_PATTERN } from "./ids";
 import type { PluginFunctionPoint } from "./manifest";
+import { ORDER_CHANNELS } from "../order-channel";
+import { ONLINE_STORE_CHANNEL_ID, SALES_CHANNEL_ID_MAX_LENGTH, SALES_CHANNEL_ID_PATTERN } from "../sales-channels";
 
 const id = z.string().min(1).max(128);
 const minor = z.number().int().safe();
@@ -46,12 +49,38 @@ export const functionCartLineSchema = z.object({
   brandId: id.nullable(),
   /** Buyer inputs captured on the line (engraving text, gift note…). */
   properties: z.record(z.string().max(64), z.string().max(500)),
+  /**
+   * The SKU is a physical good (not digital, a service or a gift card),
+   * whatever delivery the buyer picks: a pickup line still requires shipping
+   * in this sense (Shopify's `requiresShipping`).
+   */
+  requiresShipping: z.boolean().default(true),
+  /** The SKU's weight in grams, or null when the merchant has not set one. */
+  weightGrams: z.number().finite().min(0).nullable().default(null),
+  /**
+   * The purchase option the buyer chose for the line (`<app id>.<key>`, an
+   * active app's manifest `checkout.purchaseOptions`), or null for a one-time
+   * purchase. Core prices nothing for it: the owning app prices it
+   * (`cart.line_prices`, `checkout.discounts`) and checks eligibility
+   * (`cart.validate`). The same SKU with another option is another line.
+   */
+  purchaseOption: z.string().max(PURCHASE_OPTION_ID_MAX_LENGTH).regex(PURCHASE_OPTION_ID_PATTERN).nullable().default(null),
 }).strict();
+
+/** Who places the order (`orders.channel`, `@scalius/shared/order-channel`). */
+export const FUNCTION_CART_CHANNELS = ORDER_CHANNELS;
 
 export const functionCartSchema = z.object({
   currency: z.string().length(3),
   decimalPlaces: z.number().int().min(0).max(4),
-  channel: z.enum(["online_store", "admin", "pos", "agent", "app"]),
+  channel: z.enum(FUNCTION_CART_CHANNELS),
+  /**
+   * The sales channel the order sells from (`orders.sales_channel_id`,
+   * MARKETS-DESIGN D6): the online store for the storefront, the agents
+   * channel for a buyer agent, the channel staff or an app chose for a manual
+   * order (else the online store).
+   */
+  salesChannelId: z.string().max(SALES_CHANNEL_ID_MAX_LENGTH).regex(SALES_CHANNEL_ID_PATTERN).default(ONLINE_STORE_CHANNEL_ID),
   lines: z.array(functionCartLineSchema).max(250),
   subtotalMinor: nonNegativeMinor,
   /** The buyer's segment facts when signed in; null for guests. */
@@ -59,6 +88,14 @@ export const functionCartSchema = z.object({
     id,
     /** The customer's tags (Customers → Tags), sorted; at most 50. */
     tags: z.array(z.string().max(64)).max(50),
+    /**
+     * The customer segments that price this cart for the buyer, sorted, at
+     * most 50: the segments of the market's live segment price lists on the
+     * cart's SKUs that the buyer is in (`resolvePrice()`'s segment source).
+     * Not every segment the buyer is in: membership is evaluated only where
+     * a segment prices the cart. Empty when none applies.
+     */
+    segmentIds: z.array(id).max(50).default([]),
     orderCount: z.number().int().min(0),
     totalSpentMinor: nonNegativeMinor,
   }).strict().nullable(),
@@ -105,6 +142,18 @@ const reads = functionReadsSchema.default({});
 
 // ── checkout.discounts ────────────────────────────────────────────────────
 
+/**
+ * A discount's class, from its target (Shopify's discount classes): `lines`
+ * is a product discount, `order` an order discount, `shipping` a shipping
+ * discount.
+ */
+export const FUNCTION_DISCOUNT_CLASSES = ["product", "order", "shipping"] as const;
+export type FunctionDiscountClass = (typeof FUNCTION_DISCOUNT_CLASSES)[number];
+
+export function functionDiscountClass(targetKind: "lines" | "order" | "shipping"): FunctionDiscountClass {
+  return targetKind === "lines" ? "product" : targetKind;
+}
+
 export const checkoutDiscountsOutputSchema = z.object({
   discounts: z.array(z.object({
     title: label,
@@ -121,6 +170,19 @@ export const checkoutDiscountsOutputSchema = z.object({
     ]),
     /** Caps the discount's total. */
     maxAmountMinor: minor.positive().optional(),
+    /**
+     * The classes this discount stacks with; every key defaults to true (it
+     * stacks with everything). Two discounts both apply only when each
+     * combines with the other's class; the platform's own discounts combine
+     * with everything, but an app discount that does not combine with their
+     * class is skipped when they discounted that class. A skipped discount
+     * claims no code and spends no `commit`.
+     */
+    combinesWith: z.object({
+      productDiscounts: z.boolean().optional(),
+      orderDiscounts: z.boolean().optional(),
+      shippingDiscounts: z.boolean().optional(),
+    }).strict().optional(),
   }).strict()).max(10),
   /**
    * New versions of records this function read (`as`: a single-key object

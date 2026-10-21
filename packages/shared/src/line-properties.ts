@@ -365,6 +365,54 @@ export function lineAdjustmentProperty(title: string, amountMinor: number): Reso
   return { key: LINE_ADJUSTMENT_PROPERTY_KEY, type: "text", label: LINE_ADJUSTMENT_LABEL, value: text, displayValue: text, priceMinor: amountMinor };
 }
 
+/**
+ * A line's purchase option (an app's `checkout.purchaseOptions`, "Subscribe
+ * and save"), frozen on the order line after its buyer inputs: `value` is the
+ * option's public id `<app id>.<key>`, `displayValue` its title. The key is a
+ * contract: payments ask the provider to keep the buyer's payment method when
+ * an order has such a line. It is not a buyer input (no price, never sent
+ * back as a property); the cart sends it as the line's `purchaseOption`, and
+ * it is part of the line's identity (`lineIdentityProperties`).
+ */
+export const LINE_PURCHASE_OPTION_PROPERTY_KEY = "_purchase_option";
+export const LINE_PURCHASE_OPTION_LABEL = "Purchase option";
+
+export function linePurchaseOptionProperty(id: string, title: string): ResolvedLineProperty {
+  const text = title.trim().slice(0, 80);
+  return { key: LINE_PURCHASE_OPTION_PROPERTY_KEY, type: "text", label: LINE_PURCHASE_OPTION_LABEL, value: id, displayValue: text, priceMinor: 0 };
+}
+
+/**
+ * What a cart line's identity hashes (`linePropertiesHash`, `lineCartKey`):
+ * its canonical buyer inputs, then its purchase option when it has one. A
+ * line without an option hashes exactly as before.
+ */
+export function lineIdentityProperties(
+  canonical: readonly CanonicalLineProperty[],
+  purchaseOption: string | null | undefined,
+): CanonicalLineProperty[] {
+  return purchaseOption ? [...canonical, { key: LINE_PURCHASE_OPTION_PROPERTY_KEY, value: purchaseOption }] : [...canonical];
+}
+
+/** The purchase option frozen on an order line (`order_items.properties` JSON or entries), or null. */
+export function readLinePurchaseOption(properties: string | readonly unknown[] | null | undefined): string | null {
+  let entries: unknown = properties;
+  if (typeof properties === "string") {
+    try {
+      entries = JSON.parse(properties);
+    } catch {
+      return null;
+    }
+  }
+  if (!Array.isArray(entries)) return null;
+  for (const entry of entries) {
+    if (isRecord(entry) && entry.key === LINE_PURCHASE_OPTION_PROPERTY_KEY && typeof entry.value === "string" && entry.value) {
+      return entry.value.slice(0, 160);
+    }
+  }
+  return null;
+}
+
 /** The frozen `order_items.properties` entry. */
 export interface ResolvedLineProperty {
   key: string;

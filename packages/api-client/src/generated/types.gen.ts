@@ -3015,6 +3015,7 @@ export type OrderResource = {
         subtotalMinor: number;
         discountMinor: number;
         taxMinor: number;
+        purchaseOption: string | null;
     }>;
     createdAt: string;
     updatedAt: string;
@@ -3320,6 +3321,72 @@ export type GiftCardTransactionResource = {
     actorType: 'system' | 'admin' | 'customer';
     reason: string | null;
     createdAt: string;
+};
+
+export type RefundResource = {
+    id: string;
+    orderId: string;
+    status: string;
+    currency: string;
+    amountMinor: number;
+    settlement: string;
+    lines: Array<{
+        orderItemId: string;
+        variantId: string | null;
+        quantity: number;
+    }>;
+    paymentIds: Array<string>;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type PaymentMethodResource = {
+    /**
+     * The saved method (`cpm_…`): pass it as `paymentMethodId` to charge it.
+     */
+    id: string;
+    customerId: string;
+    /**
+     * The payment provider that keeps it (`<app id>:<provider id>`).
+     */
+    providerId: string;
+    /**
+     * The card network or wallet, lower case (`visa`).
+     */
+    brand: string | null;
+    /**
+     * The last four digits; the full number never reaches the store.
+     */
+    last4: string | null;
+    expiryMonth: number | null;
+    expiryYear: number | null;
+    label: string | null;
+    status: 'active' | 'removed';
+    /**
+     * The order whose payment kept it.
+     */
+    sourceOrderId: string | null;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type PaymentOutcomeResource = {
+    /**
+     * `succeeded`: captured and credited to the order. `authorized`: held, capture it with payments.capture. `pending`: the provider answers later by webhook; read the order. `voided`: the hold was released.
+     */
+    outcome: 'succeeded' | 'authorized' | 'pending' | 'voided';
+    orderId: string;
+    providerId: string;
+    /**
+     * In minor units of `currency`.
+     */
+    amountMinor: number;
+    currency: string;
+    payment: PaymentResource & unknown;
+    /**
+     * True when this answers a request already handled (the same Idempotency-Key, or an authorization already settled).
+     */
+    replayed: boolean;
 };
 
 export type AppWebhookSubscription = {
@@ -4704,7 +4771,7 @@ export type AppDetail = AppSummary & {
      * The requested scopes, for the consent screen.
      */
     scopes: Array<{
-        name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_places';
+        name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_refunds' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_places';
         /**
          * The highest risk among the operations the scope lets this app call.
          */
@@ -4912,7 +4979,7 @@ export type AppGrant = {
     /**
      * Access scopes: store data and actions the app may read or change.
      */
-    scopes: Array<'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_places'>;
+    scopes: Array<'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_refunds' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_places'>;
     allowedHosts: Array<string>;
     events: Array<string>;
     functions: Array<string>;
@@ -4964,7 +5031,7 @@ export type AppFeature = {
          * Store access this feature adds, for its consent dialog.
          */
         scopes: Array<{
-            name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_places';
+            name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_refunds' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_places';
             /**
              * The highest risk among the operations the scope lets this app call.
              */
@@ -20523,6 +20590,10 @@ export type PostApiV1OrdersCartValidationData = {
                 key: string;
                 value: string;
             }>;
+            /**
+             * An installed app's purchase option for the line (`<app id>.<key>`, e.g. a subscription); absent or null: a one-time purchase. Part of the line's identity: the same SKU with another option is another line. An option no active app offers is refused (`purchase_option_unavailable`).
+             */
+            purchaseOption?: string | null;
         }>;
         inventoryPool?: 'regular' | 'preorder' | 'backorder';
         shippingCountryCode?: string | null;
@@ -21126,7 +21197,7 @@ export type PostApiV1OrdersCartValidationResponses = {
                 cartKey?: string | null;
                 productId: string;
                 variantId: string | null;
-                code: 'product_unavailable' | 'variant_required' | 'variant_unavailable' | 'variant_mismatch' | 'quantity_unavailable' | 'price_changed' | 'properties_required' | 'properties_invalid' | 'fulfilment_unavailable';
+                code: 'product_unavailable' | 'variant_required' | 'variant_unavailable' | 'variant_mismatch' | 'quantity_unavailable' | 'price_changed' | 'properties_required' | 'properties_invalid' | 'fulfilment_unavailable' | 'purchase_option_unavailable';
                 action: 'remove' | 'select_variant' | 'reduce_quantity' | 'refresh_item' | 'edit_properties';
                 message: string;
                 productName: string | null;
@@ -21180,6 +21251,13 @@ export type PostApiV1OrdersCartValidationResponses = {
                     price: number;
                     priceMinor: number;
                 }>;
+                /**
+                 * The line's purchase option (absent: a one-time purchase). The app that offers it prices it.
+                 */
+                purchaseOption?: {
+                    id: string;
+                    title: string;
+                };
                 propertiesHash: string;
                 /**
                  * What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered).
@@ -21261,6 +21339,10 @@ export type PostApiV1OrdersTaxQuoteData = {
                 key: string;
                 value: string;
             }>;
+            /**
+             * An installed app's purchase option for the line (`<app id>.<key>`, e.g. a subscription); absent or null: a one-time purchase. Part of the line's identity: the same SKU with another option is another line. An option no active app offers is refused (`purchase_option_unavailable`).
+             */
+            purchaseOption?: string | null;
         }>;
         inventoryPool?: 'regular' | 'preorder' | 'backorder';
         shippingCountryCode?: string | null;
@@ -22114,6 +22196,13 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                     price: number;
                     priceMinor: number;
                 }>;
+                /**
+                 * The line's purchase option (absent: a one-time purchase). The app that offers it prices it.
+                 */
+                purchaseOption?: {
+                    id: string;
+                    title: string;
+                };
                 propertiesHash: string;
             }>;
         };
@@ -22187,6 +22276,10 @@ export type PostApiV1OrdersData = {
                 key: string;
                 value: string;
             }>;
+            /**
+             * An installed app's purchase option for the line (`<app id>.<key>`, e.g. a subscription); absent or null: a one-time purchase. Part of the line's identity: the same SKU with another option is another line. An option no active app offers is refused (`purchase_option_unavailable`).
+             */
+            purchaseOption?: string | null;
         }>;
         /**
          * Discount codes the buyer applied. Codes of different discount classes combine when either allows it.
@@ -24112,6 +24205,10 @@ export type PostApiV1AdminResourcesOrdersData = {
                 key: string;
                 value: string;
             }>;
+            /**
+             * An installed app's purchase option for the line (`<app id>.<key>`, e.g. a subscription); absent or null: a one-time purchase. Part of the line's identity: the same SKU with another option is another line. An option no active app offers is refused (`purchase_option_unavailable`).
+             */
+            purchaseOption?: string | null;
         }>;
         /**
          * The delivery or pickup method; a physical line needs one with an address, or a pickup method.
@@ -26850,6 +26947,501 @@ export type PostApiV1AdminResourcesAppContentDeleteResponses = {
 
 export type PostApiV1AdminResourcesAppContentDeleteResponse = PostApiV1AdminResourcesAppContentDeleteResponses[keyof PostApiV1AdminResourcesAppContentDeleteResponses];
 
+export type GetApiV1AdminResourcesOrdersByIdRefundsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/orders/{id}/refunds';
+};
+
+export type GetApiV1AdminResourcesOrdersByIdRefundsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesOrdersByIdRefundsError = GetApiV1AdminResourcesOrdersByIdRefundsErrors[keyof GetApiV1AdminResourcesOrdersByIdRefundsErrors];
+
+export type GetApiV1AdminResourcesOrdersByIdRefundsResponses = {
+    /**
+     * The refunds
+     */
+    200: {
+        success: true;
+        data: {
+            refunds: Array<RefundResource>;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesOrdersByIdRefundsResponse = GetApiV1AdminResourcesOrdersByIdRefundsResponses[keyof GetApiV1AdminResourcesOrdersByIdRefundsResponses];
+
+export type PostApiV1AdminResourcesOrdersByIdRefundsData = {
+    body: {
+        /**
+         * What goes back, in minor units of the order's `currency`; at most what was paid less what was refunded.
+         */
+        amountMinor: number;
+        /**
+         * Which order lines (and how many units of each) the refund is for; each at most its quantity less what earlier refunds named. Omit for an amount-only refund.
+         */
+        lines?: Array<{
+            orderItemId: string;
+            quantity: number;
+        }>;
+        /**
+         * Why, for the order timeline (staff read it).
+         */
+        reason: string;
+        /**
+         * `original`: back to the payments it came from. `store_credit`: one new gift card for the whole amount, sent to the order contact.
+         */
+        settlement?: 'original' | 'store_credit';
+        /**
+         * Refund only payments taken by this method (`cod`, a gateway id or an app provider's `<plugin id>:<provider id>`).
+         */
+        gateway?: string;
+        /**
+         * Required true when part of it goes back to a cash-on-delivery or recorded payment: the buyer already got that money by hand.
+         */
+        manualSettlementConfirmed?: boolean;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/orders/{id}/refunds';
+};
+
+export type PostApiV1AdminResourcesOrdersByIdRefundsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesOrdersByIdRefundsError = PostApiV1AdminResourcesOrdersByIdRefundsErrors[keyof PostApiV1AdminResourcesOrdersByIdRefundsErrors];
+
+export type PostApiV1AdminResourcesOrdersByIdRefundsResponses = {
+    /**
+     * The refund
+     */
+    201: {
+        success: true;
+        data: {
+            refund: RefundResource;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesOrdersByIdRefundsResponse = PostApiV1AdminResourcesOrdersByIdRefundsResponses[keyof PostApiV1AdminResourcesOrdersByIdRefundsResponses];
+
+export type GetApiV1AdminResourcesPaymentMethodsData = {
+    body?: never;
+    path?: never;
+    query: {
+        customerId: string;
+    };
+    url: '/api/v1/admin/resources/payment-methods';
+};
+
+export type GetApiV1AdminResourcesPaymentMethodsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesPaymentMethodsError = GetApiV1AdminResourcesPaymentMethodsErrors[keyof GetApiV1AdminResourcesPaymentMethodsErrors];
+
+export type GetApiV1AdminResourcesPaymentMethodsResponses = {
+    /**
+     * The saved methods
+     */
+    200: {
+        success: true;
+        data: {
+            paymentMethods: Array<PaymentMethodResource>;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesPaymentMethodsResponse = GetApiV1AdminResourcesPaymentMethodsResponses[keyof GetApiV1AdminResourcesPaymentMethodsResponses];
+
+export type DeleteApiV1AdminResourcesPaymentMethodsByIdData = {
+    body?: never;
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/payment-methods/{id}';
+};
+
+export type DeleteApiV1AdminResourcesPaymentMethodsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Declined by the provider (`payment_declined`), or a key reused for another request
+     */
+    422: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type DeleteApiV1AdminResourcesPaymentMethodsByIdError = DeleteApiV1AdminResourcesPaymentMethodsByIdErrors[keyof DeleteApiV1AdminResourcesPaymentMethodsByIdErrors];
+
+export type DeleteApiV1AdminResourcesPaymentMethodsByIdResponses = {
+    /**
+     * The removed method
+     */
+    200: {
+        success: true;
+        data: {
+            paymentMethod: PaymentMethodResource;
+        };
+    };
+};
+
+export type DeleteApiV1AdminResourcesPaymentMethodsByIdResponse = DeleteApiV1AdminResourcesPaymentMethodsByIdResponses[keyof DeleteApiV1AdminResourcesPaymentMethodsByIdResponses];
+
+export type PostApiV1AdminResourcesOrdersByIdPaymentsChargeData = {
+    body: {
+        /**
+         * A saved method of the order's customer (payment_methods.list).
+         */
+        paymentMethodId: string;
+        /**
+         * What to charge, in minor units of the order's `currency`. Default: its `balanceDueMinor`; another amount must be one the order takes (a deposit).
+         */
+        amountMinor?: number;
+        /**
+         * `manual` only authorizes (money held): capture it with payments.capture or release it with payments.void. Needs a provider that authorizes.
+         */
+        capture?: 'automatic' | 'manual';
+        /**
+         * The order `version` you read; a different one is refused with 409 before the provider is called.
+         */
+        expectedVersion?: number;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/orders/{id}/payments/charge';
+};
+
+export type PostApiV1AdminResourcesOrdersByIdPaymentsChargeErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Declined by the provider (`payment_declined`), or a key reused for another request
+     */
+    422: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesOrdersByIdPaymentsChargeError = PostApiV1AdminResourcesOrdersByIdPaymentsChargeErrors[keyof PostApiV1AdminResourcesOrdersByIdPaymentsChargeErrors];
+
+export type PostApiV1AdminResourcesOrdersByIdPaymentsChargeResponses = {
+    /**
+     * The outcome
+     */
+    201: {
+        success: true;
+        data: PaymentOutcomeResource;
+    };
+};
+
+export type PostApiV1AdminResourcesOrdersByIdPaymentsChargeResponse = PostApiV1AdminResourcesOrdersByIdPaymentsChargeResponses[keyof PostApiV1AdminResourcesOrdersByIdPaymentsChargeResponses];
+
+export type PostApiV1AdminResourcesPaymentsByIdCaptureData = {
+    body?: never;
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        /**
+         * The authorized payment's id (payments.list).
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/payments/{id}/capture';
+};
+
+export type PostApiV1AdminResourcesPaymentsByIdCaptureErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Declined by the provider (`payment_declined`), or a key reused for another request
+     */
+    422: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesPaymentsByIdCaptureError = PostApiV1AdminResourcesPaymentsByIdCaptureErrors[keyof PostApiV1AdminResourcesPaymentsByIdCaptureErrors];
+
+export type PostApiV1AdminResourcesPaymentsByIdCaptureResponses = {
+    /**
+     * The outcome
+     */
+    200: {
+        success: true;
+        data: PaymentOutcomeResource;
+    };
+};
+
+export type PostApiV1AdminResourcesPaymentsByIdCaptureResponse = PostApiV1AdminResourcesPaymentsByIdCaptureResponses[keyof PostApiV1AdminResourcesPaymentsByIdCaptureResponses];
+
+export type PostApiV1AdminResourcesPaymentsByIdVoidData = {
+    body?: never;
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        /**
+         * The authorized payment's id (payments.list).
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/payments/{id}/void';
+};
+
+export type PostApiV1AdminResourcesPaymentsByIdVoidErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Declined by the provider (`payment_declined`), or a key reused for another request
+     */
+    422: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesPaymentsByIdVoidError = PostApiV1AdminResourcesPaymentsByIdVoidErrors[keyof PostApiV1AdminResourcesPaymentsByIdVoidErrors];
+
+export type PostApiV1AdminResourcesPaymentsByIdVoidResponses = {
+    /**
+     * The outcome
+     */
+    200: {
+        success: true;
+        data: PaymentOutcomeResource;
+    };
+};
+
+export type PostApiV1AdminResourcesPaymentsByIdVoidResponse = PostApiV1AdminResourcesPaymentsByIdVoidResponses[keyof PostApiV1AdminResourcesPaymentsByIdVoidResponses];
+
 export type GetApiV1AdminResourcesWebhookSubscriptionsData = {
     body?: never;
     path?: never;
@@ -26911,7 +27503,7 @@ export type PostApiV1AdminResourcesWebhookSubscriptionsData = {
          * HTTPS endpoint on one of the app's approved hosts (`allowedHosts`). Private, loopback and reserved addresses are refused.
          */
         url: string;
-        topics: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested'>;
+        topics: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested'>;
         description?: string | null;
         /**
          * The buyer contact data deliveries include, within the app's protected data scopes; the rest read null. None by default.
@@ -27052,7 +27644,7 @@ export type PatchApiV1AdminResourcesWebhookSubscriptionsByIdData = {
          * HTTPS endpoint on one of the app's approved hosts (`allowedHosts`). Private, loopback and reserved addresses are refused.
          */
         url?: string;
-        topics?: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested'>;
+        topics?: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested'>;
         description?: string | null;
         /**
          * The buyer contact data deliveries include, within the app's protected data scopes; the rest read null. None by default.
@@ -52048,6 +52640,13 @@ export type PostApiV1AdminOrdersByIdRefundData = {
          * One key per refund (per dialog opening). Repeating it returns the first refund.
          */
         requestKey?: string;
+        /**
+         * Which order lines (and how many units of each) the refund is for; each at most its quantity less what earlier refunds named. Omit for an amount-only refund.
+         */
+        lines?: Array<{
+            orderItemId: string;
+            quantity: number;
+        }>;
     };
     path: {
         id: string;
@@ -52094,6 +52693,10 @@ export type PostApiV1AdminOrdersByIdRefundResponses = {
         data: {
             success: boolean;
             gateway: string;
+            /**
+             * The refund record (dashboard.resources.refunds.list).
+             */
+            orderRefundId?: string;
             refundId?: string;
             amount: number;
             isFullRefund: boolean;
@@ -53773,6 +54376,7 @@ export type PostApiV1AdminOrdersData = {
                 value: string;
             }>;
             unitPriceMinor?: number;
+            purchaseOption?: string | null;
         }>;
         requestKey?: string;
         shippingMethodId?: string | null;
@@ -54296,6 +54900,7 @@ export type PostApiV1AdminOrdersQuoteData = {
                 value: string;
             }>;
             unitPriceMinor?: number;
+            purchaseOption?: string | null;
         }>;
         discountAmount: number | null;
         shippingCharge: number;
@@ -54425,6 +55030,7 @@ export type PostApiV1AdminOrdersByIdAmendmentsPreviewData = {
                 value: string;
             }>;
             unitPriceMinor?: number;
+            purchaseOption?: string | null;
             orderItemId?: string;
         }>;
     };
@@ -54554,6 +55160,7 @@ export type PostApiV1AdminOrdersByIdAmendmentsData = {
                 value: string;
             }>;
             unitPriceMinor?: number;
+            purchaseOption?: string | null;
             orderItemId?: string;
         }>;
         requestKey?: string;
@@ -66626,7 +67233,7 @@ export type PostApiV1AdminWebhooksData = {
          * HTTPS endpoint on a public host. Private, loopback, link-local and reserved addresses are refused.
          */
         url: string;
-        topics: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested'>;
+        topics: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested'>;
         description?: string | null;
         /**
          * The buyer contact data deliveries include: names, emails, phones, street addresses. The rest read null; none by default.
@@ -66782,7 +67389,7 @@ export type PatchApiV1AdminWebhooksByIdData = {
          * HTTPS endpoint on a public host. Private, loopback, link-local and reserved addresses are refused.
          */
         url?: string;
-        topics?: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested'>;
+        topics?: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested'>;
         description?: string | null;
         /**
          * The buyer contact data deliveries include: names, emails, phones, street addresses. The rest read null; none by default.
@@ -67056,8 +67663,8 @@ export type GetApiV1AdminEventsData = {
     body?: never;
     path?: never;
     query?: {
-        topic?: 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested';
-        resourceType?: 'order' | 'return' | 'product' | 'variant' | 'customer' | 'purchase_order' | 'inventory_transfer' | 'fulfillment' | 'shipment' | 'payment' | 'checkout' | 'discount' | 'review' | 'gift_card' | 'gift_card_transaction' | 'object';
+        topic?: 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested';
+        resourceType?: 'order' | 'return' | 'product' | 'variant' | 'customer' | 'purchase_order' | 'inventory_transfer' | 'fulfillment' | 'refund' | 'shipment' | 'payment' | 'checkout' | 'discount' | 'review' | 'gift_card' | 'gift_card_transaction' | 'object';
         resourceId?: string;
         /**
          * `nextCursor` of the previous page.

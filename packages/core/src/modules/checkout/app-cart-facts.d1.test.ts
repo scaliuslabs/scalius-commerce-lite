@@ -54,7 +54,36 @@ describe("the app cart's customer tags and market", () => {
       discountCodes: [],
     });
     expect(functionCartSchema.safeParse(cart).success).toBe(true);
-    expect(cart).toMatchObject({ market: { id: "mkt_in", country: "IN" }, attributes: {}, customer: { tags: ["new year", "vip", "wholesale"] } });
+    expect(cart).toMatchObject({ market: { id: "mkt_in", country: "IN" }, attributes: {}, customer: { tags: ["new year", "vip", "wholesale"], segmentIds: [] } });
+  });
+
+  it("reads each SKU's weight and whether it ships from the same product and SKU statements", async () => {
+    sqlite.exec(`
+      UPDATE product_variants SET weight = 250 WHERE id = 'v_a';
+      INSERT INTO products (id, name, slug, price_minor, is_active, is_gift_card) VALUES ('p_card', 'Gift card', 'gift-card', 100000, 1, 1), ('p_book', 'E-book', 'e-book', 30000, 1, 0);
+      INSERT INTO product_variants (id, product_id, sku, price_minor, stock, reserved_stock, stock_version, is_default, track_inventory, fulfillment_kind)
+      VALUES ('v_card', 'p_card', 'CARD-1000', 100000, 0, 0, 0, 1, 0, 'physical'), ('v_book', 'p_book', 'BOOK-1', 30000, 0, 0, 0, 1, 0, 'digital');
+    `);
+    const loaded = await loadAppFunctionCartFacts(db, { productIds: ["p_a", "p_card", "p_book"], variantIds: ["v_a", "v_card", "v_book"], marketCountry: null });
+    const cart = buildAppFunctionCart({
+      currency: { code: "BDT", decimalPlaces: 2 },
+      channel: "online_store",
+      lines: [
+        { lineId: "cart:0:v_a", productId: "p_a", variantId: "v_a", title: "Tea", quantity: 2, unitPriceMinor: 50_000, discountMinor: 0, properties: [] },
+        { lineId: "cart:1:v_card", productId: "p_card", variantId: "v_card", title: "Gift card", quantity: 1, unitPriceMinor: 100_000, discountMinor: 0, properties: [] },
+        { lineId: "cart:2:v_book", productId: "p_book", variantId: "v_book", title: "E-book", quantity: 1, unitPriceMinor: 30_000, discountMinor: 0, properties: [] },
+      ],
+      facts: loaded,
+      destination: null,
+      discountCodes: [],
+    });
+    expect(functionCartSchema.safeParse(cart).success).toBe(true);
+    expect(cart.salesChannelId).toBe("sc_online_store");
+    expect(cart.lines.map((line) => [line.variantId, line.requiresShipping, line.weightGrams])).toEqual([
+      ["v_a", true, 250],
+      ["v_card", false, null],
+      ["v_book", false, null],
+    ]);
   });
 });
 

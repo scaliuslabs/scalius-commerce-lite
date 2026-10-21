@@ -49,6 +49,7 @@ import {
   type EventRepresentationType,
 } from "@scalius/shared/events";
 import { allProtectedData } from "@scalius/shared/plugins/protected-data";
+import { readLinePurchaseOption } from "@scalius/shared/line-properties";
 
 /** The most lines a representation lists (an order's, a return's, a purchase order's): a bigger one is truncated as a whole. */
 const MAX_LINES = 500;
@@ -141,6 +142,8 @@ export async function readOrderRepresentations(db: Database, ids: readonly strin
       subtotalMinor: orderItems.lineSubtotalMinor,
       discountMinor: orderItems.discountAmountMinor,
       taxMinor: orderItems.taxAmountMinor,
+      // The line's frozen inputs, in the same read: its purchase option rides there.
+      properties: orderItems.properties,
     }).from(orderItems).where(inArray(orderItems.orderId, [...ids]))
       .orderBy(asc(orderItems.orderId), asc(orderItems.createdAt), asc(orderItems.id)).all(),
   ]);
@@ -165,6 +168,7 @@ type OrderLineRow = {
   subtotalMinor: number | null;
   discountMinor: number | null;
   taxMinor: number | null;
+  properties: string | null;
 };
 
 function orderFrom(order: OrderRow, lines: readonly OrderLineRow[]) {
@@ -199,8 +203,9 @@ function orderFrom(order: OrderRow, lines: readonly OrderLineRow[]) {
     billingAddress: billingAddress(order),
     fulfillmentLocationId: order.fulfillmentLocationId ?? null,
     version: order.version,
-    lines: lines.map(({ orderId: _orderId, ...line }) => ({
+    lines: lines.map(({ orderId: _orderId, properties, ...line }) => ({
       ...line,
+      purchaseOption: readLinePurchaseOption(properties),
       unitPriceMinor: line.unitPriceMinor ?? 0,
       subtotalMinor: line.subtotalMinor ?? 0,
       discountMinor: line.discountMinor ?? 0,

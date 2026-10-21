@@ -12,6 +12,7 @@ import {
   CUSTOMIZATION_FIELD_TYPES,
   LINE_PROPERTY_INPUT_LIMITS,
 } from "@scalius/shared/line-properties";
+import { PURCHASE_OPTION_ID_MAX_LENGTH, PURCHASE_OPTION_ID_PATTERN } from "@scalius/shared/plugins/ids";
 import { nullableTimestampSchema } from "./timestamps";
 
 export const fulfillmentKindSchema = z.enum(FULFILLMENT_KINDS).openapi({
@@ -39,6 +40,23 @@ export const linePropertiesInputSchema = z
   .openapi({
     description: "Buyer inputs the product asks for (engraving text, gift wrap, a fit choice). A ticked checkbox sends \"true\"; empty optional fields are omitted. Same SKU with different inputs is a different line.",
   });
+
+/** The purchase option a cart line is bought with (an active app's `checkout.purchaseOptions`). */
+export const linePurchaseOptionInputSchema = z
+  .string()
+  .max(PURCHASE_OPTION_ID_MAX_LENGTH)
+  .regex(PURCHASE_OPTION_ID_PATTERN, "Use a purchase option id: <app id>.<key>.")
+  .nullable()
+  .optional()
+  .openapi({
+    description: "An installed app's purchase option for the line (`<app id>.<key>`, e.g. a subscription); absent or null: a one-time purchase. Part of the line's identity: the same SKU with another option is another line. An option no active app offers is refused (`purchase_option_unavailable`).",
+  });
+
+/** The purchase option a validated line carries, with the title the buyer sees. */
+export const linePurchaseOptionSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+}).openapi({ description: "The line's purchase option (absent: a one-time purchase). The app that offers it prices it." });
 
 /** A resolved buyer input as priced and frozen on the order line. */
 export const orderLinePropertySchema = z.object({

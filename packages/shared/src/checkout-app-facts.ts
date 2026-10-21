@@ -72,7 +72,7 @@ export interface ManualOrderAppLine {
   quantity: number;
   unitPriceMinor: number;
   isGiftCard: boolean;
-  /** The serialized buyer inputs (`order_items.properties`), or null. */
+  /** The serialized buyer inputs (`order_items.properties`), or null; a purchase option rides there as `_purchase_option`. */
   properties: string | null;
 }
 
@@ -85,6 +85,10 @@ export interface ManualOrderAppDeliveryMethod {
 }
 
 export interface ManualOrderAppInput {
+  /** Who places it: staff (`admin`, the default) or an app (`app`). */
+  channel?: "admin" | "app";
+  /** The sales channel the order sells from (resolved by the create; absent: the online store). */
+  salesChannelId?: string | null;
   /** The order's currency at the store's price increment (app amounts round to it). */
   currency: { code: string; decimalPlaces: number; priceIncrementMinor: number };
   lines: readonly ManualOrderAppLine[];
@@ -123,4 +127,6 @@ export interface ManualOrderAppOutcome {
  */
 export interface ManualOrderAppFunctions {
   price(input: ManualOrderAppInput): Promise<ManualOrderAppOutcome>;
+  /** The purchase options the active apps offer, `<app id>.<key>` → title: what a line's `purchaseOption` may name. */
+  readonly purchaseOptions?: ReadonlyMap<string, string>;
 }

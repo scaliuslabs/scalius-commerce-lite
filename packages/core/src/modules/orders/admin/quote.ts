@@ -14,6 +14,7 @@ import {
     type FulfillmentType,
 } from "@scalius/shared/fulfilment";
 import {
+    linePurchaseOptionProperty,
     parseStoredCustomizationSchema,
     resolveLineProperties,
     serializeOrderLineProperties,
@@ -78,7 +79,9 @@ type AdminOrderSkuIssueCode =
     | "product_unavailable"
     | "properties_required"
     | "properties_invalid"
-    | "fulfilment_unavailable";
+    | "fulfilment_unavailable"
+    /** The line's purchase option is not offered by any active app. */
+    | "purchase_option_unavailable";
 
 /** The delivery method a manual order uses, as snapshotted on the order. */
 export interface ManualOrderDeliveryMethod {
@@ -246,6 +249,9 @@ export interface ManualOrderQuoteOptions {
     apps?: ManualOrderAppFunctions;
     /** The request's app providers: an app tax provider is asked through them (none: it fails closed). */
     appProviders?: AppProviders;
+    /** Who places the order and the sales channel it sells from, as the create resolved them (apps see both). */
+    channel?: "admin" | "app";
+    salesChannelId?: string | null;
 }
 
 /** No app work: the staff discount and charge stand as entered. */
@@ -285,10 +291,12 @@ async function loadManualOrderDeliveryMethod(
 }
 
 function resolveManualOrderLineProperties(
-    items: ReadonlyArray<AdminOrderItemWithInventory<ManualOrderMoneyItem & { properties?: unknown; orderItemId?: string | null }>>,
+    items: ReadonlyArray<AdminOrderItemWithInventory<ManualOrderMoneyItem & { properties?: unknown; orderItemId?: string | null; purchaseOption?: string | null }>>,
     retainedLines: ReadonlyMap<string, RetainedManualOrderLine> | undefined,
     /** An order in a market's own currency (MARKETS-DESIGN step 6): only its own lines, at their prices. */
     foreignCurrency: string | null = null,
+    /** The purchase options the active apps offer, id → title (none without apps: a line naming one is refused). */
+    purchaseOptions: ReadonlyMap<string, string> = new Map(),
 ) {
     const issues: AdminOrderSkuIssue[] = [];
     const lines = items.map((item, index) => {
@@ -323,11 +331,21 @@ function resolveManualOrderLineProperties(
                 : "Check the buyer inputs for this item.");
             return null;
         }
+        // An app's purchase option (a subscription): frozen after the buyer inputs; the app prices it.
+        const purchaseOptionTitle = item.purchaseOption ? purchaseOptions.get(item.purchaseOption) : undefined;
+        if (item.purchaseOption && purchaseOptionTitle === undefined) {
+            addAdminOrderSkuIssue(issues, item, index, "purchase_option_unavailable",
+                "No installed app offers this purchase option any more. Remove it from the item.");
+            return null;
+        }
         return {
             unitPriceMinor: item.catalogUnitPriceMinor + resolved.propertiesPriceMinor,
             baseUnitPriceMinor: item.catalogUnitPriceMinor,
             propertiesPriceMinor: resolved.propertiesPriceMinor,
-            properties: serializeOrderLineProperties(resolved.properties),
+            properties: serializeOrderLineProperties([
+                ...resolved.properties,
+                ...(item.purchaseOption && purchaseOptionTitle !== undefined ? [linePurchaseOptionProperty(item.purchaseOption, purchaseOptionTitle)] : []),
+            ]),
         };
     });
     if (issues.length > 0) throwAdminOrderSkuIssues(issues);
@@ -451,7 +469,7 @@ export async function prepareManualOrderQuote(
 
     const lineProperties = resolveManualOrderLineProperties(
         resolvedItems.map((item, index) => {
-            const submitted = data.items[index] as { orderItemId?: string | null; unitPriceMinor?: number } | undefined;
+            const submitted = data.items[index] as { orderItemId?: string | null; unitPriceMinor?: number; purchaseOption?: string | null } | undefined;
             const override = submitted?.unitPriceMinor;
             if (override !== undefined && !isIncrementMultipleMinor(override, currency.priceIncrementMinor)) {
                 throw new ValidationError(priceIncrementMessage(currency.code, currency.priceIncrementMinor), {
@@ -461,6 +479,7 @@ export async function prepareManualOrderQuote(
             return {
                 ...item,
                 orderItemId: submitted?.orderItemId ?? null,
+                purchaseOption: submitted?.purchaseOption ?? null,
                 // A price set by hand replaces the catalogue price (resolvePrice) for this line.
                 catalogUnitPriceMinor: override ?? item.catalogUnitPriceMinor,
                 unitPriceMinor: override ?? item.catalogUnitPriceMinor,
@@ -468,6 +487,7 @@ export async function prepareManualOrderQuote(
         }),
         retainedLines,
         currency.code !== store.code ? currency.code : null,
+        options.apps?.purchaseOptions,
     );
     const trackedItems: PreparedManualOrderLine[] = resolvedItems.map((item, index) => ({
         ...item,
@@ -491,6 +511,8 @@ export async function prepareManualOrderQuote(
     );
     // The staff discount, then the apps (injected `apps`), then tax. No app: no read, no call.
     const appInput: ManualOrderAppInput = {
+        ...(options.channel ? { channel: options.channel } : {}),
+        ...(options.salesChannelId ? { salesChannelId: options.salesChannelId } : {}),
         currency: { code: currency.code, decimalPlaces: currency.decimalPlaces, priceIncrementMinor: currency.priceIncrementMinor },
         lines: manualOrderAppLines(trackedItems, allocationLineIds),
         manualDiscountMinor: money.discountAmountMinor,
