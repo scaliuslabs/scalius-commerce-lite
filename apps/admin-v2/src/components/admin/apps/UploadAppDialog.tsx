@@ -112,7 +112,7 @@ export function UploadAppDialog({ open, onOpenChange }: { open: boolean; onOpenC
 
   return (
     <Dialog open={open} onOpenChange={changeOpen}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="sm:max-w-160">
         <DialogHeader>
           <DialogTitle>{t("uploadTitle")}</DialogTitle>
           <DialogDescription>{t("uploadBody")}</DialogDescription>

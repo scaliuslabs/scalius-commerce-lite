@@ -56,7 +56,7 @@ export function AppActionDialogs({ target, asking, onCancel, onConfirm, answer, 
         }}
       />
       <Dialog open={answerOpen} onOpenChange={onAnswerOpenChange}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-160">
           <DialogHeader>
             <DialogTitle>{answer?.entry.action.label ?? ""}</DialogTitle>
             <DialogDescription>{answer ? t("fromApp", { app: answer.entry.app.name }) : ""}</DialogDescription>

@@ -91,7 +91,7 @@ export function ActivateAppDialog({ app, open, onOpenChange }: DialogProps) {
   const missing = app.settings.fields.filter((field) => app.settings.missing.includes(field.key));
   return (
     <Dialog open={open} onOpenChange={(next) => (activate.isPending ? undefined : onOpenChange(next))}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="sm:max-w-160">
         <DialogHeader>
           <DialogTitle>{t(update ? "approveTitle" : "activateTitle", { name: app.name })}</DialogTitle>
           <DialogDescription>{t(update ? "approveIntro" : "activateIntro", { name: app.name })}</DialogDescription>
@@ -201,7 +201,7 @@ export function UninstallAppDialog({ app, open, onOpenChange }: DialogProps) {
           onValueChange={(value) => setKeepData(value === "keep")}
         >
           {choices.map((choice) => (
-            <label key={choice.value} className="flex min-h-11 items-start gap-3 py-1 text-body">
+            <label key={choice.value} className="flex min-h-11 items-start gap-2 py-1 text-body">
               <span className="flex h-lh items-center">
                 <RadioGroupItem value={choice.value} />
               </span>

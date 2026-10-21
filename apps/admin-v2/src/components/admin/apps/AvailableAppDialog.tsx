@@ -16,7 +16,7 @@ export function AvailableAppDialog({ app: listed, open, onOpenChange }: { app: A
   const app = listed ? localizedApp(listed, locale) : null;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-160">
         {app ? (
           <>
             <DialogHeader>
