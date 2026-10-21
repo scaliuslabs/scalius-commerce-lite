@@ -25,6 +25,7 @@ import {
   getPublicApiCachePolicy,
 } from "./public-cache-policy";
 import { createPublicPartReader, renderPublicRead } from "./public-read";
+import { cacheFrontierEndpoint, serveCacheFrontierCheck, serveCacheFrontierDelta } from "./cache-frontier";
 import { isAgentAccessPath } from "./agent-access/paths";
 import { fetchRuntimeApiApp } from "./runtime/fetch-runtime-app";
 import { composeApiRuntimeEnv, hasMasterSecret } from "./runtime/runtime-env";
@@ -124,6 +125,23 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
     const pathname = new URL(request.url).pathname;
     if (!hasMasterSecret(this.env) && !isProbePath(pathname)) {
       return missingMasterSecretResponse(request);
+    }
+
+    // The storefront's change frontier: a quiet store's page hit waits on
+    // this call, so it skips the Platform settings, the route families and
+    // the middleware chain (one key check, one statement).
+    const frontierEndpoint = cacheFrontierEndpoint(request.method, pathname);
+    if (frontierEndpoint) {
+      const { getDb } = await import("@scalius/database/client");
+      const db = () => getDb(this.env);
+      const response = await (frontierEndpoint === "delta"
+        ? serveCacheFrontierDelta(request, this.env, db)
+        : serveCacheFrontierCheck(request, this.env, db)
+      ).catch((error: unknown) => {
+        console.error("[CacheFrontier] read failed", error instanceof Error ? error.name : "unknown");
+        return Response.json({ success: false, error: "Cache proof unavailable" }, { status: 503, headers: { "Cache-Control": "private, no-store" } });
+      });
+      return applyBaselineSecurityHeaders(request, response, { frameProtection: "deny" });
     }
 
     if (isAgentAccessPath(pathname)) {

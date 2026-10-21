@@ -349,6 +349,31 @@ describe("storefront frontier endpoint", () => {
       body: JSON.stringify({ s0: 0, deps: ["p:p_linen"] }),
     })).status).toBe(400);
   });
+
+  it("answers at the Worker entry: no Platform settings read, route family or middleware", async () => {
+    const { env, ctx } = setupWithSqlite();
+    const { deriveRuntimeSecret } = await import("@scalius/shared/runtime-secrets");
+    const key = await deriveRuntimeSecret(String(env.SCALIUS_SECRET), "cache-frontier");
+    const runtimeApp = vi.spyOn(await import("./runtime/fetch-runtime-app"), "fetchRuntimeApiApp");
+    const runtimeEnv = vi.spyOn(await import("./runtime/runtime-env"), "composeApiRuntimeEnv");
+    const { default: ApiWorker } = await import("./worker");
+    const call = (path: string, init: RequestInit) =>
+      (new ApiWorker(ctx, env) as unknown as TestWorker).fetch(new Request(`https://api.internal${path}`, init));
+    const delta = await call("/api/v1/storefront/frontier?since=0", { headers: { "X-Scalius-Frontier-Key": key } });
+    expect(delta.status).toBe(200);
+    const check = await call("/api/v1/storefront/frontier/check", {
+      method: "POST",
+      headers: { "X-Scalius-Frontier-Key": key, "Content-Type": "application/json" },
+      body: JSON.stringify({ s0: 0, deps: [] }),
+    });
+    expect(check.status).toBe(200);
+    expect(runtimeApp).not.toHaveBeenCalled();
+    expect(runtimeEnv).not.toHaveBeenCalled();
+    // The baseline security headers still apply.
+    expect(delta.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    runtimeApp.mockRestore();
+    runtimeEnv.mockRestore();
+  });
 });
 
 describe("storefront batch parts", () => {
