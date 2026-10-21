@@ -538,27 +538,16 @@ describe("the stable app API", () => {
     expect(paginationProblems(stable)).toEqual([]);
   });
 
-  // The saved-method payment and refund operations get their L1/L2/L9 shape
-  // with the security fixes that own them (resources-payment-methods.ts,
-  // resources-refunds.ts); delete each name here once it conforms.
-  const AWAITING_PAYMENTS_OWNER = new Set(["payments.charge", "payments.capture", "payments.void", "payment_methods.list", "refunds.list"]);
-  const open = (problems: string[]) => problems.filter((problem) => !AWAITING_PAYMENTS_OWNER.has(problem.split(":")[0]!));
-
   it("answers every list as { <plural>, nextCursor } and nothing else (audit L9)", () => {
-    expect(open(listShapeProblems(stable))).toEqual([]);
+    expect(listShapeProblems(stable)).toEqual([]);
   });
 
   it("answers one shape per kind: a resource under its name, never bare, empty, a message or no body (audit L1)", () => {
-    expect(open(answerShapeProblems(stable))).toEqual([]);
+    expect(answerShapeProblems(stable)).toEqual([]);
   });
 
   it("has one precondition: expectedRevision, in the body or a DELETE's query, and resources expose revision (audit L2)", () => {
-    expect(open(preconditionProblems(stable))).toEqual([]);
-  });
-
-  it("lists only payment operations that still break the shape rules as awaiting their owner", () => {
-    const failing = new Set([...listShapeProblems(stable), ...answerShapeProblems(stable), ...preconditionProblems(stable)].map((problem) => problem.split(":")[0]!));
-    expect([...AWAITING_PAYMENTS_OWNER].filter((name) => !failing.has(name))).toEqual([]);
+    expect(preconditionProblems(stable)).toEqual([]);
   });
 
   it("has one address shape: place ids only under placeIds, no flattened address fields (audit L3)", () => {

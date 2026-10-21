@@ -3280,6 +3280,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_payment_methods",
     "write_refunds",
     "write_fulfillments"
    ],
@@ -8467,6 +8468,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_payment_methods",
     "write_refunds",
     "write_fulfillments"
    ],
@@ -10123,6 +10125,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_payment_methods",
     "write_refunds",
     "write_fulfillments"
    ],
@@ -11478,6 +11481,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_payment_methods",
     "write_refunds",
     "write_fulfillments"
    ],
@@ -11533,6 +11537,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_payment_methods",
     "write_refunds",
     "write_fulfillments"
    ],
@@ -11719,7 +11724,7 @@
    "idempotency": "required",
    "revision": "none",
    "scopes": [
-    "write_payments"
+    "write_payment_methods"
    ],
    "input": {
     "parameters": [
@@ -11782,7 +11787,7 @@
    "idempotency": "none",
    "revision": "none",
    "scopes": [
-    "write_payments"
+    "write_payment_methods"
    ],
    "input": {
     "parameters": [
@@ -11794,6 +11799,30 @@
       },
       "required": true,
       "name": "customerId",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 50,
+       "default": 50,
+       "description": "At most this many items (default and maximum 50)."
+      },
+      "required": false,
+      "description": "At most this many items (default and maximum 50).",
+      "name": "limit",
       "in": "query"
      }
     ]
@@ -11815,10 +11844,16 @@
         "items": {
          "$ref": "#/components/schemas/PaymentMethodResource"
         }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
        }
       },
       "required": [
-       "paymentMethods"
+       "paymentMethods",
+       "nextCursor"
       ]
      }
     },
@@ -11836,7 +11871,7 @@
    "idempotency": "required",
    "revision": "none",
    "scopes": [
-    "write_payments"
+    "write_payment_methods"
    ],
    "input": {
     "parameters": [
@@ -11876,7 +11911,58 @@
       ]
      },
      "data": {
-      "$ref": "#/components/schemas/PaymentOutcomeResource"
+      "type": "object",
+      "properties": {
+       "outcome": {
+        "type": "string",
+        "enum": [
+         "succeeded",
+         "authorized",
+         "pending",
+         "voided"
+        ],
+        "description": "`succeeded`: captured and credited to the order. `authorized`: held, capture it with payments.capture. `pending`: the provider answers later by webhook; read the order. `voided`: the hold was released."
+       },
+       "orderId": {
+        "type": "string"
+       },
+       "providerId": {
+        "type": "string"
+       },
+       "amountMinor": {
+        "type": "integer",
+        "description": "In minor units of `currency`."
+       },
+       "currency": {
+        "type": "string",
+        "minLength": 3,
+        "maxLength": 3
+       },
+       "payment": {
+        "allOf": [
+         {
+          "$ref": "#/components/schemas/PaymentResource"
+         },
+         {
+          "nullable": true,
+          "description": "The order payment, once the provider's answer landed."
+         }
+        ]
+       },
+       "replayed": {
+        "type": "boolean",
+        "description": "True when this answers a request already handled (the same Idempotency-Key, or an authorization already settled)."
+       }
+      },
+      "required": [
+       "outcome",
+       "orderId",
+       "providerId",
+       "amountMinor",
+       "currency",
+       "payment",
+       "replayed"
+      ]
      }
     },
     "required": [
@@ -11893,7 +11979,7 @@
    "idempotency": "required",
    "revision": "optional",
    "scopes": [
-    "write_payments"
+    "write_payment_methods"
    ],
    "input": {
     "parameters": [
@@ -11948,10 +12034,10 @@
           "default": "automatic",
           "description": "`manual` only authorizes (money held): capture it with payments.capture or release it with payments.void. Needs a provider that authorizes."
          },
-         "expectedVersion": {
+         "expectedRevision": {
           "type": "integer",
           "minimum": 1,
-          "description": "The order `version` you read; a different one is refused with 409 before the provider is called."
+          "description": "The order `revision` you read; a different one is refused with 409 before the provider is called."
          }
         },
         "required": [
@@ -11973,7 +12059,58 @@
       ]
      },
      "data": {
-      "$ref": "#/components/schemas/PaymentOutcomeResource"
+      "type": "object",
+      "properties": {
+       "outcome": {
+        "type": "string",
+        "enum": [
+         "succeeded",
+         "authorized",
+         "pending",
+         "voided"
+        ],
+        "description": "`succeeded`: captured and credited to the order. `authorized`: held, capture it with payments.capture. `pending`: the provider answers later by webhook; read the order. `voided`: the hold was released."
+       },
+       "orderId": {
+        "type": "string"
+       },
+       "providerId": {
+        "type": "string"
+       },
+       "amountMinor": {
+        "type": "integer",
+        "description": "In minor units of `currency`."
+       },
+       "currency": {
+        "type": "string",
+        "minLength": 3,
+        "maxLength": 3
+       },
+       "payment": {
+        "allOf": [
+         {
+          "$ref": "#/components/schemas/PaymentResource"
+         },
+         {
+          "nullable": true,
+          "description": "The order payment, once the provider's answer landed."
+         }
+        ]
+       },
+       "replayed": {
+        "type": "boolean",
+        "description": "True when this answers a request already handled (the same Idempotency-Key, or an authorization already settled)."
+       }
+      },
+      "required": [
+       "outcome",
+       "orderId",
+       "providerId",
+       "amountMinor",
+       "currency",
+       "payment",
+       "replayed"
+      ]
      }
     },
     "required": [
@@ -12107,6 +12244,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_payment_methods",
     "write_refunds",
     "write_fulfillments"
    ],
@@ -12192,7 +12330,7 @@
    "idempotency": "required",
    "revision": "none",
    "scopes": [
-    "write_payments"
+    "write_payment_methods"
    ],
    "input": {
     "parameters": [
@@ -12232,7 +12370,58 @@
       ]
      },
      "data": {
-      "$ref": "#/components/schemas/PaymentOutcomeResource"
+      "type": "object",
+      "properties": {
+       "outcome": {
+        "type": "string",
+        "enum": [
+         "succeeded",
+         "authorized",
+         "pending",
+         "voided"
+        ],
+        "description": "`succeeded`: captured and credited to the order. `authorized`: held, capture it with payments.capture. `pending`: the provider answers later by webhook; read the order. `voided`: the hold was released."
+       },
+       "orderId": {
+        "type": "string"
+       },
+       "providerId": {
+        "type": "string"
+       },
+       "amountMinor": {
+        "type": "integer",
+        "description": "In minor units of `currency`."
+       },
+       "currency": {
+        "type": "string",
+        "minLength": 3,
+        "maxLength": 3
+       },
+       "payment": {
+        "allOf": [
+         {
+          "$ref": "#/components/schemas/PaymentResource"
+         },
+         {
+          "nullable": true,
+          "description": "The order payment, once the provider's answer landed."
+         }
+        ]
+       },
+       "replayed": {
+        "type": "boolean",
+        "description": "True when this answers a request already handled (the same Idempotency-Key, or an authorization already settled)."
+       }
+      },
+      "required": [
+       "outcome",
+       "orderId",
+       "providerId",
+       "amountMinor",
+       "currency",
+       "payment",
+       "replayed"
+      ]
      }
     },
     "required": [
@@ -14271,7 +14460,7 @@
            "store_credit"
           ],
           "default": "original",
-          "description": "`original`: back to the payments it came from. `store_credit`: one new gift card for the whole amount, sent to the order contact."
+          "description": "`original`: back to the payments it came from. `store_credit`: one new gift card for the whole amount, sent to the order contact. An app or agent may give store credit only for money a provider captured (or gift-card value); over a cash-on-delivery or recorded payment it is refused with reason `store_credit_needs_staff`."
          },
          "gateway": {
           "type": "string",
@@ -14332,6 +14521,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_payment_methods",
     "write_refunds",
     "write_fulfillments"
    ],
@@ -14346,6 +14536,30 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 100,
+       "default": 100,
+       "description": "At most this many items (default and maximum 100)."
+      },
+      "required": false,
+      "description": "At most this many items (default and maximum 100).",
+      "name": "limit",
+      "in": "query"
      }
     ]
    },
@@ -14366,10 +14580,16 @@
         "items": {
          "$ref": "#/components/schemas/RefundResource"
         }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
        }
       },
       "required": [
-       "refunds"
+       "refunds",
+       "nextCursor"
       ]
      }
     },
@@ -14390,6 +14610,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_payment_methods",
     "write_refunds",
     "write_fulfillments"
    ],
@@ -14445,6 +14666,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_payment_methods",
     "write_refunds",
     "write_fulfillments"
    ],
@@ -14643,6 +14865,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_payment_methods",
     "write_refunds",
     "write_fulfillments"
    ],
@@ -14698,6 +14921,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_payment_methods",
     "write_refunds",
     "write_fulfillments"
    ],
@@ -20044,6 +20268,16 @@
      "nullable": true,
      "description": "The order whose payment kept it."
     },
+    "ownerAppId": {
+     "type": "string",
+     "nullable": true,
+     "description": "The app whose purchase option the buyer kept it for: the only app that may charge it (null: only staff may). An app lists and charges only its own."
+    },
+    "purchaseOptionId": {
+     "type": "string",
+     "nullable": true,
+     "description": "That purchase option (`<app id>.<key>`), when the order named exactly one."
+    },
     "createdAt": {
      "type": "string",
      "format": "date-time"
@@ -20064,62 +20298,10 @@
     "label",
     "status",
     "sourceOrderId",
+    "ownerAppId",
+    "purchaseOptionId",
     "createdAt",
     "updatedAt"
-   ]
-  },
-  "PaymentOutcomeResource": {
-   "type": "object",
-   "properties": {
-    "outcome": {
-     "type": "string",
-     "enum": [
-      "succeeded",
-      "authorized",
-      "pending",
-      "voided"
-     ],
-     "description": "`succeeded`: captured and credited to the order. `authorized`: held, capture it with payments.capture. `pending`: the provider answers later by webhook; read the order. `voided`: the hold was released."
-    },
-    "orderId": {
-     "type": "string"
-    },
-    "providerId": {
-     "type": "string"
-    },
-    "amountMinor": {
-     "type": "integer",
-     "description": "In minor units of `currency`."
-    },
-    "currency": {
-     "type": "string",
-     "minLength": 3,
-     "maxLength": 3
-    },
-    "payment": {
-     "allOf": [
-      {
-       "$ref": "#/components/schemas/PaymentResource"
-      },
-      {
-       "nullable": true,
-       "description": "The order payment, once the provider's answer landed."
-      }
-     ]
-    },
-    "replayed": {
-     "type": "boolean",
-     "description": "True when this answers a request already handled (the same Idempotency-Key, or an authorization already settled)."
-    }
-   },
-   "required": [
-    "outcome",
-    "orderId",
-    "providerId",
-    "amountMinor",
-    "currency",
-    "payment",
-    "replayed"
    ]
   },
   "PaymentResource": {
