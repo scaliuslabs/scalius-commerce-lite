@@ -22,7 +22,13 @@ export function listingScaleSeed(): string {
     const products: string[] = [];
     const skus: string[] = [];
     const attributes: string[] = [];
-    const stats: string[] = [];
+    // Ratings arrive as a store gets them: a published review of a fulfilled
+    // line of a delivered order, which the review triggers count.
+    const orders: string[] = [];
+    const lines: string[] = [];
+    const fulfillments: string[] = [];
+    const fulfilled: string[] = [];
+    const reviews: string[] = [];
     for (let index = 0; index < PRODUCTS; index += 1) {
         const id = `prd_${String(index).padStart(4, "0")}`;
         const price = 1000 + (index * 37 % 23) * 250;
@@ -32,7 +38,16 @@ export function listingScaleSeed(): string {
         // "red" on 1 in 15 products (few), "blue" on the rest.
         attributes.push(`('pav_color_${id}', '${id}', 'attr_color', '${index % 15 === 0 ? "Red" : "Blue"}')`);
         if (index % 2 === 0) attributes.push(`('pav_fit_${id}', '${id}', 'attr_fit', '${index % 4 === 0 ? "Slim" : "Loose"}')`);
-        if (index % 5 === 0) stats.push(`('${id}', 2, 8, 1, 1, 400, 3600)`);
+        if (index % 5 === 0) {
+            for (const rating of [3, 5]) {
+                const key = `${id.slice(4)}_${rating}`;
+                orders.push(`('ord_${key}', 'Buyer', '01700000000', 'House 1', 'c', 'z', ${price}, 'confirmed')`);
+                lines.push(`('item_${key}', 'ord_${key}', '${id}', 'var_${id}', 1, ${price}, 'ship')`);
+                fulfillments.push(`('ful_${key}', 'ord_${key}', 'ship', 'key_${key}', 'admin')`);
+                fulfilled.push(`('fln_${key}', 'ful_${key}', 'ord_${key}', 'item_${key}', 1)`);
+                reviews.push(`('rev_scale_${key}', '${id}', 'var_${id}', 'ord_${key}', 'item_${key}', 'cus_${key}', 'customer', 'Buyer B.', ${rating}, 'published', 1790000000)`);
+            }
+        }
     }
     return `
         INSERT INTO categories (id, name, slug, status, parent_id) VALUES ('cat_root', 'Root', 'root', 'published', NULL);
@@ -44,7 +59,13 @@ export function listingScaleSeed(): string {
         INSERT INTO products (id, name, price_minor, slug, category_id, brand_id, is_active, created_at) VALUES ${products.join(", ")};
         INSERT INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory) VALUES ${skus.join(", ")};
         INSERT INTO product_attribute_values (id, product_id, attribute_id, value) VALUES ${attributes.join(", ")};
-        INSERT INTO product_review_stats (product_id, review_count, rating_sum, count_3, count_5, rating_avg_centi, rating_rank_milli) VALUES ${stats.join(", ")}
+        INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, total_amount_minor, status) VALUES ${orders.join(", ")};
+        INSERT INTO order_items (id, order_id, product_id, variant_id, quantity, unit_price_minor, fulfillment_type) VALUES ${lines.join(", ")};
+        INSERT INTO order_fulfillments (id, order_id, kind, request_key, actor_type) VALUES ${fulfillments.join(", ")};
+        INSERT INTO order_fulfillment_lines (id, fulfillment_id, order_id, order_item_id, quantity) VALUES ${fulfilled.join(", ")};
+        UPDATE orders SET status = 'delivered';
+        INSERT INTO product_reviews (id, product_id, variant_id, order_id, order_item_id, reviewer_key, author_type,
+            author_display_name, rating, status, published_at) VALUES ${reviews.join(", ")}
     `;
 }
 
@@ -112,6 +133,8 @@ export function listingScaleScenarios(setup: () => Promise<ListingScaleStore>): 
         });
         expect(subtree.facets).toEqual(groupCatalogFacets(live));
         expect(subtree.ratingFacet).toEqual(groupCatalogRatingFacet(live));
+        // The review triggers rated 1 in 5 products (a 3 and a 5, so 4 stars).
+        expect(subtree.ratingFacet.find((value) => value.min === 4)?.count).toBeGreaterThan(0);
         expect(subtree.pagination.total).toBe(144);
         expect(subtree.facets.find((facet) => facet.kind === "category")?.values.map((value) => [value.value, value.count]))
             .toEqual([["a", 72], ["b", 36]]);
