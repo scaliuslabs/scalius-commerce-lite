@@ -3,6 +3,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 
 import { AccessPage } from "~/components/admin/agent-access";
+import { ChangeApprovalTargets, changeRequesterText } from "~/components/admin/agent-access/ChangeApprovalDetails";
 import { SettingsCard } from "~/components/admin/settings/SettingsPage";
 import { Button } from "~/components/ui/button";
 import { useMessages } from "~/i18n";
@@ -18,7 +19,10 @@ import { RouteErrorComponent } from "~/lib/route-error";
 
 // A person approves one change an AI assistant or access key asked to make
 // (audit R2 F3). The agent only ever has this link: the change runs once,
-// after the grant's owner approves it here in a 2FA-verified session.
+// after the grant's owner approves it here in a 2FA-verified session. The
+// page names the connection that asks and the records the change acts on
+// (product titles, SKUs, order numbers, customer names), read from the
+// input the approval binds (black-box M7).
 
 /** Approving runs inside a fresh Super Admin session (agent grants belong to Super Admins). */
 export async function requireFreshChangeApprovalAuthority() {
@@ -80,10 +84,12 @@ function ApprovalRoute() {
   }
 
   const answered = status === "approved" || status === "declined";
+  const requester = changeRequesterText(t, approval.requester);
   return (
     <AccessPage title={t("changeTitle")}>
-      <SettingsCard title={t("changeDescription")}>
+      <SettingsCard title={requester ? t("changeAsks", { requester }) : t("changeDescription")}>
         <p className="text-body font-medium break-words">{approval.summary}</p>
+        <ChangeApprovalTargets targets={approval.targets} />
         {status === "error" ? (
           <p role="alert" className="text-body text-destructive">{t("changeFailed")}</p>
         ) : null}
