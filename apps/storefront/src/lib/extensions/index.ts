@@ -43,7 +43,7 @@ import type { ExtensionRuntime } from "./loaders";
 export { ExtensionHost } from "./host";
 
 interface RequestExtensions {
-  list: StorefrontExtension[];
+  list: readonly StorefrontExtension[];
   byId: Map<string, StorefrontExtension>;
   /** The component slots some active app's component targets (a unit leaves the others out). */
   filled: ReadonlySet<string>;

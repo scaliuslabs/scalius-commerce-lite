@@ -295,9 +295,53 @@ export function storefrontExtensionSettingSchemas(extensions: readonly Storefron
 const RELEASE = /^[0-9a-f]{64}$/;
 const HOST = PLUGIN_HOST_PATTERN;
 
-/** The layout payload's `appExtensions`, shape-checked; anything malformed is left out. */
-export function readStorefrontExtensions(value: unknown): StorefrontExtension[] {
+/**
+ * Checked lists by the layout value they came from, and by its text: a page
+ * reads the list several times (middleware, layout, components), and every
+ * render of an isolate gets a fresh layout object holding the same few apps.
+ * The check is a pure function of the value, so each distinct value is
+ * checked once and its list is shared, frozen, by every reader.
+ */
+const extensionsByValue = new WeakMap<object, readonly StorefrontExtension[]>();
+const extensionsByText = new Map<string, readonly StorefrontExtension[]>();
+/** Distinct layout values an isolate keeps lists for (a store has one; an app change adds one). */
+const EXTENSION_LISTS_KEPT = 8;
+/** A larger value is checked every time rather than kept. */
+const EXTENSION_TEXT_KEPT_MAX = 256 * 1024;
+
+function deepFreeze<T>(value: T): T {
+  if (typeof value === "object" && value !== null && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const child of Object.values(value)) deepFreeze(child);
+  }
+  return value;
+}
+
+/** The layout payload's `appExtensions`, shape-checked; anything malformed is left out. The list is frozen and shared. */
+export function readStorefrontExtensions(value: unknown): readonly StorefrontExtension[] {
   if (!Array.isArray(value)) return [];
+  const known = extensionsByValue.get(value);
+  if (known) return known;
+  let text: string | null;
+  try {
+    text = JSON.stringify(value);
+  } catch {
+    text = null;
+  }
+  const kept = text !== null && text.length <= EXTENSION_TEXT_KEPT_MAX ? text : null;
+  let list = kept === null ? undefined : extensionsByText.get(kept);
+  // Most recently used last, so the oldest is the one dropped.
+  if (list) extensionsByText.delete(kept!);
+  else list = deepFreeze(parseStorefrontExtensions(value));
+  if (kept !== null) {
+    extensionsByText.set(kept, list);
+    if (extensionsByText.size > EXTENSION_LISTS_KEPT) extensionsByText.delete(extensionsByText.keys().next().value!);
+  }
+  extensionsByValue.set(value, list);
+  return list;
+}
+
+function parseStorefrontExtensions(value: readonly unknown[]): StorefrontExtension[] {
   const out: StorefrontExtension[] = [];
   for (const entry of value) {
     if (typeof entry !== "object" || entry === null) continue;

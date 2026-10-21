@@ -160,4 +160,20 @@ describe("storefront files", () => {
       islands: ["carousel"], stylesheet: true, connect: ["api.acme.test"],
     }]);
   });
+
+  it("checks each distinct layout value once and shares the frozen list", () => {
+    const release = "e".repeat(64);
+    const layout = () => [{ pluginId: "acme.memo", version: "1.0.0", source: "upload", release, sections: ["hero"], sectionSettings: { hero: [{ key: "a", label: "A", type: "text" }] }, skins: [], components: [], islands: [], stylesheet: false, connect: [] }];
+    const first = readStorefrontExtensions(layout());
+    // A later render's fresh layout object with the same content gets the same list.
+    expect(readStorefrontExtensions(layout())).toBe(first);
+    expect(Object.isFrozen(first)).toBe(true);
+    expect(Object.isFrozen(first[0]!.sectionSettings.hero![0])).toBe(true);
+    // Different content is checked on its own.
+    const changed = layout();
+    changed[0]!.version = "1.0.1";
+    expect(readStorefrontExtensions(changed)).not.toBe(first);
+    expect(readStorefrontExtensions(changed)[0]!.version).toBe("1.0.1");
+    expect(readStorefrontExtensions(null)).toEqual([]);
+  });
 });
