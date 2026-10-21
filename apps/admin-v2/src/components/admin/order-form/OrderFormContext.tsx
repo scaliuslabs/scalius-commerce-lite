@@ -7,7 +7,7 @@ import type {
 } from "./types";
 import type { ManualOrderQuotePayload } from "@/lib/api-query-options/orders";
 import type { ManualOrderDiscountGuidance } from "./manual-order-discount";
-import type { CheckoutRuleError } from "@/lib/admin-api-conflicts";
+import type { CheckoutRuleError, ManualOrderItemIssue } from "@/lib/admin-api-conflicts";
 
 interface OrderFormState {
   form: UseFormReturn<OrderFormInput, unknown, OrderFormValues>;
@@ -34,6 +34,8 @@ interface OrderFormState {
     discountLimit: ManualOrderDiscountGuidance | null;
     /** Installed apps' rules the order breaks (the quote was refused); shown instead of `errorMessage`. */
     ruleErrors?: CheckoutRuleError[] | null;
+    /** Lines the API refused, each with its reason (said on the line); `errorMessage` is then left out. */
+    itemIssues?: ManualOrderItemIssue[] | null;
     errorMessage: string | null;
     canRetry: boolean;
     retry: () => void;

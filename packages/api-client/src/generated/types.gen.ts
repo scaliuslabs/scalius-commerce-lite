@@ -56775,6 +56775,10 @@ export type PostApiV1AdminOrdersData = {
         };
         paymentMethod?: 'cod' | 'net_terms';
         paymentTermsDays?: number;
+        paid?: {
+            via: 'bank_transfer' | 'cash' | 'cheque' | 'card_terminal' | 'mobile_wallet' | 'other';
+            reference?: string | null;
+        };
     };
     headers?: {
         /**

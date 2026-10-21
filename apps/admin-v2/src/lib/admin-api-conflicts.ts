@@ -136,6 +136,31 @@ export function readCheckoutRuleErrors(error: unknown): CheckoutRuleError[] | nu
   return errors.length > 0 ? errors : null;
 }
 
+/** One line of a manual order the API refused, by its position in the request, with the API's own words. */
+export interface ManualOrderItemIssue {
+  index: number;
+  code: string;
+  message: string;
+}
+
+/**
+ * The per-line reasons of a refused manual order or quote (`details.itemIssues`):
+ * a download on a cash on delivery order, a SKU out of stock, a retired SKU.
+ */
+export function readManualOrderItemIssues(error: unknown): ManualOrderItemIssue[] | null {
+  const parsed = readAdminApiError(error);
+  if (parsed?.status !== 400 || !parsed.details || typeof parsed.details !== "object") return null;
+  const raw = (parsed.details as { itemIssues?: unknown }).itemIssues;
+  if (!Array.isArray(raw)) return null;
+  const issues = raw.flatMap((entry: unknown): ManualOrderItemIssue[] => {
+    if (!entry || typeof entry !== "object") return [];
+    const { index, code, message } = entry as { index?: unknown; code?: unknown; message?: unknown };
+    if (typeof index !== "number" || !Number.isInteger(index) || index < 0 || typeof message !== "string") return [];
+    return [{ index, code: typeof code === "string" ? code : "", message }];
+  });
+  return issues.length > 0 ? issues : null;
+}
+
 export function readAdminOrderCreateRequestMismatch(
   error: unknown,
 ): AdminOrderCreateRequestMismatch | null {

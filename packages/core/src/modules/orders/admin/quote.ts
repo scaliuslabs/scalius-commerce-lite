@@ -445,13 +445,18 @@ export async function prepareManualOrderQuote(
             ? "This order has no delivery method, so it can't take items that ship. Create a new order for them."
             : "Add at least one sellable item.");
     }
-    // Staff orders are cash on delivery; digital and gift-card lines fulfil
-    // automatically and have no fulfiller until Wave B, so they fail closed.
+    // Downloads and gift cards are handed over once the order is paid
+    // (automatic fulfilment of a settled order). An invoice (or an order
+    // marked paid, placed as one) gets paid before that; cash on delivery is
+    // collected at a door they never reach, so those lines are refused.
+    const paidBeforeHandover = (data.paymentMethod ?? "cod") !== COD_PAYMENT_METHOD;
     const unavailable: AdminOrderSkuIssue[] = [];
     plan.lineTypes.forEach((type, index) => {
-        if (isAutoFulfillmentType(type)) {
+        if (isAutoFulfillmentType(type) && !paidBeforeHandover) {
             addAdminOrderSkuIssue(unavailable, resolvedItems[index]!, index, "fulfilment_unavailable",
-                "Digital items and gift cards can't be added to an order yet.");
+                type === "gift_card"
+                    ? "A gift card is sent once it's paid, so it can't be cash on delivery. Choose Mark as paid or Invoice."
+                    : "A download is sent once it's paid, so it can't be cash on delivery. Choose Mark as paid or Invoice.");
         }
     });
     if (unavailable.length > 0) throwAdminOrderSkuIssues(unavailable);

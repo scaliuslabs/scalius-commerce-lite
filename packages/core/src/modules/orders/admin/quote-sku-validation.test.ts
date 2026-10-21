@@ -219,6 +219,8 @@ interface SkuRow {
     variantDiscountType?: "percentage" | "flat" | null;
     variantDiscountBps?: number;
     variantDiscountAmountMinor?: number;
+    fulfillmentKind?: "physical" | "digital" | "service";
+    isGiftCard?: boolean;
 }
 
 interface AdminOrderSkuIssue {
@@ -807,6 +809,24 @@ describe("resolveAdminOrderItemInventory", () => {
             },
         });
         expect(taxMocks.calculateStorefrontTaxQuote).not.toHaveBeenCalled();
+    });
+
+    it("refuses downloads and gift cards on cash on delivery, per line, and takes them on an order paid before hand-over", async () => {
+        const rows: SkuRow[] = [
+            { id: "var_book", productId: "prod_book", trackInventory: false, variantDeletedAt: null, productActive: true, productDeletedAt: null, fulfillmentKind: "digital" },
+            { id: "var_card", productId: "prod_card", trackInventory: false, variantDeletedAt: null, productActive: true, productDeletedAt: null, fulfillmentKind: "digital", isGiftCard: true },
+        ];
+        const items = [
+            { productId: "prod_book", variantId: "var_book", quantity: 1 },
+            { productId: "prod_card", variantId: "var_card", quantity: 1 },
+        ];
+        const issues = await expectSkuIssues(quoteManualOrder(createOrderDbWithSkuRows(rows).db, { city: "city_dhaka", zone: "zone_mirpur", area: null, items, shippingCharge: 0, discountAmount: null }));
+        expect(issues.map((issue) => [issue.index, issue.code])).toEqual([[0, "fulfilment_unavailable"], [1, "fulfilment_unavailable"]]);
+        expect(issues[0]!.message).toMatch(/download/);
+        expect(issues[1]!.message).toMatch(/gift card/);
+
+        await expect(quoteManualOrder(createOrderDbWithSkuRows(rows).db, { city: "city_dhaka", zone: "zone_mirpur", area: null, items, shippingCharge: 0, discountAmount: null, paymentMethod: "net_terms" }))
+            .resolves.toMatchObject({ subtotalAmount: 200 });
     });
 
     it("allows a full item discount while keeping shipping payable", async () => {

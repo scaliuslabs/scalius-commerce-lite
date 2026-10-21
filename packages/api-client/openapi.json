@@ -201906,6 +201906,31 @@
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 365
+                  },
+                  "paid": {
+                    "type": "object",
+                    "properties": {
+                      "via": {
+                        "type": "string",
+                        "enum": [
+                          "bank_transfer",
+                          "cash",
+                          "cheque",
+                          "card_terminal",
+                          "mobile_wallet",
+                          "other"
+                        ]
+                      },
+                      "reference": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 120
+                      }
+                    },
+                    "required": [
+                      "via"
+                    ],
+                    "additionalProperties": false
                   }
                 },
                 "required": [
