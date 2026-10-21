@@ -246,11 +246,7 @@ a.product-reviews-bar:hover .product-reviews-bar-track,
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.25rem 0.5rem;
-}
-
-.review-sep {
-  color: var(--border);
+  gap: 0.25rem 0.75rem;
 }
 
 .review-verified {

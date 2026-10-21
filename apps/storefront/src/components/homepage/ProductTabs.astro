@@ -26,7 +26,7 @@ interface Props {
 
 const { sectionId, title, tabs, currencySymbol, currencyCode, aboveFold } = Astro.props;
 const { language } = await currentRequestTheme(Astro.locals);
-const copy = storefrontCopy(language).home;
+const copy = storefrontCopy(language).section;
 const base = `home-${sectionId}`;
 const headingId = `${base}-title`;
 const heading = title.trim();
@@ -82,7 +82,7 @@ const labelled = Boolean(heading) || single;
               )}
               {!single && tab.href && (
                 <p class="mt-2 text-end">
-                  <a href={tab.href} class="-my-3 inline-block py-3 text-sm font-semibold text-primary hover:underline">{copy.viewAllOf(tab.title)}</a>
+                  <a href={tab.href} class="-my-3 inline-block py-3 text-sm font-semibold text-primary hover:underline">{copy.viewAll}<span class="sr-only">: {tab.title}</span></a>
                 </p>
               )}
             </div>

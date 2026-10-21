@@ -10,7 +10,9 @@
 // - square: a square gallery.
 // Grids use the widest column count that leaves no stranded row
 // (balancedColumns), so twelve tiles are 6 or 4 across, never 8 + 4. A
-// category without a photo shows CategoryMonogram in the same box.
+// category without a photo shows CategoryMonogram in the same box; photo
+// tiles where no category has a photo are name cards instead of a wall of
+// empty frames.
 import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
 import type { HomepageCategory } from "@/lib/api/storefront";
 import { balancedColumns } from "@/lib/homepage-sections";
@@ -41,6 +43,7 @@ const columns = (phone: number, tablet: number, desktop: number) =>
   `--cols-phone:${balancedColumns(count, phone)};--cols-tablet:${balancedColumns(count, tablet)};--cols-desktop:${balancedColumns(count, desktop)};`;
 const quads = Array.from({ length: Math.ceil(count / 4) }, (_, index) => categories.slice(index * 4, index * 4 + 4));
 const shown = photo ? count >= 1 : count >= 2;
+const named = photo && categories.every((category) => !category.imageUrl);
 ---
 
 {shown && (
@@ -48,7 +51,20 @@ const shown = photo ? count >= 1 : count >= 2;
     <Container>
       <SectionHeader id={headingId} title={title} />
 
-      {photo && (
+      {named && (
+        <ul class="cat-names" style={columns(2, 3, 4)}>
+          {categories.map((category) => (
+            <li>
+              <a href={hrefOf(category)} class="cat-name">
+                <span class="cat-name-text">{category.name}</span>
+                <svg aria-hidden="true" data-dir-icon viewBox="0 0 24 24" width="18" height="18"><path d="M5 12h14m-6-6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {photo && !named && (
         <ul
           class="cat-photos"
           style={columns(3, style === "photo-grid" ? 3 : 3, style === "photo-grid" ? 4 : 5)}
@@ -253,6 +269,48 @@ const shown = photo ? count >= 1 : count >= 2;
 
   @media (min-width: 64rem) {
     .cat-photos { grid-template-columns: repeat(var(--cols-desktop), minmax(0, 1fr)); }
+  }
+
+  /* Name cards: photo tiles when no category has a photo. */
+  .cat-names {
+    display: grid;
+    grid-template-columns: repeat(var(--cols-phone), minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  .cat-name {
+    display: flex;
+    block-size: 100%;
+    min-block-size: 3.5rem;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border: var(--theme-surface-border, 1px solid var(--border));
+    border-radius: var(--radius);
+    background: var(--card);
+    box-shadow: var(--theme-surface-shadow, none);
+    color: var(--foreground);
+    font-size: var(--theme-text-sm, 0.875rem);
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  .cat-name-text { min-inline-size: 0; overflow-wrap: break-word; }
+  .cat-name svg { flex: none; color: var(--muted-foreground); }
+
+  @media (hover: hover) {
+    .cat-name:hover { border-color: var(--primary); }
+    .cat-name:hover svg { color: var(--foreground); }
+  }
+
+  @media (min-width: 40rem) {
+    .cat-names { grid-template-columns: repeat(var(--cols-tablet), minmax(0, 1fr)); gap: 0.75rem; }
+    .cat-name { min-block-size: 4.5rem; padding-inline: 1.25rem; font-size: var(--theme-text-base, 1rem); }
+  }
+
+  @media (min-width: 64rem) {
+    .cat-names { grid-template-columns: repeat(var(--cols-desktop), minmax(0, 1fr)); }
   }
 
   /* Icon tiles: 3 across on phones so names fit whole. */

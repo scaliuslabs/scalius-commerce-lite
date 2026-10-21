@@ -151,18 +151,21 @@ const listingEmbeds: EmbedRenderers = { filters: embed("filters"), toolbar: embe
 
     {((description && !descriptionAbove) || guide) && (
       <section
-        class="mx-auto mt-10 max-w-4xl space-y-6 border-t border-border pt-8 sm:mt-12 sm:pt-10"
+        class="mt-10 border-t border-border pt-8 sm:mt-12 sm:pt-10"
         aria-label={guide?.label ?? copy.listing.about(hero.title)}
         data-catalog-content="below"
       >
-        {projection.descriptionHtml && !descriptionAbove && <CatalogDescription content={projection.descriptionHtml} name={projection.title} />}
-        {guide && (
-          <RichContent
-            content={guide.html}
-            className="prose-sm sm:prose-base prose-headings:scroll-mt-24"
-            processShortcodes={false}
-          />
-        )}
+        {/* The page's start edge with a reading measure, not a centred box. */}
+        <div class="max-w-3xl space-y-6">
+          {projection.descriptionHtml && !descriptionAbove && <CatalogDescription content={projection.descriptionHtml} name={projection.title} />}
+          {guide && (
+            <RichContent
+              content={guide.html}
+              className="prose-sm sm:prose-base prose-headings:scroll-mt-24"
+              processShortcodes={false}
+            />
+          )}
+        </div>
       </section>
     )}
   </Container>
