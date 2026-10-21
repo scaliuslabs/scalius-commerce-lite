@@ -635,10 +635,10 @@ const VariantRow = React.memo(function VariantRow({
   const photoError = errorOf("photo");
   // Quantities need "Adjust stock"; the rest of the row follows products.edit.
   const quantityReadOnly = readOnly || !usePermissions().hasPermission(PERMISSIONS.PRODUCTS_ADJUST_STOCK);
-  const sale = Number.isFinite(variant.price) && !errorOf("discount") ? money.salePrice(variant.price, variant) : null;
+  const compareAt = !errorOf("discount") ? variant.compareAt : null;
   const change = (patch: Partial<DraftVariant>) => onChange(variant.id, patch);
-  // Profit and margin of what the customer pays (after the variant's discount).
-  const customerPays = Number.isFinite(variant.price) ? sale ?? variant.price : null;
+  // Profit and margin of what the customer pays: the price itself.
+  const customerPays = Number.isFinite(variant.price) ? variant.price : null;
   const margin = cost === undefined ? null : costMargin(customerPays, cost, getDecimalPlaces(money.code));
   const actions = React.useMemo<ExtraAction[]>(() => [
     ...(!readOnly ? [{ label: t("editDetails"), icon: PenLine, onClick: () => onToggleExpand(variant.id) }] : []),
@@ -676,12 +676,12 @@ const VariantRow = React.memo(function VariantRow({
         </button>
         <div className="flex min-w-0 items-center gap-2 text-body text-muted-foreground">
           <IdText value={variant.sku} copy className="min-w-0" />
-          {/* The price after the variant's discount, compact; the full sentence is its name and tooltip. */}
-          {sale !== null ? (
-            <span className="inline-flex shrink-0 items-center gap-1 tabular-nums" title={t("afterDiscount", { amount: money.whole(sale) })}>
+          {/* The compare-at price, crossed out and compact; the full sentence is its name and tooltip. */}
+          {compareAt !== null ? (
+            <span className="inline-flex shrink-0 items-center gap-1 tabular-nums" title={t("compareAtWas", { amount: money.whole(compareAt) })}>
               <Tag aria-hidden="true" className="size-3.5" />
-              <span aria-hidden="true">{money.whole(sale)}</span>
-              <span className="sr-only">{t("afterDiscount", { amount: money.whole(sale) })}</span>
+              <s aria-hidden="true">{money.whole(compareAt)}</s>
+              <span className="sr-only">{t("compareAtWas", { amount: money.whole(compareAt) })}</span>
             </span>
           ) : null}
         </div>

@@ -31,8 +31,8 @@ const options: DraftOption[] = [
 ];
 const variant = (id: string, size: string, color: string, price: number, extra: Partial<DraftVariant> = {}): DraftVariant => ({
   id, selectedOptionValueIds: [size, color], imageId: null, sku: `PANJABI-${id.toUpperCase()}`, price, stock: 5,
-  trackInventory: true, weight: null, barcode: null, barcodeType: null, discountType: "percentage",
-  discountPercentage: null, discountAmount: null, ...extra,
+  trackInventory: true, weight: null, barcode: null, barcodeType: null, compareAt: null,
+  ...extra,
 });
 const label = (key: ProductVariantMessageKey, vars?: Record<string, string | number>) => translate(productVariantMessages, key, vars);
 
@@ -110,7 +110,7 @@ describe("VariantTable", () => {
   });
 
   const rows = () => [
-    variant("sw", "s", "w", 2500, { discountPercentage: 10 }),
+    variant("sw", "s", "w", 2500, { compareAt: 2800 }),
     variant("sb", "s", "b", 2500),
     variant("mw", "m", "w", 2200),
     variant("mb", "m", "b", 2400, { trackInventory: false, stock: 0 }),
@@ -158,7 +158,7 @@ describe("VariantTable", () => {
     expect(mocks.restoredAll).not.toHaveBeenCalled();
   });
 
-  it("shows each variant on one line: ৳ price, SKU with copy, the discounted price as a short note", async () => {
+  it("shows each variant on one line: ৳ price, SKU with copy, the compare-at price as a short note", async () => {
     await render(rows());
     const price = input(label("priceFor", { name: "S / White" }));
     expect(price.value).toBe("2500");
@@ -166,7 +166,7 @@ describe("VariantTable", () => {
     const row = host.querySelector('[data-variant-row="sw"]')!;
     expect(row.textContent).toContain("PANJABI-SW");
     expect(row.querySelector('button[aria-label^="Copy"]')).not.toBeNull();
-    expect(row.textContent).toContain(label("afterDiscount", { amount: "৳2,250" }));
+    expect(row.textContent).toContain(label("compareAtWas", { amount: "৳2,800" }));
     expect(host.textContent).not.toContain("Customers pay");
     // Untracked variants say so instead of offering a quantity.
     expect(host.querySelector('[data-variant-row="mb"]')!.textContent).toContain(label("notTracked"));

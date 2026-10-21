@@ -53,6 +53,8 @@ import {
   materializeVariants,
   materializeVariantsExcluding,
   matrixSaveVariants,
+  variantInput,
+  type VariantSeed,
   missingOptionCombinations,
   normalized,
   followProductDefaults,
@@ -80,6 +82,8 @@ import { barcodePatch, InventoryQuantityInput, type IncomingUnits, type IssueFor
 import { VariantTable, type VariantCosts } from "./VariantTable";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { usePermissions } from "~/contexts/PermissionContext";
+import { useCurrency } from "@/hooks/use-currency";
+import { getDecimalPlaces } from "@scalius/shared/currency";
 
 const MAX_AXES = MAX_PRODUCT_OPTION_AXES;
 const MAX_COMBINATIONS = MAX_PRODUCT_OPTION_COMBINATIONS;
@@ -104,7 +108,10 @@ type OptionMatrixEditorProps = {
   readOnly?: boolean;
   productId?: string;
   productName: string;
+  /** What customers pay for the product: new variants start at it. */
   productPrice: number;
+  /** The product's compare-at price, which new variants start with too (null: none). */
+  productCompareAt?: number | null;
   /** Active products need every variant priced above 0. */
   requirePositivePrice?: boolean;
   options?: ProductOptionDefinition[];
@@ -141,6 +148,7 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
   productId,
   productName,
   productPrice,
+  productCompareAt = null,
   requirePositivePrice = false,
   options: savedOptions = NO_OPTIONS,
   variants: savedVariants = NO_VARIANTS,
@@ -158,6 +166,9 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
   fulfilmentMode = "physical",
 }, ref) {
   const t = useMessages(productVariantMessages);
+  // Saved SKUs read as the merchant's pair (price customers pay, compare-at price); rows go back as base and discount.
+  const { salePrice, code: currencyCode } = useCurrency();
+  const decimalPlaces = getDecimalPlaces(currencyCode);
   const weightUnit = useWeightUnit();
   const d = useMessages(digitalMessages);
   const queryClient = useQueryClient();
@@ -167,11 +178,11 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
   // Quantities need "Adjust stock" (products.adjust_stock); the rest of the SKU follows products.edit.
   const canAdjustStock = usePermissions().hasPermission(PERMISSIONS.PRODUCTS_ADJUST_STOCK);
   const [optionDraft, setOptions] = React.useState<DraftOption[]>(() => initialOptions(savedOptions));
-  const [variantDraft, setVariants] = React.useState<DraftVariant[]>(() => initialVariants(savedVariants));
+  const [variantDraft, setVariants] = React.useState<DraftVariant[]>(() => initialVariants(savedVariants, salePrice));
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const simpleSku = React.useMemo(() => readOnly ? initialSimpleSku(defaultSku) : simpleSkuDraft, [readOnly, defaultSku, simpleSkuDraft]);
   const options = React.useMemo(() => readOnly ? initialOptions(savedOptions) : optionDraft, [readOnly, savedOptions, optionDraft]);
-  const variants = React.useMemo(() => readOnly ? initialVariants(savedVariants) : variantDraft, [readOnly, savedVariants, variantDraft]);
+  const variants = React.useMemo(() => readOnly ? initialVariants(savedVariants, salePrice) : variantDraft, [readOnly, savedVariants, variantDraft]);
   // Dirty is the draft against the last saved one: an edit changed back is no change.
   const draft = React.useMemo(() => draftSignature(simpleSkuDraft, optionDraft, variantDraft), [simpleSkuDraft, optionDraft, variantDraft]);
   const [savedDraft, setSavedDraft] = React.useState(draft);
@@ -183,7 +194,7 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
   const [combinationsPending, setCombinationsPending] = React.useState(false);
   const [topologyChanged, setTopologyChanged] = React.useState(false);
   const [excludedCombinationKeys, setExcludedCombinationKeys] = React.useState<Set<string>>(() => new Set(
-    missingOptionCombinations(initialOptions(savedOptions), initialVariants(savedVariants)).map(combinationKey),
+    missingOptionCombinations(initialOptions(savedOptions), initialVariants(savedVariants, salePrice)).map(combinationKey),
   ));
   const [omittedVariantsByKey, setOmittedVariantsByKey] = React.useState<Map<string, DraftVariant>>(() => new Map());
   // The product's kind (a gift card) limits what its SKUs may be: the table, the checks and
@@ -410,8 +421,8 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
               ...(kindRules.showWeight && shownSimpleSku.weight !== null ? { weight: shownSimpleSku.weight } : {}),
             },
           }
-        : options.length > 0 ? { optionMatrix: { options, variants: withFulfilmentMode(shownVariants, fulfilmentMode) } } : null);
-  }, [readOnly, draftIssue, fulfilmentMode, kindRules, onDraftChange, options, simpleMode, shownSimpleSku, shownVariants]);
+        : options.length > 0 ? { optionMatrix: { options, variants: withFulfilmentMode(shownVariants, fulfilmentMode).map((row) => variantInput(row, decimalPlaces)) } } : null);
+  }, [readOnly, decimalPlaces, draftIssue, fulfilmentMode, kindRules, onDraftChange, options, simpleMode, shownSimpleSku, shownVariants]);
 
   React.useEffect(() => onDraftIssueChange?.(readOnly ? null : draftLine), [readOnly, draftLine, onDraftIssueChange]);
   // Typed costs count as a variant change: the page's Save sends them after the variants.
@@ -446,21 +457,35 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
     setCombinationsPending(true);
   }, []);
 
+  // New rows start from the product's pair; while the product has no options yet, its
+  // one SKU's barcode goes to the first row, so printed labels keep scanning.
+  const seedBarcode = savedOptions.length === 0 ? simpleSkuDraft.barcode : null;
+  const seedBarcodeType = savedOptions.length === 0 ? simpleSkuDraft.barcodeType : null;
+  const seed = React.useMemo<VariantSeed>(() => ({
+    price: productPrice,
+    compareAt: productCompareAt,
+    barcode: seedBarcode,
+    barcodeType: seedBarcodeType,
+  }), [productPrice, productCompareAt, seedBarcode, seedBarcodeType]);
+
   const applyOptions = React.useCallback(() => {
     if (!validShape || combinationCount > MAX_COMBINATIONS) return;
     const next = materializeVariantsExcluding(
       options,
       variants,
       productName,
-      productPrice,
+      seed,
       simpleConversion ? defaultSku!.stock : 0,
       excludedCombinationKeys,
     );
     setVariants(next);
+    // The product's first option: every variant keeps the one cost per item it had.
+    const simpleCost = variants.length === 0 && costs ? costs.costOf(costs.simpleKey) : null;
+    if (simpleCost !== null) costs!.setCosts(next.filter((row) => costs!.costOf(row.id) === null).map((row) => row.id), simpleCost);
     setExcludedCombinationKeys(new Set(missingOptionCombinations(options, next).map(combinationKey)));
     setTopologyChanged(optionTopologySignature(options) !== savedTopology);
     setCombinationsPending(false);
-  }, [combinationCount, defaultSku, excludedCombinationKeys, options, productName, productPrice, savedTopology, simpleConversion, validShape, variants]);
+  }, [combinationCount, costs, defaultSku, excludedCombinationKeys, options, productName, seed, savedTopology, simpleConversion, validShape, variants]);
 
   // Variants follow the options as soon as every option has a name and a value.
   // Existing rows are matched by option values and keep their data; rows that
@@ -521,9 +546,9 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
   const restoreCombination = React.useCallback((selectedOptionValueIds: string[]) => {
     const key = combinationKey(selectedOptionValueIds);
     const restored = omittedVariantsByKey.get(key)
-      ?? materializeCombination(options, variants, selectedOptionValueIds, productName, productPrice);
+      ?? materializeCombination(options, variants, selectedOptionValueIds, productName, seed);
     const next = [...variants, restored];
-    const order = new Map(materializeVariants(options, next, productName, productPrice, 0)
+    const order = new Map(materializeVariants(options, next, productName, seed, 0)
       .map((variant, index) => [combinationKey(variant.selectedOptionValueIds), index]));
     setVariants(next.sort((a, b) =>
       (order.get(combinationKey(a.selectedOptionValueIds)) ?? 0)
@@ -539,17 +564,17 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
       next.delete(key);
       return next;
     });
-  }, [omittedVariantsByKey, options, productName, productPrice, variants]);
+  }, [omittedVariantsByKey, options, productName, seed, variants]);
 
   const restoreAllCombinations = React.useCallback(() => {
     const currentCombinationKeys = new Set(missingOptionCombinations(options, variants).map(combinationKey));
     const restorableOriginals = [...omittedVariantsByKey]
       .filter(([key]) => currentCombinationKeys.has(key))
       .map(([, variant]) => variant);
-    setVariants(materializeVariants(options, [...variants, ...restorableOriginals], productName, productPrice, 0));
+    setVariants(materializeVariants(options, [...variants, ...restorableOriginals], productName, seed, 0));
     setExcludedCombinationKeys(new Set());
     setOmittedVariantsByKey(new Map());
-  }, [omittedVariantsByKey, options, productName, productPrice, variants]);
+  }, [omittedVariantsByKey, options, productName, seed, variants]);
 
   const missingCombinations = React.useMemo(
     () => missingOptionCombinations(options, variants),
@@ -599,7 +624,7 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
             : {}),
         },
       }
-    : { optionMatrix: { options, variants: matrixSaveVariants(shownVariants, savedVariants, fulfilmentMode) } };
+    : { optionMatrix: { options, variants: matrixSaveVariants(shownVariants, savedVariants, fulfilmentMode, decimalPlaces) } };
 
   const mutation = useMutation({
     mutationFn: (revisionOverride?: number) => {
@@ -612,7 +637,7 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
               ...body.defaultSku,
               selectedOptionValueIds: [],
               imageId: defaultSku.imageId,
-              price: productPrice,
+              price: productCompareAt ?? productPrice,
               discountType: "percentage",
               discountPercentage: null,
               discountAmount: null,

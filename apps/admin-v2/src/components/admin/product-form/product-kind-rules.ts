@@ -71,6 +71,7 @@ type ConstrainableSku = {
   discountType?: "percentage" | "flat";
   discountPercentage?: number | null;
   discountAmount?: number | null;
+  compareAt?: number | null;
   fulfillmentKind?: "physical" | "digital" | "service";
 };
 
@@ -93,6 +94,7 @@ export function constrainSkuForKind<T extends ConstrainableSku>(sku: T, rules: P
     if (sku.discountType !== undefined && sku.discountType !== "percentage") patch.discountType = "percentage";
     if (sku.discountPercentage) patch.discountPercentage = null;
     if (sku.discountAmount) patch.discountAmount = null;
+    if (sku.compareAt != null) patch.compareAt = null;
   }
   if (rules.forcedFulfillmentKind && sku.fulfillmentKind !== undefined && sku.fulfillmentKind !== rules.forcedFulfillmentKind) {
     patch.fulfillmentKind = rules.forcedFulfillmentKind;

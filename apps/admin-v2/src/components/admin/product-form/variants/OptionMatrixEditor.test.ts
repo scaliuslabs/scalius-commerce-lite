@@ -6,6 +6,7 @@ import {
   getOptionMatrixIssue,
   followProductDefaults,
   getSimpleSkuIssue,
+  initialVariants,
   guessOptionType,
   materializeCombination,
   materializeVariants,
@@ -49,9 +50,7 @@ const variant = (
   weight: null,
   barcode: null,
   barcodeType: null,
-  discountType: "percentage",
-  discountPercentage: 0,
-  discountAmount: 0,
+  compareAt: null,
 });
 
 const issue = (key: ProductVariantMessageKey, vars?: Record<string, number>) => translate(productVariantMessages, key, vars);
@@ -198,7 +197,41 @@ describe("option matrix editor model", () => {
     expect(getOptionMatrixIssue(options, [], [], true)?.message).toBe(issue("issueOptionNamesUnique"));
   });
 
-  it("blocks duplicate SKUs, barcodes, invalid images, and excessive flat discounts", () => {
+  // Buyer QA B1 / merchant QA M4: Price 4200, Compare-at 4800, options Color x Size,
+  // White / 42 priced 4400. Every SKU sells at exactly what the merchant typed.
+  it("keeps each variant's price and compare-at price exactly as entered", () => {
+    const options = [
+      option("color", "Color", [["graphite", "Graphite"], ["white", "White"]]),
+      option("size", "Size", [["40", "40"], ["41", "41"], ["42", "42"]]),
+    ];
+    const rows = materializeVariants(options, [], "Metro Low-Top Sneakers",
+      { price: 4200, compareAt: 4800, barcode: "99019643763621", barcodeType: "custom" }, 20);
+    expect(rows.map((row) => [row.price, row.compareAt])).toEqual(Array(6).fill([4200, 4800]));
+    // The product's one SKU becomes the first row: its barcode (and stock) go with it, once.
+    expect(rows.map((row) => row.barcode)).toEqual(["99019643763621", null, null, null, null, null]);
+    const whiteFortyTwo = rows.find((row) => row.selectedOptionValueIds.join() === "white,42")!;
+    whiteFortyTwo.price = 4400;
+    const sent = saveRows(rows, [], "physical", 2);
+    const sells = (row: (typeof sent)[number]) => row.price - (row.discountType === "flat" ? row.discountAmount ?? 0 : 0);
+    expect(sent.map(sells)).toEqual([4200, 4200, 4200, 4200, 4200, 4400]);
+    expect(sent.map((row) => row.price)).toEqual(Array(6).fill(4800));
+    // A row without a compare-at price is sent with no discount at all.
+    whiteFortyTwo.compareAt = null;
+    expect(saveRows(rows, [], "physical", 2).at(-1)).toMatchObject({ price: 4400, discountType: "percentage", discountAmount: null });
+    // A compare-at price must be the higher one.
+    whiteFortyTwo.compareAt = 4400;
+    expect(getOptionMatrixIssue(options, rows, [], false)).toMatchObject({ message: issue("compareAtNotHigher"), field: "discount" });
+  });
+
+  it("reads saved SKUs as the merchant's pair", () => {
+    expect(initialVariants([{
+      id: "var_1", isDefault: false, deletedAt: null, selectedOptions: [], imageId: null, sku: "A", price: 4800,
+      stock: 0, trackInventory: true, weight: null, barcode: null, barcodeType: null,
+      discountType: "flat", discountPercentage: 0, discountAmount: 400,
+    } as unknown as Parameters<typeof initialVariants>[0][number]])[0]).toMatchObject({ price: 4400, compareAt: 4800 });
+  });
+
+  it("blocks duplicate SKUs, barcodes, invalid images, and a compare-at price below the price", () => {
     const options = [option("format", "Format", [["print", "Print"], ["digital", "Digital"]])];
     const rows = [variant("one", ["print"]), variant("two", ["digital"])];
     rows[1]!.sku = rows[0]!.sku.toLowerCase();
@@ -217,10 +250,9 @@ describe("option matrix editor model", () => {
     expect(getOptionMatrixIssue(options, rows, [], false, { allowSavedImageRemovalConfirmation: true })).toBeNull();
 
     rows[0]!.imageId = null;
-    rows[0]!.discountType = "flat";
-    rows[0]!.discountAmount = 101;
+    rows[0]!.compareAt = 90;
     expect(getOptionMatrixIssue(options, rows, [], false)).toEqual({
-      message: issue("issueDiscountOverPrice"),
+      message: issue("compareAtNotHigher"),
       variantId: "one",
       field: "discount",
     });
@@ -319,7 +351,7 @@ describe("option matrix editor model", () => {
 describe("product fulfilment mode", () => {
   const row = (id: string, fulfillmentKind?: "physical" | "service") => ({
     id, selectedOptionValueIds: [], imageId: null, sku: id.toUpperCase(), price: 100, stock: 0, trackInventory: false,
-    weight: null, barcode: null, barcodeType: null, discountType: "percentage", discountPercentage: null, discountAmount: null,
+    weight: null, barcode: null, barcodeType: null, compareAt: null,
     ...(fulfillmentKind ? { fulfillmentKind } : {}),
   }) as FulfilmentRow;
 
