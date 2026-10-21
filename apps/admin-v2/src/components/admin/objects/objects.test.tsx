@@ -161,7 +161,7 @@ describe("objects", () => {
     expect(container.querySelector('a[href="/admin/objects/new"]')).not.toBeNull();
   });
 
-  it("creates a object type from its name, fields, display field and storefront access", async () => {
+  it("creates an object type from its name, fields, display field and storefront access", async () => {
     await render(<ObjectTypeForm definition={null} />);
     await typeInto(field("object-name"), "Size chart");
     // The handle follows the name until it is edited.

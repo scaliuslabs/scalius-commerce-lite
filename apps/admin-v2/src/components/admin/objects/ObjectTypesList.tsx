@@ -76,8 +76,8 @@ export function ObjectTypesList() {
 
   return (
     <div className="pb-8">
-      <PageHeader title={t("pageTitle")} actions={nothingYet ? null : create} />
-      <p className="mb-4 max-w-3xl text-body text-muted-foreground">{t("pageDescription")}</p>
+      {/* The explanation rides in the header's meta line, never loose on the page (K5); the first-run card says it itself (E1). */}
+      <PageHeader title={t("pageTitle")} meta={nothingYet ? undefined : t("pageDescription")} actions={nothingYet ? null : create} />
       <div className="mb-4 empty:hidden">
         <RemovedAppDataCard show={(group) => group.objectTypes > 0} />
       </div>

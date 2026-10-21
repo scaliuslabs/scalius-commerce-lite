@@ -27,7 +27,6 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { SearchableSelect } from "~/components/ui/searchable-select";
-import { Switch } from "~/components/ui/switch";
 import { Textarea } from "~/components/ui/textarea";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { useMessages } from "~/i18n";
@@ -398,15 +397,14 @@ function TypeFormPage({ initial }: { initial: ObjectType | null }) {
                 <CardContent>
                   <ChoiceField
                     id="object-storefront"
-                    controlAt="end"
                     label={t("storefront")}
                     help={t("storefrontHelp")}
                     control={(
-                      <Switch
+                      <Checkbox
                         id="object-storefront"
                         checked={draft.storefront}
                         aria-describedby="object-storefront-help"
-                        onCheckedChange={(value) => update({ storefront: value })}
+                        onCheckedChange={(value) => update({ storefront: value === true })}
                       />
                     )}
                   />
