@@ -356,6 +356,8 @@ const appDetailSchema = appSummarySchema.extend({
     head: z.boolean(),
     sections: z.array(z.object({ type: z.string(), name: z.string() })),
     components: z.array(z.object({ type: z.string(), name: z.string(), targets: z.array(z.enum(STOREFRONT_COMPONENT_TARGETS)) })),
+    /** Designs (skins) of the store's own parts: a unit (`header`, `product_card`) or a core section (`section:<type>`). */
+    skins: z.array(z.object({ id: z.string(), name: z.string(), target: z.string() })),
     scripts: z.array(z.object({ src: z.string(), placement: z.string(), pages: z.array(z.string()) })),
     themeProblems: z.array(z.object({
       kind: z.enum(["template", "page-preset"]),
@@ -648,6 +650,7 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
       head: manifest.storefront.head,
       sections: manifest.storefront.sections.map((section) => ({ type: section.type, name: section.name })),
       components: manifest.storefront.components.map((component) => ({ type: component.type, name: component.name, targets: [...component.targets] })),
+      skins: manifest.storefront.skins.map((skin) => ({ id: skin.id, name: skin.name, target: skin.target })),
       scripts: manifest.storefront.scripts.map((script) => ({ src: script.src, placement: script.placement, pages: [...script.pages] })),
       themeProblems: storefrontAppThemeProblems(manifest.storefront),
     },

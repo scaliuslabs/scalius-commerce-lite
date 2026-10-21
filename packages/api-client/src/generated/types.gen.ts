@@ -5377,6 +5377,11 @@ export type AppDetail = AppSummary & {
             name: string;
             targets: Array<'header.actions' | 'product.buy_box.before' | 'product.buy_box.after' | 'product.below' | 'footer.columns' | 'product_card.badges' | 'product_card.meta' | 'page'>;
         }>;
+        skins: Array<{
+            id: string;
+            name: string;
+            target: string;
+        }>;
         scripts: Array<{
             src: string;
             placement: string;

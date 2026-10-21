@@ -24634,6 +24634,28 @@
                       ]
                     }
                   },
+                  "skins": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "target": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "target"
+                      ]
+                    }
+                  },
                   "scripts": {
                     "type": "array",
                     "items": {
@@ -24696,6 +24718,7 @@
                   "head",
                   "sections",
                   "components",
+                  "skins",
                   "scripts",
                   "themeProblems"
                 ]

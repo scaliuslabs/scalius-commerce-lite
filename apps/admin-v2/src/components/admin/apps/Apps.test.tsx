@@ -548,7 +548,7 @@ describe("App page", () => {
       VIEWER,
     );
 
-    expect(text()).toContain("Redesigns your storefront with its own code");
+    expect(text()).toContain("Draws on your storefront with its own code: its own styles and scripts.");
     expect(text()).toContain("can act as the signed-in buyer on your store (see their orders, addresses, gift cards)");
     expect(text()).toContain("Its storefront code connects to cdn.acme.example from your buyers' browsers");
     const newRows = [...document.querySelectorAll("li")].filter((row) => row.textContent?.includes("New"));
