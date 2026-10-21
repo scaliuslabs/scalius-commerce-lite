@@ -14,7 +14,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "~/components/ui/dialog";
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from "~/components/ui/sheet";
+import { SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "~/components/ui/sheet";
 import { Field } from "~/components/ui/field";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { SaveErrorBanner, SaveScope, useSaveScope, useServerFieldError, type SaveScopeState } from "../shared/SaveBar";
@@ -309,9 +309,10 @@ export function SettingsDialog({
       savedMessage={savedMessage}
       render={(state) => (
         <>
-          {layout === "sheet" ? (
-            <Sheet open={open} onOpenChange={(next) => (next ? setOpen(true) : requestClose(state))}>
-              <SheetTrigger asChild>{trigger}</SheetTrigger>
+          {/* One mounted root (a sheet is a Radix dialog too); the layout picks its content. */}
+          <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : requestClose(state))}>
+            <DialogTrigger asChild>{trigger}</DialogTrigger>
+            {layout === "sheet" ? (
               <SheetContent className="flex flex-col" {...(description ? {} : { "aria-describedby": undefined })}>
                 <div className="flex shrink-0 items-start gap-2 border-b px-6 py-4">
                   <SheetHeader className="min-w-0 flex-1">
@@ -325,10 +326,7 @@ export function SettingsDialog({
                 <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-6 py-4">{body(state)}</div>
                 <SheetFooter>{actions(state)}</SheetFooter>
               </SheetContent>
-            </Sheet>
-          ) : (
-            <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : requestClose(state))}>
-              <DialogTrigger asChild>{trigger}</DialogTrigger>
+            ) : (
               <DialogContent className="sm:max-w-160">
                 <DialogHeader>
                   <DialogTitle>{title}</DialogTitle>
@@ -338,8 +336,8 @@ export function SettingsDialog({
                 {/* Long forms scroll; the footer is a pinned, bordered bar (DialogFooter). */}
                 <DialogFooter>{actions(state)}</DialogFooter>
               </DialogContent>
-            </Dialog>
-          )}
+            )}
+          </Dialog>
           <ConfirmDialog
             open={confirmDiscard && state.dirty}
             onOpenChange={setConfirmDiscard}
