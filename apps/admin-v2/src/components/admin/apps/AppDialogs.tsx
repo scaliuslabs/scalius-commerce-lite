@@ -4,6 +4,7 @@
 // shown again. Deactivate and uninstall are guarded by the revision too, and
 // both list the published theme's parts the app draws, which then show the
 // store's own design.
+import { TypedConfirmField, typedConfirmMatches } from "~/components/admin/shared/TypedConfirmField";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -161,6 +162,7 @@ export function UninstallAppDialog({ app, open, onOpenChange }: DialogProps) {
   const navigate = useNavigate();
   const result = useAppMutationResult(app);
   const [keepData, setKeepData] = useState(true);
+  const [typed, setTyped] = useState("");
   const uninstall = useMutation({
     mutationFn: () => uninstallApp(app, keepData),
     onSuccess: async ({ hookError }) => {
@@ -177,7 +179,10 @@ export function UninstallAppDialog({ app, open, onOpenChange }: DialogProps) {
   const changeOpen = (next: boolean) => {
     if (uninstall.isPending) return;
     // Each opening starts on the safe choice.
-    if (!next) setKeepData(true);
+    if (!next) {
+      setKeepData(true);
+      setTyped("");
+    }
     onOpenChange(next);
   };
   const choices = [
@@ -212,9 +217,11 @@ export function UninstallAppDialog({ app, open, onOpenChange }: DialogProps) {
             </label>
           ))}
         </RadioGroup>
+        {/* Deleting the data cannot be undone: the app's name is typed first. */}
+        {!keepData ? <TypedConfirmField phrase={app.name} value={typed} onChange={setTyped} disabled={uninstall.isPending} /> : null}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={uninstall.isPending}>{t("cancel")}</AlertDialogCancel>
-          <Button type="button" variant="destructive" loading={uninstall.isPending} onClick={() => uninstall.mutate()}>
+          <Button type="button" variant="destructive" loading={uninstall.isPending} disabled={!keepData && !typedConfirmMatches(app.name, typed)} onClick={() => uninstall.mutate()}>
             {t("uninstall")}
           </Button>
         </AlertDialogFooter>

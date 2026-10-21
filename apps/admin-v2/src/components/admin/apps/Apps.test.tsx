@@ -353,6 +353,11 @@ const STORE = {
 const rows = () => [...document.querySelectorAll("li")].map((row) => row.textContent ?? "");
 const tab = (label: string) => [...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((element) => element.textContent?.startsWith(label))!;
 
+function typeInto(input: HTMLInputElement, value: string) {
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
 describe("Apps list", () => {
   it("shows every installed app with its icon, status, purpose and features on, and links to its page", async () => {
     sdk.getApiV1AdminApps.mockImplementation(() => ok({
@@ -747,6 +752,9 @@ describe("App page", () => {
     expect(dialog().textContent).toContain("stays in your apps, ready to activate again");
     const deleteChoice = [...dialog().querySelectorAll("label")].find((label) => label.textContent?.includes("Delete this app's data"))!;
     await click(deleteChoice.querySelector<HTMLElement>('[role="radio"]')!);
+    // Deleting data for good asks for the app's name first.
+    expect(button("Uninstall", dialog()).disabled).toBe(true);
+    await act(async () => typeInto(dialog().querySelector("input")!, " loyalty POINTS "));
     await click(button("Uninstall", dialog()));
 
     expect(sdk.postApiV1AdminAppsByIdUninstall).toHaveBeenCalledWith({

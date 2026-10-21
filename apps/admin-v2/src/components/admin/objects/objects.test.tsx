@@ -84,6 +84,11 @@ const shipping: ObjectRecord = {
 const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
 const setArea = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
 
+function typeInto(input: HTMLInputElement, value: string) {
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
 describe("objects", () => {
   let root: Root;
   let container: HTMLDivElement;
@@ -257,6 +262,9 @@ describe("objects", () => {
     expect(dialog.textContent).toContain("Delete data from “Bazaar demo”?");
     expect(dialog.textContent).toContain("can't be undone");
     const confirm = [...dialog.querySelectorAll<HTMLButtonElement>("button")].find((each) => each.textContent?.trim() === "Delete data")!;
+    expect(confirm.disabled).toBe(true);
+    await act(async () => typeInto(dialog.querySelector("input")!, "Bazaar demo"));
+    expect(confirm.disabled).toBe(false);
     await act(async () => confirm.click());
     await vi.waitFor(() => expect(sdk.postApiV1AdminAppsRemovedDataByIdDelete).toHaveBeenCalledWith({
       path: { id: "scalius.bazaar" },
