@@ -12,6 +12,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { appOperationNames } from "../packages/shared/src/plugins/app-operations.ts";
 
 const root = resolve(import.meta.dirname, "..");
 export const STABLE_SNAPSHOT = join(root, "apps/api/src/openapi/stable-operations.snapshot.json");
@@ -19,10 +20,11 @@ export const SDK_CONTRACT_GEN = join(root, "packages/plugin-sdk/src/testing-cont
 /** Every operation the host knows, with its stability (generated from the OpenAPI contract). */
 export const AGENT_OPERATIONS_MANIFEST = join(root, "apps/api/src/generated/agent-operations.gen.txt");
 
-/** The ids of operations that exist but are not stable: the host refuses an app's call to one with 403 `api.operation_not_stable`. */
-export function nonStableOperationIds(manifestText) {
+/** The app names of operations that exist but are not stable: the host refuses an app's call to one with 403 `api_operation_not_stable`. */
+export function nonStableOperationNames(manifestText) {
   const { operations } = JSON.parse(manifestText);
-  return [...new Set(operations.filter((operation) => operation.stability !== "stable").map((operation) => operation.operationId))].sort();
+  const stability = new Map(operations.map((operation) => [operation.operationId, operation.stability]));
+  return [...appOperationNames(stability.keys())].filter(([, operationId]) => stability.get(operationId) !== "stable").map(([name]) => name).sort();
 }
 
 /** The generated module: the snapshot as one JSON string, so the type checker reads a string, not a 400 KB literal. */
@@ -37,8 +39,8 @@ export function renderContractModule(snapshotText, manifestText) {
     "",
     `export const STABLE_CONTRACT: StableContract = JSON.parse(${JSON.stringify(compact)});`,
     "",
-    "/** Operations that exist but are not stable (beta or internal): an app's call is refused with 403 `api.operation_not_stable`. */",
-    `export const NON_STABLE_OPERATION_IDS: readonly string[] = JSON.parse(${JSON.stringify(JSON.stringify(nonStableOperationIds(manifestText)))});`,
+    "/** App names of operations that exist but are not stable (beta or internal): an app's call is refused with 403 `api_operation_not_stable`. */",
+    `export const NON_STABLE_OPERATION_NAMES: readonly string[] = JSON.parse(${JSON.stringify(JSON.stringify(nonStableOperationNames(manifestText)))});`,
     "",
   ].join("\n");
 }

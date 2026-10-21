@@ -1,5 +1,13 @@
 import { z } from "@hono/zod-openapi";
 
+/**
+ * An instant as every stable operation carries it: ISO 8601 in UTC
+ * (`2026-10-21T09:30:00.000Z`). Dashboard-only routes may still return the
+ * older `timestampSchema` forms.
+ */
+export const isoTimestampSchema = z.string().openapi({ format: "date-time" });
+export const nullableIsoTimestampSchema = isoTimestampSchema.nullable();
+
 export const timestampSchema = z.union([z.string(), z.number()]);
 
 const nullableTimestampOpenApi = {

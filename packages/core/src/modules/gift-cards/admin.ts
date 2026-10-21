@@ -319,7 +319,7 @@ export async function getStaffGiftCardSummary(db: Database, giftCardId: string):
  * idempotent by request key (a retry adds nothing). The ledger guard refuses
  * an adjustment below zero.
  */
-const GIFT_CARD_VERSION_CONFLICT = "GIFT_CARD_VERSION_CONFLICT";
+const GIFT_CARD_VERSION_CONFLICT = "gift_card_version_conflict";
 
 export async function adjustGiftCardBalance(
     db: Database,

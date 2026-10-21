@@ -201,7 +201,7 @@ describe("cart.line_prices (real schema, test apps)", () => {
     const stale = await validateStorefrontCartItems(db, [line("p_tea", "v_tea", 10, 500)], {
       currencyCode: "BDT", priceIncrementMinor: 100, linePricer: createAppLinePricer(db, runner, { channel: "online_store" }),
     });
-    expect(stale.issues).toEqual([expect.objectContaining({ code: "PRICE_CHANGED", currentPrice: 400 })]);
+    expect(stale.issues).toEqual([expect.objectContaining({ code: "price_changed", currentPrice: 400 })]);
     expect((seen[0]!.input.lines as unknown[])[0]).toEqual({ lineId: "cart:0:v_tea", source: "base", bundle: null });
 
     const data = input([line("p_tea", "v_tea", 10, 400), line("p_mug", "v_mug", 1, 300)]);
@@ -342,6 +342,6 @@ describe("cart.line_prices (real schema, test apps)", () => {
     answers["acme.contract"] = () => failed("TypeError: down");
     await expect(validateStorefrontCartItems(db, [line("p_tea", "v_tea", 1, 500)], {
       currencyCode: "BDT", priceIncrementMinor: 100, linePricer: createAppLinePricer(db, await apps(), { channel: "online_store" }),
-    })).rejects.toMatchObject({ details: { reason: "CHECKOUT_APP_UNAVAILABLE" } });
+    })).rejects.toMatchObject({ details: { reason: "checkout_app_unavailable" } });
   });
 });

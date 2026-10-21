@@ -131,7 +131,7 @@ export async function replaceCategoryAttributeSet(
                 EXISTS (SELECT 1 FROM ${categories} WHERE ${categories.id} = ${categoryId} AND ${categories.deletedAt} IS NULL)
                 AND (SELECT count(*) FROM ${productAttributes}
                      WHERE ${productAttributes.deletedAt} IS NULL AND ${productAttributes.id} IN ${jsonIdSet(ids)}) = ${ids.length}
-            `, "CATEGORY_ATTRIBUTE_SET_CONFLICT"),
+            `, "category_attribute_set_conflict"),
             db.delete(categoryAttributeSets).where(eq(categoryAttributeSets.categoryId, categoryId)),
             ...(ids.length > 0
                 ? [db.insert(categoryAttributeSets).select(sql`
@@ -144,7 +144,7 @@ export async function replaceCategoryAttributeSet(
                 : []),
         ] as never);
     } catch (error) {
-        if (isBatchGuardError(error, "CATEGORY_ATTRIBUTE_SET_CONFLICT")) {
+        if (isBatchGuardError(error, "category_attribute_set_conflict")) {
             throw new ConflictError("The category or one of the attributes changed meanwhile. Refresh and try again.");
         }
         throw error;

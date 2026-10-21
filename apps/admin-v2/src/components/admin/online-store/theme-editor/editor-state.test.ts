@@ -47,7 +47,7 @@ type Theme = StorefrontThemeDocument;
 const section = (type: StorefrontSectionType, id: string, settings: Record<string, unknown> = {}) =>
   ({ ...storefrontSectionDefault(type, id), settings: { ...storefrontSectionDefault(type, id).settings, ...settings } }) as StorefrontSection;
 
-const HOME = [section("hero", "hero"), section("product-rail", "rail", { title: "New" }), section("faq", "faq")];
+const HOME = [section("hero", "hero"), section("product_rail", "rail", { title: "New" }), section("faq", "faq")];
 const withSections = (base: Theme, home: StorefrontSection[]): Theme => ({ ...base, pages: { ...base.pages, home } });
 const theme = (home: StorefrontSection[] = HOME): Theme => withSections(DEFAULT_STOREFRONT_THEME, home);
 const ids = (sections: readonly StorefrontSection[]) => sections.map((each) => each.id);
@@ -156,8 +156,8 @@ describe("sections", () => {
     expect(faq.id).toBe("faq-2");
     expect(itemIds(insertItem(homeItems, faq, 1))).toEqual(["hero", "faq-2", "rail", "faq"]);
     const copy = duplicateSection(homeItems, "rail")!;
-    expect(copy.id).toBe("product-rail");
-    expect(itemIds(copy.items)).toEqual(["hero", "rail", "product-rail", "faq"]);
+    expect(copy.id).toBe("product_rail");
+    expect(itemIds(copy.items)).toEqual(["hero", "rail", "product_rail", "faq"]);
     expect(fromPageItems(copy.items).sections[2]!.settings).toEqual(HOME[1]!.settings);
     expect(duplicateSection(homeItems, "hero")).toBeNull();
     expect(canAddSectionType(HOME, "hero")).toBe(false);
@@ -196,7 +196,7 @@ describe("sections", () => {
 
 describe("blocks", () => {
   const faq = section("faq", "faq", { items: [{ question: "Shipping?", answer: "Two days." }] });
-  const tabs = storefrontSectionDefault("product-tabs", "tabs") as StorefrontSection;
+  const tabs = storefrontSectionDefault("product_tabs", "tabs") as StorefrontSection;
 
   it("adds, duplicates, moves and removes the items of a block list", () => {
     const added = addBlock(faq, "items")!;

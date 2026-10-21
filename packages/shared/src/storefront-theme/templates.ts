@@ -155,8 +155,8 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
     home: [
       home("hero", "hero", { layout: "contained-banners" }),
       home("collections", "collections"),
-      home("category-tiles", "categories", { style: "photo" }),
-      home("usp-strip", "delivery"),
+      home("category_tiles", "categories", { style: "photo" }),
+      home("usp_strip", "delivery"),
     ],
   },
   {
@@ -199,7 +199,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
     home: [
       home("hero", "hero", { layout: "split" }),
       home("editorial", "intro"),
-      home("product-grid", "featured", { columns: 4, rows: 2 }),
+      home("product_grid", "featured", { columns: 4, rows: 2 }),
       home("editorial", "values", { layout: "multicolumn", heading: "", columns: [] }),
       home("editorial", "testimonials", { layout: "testimonial", quotes: [] }),
       home("newsletter", "newsletter"),
@@ -240,9 +240,9 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
     }),
     home: [
       home("hero", "hero", { layout: "full-bleed" }),
-      home("category-tiles", "categories", { style: "quad" }),
-      home("deal-block", "flash-sale"),
-      home("endless-grid", "for-you"),
+      home("category_tiles", "categories", { style: "quad" }),
+      home("deal_block", "flash-sale"),
+      home("endless_grid", "for-you"),
     ],
   },
   {
@@ -268,10 +268,10 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
     }),
     home: [
       home("hero", "hero", { layout: "full-bleed" }),
-      home("category-tiles", "categories", { style: "photo" }),
-      home("product-grid", "popular", { title: "Top selling products", source: { kind: "popular" }, columns: 4, rows: 1 }),
-      home("brand-wall", "brands", { style: "rail" }),
-      home("product-grid", "offers", { source: { kind: "on-sale" }, columns: 4, rows: 2 }),
+      home("category_tiles", "categories", { style: "photo" }),
+      home("product_grid", "popular", { title: "Top selling products", source: { kind: "popular" }, columns: 4, rows: 1 }),
+      home("brand_wall", "brands", { style: "rail" }),
+      home("product_grid", "offers", { source: { kind: "on-sale" }, columns: 4, rows: 2 }),
     ],
   },
   {
@@ -306,8 +306,8 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
     // proof and questions the merchant writes.
     home: [
       home("hero", "hero", { layout: "full-bleed" }),
-      home("usp-strip", "promise"),
-      home("product-grid", "featured", { columns: 3, rows: 2 }),
+      home("usp_strip", "promise"),
+      home("product_grid", "featured", { columns: 3, rows: 2 }),
       home("editorial", "feature", { layout: "image-with-text", heading: "", body: "", mediaId: null, imageSide: "end" }),
       home("editorial", "highlights", { layout: "multicolumn", heading: "", columns: [] }),
       home("editorial", "testimonials", { layout: "testimonial", quotes: [] }),

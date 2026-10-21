@@ -44,7 +44,7 @@ const COOKIE_VALUE = /^[\x21\x23-\x2B\x2D-\x3A\x3C-\x5B\x5D-\x7E]{1,4096}$/;
 const SAME_STORE_PATH = /^\/(?![/\\])[^\s\\]*$/;
 
 function plain(status: number, message: string, extra: Record<string, string> = {}): Response {
-  return new Response(JSON.stringify({ success: false, error: { code: status === 404 ? "NOT_FOUND" : "APP_PROXY", message } }), {
+  return new Response(JSON.stringify({ success: false, error: { code: status === 404 ? "not_found" : "app_proxy", message } }), {
     status,
     headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...extra },
   });

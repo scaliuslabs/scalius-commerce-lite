@@ -57,8 +57,8 @@ type T = (key: DigitalMessageKey, vars?: Record<string, string | number>) => str
 /** A known refusal in words; anything else as the server said it. */
 export function digitalErrorText(error: unknown, t: T): string {
   if (error instanceof AdminApiResponseError) {
-    if (error.code === "DIGITAL_ASSET_CHANGED") return t("changed");
-    if (error.code === "DIGITAL_ASSET_IN_USE") return t("inUse");
+    if (error.code === "digital_asset_changed") return t("changed");
+    if (error.code === "digital_asset_in_use") return t("inUse");
   }
   return getServerFnError(error);
 }

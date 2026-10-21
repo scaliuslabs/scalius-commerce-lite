@@ -1,7 +1,7 @@
 /** Typed records shared by apps, merchant content and the storefront. */
 import { z } from "zod";
 import {
-  CUSTOM_FIELD_TYPES, customFieldStorefrontValue, customFieldWireValue, parseCustomFieldValue, parseCustomFieldValidations,
+  CUSTOM_FIELD_TYPES, customFieldWireValue, parseCustomFieldValue, parseCustomFieldValidations,
   type CustomFieldCodecContext, type CustomFieldType,
 } from "../custom-fields";
 import { PLUGIN_ID_PATTERN } from "./ids";
@@ -170,31 +170,18 @@ export function prepareObjectData(
 }
 
 /**
- * Stored record data as every app boundary carries it (the HTTP API,
- * `ctx.objects`, function reads): money is `{ amountMinor, currency }`, the
- * stored minor units with the store currency beside them.
+ * Stored record data as every boundary carries it (the HTTP API, the
+ * storefront contract, `ctx.objects`, function reads): money is
+ * `{ amountMinor, currency }`, the stored minor units with the store
+ * currency beside them.
  */
 export function objectDataWire(declaration: Pick<ObjectTypeDeclaration, "fields">, stored: Record<string, unknown>, context: CustomFieldCodecContext): Record<string, unknown> {
-  return dataWire(declaration, stored, context, customFieldWireValue);
-}
-
-/** Stored record data as the storefront contract shows it (money in major units); never an app boundary. */
-export function objectDataStorefront(declaration: Pick<ObjectTypeDeclaration, "fields">, stored: Record<string, unknown>, context: CustomFieldCodecContext): Record<string, unknown> {
-  return dataWire(declaration, stored, context, customFieldStorefrontValue);
-}
-
-function dataWire(
-  declaration: Pick<ObjectTypeDeclaration, "fields">,
-  stored: Record<string, unknown>,
-  context: CustomFieldCodecContext,
-  codec: typeof customFieldWireValue,
-): Record<string, unknown> {
   const data: Record<string, unknown> = {};
   for (const field of declaration.fields) {
     const value = stored[field.key];
     if (value === undefined) continue;
-    data[field.key] = field.type === "money" ? codec("money", String(value), context)
-      : field.type === "list.money" ? codec("list.money", JSON.stringify((value as unknown[]).map(String)), context) : value;
+    data[field.key] = field.type === "money" ? customFieldWireValue("money", String(value), context)
+      : field.type === "list.money" ? customFieldWireValue("list.money", JSON.stringify((value as unknown[]).map(String)), context) : value;
   }
   return data;
 }

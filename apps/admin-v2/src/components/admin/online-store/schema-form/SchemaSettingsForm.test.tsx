@@ -27,7 +27,7 @@ vi.mock("@scalius/api-client/sdk", () => ({
   getApiV1AdminCollectionsByIds: vi.fn(async () => ({ collections: [{ id: "col_eid", name: "Eid picks" }] })),
   getApiV1AdminCategoriesFormOptions: vi.fn(async () => ({ categories: [{ id: "cat_honey", name: "Honey", status: "published" }] })),
   getApiV1AdminDiscounts: vi.fn(async () => ({
-    discounts: [{ id: "promo_eid", name: "Eid", title: null, status: "active", deletedAtEpochSeconds: null, endsAtEpochSeconds: Date.now() / 1000 + 86_400 }],
+    discounts: [{ id: "promo_eid", name: "Eid", title: null, status: "active", deletedAt: null, endsAt: new Date(Date.now() + 86_400_000).toISOString() }],
   })),
 }));
 vi.mock("@tanstack/react-router", () => ({
@@ -167,7 +167,7 @@ describe("SchemaSettingsForm controls", () => {
   const id = (path: string) => settingFieldId("sink", path);
 
   it("draws text by length, numbers by range, switches and choices", () => {
-    render(spec, START, ["s.product-grid"], "sink");
+    render(spec, START, ["s.product_grid"], "sink");
     expect(field(id("title"))?.tagName).toBe("INPUT");
     expect(field(id("body"))?.tagName).toBe("TEXTAREA");
     type(field(id("title"))!, "Best sellers");
@@ -248,7 +248,7 @@ describe("SchemaSettingsForm controls", () => {
   });
 
   it("switches variants and draws the chosen variant's own settings with record pickers", async () => {
-    render(spec, START, ["s.product-rail"], "sink");
+    render(spec, START, ["s.product_rail"], "sink");
     choose(field(id("source"))!, "A collection");
     expect(seen.value.source).toEqual({ kind: "collection", collectionId: "" });
     // The variant picker's popover finishes closing before the next select opens.
@@ -281,7 +281,7 @@ describe("SchemaSettingsForm controls", () => {
   });
 
   it("picks categories, collections and a running promotion", async () => {
-    render(spec, START, ["s.deal-block"], "sink");
+    render(spec, START, ["s.deal_block"], "sink");
     await act(async () => field<HTMLButtonElement>(id("categoryIds"))!.click());
     await vi.waitFor(() => expect(document.querySelector('[role="option"]')?.textContent).toBe("Honey"));
     await act(async () => document.querySelector<HTMLButtonElement>('[role="option"]')!.click());

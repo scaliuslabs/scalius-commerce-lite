@@ -47,8 +47,8 @@ it("writes the homepage into the published theme: slides by media id, category t
       home: [
         { id: "hero", type: "hero", version: 1, settings: { layout: "contained-banners", slides: [] } },
         { id: "collections", type: "collections", version: 1, settings: { carousel: "large", collectionIds: [] } },
-        { id: "categories", type: "category-tiles", version: 1, settings: { style: "photo", title: "", categoryIds: [] } },
-        { id: "delivery", type: "usp-strip", version: 1, settings: { style: "icons", source: { kind: "delivery-facts" } } },
+        { id: "categories", type: "category_tiles", version: 1, settings: { style: "photo", title: "", categoryIds: [] } },
+        { id: "delivery", type: "usp_strip", version: 1, settings: { style: "icons", source: { kind: "delivery-facts" } } },
       ],
       homeMode: { kind: "sections" },
     },
@@ -72,6 +72,6 @@ it("writes the homepage into the published theme: slides by media id, category t
   seedHomepageTheme(db, theme, { categoryIds: ["cat_00", "cat_01"] });
   expect(db.prepare("SELECT revision FROM theme_settings WHERE id = 'default'").get().revision).toBe(2);
   expect(() => seedHomepageTheme(db, { ...theme, pages: { ...theme.pages, home: theme.pages.home.slice(0, 1) } }, { categoryIds: [] }))
-    .toThrow(/no category-tiles, collections section/);
+    .toThrow(/no category_tiles, collections section/);
   db.close();
 });

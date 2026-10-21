@@ -238,8 +238,8 @@ export function giftCardSessionCookie(request: Request): string | null {
 function failureReason(status: number, code: string): GiftCardFailureReason {
   if (status === 401) return "signed_out";
   if (status === 429) return "rate_limited";
-  if (status === 404 || code === "GIFT_CARD_NOT_FOUND") return "not_found";
-  if (status === 400 || status === 409 || status === 422 || code === "GIFT_CARD_UNUSABLE") return "unusable";
+  if (status === 404 || code === "gift_card_not_found") return "not_found";
+  if (status === 400 || status === 409 || status === 422 || code === "gift_card_unusable") return "unusable";
   return "unavailable";
 }
 

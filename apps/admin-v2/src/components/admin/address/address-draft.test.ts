@@ -43,7 +43,7 @@ describe("the dashboard address draft", () => {
   });
 
   it("reads the fields an address refusal names, and nothing from another error", () => {
-    const refused = new AdminApiResponseError("Enter the postal code.", 400, "VALIDATION_ERROR", {
+    const refused = new AdminApiResponseError("Enter the postal code.", 400, "validation_error", {
       reason: "address_invalid",
       issues: [{ field: "postalCode", code: "required" }, { field: "adminArea", code: "invalid" }],
     });

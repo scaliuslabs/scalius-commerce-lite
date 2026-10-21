@@ -74,7 +74,7 @@ const MAX_REGISTRY_REDIRECTS = 3;
 function registryUrl(url: string): URL {
   const checked = checkOutboundUrl(url);
   if (!checked.ok || checked.url.protocol !== "https:") {
-    throw new PluginError("registry.unavailable", "Registry addresses must be public https:// addresses.");
+    throw new PluginError("registry_unavailable", "Registry addresses must be public https:// addresses.");
   }
   return checked.url;
 }
@@ -87,29 +87,29 @@ async function fetchBytes(url: string, maxBytes: number): Promise<Uint8Array> {
     try {
       response = await fetch(target.href, { redirect: "manual", signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
     } catch {
-      throw new PluginError("registry.unavailable", `${target.host} did not answer.`);
+      throw new PluginError("registry_unavailable", `${target.host} did not answer.`);
     }
     const location = response.status >= 300 && response.status < 400 ? response.headers.get("Location") : null;
     if (!location) break;
     await response.body?.cancel().catch(() => undefined);
-    if (hop >= MAX_REGISTRY_REDIRECTS) throw new PluginError("registry.unavailable", `${target.host} redirected too many times.`);
+    if (hop >= MAX_REGISTRY_REDIRECTS) throw new PluginError("registry_unavailable", `${target.host} redirected too many times.`);
     let next: string;
     try {
       next = new URL(location, target).href;
     } catch {
-      throw new PluginError("registry.unavailable", `${target.host} redirected to an invalid address.`);
+      throw new PluginError("registry_unavailable", `${target.host} redirected to an invalid address.`);
     }
     target = registryUrl(next);
     checked.url = target;
   }
   if (!response.ok) {
     await response.body?.cancel().catch(() => undefined);
-    throw new PluginError(response.status === 404 ? "registry.not_found" : "registry.unavailable", `${checked.url.host} answered ${response.status}.`);
+    throw new PluginError(response.status === 404 ? "registry_not_found" : "registry_unavailable", `${checked.url.host} answered ${response.status}.`);
   }
   const declared = Number(response.headers.get("Content-Length") ?? "0");
   if (declared > maxBytes) {
     await response.body?.cancel().catch(() => undefined);
-    throw new PluginError("registry.unavailable", "The download is larger than allowed.");
+    throw new PluginError("registry_unavailable", "The download is larger than allowed.");
   }
   const reader = response.body?.getReader();
   if (!reader) return new Uint8Array();
@@ -121,7 +121,7 @@ async function fetchBytes(url: string, maxBytes: number): Promise<Uint8Array> {
     size += value.byteLength;
     if (size > maxBytes) {
       await reader.cancel().catch(() => undefined);
-      throw new PluginError("registry.unavailable", "The download is larger than allowed.");
+      throw new PluginError("registry_unavailable", "The download is larger than allowed.");
     }
     chunks.push(value);
   }
@@ -141,10 +141,10 @@ export async function fetchRegistryIndex(indexUrl: string): Promise<PluginRegist
   try {
     json = JSON.parse(new TextDecoder().decode(bytes));
   } catch {
-    throw new PluginError("registry.unavailable", "The registry index is not JSON.");
+    throw new PluginError("registry_unavailable", "The registry index is not JSON.");
   }
   const parsed = pluginRegistryIndexSchema.safeParse(json);
-  if (!parsed.success) throw new PluginError("registry.unavailable", "The registry index is not in the Scalius registry format.");
+  if (!parsed.success) throw new PluginError("registry_unavailable", "The registry index is not in the Scalius registry format.");
   return parsed.data;
 }
 
@@ -186,43 +186,43 @@ export interface VerifyReleaseInput {
 export async function verifyRelease(input: VerifyReleaseInput): Promise<PluginRelease> {
   const sha256 = await sha256Hex(input.code);
   if (input.expectedSha256 !== undefined && sha256 !== input.expectedSha256) {
-    throw new PluginError("package.hash_mismatch", "The downloaded code does not match the registry's SHA-256.");
+    throw new PluginError("package_hash_mismatch", "The downloaded code does not match the registry's SHA-256.");
   }
   const compatible = pluginCompatibility(input.manifest);
-  if (!compatible.ok) throw new PluginError("installation.incompatible", compatible.message, { reason: compatible.reason });
+  if (!compatible.ok) throw new PluginError("installation_incompatible", compatible.message, { reason: compatible.reason });
   const manifest = requireInstallableManifest(input.manifest, input.source);
   if ((input.expectedId && manifest.id !== input.expectedId) || (input.expectedVersion && manifest.version !== input.expectedVersion)) {
-    throw new PluginError("package.invalid", "The release's manifest names another app or version than its listing.");
+    throw new PluginError("package_invalid", "The release's manifest names another app or version than its listing.");
   }
   let signer: PluginTrustedKey | null = null;
   if (input.signature) {
     const check = await verifyPluginSignature({ id: manifest.id, version: manifest.version, sha256, manifest: input.manifest }, input.signature, input.trustedKeys);
     if (!check.ok) {
       throw check.reason === "untrusted_key"
-        ? new PluginError("signature.untrusted", "The release is signed by a developer this store does not trust.", { keyId: input.signature.keyId })
-        : new PluginError("signature.invalid", "The release's signature does not match its code and manifest. Do not install it.");
+        ? new PluginError("signature_untrusted", "The release is signed by a developer this store does not trust.", { keyId: input.signature.keyId })
+        : new PluginError("signature_invalid", "The release's signature does not match its code and manifest. Do not install it.");
     }
     signer = check.key;
   } else if (!(input.source === "upload" && input.allowUnsigned)) {
-    throw new PluginError("signature.missing", "The release is not signed.");
+    throw new PluginError("signature_missing", "The release is not signed.");
   }
   const sealed = sealedAssetDigests(new TextDecoder().decode(input.code));
   const assets = new Map<string, Uint8Array>();
   for (const { path, role } of listingAssetPaths(manifest)) {
     if (assets.has(path)) continue;
     const digest = sealed[path];
-    if (!digest) throw new PluginError("package.invalid", `The bundle does not seal the digest of ${path}; pack it with pnpm plugin pack.`);
+    if (!digest) throw new PluginError("package_invalid", `The bundle does not seal the digest of ${path}; pack it with pnpm plugin pack.`);
     const bytes = await input.asset(path);
-    if (!bytes || await sha256Hex(bytes) !== digest) throw new PluginError("package.invalid", `${path} is missing or does not match the bundle.`);
+    if (!bytes || await sha256Hex(bytes) !== digest) throw new PluginError("package_invalid", `${path} is missing or does not match the bundle.`);
     const problem = checkPluginAsset(path, bytes, role);
-    if (problem) throw new PluginError("package.invalid", problem);
+    if (problem) throw new PluginError("package_invalid", problem);
     assets.set(path, bytes);
   }
   let storefront: Map<string, Uint8Array>;
   try {
     storefront = await verifyStorefrontFiles(manifest, new TextDecoder().decode(input.code), input.storefrontFile ?? (async () => null));
   } catch (error) {
-    throw new PluginError("package.invalid", error instanceof Error ? error.message : "The storefront files do not match the bundle.");
+    throw new PluginError("package_invalid", error instanceof Error ? error.message : "The storefront files do not match the bundle.");
   }
   return { manifest, sha256, code: input.code, assets, storefront, signer };
 }
@@ -264,12 +264,12 @@ export async function downloadRegistryRelease(
 ): Promise<PluginRelease> {
   const settings = await readRegistrySettings(db);
   const sources = pluginRegistrySources(settings);
-  if (sources.length === 0) throw new PluginError("registry.not_configured", "No app registry is configured. The official registry is not configured yet.");
+  if (sources.length === 0) throw new PluginError("registry_not_configured", "No app registry is configured. The official registry is not configured yet.");
   const source = sources.find((candidate) => candidate.id === request.registryId);
-  if (!source) throw new PluginError("registry.not_found", `No registry ${request.registryId}.`);
+  if (!source) throw new PluginError("registry_not_found", `No registry ${request.registryId}.`);
   const index = await fetchRegistryIndex(source.indexUrl);
   const entry = latestEntry(index, request.id, request.version);
-  if (!entry) throw new PluginError("registry.not_found", `${request.id}${request.version ? `@${request.version}` : ""} is not in ${source.name}.`);
+  if (!entry) throw new PluginError("registry_not_found", `${request.id}${request.version ? `@${request.version}` : ""} is not in ${source.name}.`);
   const code = await fetchBytes(releaseUrl(source.indexUrl, entry, "plugin.js"), entry.size);
   return verifyRelease({
     manifest: entry.manifest,
@@ -314,12 +314,12 @@ export async function verifyUploadedPackage(
   const read = (name: string) => files.get(name) ?? null;
   const manifestBytes = read("manifest.json");
   const code = read("plugin.js");
-  if (!manifestBytes || !code) throw new PluginError("package.invalid", "A package holds manifest.json and plugin.js (pnpm plugin pack writes both).");
+  if (!manifestBytes || !code) throw new PluginError("package_invalid", "A package holds manifest.json and plugin.js (pnpm plugin pack writes both).");
   const parseJson = (bytes: Uint8Array, name: string): unknown => {
     try {
       return JSON.parse(new TextDecoder().decode(bytes));
     } catch {
-      throw new PluginError("package.invalid", `${name} is not JSON.`);
+      throw new PluginError("package_invalid", `${name} is not JSON.`);
     }
   };
   const manifest = parseJson(manifestBytes, "manifest.json");
@@ -330,13 +330,13 @@ export async function verifyUploadedPackage(
   let newKey: PluginTrustedKey | null = null;
   if (signatureBytes) {
     const parsed = pluginPackageSignatureSchema.safeParse(parseJson(signatureBytes, "signature.json"));
-    if (!parsed.success) throw new PluginError("package.invalid", "signature.json is not a Scalius package signature.");
+    if (!parsed.success) throw new PluginError("package_invalid", "signature.json is not a Scalius package signature.");
     const packageKey = await trustedKeyFrom(parsed.data.publicKey, parsed.data.developer);
-    if (!packageKey || packageKey.id !== parsed.data.keyId) throw new PluginError("signature.invalid", "signature.json names a key that does not match its public key.");
+    if (!packageKey || packageKey.id !== parsed.data.keyId) throw new PluginError("signature_invalid", "signature.json names a key that does not match its public key.");
     signature = { keyId: parsed.data.keyId, value: parsed.data.value };
     if (!trustedKeys.some((key) => key.id === packageKey.id)) {
       if (!trust.trustDeveloper) {
-        throw new PluginError("signature.untrusted", `Signed by ${packageKey.name}, a developer this store does not trust yet.`, {
+        throw new PluginError("signature_untrusted", `Signed by ${packageKey.name}, a developer this store does not trust yet.`, {
           keyId: packageKey.id,
           developer: packageKey.name,
         });

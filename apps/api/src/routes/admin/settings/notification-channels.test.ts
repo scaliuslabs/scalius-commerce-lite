@@ -174,7 +174,7 @@ describe("notification settings routes", () => {
 
         expect(status).toBe(409);
         expect(body.error).toMatchObject({
-            code: "SETTINGS_REVISION_CONFLICT",
+            code: "settings_revision_conflict",
             details: { expectedRevision: 0, currentRevision: 1 },
         });
         expect(stored()).toMatchObject({ revision: 1, orderChannels: { order_created: [], order_confirmed: ["email"] } });

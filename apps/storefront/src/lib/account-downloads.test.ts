@@ -90,9 +90,9 @@ describe("return paths and outcome flags", () => {
   it("maps API refusals to buyer flags", () => {
     const account = { kind: "account" } as const;
     const receipt = { kind: "receipt", orderId: "ord_1" } as const;
-    expect(downloadFlagForApi(409, "DOWNLOAD_LIMIT_REACHED", account)).toBe("limit");
-    expect(downloadFlagForApi(409, "DOWNLOAD_REVOKED", account)).toBe("revoked");
-    expect(downloadFlagForApi(409, "DOWNLOAD_EXPIRED", account)).toBe("expired");
+    expect(downloadFlagForApi(409, "download_limit_reached", account)).toBe("limit");
+    expect(downloadFlagForApi(409, "download_revoked", account)).toBe("revoked");
+    expect(downloadFlagForApi(409, "download_expired", account)).toBe("expired");
     expect(downloadFlagForApi(429, null, account)).toBe("rate");
     expect(downloadFlagForApi(401, null, account)).toBe("signin");
     expect(downloadFlagForApi(401, null, receipt)).toBe("missing");

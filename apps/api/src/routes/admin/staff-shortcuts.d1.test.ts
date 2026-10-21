@@ -67,7 +67,7 @@ describe("admin keyboard shortcuts", () => {
         await put("user_1", { expectedRevision: 0, shortcuts: { "/admin/orders": "g o" } });
         const stale = await put("user_1", { expectedRevision: 0, shortcuts: { "/admin/orders": "g x" } });
         expect(stale.status).toBe(409);
-        expect((await json(stale)).error.code).toBe("SETTINGS_REVISION_CONFLICT");
+        expect((await json(stale)).error.code).toBe("settings_revision_conflict");
     });
 
     it("refuses duplicates and bad paths with a readable message", async () => {

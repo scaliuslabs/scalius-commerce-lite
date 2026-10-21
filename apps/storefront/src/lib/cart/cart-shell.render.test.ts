@@ -369,7 +369,7 @@ describe("the cart shell render", () => {
   });
 
   it("refers a conflicting COD checkout to its existing proof-gated receipt without attaching the submitted cart", async () => {
-    const { response, calls } = await renderCart(checkoutPost(), checkoutRefusal("CHECKOUT_ATTEMPT_CONFLICT", {
+    const { response, calls } = await renderCart(checkoutPost(), checkoutRefusal("checkout_attempt_conflict", {
       orderId: "old_order", paymentMethod: "cod", receiptToken: "chk_must_not_be_used",
     }));
     expect(response.status).toBe(303);
@@ -386,7 +386,7 @@ describe("the cart shell render", () => {
   });
 
   it("only marks the expired submitted checkout for client reset and keeps the cart form available", async () => {
-    const { response, html } = await renderCart(checkoutPost(), checkoutRefusal("CHECKOUT_ATTEMPT_EXPIRED"));
+    const { response, html } = await renderCart(checkoutPost(), checkoutRefusal("checkout_attempt_expired"));
     expect(response.status).toBe(200);
     expect(response.headers.has("Set-Cookie")).toBe(false);
     expect(html).toContain('data-expired-checkout-id="checkout_previous_123456"');
@@ -394,14 +394,14 @@ describe("the cart shell render", () => {
     expect(html).toContain('id="checkoutForm"');
   });
 
-  it.each(["CHECKOUT_ATTEMPT_CONFLICT", "STOREFRONT_CHECKOUT_QUOTE_CONFLICT", "CHECKOUT_ATTEMPT_MISSING"])(
+  it.each(["checkout_attempt_conflict", "storefront_checkout_quote_conflict", "checkout_attempt_missing"])(
     "does not rotate or redirect a %s refusal without a safe existing-order reference", async (code) => {
       const { response, html } = await renderCart(checkoutPost(), checkoutRefusal(code, { orderId: "../../private?token=chk_secret" }));
       expect(response.status).toBe(200);
       expect(response.headers.has("Set-Cookie")).toBe(false);
       expect(html).not.toContain("data-expired-checkout-id");
       expect(html).not.toContain("chk_secret");
-      if (code === "CHECKOUT_ATTEMPT_CONFLICT") expect(html).toContain(ENGLISH_CHECKOUT_LANGUAGE_DATA.checkoutAttemptConflictText);
+      if (code === "checkout_attempt_conflict") expect(html).toContain(ENGLISH_CHECKOUT_LANGUAGE_DATA.checkoutAttemptConflictText);
     },
   );
 });

@@ -49,7 +49,7 @@ export const STOCK_COMMAND_MAX_LINES = 100;
 /** Lines per CAS guard statement: 4 bound values each, below D1's 100. */
 const GUARD_CHUNK = 20;
 const CAS_MARKER = "STOCK_COMMAND_CAS";
-const SUBJECT_MARKER = "STOCK_COMMAND_SUBJECT_STALE";
+const SUBJECT_MARKER = "stock_command_subject_stale";
 
 export interface StockCommandSkuState {
   id: string;

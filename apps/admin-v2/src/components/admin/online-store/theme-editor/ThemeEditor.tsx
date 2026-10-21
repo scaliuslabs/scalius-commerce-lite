@@ -523,7 +523,7 @@ export function ThemeEditor({ workspace, refetch }: {
     return [
       ...STOREFRONT_SECTION_RENDERERS.map((type) => {
         const failed = failedFitConditions(STOREFRONT_SECTION_REGISTRY[type].requires, { facts: resolved.facts, blocks: {} });
-        const deliveryOnly = type === "usp-strip" && (template === "collection" || template === "page");
+        const deliveryOnly = type === "usp_strip" && (template === "collection" || template === "page");
         return {
           choice: { type } as LibraryChoice,
           blocked: reason(addBlockedReason(current, type)),

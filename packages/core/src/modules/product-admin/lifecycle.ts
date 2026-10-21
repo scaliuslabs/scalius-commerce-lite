@@ -236,7 +236,7 @@ function buildPermanentDeleteReferenceGuard(
                     SELECT CAST(value AS TEXT) FROM json_each(${idSet})
                 )
             )
-        )`, "PRODUCT_HARD_DELETE_CONFLICT");
+        )`, "product_hard_delete_conflict");
 }
 
 function deleteLowStockAlertsForProductBatch(
@@ -411,7 +411,7 @@ export async function bulkDeleteProducts(
                     outcomes.push({
                         id: claim.id,
                         status: "failed",
-                        code: "PRODUCT_PERMANENT_DELETE_FAILED",
+                        code: "product_permanent_delete_failed",
                         message:
                             "This product could not be permanently deleted. Retry it individually; if it still fails, keep it in trash and contact support.",
                     });

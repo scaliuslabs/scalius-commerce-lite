@@ -101,7 +101,7 @@ describe("POST /api/reviews/submit without JavaScript", () => {
   });
 
   it("names the review to edit when the product was already reviewed", async () => {
-    api.fetch.mockResolvedValue(apiAnswer(409, { success: false, error: { code: "REVIEW_EXISTS", message: "x", details: { reviewId: "rev_9" } } }));
+    api.fetch.mockResolvedValue(apiAnswer(409, { success: false, error: { code: "review_exists", message: "x", details: { reviewId: "rev_9" } } }));
     const response = await post({ ...submitFields, returnTo: "/account/reviews" }, { cookie: SESSION });
     expect(response.headers.get("Location")).toBe("/account/reviews?review=exists&reviewLine=item_1&reviewRef=rev_9#review-item_1");
   });
@@ -144,7 +144,7 @@ describe("POST /api/reviews/submit without JavaScript", () => {
 
 describe("POST /api/reviews/submit with JavaScript", () => {
   it("answers JSON with the kind message in the page's language, keeping the form", async () => {
-    api.fetch.mockResolvedValue(apiAnswer(429, { success: false, error: { code: "RATE_LIMITED", message: "slow" } }));
+    api.fetch.mockResolvedValue(apiAnswer(429, { success: false, error: { code: "rate_limited", message: "slow" } }));
     const response = await post(submitFields, { cookie: SESSION, json: true });
     expect(response.headers.get("Content-Type")).toContain("application/json");
     const body = await response.json() as Record<string, unknown>;

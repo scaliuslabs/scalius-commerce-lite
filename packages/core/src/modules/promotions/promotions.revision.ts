@@ -11,7 +11,7 @@ import type { BatchItem } from "drizzle-orm/batch";
 
 import { MAX_ACTIVE_AUTOMATIC_PROMOTIONS } from "./promotions.evaluator";
 
-export const PROMOTION_REVISION_CONFLICT = "PROMOTION_REVISION_CONFLICT";
+export const PROMOTION_REVISION_CONFLICT = "promotion_revision_conflict";
 
 export class PromotionRevisionConflictError extends AppError {
     constructor(
@@ -33,7 +33,7 @@ export class PromotionStateConflictError extends AppError {
     constructor(promotionId: string) {
         super(
             409,
-            "PROMOTION_STATE_CONFLICT",
+            "promotion_state_conflict",
             "This promotion is no longer editable. Return to promotions and reload.",
             { promotionId },
         );
@@ -57,7 +57,7 @@ export function buildPromotionRevisionGuard(
     `, PROMOTION_REVISION_CONFLICT);
 }
 
-export const PROMOTION_AUTOMATIC_CAP = "PROMOTION_AUTOMATIC_CAP";
+export const PROMOTION_AUTOMATIC_CAP = "promotion_automatic_cap";
 
 /**
  * After the mutation: when this promotion is an automatic one that is on

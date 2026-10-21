@@ -66,9 +66,9 @@ describe("preview document synchronization", () => {
 
   it("refreshes phone ordering when a sibling's settings change its visibility", () => {
     const hero = section("hero", "hero", { phonePlacement: "after-categories" });
-    const tiles = section("category-tiles", "tiles", { categoryIds: ["a", "b"] });
+    const tiles = section("category_tiles", "tiles", { categoryIds: ["a", "b"] });
     start(theme([hero, tiles]));
-    const next = theme([hero, section("category-tiles", "tiles", { categoryIds: [] })]);
+    const next = theme([hero, section("category_tiles", "tiles", { categoryIds: [] })]);
     update({ working: next, sendable: next }); tick();
     expect(renders()).toHaveLength(1);
     expect(renders()[0].body.only).toBeUndefined();
@@ -76,7 +76,7 @@ describe("preview document synchronization", () => {
 
   it("renders only the edited FAQ beside a phone-placed hero", () => {
     const hero = section("hero", "hero", { phonePlacement: "after-categories" });
-    const tiles = section("category-tiles", "tiles", { categoryIds: ["a", "b"] });
+    const tiles = section("category_tiles", "tiles", { categoryIds: ["a", "b"] });
     const faq = section("faq", "faq", { heading: "Old", items: [{ question: "Where?", answer: "Here." }] });
     start(theme([hero, tiles, faq]));
     const next = theme([hero, tiles, { ...faq, settings: { ...faq.settings, heading: "New" } } as StorefrontSection]);
@@ -86,7 +86,7 @@ describe("preview document synchronization", () => {
 
   it("still reconciles phone placement when hero settings change", () => {
     const hero = section("hero", "hero", { phonePlacement: "after-categories" });
-    const tiles = section("category-tiles", "tiles", { categoryIds: ["a", "b"] });
+    const tiles = section("category_tiles", "tiles", { categoryIds: ["a", "b"] });
     start(theme([hero, tiles]));
     const next = theme([section("hero", "hero", { phonePlacement: "after-categories", layout: "wide-editorial" }), tiles]);
     update({ working: next, sendable: next }); tick();

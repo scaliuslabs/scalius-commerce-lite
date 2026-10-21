@@ -8,6 +8,7 @@
 // the app deletes its subscriptions. Deliveries are signed like every webhook
 // (COMMERCE-HOOKS H3); the secret is returned once, at create.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { isoTimestampSchema, nullableIsoTimestampSchema } from "../../schemas/timestamps";
 import type { Context } from "hono";
 import {
   MAX_APP_WEBHOOK_SUBSCRIPTIONS,
@@ -55,13 +56,13 @@ const AppWebhookSubscription = z.object({
   status: z.enum(["active", "disabled"]),
   disabledReason: z.enum(["manual", "failing"]).nullable().openapi({ description: "`failing`: sustained delivery failure turned it off." }),
   failureStreak: z.number().int(),
-  failingSince: z.string().nullable(),
-  lastSuccessAt: z.string().nullable(),
-  lastFailureAt: z.string().nullable(),
+  failingSince: nullableIsoTimestampSchema,
+  lastSuccessAt: nullableIsoTimestampSchema,
+  lastFailureAt: nullableIsoTimestampSchema,
   secretHint: z.string().openapi({ description: "The signing secret's last four characters." }),
   version: z.number().int().positive().openapi({ description: "Send it as `expectedVersion` to change or delete it." }),
-  createdAt: z.string(),
-  updatedAt: z.string(),
+  createdAt: isoTimestampSchema,
+  updatedAt: isoTimestampSchema,
 }).openapi("AppWebhookSubscription");
 
 function subscriptionResource(view: WebhookSubscriptionView): z.infer<typeof AppWebhookSubscription> {

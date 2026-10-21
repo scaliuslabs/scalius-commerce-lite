@@ -16,27 +16,27 @@ type Kind = "type" | "entry";
 export function throwObjectSaveError(error: unknown, kind: Kind): void {
   const t = (key: ObjectMessageKey) => translate(objectMessages, key);
   switch (readAdminApiErrorCode(error)) {
-    case "object.conflict":
-    case "OBJECT_REVISION_CONFLICT":
+    case "object_conflict":
+    case "object_revision_conflict":
       throw new SaveConflict(t(kind === "type" ? "typeChanged" : "entryChanged"));
-    case "object.unique_violation":
+    case "object_unique_violation":
       throw new SaveNotCompleted(t("entryUniqueTaken"));
-    case "object.forbidden":
+    case "object_forbidden":
       throw new SaveNotCompleted(t("recordReadOnly"));
-    case "object.invalid": {
+    case "object_invalid": {
       const details = readAdminApiError(error)?.details;
       const issues = Array.isArray(details) ? details.filter((item): item is { key: string; message: string } =>
         Boolean(item && typeof item.key === "string" && typeof item.message === "string")) : [];
       const focus = Object.fromEntries(issues.map((issue) => [issue.message, () => document.getElementById(`object-entry-${issue.key}`)?.focus()]));
       throw new SaveNotCompleted(t("fixFields"), issues.map((issue) => issue.message), focus);
     }
-    case "OBJECT_TYPE_TAKEN":
+    case "object_type_taken":
       throw new SaveNotCompleted(t("typeTaken"));
-    case "OBJECT_HANDLE_TAKEN":
+    case "object_handle_taken":
       throw new SaveNotCompleted(t("entryHandleTaken"));
-    case "OBJECT_NAMESPACE_FORBIDDEN":
+    case "object_namespace_forbidden":
       throw new SaveNotCompleted(t("typeNamespace"));
-    case "OBJECT_LIMIT":
+    case "object_limit":
       throw new SaveNotCompleted(t(kind === "type" ? "typeLimit" : "entryLimit"));
     default:
   }

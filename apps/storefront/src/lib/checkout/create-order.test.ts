@@ -203,7 +203,7 @@ describe("createOrder", () => {
       cartKey: "prod_1:default",
       productId: "prod_1",
       variantId: null,
-      code: "PRODUCT_UNAVAILABLE" as const,
+      code: "product_unavailable" as const,
       action: "remove" as const,
       message: "Cotton Panjabi is no longer available.",
       productName: "Cotton Panjabi",
@@ -234,7 +234,7 @@ describe("createOrder", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
       success: false,
       error: "Too many checkout attempts.",
-      errorCode: "CHECKOUT_RATE_LIMITED",
+      errorCode: "checkout_rate_limited",
       details: { retryAfterSeconds: 60 },
     }), { status: 429 })));
 
@@ -245,7 +245,7 @@ describe("createOrder", () => {
       expect(error).toBeInstanceOf(CheckoutOrderError);
       expect(error).toMatchObject({
         status: 429,
-        errorCode: "CHECKOUT_RATE_LIMITED",
+        errorCode: "checkout_rate_limited",
         details: { retryAfterSeconds: 60 },
       });
     }

@@ -1,24 +1,28 @@
 // Rows for 0153_theme_skins: stored theme documents and app manifests in the
 // shape before skins, and the shape each must read as after. Portable SQL: the
-// same text seeds SQLite and PostgreSQL.
+// same text seeds SQLite and PostgreSQL. A migrated theme is the version-11
+// document 0153 wrote (kebab-case skin units); it reads through today's
+// upgrade chain like any stored theme.
 import { parsePluginManifest, type PluginManifest } from "@scalius/shared/plugins";
 import { expect } from "vitest";
-import { DEFAULT_STOREFRONT_THEME, storefrontThemeDocumentSchema, type StorefrontThemeDocument } from "@scalius/shared/storefront-theme";
+import { DEFAULT_STOREFRONT_THEME, readStoredStorefrontThemeDocument, type StorefrontThemeDocument } from "@scalius/shared/storefront-theme";
 
 const quote = (value: string) => `'${value.replaceAll("'", "''")}'`;
 const ref = (app: string, values: Record<string, unknown> = {}) => ({ app, values });
 
-type Skins = NonNullable<NonNullable<StorefrontThemeDocument["apps"]>["skins"]>;
+type Ref = ReturnType<typeof ref>;
+type Skins = Partial<Record<"header" | "footer" | "product-card", Ref>>;
+type Version11 = Omit<StorefrontThemeDocument, "version" | "apps"> & { version: 11; apps?: { skins: Skins; template: string } };
 const OLD_KEY = { header: "header", footer: "footer", "product-card": "productCard" } as const;
 
-/** A theme document with these skins (and the template label), as it reads now. */
-function current(skins: Skins | null): StorefrontThemeDocument {
-  const document = structuredClone(DEFAULT_STOREFRONT_THEME) as StorefrontThemeDocument;
-  return skins ? { ...document, apps: { skins, template: "acme.theme/bold" } } : document;
+/** A version-11 theme document with these skins (and the template label), as 0153 writes it. */
+function current(skins: Skins | null): Version11 {
+  const { apps: _apps, ...document } = structuredClone(DEFAULT_STOREFRONT_THEME) as StorefrontThemeDocument;
+  return { ...document, version: 11, ...(skins ? { apps: { skins, template: "acme.theme/bold" } } : {}) };
 }
 
 /** The same document as it was stored before skins. */
-function before(document: StorefrontThemeDocument): string {
+function before(document: Version11): string {
   const { apps, ...rest } = document;
   if (!apps) return JSON.stringify(rest);
   const { skins = {}, ...others } = apps;
@@ -58,7 +62,7 @@ function storedBefore(value: PluginManifest, id: string): string {
 }
 
 export const MANIFEST_EXPECTED = {
-  theme: manifest([{ id: "head", target: "header", name: "Header" }, { id: "card", target: "product-card", name: "Card" }]),
+  theme: manifest([{ id: "head", target: "header", name: "Header" }, { id: "foot", target: "footer", name: "Footer" }]),
   plain: manifest([]),
 };
 
@@ -86,17 +90,18 @@ export function expectSkinsRows(rows: {
   manifests: Record<string, string>;
 }): void {
   const theme = (value: string) => {
-    const parsed = storefrontThemeDocumentSchema.safeParse(JSON.parse(value));
-    expect(parsed.error?.issues ?? []).toEqual([]);
-    return parsed.data;
+    const read = readStoredStorefrontThemeDocument(value);
+    expect(read.ok ? null : read.reason).toBeNull();
+    return read.ok ? read.document : null;
   };
+  const expected = (document: Version11) => theme(JSON.stringify(document));
   const envelope = (value: string) => theme(JSON.stringify((JSON.parse(value) as { theme: unknown }).theme));
-  expect(theme(rows.published)).toEqual(THEME_EXPECTED.published);
-  expect(theme(rows.draft)).toEqual(THEME_EXPECTED.draft);
-  expect(envelope(rows.versions.themev_envelope!)).toEqual(THEME_EXPECTED.versionEnvelope);
-  expect(envelope(rows.versions.themev_plain!)).toEqual(THEME_EXPECTED.versionPlain);
-  expect(theme(rows.versions.themev_bare!)).toEqual(THEME_EXPECTED.versionBare);
-  expect(theme(rows.restore)).toEqual(THEME_EXPECTED.restore);
+  expect(theme(rows.published)).toEqual(expected(THEME_EXPECTED.published));
+  expect(theme(rows.draft)).toEqual(expected(THEME_EXPECTED.draft));
+  expect(envelope(rows.versions.themev_envelope!)).toEqual(expected(THEME_EXPECTED.versionEnvelope));
+  expect(envelope(rows.versions.themev_plain!)).toEqual(expected(THEME_EXPECTED.versionPlain));
+  expect(theme(rows.versions.themev_bare!)).toEqual(expected(THEME_EXPECTED.versionBare));
+  expect(theme(rows.restore)).toEqual(expected(THEME_EXPECTED.restore));
   for (const [id, expected] of [["acme.theme", MANIFEST_EXPECTED.theme], ["acme.plain", { ...MANIFEST_EXPECTED.plain, id: "acme.plain" }]] as const) {
     const parsed = parsePluginManifest(JSON.parse(rows.manifests[id]!));
     expect(parsed.ok ? parsed.manifest : parsed.issues).toEqual(expected);

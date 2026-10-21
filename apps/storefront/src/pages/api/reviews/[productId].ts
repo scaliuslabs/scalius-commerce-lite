@@ -31,10 +31,10 @@ export const GET: APIRoute = async ({ params, url }) => {
     limit: Number.isFinite(limit) ? limit : REVIEW_PAGE_SIZE,
   });
   if (result.state === "not_found") {
-    return json(404, { success: false, error: { code: "NOT_FOUND", message: "Reviews not found" } }, "public, max-age=0, no-cache, must-revalidate");
+    return json(404, { success: false, error: { code: "not_found", message: "Reviews not found" } }, "public, max-age=0, no-cache, must-revalidate");
   }
   if (result.state === "unavailable") {
-    return json(503, { success: false, error: { code: "UNAVAILABLE", message: "Reviews are unavailable right now" } }, "private, no-store");
+    return json(503, { success: false, error: { code: "service_unavailable", message: "Reviews are unavailable right now" } }, "private, no-store");
   }
   // Browsers revalidate; the shared cache keeps it under the store's generation.
   return json(200, { success: true, data: result.data }, "public, max-age=0, no-cache, must-revalidate");

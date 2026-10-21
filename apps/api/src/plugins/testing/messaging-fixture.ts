@@ -48,10 +48,10 @@ async function sendOnce(ctx, key, prefix, recipient) {
   return answer;
 }
 function failure(text, ctx) {
-  if (text.includes("[declined]")) throw providerError("declined", "The number was refused.", { code: "acme.refused" });
-  if (text.includes("[busy]")) throw providerError("retryable", "The gateway is busy.", { code: "acme.busy" });
-  if (text.includes("[timeout]")) throw providerError("retryable", "Timed out after sending; key " + ctx.settings.api_key, { uncertain: true, code: "acme.timeout" });
-  if (text.includes("[rejected-key]")) throw providerError("misconfigured", "The API key was rejected.", { code: "acme.key" });
+  if (text.includes("[declined]")) throw providerError("declined", "The number was refused.", { code: "acme_refused" });
+  if (text.includes("[busy]")) throw providerError("retryable", "The gateway is busy.", { code: "acme_busy" });
+  if (text.includes("[timeout]")) throw providerError("retryable", "Timed out after sending; key " + ctx.settings.api_key, { uncertain: true, code: "acme_timeout" });
+  if (text.includes("[rejected-key]")) throw providerError("misconfigured", "The API key was rejected.", { code: "acme_key" });
   if (text.includes("[crash]")) throw new TypeError("boom");
 }
 export default {

@@ -43,7 +43,7 @@ describe("conditional records", () => {
       { ...before[1], k1: before[0]!.k1, u1: before[0]!.u1 },
     ]);
     expect((await queryObjectRecords(db, "custom", "pairs", next, { where: { y: "a" } })).records.map((record) => record.id)).toEqual(["two"]);
-    await expect(putObjectRecord(db, "custom", "pairs", next, "three", { x: "c", y: "a" })).rejects.toMatchObject({ objectCode: "object.unique_violation" });
+    await expect(putObjectRecord(db, "custom", "pairs", next, "three", { x: "c", y: "a" })).rejects.toMatchObject({ objectCode: "object_unique_violation" });
   });
 
   it("rejects duplicate replacement unique keys without changing the type or its records", async () => {
@@ -56,7 +56,7 @@ describe("conditional records", () => {
     const beforeType = sqlite.prepare("SELECT * FROM object_types WHERE id = ?").get(type.id);
     const beforeRecords = sqlite.prepare("SELECT * FROM object_records WHERE type_id = ? ORDER BY id").all(type.id);
     await expect(updateObjectType(db, type.id, { ...declaration, unique: ["y"], storefront: true, expectedRevision: type.revision }))
-      .rejects.toMatchObject({ objectCode: "object.unique_violation" });
+      .rejects.toMatchObject({ objectCode: "object_unique_violation" });
     expect(sqlite.prepare("SELECT * FROM object_types WHERE id = ?").get(type.id)).toEqual(beforeType);
     expect(sqlite.prepare("SELECT * FROM object_records WHERE type_id = ? ORDER BY id").all(type.id)).toEqual(beforeRecords);
   });
@@ -70,7 +70,7 @@ describe("conditional records", () => {
     expect(await objectRecordExists(db, PLUGIN, "ledger", LEDGER, { ref: "R-1" })).toBe(true);
     expect(await objectRecordExists(db, PLUGIN, "ledger", LEDGER, { ref: "R-2" })).toBe(false);
     // A record without the unique field is not in its set: a null lookup needs a real index.
-    await expect(queryObjectRecords(db, PLUGIN, "ledger", LEDGER, { where: { ref: null } })).rejects.toMatchObject({ objectCode: "object.unindexed_query" });
+    await expect(queryObjectRecords(db, PLUGIN, "ledger", LEDGER, { where: { ref: null } })).rejects.toMatchObject({ objectCode: "object_unindexed_query" });
     await expect(queryObjectRecords(db, PLUGIN, "ledger", LEDGER, { where: { points: 5 } }))
       .rejects.toThrow("declared indexes: customer_id, unique ref");
   });
@@ -93,7 +93,7 @@ describe("conditional records", () => {
     ] });
     await createObjectType(db, { type: "articles", ...declaration }, { kind: "plugin", pluginId: PLUGIN });
     await writeObjectRecords(db, PLUGIN, () => declaration, [{ op: "put", object: "articles", id: "one", record: { title: "Published" }, status: "published" }]);
-    await expect(putObjectRecord(db, PLUGIN, "articles", declaration, "one", {})).rejects.toMatchObject({ objectCode: "object.invalid" });
+    await expect(putObjectRecord(db, PLUGIN, "articles", declaration, "one", {})).rejects.toMatchObject({ objectCode: "object_invalid" });
     expect(await getObjectRecordVersion(db, PLUGIN, "articles", "one")).toMatchObject({ data: { title: "Published" }, status: "published", revision: 1 });
   });
 
@@ -104,22 +104,22 @@ describe("conditional records", () => {
     const updated = await updateObjectType(db, type.id, { ...declaration, storefront: true, expectedRevision: type.revision });
     expect(updated).toMatchObject({ revision: 2, storefront: true, admin: "edit" });
     expect(await getObjectRecordVersion(db, "custom", "notes", "one")).toMatchObject({ status: "draft" });
-    await expect(updateObjectType(db, type.id, { ...declaration, expectedRevision: 1 })).rejects.toMatchObject({ code: "OBJECT_REVISION_CONFLICT" });
+    await expect(updateObjectType(db, type.id, { ...declaration, expectedRevision: 1 })).rejects.toMatchObject({ code: "object_revision_conflict" });
     expect((await getObjectType(db, "custom.notes"))?.id).toBe(type.id);
   });
 
   it("advances a revision on every write and writes only at the revision read", async () => {
     expect(await putObjectRecord(db, PLUGIN, "balances", BALANCES, "c1", { points: 10 }, null)).toEqual({ revision: 1 });
     await expect(putObjectRecord(db, PLUGIN, "balances", BALANCES, "c1", { points: 99 }, null))
-      .rejects.toMatchObject({ objectCode: "object.conflict" });
+      .rejects.toMatchObject({ objectCode: "object_conflict" });
     expect(await putObjectRecord(db, PLUGIN, "balances", BALANCES, "c1", { points: 20 }, 1)).toEqual({ revision: 2 });
     await expect(putObjectRecord(db, PLUGIN, "balances", BALANCES, "c1", { points: 30 }, 1))
-      .rejects.toMatchObject({ objectCode: "object.conflict" });
+      .rejects.toMatchObject({ objectCode: "object_conflict" });
     // Unconditional writes still work, and advance the revision too.
     expect(await putObjectRecord(db, PLUGIN, "balances", BALANCES, "c1", { points: 40 })).toEqual({ revision: 3 });
     expect(await getObjectRecordVersion(db, PLUGIN, "balances", "c1")).toEqual({ data: { points: 40 }, revision: 3, handle: null, status: "active" });
 
-    await expect(deleteObjectRecord(db, PLUGIN, "balances", "c1", 2)).rejects.toMatchObject({ objectCode: "object.conflict" });
+    await expect(deleteObjectRecord(db, PLUGIN, "balances", "c1", 2)).rejects.toMatchObject({ objectCode: "object_conflict" });
     expect(await deleteObjectRecord(db, PLUGIN, "balances", "c1", 3)).toBe(true);
     expect(await getObjectRecord(db, PLUGIN, "balances", "c1")).toBeNull();
   });
@@ -137,29 +137,29 @@ describe("conditional records", () => {
     await expect(writeObjectRecords(db, PLUGIN, collections, [
       { op: "put", object: "balances", id: "c1", record: { points: 20 }, expectedRevision: 2 },
       { op: "put", object: "ledger", id: "evt-1", record: { customer_id: "c1", ref: "o1-again", points: -40 }, expectedRevision: null },
-    ])).rejects.toMatchObject({ objectCode: "object.conflict", details: { index: 1 } });
+    ])).rejects.toMatchObject({ objectCode: "object_conflict", details: { index: 1 } });
     expect(await getObjectRecordVersion(db, PLUGIN, "balances", "c1")).toEqual({ data: { points: 60 }, revision: 2, handle: null, status: "active" });
 
     // A unique index violation aborts the batch the same way.
     await expect(writeObjectRecords(db, PLUGIN, collections, [
       { op: "put", object: "balances", id: "c1", record: { points: 0 } },
       { op: "put", object: "ledger", id: "evt-2", record: { customer_id: "c1", ref: "o1" } },
-    ])).rejects.toMatchObject({ objectCode: "object.unique_violation" });
+    ])).rejects.toMatchObject({ objectCode: "object_unique_violation" });
     expect((await getObjectRecord(db, PLUGIN, "balances", "c1"))?.points).toBe(60);
   });
 
   it("refuses malformed and oversized batches before writing", async () => {
-    await expect(writeObjectRecords(db, PLUGIN, collections, [])).rejects.toMatchObject({ objectCode: "object.invalid_batch" });
+    await expect(writeObjectRecords(db, PLUGIN, collections, [])).rejects.toMatchObject({ objectCode: "object_invalid_batch" });
     await expect(writeObjectRecords(db, PLUGIN, collections, Array.from({ length: 26 }, (_, index) => ({
       op: "put" as const, object: "balances", id: `c${index}`, record: {},
-    })))).rejects.toMatchObject({ objectCode: "object.invalid_batch" });
+    })))).rejects.toMatchObject({ objectCode: "object_invalid_batch" });
     await expect(writeObjectRecords(db, PLUGIN, collections, [
       { op: "put", object: "balances", id: "c1", record: {} },
       { op: "delete", object: "balances", id: "c1" },
-    ])).rejects.toMatchObject({ objectCode: "object.invalid_batch" });
+    ])).rejects.toMatchObject({ objectCode: "object_invalid_batch" });
     await expect(writeObjectRecords(db, PLUGIN, collections, [
       { op: "put", object: "balances", id: "c1", record: {}, expectedRevision: 0 },
-    ])).rejects.toMatchObject({ objectCode: "object.invalid_batch" });
+    ])).rejects.toMatchObject({ objectCode: "object_invalid_batch" });
     expect(sqlite.prepare("SELECT count(*) AS n FROM object_records").get()).toEqual({ n: 0 });
   });
 });

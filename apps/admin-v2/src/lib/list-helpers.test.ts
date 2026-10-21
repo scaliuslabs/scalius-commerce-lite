@@ -96,9 +96,9 @@ describe("cursor paging URL state", () => {
   });
 
   it("recognises the API's paging refusals", () => {
-    expect(isPagingRefusal({ code: "INVALID_CURSOR" })).toBe(true);
-    expect(isPagingRefusal({ code: "PAGE_TOO_DEEP" })).toBe(true);
-    expect(isPagingRefusal({ code: "VALIDATION_ERROR" })).toBe(false);
+    expect(isPagingRefusal({ code: "invalid_cursor" })).toBe(true);
+    expect(isPagingRefusal({ code: "page_too_deep" })).toBe(true);
+    expect(isPagingRefusal({ code: "validation_error" })).toBe(false);
     expect(isPagingRefusal(new Error("boom"))).toBe(false);
     expect(isPagingRefusal(null)).toBe(false);
   });

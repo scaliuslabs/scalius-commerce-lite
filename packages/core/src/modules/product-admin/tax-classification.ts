@@ -87,7 +87,7 @@ export async function updateTaxClassification(db: Database, input: {
                 WHERE ${products.id} = ${input.id}
                   AND ${products.taxClassificationVersion} = ${input.expectedVersion}
                   AND ${products.deletedAt} IS NULL
-            )`, "TAX_CLASSIFICATION_CONFLICT");
+            )`, "tax_classification_conflict");
         const update = db.update(products).set({
             taxClassId: input.taxClassId,
             taxClassificationVersion: sql`${products.taxClassificationVersion} + 1`,
@@ -116,7 +116,7 @@ export async function updateTaxClassification(db: Database, input: {
                 };
             }
         } catch (error) {
-            if (isBatchGuardError(error, "TAX_CLASSIFICATION_CONFLICT")) {
+            if (isBatchGuardError(error, "tax_classification_conflict")) {
                 throw new ConflictError("Tax classification changed or the catalog item is unavailable. Reload and try again.");
             }
             throw error;
@@ -136,7 +136,7 @@ export async function updateTaxClassification(db: Database, input: {
                   AND ${productVariants.productId} = ${variant.productId}
                   AND ${productVariants.taxClassificationVersion} = ${input.expectedVersion}
                   AND ${productVariants.deletedAt} IS NULL
-            )`, "TAX_CLASSIFICATION_CONFLICT");
+            )`, "tax_classification_conflict");
         const update = db.update(productVariants).set({
             taxClassId: input.taxClassId,
             taxClassificationVersion: sql`${productVariants.taxClassificationVersion} + 1`,
@@ -165,7 +165,7 @@ export async function updateTaxClassification(db: Database, input: {
                 };
             }
         } catch (error) {
-            if (isBatchGuardError(error, "TAX_CLASSIFICATION_CONFLICT")) {
+            if (isBatchGuardError(error, "tax_classification_conflict")) {
                 throw new ConflictError("Tax classification changed or the catalog item is unavailable. Reload and try again.");
             }
             throw error;

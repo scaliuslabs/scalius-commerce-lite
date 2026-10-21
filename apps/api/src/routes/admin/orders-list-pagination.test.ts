@@ -84,13 +84,13 @@ describe("order list cursor contract", () => {
         const first = await (await list({ limit: "10" })).json() as ListBody;
         const cursor = first.data.pageInfo.endCursor!;
         const cases: Array<[Record<string, string>, string]> = [
-            [{ after: "!!!" }, "INVALID_CURSOR"],
-            [{ after: cursor.slice(0, -5) }, "INVALID_CURSOR"],
-            [{ after: cursor, sort: "totalAmount" }, "INVALID_CURSOR"],
-            [{ after: cursor, order: "asc" }, "INVALID_CURSOR"],
-            [{ after: cursor, before: cursor }, "INVALID_CURSOR"],
-            [{ after: cursor, page: "3" }, "INVALID_CURSOR"],
-            [{ page: "21", limit: "50" }, "PAGE_TOO_DEEP"],
+            [{ after: "!!!" }, "invalid_cursor"],
+            [{ after: cursor.slice(0, -5) }, "invalid_cursor"],
+            [{ after: cursor, sort: "totalAmount" }, "invalid_cursor"],
+            [{ after: cursor, order: "asc" }, "invalid_cursor"],
+            [{ after: cursor, before: cursor }, "invalid_cursor"],
+            [{ after: cursor, page: "3" }, "invalid_cursor"],
+            [{ page: "21", limit: "50" }, "page_too_deep"],
         ];
         for (const [query, code] of cases) {
             const response = await list(query);

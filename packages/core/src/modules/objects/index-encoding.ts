@@ -41,7 +41,7 @@ function pushString(value: string, field: string, out: number[]): void {
   const bytes = encoder.encode(value);
   if (bytes.length > OBJECT_INDEX_STRING_MAX_BYTES) {
     throw new ObjectError(
-      "object.invalid_index_value",
+      "object_invalid_index_value",
       `Indexed field "${field}" holds more than ${OBJECT_INDEX_STRING_MAX_BYTES} bytes.`,
     );
   }
@@ -58,12 +58,12 @@ export function indexScalar(value: unknown, field: string): IndexScalar {
   if (typeof value === "string" || typeof value === "boolean") return value;
   if (typeof value === "number") {
     if (!Number.isFinite(value)) {
-      throw new ObjectError("object.invalid_index_value", `Indexed field "${field}" must be a finite number.`);
+      throw new ObjectError("object_invalid_index_value", `Indexed field "${field}" must be a finite number.`);
     }
     return value;
   }
   throw new ObjectError(
-    "object.invalid_index_value",
+    "object_invalid_index_value",
     `Indexed field "${field}" must be a string, number, boolean or null.`,
   );
 }
@@ -93,7 +93,7 @@ export function encodeIndexTuple(values: readonly IndexScalar[], fields: readonl
   values.forEach((value, index) => pushComponent(value, fields[index] ?? `#${index}`, bytes));
   if (bytes.length > OBJECT_INDEX_TUPLE_MAX_BYTES) {
     throw new ObjectError(
-      "object.invalid_index_value",
+      "object_invalid_index_value",
       `The indexed values of ${fields.join(", ")} are longer than ${OBJECT_INDEX_TUPLE_MAX_BYTES} bytes together.`,
     );
   }

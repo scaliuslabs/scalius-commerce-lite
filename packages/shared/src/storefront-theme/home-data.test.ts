@@ -39,16 +39,16 @@ describe("homepage section data requests", () => {
 
   it("reads each source once at the largest limit, and each image once", () => {
     const requests = homeSectionRequests([
-      section({ id: "a", type: "product-rail", version: 1, settings: { title: "", source: { kind: "newest" }, limit: 8 } }),
-      section({ id: "b", type: "product-grid", version: 1, settings: { title: "", source: { kind: "newest" }, columns: 6, rows: 4 } }),
-      section({ id: "c", type: "deal-block", version: 1, settings: { title: "", source: { kind: "on-sale" }, promotionId: "promo_a" } }),
-      section({ id: "c2", type: "product-tabs", version: 1, settings: { title: "", limit: 8, tabs: [
+      section({ id: "a", type: "product_rail", version: 1, settings: { title: "", source: { kind: "newest" }, limit: 8 } }),
+      section({ id: "b", type: "product_grid", version: 1, settings: { title: "", source: { kind: "newest" }, columns: 6, rows: 4 } }),
+      section({ id: "c", type: "deal_block", version: 1, settings: { title: "", source: { kind: "on-sale" }, promotionId: "promo_a" } }),
+      section({ id: "c2", type: "product_tabs", version: 1, settings: { title: "", limit: 8, tabs: [
         { label: "", source: { kind: "on-sale" } },
         { label: "Top", source: { kind: "popular" } },
       ] } }),
-      section({ id: "c3", type: "shop-by", version: 1, settings: { title: "", cards: [{ mediaId: "m5", title: "Eid", href: "/eid" }] } }),
-      section({ id: "c4", type: "banner-mosaic", version: 1, settings: { tiles: [{ mediaId: "m6", alt: "", href: null }, { mediaId: "m1", alt: "", href: null }] } }),
-      section({ id: "c5", type: "brand-wall", version: 1, settings: { title: "", style: "rail" } }),
+      section({ id: "c3", type: "shop_by", version: 1, settings: { title: "", cards: [{ mediaId: "m5", title: "Eid", href: "/eid" }] } }),
+      section({ id: "c4", type: "banner_mosaic", version: 1, settings: { tiles: [{ mediaId: "m6", alt: "", href: null }, { mediaId: "m1", alt: "", href: null }] } }),
+      section({ id: "c5", type: "brand_wall", version: 1, settings: { title: "", style: "rail" } }),
       section({ id: "d", type: "lookbook", version: 1, settings: { title: "", mediaId: "m1", source: { kind: "category", categoryId: "cat" } } }),
       section({ id: "e", type: "banner", version: 1, settings: { layout: "two-up", heading: "", text: "", mediaId: "m1", cta: null } }),
       section({ id: "f", type: "editorial", version: 1, settings: { layout: "image-with-text", heading: "", body: "", mediaId: "m2", imageSide: "end" } }),
@@ -59,8 +59,8 @@ describe("homepage section data requests", () => {
       section({ id: "h", type: "hero", version: 1, settings: { layout: "split", slides: [], sideBanners: [{ mediaId: "m4", alt: "", href: null }] } }),
       section({ id: "i", type: "collections", version: 1, settings: { carousel: "large", collectionIds: ["col_b", "col_a"] } }),
       section({ id: "i2", type: "collections", version: 1, settings: { carousel: "compact", collectionIds: ["col_a", "col_c"] } }),
-      section({ id: "k", type: "category-tiles", version: 1, settings: { style: "photo", title: "", categoryIds: ["cat_2", "cat_1"] } }),
-      section({ id: "j", type: "endless-grid", version: 1, settings: { title: "", pageSize: 36 } }),
+      section({ id: "k", type: "category_tiles", version: 1, settings: { style: "photo", title: "", categoryIds: ["cat_2", "cat_1"] } }),
+      section({ id: "j", type: "endless_grid", version: 1, settings: { title: "", pageSize: 36 } }),
     ]);
     expect(requests.lists).toEqual([
       { key: "newest", source: { kind: "newest" }, limit: 36 },
@@ -81,14 +81,14 @@ describe("homepage section data requests", () => {
     const requests = homeSectionRequests([], { kind: "product", productId: "prod_1" });
     expect(requests.homeProductId).toBe("prod_1");
     expect(homeSectionRequestsEmpty(requests)).toBe(false);
-    expect(homeSectionsShowDeliveryFacts([storefrontSectionDefault("usp-strip", "u")])).toBe(true);
-    expect(homeSectionsShowDeliveryFacts([section({ id: "u", type: "usp-strip", version: 1, settings: { style: "icons", source: { kind: "custom", items: [{ title: "COD", detail: "" }] } } })])).toBe(false);
+    expect(homeSectionsShowDeliveryFacts([storefrontSectionDefault("usp_strip", "u")])).toBe(true);
+    expect(homeSectionsShowDeliveryFacts([section({ id: "u", type: "usp_strip", version: 1, settings: { style: "icons", source: { kind: "custom", items: [{ title: "COD", detail: "" }] } } })])).toBe(false);
     expect(homeSectionsShowDeliveryFacts([storefrontSectionDefault("hero", "h")])).toBe(false);
   });
 
   it("reads optional deal and newsletter images once through the page media batch", () => {
     const requests = homeSectionRequests([
-      section({ id: "sale", type: "deal-block", version: 1, settings: { title: "Sale", source: { kind: "on-sale" }, mediaId: "campaign" } }),
+      section({ id: "sale", type: "deal_block", version: 1, settings: { title: "Sale", source: { kind: "on-sale" }, mediaId: "campaign" } }),
       section({ id: "news", type: "newsletter", version: 1, settings: { heading: "Updates", text: "", mediaId: "campaign" } }),
       section({ id: "hidden-news", type: "newsletter", version: 1, hidden: true, settings: { heading: "Hidden", text: "", mediaId: "hidden-photo" } }),
     ]);
@@ -97,7 +97,7 @@ describe("homepage section data requests", () => {
 
   it("reads no brands or promotions for a homepage without a brand wall or a promotion deal", () => {
     const requests = homeSectionRequests([
-      section({ id: "c", type: "deal-block", version: 1, settings: { title: "", source: { kind: "on-sale" }, promotionId: null } }),
+      section({ id: "c", type: "deal_block", version: 1, settings: { title: "", source: { kind: "on-sale" }, promotionId: null } }),
     ]);
     expect(requests.brandLimit).toBe(0);
     expect(requests.promotionIds).toEqual([]);
@@ -107,13 +107,13 @@ describe("homepage section data requests", () => {
   it("flags sections whose own words or photos are missing, never data-driven ones", () => {
     const needs = STOREFRONT_SECTION_TYPES.filter((type) => storefrontSectionNeedsContent(storefrontSectionDefault(type, "x")));
     // A hero without slides and category tiles without categories have nothing to show either.
-    expect(needs.sort()).toEqual(["banner", "banner-mosaic", "category-tiles", "editorial", "faq", "hero", "objects", "seo-text", "shop-by", "specifications", "utility-cards"]);
+    expect(needs.sort()).toEqual(["banner", "banner_mosaic", "category_tiles", "editorial", "faq", "hero", "objects", "seo_text", "shop_by", "specifications", "utility_cards"]);
     expect(storefrontSectionNeedsContent(section({ id: "b", type: "banner", version: 1, settings: { layout: "full", heading: "Eid", text: "", mediaId: null, cta: null } }))).toBe(false);
   });
 
   it("bounds tabbed product blocks to 2 to 4 tabs", () => {
     const tabs = (count: number) => storefrontSectionListSchema.safeParse([{
-      id: "t", type: "product-tabs", version: 1,
+      id: "t", type: "product_tabs", version: 1,
       settings: { title: "", limit: 8, tabs: Array.from({ length: count }, () => ({ label: "", source: { kind: "newest" } })) },
     }]).success;
     expect([1, 2, 4, 5].map(tabs)).toEqual([false, true, true, false]);
@@ -121,11 +121,11 @@ describe("homepage section data requests", () => {
 
   it("caps the lists, images, categories and collections one homepage reads", () => {
     const sections = Array.from({ length: 24 }, (_, index) =>
-      section({ id: `s${index}`, type: "shop-by", version: 1, settings: { title: "", cards: Array.from({ length: 2 }, (_, card) => ({ mediaId: `m${index}-${card}`, title: "x", href: "/x" })) } }));
+      section({ id: `s${index}`, type: "shop_by", version: 1, settings: { title: "", cards: Array.from({ length: 2 }, (_, card) => ({ mediaId: `m${index}-${card}`, title: "x", href: "/x" })) } }));
     const lookbooks = Array.from({ length: 12 }, (_, index) =>
       section({ id: `l${index}`, type: "lookbook", version: 1, settings: { title: "", mediaId: null, source: { kind: "category", categoryId: `c${index}` } } }));
     const tiles = Array.from({ length: 3 }, (_, index) =>
-      section({ id: `t${index}`, type: "category-tiles", version: 1, settings: { style: "photo", title: "", categoryIds: Array.from({ length: 12 }, (_, id) => `cat${index}-${id}`) } }));
+      section({ id: `t${index}`, type: "category_tiles", version: 1, settings: { style: "photo", title: "", categoryIds: Array.from({ length: 12 }, (_, id) => `cat${index}-${id}`) } }));
     const shelves = Array.from({ length: 2 }, (_, index) =>
       section({ id: `c${index}`, type: "collections", version: 1, settings: { carousel: "large", collectionIds: Array.from({ length: 8 }, (_, id) => `col${index}-${id}`) } }));
     const requests = homeSectionRequests([...sections, ...lookbooks, ...tiles, ...shelves]);
@@ -194,9 +194,9 @@ describe("homepage section data requests", () => {
 
   it("keeps category and collection ids unique and bounded", () => {
     const parse = (type: string, settings: object) => storefrontSectionListSchema.safeParse([{ id: "x", type, version: 1, settings }]).success;
-    expect(parse("category-tiles", { style: "round", title: "Shop", categoryIds: ["a", "b"] })).toBe(true);
-    expect(parse("category-tiles", { style: "round", title: "", categoryIds: ["a", "a"] })).toBe(false);
-    expect(parse("category-tiles", { style: "round", title: "", categoryIds: Array.from({ length: 13 }, (_, i) => `c${i}`) })).toBe(false);
+    expect(parse("category_tiles", { style: "round", title: "Shop", categoryIds: ["a", "b"] })).toBe(true);
+    expect(parse("category_tiles", { style: "round", title: "", categoryIds: ["a", "a"] })).toBe(false);
+    expect(parse("category_tiles", { style: "round", title: "", categoryIds: Array.from({ length: 13 }, (_, i) => `c${i}`) })).toBe(false);
     expect(parse("collections", { carousel: "large", collectionIds: ["a", "b"] })).toBe(true);
     expect(parse("collections", { carousel: "large", collectionIds: ["a", "a"] })).toBe(false);
     expect(parse("collections", { carousel: "large", collectionIds: Array.from({ length: 9 }, (_, i) => `c${i}`) })).toBe(false);

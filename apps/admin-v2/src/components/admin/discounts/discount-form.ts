@@ -111,6 +111,16 @@ export function storeTimeToEpoch(date: string, time: string): number | null {
   return check.date === date && check.time === (time || "00:00") ? Math.floor(guess / 1_000) : null;
 }
 
+/** An ISO 8601 instant (the API's) as epoch seconds. */
+export function isoSeconds(iso: string): number {
+  return Math.floor(Date.parse(iso) / 1_000);
+}
+
+/** Epoch seconds as the API's ISO 8601 instant; null stays null. */
+export function epochIso(epochSeconds: number | null): string | null {
+  return epochSeconds === null ? null : new Date(epochSeconds * 1_000).toISOString();
+}
+
 export function epochToStoreTime(epochSeconds: number): { date: string; time: string } {
   return partsIn(epochSeconds * 1_000);
 }
@@ -250,8 +260,8 @@ export function draftFromDiscount(record: DiscountRecord, currencyCode: string):
   const money = (minor: unknown) => minorToMajor(numberOf(minor) ?? 0, currencyCode);
   const minimum = record.conditions.find(({ config }) => config.shippingOnly !== true);
   const shippingMinimum = record.conditions.find(({ config }) => config.shippingOnly === true);
-  const start = record.startsAtEpochSeconds === null ? null : epochToStoreTime(record.startsAtEpochSeconds);
-  const end = record.endsAtEpochSeconds === null ? null : epochToStoreTime(record.endsAtEpochSeconds);
+  const start = record.startsAt === null ? null : epochToStoreTime(isoSeconds(record.startsAt));
+  const end = record.endsAt === null ? null : epochToStoreTime(isoSeconds(record.endsAt));
   const buy = config.buy as Config | undefined;
   return {
     ...draft,
@@ -434,8 +444,8 @@ export function draftToInput(draft: DiscountDraft, currencyCode: string): Discou
       [DISCOUNT_CLASS[draft.type]]: false,
       ...(bundlesShipping(draft) ? { shipping: false } : {}),
     },
-    startsAtEpochSeconds: storeTimeToEpoch(draft.startDate, draft.startTime),
-    endsAtEpochSeconds: draft.hasEnd ? storeTimeToEpoch(draft.endDate, draft.endTime) : null,
+    startsAt: epochIso(storeTimeToEpoch(draft.startDate, draft.startTime)),
+    endsAt: draft.hasEnd ? epochIso(storeTimeToEpoch(draft.endDate, draft.endTime)) : null,
     timezone: getStoreTimeZone(),
     maxRedemptions: isCode && draft.limitTotal ? positiveInteger(draft.totalUses) : null,
     maxRedemptionsPerCustomer: isCode && draft.oncePerCustomer ? 1 : null,
@@ -478,14 +488,14 @@ export function combinationPreview(
 export type DiscountStatus = "active" | "scheduled" | "expired" | "draft" | "inactive";
 
 export function discountStatus(
-  record: Pick<DiscountRecord, "status" | "startsAtEpochSeconds" | "endsAtEpochSeconds">,
+  record: Pick<DiscountRecord, "status" | "startsAt" | "endsAt">,
   nowSeconds = Math.floor(Date.now() / 1_000),
 ): DiscountStatus {
   if (record.status !== "active" && record.status !== "draft") return "inactive";
   // Past its end date a draft can never go live either: both are expired.
-  if (record.endsAtEpochSeconds !== null && record.endsAtEpochSeconds <= nowSeconds) return "expired";
+  if (record.endsAt !== null && isoSeconds(record.endsAt) <= nowSeconds) return "expired";
   if (record.status === "draft") return "draft";
-  if (record.startsAtEpochSeconds !== null && record.startsAtEpochSeconds > nowSeconds) return "scheduled";
+  if (record.startsAt !== null && isoSeconds(record.startsAt) > nowSeconds) return "scheduled";
   return "active";
 }
 

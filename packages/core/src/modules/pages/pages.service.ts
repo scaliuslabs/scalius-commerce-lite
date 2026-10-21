@@ -722,7 +722,7 @@ export async function updatePage(
     await rethrowPageRevisionConflict(
       db,
       claims,
-      new Error("PAGE_REVISION_CONFLICT"),
+      new Error("page_revision_conflict"),
       "active",
     );
   }
@@ -858,7 +858,7 @@ export async function updatePage(
     await rethrowPageRevisionConflict(
       db,
       claims,
-      new Error("PAGE_REVISION_CONFLICT"),
+      new Error("page_revision_conflict"),
       "active",
     );
   }

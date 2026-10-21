@@ -81,7 +81,7 @@ describe("checkout gift-card routes (G8)", () => {
     ];
     for (const answer of answers) {
       expect(answer.status).toBe(400);
-      expect(answer.body.error).toEqual({ code: "GIFT_CARD_UNUSABLE", message: "This gift card can't be used." });
+      expect(answer.body.error).toEqual({ code: "gift_card_unusable", message: "This gift card can't be used." });
     }
   });
 
@@ -94,7 +94,7 @@ describe("checkout gift-card routes (G8)", () => {
     expect(found.body.data).toEqual({ last4: card.code.slice(-4), balance: 123, balanceMinor: 12_300, currencyCode: "BDT", expiresAt: null, status: "active" });
     const missing = await post("/balance", { code: "ZZZZ-ZZZZ-ZZZZ-ZZZZ" });
     expect(missing.status).toBe(404);
-    expect(missing.body.error.code).toBe("GIFT_CARD_NOT_FOUND");
+    expect(missing.body.error.code).toBe("gift_card_not_found");
   });
 
   it("rate limits, and fails closed without a limiter or the durable key", async () => {

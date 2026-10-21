@@ -52,15 +52,15 @@ type MessageKey = keyof (typeof onlineStoreMessages)["en"];
 const SECTION_ICONS: Partial<Record<StorefrontSectionType, LucideIcon>> = {
   hero: Image,
   banner: Image,
-  "banner-mosaic": Image,
-  "shop-by": Image,
+  "banner_mosaic": Image,
+  "shop_by": Image,
   lookbook: Image,
   editorial: Type,
   faq: Type,
-  "seo-text": Type,
+  "seo_text": Type,
   newsletter: Type,
-  "usp-strip": Type,
-  "utility-cards": Type,
+  "usp_strip": Type,
+  "utility_cards": Type,
 };
 
 export interface TreeHandlers {

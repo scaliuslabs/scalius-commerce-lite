@@ -16,7 +16,7 @@ import { readStoreCurrency } from "../markets";
 /** Largest cost the API accepts, in major units (matches the money range of `toMinor`). */
 export const UNIT_COST_MAX = 9_000_000_000;
 export const SKU_COST_BATCH_LIMIT = 100;
-const COST_CONFLICT = "SKU_COST_CHANGED";
+const COST_CONFLICT = "sku_cost_changed";
 
 /** A cost in major units of the store currency: finite, non-negative. */
 export const unitCostAmountSchema = z.number().finite().min(0).max(UNIT_COST_MAX);

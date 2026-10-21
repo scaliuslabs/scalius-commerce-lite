@@ -32,12 +32,12 @@ Triggers refuse an overdraft, a redemption of a disabled or expired card, a wron
 ## Rules
 
 - Balance is the sum of transactions and never negative. Each statement computes the running balance from the committed card row, so concurrent redemptions cannot overspend and a batch built before a concurrent write stays correct.
-- Redemption runs in the checkout commit batch. A card spent, disabled or expired since the quote fails the batch (`isGiftCardLedgerError`) and becomes `GIFT_CARD_CHANGED`.
+- Redemption runs in the checkout commit batch. A card spent, disabled or expired since the quote fails the batch (`isGiftCardLedgerError`) and becomes `gift_card_changed`.
 - Tender pays at most the eligible total. A gift card never pays for a gift-card line. At most 5 cards per order. A deposit plan cannot combine with gift cards.
 - Release happens once per order and card (key `release:<orderId>:<giftCardId>`). It moves the tender row from `succeeded` to `refunded`.
 - Refund to a card and store credit are idempotent per refund attempt. A purchase issue is idempotent per order line and unit.
 - Limits: 20 units per line, 50 units per order, message 200 characters, note 500 characters. The largest card is 10,000,000,000 minor units.
-- `apply` answers every failure with one message, "This gift card can't be used." (unknown, disabled, expired, empty, wrong currency). The balance check reports an unknown code as `GIFT_CARD_NOT_FOUND`. Both are rate limited by IP.
+- `apply` answers every failure with one message, "This gift card can't be used." (unknown, disabled, expired, empty, wrong currency). The balance check reports an unknown code as `gift_card_not_found`. Both are rate limited by IP.
 - Code material derives from `CREDENTIAL_ENCRYPTION_KEY`, never `SCALIUS_SECRET`, so a secret rotation cannot orphan a live card. A missing key raises `GiftCardsUnavailableError` (503) with no fallback. The apply handle uses a key derived from `SCALIUS_SECRET`.
 - Codes never appear in URLs, logs, analytics, queue or outbox payloads, or receipts. Staff see `last4`. The code is shown once at manual issue.
 - The `gift_cards` settings document (`defaultExpiryMonths`, 1 to 120 or null) is declared in `settings`. This domain receives the expiry as input (`giftCardExpiryFromMonths`).

@@ -360,7 +360,7 @@ describe("system settings write behavior", () => {
     await expect(response.json()).resolves.toMatchObject({
       success: false,
       error: {
-        code: "SETTINGS_REVISION_CONFLICT",
+        code: "settings_revision_conflict",
         details: { document: "checkout", expectedRevision: 1, currentRevision: 2 },
       },
     });

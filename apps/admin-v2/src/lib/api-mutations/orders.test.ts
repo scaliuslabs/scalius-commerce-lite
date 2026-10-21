@@ -136,7 +136,7 @@ describe("order mutations refresh every card of the order", () => {
 
 describe("order mutation failures", () => {
   it("reloads a changed order and says it now shows the latest", async () => {
-    const conflict = new AdminApiResponseError("This order changed. Reload to see the latest.", 409, "CONFLICT");
+    const conflict = new AdminApiResponseError("This order changed. Reload to see the latest.", 409, "conflict");
     sdk.putApiV1AdminOrdersByIdStatus.mockRejectedValue(conflict);
     await run(renderMutation(useUpdateOrderStatus), { orderId: "ord_1", status: "confirmed" });
 
@@ -154,7 +154,7 @@ describe("order mutation failures", () => {
       client.setQueryData(queryKeys.orders.detail("ord_1"), { id: "ord_1", version: 4 });
     });
     sdk.postApiV1AdminOrdersByIdCod.mockRejectedValue(
-      new AdminApiResponseError("Cash can be recorded once the order is sent with a courier.", 400, "VALIDATION_ERROR"),
+      new AdminApiResponseError("Cash can be recorded once the order is sent with a courier.", 400, "validation_error"),
     );
     await run(renderMutation(useUpdateOrderCod), { orderId: "ord_1", action: "collected", collectedBy: "Rider", collectedAmount: 500 });
 

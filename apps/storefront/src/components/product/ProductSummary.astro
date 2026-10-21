@@ -38,7 +38,7 @@ const CLASSIC_LOOK: StorefrontBuyBoxLook = { cta: { layout: "row" }, facts: "lis
 
 interface Props {
   product: Product;
-  /** The same public facts a product-main skin draws. */
+  /** The same public facts a product_main skin draws. */
   projection?: StorefrontProductPage;
   category: Product["category"] | null;
   variants: ProductVariant[];
@@ -68,7 +68,7 @@ interface Props {
   details?: boolean;
   /** The key features show in the buy box or in "About this item": the tabs leave them out. */
   detailsFeatures?: boolean;
-  /** False leaves out the product title (a product-main skin that draws its own `<h1>`). */
+  /** False leaves out the product title (a product_main skin that draws its own `<h1>`). */
   title?: boolean;
 }
 

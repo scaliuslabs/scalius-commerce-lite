@@ -203,7 +203,7 @@ describe("storefront homepage data", () => {
       ('cat_a', 'Tea', 'tea', 'published'),
       ('cat_b', 'Coffee', 'coffee', 'published'),
       ('cat_draft', 'Hidden', 'hidden', 'draft')`);
-    publishTheme(sqlite, [section({ id: "tiles", type: "category-tiles", settings: { style: "round", title: "Shop", categoryIds: ["cat_b", "cat_draft", "cat_a"] } })]);
+    publishTheme(sqlite, [section({ id: "tiles", type: "category_tiles", settings: { style: "round", title: "Shop", categoryIds: ["cat_b", "cat_draft", "cat_a"] } })]);
 
     const unsaved = await getHomepageData(db);
     expect(unsaved.seo).toEqual({
@@ -228,7 +228,7 @@ describe("storefront homepage data", () => {
         VALUES ('v_honey', 'p_honey', 'HONEY', 90000, 5, 0, 1, 1);
     `);
     await rebuildCatalogProjections(db);
-    const rail = section({ id: "new", type: "product-rail", settings: { title: "", source: { kind: "newest" }, limit: 4 } });
+    const rail = section({ id: "new", type: "product_rail", settings: { title: "", source: { kind: "newest" }, limit: 4 } });
     publishTheme(sqlite, [rail]);
     batches = 0;
     expect((await getHomepageData(db)).sections.homeProduct).toBeNull();
@@ -274,12 +274,12 @@ describe("storefront homepage data", () => {
         ('o_3', 'C', '01700000003', 'x', 'city', 'zone', 'cancelled', ${now - 60}, ${now - 60});
     `);
     publishTheme(sqlite, [
-      section({ id: "new", type: "product-rail", settings: { title: "", source: { kind: "newest" }, limit: 4 } }),
-      section({ id: "sale", type: "deal-block", settings: { title: "", source: { kind: "on-sale" } } }),
-      section({ id: "cat", type: "product-grid", settings: { title: "", source: { kind: "category", categoryId: "cat_tea" }, columns: 2, rows: 1 } }),
-      section({ id: "draft", type: "product-grid", settings: { title: "", source: { kind: "category", categoryId: "cat_draft" }, columns: 2, rows: 1 } }),
-      section({ id: "col", type: "product-rail", settings: { title: "", source: { kind: "collection", collectionId: "col_teas" }, limit: 4 } }),
-      section({ id: "pop", type: "product-rail", settings: { title: "", source: { kind: "popular" }, limit: 4 } }),
+      section({ id: "new", type: "product_rail", settings: { title: "", source: { kind: "newest" }, limit: 4 } }),
+      section({ id: "sale", type: "deal_block", settings: { title: "", source: { kind: "on-sale" } } }),
+      section({ id: "cat", type: "product_grid", settings: { title: "", source: { kind: "category", categoryId: "cat_tea" }, columns: 2, rows: 1 } }),
+      section({ id: "draft", type: "product_grid", settings: { title: "", source: { kind: "category", categoryId: "cat_draft" }, columns: 2, rows: 1 } }),
+      section({ id: "col", type: "product_rail", settings: { title: "", source: { kind: "collection", collectionId: "col_teas" }, limit: 4 } }),
+      section({ id: "pop", type: "product_rail", settings: { title: "", source: { kind: "popular" }, limit: 4 } }),
       section({ id: "banner", type: "banner", settings: { layout: "full", heading: "", text: "", mediaId: "m_banner", cta: null } }),
       section({ id: "gone", type: "banner", settings: { layout: "full", heading: "", text: "", mediaId: "m_gone", cta: null } }),
     ]);

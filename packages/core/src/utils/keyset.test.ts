@@ -98,7 +98,7 @@ describe("request paging", () => {
     it("turns every cursor failure into a typed 400", () => {
         for (const bad of ["x", "eyJ2IjoxfQ", "a".repeat(5_000)]) {
             expect(() => resolveListPaging({ page: 1, limit: 20, after: bad }, shape)).toThrow(
-                expect.objectContaining({ status: 400, code: "INVALID_CURSOR" }),
+                expect.objectContaining({ status: 400, code: "invalid_cursor" }),
             );
         }
     });
@@ -111,13 +111,13 @@ describe("request paging", () => {
         expect(() => resolveListPaging({ page: lastPage + 1, limit: 50 }, shape)).toThrow(
             expect.objectContaining({
                 status: 400,
-                code: "PAGE_TOO_DEEP",
+                code: "page_too_deep",
                 details: { maxOffset },
                 message: expect.stringContaining("after cursor"),
             }),
         );
         // The bound is a value: the same call can name another one.
-        expect(() => resolveListPaging({ page: 3, limit: 50 }, shape, 100)).toThrow(expect.objectContaining({ code: "PAGE_TOO_DEEP" }));
+        expect(() => resolveListPaging({ page: 3, limit: 50 }, shape, 100)).toThrow(expect.objectContaining({ code: "page_too_deep" }));
     });
 });
 
@@ -144,10 +144,10 @@ describe("referenced sorts (personal data stays out of the cursor)", () => {
     it("answers a cursor whose row is gone, or one made for another sort, with a typed 400", async () => {
         const gone = vi.fn(async () => undefined);
         await expect(resolveReferencedBoundary({ after: reference }, { sort: "name", direction: "asc" }, gone))
-            .rejects.toMatchObject({ status: 400, code: "INVALID_CURSOR", message: expect.stringContaining("no longer exists") });
+            .rejects.toMatchObject({ status: 400, code: "invalid_cursor", message: expect.stringContaining("no longer exists") });
         const wrongSort = encodeListCursor({ sort: "createdAt", direction: "asc", values: [], id: "r03" });
         await expect(resolveReferencedBoundary({ after: wrongSort }, { sort: "name", direction: "asc" }, vi.fn()))
-            .rejects.toMatchObject({ status: 400, code: "INVALID_CURSOR" });
+            .rejects.toMatchObject({ status: 400, code: "invalid_cursor" });
     });
 
     it("plans a page from the boundary and puts no value in the cursors it issues", () => {
@@ -188,14 +188,14 @@ describe("positional (ranked) paging", () => {
     it("rejects the window's end, other sorts and keyset cursors", () => {
         const { maxOffset } = planLimits().lists;
         expect(() => resolvePositionalPaging({ page: 1, limit: 25, after: positionCursor("relevance", maxOffset - 1) }, "relevance")).toThrow(
-            expect.objectContaining({ code: "PAGE_TOO_DEEP" }),
+            expect.objectContaining({ code: "page_too_deep" }),
         );
         expect(() => resolvePositionalPaging({ page: 1, limit: 25, after: positionCursor("other", 3) }, "relevance")).toThrow(
-            expect.objectContaining({ code: "INVALID_CURSOR" }),
+            expect.objectContaining({ code: "invalid_cursor" }),
         );
         const keyset = encodeListCursor({ sort: "relevance", direction: "desc", values: [3], id: "x" });
         expect(() => resolvePositionalPaging({ page: 1, limit: 25, after: keyset }, "relevance")).toThrow(
-            expect.objectContaining({ code: "INVALID_CURSOR" }),
+            expect.objectContaining({ code: "invalid_cursor" }),
         );
         expect(decodeListCursor(positionCursor("relevance", 7), {
             sort: "relevance", direction: "desc", kinds: ["number"], positional: true,

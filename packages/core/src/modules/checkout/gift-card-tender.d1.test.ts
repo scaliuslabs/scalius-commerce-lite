@@ -192,17 +192,17 @@ describe("gift cards as a checkout tender", () => {
         }, { paymentProviders: createSslcommerzPackProviders().providers });
         expect(only.result.giftCardTender).toMatchObject({ appliedTotalMinor: 0, amountDueMinor: 50_000 });
         expect(only.result.giftCardTender.issues).toEqual([
-            expect.objectContaining({ handle: card.handle, code: "GIFT_CARD_NOT_ELIGIBLE" }),
+            expect.objectContaining({ handle: card.handle, code: "gift_card_not_eligible" }),
         ]);
         expect(only.result.commitPayload).not.toHaveProperty("giftCardRedemptions");
         expect(only.result.commitPayload.orderData).toMatchObject({ paymentStatus: "unpaid", paidAmountMinor: 0 });
     });
 
-    it("GIFT_CARD_CHANGED: a changed amount due or an unusable card is refused before anything is written", async () => {
+    it("gift_card_changed: a changed amount due or an unusable card is refused before anything is written", async () => {
         const card = await store.issueCard(10_000);
         const items = [line("p_mug", "v_mug", 1, 300)];
         await expect(store.prepare({ ...DELIVERY, items, giftCards: [{ handle: card.handle }], expectedAmountDueMinor: 25_000 }))
-            .rejects.toMatchObject({ code: "GIFT_CARD_CHANGED", status: 409 });
+            .rejects.toMatchObject({ code: "gift_card_changed", status: 409 });
         await expect(store.prepare({ ...DELIVERY, items, giftCards: [{ handle: "gch_not-a-real-handle-000000000000000000000000000" }], expectedAmountDueMinor: MUG_ORDER_TOTAL }))
             .rejects.toBeInstanceOf(GiftCardChangedError);
         // A handle sealed under another secret opens nothing.
@@ -226,14 +226,14 @@ describe("gift cards as a checkout tender", () => {
 
     it("caps gift-card quantity at 20 a line and 50 an order", async () => {
         const perLine = await validateStorefrontCartItems(store.db, [{ productId: "p_gc", variantId: "v_gc", quantity: 21 }]);
-        expect(perLine.issues).toEqual([expect.objectContaining({ code: "QUANTITY_UNAVAILABLE", action: "reduce_quantity", availableQuantity: 20 })]);
+        expect(perLine.issues).toEqual([expect.objectContaining({ code: "quantity_unavailable", action: "reduce_quantity", availableQuantity: 20 })]);
         const perOrder = await validateStorefrontCartItems(store.db, [
             { productId: "p_gc", variantId: "v_gc", quantity: 20, cartKey: "a" },
             { productId: "p_gc", variantId: "v_gc", quantity: 20, cartKey: "b" },
             { productId: "p_gc", variantId: "v_gc", quantity: 11, cartKey: "c" },
         ]);
         expect(perOrder.issues.map((issue) => [issue.cartKey, issue.code, issue.availableQuantity])).toEqual([
-            ["c", "QUANTITY_UNAVAILABLE", 10],
+            ["c", "quantity_unavailable", 10],
         ]);
         expect((await validateStorefrontCartItems(store.db, [
             { productId: "p_gc", variantId: "v_gc", quantity: 20 },
@@ -255,13 +255,13 @@ describe("gift cards as a checkout tender", () => {
             .map(({ code, action, propertyKey }) => ({ code, action, propertyKey }));
 
         expect(await issue([{ key: "_gc_recipient_email", value: "not-an-email" }]))
-            .toEqual([{ code: "PROPERTIES_INVALID", action: "edit_properties", propertyKey: "_gc_recipient_email" }]);
+            .toEqual([{ code: "properties_invalid", action: "edit_properties", propertyKey: "_gc_recipient_email" }]);
         expect(await issue([{ key: "_gc_recipient_phone", value: "12" }]))
-            .toEqual([{ code: "PROPERTIES_INVALID", action: "edit_properties", propertyKey: "_gc_recipient_phone" }]);
+            .toEqual([{ code: "properties_invalid", action: "edit_properties", propertyKey: "_gc_recipient_phone" }]);
         expect(await issue([
             { key: "_gc_recipient_email", value: "rahim@example.com" },
             { key: "_gc_recipient_phone", value: "01712345678" },
-        ])).toEqual([{ code: "PROPERTIES_INVALID", action: "edit_properties", propertyKey: "_gc_recipient_phone" }]);
+        ])).toEqual([{ code: "properties_invalid", action: "edit_properties", propertyKey: "_gc_recipient_phone" }]);
 
         expect((await validate([{ key: "_gc_recipient_name", value: "Rahim" }, { key: "_gc_recipient_email", value: "rahim@example.com" }])).valid).toBe(true);
         expect((await validate([{ key: "_gc_recipient_phone", value: "01712345678" }])).valid).toBe(true);

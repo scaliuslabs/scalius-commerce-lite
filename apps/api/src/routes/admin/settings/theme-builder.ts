@@ -78,7 +78,7 @@ app.openapi(createRoute({
   path: "/theme/restore-point",
   tags: ["Admin - Settings"],
   summary: "Put a restore point back in the draft (it goes live only when the draft is published)",
-  description: "The draft it replaces becomes a restore point too, so the restore can be undone. A point that names images deleted from Files since is refused with THEME_VERSION_IMAGES_MISSING; send withoutMissingImages to restore it without them.",
+  description: "The draft it replaces becomes a restore point too, so the restore can be undone. A point that names images deleted from Files since is refused with theme_version_images_missing; send withoutMissingImages to restore it without them.",
   operationId: "dashboard.theme.draft_snapshot_restore",
   request: {
     body: {
@@ -113,25 +113,25 @@ app.openapi(createRoute({
 /** What each section type is for, in a line the model reads beside its settings. */
 const SECTION_PURPOSE: Record<(typeof STOREFRONT_SECTION_RENDERERS)[number], string> = {
   hero: "A banner slider at the top of a page. Each slide needs an image (a media id from Files), so leave slides empty when you have none.",
-  "usp-strip": "A strip of short selling points (delivery, returns, payment), from the store's delivery facts or the merchant's own.",
-  "category-tiles": "Tiles that link to the store's categories (category ids).",
+  "usp_strip": "A strip of short selling points (delivery, returns, payment), from the store's delivery facts or the merchant's own.",
+  "category_tiles": "Tiles that link to the store's categories (category ids).",
   collections: "Rows of products from collections (collection ids).",
-  "product-rail": "A scrolling row of products from a source (newest, on sale, popular, a category or a collection).",
-  "product-grid": "A grid of products from a source.",
-  "deal-block": "A flash-sale row of products, with a countdown to a real promotion's end.",
-  "product-tabs": "Two to four tabs, each a product source.",
+  "product_rail": "A scrolling row of products from a source (newest, on sale, popular, a category or a collection).",
+  "product_grid": "A grid of products from a source.",
+  "deal_block": "A flash-sale row of products, with a countdown to a real promotion's end.",
+  "product_tabs": "Two to four tabs, each a product source.",
   lookbook: "A lifestyle photo beside a grid of products.",
   banner: "One campaign banner: heading, text, optional image and button.",
-  "shop-by": "Image cards that each link somewhere (each needs an image).",
-  "banner-mosaic": "A mosaic of linked promo images (each needs an image).",
-  "brand-wall": "The store's brands as a wall or rail.",
+  "shop_by": "Image cards that each link somewhere (each needs an image).",
+  "banner_mosaic": "A mosaic of linked promo images (each needs an image).",
+  "brand_wall": "The store's brands as a wall or rail.",
   editorial: "Words: rich text, image with text, columns or testimonials.",
   faq: "Questions and answers.",
   specifications: "Product details as label and value rows, optionally connected to the product's custom fields.",
-  "utility-cards": "Small link cards (track an order, contact us).",
-  "endless-grid": "A long grid of the newest products that keeps loading.",
-  "seo-text": "Long copy below everything, for search engines and readers.",
-  "recently-viewed": "The products this buyer viewed (filled in their browser).",
+  "utility_cards": "Small link cards (track an order, contact us).",
+  "endless_grid": "A long grid of the newest products that keeps loading.",
+  "seo_text": "Long copy below everything, for search engines and readers.",
+  "recently_viewed": "The products this buyer viewed (filled in their browser).",
   objects: "The published entries of one content type (an FAQ, a size chart, store locations): a content type id from Content types; leave it empty when you have none.",
   newsletter: "A signup: phone always, e-mail as chosen, optional WhatsApp.",
 };
@@ -248,13 +248,13 @@ app.openapi(createRoute({
       signal: c.req.raw.signal,
     });
   } catch (error) {
-    if (error instanceof AiGenerateError) throw new ValidationError(error.message, { code: `ai.${error.reason}` });
+    if (error instanceof AiGenerateError) throw new ValidationError(error.message, { code: `ai_${error.reason}` });
     throw error;
   }
   // Every section is checked against the theme's own schemas; one that fails is left out and counted.
   const accepted = acceptDraftedSections(value.sections.slice(0, input.limit), []);
   if (accepted.sections.length === 0) {
-    throw new ValidationError(`${choice.provider.label} returned nothing this theme can show. Try other words.`, { code: "ai.invalid_output" });
+    throw new ValidationError(`${choice.provider.label} returned nothing this theme can show. Try other words.`, { code: "ai_invalid_output" });
   }
   return ok(c, { sections: accepted.sections, rejected: accepted.rejected, note: value.note ?? null });
 });

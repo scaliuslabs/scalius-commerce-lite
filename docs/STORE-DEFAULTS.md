@@ -29,7 +29,7 @@ After the first admin signs in, the dashboard opens `/admin/welcome`. The page a
 3. the shop currency and its symbol (currency document), only when the currency changes;
 4. the time zone and units (platform document).
 
-The batch guard refuses a store that is no longer new. A store is new while it has no order, it has one market, and the backup market still has revision 1 (as migration 0112 created it). Then the API answers 409 `STORE_SETUP_DONE` and writes nothing. A second request for the same store therefore gets 409, so the step runs at most once. Products or delivery methods lock the currency: setup keeps the current currency or refuses a different one.
+The batch guard refuses a store that is no longer new. A store is new while it has no order, it has one market, and the backup market still has revision 1 (as migration 0112 created it). Then the API answers 409 `store_setup_done` and writes nothing. A second request for the same store therefore gets 409, so the step runs at most once. Products or delivery methods lock the currency: setup keeps the current currency or refuses a different one.
 
 Setup creates no tax region and no shipping zone. The Home setup guide shows "Tell us about your store" while the store is new, then "Review delivery charges" and "Review taxes".
 
@@ -91,6 +91,6 @@ Weights are stored in grams (`product_variants.weight`). The unit system and the
 | `dashboard.settings.store_defaults_get` | any staff | time zone, unit system, weight unit, store country, platform revision |
 | `dashboard.settings.store_defaults_update` | Edit store settings | revision required; writes the settings mirror |
 | `dashboard.settings.store_setup_get` | View store settings | `needed`, `done`, current values, `currencyLocked` |
-| `dashboard.settings.store_setup_apply` | Edit store settings | 409 `STORE_SETUP_DONE` once the store is not new |
+| `dashboard.settings.store_setup_apply` | Edit store settings | 409 `store_setup_done` once the store is not new |
 
 The agent routes `dashboard.store-defaults` and `dashboard.store-setup` plan these operations. The control `dashboard.timezone-separate-review` keeps a time zone change out of the Bangladesh checkout setup. The analytics overview response carries `timeZone`.

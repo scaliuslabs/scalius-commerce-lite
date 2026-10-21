@@ -101,8 +101,9 @@ const promotionRuleShape = {
         order: z.boolean(),
         shipping: z.boolean(),
     }).strict().default({ product: false, order: false, shipping: false }),
-    startsAtEpochSeconds: z.number().int().nonnegative().nullable().default(null),
-    endsAtEpochSeconds: z.number().int().nonnegative().nullable().default(null),
+    /** When it starts and ends: ISO 8601 date-times (null: now, never). */
+    startsAt: z.iso.datetime({ offset: true }).nullable().default(null),
+    endsAt: z.iso.datetime({ offset: true }).nullable().default(null),
     /** The schedule's zone: the store's (Settings → Store details) unless the form sends one. */
     timezone: z.string().trim().min(1).max(80).default(() => currentStoreTimeZone()),
     maxRedemptions: z.number().int().positive().nullable().default(null),
@@ -161,10 +162,13 @@ export function promotionAmountIssues(
 }
 
 function refinePromotionRule(
-    rule: Parameters<typeof checkPromotionRule>[0] & { timezone: string; customerSegmentIds: string[] },
+    rule: Parameters<typeof checkPromotionRule>[0] & { startsAt: string | null; endsAt: string | null; timezone: string; customerSegmentIds: string[] },
     context: z.RefinementCtx,
 ): void {
     checkPromotionRule(rule, context);
+    if (rule.startsAt !== null && rule.endsAt !== null && Date.parse(rule.endsAt) <= Date.parse(rule.startsAt)) {
+        context.addIssue({ code: "custom", path: ["endsAt"], message: "The end date must be after the start date." });
+    }
     if (new Set(rule.customerSegmentIds).size !== rule.customerSegmentIds.length) {
         context.addIssue({ code: "custom", path: ["customerSegmentIds"], message: "Choose each customer segment once." });
     }

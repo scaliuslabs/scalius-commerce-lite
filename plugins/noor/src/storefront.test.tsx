@@ -107,10 +107,10 @@ describe("Noor manifest", () => {
       "featured_product", "gallery", "landing_features", "landing_hero", "landing_order", "marquee", "slideshow", "testimonials", "video",
     ]);
     expect(declared.storefront.skins.map((skin) => skin.target).sort()).toEqual([
-      "footer", "header", "product-card", "product-main",
-      "section:banner-mosaic", "section:category-tiles", "section:deal-block", "section:editorial", "section:faq", "section:hero",
-      "section:lookbook", "section:newsletter", "section:product-grid", "section:product-rail", "section:product-tabs",
-      "section:seo-text", "section:shop-by", "section:specifications", "section:usp-strip",
+      "footer", "header", "product_card", "product_main",
+      "section:banner_mosaic", "section:category_tiles", "section:deal_block", "section:editorial", "section:faq", "section:hero",
+      "section:lookbook", "section:newsletter", "section:product_grid", "section:product_rail", "section:product_tabs",
+      "section:seo_text", "section:shop_by", "section:specifications", "section:usp_strip",
     ]);
   });
 
@@ -141,7 +141,7 @@ describe("Noor manifest", () => {
     const campaign = readStorefrontPagePresetSections(declared.storefront.pagePresets[0]!.sections, declared.storefront.pagePresets[0]!.themeVersion!)!;
     const sections = [...(template.sections ?? []), ...campaign];
     // Testimonials, questions and promises are the merchant's to write: a template starts with none of them.
-    const trustTypes = ["scalius.noor/testimonials", "faq", "usp-strip", "editorial"];
+    const trustTypes = ["scalius.noor/testimonials", "faq", "usp_strip", "editorial"];
     for (const section of sections) {
       if (section.type !== "app") {
         expect(trustTypes).not.toContain(section.type);
@@ -165,7 +165,7 @@ describe("Noor manifest", () => {
     expect(html).not.toContain("noor-urgency");
     expect(renderSection(storefront, "landing_features", settingsFor("landing_features", appCampaign[1]!.settings.values))).toBe("");
     const order = renderSection(storefront, "landing_order", settingsFor("landing_order", { ...appCampaign.at(-1)!.settings.values, product: "prod_1" }));
-    expect(order).toContain('<scalius-embed kind="order-form"');
+    expect(order).toContain('<scalius-embed kind="order_form"');
     expect(order).not.toContain("noor-assure");
   });
 
@@ -272,12 +272,12 @@ describe("Noor chrome", () => {
     const hero = { kind: "core" as const, type: "hero" };
     const leads = [
       null,
-      { kind: "core" as const, type: "product-grid" },
+      { kind: "core" as const, type: "product_grid" },
       // The store's own hero, or another skin's, or one Noor draws beside the photo.
       hero,
       { ...hero, skin: { id: "other-hero", settings: slotSettings("noor_hero") } },
       { ...hero, skin: { id: "noor_hero", settings: slotSettings("noor_hero", { layout: "split" }) } },
-      { kind: "core" as const, type: "seo-text", skin: { id: "noor_hero", settings: slotSettings("noor_hero") } },
+      { kind: "core" as const, type: "seo_text", skin: { id: "noor_hero", settings: slotSettings("noor_hero") } },
       app,
       { ...app, pluginId: "another.theme", settings: settingsFor("slideshow", { slides: [{ image: "hero" }] }) },
       { ...app, settings: settingsFor("slideshow", { slides: [] }) },
@@ -420,7 +420,7 @@ describe("Noor landing kit", () => {
     const html = shown(render("landing_order", { assurances: [{ icon: "truck", text: "2-day delivery" }], max_quantity: 3 }));
     expect(html).toContain('id="noor-order-app-landing_order"');
     // The embed names the product by id, never by a URL a canonical path override can change.
-    expect(html).toContain('<scalius-embed kind="order-form" data-product="product:prod_1-1" data-max-quantity="3"></scalius-embed>');
+    expect(html).toContain('<scalius-embed kind="order_form" data-product="product:prod_1-1" data-max-quantity="3"></scalius-embed>');
     expect(html).toContain('data-island="landing-bar"');
     expect(html).toContain("2-day delivery");
     expect(html).not.toContain("Cash on delivery: pay when it arrives");

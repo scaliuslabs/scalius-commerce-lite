@@ -363,12 +363,12 @@ export const MERCHANT_TASKS: readonly MerchantTask[] = [
           name: "EID10", method: "code", codes: [{ code: "EID10" }],
           effects: [{ target: "order", allocation: "once", kind: "percentage_off", config: { basisPoints: 1000 } }],
           conditions: [{ kind: "minimum_merchandise_subtotal", config: { amountMinor: 200_000, currencyCode: "BDT" } }],
-          startsAtEpochSeconds: starts, endsAtEpochSeconds: starts + 3 * 86_400 - 1, timezone: "Asia/Dhaka",
+          startsAt: new Date(starts * 1_000).toISOString(), endsAt: new Date((starts + 3 * 86_400 - 1) * 1_000).toISOString(), timezone: "Asia/Dhaka",
         },
       });
       await ctx.agent.change("dashboard.discounts.activate", { path: { id: String(data.id) }, body: { expectedRevision: Number(data.revision) } });
       ctx.facts.discountId = data.id;
-      await ctx.agent.read("dashboard.discounts.get", { path: { id: String(data.id) } }, { select: ["/status", "/codes", "/startsAtEpochSeconds", "/endsAtEpochSeconds"] });
+      await ctx.agent.read("dashboard.discounts.get", { path: { id: String(data.id) } }, { select: ["/status", "/codes", "/startsAt", "/endsAt"] });
     },
     verify(ctx) {
       const code = one(ctx.sqlite, "SELECT 1 FROM promotion_codes WHERE upper(code) = 'EID10'");
@@ -694,7 +694,7 @@ export const MERCHANT_TASKS: readonly MerchantTask[] = [
         JOIN permissions p ON p.id = rp.permission_id WHERE ur.user_id = ?`, invited.id).map((row) => row.name);
       return permissions.length > 0 && permissions.every((name) => name.startsWith("orders.")) ? [] : [`invited user permissions ${permissions.join()}`];
     },
-    knownGap: "team.users.invite answers 500 INTERNAL_ERROR on the seeded store (the role is created fine); the invite path depends on auth/email wiring the in-process store does not provide, so the staff invite is unproven.",
+    knownGap: "team.users.invite answers 500 internal_error on the seeded store (the role is created fine); the invite path depends on auth/email wiring the in-process store does not provide, so the staff invite is unproven.",
   },
   {
     n: 27,

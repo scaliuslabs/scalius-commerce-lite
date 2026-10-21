@@ -509,7 +509,7 @@ export async function updateAttribute(
             ...(plan?.statements ?? []),
         ] as never) as unknown[];
     } catch (error) {
-        if (isBatchGuardError(error, "ATTRIBUTE_VALUE_IN_USE")) {
+        if (isBatchGuardError(error, "attribute_value_in_use")) {
             throw new ConflictError("Products started using a removed value meanwhile. Refresh and try again.");
         }
         throw error;
@@ -598,7 +598,7 @@ function attributeDeleteGuard(
                     SELECT CAST(value AS TEXT) FROM json_each(${idSet})
                 )
             )
-    `, "ATTRIBUTE_DELETE_CONFLICT");
+    `, "attribute_delete_conflict");
 }
 
 async function deleteAttributes(
@@ -634,7 +634,7 @@ async function deleteAttributes(
     try {
         await safeBatch(db, [attributeDeleteGuard(db, ids, permanent), ...writes] as never);
     } catch (error) {
-        if (isBatchGuardError(error, "ATTRIBUTE_DELETE_CONFLICT")) {
+        if (isBatchGuardError(error, "attribute_delete_conflict")) {
             throw new ConflictError(
                 "Attributes changed while the delete was being processed. Refresh and try again.",
             );
@@ -687,7 +687,7 @@ function attributeRestoreGuard(db: Database, ids: string[]): SQLiteBatchItem {
                     SELECT CAST(value AS TEXT) FROM json_each(${idSet})
                 )
             )
-    `, "ATTRIBUTE_RESTORE_CONFLICT");
+    `, "attribute_restore_conflict");
 }
 
 async function restoreAttributes(db: Database, rawIds: string[]): Promise<void> {
@@ -760,7 +760,7 @@ async function restoreAttributes(db: Database, rawIds: string[]): Promise<void> 
     try {
         await safeBatch(db, [attributeRestoreGuard(db, ids), write] as never);
     } catch (error) {
-        if (isBatchGuardError(error, "ATTRIBUTE_RESTORE_CONFLICT")) {
+        if (isBatchGuardError(error, "attribute_restore_conflict")) {
             throw new ConflictError(
                 "Attributes changed while the restore was being processed. Refresh and try again.",
             );
@@ -1156,13 +1156,13 @@ export async function deleteAttributeValue(
             await safeBatch(db, [
                 buildBatchGuard(db, sql`NOT EXISTS (
                     SELECT 1 FROM ${productAttributeValues} WHERE ${productAttributeValues.valueId} = ${preset.id}
-                )`, "ATTRIBUTE_VALUE_IN_USE"),
+                )`, "attribute_value_in_use"),
                 db.update(attributeValues)
                     .set({ deletedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
                     .where(and(eq(attributeValues.id, preset.id), isNull(attributeValues.deletedAt))),
             ] as never);
         } catch (error) {
-            if (isBatchGuardError(error, "ATTRIBUTE_VALUE_IN_USE")) {
+            if (isBatchGuardError(error, "attribute_value_in_use")) {
                 throw new ConflictError("Products started using this value while it was being deleted. Try again.");
             }
             throw error;

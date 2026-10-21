@@ -323,7 +323,7 @@ describe("gateway kernel with an app provider's adapter", () => {
 
   it("ends a refund the port says never reached the provider, and keeps one that may have", async () => {
     await capture("pay_1", 10_000);
-    state.refundError = new ProviderError("declined", "The refund window has closed.", { code: "fake.window_closed" });
+    state.refundError = new ProviderError("declined", "The refund window has closed.", { code: "fake_window_closed" });
     await expect(processRefund(db, { orderId: "order_1", reason: "late" }, undefined, providers)).rejects.toThrow("The refund window has closed.");
     expect(attemptStatuses()).toEqual(["failed"]);
     expect(orderState()).toMatchObject({ payment_status: PaymentStatus.PAID, paid_amount_minor: 10_000 });

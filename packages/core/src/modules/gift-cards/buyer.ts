@@ -39,7 +39,7 @@ export interface BuyerGiftCard {
     transactions: BuyerGiftCardTransaction[];
 }
 
-export const GIFT_CARD_SAVE_FAILED_CODE = "GIFT_CARD_SAVE_FAILED";
+export const GIFT_CARD_SAVE_FAILED_CODE = "gift_card_save_failed";
 export const GIFT_CARD_SAVE_FAILED_MESSAGE = "This gift card can't be saved to your account. Check the code and try again.";
 
 export class GiftCardSaveFailedError extends AppError {

@@ -17,7 +17,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
 /** The guard marker when a pool ran out between the plan and the batch. */
-export const DIGITAL_KEYS_EXHAUSTED = "DIGITAL_KEYS_EXHAUSTED";
+export const DIGITAL_KEYS_EXHAUSTED = "digital_keys_exhausted";
 
 export interface DigitalDeliveryLine {
     orderItemId: string;

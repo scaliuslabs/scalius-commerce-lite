@@ -207,7 +207,7 @@ describe("app safety", () => {
     expect(Object.keys(restored.manifest.objects)).toEqual(["ledger"]);
     expect(sqlite.prepare("SELECT type FROM object_types WHERE namespace = 'acme.loyalty'").all()).toEqual([{ type: "ledger" }]);
     await expect(restorePluginRelease(db, before, { expectedRevision: updated.revision, reason: "again" }))
-      .rejects.toMatchObject({ pluginCode: "installation.revision_conflict" });
+      .rejects.toMatchObject({ pluginCode: "installation_revision_conflict" });
   });
 
   it("keeps app objects on keep-data uninstall and cascades them on delete-data uninstall", async () => {
@@ -228,15 +228,15 @@ describe("app safety", () => {
     await expect(updatePluginInstallation(db, "acme.loyalty", {
       manifest: manifest({ version: "2.0.0", objects: { ledger: changed } }),
       source: "upload", bundleSha256: SHA2, expectedRevision: active.revision,
-    })).rejects.toMatchObject({ pluginCode: "installation.objects_invalid" });
+    })).rejects.toMatchObject({ pluginCode: "installation_objects_invalid" });
     expect(await requirePluginInstallation(db, "acme.loyalty")).toMatchObject({ status: "failed" });
     expect(await getObjectRecord(db, "acme.loyalty", "ledger", "r1")).toEqual({ note: "kept" });
   });
 
   it("refuses a manifest built for another plugin API or a newer platform with a plain reason", async () => {
     await expect(installPlugin(db, { manifest: { ...manifest(), apiVersion: "2099-01" } as never, source: "upload", bundleSha256: SHA }))
-      .rejects.toMatchObject({ pluginCode: "installation.incompatible", message: expect.stringMatching(/plugin API 2099-01/) });
+      .rejects.toMatchObject({ pluginCode: "installation_incompatible", message: expect.stringMatching(/plugin API 2099-01/) });
     await expect(installPlugin(db, { manifest: manifest({ minPlatformVersion: "99.0.0" }), source: "upload", bundleSha256: SHA }))
-      .rejects.toMatchObject({ pluginCode: "installation.incompatible", message: expect.stringMatching(/Needs Scalius 99\.0\.0/) });
+      .rejects.toMatchObject({ pluginCode: "installation_incompatible", message: expect.stringMatching(/Needs Scalius 99\.0\.0/) });
   });
 });

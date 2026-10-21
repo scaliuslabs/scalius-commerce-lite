@@ -171,7 +171,7 @@ describe("item-level return database transactions", () => {
 
     const view = await getOrderReturn(fixture.db, "order_1", "return_1");
 
-    expect(view.receiptRecovery).toEqual({ required: true, startedAt: 123 });
+    expect(view.receiptRecovery).toEqual({ required: true, startedAt: "1970-01-01T00:02:03.000Z" });
     expect(JSON.stringify(view)).not.toMatch(/private-receive-command|private-hash/);
   });
 });

@@ -165,15 +165,15 @@ describe("buyer properties: resolution and pricing (§3.3)", () => {
     expect(resolveLineProperties(schema, [{ key: "engraving", value: "   " }, { key: "size_fit", value: "regular" }]))
       .toMatchObject({ ok: true, propertiesPriceMinor: 0, canonical: [{ key: "size_fit", value: "regular" }] });
     expect(resolveLineProperties(schema, [{ key: "wrap", value: "true" }])).toEqual({
-      ok: false, code: "PROPERTIES_REQUIRED", key: "size_fit", reason: "required",
+      ok: false, code: "properties_required", key: "size_fit", reason: "required",
     });
-    expect(resolveLineProperties(schema, undefined)).toMatchObject({ ok: false, code: "PROPERTIES_REQUIRED" });
+    expect(resolveLineProperties(schema, undefined)).toMatchObject({ ok: false, code: "properties_required" });
   });
 
   it("accepts no properties for a product without inputs, and refuses any it sends", () => {
     expect(resolveLineProperties(null, undefined)).toEqual({ ok: true, canonical: [], properties: [], propertiesPriceMinor: 0 });
     expect(resolveLineProperties(null, [])).toMatchObject({ ok: true });
-    expect(resolveLineProperties(null, [{ key: "engraving", value: "x" }])).toMatchObject({ ok: false, code: "PROPERTIES_INVALID" });
+    expect(resolveLineProperties(null, [{ key: "engraving", value: "x" }])).toMatchObject({ ok: false, code: "properties_invalid" });
   });
 
   // P7: buyer payload limits.
@@ -193,7 +193,7 @@ describe("buyer properties: resolution and pricing (§3.3)", () => {
     const result = resolveLineProperties(schema, input);
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.code).toBe("PROPERTIES_INVALID");
+      expect(result.code).toBe("properties_invalid");
       expect(result.reason).toMatch(expected);
     }
   });

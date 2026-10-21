@@ -1,5 +1,7 @@
 // Plugin functions (docs/platform/PLUGINS.md): synchronous decision points in
-// checkout (Shopify Functions). A function is pure: it receives the input
+// checkout (Shopify Functions). Buyer UI is not a function: an app declares it
+// as storefront extensions (manifest `storefront.extensions`, one per UI slot)
+// and the host renders it through the same pipeline (PLUGIN_EXTENSION_SCHEMAS). A function is pure: it receives the input
 // below plus its plugin's settings, does no I/O, and returns an output the
 // platform validates and applies. Inputs carry ids, quantities, money in
 // integer minor units and customer segments — never contact details. A
@@ -269,7 +271,6 @@ export const buyerUiInputSchema = z.object({
 export type BuyerUiInput = z.infer<typeof buyerUiInputSchema>;
 
 export const PLUGIN_FUNCTION_SCHEMAS = {
-  "buyer.ui": { input: buyerUiInputSchema, output: buyerUiOutputSchema },
   "cart.transform": {
     input: z.object({ cart: functionCartSchema, reads }).strict(),
     output: cartTransformOutputSchema,
@@ -309,33 +310,62 @@ export const PLUGIN_FUNCTION_SCHEMAS = {
   },
 } as const satisfies Record<PluginFunctionPoint, { input: z.ZodType; output: z.ZodType }>;
 
-/** What a function receives (defaults applied). */
-export type PluginFunctionInput<P extends PluginFunctionPoint> = z.infer<(typeof PLUGIN_FUNCTION_SCHEMAS)[P]["input"]>;
+/**
+ * A storefront extension's render (manifest `storefront.extensions`): the
+ * input for one UI slot of the buyer's own pages (cart, checkout, the
+ * receipt, account) and the `ui` tree it answers, or null to show nothing.
+ */
+export const PLUGIN_EXTENSION_SCHEMAS = { input: buyerUiInputSchema, output: buyerUiOutputSchema } as const;
+
+/**
+ * The host's run name for extension renders. The host runs them through the
+ * function pipeline (declared reads, limits, incident logs) under this
+ * name; it is not a function point and no manifest names it.
+ */
+export const PLUGIN_EXTENSION_RUN = "buyer.ui";
+/** What the host runs through the function pipeline: every function point and the extension render. */
+export type PluginRunPoint = PluginFunctionPoint | typeof PLUGIN_EXTENSION_RUN;
+const PLUGIN_RUN_SCHEMAS = { ...PLUGIN_FUNCTION_SCHEMAS, [PLUGIN_EXTENSION_RUN]: PLUGIN_EXTENSION_SCHEMAS } as const satisfies Record<PluginRunPoint, { input: z.ZodType; output: z.ZodType }>;
+
+/** A run's log source as the merchant reads it: `function:<point>`, or `extension:<target>` for a render. */
+export function pluginRunSource(point: PluginRunPoint, input: unknown): string {
+  if (point !== PLUGIN_EXTENSION_RUN) return `function:${point}`;
+  const target = typeof input === "object" && input !== null ? (input as { target?: unknown }).target : undefined;
+  return `extension:${typeof target === "string" ? target : "unknown"}`;
+}
+
+/** The input and output schemas of a run: a function point's, or the extension render's. */
+export function pluginRunSchemas<P extends PluginRunPoint>(point: P): (typeof PLUGIN_RUN_SCHEMAS)[P] {
+  return PLUGIN_RUN_SCHEMAS[point];
+}
+
+/** What a function (or the extension render) receives (defaults applied). */
+export type PluginFunctionInput<P extends PluginRunPoint> = z.infer<(typeof PLUGIN_RUN_SCHEMAS)[P]["input"]>;
 /** An input as a caller may write it (defaults left out): what the test harness takes. */
-export type PluginFunctionInputDraft<P extends PluginFunctionPoint> = z.input<(typeof PLUGIN_FUNCTION_SCHEMAS)[P]["input"]>;
+export type PluginFunctionInputDraft<P extends PluginRunPoint> = z.input<(typeof PLUGIN_RUN_SCHEMAS)[P]["input"]>;
 /** An answer as the platform reads it (defaults applied). */
-export type PluginFunctionOutput<P extends PluginFunctionPoint> = z.infer<(typeof PLUGIN_FUNCTION_SCHEMAS)[P]["output"]>;
+export type PluginFunctionOutput<P extends PluginRunPoint> = z.infer<(typeof PLUGIN_RUN_SCHEMAS)[P]["output"]>;
 /** An answer as a function writes it (defaults may be left out). */
-export type PluginFunctionAnswer<P extends PluginFunctionPoint> = z.input<(typeof PLUGIN_FUNCTION_SCHEMAS)[P]["output"]>;
+export type PluginFunctionAnswer<P extends PluginRunPoint> = z.input<(typeof PLUGIN_RUN_SCHEMAS)[P]["output"]>;
 
 /** The refusal code of an answer that fails its point's schema; the host skips the app (or blocks, `onError`). */
-export const PLUGIN_FUNCTION_INVALID_OUTPUT = "function.invalid_output";
+export const PLUGIN_FUNCTION_INVALID_OUTPUT = "function_invalid_output";
 
 /**
  * A function's answer checked the way the host checks it: the parsed output,
- * or `function.invalid_output` with the first issue's path. The host and the
+ * or `function_invalid_output` with the first issue's path. The host and the
  * SDK test harness both use this, so a test sees what production does.
  */
-export function checkPluginFunctionOutput<P extends PluginFunctionPoint>(
+export function checkPluginFunctionOutput<P extends PluginRunPoint>(
   point: P,
   value: unknown,
 ): { ok: true; value: PluginFunctionOutput<P> } | { ok: false; code: typeof PLUGIN_FUNCTION_INVALID_OUTPUT; message: string } {
-  const parsed = PLUGIN_FUNCTION_SCHEMAS[point].output.safeParse(value);
+  const parsed = PLUGIN_RUN_SCHEMAS[point].output.safeParse(value);
   if (parsed.success) return { ok: true, value: parsed.data as PluginFunctionOutput<P> };
   const issue = parsed.error.issues[0];
   return {
     ok: false,
     code: PLUGIN_FUNCTION_INVALID_OUTPUT,
-    message: `Invalid ${point} output${issue ? ` at ${issue.path.join(".") || "(root)"}: ${issue.message}` : ""}.`,
+    message: `Invalid ${point === PLUGIN_EXTENSION_RUN ? "extension" : point} output${issue ? ` at ${issue.path.join(".") || "(root)"}: ${issue.message}` : ""}.`,
   };
 }

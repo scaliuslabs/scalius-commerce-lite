@@ -196,8 +196,8 @@ export function downloadStatusText(flag: DownloadStatusFlag): string {
 /** What a refused ticket or reveal means for the buyer. */
 export function downloadFlagForApi(status: number, code: string | null, access: DigitalAccess): DownloadStatusFlag {
   if (status === 409) {
-    if (code === "DOWNLOAD_REVOKED") return "revoked";
-    if (code === "DOWNLOAD_EXPIRED") return "expired";
+    if (code === "download_revoked") return "revoked";
+    if (code === "download_expired") return "expired";
     return "limit";
   }
   if (status === 429) return "rate";

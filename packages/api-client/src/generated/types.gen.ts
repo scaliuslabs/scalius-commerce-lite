@@ -84,7 +84,7 @@ export type StorefrontCustomField = {
         }>;
     };
     /**
-     * JSON per the type: text, dates, URLs, colours and record ids as strings; integers as numbers; decimals as decimal strings; booleans; any JSON for `json`; money in decimal major units of the store currency; lists as arrays.
+     * JSON per the type: text, dates, URLs, colours and record ids as strings; integers as numbers; decimals as decimal strings; booleans; any JSON for `json`; money as `{ amountMinor, currency }` (integer minor units; the page market's currency on a product page, else the store's); lists as arrays.
      */
     value?: unknown;
     /**
@@ -147,8 +147,6 @@ export type ProductCardFacts = {
         feeFrom: number;
     } | unknown;
 };
-
-export type NullableTimestamp = string | number | null;
 
 export type StorefrontHomepageSections = {
     bindingObjects?: {
@@ -391,7 +389,7 @@ export type StorefrontHomepageSections = {
                 name: string;
                 type: string;
                 /**
-                 * The custom-field HTTP contract, as public custom fields: text, dates, URLs, colours and media ids (in media) as strings; integers and money (decimal major units of the store currency) as numbers; booleans; lists as arrays.
+                 * The custom-field HTTP contract, as public custom fields: text, dates, URLs, colours and media ids (in media) as strings; integers as numbers; money as `{ amountMinor, currency }` (integer minor units of the store currency); booleans; lists as arrays.
                  */
                 value?: unknown;
             }>;
@@ -434,7 +432,7 @@ export type MarketPresence = {
 };
 
 export type StorefrontThemeDocument = {
-    version: 11;
+    version: 12;
     template: 'department-mall' | 'boutique' | 'marketplace' | 'daily-essentials' | 'showcase-landing';
     tokens: {
         colors: {
@@ -753,9 +751,9 @@ export type StorefrontThemeDocument = {
         skins?: {
             header?: StorefrontSkinRef;
             footer?: StorefrontSkinRef;
-            'product-card'?: StorefrontSkinRef;
-            'product-main'?: StorefrontSkinRef;
-            'listing-main'?: StorefrontSkinRef;
+            product_card?: StorefrontSkinRef;
+            product_main?: StorefrontSkinRef;
+            listing_main?: StorefrontSkinRef;
         };
         template?: string;
     };
@@ -851,7 +849,7 @@ export type StorefrontSectionList = Array<{
     skin?: StorefrontSkinRef;
 } | {
     id: string;
-    type: 'usp-strip';
+    type: 'usp_strip';
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
@@ -873,7 +871,7 @@ export type StorefrontSectionList = Array<{
     skin?: StorefrontSkinRef;
 } | {
     id: string;
-    type: 'category-tiles';
+    type: 'category_tiles';
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
@@ -899,7 +897,7 @@ export type StorefrontSectionList = Array<{
     skin?: StorefrontSkinRef;
 } | {
     id: string;
-    type: 'product-rail';
+    type: 'product_rail';
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
@@ -912,7 +910,7 @@ export type StorefrontSectionList = Array<{
     skin?: StorefrontSkinRef;
 } | {
     id: string;
-    type: 'product-grid';
+    type: 'product_grid';
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
@@ -926,7 +924,7 @@ export type StorefrontSectionList = Array<{
     skin?: StorefrontSkinRef;
 } | {
     id: string;
-    type: 'deal-block';
+    type: 'deal_block';
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
@@ -940,7 +938,7 @@ export type StorefrontSectionList = Array<{
     skin?: StorefrontSkinRef;
 } | {
     id: string;
-    type: 'product-tabs';
+    type: 'product_tabs';
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
@@ -958,7 +956,7 @@ export type StorefrontSectionList = Array<{
     skin?: StorefrontSkinRef;
 } | {
     id: string;
-    type: 'shop-by';
+    type: 'shop_by';
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
@@ -977,7 +975,7 @@ export type StorefrontSectionList = Array<{
     skin?: StorefrontSkinRef;
 } | {
     id: string;
-    type: 'banner-mosaic';
+    type: 'banner_mosaic';
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
@@ -1026,7 +1024,7 @@ export type StorefrontSectionList = Array<{
     skin?: StorefrontSkinRef;
 } | {
     id: string;
-    type: 'brand-wall';
+    type: 'brand_wall';
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
@@ -1109,7 +1107,7 @@ export type StorefrontSectionList = Array<{
     skin?: StorefrontSkinRef;
 } | {
     id: string;
-    type: 'utility-cards';
+    type: 'utility_cards';
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
@@ -1126,7 +1124,7 @@ export type StorefrontSectionList = Array<{
     skin?: StorefrontSkinRef;
 } | {
     id: string;
-    type: 'endless-grid';
+    type: 'endless_grid';
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
@@ -1138,7 +1136,7 @@ export type StorefrontSectionList = Array<{
     skin?: StorefrontSkinRef;
 } | {
     id: string;
-    type: 'seo-text';
+    type: 'seo_text';
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
@@ -1150,7 +1148,7 @@ export type StorefrontSectionList = Array<{
     skin?: StorefrontSkinRef;
 } | {
     id: string;
-    type: 'recently-viewed';
+    type: 'recently_viewed';
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
@@ -1351,6 +1349,8 @@ export type GiftCardBalance = {
     expiresAt: string | null;
     status: 'active' | 'disabled' | 'expired';
 };
+
+export type NullableTimestamp = string | number | null;
 
 export type PluginUiJson = string | number | boolean | unknown | Array<PluginUiJson & unknown> | {
     [key: string]: PluginUiJson & unknown;
@@ -1606,8 +1606,8 @@ export type PluginUiNode = {
                     path: string;
                 };
             } | {
-                money: number;
-                currency?: string;
+                amountMinor: number;
+                currency: string;
             } | {
                 date: string;
             };
@@ -2210,8 +2210,8 @@ export type CustomerAccountSummary = {
                             path: string;
                         };
                     } | {
-                        money: number;
-                        currency?: string;
+                        amountMinor: number;
+                        currency: string;
                     } | {
                         date: string;
                     };
@@ -4188,7 +4188,7 @@ export type WarrantyClaim = {
 export type ProductMutationConflict = {
     success: false;
     error: {
-        code: 'PRODUCT_REVISION_CONFLICT';
+        code: 'product_revision_conflict';
         message: string;
         details: {
             expectedRevision: number;
@@ -4198,7 +4198,7 @@ export type ProductMutationConflict = {
 } | {
     success: false;
     error: {
-        code: 'PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT';
+        code: 'product_media_sku_reference_conflict';
         message: string;
         details: {
             affectedCount: number;
@@ -4390,10 +4390,10 @@ export type AppSummary = {
         total: number;
     };
     /**
-     * The checkout function points the app implements (cart rules, prices, discounts, delivery options, payment methods, buyer UI).
+     * The checkout function points the app implements (cart rules, prices, discounts, delivery options, payment methods).
      */
     functions: Array<{
-        point: 'cart.transform' | 'cart.line_prices' | 'cart.validate' | 'checkout.discounts' | 'checkout.shipping_rates' | 'checkout.payment_methods' | 'buyer.ui';
+        point: 'cart.transform' | 'cart.line_prices' | 'cart.validate' | 'checkout.discounts' | 'checkout.shipping_rates' | 'checkout.payment_methods';
         /**
          * Lower runs first among apps at the same point.
          */
@@ -4404,6 +4404,30 @@ export type AppSummary = {
         onError: 'skip' | 'block';
         /**
          * The app's data the function reads at checkout (checkout.discounts may also update those records with the order).
+         */
+        reads: Array<{
+            as: string;
+            /**
+             * The app's object type read; null for a custom-field read.
+             */
+            object: string | null;
+            /**
+             * The app's own custom fields read (`<owner>:<key>`); empty for an object read.
+             */
+            customFields: Array<string>;
+            /**
+             * What the read is keyed by: customer, line.variantId, line.productId, attribute.<key>, or from:<read>.<field>.
+             */
+            key: string;
+        }>;
+    }>;
+    /**
+     * Where the app shows content on the buyer's cart, checkout, receipt and account pages (storefront extensions).
+     */
+    extensions: Array<{
+        target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'checkout.payment.after' | 'checkout.actions.before' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
+        /**
+         * The app's data the extension reads to draw its content.
          */
         reads: Array<{
             as: string;
@@ -4892,6 +4916,10 @@ export type AppGrant = {
     allowedHosts: Array<string>;
     events: Array<string>;
     functions: Array<string>;
+    /**
+     * UI slots of the buyer's cart, checkout, receipt and account pages the app shows content in.
+     */
+    extensions: Array<string>;
     /**
      * Function points where the app may pause checkout when it cannot answer.
      */
@@ -5760,7 +5788,7 @@ export type GetApiV1CollectionsByIdData = {
         page?: number;
         limit?: number;
         /**
-         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR.
+         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.
          */
         cursor?: string;
         sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating';
@@ -6129,7 +6157,7 @@ export type GetApiV1BrandsBySlugProductsData = {
          */
         limit?: number;
         /**
-         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR.
+         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.
          */
         cursor?: string;
         /**
@@ -6860,15 +6888,13 @@ export type GetApiV1PagesResponses = {
                     width?: number | null;
                     height?: number | null;
                     folderId?: string | null;
-                    createdAt?: string | number;
-                    updatedAt?: string | number;
                     [key: string]: unknown;
                 } | null;
-                publishedAt?: NullableTimestamp;
+                publishedAt?: string | null;
                 sortOrder: number;
-                createdAt: NullableTimestamp;
-                updatedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string | null;
+                updatedAt: string | null;
+                deletedAt: string | null;
                 /**
                  * The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle.
                  */
@@ -6953,15 +6979,13 @@ export type GetApiV1PagesSlugBySlugResponses = {
                     width?: number | null;
                     height?: number | null;
                     folderId?: string | null;
-                    createdAt?: string | number;
-                    updatedAt?: string | number;
                     [key: string]: unknown;
                 } | null;
-                publishedAt?: NullableTimestamp;
+                publishedAt?: string | null;
                 sortOrder: number;
-                createdAt: NullableTimestamp;
-                updatedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string | null;
+                updatedAt: string | null;
+                deletedAt: string | null;
                 /**
                  * The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle.
                  */
@@ -7040,15 +7064,13 @@ export type GetApiV1PagesByIdResponses = {
                     width?: number | null;
                     height?: number | null;
                     folderId?: string | null;
-                    createdAt?: string | number;
-                    updatedAt?: string | number;
                     [key: string]: unknown;
                 } | null;
-                publishedAt?: NullableTimestamp;
+                publishedAt?: string | null;
                 sortOrder: number;
-                createdAt: NullableTimestamp;
-                updatedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string | null;
+                updatedAt: string | null;
+                deletedAt: string | null;
                 /**
                  * The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle.
                  */
@@ -7125,15 +7147,13 @@ export type GetApiV1ArticlesResponses = {
                     width?: number | null;
                     height?: number | null;
                     folderId?: string | null;
-                    createdAt?: string | number;
-                    updatedAt?: string | number;
                     [key: string]: unknown;
                 } | null;
-                publishedAt?: NullableTimestamp;
+                publishedAt?: string | null;
                 sortOrder: number;
-                createdAt: NullableTimestamp;
-                updatedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string | null;
+                updatedAt: string | null;
+                deletedAt: string | null;
                 /**
                  * The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle.
                  */
@@ -7218,15 +7238,13 @@ export type GetApiV1ArticlesSlugBySlugResponses = {
                     width?: number | null;
                     height?: number | null;
                     folderId?: string | null;
-                    createdAt?: string | number;
-                    updatedAt?: string | number;
                     [key: string]: unknown;
                 } | null;
-                publishedAt?: NullableTimestamp;
+                publishedAt?: string | null;
                 sortOrder: number;
-                createdAt: NullableTimestamp;
-                updatedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string | null;
+                updatedAt: string | null;
+                deletedAt: string | null;
                 /**
                  * The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle.
                  */
@@ -7745,15 +7763,13 @@ export type GetApiV1StorefrontPagesSlugBySlugResponses = {
                     width?: number | null;
                     height?: number | null;
                     folderId?: string | null;
-                    createdAt?: string | number;
-                    updatedAt?: string | number;
                     [key: string]: unknown;
                 } | null;
-                publishedAt?: NullableTimestamp;
+                publishedAt?: string | null;
                 sortOrder: number;
-                createdAt: NullableTimestamp;
-                updatedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string | null;
+                updatedAt: string | null;
+                deletedAt: string | null;
                 /**
                  * The resource's URL handle by language (ISO 639-1), where it has a localized one: its hreflang alternates. Absent without a localized handle.
                  */
@@ -8021,7 +8037,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 skins: Array<{
                     id: string;
                     /**
-                     * The unit the skin draws: header, footer, product-card, product-main, listing-main or section:<core section type>.
+                     * The unit the skin draws: header, footer, product_card, product_main, listing_main or section:<core section type>.
                      */
                     target: string;
                     settings: Array<{
@@ -9666,8 +9682,8 @@ export type PostApiV1StorefrontAgentContextsByContextIdCustomerAddressesResponse
                 zoneName: string | null;
                 areaName: string | null;
                 validationSkipped: boolean;
-                createdAt: number;
-                updatedAt: number;
+                createdAt: string;
+                updatedAt: string;
             }>;
         };
     };
@@ -11093,8 +11109,8 @@ export type PostApiV1CustomerAuthVerifyOtpResponses = {
                     zoneName: string | null;
                     areaName: string | null;
                     validationSkipped: boolean;
-                    createdAt: number;
-                    updatedAt: number;
+                    createdAt: string;
+                    updatedAt: string;
                 } | null;
                 profileComplete: boolean;
             };
@@ -11189,8 +11205,8 @@ export type GetApiV1CustomerAuthMeResponses = {
                     zoneName: string | null;
                     areaName: string | null;
                     validationSkipped: boolean;
-                    createdAt: number;
-                    updatedAt: number;
+                    createdAt: string;
+                    updatedAt: string;
                 } | null;
                 profileComplete: boolean;
             };
@@ -11323,8 +11339,8 @@ export type PutApiV1CustomerAuthProfileResponses = {
                     zoneName: string | null;
                     areaName: string | null;
                     validationSkipped: boolean;
-                    createdAt: number;
-                    updatedAt: number;
+                    createdAt: string;
+                    updatedAt: string;
                 } | null;
                 profileComplete: boolean;
             };
@@ -11501,8 +11517,8 @@ export type GetApiV1CustomerAuthOrdersResponses = {
                     zoneName: string | null;
                     areaName: string | null;
                     validationSkipped: boolean;
-                    createdAt: number;
-                    updatedAt: number;
+                    createdAt: string;
+                    updatedAt: string;
                 } | null;
             };
         };
@@ -11992,8 +12008,8 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                                     path: string;
                                 };
                             } | {
-                                money: number;
-                                currency?: string;
+                                amountMinor: number;
+                                currency: string;
                             } | {
                                 date: string;
                             };
@@ -14600,7 +14616,7 @@ export type PostApiV1CustomerAuthDownloadsByEntitlementIdTicketErrors = {
      */
     404: ErrorResponse;
     /**
-     * Refused: DOWNLOAD_LIMIT_REACHED, DOWNLOAD_REVOKED (removed by the store, or the order was cancelled or refunded) or DOWNLOAD_EXPIRED
+     * Refused: download_limit_reached, download_revoked (removed by the store, or the order was cancelled or refunded) or download_expired
      */
     409: ErrorResponse;
     /**
@@ -15221,8 +15237,8 @@ export type GetApiV1CustomerAuthAddressesResponses = {
                 zoneName: string | null;
                 areaName: string | null;
                 validationSkipped: boolean;
-                createdAt: number;
-                updatedAt: number;
+                createdAt: string;
+                updatedAt: string;
             }>;
         };
     };
@@ -15312,8 +15328,8 @@ export type PostApiV1CustomerAuthAddressesResponses = {
                 zoneName: string | null;
                 areaName: string | null;
                 validationSkipped: boolean;
-                createdAt: number;
-                updatedAt: number;
+                createdAt: string;
+                updatedAt: string;
             }>;
         };
     };
@@ -15389,8 +15405,8 @@ export type DeleteApiV1CustomerAuthAddressesByAddressIdResponses = {
                 zoneName: string | null;
                 areaName: string | null;
                 validationSkipped: boolean;
-                createdAt: number;
-                updatedAt: number;
+                createdAt: string;
+                updatedAt: string;
             }>;
         };
     };
@@ -15482,8 +15498,8 @@ export type PutApiV1CustomerAuthAddressesByAddressIdResponses = {
                 zoneName: string | null;
                 areaName: string | null;
                 validationSkipped: boolean;
-                createdAt: number;
-                updatedAt: number;
+                createdAt: string;
+                updatedAt: string;
             }>;
         };
     };
@@ -15559,8 +15575,8 @@ export type PostApiV1CustomerAuthAddressesByAddressIdDefaultResponses = {
                 zoneName: string | null;
                 areaName: string | null;
                 validationSkipped: boolean;
-                createdAt: number;
-                updatedAt: number;
+                createdAt: string;
+                updatedAt: string;
             }>;
         };
     };
@@ -15636,8 +15652,8 @@ export type PostApiV1CustomerAuthAddressesByAddressIdDefaultBillingResponses = {
                 zoneName: string | null;
                 areaName: string | null;
                 validationSkipped: boolean;
-                createdAt: number;
-                updatedAt: number;
+                createdAt: string;
+                updatedAt: string;
             }>;
         };
     };
@@ -16916,7 +16932,7 @@ export type GetApiV1ProductsData = {
          */
         limit?: number;
         /**
-         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR.
+         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.
          */
         cursor?: string;
         /**
@@ -18593,7 +18609,7 @@ export type GetApiV1CategoriesBySlugProductsData = {
          */
         limit?: number;
         /**
-         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR.
+         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.
          */
         cursor?: string;
         /**
@@ -18899,7 +18915,7 @@ export type GetApiV1CategoriesBySlugProductSummariesData = {
         page?: number;
         limit?: number;
         /**
-         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR.
+         * Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.
          */
         cursor?: string;
         sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating';
@@ -19829,8 +19845,8 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                                         path: string;
                                     };
                                 } | {
-                                    money: number;
-                                    currency?: string;
+                                    amountMinor: number;
+                                    currency: string;
                                 } | {
                                     date: string;
                                 };
@@ -20812,8 +20828,8 @@ export type PostApiV1OrdersCartValidationResponses = {
                                     path: string;
                                 };
                             } | {
-                                money: number;
-                                currency?: string;
+                                amountMinor: number;
+                                currency: string;
                             } | {
                                 date: string;
                             };
@@ -21110,7 +21126,7 @@ export type PostApiV1OrdersCartValidationResponses = {
                 cartKey?: string | null;
                 productId: string;
                 variantId: string | null;
-                code: 'PRODUCT_UNAVAILABLE' | 'VARIANT_REQUIRED' | 'VARIANT_UNAVAILABLE' | 'VARIANT_MISMATCH' | 'QUANTITY_UNAVAILABLE' | 'PRICE_CHANGED' | 'PROPERTIES_REQUIRED' | 'PROPERTIES_INVALID' | 'FULFILMENT_UNAVAILABLE';
+                code: 'product_unavailable' | 'variant_required' | 'variant_unavailable' | 'variant_mismatch' | 'quantity_unavailable' | 'price_changed' | 'properties_required' | 'properties_invalid' | 'fulfilment_unavailable';
                 action: 'remove' | 'select_variant' | 'reduce_quantity' | 'refresh_item' | 'edit_properties';
                 message: string;
                 productName: string | null;
@@ -21196,7 +21212,7 @@ export type PostApiV1OrdersCartValidationResponses = {
             allowedPaymentMethods: Array<string>;
             giftCardIssues: Array<{
                 handle: string | null;
-                code: 'GIFT_CARD_UNUSABLE' | 'GIFT_CARD_DUPLICATE' | 'GIFT_CARD_NOT_NEEDED' | 'GIFT_CARD_NOT_ELIGIBLE';
+                code: 'gift_card_unusable' | 'gift_card_duplicate' | 'gift_card_not_needed' | 'gift_card_not_eligible';
                 message: string;
             }>;
             delivery?: {
@@ -21563,8 +21579,8 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                                     path: string;
                                 };
                             } | {
-                                money: number;
-                                currency?: string;
+                                amountMinor: number;
+                                currency: string;
                             } | {
                                 date: string;
                             };
@@ -21916,7 +21932,7 @@ export type PostApiV1OrdersTaxQuoteResponses = {
              */
             giftCardIssues: Array<{
                 handle: string | null;
-                code: 'GIFT_CARD_UNUSABLE' | 'GIFT_CARD_DUPLICATE' | 'GIFT_CARD_NOT_NEEDED' | 'GIFT_CARD_NOT_ELIGIBLE';
+                code: 'gift_card_unusable' | 'gift_card_duplicate' | 'gift_card_not_needed' | 'gift_card_not_eligible';
                 message: string;
             }>;
             shippingMethod: {
@@ -22212,7 +22228,7 @@ export type PostApiV1OrdersData = {
             userAgent: string | null;
         } | null;
         /**
-         * The amount due the buyer reviewed in the tax quote (`amountDueMinor`). Required with gift cards: a card that changed since then is a 409 GIFT_CARD_CHANGED.
+         * The amount due the buyer reviewed in the tax quote (`amountDueMinor`). Required with gift cards: a card that changed since then is a 409 gift_card_changed.
          */
         expectedAmountDueMinor?: number;
     };
@@ -23256,7 +23272,7 @@ export type PostApiV1OrdersReceiptByIdDownloadsByEntitlementIdTicketErrors = {
      */
     404: ErrorResponse;
     /**
-     * Refused: DOWNLOAD_LIMIT_REACHED, DOWNLOAD_REVOKED (removed by the store, or the order was cancelled or refunded) or DOWNLOAD_EXPIRED
+     * Refused: download_limit_reached, download_revoked (removed by the store, or the order was cancelled or refunded) or download_expired
      */
     409: ErrorResponse;
     /**
@@ -25664,7 +25680,10 @@ export type GetApiV1AdminResourcesPriceListsByIdPricesData = {
         id: string;
     };
     query?: {
-        page?: number;
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
         limit?: number;
         search?: string;
     };
@@ -25707,10 +25726,11 @@ export type GetApiV1AdminResourcesPriceListsByIdPricesResponses = {
     200: {
         success: true;
         data: {
-            items: Array<PriceListSku>;
-            total: number;
-            page: number;
-            limit: number;
+            prices: Array<PriceListSku>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
         };
     };
 };
@@ -26364,6 +26384,7 @@ export type GetApiV1AdminResourcesBulkRunsData = {
          * The `nextCursor` of the page before.
          */
         cursor?: string;
+        limit?: number;
     };
     url: '/api/v1/admin/resources/bulk-runs';
 };
@@ -27341,7 +27362,7 @@ export type PostApiV1AdminCategoriesData = {
             url: string;
             filename: string;
             size: number;
-            createdAt: string | string;
+            createdAt?: string;
         } | null;
         /**
          * The parent category's id, or null for a top-level category. The tree has at most four levels.
@@ -27904,7 +27925,7 @@ export type PutApiV1AdminCategoriesByIdData = {
             url: string;
             filename: string;
             size: number;
-            createdAt: string | string;
+            createdAt?: string;
         } | null;
         /**
          * The parent category's id, or null for a top-level category. The tree has at most four levels.
@@ -30273,9 +30294,9 @@ export type GetApiV1AdminCollectionsResponses = {
                 canonicalPath: string | null;
                 noIndex: boolean;
                 excludeFromSitemap: boolean;
-                createdAt: NullableTimestamp;
-                updatedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string | null;
+                updatedAt: string | null;
+                deletedAt: string | null;
             }>;
             pagination: {
                 page: number;
@@ -30795,9 +30816,9 @@ export type GetApiV1AdminCollectionsByIdSectionsBySectionResponses = {
                 canonicalPath: string | null;
                 noIndex: boolean;
                 excludeFromSitemap: boolean;
-                createdAt: NullableTimestamp;
-                updatedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string | null;
+                updatedAt: string | null;
+                deletedAt: string | null;
                 metaTitle: string | null;
                 metaDescription: string | null;
                 descriptionCharacters: number;
@@ -30915,9 +30936,9 @@ export type GetApiV1AdminCollectionsByIdResponses = {
             canonicalPath: string | null;
             noIndex: boolean;
             excludeFromSitemap: boolean;
-            createdAt: NullableTimestamp;
-            updatedAt: NullableTimestamp;
-            deletedAt: NullableTimestamp;
+            createdAt: string | null;
+            updatedAt: string | null;
+            deletedAt: string | null;
             description: string | null;
             content: string | null;
             metaTitle: string | null;
@@ -32034,7 +32055,7 @@ export type GetApiV1AdminCustomersData = {
     path?: never;
     query?: {
         /**
-         * Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (PAGE_TOO_DEEP beyond), use after/before to go deeper
+         * Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (page_too_deep beyond), use after/before to go deeper
          */
         page?: number | null;
         /**
@@ -32042,7 +32063,7 @@ export type GetApiV1AdminCustomersData = {
          */
         limit?: number | null;
         /**
-         * Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR.
+         * Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with invalid_cursor.
          */
         after?: string;
         /**
@@ -32586,8 +32607,8 @@ export type GetApiV1AdminCustomersByIdResponses = {
                 zoneName: string | null;
                 areaName: string | null;
                 validationSkipped: boolean;
-                createdAt: number;
-                updatedAt: number;
+                createdAt: string;
+                updatedAt: string;
             }>;
             relatedObjects: Array<{
                 typeId: string;
@@ -32768,8 +32789,8 @@ export type GetApiV1AdminCustomersByIdAddressesResponses = {
                 zoneName: string | null;
                 areaName: string | null;
                 validationSkipped: boolean;
-                createdAt: number;
-                updatedAt: number;
+                createdAt: string;
+                updatedAt: string;
             }>;
         };
     };
@@ -32861,8 +32882,8 @@ export type PostApiV1AdminCustomersByIdAddressesResponses = {
             zoneName: string | null;
             areaName: string | null;
             validationSkipped: boolean;
-            createdAt: number;
-            updatedAt: number;
+            createdAt: string;
+            updatedAt: string;
         };
     };
 };
@@ -33002,8 +33023,8 @@ export type PutApiV1AdminCustomersByIdAddressesByAddressIdResponses = {
             zoneName: string | null;
             areaName: string | null;
             validationSkipped: boolean;
-            createdAt: number;
-            updatedAt: number;
+            createdAt: string;
+            updatedAt: string;
         };
     };
 };
@@ -33078,8 +33099,8 @@ export type PostApiV1AdminCustomersByIdAddressesByAddressIdDefaultResponses = {
             zoneName: string | null;
             areaName: string | null;
             validationSkipped: boolean;
-            createdAt: number;
-            updatedAt: number;
+            createdAt: string;
+            updatedAt: string;
         };
     };
 };
@@ -33154,8 +33175,8 @@ export type PostApiV1AdminCustomersByIdAddressesByAddressIdDefaultBillingRespons
             zoneName: string | null;
             areaName: string | null;
             validationSkipped: boolean;
-            createdAt: number;
-            updatedAt: number;
+            createdAt: string;
+            updatedAt: string;
         };
     };
 };
@@ -33397,16 +33418,14 @@ export type GetApiV1AdminPagesResponses = {
                     width?: number | null;
                     height?: number | null;
                     folderId?: string | null;
-                    createdAt?: string | number;
-                    updatedAt?: string | number;
                     [key: string]: unknown;
                 } | null;
-                publishedAt?: NullableTimestamp;
+                publishedAt?: string | null;
                 sortOrder: number;
                 revision: number;
-                createdAt: NullableTimestamp;
-                updatedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string | null;
+                updatedAt: string | null;
+                deletedAt: string | null;
             }>;
             pagination: {
                 page: number;
@@ -33446,12 +33465,10 @@ export type PostApiV1AdminPagesData = {
             width?: number | null;
             height?: number | null;
             folderId?: string | null;
-            createdAt?: string | number | string;
-            updatedAt?: string | number | string;
             [key: string]: unknown;
         } | null;
         contentType?: 'page' | 'article';
-        publishedAt?: string | string | unknown;
+        publishedAt?: string | null;
         isPublished?: boolean;
         hideHeader?: boolean;
         hideFooter?: boolean;
@@ -34044,16 +34061,14 @@ export type GetApiV1AdminPagesByIdResponses = {
                 width?: number | null;
                 height?: number | null;
                 folderId?: string | null;
-                createdAt?: string | number;
-                updatedAt?: string | number;
                 [key: string]: unknown;
             } | null;
-            publishedAt?: NullableTimestamp;
+            publishedAt?: string | null;
             sortOrder: number;
             revision: number;
-            createdAt: NullableTimestamp;
-            updatedAt: NullableTimestamp;
-            deletedAt: NullableTimestamp;
+            createdAt: string | null;
+            updatedAt: string | null;
+            deletedAt: string | null;
         };
     };
 };
@@ -34075,7 +34090,7 @@ export type PutApiV1AdminPagesByIdData = {
         noIndex?: boolean;
         excludeFromSitemap?: boolean;
         isPublished?: boolean;
-        publishedAt?: string | string | unknown;
+        publishedAt?: string | null;
         hideHeader?: boolean;
         hideFooter?: boolean;
         hideTitle?: boolean;
@@ -34089,8 +34104,6 @@ export type PutApiV1AdminPagesByIdData = {
             width?: number | null;
             height?: number | null;
             folderId?: string | null;
-            createdAt?: string | number | string;
-            updatedAt?: string | number | string;
             [key: string]: unknown;
         } | null;
     };
@@ -34280,8 +34293,8 @@ export type GetApiV1AdminDiscountsResponses = {
                     order: boolean;
                     shipping: boolean;
                 };
-                startsAtEpochSeconds: number | null;
-                endsAtEpochSeconds: number | null;
+                startsAt: string | null;
+                endsAt: string | null;
                 timezone: string;
                 maxRedemptions: number | null;
                 maxRedemptionsPerCustomer: number | null;
@@ -34300,9 +34313,9 @@ export type GetApiV1AdminDiscountsResponses = {
                  * Total savings given, in minor units.
                  */
                 discountSpendMinor: number;
-                createdAtEpochSeconds: number;
-                updatedAtEpochSeconds: number;
-                deletedAtEpochSeconds: number | null;
+                createdAt: string;
+                updatedAt: string;
+                deletedAt: string | null;
                 codes: Array<{
                     code: string;
                     isActive: boolean;
@@ -34370,8 +34383,8 @@ export type PostApiV1AdminDiscountsData = {
             order: boolean;
             shipping: boolean;
         };
-        startsAtEpochSeconds?: number | null;
-        endsAtEpochSeconds?: number | null;
+        startsAt?: string | null;
+        endsAt?: string | null;
         timezone?: string;
         maxRedemptions?: number | null;
         maxRedemptionsPerCustomer?: number | null;
@@ -34614,8 +34627,8 @@ export type GetApiV1AdminDiscountsByIdResponses = {
                 order: boolean;
                 shipping: boolean;
             };
-            startsAtEpochSeconds: number | null;
-            endsAtEpochSeconds: number | null;
+            startsAt: string | null;
+            endsAt: string | null;
             timezone: string;
             maxRedemptions: number | null;
             maxRedemptionsPerCustomer: number | null;
@@ -34634,9 +34647,9 @@ export type GetApiV1AdminDiscountsByIdResponses = {
              * Total savings given, in minor units.
              */
             discountSpendMinor: number;
-            createdAtEpochSeconds: number;
-            updatedAtEpochSeconds: number;
-            deletedAtEpochSeconds: number | null;
+            createdAt: string;
+            updatedAt: string;
+            deletedAt: string | null;
             codes: Array<{
                 code: string;
                 isActive: boolean;
@@ -34680,8 +34693,8 @@ export type PutApiV1AdminDiscountsByIdData = {
             order: boolean;
             shipping: boolean;
         };
-        startsAtEpochSeconds?: number | null;
-        endsAtEpochSeconds?: number | null;
+        startsAt?: string | null;
+        endsAt?: string | null;
         timezone?: string;
         maxRedemptions?: number | null;
         maxRedemptionsPerCustomer?: number | null;
@@ -35104,10 +35117,10 @@ export type GetApiV1AdminMediaResponses = {
                 folderId: string | null;
                 status: 'ready' | 'trashed' | 'deleting' | 'deleted';
                 version: number;
-                createdAt: string | number;
-                updatedAt: string | number;
-                trashedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string;
+                updatedAt: string;
+                trashedAt: string | null;
+                deletedAt: string | null;
                 /**
                  * Distinct places that show the file: products, categories, collections, pages, banners, theme, navigation, invoice, social image, video covers and staff photos.
                  */
@@ -35117,11 +35130,10 @@ export type GetApiV1AdminMediaResponses = {
                  */
                 keptForOrders: boolean;
             }>;
-            pagination: {
-                limit: number;
-                hasMore: boolean;
-                nextCursor: string | null;
-            };
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
         };
     };
 };
@@ -35287,10 +35299,10 @@ export type PostApiV1AdminMediaUploadsImportUrlResponses = {
                 folderId: string | null;
                 status: 'ready' | 'trashed' | 'deleting' | 'deleted';
                 version: number;
-                createdAt: string | number;
-                updatedAt: string | number;
-                trashedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string;
+                updatedAt: string;
+                trashedAt: string | null;
+                deletedAt: string | null;
             };
         };
     };
@@ -35559,10 +35571,10 @@ export type PostApiV1AdminMediaUploadsByIdCompleteResponses = {
                 folderId: string | null;
                 status: 'ready' | 'trashed' | 'deleting' | 'deleted';
                 version: number;
-                createdAt: string | number;
-                updatedAt: string | number;
-                trashedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string;
+                updatedAt: string;
+                trashedAt: string | null;
+                deletedAt: string | null;
             };
         };
     };
@@ -35697,10 +35709,10 @@ export type GetApiV1AdminMediaByIdResponses = {
                 folderId: string | null;
                 status: 'ready' | 'trashed' | 'deleting' | 'deleted';
                 version: number;
-                createdAt: string | number;
-                updatedAt: string | number;
-                trashedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string;
+                updatedAt: string;
+                trashedAt: string | null;
+                deletedAt: string | null;
             };
         };
     };
@@ -35792,10 +35804,10 @@ export type PatchApiV1AdminMediaByIdResponses = {
                 folderId: string | null;
                 status: 'ready' | 'trashed' | 'deleting' | 'deleted';
                 version: number;
-                createdAt: string | number;
-                updatedAt: string | number;
-                trashedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string;
+                updatedAt: string;
+                trashedAt: string | null;
+                deletedAt: string | null;
             };
         };
     };
@@ -35879,10 +35891,10 @@ export type PostApiV1AdminMediaByIdTrashResponses = {
                 folderId: string | null;
                 status: 'ready' | 'trashed' | 'deleting' | 'deleted';
                 version: number;
-                createdAt: string | number;
-                updatedAt: string | number;
-                trashedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string;
+                updatedAt: string;
+                trashedAt: string | null;
+                deletedAt: string | null;
             };
         };
     };
@@ -35960,10 +35972,10 @@ export type PostApiV1AdminMediaByIdRestoreResponses = {
                 folderId: string | null;
                 status: 'ready' | 'trashed' | 'deleting' | 'deleted';
                 version: number;
-                createdAt: string | number;
-                updatedAt: string | number;
-                trashedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string;
+                updatedAt: string;
+                trashedAt: string | null;
+                deletedAt: string | null;
             };
         };
     };
@@ -36047,10 +36059,10 @@ export type PostApiV1AdminMediaByIdVariantsResponses = {
                 folderId: string | null;
                 status: 'ready' | 'trashed' | 'deleting' | 'deleted';
                 version: number;
-                createdAt: string | number;
-                updatedAt: string | number;
-                trashedAt: NullableTimestamp;
-                deletedAt: NullableTimestamp;
+                createdAt: string;
+                updatedAt: string;
+                trashedAt: string | null;
+                deletedAt: string | null;
             };
         };
     };
@@ -38722,8 +38734,8 @@ export type GetApiV1AdminInventoryLocationsResponses = {
                  * SKUs with units on hand there
                  */
                 stockedSkus: number;
-                createdAt: string | number;
-                updatedAt: string | number;
+                createdAt: string;
+                updatedAt: string;
             }>;
         };
     };
@@ -38790,8 +38802,8 @@ export type PostApiV1AdminInventoryLocationsResponses = {
              * SKUs with units on hand there
              */
             stockedSkus: number;
-            createdAt: string | number;
-            updatedAt: string | number;
+            createdAt: string;
+            updatedAt: string;
         };
     };
 };
@@ -38864,8 +38876,8 @@ export type PatchApiV1AdminInventoryLocationsByLocationIdResponses = {
              * SKUs with units on hand there
              */
             stockedSkus: number;
-            createdAt: string | number;
-            updatedAt: string | number;
+            createdAt: string;
+            updatedAt: string;
         };
     };
 };
@@ -38923,8 +38935,8 @@ export type PostApiV1AdminInventoryLocationsByLocationIdArchiveResponses = {
              * SKUs with units on hand there
              */
             stockedSkus: number;
-            createdAt: string | number;
-            updatedAt: string | number;
+            createdAt: string;
+            updatedAt: string;
         };
     };
 };
@@ -38978,8 +38990,8 @@ export type PostApiV1AdminInventoryLocationsByLocationIdUnarchiveResponses = {
              * SKUs with units on hand there
              */
             stockedSkus: number;
-            createdAt: string | number;
-            updatedAt: string | number;
+            createdAt: string;
+            updatedAt: string;
         };
     };
 };
@@ -39037,8 +39049,8 @@ export type PostApiV1AdminInventoryLocationsByLocationIdDefaultResponses = {
              * SKUs with units on hand there
              */
             stockedSkus: number;
-            createdAt: string | number;
-            updatedAt: string | number;
+            createdAt: string;
+            updatedAt: string;
         };
     };
 };
@@ -48325,9 +48337,9 @@ export type GetApiV1AdminSettingsSalesChannelsByIdProductsData = {
     };
     query?: {
         /**
-         * The last product id of the previous page.
+         * The `nextCursor` of the page before; leave it out for the first page.
          */
-        after?: string;
+        cursor?: string;
         limit?: number;
     };
     url: '/api/v1/admin/settings/sales-channels/{id}/products';
@@ -48370,7 +48382,10 @@ export type GetApiV1AdminSettingsSalesChannelsByIdProductsResponses = {
         success: true;
         data: {
             productIds: Array<string>;
-            nextAfter: string | null;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
         };
     };
 };
@@ -52742,7 +52757,7 @@ export type GetApiV1AdminOrdersByIdReturnsResponses = {
                 updatedAt: string | null;
                 receiptRecovery: {
                     required: true;
-                    startedAt: number | null;
+                    startedAt: string | null;
                 } | null;
                 receipts: Array<{
                     id: string;
@@ -52923,7 +52938,7 @@ export type GetApiV1AdminOrdersByIdReturnsByReturnIdResponses = {
                 updatedAt: string | null;
                 receiptRecovery: {
                     required: true;
-                    startedAt: number | null;
+                    startedAt: string | null;
                 } | null;
                 receipts: Array<{
                     id: string;
@@ -53413,7 +53428,7 @@ export type GetApiV1AdminOrdersData = {
     path?: never;
     query?: {
         /**
-         * Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (PAGE_TOO_DEEP beyond), use after/before to go deeper
+         * Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (page_too_deep beyond), use after/before to go deeper
          */
         page?: number | null;
         /**
@@ -53421,7 +53436,7 @@ export type GetApiV1AdminOrdersData = {
          */
         limit?: number | null;
         /**
-         * Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR.
+         * Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with invalid_cursor.
          */
         after?: string;
         /**
@@ -53916,7 +53931,7 @@ export type GetApiV1AdminOrdersPaymentRecoveryData = {
     path?: never;
     query?: {
         /**
-         * Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (PAGE_TOO_DEEP beyond), use after/before to go deeper
+         * Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (page_too_deep beyond), use after/before to go deeper
          */
         page?: number | null;
         /**
@@ -53924,7 +53939,7 @@ export type GetApiV1AdminOrdersPaymentRecoveryData = {
          */
         limit?: number | null;
         /**
-         * Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR.
+         * Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with invalid_cursor.
          */
         after?: string;
         /**
@@ -54861,7 +54876,11 @@ export type GetApiV1AdminOrdersByIdTimelineData = {
         id: string;
     };
     query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
         cursor?: string;
+        limit?: number;
     };
     url: '/api/v1/admin/orders/{id}/timeline';
 };
@@ -54898,10 +54917,9 @@ export type GetApiV1AdminOrdersByIdTimelineResponses = {
                  * The viewer wrote this comment and may delete it.
                  */
                 own: boolean;
-                createdAt: string | number;
+                createdAt: string;
             }>;
             nextCursor: string | null;
-            hasMore: boolean;
         };
     };
 };
@@ -54968,7 +54986,7 @@ export type PostApiV1AdminOrdersByIdTimelineResponses = {
              * The viewer wrote this comment and may delete it.
              */
             own: boolean;
-            createdAt: string | number;
+            createdAt: string;
         };
     };
 };
@@ -58342,7 +58360,7 @@ export type GetApiV1AdminProductsData = {
     path?: never;
     query?: {
         /**
-         * Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (PAGE_TOO_DEEP beyond), use after/before to go deeper
+         * Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (page_too_deep beyond), use after/before to go deeper
          */
         page?: number;
         /**
@@ -58350,7 +58368,7 @@ export type GetApiV1AdminProductsData = {
          */
         limit?: number;
         /**
-         * Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR.
+         * Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with invalid_cursor.
          */
         after?: string;
         /**
@@ -58759,7 +58777,7 @@ export type GetApiV1AdminProductsSummariesData = {
         page?: number;
         limit?: number;
         /**
-         * Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR.
+         * Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with invalid_cursor.
          */
         after?: string;
         /**
@@ -74471,7 +74489,7 @@ export type PutApiV1AdminSettingsCheckoutLanguagesByIdData = {
          */
         isDefault?: boolean;
         /**
-         * The revision the editor loaded; a stale one is refused with 409 SETTINGS_REVISION_CONFLICT.
+         * The revision the editor loaded; a stale one is refused with 409 settings_revision_conflict.
          */
         expectedRevision: number;
     };

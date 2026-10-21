@@ -1,6 +1,7 @@
 // Static object operations: agents discover the fields at runtime; apps own
 // their definitions in manifests and staff edit only types in custom.*.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { isoTimestampSchema } from "../../schemas/timestamps";
 import type { Context } from "hono";
 import {
   createObjectType, deleteObjectType, getObjectType, listObjectTypes, updateObjectType,
@@ -37,12 +38,12 @@ const typeSchema = z.object({
   indexes: z.array(indexSchema), unique: z.array(indexSchema), display: z.string().nullable(),
   storefront: z.boolean(), admin: z.enum(["none", "read", "edit"]), events: z.boolean(), handleEnabled: z.boolean(),
   owner: z.enum(["merchant", "app"]), recordCount: z.number().int(), revision: z.number().int(),
-  createdAt: z.string(), updatedAt: z.string(),
+  createdAt: isoTimestampSchema, updatedAt: isoTimestampSchema,
 }).openapi("ObjectType");
 const recordSchema = z.object({
   id: z.string(), typeId: z.string(), handle: z.string().nullable(), status: statusSchema,
   displayName: z.string(), data: z.record(z.string(), z.unknown()).openapi({ description: "Field values by key, typed as the custom-field HTTP contract: money as { amountMinor, currency } (integer minor units of the store currency)." }),
-  position: z.number().int(), revision: z.number().int(), createdAt: z.string(), updatedAt: z.string(),
+  position: z.number().int(), revision: z.number().int(), createdAt: isoTimestampSchema, updatedAt: isoTimestampSchema,
 }).openapi("ObjectRecord");
 const typeParam = z.object({ type: z.string().min(1).max(160) });
 const recordParams = typeParam.extend({ id: z.string().min(1).max(128) });

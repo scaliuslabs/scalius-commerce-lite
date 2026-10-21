@@ -15,6 +15,7 @@ import type {
   StorefrontMoney,
   StorefrontProductCard,
   StorefrontProductPage,
+  StorefrontRenderJob,
   StorefrontResolvedSettings,
   StorefrontSectionSkinData,
   StorefrontSectionSkinSettings,
@@ -33,6 +34,9 @@ import {
   type StorefrontSection,
 } from "@scalius/shared/storefront-theme";
 import { resolveBuyerAvailabilityBand, type BuyerAvailabilityBand } from "@scalius/shared/buyer-availability";
+import { isCustomFieldMoney, type CustomFieldMoney } from "@scalius/shared/custom-fields";
+import { toMinor } from "@scalius/shared/money";
+import { formatMinorMoney, getDecimalPlaces } from "@/lib/currency";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 import { resolveStorefrontSettings, type StorefrontExtension } from "@scalius/shared/plugins/storefront-components";
 import type { PluginSettingsSchema } from "@scalius/shared/plugins/settings-schema";
@@ -191,8 +195,31 @@ export function footerData(input: {
   };
 }
 
+/** How the page writes money: its market's currency and the store's symbol for it. */
+export interface StorefrontPageMoney {
+  currencyCode: string;
+  currencySymbol: string;
+}
+
+/** Wire money (`{ amountMinor, currency }`) as apps get it: with the store's text (its symbol for the page's currency). */
+export function storefrontMoneyOf(money: CustomFieldMoney, page: StorefrontPageMoney): StorefrontMoney {
+  const symbol = money.currency === page.currencyCode ? { symbol: page.currencySymbol } : {};
+  return { amountMinor: money.amountMinor, currency: money.currency, formatted: formatMinorMoney(money, symbol) };
+}
+
+/** A page-currency amount as the API reads it (decimal major units) as protocol money. */
+function pageAmount(amount: number, page: StorefrontPageMoney): StorefrontMoney {
+  return storefrontMoneyOf({ amountMinor: toMinor(Math.max(0, amount), getDecimalPlaces(page.currencyCode)), currency: page.currencyCode }, page);
+}
+
+/** A custom field value as apps get it: money (and lists of it) with the store's text; anything else as the API sent it. */
+function fieldValue(value: unknown, page: StorefrontPageMoney): unknown {
+  if (isCustomFieldMoney(value)) return storefrontMoneyOf(value, page);
+  return Array.isArray(value) && value.length > 0 && value.every(isCustomFieldMoney) ? value.map((item) => storefrontMoneyOf(item, page)) : value;
+}
+
 /** A product as an app card gets it, from the core card model (same prices, photo and quick-add rules). */
-export function productCardData(product: ProductCardProduct, model: ProductCardModel): StorefrontProductCard {
+export function productCardData(product: ProductCardProduct, model: ProductCardModel, page: StorefrontPageMoney): StorefrontProductCard {
   const discounted = model.price.regular !== null;
   const percent = discounted && product.price > 0 ? Math.round((1 - product.discountedPrice / product.price) * 100) : 0;
   const image = model.image
@@ -206,8 +233,8 @@ export function productCardData(product: ProductCardProduct, model: ProductCardM
     id: product.id,
     title: product.name,
     url: product.canonicalPath?.startsWith("/") ? product.canonicalPath : model.href,
-    price: { amount: product.discountedPrice, formatted: model.price.current },
-    compareAt: discounted ? { amount: product.price, formatted: model.price.regular! } : null,
+    price: { ...pageAmount(product.discountedPrice, page), formatted: model.price.current },
+    compareAt: discounted ? { ...pageAmount(product.price, page), formatted: model.price.regular! } : null,
     priceVaries: model.price.from,
     percentOff: percent > 0 ? percent : null,
     image,
@@ -217,8 +244,22 @@ export function productCardData(product: ProductCardProduct, model: ProductCardM
     quickAdd: model.quickAddEligible,
     needsOptions: model.needsOptions,
     facts,
-    fields: product.fields ?? {},
+    fields: Object.fromEntries(Object.entries(product.fields ?? {}).map(([key, value]) => [key, fieldValue(value, page)])) as StorefrontProductCard["fields"],
   };
+}
+
+type SectionObjects = NonNullable<Extract<StorefrontRenderJob, { kind: "section" }>["objects"]>;
+
+/** A section's public object records as its component gets them: money fields with the store's text. */
+export function sectionObjectsOf(objects: SectionObjects, page: StorefrontPageMoney): SectionObjects {
+  return Object.fromEntries(Object.entries(objects).map(([type, { fields, records }]) => [type, {
+    fields,
+    records: records.map((record) => ({
+      ...record,
+      data: Object.fromEntries(Object.entries(record.data).map(([key, value]) => [key,
+        fields[key] === "money" || fields[key] === "list.money" ? fieldValue(value, page) : value])),
+    })),
+  }]));
 }
 
 /** A component section's settings, from the section data the page read for it. */
@@ -244,13 +285,16 @@ export function productCardsOf(
   products: readonly ProductCardProduct[],
   options: { currencySymbol: string; currencyCode: string; ratings: boolean },
 ): StorefrontProductCard[] {
-  return products.map((product) => productCardData(product, productCardModel(product, { ...options, hoverImage: true })));
+  return products.map((product) => productCardData(product, productCardModel(product, { ...options, hoverImage: true }), options));
 }
 
-/** A resource's storefront-visible custom fields by `<namespace>.<key>`. */
-export function storefrontFieldValues(fields: readonly StorefrontCustomField[] | null | undefined): StorefrontFieldValues {
+/** A resource's storefront-visible custom fields by `<namespace>.<key>` (money with the store's text). */
+export function storefrontFieldValues(fields: readonly StorefrontCustomField[] | null | undefined, page: StorefrontPageMoney): StorefrontFieldValues {
   const values: StorefrontFieldValues = {};
-  for (const field of fields ?? []) values[`${field.namespace}.${field.key}`] = field.value;
+  for (const field of fields ?? []) {
+    const money = field.type === "money" || field.type === "list.money";
+    values[`${field.namespace}.${field.key}`] = money ? fieldValue(field.value, page) : field.value;
+  }
   return values;
 }
 
@@ -258,7 +302,7 @@ const BAND_ORDER: readonly BuyerAvailabilityBand[] = ["in_stock", "untracked", "
 const PRODUCT_PAGE_MEDIA_MAX = 20;
 const PRODUCT_PAGE_VARIANTS_MAX = 100;
 
-/** The product page's projection (`StorefrontProductPage`): what a product-main skin and product blocks get. */
+/** The product page's projection (`StorefrontProductPage`): what a product_main skin and product blocks get. */
 export function productPageData(input: {
   product: Product;
   media: readonly ProductMedia[];
@@ -271,10 +315,10 @@ export function productPageData(input: {
   price: { current: number; regular: number; from: boolean };
   /** One SKU's buyer price (the page's price engine). */
   variantPrice: (variant: ProductVariant) => number;
-  money: (amount: number) => string;
+  page: StorefrontPageMoney;
 }): StorefrontProductPage {
-  const { product, money } = input;
-  const amount = (value: number): StorefrontMoney => ({ amount: value, formatted: money(value) });
+  const { product, page } = input;
+  const amount = (value: number): StorefrontMoney => pageAmount(value, page);
   const compare = (current: number, regular: number) => (regular > current ? amount(regular) : null);
   const media = productGalleryItems(product, input.media).flatMap((item) => {
     const url = item.kind === "video" ? item.posterUrl : item.url;
@@ -316,7 +360,7 @@ export function productPageData(input: {
           image,
         };
       }),
-      fields: storefrontFieldValues(product.customFields),
+      fields: storefrontFieldValues(product.customFields, page),
       breadcrumbs: input.breadcrumbs,
       buyerInputs: (product.customization?.fields ?? []).map((field) => ({
         key: field.key,
@@ -330,7 +374,7 @@ export function productPageData(input: {
   };
 }
 
-/** A listing page's projection (`StorefrontListingPage`): what a listing-main skin gets. */
+/** A listing page's projection (`StorefrontListingPage`): what a listing_main skin gets. */
 export function listingPageData(input: {
   kind: StorefrontListingPage["kind"];
   title: string;
@@ -416,7 +460,7 @@ export function coreSectionSkinData<Type extends StorefrontSkinnableSection>(
     // The projection's own version: core may change its section's version without changing what skins get.
     version: STOREFRONT_SECTION_SKIN_PROJECTIONS[visible.type as StorefrontSkinnableSection],
     settings,
-    tiles: visible.type === "brand-wall"
+    tiles: visible.type === "brand_wall"
       ? content.brands.map((brand) => ({
         id: brand.id,
         title: brand.name,

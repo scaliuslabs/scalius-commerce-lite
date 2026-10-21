@@ -77,7 +77,7 @@ export const manifest = {
         settings: [{ key: "tagline", label: "Tagline", type: "text", default: "Made with care.", maxLength: 120 }],
       },
       {
-        id: "studio_card", target: "product-card", name: "Studio card",
+        id: "studio_card", target: "product_card", name: "Studio card",
         settings: [
           {
             key: "ratio", label: "Photo shape", type: "select", default: "portrait",
@@ -96,7 +96,7 @@ export const manifest = {
           skins: {
             header: { app: "acme.studio/studio_header", values: {} },
             footer: { app: "acme.studio/studio_footer", values: {} },
-            "product-card": { app: "acme.studio/studio_card", values: {} },
+            "product_card": { app: "acme.studio/studio_card", values: {} },
           },
         },
         sections: [

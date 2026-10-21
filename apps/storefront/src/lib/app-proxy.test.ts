@@ -180,7 +180,7 @@ describe("storefront app proxy pages", () => {
     expect(await passed.text()).toBe(body);
     expect(passed.headers.get("cache-control")).toBe("public, max-age=30");
 
-    const error = JSON.stringify({ success: false, error: { code: "APP_PROXY", message: "The app could not be reached." } });
+    const error = JSON.stringify({ success: false, error: { code: "app_proxy", message: "The app could not be reached." } });
     const failed = await resolveAppProxyAnswer(navigation, new Response(error, { status: 502, headers: { "Content-Type": "application/json" } }));
     expect((failed as { response: Response }).response.status).toBe(502);
     expect(await (failed as { response: Response }).response.text()).toBe(error);

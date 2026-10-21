@@ -75,7 +75,7 @@ describe("store defaults and store setup routes", () => {
     expect(rebuild).toHaveBeenCalledTimes(1);
 
     const again = await call("POST", "/store-setup", { storeName: "Maison", countryCode: "FR", timeZone: "Europe/Paris" });
-    expect(again).toMatchObject({ status: 409, body: { error: { code: "STORE_SETUP_DONE" } } });
+    expect(again).toMatchObject({ status: 409, body: { error: { code: "store_setup_done" } } });
     expect((await call("GET", "/store-setup")).body.data).toMatchObject({ needed: false, done: "markets_configured" });
     // The dashboard formats and starts its weeks by the store's country.
     expect((await call("GET", "/store-defaults")).body.data).toMatchObject({ countryCode: "FR" });

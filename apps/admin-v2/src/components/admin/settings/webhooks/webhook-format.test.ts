@@ -23,7 +23,7 @@ describe("a webhook delivery's error", () => {
 
 describe("a lost dashboard session", () => {
   it("is said plainly, never with the API's cookie wording", () => {
-    const expired = new AdminApiResponseError("Admin access requires a valid dashboard session cookie.", 401, "UNAUTHORIZED");
+    const expired = new AdminApiResponseError("Admin access requires a valid dashboard session cookie.", 401, "unauthorized");
     const plain = "You're signed out. Your changes are kept on this page: sign in again in a new tab, then save.";
     expect(getServerFnError(expired)).toBe(plain);
     expect(actionErrorText(expired)).toBe(plain);

@@ -128,7 +128,7 @@ describe("agent storefront checkout quote fingerprint", () => {
     } catch (error) {
       expect(error).toMatchObject({
         status: 409,
-        code: "AGENT_STOREFRONT_CHECKOUT_QUOTE_CONFLICT",
+        code: "agent_storefront_checkout_quote_conflict",
         message: expect.stringContaining("fresh quote"),
       });
     }

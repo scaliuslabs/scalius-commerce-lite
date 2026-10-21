@@ -120,7 +120,7 @@ export class NavigationRevisionConflictError extends AppError {
     ) {
         super(
             409,
-            "NAVIGATION_REVISION_CONFLICT",
+            "navigation_revision_conflict",
             "This menu changed while you were editing. Your draft is still in the browser; reload the latest menu before saving again.",
             { menuId, expectedRevision, currentRevision },
         );
@@ -136,7 +136,7 @@ export class NavigationPlacementRevisionConflictError extends AppError {
     ) {
         super(
             409,
-            "NAVIGATION_PLACEMENT_REVISION_CONFLICT",
+            "navigation_placement_revision_conflict",
             "This menu placement changed while you were editing. Reload the latest placements and try again.",
             { placementId, expectedRevision, currentRevision },
         );

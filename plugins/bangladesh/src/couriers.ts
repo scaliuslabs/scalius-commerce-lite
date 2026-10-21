@@ -215,7 +215,7 @@ const pathao = defineCourierProvider({
     const city = Number(input.destination.placeIds?.city);
     const zone = Number(input.destination.placeIds?.zone);
     if (![city, zone].every((id) => Number.isSafeInteger(id) && id > 0)) {
-      throw new ProviderError("declined", "Pathao requires mapped city and zone IDs before quoting delivery.", { code: "pathao.locations" });
+      throw new ProviderError("declined", "Pathao requires mapped city and zone IDs before quoting delivery.", { code: "pathao_locations" });
     }
     const storeId = Number(optionalText(ctx, "pathao_store_id"));
     const deliveryType = Number(ctx.settings.pathao_delivery_type ?? 48);
@@ -223,7 +223,7 @@ const pathao = defineCourierProvider({
     // Pathao's minimum billable weight is 0.5 kg; missing catalog weights use the merchant's booking default.
     const weight = Math.max(0.5, input.parcel.weightGrams === null ? Number(ctx.settings.pathao_item_weight ?? 0.5) : input.parcel.weightGrams / 1000);
     if (!Number.isSafeInteger(storeId) || storeId <= 0 || ![48, 12].includes(deliveryType) || ![1, 2].includes(itemType) || !Number.isFinite(weight)) {
-      throw new ProviderError("misconfigured", "Check Pathao's store, delivery type, item type and weight settings.", { code: "pathao.rates_settings" });
+      throw new ProviderError("misconfigured", "Check Pathao's store, delivery type, item type and weight settings.", { code: "pathao_rates_settings" });
     }
     if (weight > 10) return { rates: [] };
     try {
@@ -242,7 +242,7 @@ const pathao = defineCourierProvider({
       // This is transport only: COD settlement fees depend on the eventual collection amount, not cart line totals.
       return { rates: [{ service: deliveryType === 12 ? "express" : "regular", name: deliveryType === 12 ? "Pathao Express" : "Pathao Regular", amountMinor, estimatedDays: null }] };
     } catch {
-      throw new ProviderError("retryable", "Pathao could not quote delivery. Try again or choose another delivery method.", { code: "pathao.rates_failed" });
+      throw new ProviderError("retryable", "Pathao could not quote delivery. Try again or choose another delivery method.", { code: "pathao_rates_failed" });
     }
   },
 
@@ -290,11 +290,11 @@ const pathao = defineCourierProvider({
     const amountToCollect = codMajor(input);
     // Pathao collects whole taka only.
     if (!Number.isSafeInteger(amountToCollect) || amountToCollect < 0) {
-      throw new ProviderError("declined", "Pathao requires a whole-taka COD amount. Use another courier for this balance.", { code: "pathao.cod_fraction" });
+      throw new ProviderError("declined", "Pathao requires a whole-taka COD amount. Use another courier for this balance.", { code: "pathao_cod_fraction" });
     }
     const ids = input.recipient.locationIds;
     if (!ids?.city || !ids.zone) {
-      throw new ProviderError("declined", "Pathao requires precisely mapped numeric location IDs. Missing mapping for: city, zone. Please configure these in the Delivery Locations settings.", { code: "pathao.locations" });
+      throw new ProviderError("declined", "Pathao requires precisely mapped numeric location IDs. Missing mapping for: city, zone. Please configure these in the Delivery Locations settings.", { code: "pathao_locations" });
     }
     let request: { token: string; body: string; baseUrl: string };
     try {
@@ -329,7 +329,7 @@ const pathao = defineCourierProvider({
       throw new ProviderError(
         "retryable",
         "Pathao shipment could not be prepared. Check the provider settings and delivery location mappings before retrying.",
-        { code: "pathao.prepare_failed" },
+        { code: "pathao_prepare_failed" },
       );
     }
 
@@ -346,7 +346,7 @@ const pathao = defineCourierProvider({
       ok = response.ok;
       answer = (await response.json<Record<string, unknown>>()) ?? {};
     } catch {
-      throw new ProviderError("retryable", PATHAO_UNKNOWN, { uncertain: true, code: "pathao.outcome_unknown" });
+      throw new ProviderError("retryable", PATHAO_UNKNOWN, { uncertain: true, code: "pathao_outcome_unknown" });
     }
     const data = OBJECT(answer.data) ? answer.data : null;
     if (ok && answer.code === 200 && typeof data?.consignment_id === "string" && data.consignment_id.trim() && typeof data.order_status === "string") {
@@ -366,10 +366,10 @@ const pathao = defineCourierProvider({
       throw new ProviderError(
         "declined",
         `Pathao rejected the shipment (HTTP ${status}). Check the shipment details and provider settings before retrying.`,
-        { code: "pathao.rejected" },
+        { code: "pathao_rejected" },
       );
     }
-    throw new ProviderError("retryable", PATHAO_UNKNOWN, { uncertain: true, code: "pathao.outcome_unknown" });
+    throw new ProviderError("retryable", PATHAO_UNKNOWN, { uncertain: true, code: "pathao_outcome_unknown" });
   },
 
   async trackShipment({ externalId }, ctx) {
@@ -395,7 +395,7 @@ const pathao = defineCourierProvider({
       }
       return { status: mapPathaoStatus(data.order_status), rawStatus: clip(data.order_status, 100), updatedAt: now(), details: flatDetails(data) };
     } catch (error) {
-      throw new ProviderError("retryable", error instanceof Error ? clip(error.message, 300) : "Pathao tracking failed.", { code: "pathao.tracking_failed" });
+      throw new ProviderError("retryable", error instanceof Error ? clip(error.message, 300) : "Pathao tracking failed.", { code: "pathao_tracking_failed" });
     }
   },
 
@@ -407,7 +407,7 @@ const pathao = defineCourierProvider({
    */
   async verifyWebhook(request: ProviderHttpRequest, ctx): Promise<CourierWebhook> {
     const secret = optionalText(ctx, "pathao_webhook_secret");
-    if (!secret) throw new ProviderError("misconfigured", "Pathao's webhook secret is not set.", { code: "pathao.webhook_secret_missing" });
+    if (!secret) throw new ProviderError("misconfigured", "Pathao's webhook secret is not set.", { code: "pathao_webhook_secret_missing" });
     const signature = request.headers["x-pathao-signature"];
     if (!signature || !sameSecret(signature, secret)) return { status: "invalid", reason: "Pathao signature missing or wrong." };
     const reply = (body: CourierWebhookReply["body"]): CourierWebhookReply => ({ status: 202, headers: { [PATHAO_SECRET_HEADER]: secret }, body });
@@ -502,7 +502,7 @@ const steadfast = defineCourierProvider({
       throw new ProviderError(
         "retryable",
         "Steadfast shipment could not be prepared. Check the provider settings and shipment details before retrying.",
-        { code: "steadfast.prepare_failed" },
+        { code: "steadfast_prepare_failed" },
       );
     }
 
@@ -515,7 +515,7 @@ const steadfast = defineCourierProvider({
       ok = response.ok;
       answer = (await response.json<Record<string, unknown>>()) ?? {};
     } catch {
-      throw new ProviderError("retryable", STEADFAST_UNKNOWN, { uncertain: true, code: "steadfast.outcome_unknown" });
+      throw new ProviderError("retryable", STEADFAST_UNKNOWN, { uncertain: true, code: "steadfast_outcome_unknown" });
     }
     const consignment = OBJECT(answer.consignment) ? answer.consignment : null;
     const consignmentId = consignment?.consignment_id;
@@ -536,10 +536,10 @@ const steadfast = defineCourierProvider({
       throw new ProviderError(
         "declined",
         `Steadfast rejected the shipment (HTTP ${status}). Check the shipment details and provider settings before retrying.`,
-        { code: "steadfast.rejected" },
+        { code: "steadfast_rejected" },
       );
     }
-    throw new ProviderError("retryable", STEADFAST_UNKNOWN, { uncertain: true, code: "steadfast.outcome_unknown" });
+    throw new ProviderError("retryable", STEADFAST_UNKNOWN, { uncertain: true, code: "steadfast_outcome_unknown" });
   },
 
   async trackShipment({ externalId }, ctx) {
@@ -551,7 +551,7 @@ const steadfast = defineCourierProvider({
       if (!data || typeof data.delivery_status !== "string") throw new Error("Failed to parse API response");
       return { status: mapSteadfastStatus(data.delivery_status), rawStatus: clip(data.delivery_status, 100), updatedAt: now(), details: flatDetails(data) };
     } catch (error) {
-      throw new ProviderError("retryable", error instanceof Error ? clip(error.message, 300) : "Steadfast tracking failed.", { code: "steadfast.tracking_failed" });
+      throw new ProviderError("retryable", error instanceof Error ? clip(error.message, 300) : "Steadfast tracking failed.", { code: "steadfast_tracking_failed" });
     }
   },
 
@@ -586,7 +586,7 @@ const steadfast = defineCourierProvider({
    */
   async verifyWebhook(request: ProviderHttpRequest, ctx): Promise<CourierWebhook> {
     const secret = optionalText(ctx, "steadfast_webhook_secret") ?? optionalText(ctx, "steadfast_secret_key");
-    if (!secret) throw new ProviderError("misconfigured", "Steadfast's webhook secret is not set.", { code: "steadfast.webhook_secret_missing" });
+    if (!secret) throw new ProviderError("misconfigured", "Steadfast's webhook secret is not set.", { code: "steadfast_webhook_secret_missing" });
     const authorization = request.headers.authorization ?? "";
     if (!authorization.toLowerCase().startsWith("bearer ") || !sameSecret(authorization.slice(7).trim(), secret)) {
       return { status: "invalid", reason: "Steadfast bearer token missing or wrong." };

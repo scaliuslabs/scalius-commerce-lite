@@ -6,9 +6,10 @@
 // Idempotency-Key middleware and the route's own validation), and a refusal
 // comes back as the result the app would get, never a throw:
 //
-//   404 api.unknown_operation      not a stable operation id
-//   400 api.invalid_input          input is not { path, query, body, idempotencyKey }
-//   403 api.operation_forbidden    no granted scope covers the operation
+//   404 api_unknown_operation      no operation has this app name
+//   400 api_invalid_input          input is not { path, query, body, idempotencyKey }
+//   403 api_operation_not_stable   the operation is beta or internal
+//   403 api_operation_forbidden    no granted scope covers the operation
 //   400 idempotency_key_required   a stock move without idempotencyKey
 //   400 idempotency_not_supported  idempotencyKey on an operation that takes none
 //   400 body_not_allowed           a body on a GET
@@ -16,7 +17,7 @@
 //   413 body_too_large             a body over 1 MiB
 //   400 missing_path_parameter / unknown_path_parameter
 //   422 idempotency_key_reused     the same key for a different request
-//   400 VALIDATION_ERROR           path, query or body against the schema
+//   400 validation_error           path, query or body against the schema
 //                                  (enums, required fields, revision preconditions)
 //
 // A valid call reaches your handler. Its answer is checked against the
@@ -25,9 +26,9 @@
 // answer without calling the handler again, as the platform does.
 
 import type { PluginApiCallInput, PluginApiResult } from "./context";
-import { NON_STABLE_OPERATION_IDS, STABLE_CONTRACT } from "./testing-contract.gen";
+import { NON_STABLE_OPERATION_NAMES, STABLE_CONTRACT } from "./testing-contract.gen";
 
-const NON_STABLE_OPERATIONS = new Set(NON_STABLE_OPERATION_IDS);
+const NON_STABLE_OPERATIONS = new Set(NON_STABLE_OPERATION_NAMES);
 
 /** JSON Schema (the OpenAPI 3.0 subset the contract uses). */
 export type ContractSchema = Record<string, unknown>;
@@ -41,6 +42,8 @@ export interface StableContractParameter {
 }
 
 export interface StableContractOperation {
+  /** The host's internal operation id the app name resolves to (what the audit log records). */
+  operationId: string;
   method: string;
   path: string;
   risk: string;
@@ -53,6 +56,7 @@ export interface StableContractOperation {
 }
 
 export interface StableContract {
+  /** By app name (`orders.get`): what an app passes to `ctx.api.call`. */
   operations: Record<string, StableContractOperation>;
   components: Record<string, ContractSchema>;
 }
@@ -78,7 +82,7 @@ export interface ContractCall {
 export type ContractHandler = (call: ContractCall) => unknown | Promise<unknown>;
 
 export interface ContractApiOptions {
-  /** Answers by stable operation id. A call to an operation without a handler fails the test (it throws). */
+  /** Answers by app operation name (`orders.get`). A call to an operation without a handler fails the test (it throws). */
   handlers?: Record<string, ContractHandler>;
   /**
    * The app's granted scopes. The harness passes the manifest's (with the
@@ -98,7 +102,8 @@ export interface ContractApi {
   readonly calls: Array<{ operationId: string; input: PluginApiCallInput | undefined; result: PluginApiResult }>;
 }
 
-const OPERATION_ID = /^(?:dashboard(\.[a-z][a-z0-9_]*){2,}|objects\.(?:types\.(?:list|get|create|update|delete)|list|get|upsert|delete))$/;
+/** An app operation name: lower snake segments joined by dots (`@scalius/shared/plugins/app-operations`). */
+const OPERATION_NAME = /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$/u;
 const IDEMPOTENCY_KEY = /^[\x20-\x7E]{8,200}$/u;
 const MAX_BODY_BYTES = 1024 * 1024;
 
@@ -277,7 +282,7 @@ function validation(where: string, issue: SchemaIssue, operation: StableContract
   const precondition = issue.missing && /^expected/i.test(issue.missing) && operation.revision !== "none"
     ? " This operation is revision-checked: pass the revision you read (a change since is refused with 409)."
     : "";
-  return refusal(400, "VALIDATION_ERROR", `${where}${issue.path ? `.${issue.path}` : ""} ${issue.message}.${precondition}`);
+  return refusal(400, "validation_error", `${where}${issue.path ? `.${issue.path}` : ""} ${issue.message}.${precondition}`);
 }
 
 function isApiResult(value: unknown): value is PluginApiResult {
@@ -290,7 +295,7 @@ const copy = <T>(value: T): T => (value === undefined ? value : structuredClone(
  * A contract-checked `ctx.api` for `createPluginTestHarness(plugin, { api })`.
  *
  *   const api = createContractApi({
- *     handlers: { "dashboard.resources.orders.get": ({ path }) => ({ id: path.id, … }) },
+ *     handlers: { "orders.get": ({ path }) => ({ id: path.id, … }) },
  *   });
  *   const harness = createPluginTestHarness(plugin, { api });
  *   // api.calls lists every call and the result the app got.
@@ -307,18 +312,18 @@ export function createContractApi(options: ContractApiOptions = {}): ContractApi
   const calls: ContractApi["calls"] = [];
 
   const answer = async (operationId: string, rawInput: unknown, granted: readonly string[] | undefined): Promise<PluginApiResult> => {
-    if (typeof operationId !== "string" || !OPERATION_ID.test(operationId)) {
-      return refusal(404, "api.unknown_operation", "Plugins call dashboard or objects operations by their reviewed id.");
+    if (typeof operationId !== "string" || operationId.length > 128 || !OPERATION_NAME.test(operationId)) {
+      return refusal(404, "api_unknown_operation", "Apps call an operation by its app name, such as orders.get.");
     }
     const operation = contract.operations[operationId];
     const exists = Boolean(operation) || NON_STABLE_OPERATIONS.has(operationId);
-    if (!exists) return refusal(404, "api.unknown_operation", `Unknown operation ${operationId}: it is not part of the stable app API.`);
+    if (!exists) return refusal(404, "api_unknown_operation", `Unknown operation ${operationId}: it is not part of the stable app API.`);
     const input = normalize(rawInput);
-    if (typeof input === "string") return refusal(400, "api.invalid_input", input);
+    if (typeof input === "string") return refusal(400, "api_invalid_input", input);
     // As the host: an operation that exists but is beta or internal is refused, not unknown.
-    if (!operation) return refusal(403, "api.operation_not_stable", `${operationId} is not part of the stable app API.`);
+    if (!operation) return refusal(403, "api_operation_not_stable", `${operationId} is not part of the stable app API.`);
     if (granted && !operation.scopes.some((scope) => granted.includes(scope))) {
-      return refusal(403, "api.operation_forbidden", `Operation is not authorized: ${operationId} needs one of ${operation.scopes.join(", ") || "(no app scope)"}.`);
+      return refusal(403, "api_operation_forbidden", `Operation is not authorized: ${operationId} needs one of ${operation.scopes.join(", ") || "(no app scope)"}.`);
     }
 
     // The dispatcher's checks, in its order.

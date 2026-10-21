@@ -126,10 +126,10 @@ describe.each(PLANS)("customer list keyset pagination on the %s plan", (plan) =>
     it("rejects invalid and mismatched cursors with a typed 400", async () => {
         const { db } = setup(12);
         const cursor = (await listCustomers(db, { limit: 5, sort: "name" })).pageInfo.endCursor!;
-        await expect(listCustomers(db, { after: "!!" })).rejects.toMatchObject({ status: 400, code: "INVALID_CURSOR" });
-        await expect(listCustomers(db, { sort: "totalSpent", after: cursor })).rejects.toMatchObject({ code: "INVALID_CURSOR" });
-        await expect(listCustomers(db, { sort: "name", after: cursor, before: cursor })).rejects.toMatchObject({ code: "INVALID_CURSOR" });
-        await expect(listCustomers(db, { page: lists.maxOffset / 20 + 1, limit: 20 })).rejects.toMatchObject({ code: "PAGE_TOO_DEEP" });
+        await expect(listCustomers(db, { after: "!!" })).rejects.toMatchObject({ status: 400, code: "invalid_cursor" });
+        await expect(listCustomers(db, { sort: "totalSpent", after: cursor })).rejects.toMatchObject({ code: "invalid_cursor" });
+        await expect(listCustomers(db, { sort: "name", after: cursor, before: cursor })).rejects.toMatchObject({ code: "invalid_cursor" });
+        await expect(listCustomers(db, { page: lists.maxOffset / 20 + 1, limit: 20 })).rejects.toMatchObject({ code: "page_too_deep" });
     });
 });
 
@@ -213,10 +213,10 @@ describe.each(PLANS)("customer list cursors carry no personal data on the %s pla
         const { db } = setup(12);
         const withName = craftedCursor({ s: "name", d: "asc", k: ["Karim Ali"], i: "cust_0001" });
         await expect(listCustomers(db, { sort: "name", order: "asc", after: withName }))
-            .rejects.toMatchObject({ status: 400, code: "INVALID_CURSOR" });
+            .rejects.toMatchObject({ status: 400, code: "invalid_cursor" });
         const reference = craftedCursor({ s: "totalSpent", d: "desc", k: [], i: "cust_0001" });
         await expect(listCustomers(db, { sort: "totalSpent", order: "desc", after: reference }))
-            .rejects.toMatchObject({ status: 400, code: "INVALID_CURSOR" });
+            .rejects.toMatchObject({ status: 400, code: "invalid_cursor" });
     });
 
     it("reads the boundary customer's name by id, and a vanished customer is a typed 400 rather than an empty page", async () => {
@@ -228,6 +228,6 @@ describe.each(PLANS)("customer list cursors carry no personal data on the %s pla
 
         sqlite.exec(`DELETE FROM customers WHERE id = '${first.customers[5]!.id}'`);
         await expect(listCustomers(db, { sort: "name", order: "asc", limit: 6, after: cursor }))
-            .rejects.toMatchObject({ status: 400, code: "INVALID_CURSOR", message: expect.stringContaining("no longer exists") });
+            .rejects.toMatchObject({ status: 400, code: "invalid_cursor", message: expect.stringContaining("no longer exists") });
     });
 });

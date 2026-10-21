@@ -64,15 +64,15 @@ describe("order risk from an event handler (ctx.orders)", () => {
     const hello = await installHello(db, sqlite);
     const runtime = { env: pluginTestEnv(binding), ctx: pluginTestCtx(), db: () => db, composedEnv: async () => pluginTestEnv(binding) };
     const helloBridge = new PluginBridgeHost({ pluginId: hello.pluginId, version: hello.version, authority: pluginBridgeAuthority(hello) }, runtime);
-    await expect(helloBridge.ordersHold({ orderId: "ord_new", reason: "No." })).rejects.toThrow("[orders.not_allowed]");
-    await expect(helloBridge.ordersAssessRisk({ orderId: "ord_new", level: "low", reasons: [] })).rejects.toThrow("[orders.not_allowed]");
+    await expect(helloBridge.ordersHold({ orderId: "ord_new", reason: "No." })).rejects.toThrow("[orders_not_allowed]");
+    await expect(helloBridge.ordersAssessRisk({ orderId: "ord_new", level: "low", reasons: [] })).rejects.toThrow("[orders_not_allowed]");
 
     const guard = await installGuard();
     const bridge = new PluginBridgeHost({ pluginId: guard.pluginId, version: guard.version, authority: pluginBridgeAuthority(guard) }, runtime);
-    await expect(bridge.ordersHold({ orderId: "ord_none", reason: "Gone" })).rejects.toThrow("[orders.not_found]");
-    await expect(bridge.ordersHold({ orderId: "ord_new", reason: "" })).rejects.toThrow("[orders.invalid]");
-    await expect(bridge.ordersAssessRisk({ orderId: "ord_new", level: "severe" as never, reasons: [] })).rejects.toThrow("[orders.invalid]");
-    await expect(bridge.ordersAssessRisk({ orderId: "ord_new", level: "low", reasons: Array.from({ length: 6 }, () => "x") })).rejects.toThrow("[orders.invalid]");
+    await expect(bridge.ordersHold({ orderId: "ord_none", reason: "Gone" })).rejects.toThrow("[orders_not_found]");
+    await expect(bridge.ordersHold({ orderId: "ord_new", reason: "" })).rejects.toThrow("[orders_invalid]");
+    await expect(bridge.ordersAssessRisk({ orderId: "ord_new", level: "severe" as never, reasons: [] })).rejects.toThrow("[orders_invalid]");
+    await expect(bridge.ordersAssessRisk({ orderId: "ord_new", level: "low", reasons: Array.from({ length: 6 }, () => "x") })).rejects.toThrow("[orders_invalid]");
     expect(await bridge.ordersRiskHistory("ord_new")).toEqual({ orders: 2, cancelled: 1, returnedToSender: 1 });
   });
 });

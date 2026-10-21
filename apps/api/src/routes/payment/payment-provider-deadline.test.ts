@@ -27,7 +27,7 @@ describe("payment provider deadline guard", () => {
       ),
     ).rejects.toMatchObject({
       status: 503,
-      code: "SERVICE_UNAVAILABLE",
+      code: "service_unavailable",
       message: "TestPay did not respond in time. Please try again shortly.",
     });
   });

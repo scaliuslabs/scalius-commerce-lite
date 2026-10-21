@@ -180,9 +180,9 @@ describe.each(["d1", "turso"] as const)("storefront discount path (%s)", (provid
         const archived = await live(db, { name: "Archived", codes: [{ code: "GONE" }], effects: [orderOff(1_000)] });
         await archivePromotionDraft(db, archived.id, archived.revision);
         await expect(quote(db, "GONE")).rejects.toThrow("not active");
-        await live(db, { name: "Later", codes: [{ code: "LATER" }], startsAtEpochSeconds: NOW + 60, effects: [orderOff(1_000)] });
+        await live(db, { name: "Later", codes: [{ code: "LATER" }], startsAt: new Date((NOW + 60) * 1_000).toISOString(), effects: [orderOff(1_000)] });
         await expect(quote(db, "LATER")).rejects.toThrow("not available yet");
-        await live(db, { name: "Ended", codes: [{ code: "ENDED" }], startsAtEpochSeconds: NOW - 60, endsAtEpochSeconds: NOW, effects: [orderOff(1_000)] });
+        await live(db, { name: "Ended", codes: [{ code: "ENDED" }], startsAt: new Date((NOW - 60) * 1_000).toISOString(), endsAt: new Date((NOW) * 1_000).toISOString(), effects: [orderOff(1_000)] });
         await expect(quote(db, "ENDED")).rejects.toThrow("expired");
         const once = await live(db, { name: "Once", codes: [{ code: "ONCE" }], maxRedemptionsPerCustomer: 1, effects: [orderOff(1_000)] });
         sqlite!.exec(`
@@ -377,7 +377,7 @@ describe.each(["d1", "turso"] as const)("storefront discount path (%s)", (provid
             INSERT INTO product_variants (id, product_id, sku, price_minor, is_default) VALUES
                 ('var_tee', 'prod_tee', 'TEE-1', 50000, 1), ('var_cap', 'prod_cap', 'CAP-1', 20000, 1);
         `);
-        await live(db, { name: "Two tees, free cap", endsAtEpochSeconds: NOW + 86_400, effects: buyGet({ productIds: ["prod_tee"] }) });
+        await live(db, { name: "Two tees, free cap", endsAt: new Date((NOW + 86_400) * 1_000).toISOString(), effects: buyGet({ productIds: ["prod_tee"] }) });
         await live(db, { name: "Shoes gift", effects: buyGet({ collectionIds: ["col_shoes"] }) });
         await live(db, { name: "Secret", codes: [{ code: "SECRET" }], effects: buyGet({ productIds: ["prod_tee"] }) });
 

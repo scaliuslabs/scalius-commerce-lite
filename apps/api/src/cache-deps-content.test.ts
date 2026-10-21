@@ -79,7 +79,7 @@ function seededTheme(): string {
     if (section.type === "hero") {
       return { ...section, settings: { ...section.settings, slides: [{ image: "media_hero", focalPoint: { x: 50, y: 50 }, alt: "Eid", link: "/" }] } };
     }
-    if (section.type === "category-tiles") {
+    if (section.type === "category_tiles") {
       return { ...section, settings: { ...section.settings, categoryIds: ["cat_panjabi", "cat_draft"] } };
     }
     return section;

@@ -71,14 +71,14 @@ describe("atomic checkout attempts", () => {
     expect(resolveCheckoutAttemptRow(row, identity)).toMatchObject({ status: "replay" });
     for (const customerWhatsapp of [null, "+8801912345678"]) {
       const changed = await buildCheckoutAttemptIdentity(buildInput({ customerWhatsapp }));
-      expect(() => resolveCheckoutAttemptRow(row, changed)).toThrow(expect.objectContaining({ code: "CHECKOUT_ATTEMPT_CONFLICT" }));
+      expect(() => resolveCheckoutAttemptRow(row, changed)).toThrow(expect.objectContaining({ code: "checkout_attempt_conflict" }));
     }
     const changed = await buildCheckoutAttemptIdentity(buildInput({ customerWhatsapp: "+8801912345678" }));
     expect(() => resolveCheckoutAttemptRow({ ...row, linkedOrderAccountOwnerCustomerId: "owner" }, changed))
       .toThrow(expect.objectContaining({ status: 403 }));
     expect(() => resolveCheckoutAttemptRow({ ...row, linkedOrderStatus: "cancelled", linkedOrderDeletedAt: 1,
       linkedOrderPaymentStatus: "unpaid", linkedOrderPaidAmountMinor: 0 }, changed))
-      .toThrow(expect.objectContaining({ code: "CHECKOUT_ATTEMPT_EXPIRED" }));
+      .toThrow(expect.objectContaining({ code: "checkout_attempt_expired" }));
   });
 
   it("replays a new exact WhatsApp request even when contact settings discarded the number", async () => {
@@ -153,7 +153,7 @@ describe("atomic checkout attempts", () => {
       expect(error).toBeInstanceOf(ConflictError);
       expect(error).toMatchObject({
         status: 409,
-        code: "CHECKOUT_ATTEMPT_CONFLICT",
+        code: "checkout_attempt_conflict",
         details: { orderId: "order_existing", paymentMethod: "cod" },
       });
       expect((error as ConflictError).details).toEqual({ orderId: "order_existing", paymentMethod: "cod" });
@@ -171,7 +171,7 @@ describe("atomic checkout attempts", () => {
       resolveCheckoutAttemptRow(row, changed);
       expect.fail("An unproven old attempt must remain sealed to its request");
     } catch (error) {
-      expect(error).toMatchObject({ status: 409, code: "CHECKOUT_ATTEMPT_CONFLICT" });
+      expect(error).toMatchObject({ status: 409, code: "checkout_attempt_conflict" });
       expect((error as ConflictError).details).toBeUndefined();
     }
   });
@@ -198,7 +198,7 @@ describe("atomic checkout attempts", () => {
           await resolveExistingCheckoutAttempt(createResolverDb(row), request, Promise.resolve(customerId));
           expect.fail("A different account must not recover the checkout");
         } catch (error) {
-          expect(error).toMatchObject({ status: 403, code: "FORBIDDEN", details: undefined });
+          expect(error).toMatchObject({ status: 403, code: "forbidden", details: undefined });
           expect(JSON.stringify(error)).not.toMatch(/order_existing|chk_existing_secret|customer_owner/);
         }
       }
@@ -273,7 +273,7 @@ describe("atomic checkout attempts", () => {
       expect(batched).toEqual([row]);
       for (const request of [identity, changed]) {
         await expect(resolveExistingCheckoutAttempt(db, request)).rejects.toMatchObject({
-          status: 409, code: "CHECKOUT_ATTEMPT_EXPIRED", details: undefined,
+          status: 409, code: "checkout_attempt_expired", details: undefined,
         });
       }
       expect(sqlite.prepare("SELECT count(*) AS count FROM orders").get()).toEqual({ count: 1 });
@@ -310,7 +310,7 @@ describe("atomic checkout attempts", () => {
       expect(resolveCheckoutAttemptRow(rows[0], identity, "customer_owner")).toEqual({ status: "replay", response });
       const changed = await buildCheckoutAttemptIdentity(buildInput({ customerWhatsapp: "+8801912345678" }));
       await expect(resolveExistingCheckoutAttempt(db, changed, "customer_owner"))
-        .rejects.toMatchObject({ code: "CHECKOUT_ATTEMPT_CONFLICT" });
+        .rejects.toMatchObject({ code: "checkout_attempt_conflict" });
     } finally {
       sqlite.close();
     }

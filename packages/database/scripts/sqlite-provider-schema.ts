@@ -1,18 +1,16 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { readdir, readFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { writeFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
 
-import {
-  compileSqliteMigrationForProvider,
-  type SqliteTriggerDefinition,
-} from "../src/migration-artifacts";
+import type { SqliteTriggerDefinition } from "../src/migration-artifacts";
 import type { DatabaseProvider } from "../src/provider";
+import { compiledMigrationSql, migratedImage, restoreMigratedImage } from "../src/testing/migrated-image";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 export const canonicalMigrationDirectory = resolve(
@@ -78,26 +76,28 @@ export async function loadSqliteSqlFile(
   return { bytes, sha256: hash.digest("hex") };
 }
 
+/**
+ * A database holding the schema the provider's migrations build (before
+ * `beforeMigration`, for sidecar parity tests), at `location`: memory, or a
+ * new file. The chain is replayed once per digest of its compiled script and
+ * cached as an image (`src/testing/migrated-image.ts`, shared with the test
+ * harness); each call restores a copy of it.
+ */
 export async function createProviderSchemaDatabase(
   provider: DatabaseProvider,
   location = ":memory:",
-  /** Apply only migrations whose file name sorts before this one (sidecar parity tests). */
   beforeMigration?: string,
 ): Promise<DatabaseSync> {
+  const image = migratedImage(provider, beforeMigration);
+  if (image && location !== ":memory:") {
+    // "wx": the file must be new, as replaying the chain onto it required.
+    await writeFile(location, image, { flag: "wx" });
+    return new DatabaseSync(location);
+  }
   const database = new DatabaseSync(location);
-  const migrationNames = (await readdir(canonicalMigrationDirectory))
-    .filter((name) => /^\d{4}_.+\.sql$/.test(name))
-    .filter((name) => beforeMigration === undefined || name < beforeMigration)
-    .sort((left, right) => left.localeCompare(right));
-
   try {
-    for (const name of migrationNames) {
-      const canonical = await readFile(
-        join(canonicalMigrationDirectory, name),
-        "utf8",
-      );
-      database.exec(compileSqliteMigrationForProvider(canonical, provider));
-    }
+    if (image) restoreMigratedImage(database, image);
+    else database.exec(compiledMigrationSql(provider, beforeMigration));
     return database;
   } catch (error) {
     database.close();

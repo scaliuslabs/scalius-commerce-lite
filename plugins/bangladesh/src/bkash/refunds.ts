@@ -80,7 +80,7 @@ function reportedRefund(answer: BkashAnswer): ReportedRefund {
 // ── refund ──────────────────────────────────────────────────────────────────
 
 export async function refund(input: PaymentRefundInput, ctx: PluginContext): Promise<PaymentRefund> {
-  if (input.currency !== "BDT") throw new ProviderError("declined", "bKash refunds only BDT.", { code: "bkash.currency" });
+  if (input.currency !== "BDT") throw new ProviderError("declined", "bKash refunds only BDT.", { code: "bkash_currency" });
   const id = await recordIdOf(input.idempotencyKey);
   const stored = await refunds(ctx).get(id);
   if (stored?.state === "completed" && stored.refundTrxId) return { refundId: stored.refundTrxId };
@@ -108,7 +108,7 @@ export async function refund(input: PaymentRefundInput, ctx: PluginContext): Pro
   }
   // bKash took it without reporting it completed (or for another amount): refundStatus settles it.
   if (reported.refundTrxId) await refunds(ctx).put(id, { ...record, refundTrxId: reported.refundTrxId });
-  throw new ProviderError("retryable", "bKash has not reported the refund completed yet.", { uncertain: true, code: "bkash.refund_pending" });
+  throw new ProviderError("retryable", "bKash has not reported the refund completed yet.", { uncertain: true, code: "bkash_refund_pending" });
 }
 
 /**
@@ -134,8 +134,8 @@ async function sendRefund(ctx: PluginContext, client: BkashClient, id: string, b
 async function settleReplay(ctx: PluginContext, client: BkashClient, id: string, stored: RefundRecord): Promise<PaymentRefund> {
   const probe = await probeRefund(ctx, client, id, stored);
   if (probe.outcome === "accepted" && probe.providerRefundId) return { refundId: probe.providerRefundId };
-  if (probe.outcome === "rejected") throw new ProviderError("declined", "bKash reports this refund failed.", { code: "bkash.refund_failed" });
-  throw new ProviderError("retryable", "This refund was already sent to bKash; its outcome is not known yet.", { uncertain: true, code: "bkash.refund_pending" });
+  if (probe.outcome === "rejected") throw new ProviderError("declined", "bKash reports this refund failed.", { code: "bkash_refund_failed" });
+  throw new ProviderError("retryable", "This refund was already sent to bKash; its outcome is not known yet.", { uncertain: true, code: "bkash_refund_pending" });
 }
 
 /** The captured transaction of a payment when the platform has none on record: bKash's status names it. */
@@ -143,7 +143,7 @@ async function capturedTrxId(client: BkashClient, paymentId: string): Promise<st
   const answer = await paymentStatus(client, paymentId);
   const trxId = field(answer, "trxID");
   if (!isCompleted(answer) || !BKASH_ID.test(trxId)) {
-    throw new ProviderError("declined", "bKash has no completed payment to refund.", { code: "bkash.not_completed" });
+    throw new ProviderError("declined", "bKash has no completed payment to refund.", { code: "bkash_not_completed" });
   }
   return trxId;
 }
@@ -207,7 +207,7 @@ async function claim(ctx: PluginContext, id: string, record: RefundRecord, repor
   try {
     await refunds(ctx).put(id, { ...record, state: "completed", refundTrxId: reported.refundTrxId });
   } catch (error) {
-    if (platformErrorCode(error) !== "object.unique_violation") throw error;
+    if (platformErrorCode(error) !== "object_unique_violation") throw error;
     return { outcome: "unknown", providerRefundId: reported.refundTrxId, manualReview: true, error: "This bKash refund already settles another refund; check the payment in the bKash merchant portal." };
   }
   return { outcome: "accepted", providerRefundId: reported.refundTrxId, providerStatus: reported.status };

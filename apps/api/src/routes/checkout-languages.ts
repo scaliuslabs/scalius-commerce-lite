@@ -179,7 +179,7 @@ const updateCheckoutLanguageSchema = createCheckoutLanguageSchema
     isActive: z.boolean().optional().openapi({ description: "Whether this language is active" }),
     isDefault: z.boolean().optional().openapi({ description: "Whether this is the default language" }),
     expectedRevision: z.number().int().nonnegative().openapi({
-      description: "The revision the editor loaded; a stale one is refused with 409 SETTINGS_REVISION_CONFLICT.",
+      description: "The revision the editor loaded; a stale one is refused with 409 settings_revision_conflict.",
     }),
   });
 

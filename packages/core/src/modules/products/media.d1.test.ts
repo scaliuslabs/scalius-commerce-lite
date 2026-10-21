@@ -102,7 +102,7 @@ describe("product media section commands", () => {
 
         await expect(updateProductMediaSection(db, "product_1", 1, [item("a", true), item("c")]))
             .rejects.toMatchObject({
-                code: "PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT",
+                code: "product_media_sku_reference_conflict",
                 details: {
                     affectedAssociationIds: ["pmed_bbbbb"],
                     affectedSkus: [{ id: "variant_1", sku: "SKU-1", imageId: "pmed_bbbbb" }],

@@ -329,7 +329,8 @@ Money is stored and computed as integer minor units of the order or store curren
 ### Money on the wire
 
 - **The stable app API, webhooks, functions and ports** carry one format: integer minor units in `*Minor` fields with the ISO 4217 code in a `currency` field on the same object or the resource that holds it (`{ currency: "BDT", totalMinor: 125000 }`). Inputs take minor units only, in the resource's currency, so a high-denomination currency (VND, IDR) is never capped by a major-unit limit. No stable operation carries a decimal amount or a decimal twin of a minor one; `stable-operations.test.ts` enforces it ([operation registry README](../apps/api/src/openapi/operation-registry/README.md)). A money value of a custom field or object field, whose key the merchant or app names, is self-describing: `{ amountMinor, currency }` in the store currency (`customFieldWireValue` / `objectDataWire` in `@scalius/shared`), the same in `ctx.objects`, `ctx.customFields`, function reads, `objects.*` and `dashboard.custom_fields.*`; its validation bounds are integer minor units.
-- **The dashboard's own routes** (beta and internal tiers) and the storefront contract (beta) may carry decimal major units, converted exactly once at that edge with `toMinor` / `fromMinor` (storefront custom fields and object sections through `customFieldStorefrontValue` / `objectDataStorefront`).
+- **The storefront protocol** (what app components, skins and islands get) carries `StorefrontMoney`: `{ amountMinor, currency, formatted }`, the wire money plus the store's text for it on the page. Prices, custom field and object money, the island cart total and admin UI table cells (`{ amountMinor, currency }`) all use it; the SDK's `formatMoney(context, money)` takes the same shape. Public storefront reads carry custom field and object money as wire money too.
+- **The dashboard's own routes** (beta and internal tiers) and the storefront's price reads may carry decimal major units, converted exactly once at that edge with `toMinor` / `fromMinor`.
 
 ## Payment pipeline
 
@@ -385,6 +386,8 @@ Fraud-checker provider rows (`category = 'fraud-checker'`) and `notification_pro
 ## List pagination
 
 Lists that can grow large use keyset (cursor) paging: the admin orders, products and customers lists and the public product listing. A cursor names the last row shown. Totals are exact up to a plan cap and read "N+" above it. Numbered `page` requests work only for shallow offsets (`planLimits().lists`). Code: `packages/shared/src/pagination.ts` (cursors) and `packages/core/src/utils/keyset.ts` (SQL). `apps/api/src/routes/admin/list-cursor-contract.test.ts` pins the contract.
+
+The stable app API pages every list one way: `cursor` and `limit` in, `{ <plural>, nextCursor }` out (`nextCursor` is null on the last page; an opaque token). No stable list takes `page`, `offset` or `after`, or returns `pagination`, `hasMore` or a next-page key of its own (`stable-operations.test.ts`). The dashboard's page-numbered lists are beta. MCP reports `meta.nextCursor` for cursor lists only.
 
 ## How to extend
 

@@ -346,13 +346,13 @@ export async function deleteAttributeValueRow(
         await safeBatch(db, [
             buildBatchGuard(db, sql`NOT EXISTS (
                 SELECT 1 FROM ${productAttributeValues} WHERE ${productAttributeValues.valueId} = ${valueId}
-            )`, "ATTRIBUTE_VALUE_IN_USE"),
+            )`, "attribute_value_in_use"),
             db.update(attributeValues)
                 .set({ deletedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
                 .where(and(eq(attributeValues.id, valueId), isNull(attributeValues.deletedAt))),
         ] as never);
     } catch (error) {
-        if (isBatchGuardError(error, "ATTRIBUTE_VALUE_IN_USE")) {
+        if (isBatchGuardError(error, "attribute_value_in_use")) {
             throw new ConflictError("Products started using this value while it was being deleted. Try again.");
         }
         throw error;
@@ -487,7 +487,7 @@ export async function planAttributeValuePresets(
             statements.push(buildBatchGuard(db, sql`NOT EXISTS (
                 SELECT 1 FROM ${productAttributeValues}
                 WHERE ${productAttributeValues.valueId} IN ${jsonIdSet(removedIds)}
-            )`, "ATTRIBUTE_VALUE_IN_USE"));
+            )`, "attribute_value_in_use"));
         }
         statements.push(db.update(attributeValues)
             .set({ deletedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })

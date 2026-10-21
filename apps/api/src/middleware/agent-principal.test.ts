@@ -98,7 +98,7 @@ describe("storefront direct-agent manifest body boundary", () => {
       body: "{}",
     }, env());
     expect(response.status).toBe(413);
-    await expect(response.json()).resolves.toMatchObject({ code: "PAYLOAD_TOO_LARGE" });
+    await expect(response.json()).resolves.toMatchObject({ code: "payload_too_large" });
   });
 
   it("rejects an oversized body with no declared length", async () => {

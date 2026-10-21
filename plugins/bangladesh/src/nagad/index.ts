@@ -191,7 +191,7 @@ async function paymentByReference(ctx: PluginContext, paymentReferenceId: string
 function timeLeft(deadline: number): number {
   const remaining = deadline - Date.now();
   // Nothing was sent yet, so running out here is not uncertain.
-  if (remaining <= 0) throw new ProviderError("retryable", "The payment timed out before Nagad could be asked. Try again.", { code: "nagad.timeout" });
+  if (remaining <= 0) throw new ProviderError("retryable", "The payment timed out before Nagad could be asked. Try again.", { code: "nagad_timeout" });
   return remaining;
 }
 
@@ -200,7 +200,7 @@ function timeLeft(deadline: number): number {
 /** A stored payment answers only the attempt that created it. */
 function assertSameAttempt(payment: NagadPayment, input: PaymentSessionInput): void {
   if (payment.orderId !== input.orderId || payment.amountMinor !== input.amountMinor) {
-    throw new ProviderError("misconfigured", "A different Nagad payment already uses this checkout attempt.", { code: "nagad.attempt_conflict" });
+    throw new ProviderError("misconfigured", "A different Nagad payment already uses this checkout attempt.", { code: "nagad_attempt_conflict" });
   }
 }
 
@@ -340,7 +340,7 @@ function statusLabel(status: string): string {
 
 const nagad = definePaymentProvider({
   async createSession(input, ctx) {
-    if (input.currency !== "BDT") throw new ProviderError("declined", "Nagad charges only in BDT.", { code: "nagad.currency" });
+    if (input.currency !== "BDT") throw new ProviderError("declined", "Nagad charges only in BDT.", { code: "nagad_currency" });
     const deadline = Date.now() + input.requestTimeoutMs;
     const attempt = await sha256Hex(input.attemptKey);
     const latest = await latestPayment(ctx, attempt);
@@ -395,14 +395,14 @@ const nagad = definePaymentProvider({
   async queryPayment(input, ctx) {
     const payment = await paymentByReference(ctx, input.providerRef);
     if (!payment || payment.orderId !== input.orderId) {
-      throw new ProviderError("declined", "This store started no Nagad payment with this reference for the order.", { code: "nagad.unknown_payment" });
+      throw new ProviderError("declined", "This store started no Nagad payment with this reference for the order.", { code: "nagad_unknown_payment" });
     }
     const endpoint = nagadEndpoint(ctx.settings);
     const verification = await verifyPayment(ctx.http, endpoint, input.providerRef, input.requestTimeoutMs);
     const assessment = assess(payment, verification, endpoint.merchantId);
     await rememberClosed(ctx, payment, assessment);
     if (assessment.kind === "mismatch") {
-      throw new ProviderError("declined", `${assessment.reason} Review it in the Nagad merchant portal.`, { code: "nagad.payment_mismatch" });
+      throw new ProviderError("declined", `${assessment.reason} Review it in the Nagad merchant portal.`, { code: "nagad_payment_mismatch" });
     }
     const providerStatus = statusLabel(verification.status);
     // The port reports an event from a query only for a captured payment.

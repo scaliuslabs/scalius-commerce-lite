@@ -6,7 +6,7 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { AppError, ValidationError } from "@scalius/core/errors";
 import type { CategoryRevisionClaim } from "./categories.validation";
 
-export const CATEGORY_REVISION_CONFLICT = "CATEGORY_REVISION_CONFLICT";
+export const CATEGORY_REVISION_CONFLICT = "category_revision_conflict";
 
 export type CategoryLifecycleState = "active" | "trashed";
 
@@ -18,7 +18,7 @@ export class CategoryRevisionConflictError extends AppError {
     ) {
         super(
             409,
-            "CATEGORY_REVISION_CONFLICT",
+            "category_revision_conflict",
             "This category changed while you were editing. Reload the latest category and try again.",
             { categoryId, expectedRevision, currentRevision },
         );
@@ -30,7 +30,7 @@ export class CategoryStateConflictError extends AppError {
     constructor(categoryId: string, requiredState: CategoryLifecycleState) {
         super(
             409,
-            "CATEGORY_STATE_CONFLICT",
+            "category_state_conflict",
             requiredState === "active"
                 ? "This category is no longer active. Return to categories and reload."
                 : "This category is not in trash. Return to categories and reload.",

@@ -17,7 +17,8 @@ import { PROTECTED_FIELD_KEYWORD, protectedPathsOf, redactProtectedData, type Pr
 const id = z.string().min(1).max(128);
 const text = z.string().max(4000);
 const state = z.string().min(1).max(64);
-const iso = z.string().min(1).max(40);
+/** An instant: ISO 8601 in UTC (`2026-10-21T09:30:00.000Z`), as every stable time is. */
+const iso = z.string().min(1).max(40).meta({ format: "date-time" });
 const minor = z.number().int();
 const currency = z.string().length(3);
 

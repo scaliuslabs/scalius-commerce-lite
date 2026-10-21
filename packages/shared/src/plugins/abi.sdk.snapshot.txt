@@ -93,7 +93,7 @@ export interface PluginApiResult<T = unknown> {
     } | null;
 }
 export interface PluginApi {
-    call<T = unknown>(operationId: string, input?: PluginApiCallInput): Promise<PluginApiResult<T>>;
+    call<T = unknown>(operation: string, input?: PluginApiCallInput): Promise<PluginApiResult<T>>;
 }
 export interface PluginMoney {
     amountMinor: number;
@@ -366,7 +366,7 @@ export {};
 
 // packages/plugin-sdk/src/index.d.ts
 import type { EventTopic, EventTopicFilter } from "@scalius/shared/events";
-import type { FunctionReadRecord, FunctionReads, PluginFunctionAnswer, PluginFunctionInput, PluginFunctionPoint, PluginManifestInput, PluginSettingValue } from "@scalius/shared/plugins";
+import type { FunctionReadRecord, FunctionReads, PluginFunctionAnswer, PluginFunctionInput, PluginFunctionPoint, PluginManifestInput, PluginSettingValue, StorefrontUiSlot } from "@scalius/shared/plugins";
 import type { ProviderImplementation, ProviderKind } from "@scalius/shared/plugins/providers";
 import type { PluginContext, PluginEvent, PluginRouteRequest, PluginRouteResponse } from "./context";
 import type { PluginContextOf, PluginSettingsOf } from "./manifest-types";
@@ -379,6 +379,7 @@ export type { PluginFeature, PluginFeatureInput, PluginManifest, PluginManifestI
 export { adminContext, adminLocale, ui, wantsPage, type PluginAdminContext, type PluginAdminLocale } from "./ui";
 export type PluginEventHandler<T extends EventTopic = EventTopic, Ctx = PluginContext> = (event: PluginEvent<T>, ctx: Ctx) => Promise<void> | void;
 export type PluginFunctionHandler<P extends PluginFunctionPoint, Settings = Readonly<Record<string, PluginSettingValue>>> = (input: PluginFunctionInput<P>, settings: Settings) => PluginFunctionAnswer<P> | Promise<PluginFunctionAnswer<P>>;
+export type PluginExtensionHandler<Settings = Readonly<Record<string, PluginSettingValue>>> = (input: PluginFunctionInput<"buyer.ui">, settings: Settings) => PluginFunctionAnswer<"buyer.ui"> | Promise<PluginFunctionAnswer<"buyer.ui">>;
 export type { FunctionReadRecord, FunctionReads };
 export declare function readOne<T extends Record<string, unknown> = Record<string, unknown>>(reads: FunctionReads | undefined, as: string): {
     revision: number;
@@ -403,6 +404,9 @@ export interface PluginDefinition<M extends PluginManifestInput = PluginManifest
     };
     functions?: {
         [P in PluginFunctionPoint]?: PluginFunctionHandler<P, PluginSettingsOf<M>>;
+    };
+    extensions?: {
+        [T in StorefrontUiSlot]?: PluginExtensionHandler<PluginSettingsOf<M>>;
     };
     routes?: {
         admin?: Record<string, PluginRouteHandler<Ctx>>;
@@ -928,7 +932,10 @@ export type Words<T = string> = {
 };
 export declare function t<T = string>(context: Context, words: Words<T>): T;
 export declare function formatNumber(context: Context, value: number, options?: Intl.NumberFormatOptions): string;
-export declare function formatMoney(context: Context, amount: number): string;
+export declare function formatMoney(context: Context, money: {
+    amountMinor: number;
+    currency: string;
+}): string;
 export declare function plural(context: Context, count: number, words: Words<Partial<Record<Intl.LDMLPluralRule, string>> & {
     other: string;
 }>): string;
@@ -983,6 +990,7 @@ export interface StableContractParameter {
     description?: string;
 }
 export interface StableContractOperation {
+    operationId: string;
     method: string;
     path: string;
     risk: string;
@@ -1042,10 +1050,10 @@ export {};
 // packages/plugin-sdk/src/testing-contract.gen.d.ts
 import type { StableContract } from "./testing-contract";
 export declare const STABLE_CONTRACT: StableContract;
-export declare const NON_STABLE_OPERATION_IDS: readonly string[];
+export declare const NON_STABLE_OPERATION_NAMES: readonly string[];
 
 // packages/plugin-sdk/src/testing.d.ts
-import { type PluginFunctionInputDraft, type PluginFunctionOutput, type PluginFunctionPoint, type PluginSettingValue } from "@scalius/shared/plugins";
+import { PLUGIN_EXTENSION_RUN, type PluginFunctionInputDraft, type PluginFunctionOutput, type PluginFunctionPoint, type PluginRunPoint, type PluginSettingValue } from "@scalius/shared/plugins";
 import type { EventTopic } from "@scalius/shared/events";
 import type { PluginApiCallInput, PluginApiResult, PluginEvent, PluginRouteRequest, PluginStoreInfo } from "./context";
 import { type PluginInvocationResult, type PluginLogRecord } from "./runtime";
@@ -1075,7 +1083,7 @@ export interface PluginTestHarnessOptions {
         body: string;
     }>;
 }
-export type PluginFunctionTestResult<P extends PluginFunctionPoint> = Omit<PluginInvocationResult, "value"> & {
+export type PluginFunctionTestResult<P extends PluginRunPoint> = Omit<PluginInvocationResult, "value"> & {
     value: PluginFunctionOutput<P> | null;
 };
 export declare function createPluginTestHarness(module: unknown, options?: PluginTestHarnessOptions): {
@@ -1096,7 +1104,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
         allowedHosts: string[];
         events: import("@scalius/shared/events").EventTopicFilter[];
         functions: {
-            point: "cart.transform" | "cart.line_prices" | "cart.validate" | "checkout.discounts" | "checkout.shipping_rates" | "checkout.payment_methods" | "buyer.ui";
+            point: "cart.transform" | "cart.line_prices" | "cart.validate" | "checkout.discounts" | "checkout.shipping_rates" | "checkout.payment_methods";
             priority: number;
             onError: "skip" | "block";
             reads: ({
@@ -1114,7 +1122,6 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
                 } | undefined;
                 max?: number | undefined;
             })[];
-            targets?: ("checkout.contact.after" | "checkout.delivery.after" | "cart.page.summary" | "checkout.payment.after" | "checkout.actions.before" | "order.confirmation" | "account.order" | "account.overview" | "account.profile")[] | undefined;
         }[];
         providers: import("@scalius/shared/plugins/providers").PluginProviderDeclaration[];
         routes: {
@@ -1424,13 +1431,8 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
                 sections: string[];
                 components: string[];
                 skins: string[];
+                extensions: ("checkout.contact.after" | "checkout.delivery.after" | "cart.page.summary" | "checkout.payment.after" | "checkout.actions.before" | "order.confirmation" | "account.order" | "account.overview" | "account.profile")[];
             };
-        }[];
-        settingsGroups: {
-            id: string;
-            title: string;
-            order: number;
-            description?: string | undefined;
         }[];
         admin: {
             pages: {
@@ -1478,11 +1480,17 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
                 };
                 filterable: boolean;
             }[];
+            settingsGroups: {
+                id: string;
+                title: string;
+                order: number;
+                description?: string | undefined;
+            }[];
+            timeline: {
+                kind: string;
+                title: string;
+            }[];
         };
-        timeline: {
-            kind: string;
-            title: string;
-        }[];
         storefront: {
             components: {
                 type: string;
@@ -1707,7 +1715,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
             }[];
             skins: {
                 id: string;
-                target: "header" | "footer" | "product-card" | "product-main" | "listing-main" | `section:${string}`;
+                target: "header" | "footer" | "product_card" | "product_main" | "listing_main" | `section:${string}`;
                 name: string;
                 settings: ({
                     type: "text";
@@ -2180,6 +2188,24 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
                 pages: ("product" | "all" | "home" | "listing")[];
             }[];
             proxy: boolean;
+            extensions: {
+                target: "checkout.contact.after" | "checkout.delivery.after" | "cart.page.summary" | "checkout.payment.after" | "checkout.actions.before" | "order.confirmation" | "account.order" | "account.overview" | "account.profile";
+                reads: ({
+                    as: string;
+                    object: string;
+                    key: string | {
+                        from: string;
+                    };
+                    max?: number | undefined;
+                } | {
+                    as: string;
+                    customFields: string[];
+                    key?: string | {
+                        from: string;
+                    } | undefined;
+                    max?: number | undefined;
+                })[];
+            }[];
         };
         limits: {
             cpuMs: number;
@@ -2263,6 +2289,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
     }) => Promise<PluginInvocationResult>;
     deliver: (event: PluginEvent) => Promise<PluginInvocationResult>;
     fn: <P extends PluginFunctionPoint>(point: P, input: PluginFunctionInputDraft<P>) => Promise<PluginFunctionTestResult<P>>;
+    extension: (input: PluginFunctionInputDraft<typeof PLUGIN_EXTENSION_RUN>) => Promise<PluginFunctionTestResult<typeof PLUGIN_EXTENSION_RUN>>;
     runMigration: (version: number) => Promise<PluginInvocationResult>;
     runMigrations: (options?: {
         from?: number;
@@ -2351,7 +2378,7 @@ export {};
 // packages/shared/src/plugins/storefront-protocol.d.ts
 import type { CustomFieldWireValue } from "../custom-fields";
 export declare const STOREFRONT_COMPONENT_ABI: 1;
-export declare const STOREFRONT_SKIN_UNITS: readonly ["header", "footer", "product-card", "product-main", "listing-main"];
+export declare const STOREFRONT_SKIN_UNITS: readonly ["header", "footer", "product_card", "product_main", "listing_main"];
 export type StorefrontSkinUnit = (typeof STOREFRONT_SKIN_UNITS)[number];
 export declare const STOREFRONT_SECTION_SKIN_PREFIX = "section:";
 export type StorefrontSkinTarget = StorefrontSkinUnit | `section:${string}`;
@@ -2377,7 +2404,7 @@ export type StorefrontUiSlot = keyof typeof STOREFRONT_UI_SLOT_PAGES;
 export type StorefrontUiSlotPage = (typeof STOREFRONT_UI_SLOT_PAGES)[StorefrontUiSlot];
 export declare const STOREFRONT_UI_SLOTS: [StorefrontUiSlot, ...StorefrontUiSlot[]];
 export declare function storefrontUiSlotsOn(page: StorefrontUiSlotPage): StorefrontUiSlot[];
-export declare const STOREFRONT_EMBED_KINDS: readonly ["buy-form", "reviews", "recommendations", "filters", "toolbar", "pagination", "order-form", "gallery", "slot"];
+export declare const STOREFRONT_EMBED_KINDS: readonly ["buy_form", "reviews", "recommendations", "filters", "toolbar", "pagination", "order_form", "gallery", "slot"];
 export type StorefrontEmbedKind = (typeof STOREFRONT_EMBED_KINDS)[number];
 export declare const STOREFRONT_EMBED_TAG = "scalius-embed";
 export interface StorefrontEmbedRule {
@@ -2422,7 +2449,8 @@ export interface StorefrontImage {
     alt: string;
 }
 export interface StorefrontMoney {
-    amount: number;
+    amountMinor: number;
+    currency: string;
     formatted: string;
 }
 export interface StorefrontProductCard {
@@ -2443,7 +2471,7 @@ export interface StorefrontProductCard {
     quickAdd: boolean;
     needsOptions: boolean;
     facts: string[];
-    fields: Record<string, CustomFieldWireValue>;
+    fields: Record<string, CustomFieldWireValue | StorefrontMoney | StorefrontMoney[]>;
 }
 export interface StorefrontMenuItem {
     title: string;
@@ -2808,45 +2836,45 @@ export interface StorefrontNewsletterSkinSettings {
 }
 export interface StorefrontSectionSkinSettings {
     hero: StorefrontHeroSkinSettings;
-    "usp-strip": StorefrontUspStripSkinSettings;
-    "category-tiles": StorefrontCategoryTilesSkinSettings;
+    "usp_strip": StorefrontUspStripSkinSettings;
+    "category_tiles": StorefrontCategoryTilesSkinSettings;
     collections: StorefrontCollectionsSkinSettings;
-    "product-rail": StorefrontProductRailSkinSettings;
-    "product-grid": StorefrontProductGridSkinSettings;
-    "deal-block": StorefrontDealBlockSkinSettings;
-    "product-tabs": StorefrontProductTabsSkinSettings;
+    "product_rail": StorefrontProductRailSkinSettings;
+    "product_grid": StorefrontProductGridSkinSettings;
+    "deal_block": StorefrontDealBlockSkinSettings;
+    "product_tabs": StorefrontProductTabsSkinSettings;
     lookbook: StorefrontLookbookSkinSettings;
     banner: StorefrontBannerSkinSettings;
-    "shop-by": StorefrontShopBySkinSettings;
-    "banner-mosaic": StorefrontBannerMosaicSkinSettings;
-    "brand-wall": StorefrontBrandWallSkinSettings;
+    "shop_by": StorefrontShopBySkinSettings;
+    "banner_mosaic": StorefrontBannerMosaicSkinSettings;
+    "brand_wall": StorefrontBrandWallSkinSettings;
     editorial: StorefrontEditorialSkinSettings;
     faq: StorefrontFaqSkinSettings;
     specifications: StorefrontSpecificationsSkinSettings;
-    "utility-cards": StorefrontUtilityCardsSkinSettings;
-    "seo-text": StorefrontSeoTextSkinSettings;
+    "utility_cards": StorefrontUtilityCardsSkinSettings;
+    "seo_text": StorefrontSeoTextSkinSettings;
     newsletter: StorefrontNewsletterSkinSettings;
 }
 export type StorefrontSkinnableSection = keyof StorefrontSectionSkinSettings;
 export declare const STOREFRONT_SECTION_SKIN_PROJECTIONS: {
     readonly hero: 1;
-    readonly "usp-strip": 1;
-    readonly "category-tiles": 1;
+    readonly usp_strip: 1;
+    readonly category_tiles: 1;
     readonly collections: 1;
-    readonly "product-rail": 1;
-    readonly "product-grid": 1;
-    readonly "deal-block": 1;
-    readonly "product-tabs": 1;
+    readonly product_rail: 1;
+    readonly product_grid: 1;
+    readonly deal_block: 1;
+    readonly product_tabs: 1;
     readonly lookbook: 1;
     readonly banner: 1;
-    readonly "shop-by": 1;
-    readonly "banner-mosaic": 1;
-    readonly "brand-wall": 1;
+    readonly shop_by: 1;
+    readonly banner_mosaic: 1;
+    readonly brand_wall: 1;
     readonly editorial: 1;
     readonly faq: 1;
     readonly specifications: 1;
-    readonly "utility-cards": 1;
-    readonly "seo-text": 1;
+    readonly utility_cards: 1;
+    readonly seo_text: 1;
     readonly newsletter: 1;
 };
 export interface StorefrontSectionSkinData<Settings = Record<string, unknown>> {
@@ -2887,13 +2915,13 @@ export type StorefrontSkinJob = (SkinJobBase & {
     target: "footer";
     data: StorefrontFooterData;
 }) | (SkinJobBase & {
-    target: "product-card";
+    target: "product_card";
     data: StorefrontProductCardData;
 }) | (SkinJobBase & {
-    target: "product-main";
+    target: "product_main";
     data: StorefrontProductPage;
 }) | (SkinJobBase & {
-    target: "listing-main";
+    target: "listing_main";
     data: StorefrontListingPage;
 }) | (SkinJobBase & {
     target: `section:${string}`;
@@ -2956,12 +2984,15 @@ export interface StorefrontIslandContext {
     assets: string;
     language: string;
     currency: string;
-    formatMoney(amount: number): string;
+    formatMoney(money: {
+        amountMinor: number;
+        currency: string;
+    }): string;
     openCart(): void;
     quickAdd(productUrl: string): Promise<boolean>;
     onCart(listener: (cart: {
         count: number;
-        total: number;
+        total: StorefrontMoney;
     }) => void): () => void;
     fetchApp(path: string, init?: RequestInit): Promise<Response>;
     product?: {

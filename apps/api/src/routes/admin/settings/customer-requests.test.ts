@@ -83,7 +83,7 @@ describe("customer request policy settings", () => {
     expect(stale.status).toBe(409);
     await expect(stale.json()).resolves.toMatchObject({
       error: {
-        code: "SETTINGS_REVISION_CONFLICT",
+        code: "settings_revision_conflict",
         details: { document: "customer_requests", expectedRevision: 0, currentRevision: 1 },
       },
     });

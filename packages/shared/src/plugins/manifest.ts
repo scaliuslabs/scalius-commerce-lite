@@ -20,7 +20,7 @@ import { storefrontComponentsManifestSchema } from "./storefront-components";
 import { PLUGIN_SETTING_KEY, PLUGIN_STOREFRONT_SETTING_TYPES, pluginAppSettingsSchemaSchema, pluginSettingsSchemaSchema, type PluginSettingsSchema } from "./settings-schema";
 import { pluginProvidersSchema } from "./providers/descriptors";
 import { checkoutAttributeSchema } from "./buyer-ui";
-import { STOREFRONT_UI_SLOTS } from "./storefront-protocol";
+import { STOREFRONT_UI_SLOTS, type StorefrontUiSlot } from "./storefront-protocol";
 import { objectTypeDeclarationSchema, OBJECT_TYPE_PATTERN, type ObjectTypeDeclaration } from "./objects";
 import { FUNCTION_READS_MAX, functionReadDeclarationSchema, functionReadIssues } from "./function-reads";
 import { PROVIDER_KINDS } from "./providers/kinds";
@@ -99,7 +99,11 @@ const description = z.string().trim().min(1).max(500);
 
 // ── Extension points ──────────────────────────────────────────────────────
 
-/** Synchronous decision points: pure input → output, strict limits (functions.ts). */
+/**
+ * Synchronous checkout decisions: pure input → output, strict limits
+ * (functions.ts). Content an app shows buyers is not a decision: it is a
+ * storefront extension (`storefront.extensions`).
+ */
 export const PLUGIN_FUNCTION_POINTS = [
   "cart.transform",
   "cart.line_prices",
@@ -107,7 +111,6 @@ export const PLUGIN_FUNCTION_POINTS = [
   "checkout.discounts",
   "checkout.shipping_rates",
   "checkout.payment_methods",
-  "buyer.ui",
 ] as const;
 export type PluginFunctionPoint = (typeof PLUGIN_FUNCTION_POINTS)[number];
 
@@ -221,6 +224,33 @@ const listColumnSchema = z.object({
   filterable: z.boolean().default(false),
 }).strict();
 
+// ── Settings groups ───────────────────────────────────────────────────────
+
+/** The most app-wide settings sections one app declares. */
+export const PLUGIN_SETTINGS_GROUPS_MAX = 20;
+
+/**
+ * An app-wide section of the app's settings page (Polaris: a titled card of
+ * related fields). Fields join one with `settings[].group`; provider-scoped
+ * fields are shown with their provider instead.
+ */
+const settingsGroupSchema = z.object({
+  id: key,
+  title,
+  description: description.optional(),
+  /** Lower comes first; groups with the same order keep the manifest's order. */
+  order: z.number().int().min(0).max(1000).default(100),
+}).strict();
+
+// ── Admin surfaces ────────────────────────────────────────────────────────
+
+/**
+ * Entry kinds the app writes on order timelines (`ctx.timeline.add`), each
+ * with the title staff see. Writing needs the `write_orders` scope.
+ */
+const timelineSchema = z.array(z.object({ kind: key, title }).strict()).max(20).default([])
+  .refine((kinds) => new Set(kinds.map((entry) => entry.kind)).size === kinds.length, "Timeline kinds must be unique.");
+
 const adminSchema = z.object({
   /** Full pages; their content is the declarative UI tree the plugin's admin route returns. */
   pages: z.array(z.object({
@@ -253,14 +283,11 @@ const adminSchema = z.object({
   widgets: z.array(z.object({ id: key, title, route: urlName }).strict()).max(5).default([]),
   /** Columns (and filters) on the products, orders and customers lists. */
   listColumns: z.array(listColumnSchema).max(10).default([]),
+  /** Sections of the app's settings page (`settings[].group`); presentation only. */
+  settingsGroups: z.array(settingsGroupSchema).max(PLUGIN_SETTINGS_GROUPS_MAX).default([]),
+  /** Typed lines the app writes on order timelines (`ctx.timeline.add`). */
+  timeline: timelineSchema,
 }).strict();
-
-/**
- * Entry kinds the app writes on order timelines (`ctx.timeline.add`), each
- * with the title staff see. Writing needs the `write_orders` scope.
- */
-const timelineSchema = z.array(z.object({ kind: key, title }).strict()).max(20).default([])
-  .refine((kinds) => new Set(kinds.map((entry) => entry.kind)).size === kinds.length, "Timeline kinds must be unique.");
 
 /** The pages an app script can name. Buyer pages (cart, checkout, the receipt, account) are not among them. */
 export const PLUGIN_STOREFRONT_SCRIPT_PAGES = ["all", "home", "product", "listing"] as const;
@@ -299,6 +326,19 @@ const storefrontSchema = z.object({
   }).strict()).max(5).default([]),
   /** `/apps/<plugin id>/*` on the storefront origin proxies to the plugin's public routes. */
   proxy: z.boolean().default(false),
+  /**
+   * Buyer UI on the buyer's own pages (cart, checkout, the receipt, account):
+   * one entry per UI slot (`STOREFRONT_UI_SLOTS`). The module's
+   * `extensions[target]` answers a `ui` tree (buyer surface, buyer-ui.ts)
+   * for it; the host draws it, so no app code runs in the buyer's browser.
+   * `reads` are the app's own data the render needs (function-reads.ts), as
+   * a function declares them; one `as` names one read across the app's
+   * extensions.
+   */
+  extensions: z.array(z.object({
+    target: z.enum(STOREFRONT_UI_SLOTS),
+    reads: z.array(functionReadDeclarationSchema).max(FUNCTION_READS_MAX).default([]),
+  }).strict()).max(STOREFRONT_UI_SLOTS.length).default([]),
   // Storefront components (storefront-components.ts): components and skins
   // the storefront module draws, ready-made templates, client islands, the
   // stylesheet and the hosts islands reach.
@@ -308,7 +348,7 @@ const storefrontSchema = z.object({
 /** The empty `storefront` part (a manifest that declares none). */
 function emptyPluginStorefront() {
   return {
-    sections: [], components: [], head: false, scripts: [], proxy: false,
+    sections: [], components: [], head: false, scripts: [], proxy: false, extensions: [],
     skins: [], templates: [], pagePresets: [], islands: [], stylesheet: false, connect: [],
   };
 }
@@ -356,24 +396,6 @@ export function objectFieldLookupIndexed(declaration: Pick<ObjectTypeDeclaration
   const alone = (entry: string | readonly string[]) => (typeof entry === "string" ? entry === field : entry.length === 1 && entry[0] === field);
   return declaration.indexes.some((entry) => lead(entry) === field) || declaration.unique.some(alone);
 }
-
-// ── Settings groups ───────────────────────────────────────────────────────
-
-/** The most app-wide settings sections one app declares. */
-export const PLUGIN_SETTINGS_GROUPS_MAX = 20;
-
-/**
- * An app-wide section of the app's settings page (Polaris: a titled card of
- * related fields). Fields join one with `settings[].group`; provider-scoped
- * fields are shown with their provider instead.
- */
-const settingsGroupSchema = z.object({
-  id: key,
-  title,
-  description: description.optional(),
-  /** Lower comes first; groups with the same order keep the manifest's order. */
-  order: z.number().int().min(0).max(1000).default(100),
-}).strict();
 
 // ── Listing ───────────────────────────────────────────────────────────────
 
@@ -531,7 +553,6 @@ export const pluginManifestSchema = z.object({
     .transform((topics) => topics as EventTopicFilter[]),
   functions: z.array(z.object({
     point: z.enum(PLUGIN_FUNCTION_POINTS),
-    targets: z.array(z.enum(STOREFRONT_UI_SLOTS)).min(1).max(STOREFRONT_UI_SLOTS.length).optional(),
     /** Lower runs first among plugins at the same point. */
     priority: z.number().int().min(0).max(1000).default(100),
     /**
@@ -602,11 +623,7 @@ export const pluginManifestSchema = z.object({
    * only then do its providers, routes, jobs, events and surfaces run.
    */
   features: z.array(pluginFeatureSchema).max(PLUGIN_FEATURES_MAX).default([]),
-  /** App-wide settings sections (`settings[].group`); additive, presentation only. */
-  settingsGroups: z.array(settingsGroupSchema).max(PLUGIN_SETTINGS_GROUPS_MAX).default([]),
-
-  admin: adminSchema.default({ pages: [], cards: [], actions: [], widgets: [], listColumns: [] }),
-  timeline: timelineSchema,
+  admin: adminSchema.default({ pages: [], cards: [], actions: [], widgets: [], listColumns: [], settingsGroups: [], timeline: [] }),
   storefront: storefrontSchema.default(emptyPluginStorefront),
   /** The dashboard text in other languages (additive; English is the manifest itself). */
   translations: z.record(z.string().regex(PLUGIN_TRANSLATION_LOCALE_PATTERN, "Use a BCP 47 language tag such as bn or pt-BR."), pluginTranslationSchema).optional()
@@ -692,7 +709,7 @@ export const pluginManifestSchema = z.object({
         }
       }
     }
-    const timelineKinds = new Set(manifest.timeline.map((entry) => entry.kind));
+    const timelineKinds = new Set(manifest.admin.timeline.map((entry) => entry.kind));
     for (const kind of Object.keys(translation.timeline ?? {})) {
       if (!timelineKinds.has(kind)) context.addIssue({ code: "custom", path: ["translations", locale, "timeline", kind], message: `No timeline kind ${kind} to translate.` });
     }
@@ -712,7 +729,7 @@ export const pluginManifestSchema = z.object({
     for (const id of Object.keys(translation.features ?? {})) {
       if (!featureIds.has(id)) context.addIssue({ code: "custom", path: ["translations", locale, "features", id], message: `No feature ${id} to translate.` });
     }
-    const groups = new Set(manifest.settingsGroups.map((group) => group.id));
+    const groups = new Set(manifest.admin.settingsGroups.map((group) => group.id));
     for (const id of Object.keys(translation.settingsGroups ?? {})) {
       if (!groups.has(id)) context.addIssue({ code: "custom", path: ["translations", locale, "settingsGroups", id], message: `No settings group ${id} to translate.` });
     }
@@ -800,7 +817,6 @@ export const pluginManifestSchema = z.object({
     });
   }
   manifest.functions.forEach((fn, index) => {
-    if ((fn.point === "buyer.ui") !== Boolean(fn.targets?.length)) context.addIssue({ code: "custom", path: ["functions", index, "targets"], message: "Only buyer.ui declares targets, and it requires at least one." });
     if (fn.onError === "block" && !(PLUGIN_BLOCKING_FUNCTION_POINTS as readonly string[]).includes(fn.point)) {
       context.addIssue({ code: "custom", path: ["functions", index, "onError"], message: `Only ${PLUGIN_BLOCKING_FUNCTION_POINTS.join(", ")} may block checkout.` });
     }
@@ -835,14 +851,14 @@ export const pluginManifestSchema = z.object({
       }
     }
   });
-  unique(manifest.settingsGroups.map((group) => group.id), ["settingsGroups"], "Settings group ids");
+  unique(manifest.admin.settingsGroups.map((group) => group.id), ["admin", "settingsGroups"], "Settings group ids");
   const providerIds = new Set(manifest.providers.map((provider) => provider.id));
-  manifest.settingsGroups.forEach((group, index) => {
+  manifest.admin.settingsGroups.forEach((group, index) => {
     if (providerIds.has(group.id)) {
-      context.addIssue({ code: "custom", path: ["settingsGroups", index, "id"], message: `${group.id} is a provider id: provider fields join their provider with group: "${group.id}".` });
+      context.addIssue({ code: "custom", path: ["admin", "settingsGroups", index, "id"], message: `${group.id} is a provider id: provider fields join their provider with group: "${group.id}".` });
     }
   });
-  const groupIds = new Set(manifest.settingsGroups.map((group) => group.id));
+  const groupIds = new Set(manifest.admin.settingsGroups.map((group) => group.id));
   manifest.settings.forEach((field, index) => {
     if (field.group !== undefined && !groupIds.has(field.group) && !providerIds.has(field.group)) {
       context.addIssue({ code: "custom", path: ["settings", index, "group"], message: `Group ${field.group} is neither a settings group nor a provider id.` });
@@ -879,6 +895,27 @@ export const pluginManifestSchema = z.object({
   unique(manifest.storefront.islands.map((island) => island.name), ["storefront", "islands"], "Island names");
   unique(manifest.storefront.connect, ["storefront", "connect"], "Connect hosts");
   unique(manifest.storefront.components.map((component) => component.type), ["storefront", "components"], "Component types");
+  unique(manifest.storefront.extensions.map((extension) => extension.target), ["storefront", "extensions"], "Extension targets");
+  const extensionReads = new Map<string, string>();
+  manifest.storefront.extensions.forEach((extension, index) => {
+    for (const issue of functionReadIssues(extension.reads, {
+      id: manifest.id,
+      objects: manifest.objects,
+      customFields: manifest.customFields,
+      attributes: (manifest.checkout?.attributes ?? []).map((attribute) => attribute.key),
+    })) context.addIssue({ code: "custom", path: ["storefront", "extensions", index, "reads", ...issue.path], message: issue.message });
+    extension.reads.forEach((read, readIndex) => {
+      const declared = JSON.stringify(read);
+      const before = extensionReads.get(read.as);
+      if (before !== undefined && before !== declared) {
+        context.addIssue({ code: "custom", path: ["storefront", "extensions", index, "reads", readIndex, "as"], message: `Read ${read.as} is declared differently by another extension: one name, one read.` });
+      }
+      extensionReads.set(read.as, declared);
+    });
+  });
+  if (extensionReads.size > FUNCTION_READS_MAX) {
+    context.addIssue({ code: "custom", path: ["storefront", "extensions"], message: `An app's extensions declare at most ${FUNCTION_READS_MAX} reads together.` });
+  }
   unique([...manifest.admin.pages, ...manifest.admin.cards, ...manifest.admin.actions, ...manifest.admin.widgets].map((item) => item.id), ["admin"], "Admin ids");
 });
 
@@ -940,6 +977,8 @@ export interface PluginGrantRequest {
   allowedHosts: string[];
   events: EventTopicFilter[];
   functions: PluginFunctionPoint[];
+  /** UI slots of the buyer's own pages the app shows content in (`storefront.extensions`). */
+  extensions: StorefrontUiSlot[];
   /** Function points where the app may pause checkout when it cannot answer (`onError: "block"`). */
   blockingFunctions: PluginFunctionPoint[];
   providers: PluginProviderKind[];
@@ -959,7 +998,7 @@ export interface PluginGrantRequest {
 
 /** The list dimensions of a grant request, in key order. */
 export const PLUGIN_GRANT_LIST_DIMENSIONS = [
-  "allowedHosts", "blockingFunctions", "customFieldOwners", "events", "features", "functions",
+  "allowedHosts", "blockingFunctions", "customFieldOwners", "events", "extensions", "features", "functions",
   "messageRecipients", "providers", "scopes", "storefrontConnect", "storefrontScripts",
 ] as const satisfies ReadonlyArray<keyof PluginGrantRequest>;
 /** The flag dimensions of a grant request, in key order. */
@@ -968,7 +1007,7 @@ export const PLUGIN_GRANT_FLAG_DIMENSIONS = ["publicRoutes", "storefrontCode", "
 /** A grant request with every dimension at its default (asks for nothing). */
 export function emptyPluginGrantRequest(): PluginGrantRequest {
   return {
-    scopes: [], allowedHosts: [], events: [], functions: [], blockingFunctions: [], providers: [],
+    scopes: [], allowedHosts: [], events: [], functions: [], extensions: [], blockingFunctions: [], providers: [],
     publicRoutes: false, storefrontScripts: [], storefrontSurfaces: false, customFieldOwners: [],
     storefrontCode: false, storefrontConnect: [], features: [], messageRecipients: [],
   };
@@ -989,6 +1028,7 @@ export function pluginGrantRequest(declared: PluginManifest, features: Iterable<
     allowedHosts: sorted(manifest.allowedHosts),
     events: sorted(manifest.events),
     functions: sorted(manifest.functions.map((fn) => fn.point)),
+    extensions: sorted(manifest.storefront.extensions.map((extension) => extension.target)),
     blockingFunctions: sorted(manifest.functions.filter((fn) => fn.onError === "block").map((fn) => fn.point)),
     providers: sorted(manifest.providers.map((provider) => provider.kind)),
     publicRoutes: manifest.routes.public.length > 0 || manifest.routes.webhooks.length > 0 || manifest.storefront.proxy,
@@ -1048,6 +1088,7 @@ export function pluginGrantAdditions(granted: PluginGrantRequest | null, next: P
     allowedHosts: added(granted.allowedHosts, next.allowedHosts),
     events: next.events.filter((filter) => !eventFilterCovered(filter, granted.events)),
     functions: added(granted.functions, next.functions),
+    extensions: added(granted.extensions, next.extensions),
     blockingFunctions: added(granted.blockingFunctions, next.blockingFunctions),
     providers: added(granted.providers, next.providers),
     publicRoutes: next.publicRoutes && !granted.publicRoutes,

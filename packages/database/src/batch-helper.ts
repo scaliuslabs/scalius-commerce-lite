@@ -70,8 +70,11 @@ export function safeBatch<T extends readonly SQLiteBatchItem[]>(
 export function buildBatchGuard(
   db: Database,
   successCondition: SQL,
-  failureMarker: string,
+  marker: string,
 ): SQLiteBatchItem {
+  // A guard is often named by the error code it becomes (`brand_revision_conflict`);
+  // the SQL sentinel always spells it upper-case, so it stays distinct in any error text.
+  const failureMarker = marker.toUpperCase();
   if (!BATCH_GUARD_MARKER.test(failureMarker)) {
     throw new Error("Batch guard failure markers must be uppercase identifiers.");
   }
@@ -92,12 +95,13 @@ export function buildBatchGuard(
  */
 export function isBatchGuardError(
   error: unknown,
-  failureMarker: string,
+  marker: string,
 ): boolean {
+  const failureMarker = marker.toUpperCase();
   if (!BATCH_GUARD_MARKER.test(failureMarker)) return false;
 
   const text = collectBatchErrorText(error);
-  if (text.includes(failureMarker)) return true;
+  if (text.toUpperCase().includes(failureMarker)) return true;
   return /malformed json/i.test(text);
 }
 

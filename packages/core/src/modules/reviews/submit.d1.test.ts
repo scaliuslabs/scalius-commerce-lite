@@ -26,14 +26,14 @@ describe("buyer reviews: only delivered lines (R1), uniqueness (R2), access (R7)
   it("refuses lines that are not handed over on a delivered order, and gift-card lines", async () => {
     store.order("ord_1", [{ item: "item_shirt", product: "prod_shirt" }, { item: "item_card", product: "prod_card", type: "gift_card" }]);
     await expect(submitReview(store.db, rahim, { orderItemId: "item_shirt", rating: 5 }))
-      .rejects.toMatchObject({ status: 409, code: "REVIEW_NOT_ELIGIBLE" });
+      .rejects.toMatchObject({ status: 409, code: "review_not_eligible" });
     store.fulfil("ord_1", "item_shirt");
     await expect(submitReview(store.db, rahim, { orderItemId: "item_shirt", rating: 5 }))
-      .rejects.toMatchObject({ code: "REVIEW_NOT_ELIGIBLE" }); // handed over, order not delivered yet
+      .rejects.toMatchObject({ code: "review_not_eligible" }); // handed over, order not delivered yet
     store.fulfil("ord_1", "item_card");
     store.deliver("ord_1");
     await expect(submitReview(store.db, rahim, { orderItemId: "item_card", rating: 5 }))
-      .rejects.toMatchObject({ code: "REVIEW_NOT_ELIGIBLE" });
+      .rejects.toMatchObject({ code: "review_not_eligible" });
     const result = await submitReview(store.db, rahim, { orderItemId: "item_shirt", rating: 4, title: "Good fit" });
     expect(result).toMatchObject({ created: true, published: true, review: { rating: 4, status: "published", displayName: "Abdur R.", variantLabel: "Size M" } });
     expect(store.scalar("SELECT count(*) FROM product_reviews")).toBe(1);
@@ -58,7 +58,7 @@ describe("buyer reviews: only delivered lines (R1), uniqueness (R2), access (R7)
     store.fulfil("ord_old", "item_old", 1, Math.floor(Date.now() / 1000) - 400 * 86_400);
     store.deliver("ord_old");
     await expect(submitReview(store.db, rahim, { orderItemId: "item_old", rating: 5 }))
-      .rejects.toMatchObject({ code: "REVIEW_NOT_ELIGIBLE" });
+      .rejects.toMatchObject({ code: "review_not_eligible" });
     expect(await listReviewableLines(store.db, rahim)).toEqual([]);
   });
 
@@ -84,7 +84,7 @@ describe("buyer reviews: only delivered lines (R1), uniqueness (R2), access (R7)
     const retry = await submitReview(store.db, rahim, { orderItemId: "item_1", rating: 2 });
     expect(retry).toMatchObject({ created: false, review: { id: first.review.id, rating: 5 } });
     await expect(submitReview(store.db, rahim, { orderItemId: "item_2", rating: 4 }))
-      .rejects.toMatchObject({ status: 409, code: "REVIEW_EXISTS", details: { reviewId: first.review.id } });
+      .rejects.toMatchObject({ status: 409, code: "review_exists", details: { reviewId: first.review.id } });
 
     const states = await listLineReviewStates(store.db, { orderId: "ord_2", orderItemIds: ["item_2"], audience: "buyer" });
     expect(states.get("item_2")).toEqual({ eligible: false, review: { id: first.review.id, rating: 5, status: "published" } });
@@ -95,7 +95,7 @@ describe("buyer reviews: only delivered lines (R1), uniqueness (R2), access (R7)
     expect(second.created).toBe(true);
     // The withdrawn line keeps its one review.
     await expect(submitReview(store.db, rahim, { orderItemId: "item_1", rating: 4 }))
-      .rejects.toMatchObject({ code: "REVIEW_EXISTS" });
+      .rejects.toMatchObject({ code: "review_exists" });
   });
 
   it("holds reviews with contact details or links for moderation whatever the rating, and alerts staff", async () => {

@@ -505,7 +505,7 @@ function withOfferCommerceDetails<T extends Record<string, unknown>>(
 
 const primarySchemaVariant = buyerVariants[0] ?? null;
 
-// An app skin of the product page's main part (`apps.skins["product-main"]`):
+// An app skin of the product page's main part (`apps.skins["product_main"]`):
 // drawn from the page's projection around the store's own buy form, else
 // the core breadcrumbs, gallery and buy box. The reviews and related
 // products it places replace the template's modules of the same. The
@@ -525,9 +525,9 @@ const productPageProjection = (): StorefrontProductPage => pageProjection ??= pr
   ],
   price: { current: buyerDisplayedPrice, regular: buyerPricePresentation.pricing.originalPrice, from: buyerPricePresentation.isStartingAt },
   variantPrice: getVariantSchemaPrice,
-  money: (amount) => formatMoney(amount, { code: currencyCode, symbol: currencySymbol }),
+  page: { currencyCode, currencySymbol },
 });
-const productMainSkin = await appSkin(Astro.locals, Astro.url, "product-main");
+const productMainSkin = await appSkin(Astro.locals, Astro.url, "product_main");
 const productMainMarkup = productMainSkin
   ? await renderAppSkin(Astro.locals, Astro.url, productMainSkin, { data: productPageProjection() })
   : null;
@@ -565,7 +565,7 @@ const buyBox = {
   deliveryFacts,
   canPurchaseAny: buyerStockSummary.canPurchaseAny,
 };
-// What a product-main skin's embeds render: the store's own buy box (the
+// What a product_main skin's embeds render: the store's own buy box (the
 // skin owns the description), gallery, reviews and related products.
 const productGalleryProps = {
   product,
@@ -579,7 +579,7 @@ const productGalleryProps = {
   positionLabel: shop.product.photoOf,
 };
 const productEmbeds: EmbedRenderers = {
-  "buy-form": ({ data }) => ({
+  "buy_form": ({ data }) => ({
     component: ProductBuyBox as EmbedRender["component"],
     props: { ...buyBox, summary: { ...buyBox.summary, details: false, title: data.title !== "false" } },
   }),

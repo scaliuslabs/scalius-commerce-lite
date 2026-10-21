@@ -355,7 +355,7 @@ const moveRoute = createRoute({
     tags: ["Admin - Categories"],
     summary: "Move a category in the tree",
     description:
-        "Moves the category and its whole subtree under `parentId` (null: the top level). Refused (400 CATEGORY_PLACEMENT_REFUSED) for a cycle, a fifth level, or a trashed or missing parent.",
+        "Moves the category and its whole subtree under `parentId` (null: the top level). Refused (400 category_placement_refused) for a cycle, a fifth level, or a trashed or missing parent.",
     request: {
         params: z.object({ id: categoryIdSchema }),
         body: { content: { "application/json": { schema: moveCategorySchema } } },

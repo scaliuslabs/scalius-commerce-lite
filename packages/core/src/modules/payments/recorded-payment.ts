@@ -27,7 +27,7 @@ import { resolveOrderCurrencySnapshot } from "./order-currency";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
-const RECORDED_PAYMENT_BATCH_GUARD = "RECORDED_PAYMENT_STATE_CHANGED";
+const RECORDED_PAYMENT_BATCH_GUARD = "recorded_payment_state_changed";
 
 export interface RecordOrderPaymentInput {
   orderId: string;

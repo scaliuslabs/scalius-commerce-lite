@@ -128,6 +128,34 @@ describe("rows stored before scopes", () => {
     expect(upgradeStoredPluginManifest({ scopes: ["read_orders"] })).toEqual({ scopes: ["read_orders"] });
   });
 
+  it("reads a manifest stored before storefront extensions and admin nesting in the current shape", () => {
+    const stored = {
+      id: "acme.notes", name: "Notes", version: "1.0.0", apiVersion: PLUGIN_API_VERSION, description: "Notes.", author: { name: "Acme" },
+      scopes: ["write_orders"],
+      objects: { notes: { name: "Notes", fields: [{ key: "text", name: "Text", type: "multi_line_text" }] } },
+      functions: [
+        { point: "buyer.ui", targets: ["checkout.contact.after", "account.overview"], reads: [{ as: "note", object: "notes", key: "customer" }] },
+        { point: "cart.validate" },
+      ],
+      settings: [{ key: "note", label: "Note", type: "text", group: "texts" }],
+      settingsGroups: [{ id: "texts", title: "Texts" }],
+      timeline: [{ kind: "noted", title: "Note added" }],
+      admin: { pages: [] },
+    };
+    const parsed = parsePluginManifest(upgradeStoredPluginManifest(stored));
+    if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
+    expect(parsed.manifest.functions.map((fn) => fn.point)).toEqual(["cart.validate"]);
+    expect(parsed.manifest.storefront.extensions).toEqual([
+      { target: "checkout.contact.after", reads: [{ as: "note", object: "notes", key: "customer" }] },
+      { target: "account.overview", reads: [{ as: "note", object: "notes", key: "customer" }] },
+    ]);
+    expect(parsed.manifest.admin.settingsGroups.map((group) => group.id)).toEqual(["texts"]);
+    expect(parsed.manifest.admin.timeline).toEqual([{ kind: "noted", title: "Note added" }]);
+    // Idempotent: the current shape reads as itself.
+    const current = upgradeStoredPluginManifest(stored);
+    expect(upgradeStoredPluginManifest(current)).toEqual(current);
+  });
+
   it("never translates a legacy grant into wider scopes: it waits for approval, unless it granted nothing", () => {
     const flags = { allowedHosts: [], events: [], functions: [], blockingFunctions: [], providers: [], publicRoutes: false, storefrontScripts: [], storefrontSurfaces: false, customFieldOwners: [] };
     expect(parseStoredPluginGrant(JSON.stringify({ ...flags, permissions: ["orders.view"] }))).toBeNull();

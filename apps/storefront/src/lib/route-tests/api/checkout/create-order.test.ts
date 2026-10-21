@@ -56,7 +56,7 @@ describe("checkout create-order proxy Origin guard", () => {
       cartKey: "line_1",
       productId: "prod_1",
       variantId: null,
-      code: "PRODUCT_UNAVAILABLE",
+      code: "product_unavailable",
       action: "remove",
       message: "Cotton Panjabi is no longer available.",
       productName: "Cotton Panjabi",
@@ -139,17 +139,17 @@ describe("checkout create-order proxy Origin guard", () => {
   it.each([
     {
       status: 409,
-      errorCode: "CHECKOUT_ATTEMPT_CONFLICT",
+      errorCode: "checkout_attempt_conflict",
       error: "This checkout was already submitted with different details.",
     },
     {
       status: 429,
-      errorCode: "CHECKOUT_RATE_LIMITED",
+      errorCode: "checkout_rate_limited",
       error: "Too many checkout attempts. Please wait before trying again.",
     },
     {
       status: 503,
-      errorCode: "CHECKOUT_CONFIG_UNAVAILABLE",
+      errorCode: "checkout_config_unavailable",
       error: "Checkout is temporarily unavailable. Please try again shortly.",
     },
   ])("preserves backend checkout failure status $status through the proxy", async ({

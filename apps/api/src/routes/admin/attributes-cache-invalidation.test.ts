@@ -178,7 +178,7 @@ describe("admin attribute write behavior", () => {
     await expect(response.json()).resolves.toMatchObject({
       success: false,
       error: {
-        code: "CONFLICT",
+        code: "conflict",
         message: 'Value "Red" already exists for this attribute',
       },
     });

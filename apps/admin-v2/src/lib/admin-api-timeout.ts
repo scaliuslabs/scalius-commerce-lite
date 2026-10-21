@@ -1,5 +1,5 @@
 export const ADMIN_API_READ_TIMEOUT_MS = 15_000;
-export const ADMIN_API_READ_TIMEOUT_CODE = "ADMIN_API_READ_TIMEOUT";
+export const ADMIN_API_READ_TIMEOUT_CODE = "admin_api_read_timeout";
 
 export class AdminApiReadTimeoutError extends Error {
   readonly code = ADMIN_API_READ_TIMEOUT_CODE;

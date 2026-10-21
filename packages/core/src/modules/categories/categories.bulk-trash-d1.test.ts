@@ -108,7 +108,7 @@ describe("category bulk trash D1 boundaries", () => {
     sqlite!.prepare("UPDATE categories SET revision = 2 WHERE id = 'cat_1'").run();
 
     await expect(bulkDeleteCategories(db, claims(2), false)).rejects.toMatchObject({
-      code: "CATEGORY_REVISION_CONFLICT",
+      code: "category_revision_conflict",
       details: {
         categoryId: "cat_1",
         expectedRevision: 1,

@@ -154,7 +154,7 @@ describe("shared component schemas in the agent manifest", () => {
     expect(Object.entries(schemas).filter(([name, schema]) => schema.nullable === true && !nullableByDesign.has(name)).map(([name]) => name))
       .toEqual([]);
     // The section list is written once, not per page or per route.
-    expect(OPENAPI_CONTRACT_JSON.split('"enum":["usp-strip"]').length - 1).toBe(1);
+    expect(OPENAPI_CONTRACT_JSON.split('"enum":["usp_strip"]').length - 1).toBe(1);
   });
 
   it("keeps every full MCP description within one agent result", () => {

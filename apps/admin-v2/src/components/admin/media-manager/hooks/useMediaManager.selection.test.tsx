@@ -295,7 +295,7 @@ describe("useMediaManager trash and delete", () => {
 
   it("explains a refused delete in plain words instead of the server's message", async () => {
     api.permanentlyDeleteFile.mockRejectedValue(
-      new AdminApiResponseError("Remove this media from every saved storefront surface", 409, "MEDIA_DEPENDENCY_CONFLICT"),
+      new AdminApiResponseError("Remove this media from every saved storefront surface", 409, "media_dependency_conflict"),
     );
 
     await act(async () => latest.mutateOne(hookState.files[1]!, "permanent"));

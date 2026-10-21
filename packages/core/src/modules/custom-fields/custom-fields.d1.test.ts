@@ -74,7 +74,7 @@ describe("custom field definitions", () => {
         expect(care).toMatchObject({ namespace: "custom", key: "care_guide", position: 0, revision: 1, storefrontVisible: false });
         expect(fabric).toMatchObject({ key: "fabric", position: 1, validations: { choices: ["Cotton", "Silk"], min: null } });
         const taken = await rejection(define(db, { name: "Care", key: "care_guide", type: "url" }));
-        expect(taken).toMatchObject({ status: 409, code: "CUSTOM_FIELD_KEY_TAKEN" });
+        expect(taken).toMatchObject({ status: 409, code: "custom_field_key_taken" });
         // The same key is free for another owner type.
         await expect(define(db, { ownerType: "variant", name: "Care guide", type: "multi_line_text" })).resolves.toMatchObject({ position: 0 });
         const { definitions } = await listCustomFieldDefinitions(db, { ownerType: "product" });
@@ -88,7 +88,7 @@ describe("custom field definitions", () => {
         expect(hidden).toBeInstanceOf(ValidationError);
         const foreign = await rejection(define(db, { name: "Points", namespace: "acme.loyalty", type: "integer" }));
         expect(foreign).toBeInstanceOf(CustomFieldNamespaceError);
-        expect(foreign).toMatchObject({ status: 403, code: "CUSTOM_FIELD_NAMESPACE_FORBIDDEN" });
+        expect(foreign).toMatchObject({ status: 403, code: "custom_field_namespace_forbidden" });
         // A plugin writes its own namespace (its default) and never `custom`.
         await expect(define(db, { name: "Points", type: "integer" }, plugin("acme.loyalty"))).resolves.toMatchObject({ namespace: "acme.loyalty", key: "points" });
         expect(await rejection(define(db, { name: "Points", namespace: "custom", type: "integer" }, plugin("acme.loyalty")))).toBeInstanceOf(CustomFieldNamespaceError);
@@ -252,7 +252,7 @@ describe("custom field values", () => {
         const rows = await selectStorefrontCustomFieldRows(db, "product", "prod_a").all();
         expect(presentStorefrontCustomFields(rows)).toEqual([
             { namespace: "custom", key: "care", name: "Care", type: "single_line_text", value: "Hand wash" },
-            { namespace: "custom", key: "msrp", name: "MSRP", type: "money", value: 1200 },
+            { namespace: "custom", key: "msrp", name: "MSRP", type: "money", value: { amountMinor: 120000, currency: "BDT" } },
         ]);
     });
 

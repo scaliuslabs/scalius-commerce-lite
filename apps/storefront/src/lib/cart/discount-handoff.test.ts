@@ -557,7 +557,7 @@ describe("cart discount checkout handoff", () => {
       success: true,
       data: {
         valid: false, subtotal: 100, hasFreeDeliveryProduct: false, items: [rice],
-        issues: [{ index: 1, cartKey: mugKey, productId: "prod_2", variantId: "var_2", code: "PRODUCT_UNAVAILABLE", action: "remove",
+        issues: [{ index: 1, cartKey: mugKey, productId: "prod_2", variantId: "var_2", code: "product_unavailable", action: "remove",
           message: "Mug is sold out.", productName: "Mug", variantLabel: null, requestedQuantity: 2, availableQuantity: 0 }],
       },
     }), { status: 200, headers: { "Content-Type": "application/json" } }));

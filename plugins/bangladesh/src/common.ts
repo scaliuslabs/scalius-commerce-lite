@@ -6,7 +6,7 @@ import { ProviderError, type PluginContext } from "@scalius/plugin-sdk";
 /** A text setting, trimmed; a missing one is a misconfiguration (the platform normally refuses the call first). */
 export function requireText(ctx: PluginContext, key: string, label: string): string {
   const text = optionalText(ctx, key);
-  if (!text) throw new ProviderError("misconfigured", `${label} is required.`, { code: "bangladesh.setting_missing" });
+  if (!text) throw new ProviderError("misconfigured", `${label} is required.`, { code: "bangladesh_setting_missing" });
   return text;
 }
 
@@ -16,7 +16,7 @@ export function optionalText(ctx: PluginContext, key: string): string | undefine
   return text || undefined;
 }
 
-/** The stable code of a platform refusal (`http.timeout`, `api.forbidden`), as the SDK runtime raises it. */
+/** The stable code of a platform refusal (`http_timeout`, `api.forbidden`), as the SDK runtime raises it. */
 export function platformErrorCode(error: unknown): string {
   return error instanceof Error && "code" in error && typeof error.code === "string" ? error.code : "";
 }

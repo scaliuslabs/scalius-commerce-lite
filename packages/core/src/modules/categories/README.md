@@ -36,7 +36,7 @@ Public routes are in `apps/api/src/routes/categories.ts` under `/api/v1/categori
 ## Rules
 
 - **Status.** `published` categories alone own public metadata, filters, navigation, discovery and dynamic collection membership. A draft or internal assignment never hides a public product; the product shows without its category identity.
-- **Revision guard.** Edit, status change, move, trash, restore and permanent delete claim `expectedRevision` and advance it by one. A stale claim is `CATEGORY_REVISION_CONFLICT` (409); the wrong lifecycle state is `CATEGORY_STATE_CONFLICT` (409). Bulk writes apply all or none.
+- **Revision guard.** Edit, status change, move, trash, restore and permanent delete claim `expectedRevision` and advance it by one. A stale claim is `category_revision_conflict` (409); the wrong lifecycle state is `category_state_conflict` (409). Bulk writes apply all or none.
 - **Trash and restore force `draft`.** A permanent delete works only from trash.
 - **Slugs.** A typed taken slug is a conflict (trash counts). An omitted slug derives from the name and gets `-2`, `-3` until free.
 - **Canonical path** is `/categories/<current slug>` or blank.
@@ -49,7 +49,7 @@ Public routes are in `apps/api/src/routes/categories.ts` under `/api/v1/categori
 
 Write only `parent_id`. Triggers keep `depth`, `path` (`/root/child/`) and `category_closure` exact. They refuse cycles, a fifth level and trashed or missing parents.
 
-- `categoryPlacementRefusal` runs the same checks first, so the service can explain a refusal. A refusal only the trigger sees (a race) becomes the same `CATEGORY_PLACEMENT_REFUSED` error (`reason`: `cycle`, `too_deep`, `parent_unavailable`).
+- `categoryPlacementRefusal` runs the same checks first, so the service can explain a refusal. A refusal only the trigger sees (a race) becomes the same `category_placement_refused` error (`reason`: `cycle`, `too_deep`, `parent_unavailable`).
 - `moveCategory` moves a whole subtree under the revision. A move to the current parent changes nothing and keeps the revision.
 - Trash rules: a category with live children cannot be trashed unless they go in the same selection. A category whose parent is in trash cannot be restored unless the parent is restored with it. A permanent delete must include every child and deletes deepest first. A trashed category keeps its place.
 - Public reads are bounded. `getPublicCategoryTree` returns at most 150 published nodes whose ancestors are all published (`CATEGORY_TREE_LINK_LIMIT`). `getPublicCategoryChildren` returns at most 100. `getPublicCategoryBreadcrumb` returns at most 4 rows from one closure read. `publicCategorySubtreeCondition` selects a category and its published descendants for listings.

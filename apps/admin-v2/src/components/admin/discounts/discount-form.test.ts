@@ -44,8 +44,8 @@ function record(input: ReturnType<typeof draftToInput>): DiscountRecord {
     conflictPolicy: "best",
     combinesWith: input.combinesWith!,
     title: null,
-    startsAtEpochSeconds: input.startsAtEpochSeconds ?? null,
-    endsAtEpochSeconds: input.endsAtEpochSeconds ?? null,
+    startsAt: input.startsAt ?? null,
+    endsAt: input.endsAt ?? null,
     timezone: "Asia/Dhaka",
     maxRedemptions: input.maxRedemptions ?? null,
     maxRedemptionsPerCustomer: input.maxRedemptionsPerCustomer ?? null,
@@ -55,9 +55,9 @@ function record(input: ReturnType<typeof draftToInput>): DiscountRecord {
     redemptionCount: 0,
     customerRedemptionCount: 0,
     discountSpendMinor: 0,
-    createdAtEpochSeconds: 0,
-    updatedAtEpochSeconds: 0,
-    deletedAtEpochSeconds: null,
+    createdAt: "1970-01-01T00:00:00.000Z",
+    updatedAt: "1970-01-01T00:00:00.000Z",
+    deletedAt: null,
     codes: (input.codes ?? []).map(({ code }) => ({ code, isActive: true })),
     conditions: (input.conditions ?? []).map((condition, index) => ({ id: `c${index}`, ...condition })),
     effects: input.effects.map((effect, index) => ({ id: `e${index}`, ...effect })),
@@ -218,12 +218,13 @@ describe("discount form model", () => {
   });
 
   it("shows ended drafts and live discounts as expired, and spots a spent usage limit", () => {
-    const ended = { startsAtEpochSeconds: NOW_SECONDS - 1_000, endsAtEpochSeconds: NOW_SECONDS - 10 };
+    const iso = (seconds: number) => new Date(seconds * 1_000).toISOString();
+    const ended = { startsAt: iso(NOW_SECONDS - 1_000), endsAt: iso(NOW_SECONDS - 10) };
     expect(discountStatus({ ...ended, status: "draft" }, NOW_SECONDS)).toBe("expired");
     expect(discountStatus({ ...ended, status: "active" }, NOW_SECONDS)).toBe("expired");
     expect(discountStatus({ ...ended, status: "paused" }, NOW_SECONDS)).toBe("inactive");
-    expect(discountStatus({ ...ended, status: "draft", endsAtEpochSeconds: null }, NOW_SECONDS)).toBe("draft");
-    expect(discountStatus({ status: "active", startsAtEpochSeconds: NOW_SECONDS + 60, endsAtEpochSeconds: null }, NOW_SECONDS)).toBe("scheduled");
+    expect(discountStatus({ ...ended, status: "draft", endsAt: null }, NOW_SECONDS)).toBe("draft");
+    expect(discountStatus({ status: "active", startsAt: iso(NOW_SECONDS + 60), endsAt: null }, NOW_SECONDS)).toBe("scheduled");
     expect(limitReached({ maxRedemptions: 1, redemptionCount: 1 })).toBe(true);
     expect(limitReached({ maxRedemptions: 5, redemptionCount: 1 })).toBe(false);
     expect(limitReached({ maxRedemptions: null, redemptionCount: 99 })).toBe(false);

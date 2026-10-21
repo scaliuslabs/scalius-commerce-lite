@@ -23,12 +23,12 @@ const MAX_PACKAGE_BYTES = 20 * 1024 * 1024;
 type Step = { kind: "choose" } | { kind: "untrusted"; developer: string | null } | { kind: "unsigned" };
 
 const REFUSALS: Record<string, AppsLifecycleMessageKey> = {
-  "package.invalid": "packageInvalid",
-  "signature.invalid": "signatureInvalid",
-  "signature.signer_changed": "signerChanged",
-  "installation.incompatible": "incompatible",
-  "installation.source_conflict": "sourceConflict",
-  "installation.sandbox_required": "sandboxRequired",
+  "package_invalid": "packageInvalid",
+  "signature_invalid": "signatureInvalid",
+  "signature_signer_changed": "signerChanged",
+  "installation_incompatible": "incompatible",
+  "installation_source_conflict": "sourceConflict",
+  "installation_sandbox_required": "sandboxRequired",
 };
 
 export function UploadAppDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
@@ -56,12 +56,12 @@ export function UploadAppDialog({ open, onOpenChange }: { open: boolean; onOpenC
     },
     onError: (error) => {
       const { code, developer } = appErrorDetails(error);
-      if (code === "signature.untrusted") {
+      if (code === "signature_untrusted") {
         setProblem(null);
         setStep({ kind: "untrusted", developer });
         return;
       }
-      if (code === "signature.missing") {
+      if (code === "signature_missing") {
         setProblem(null);
         setStep({ kind: "unsigned" });
         return;

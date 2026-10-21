@@ -291,7 +291,7 @@ describe("storefront agent buyer workflow scenarios", () => {
     await expect(mismatch.json()).resolves.toMatchObject({
       success: false,
       error: {
-        code: "VALIDATION_ERROR",
+        code: "validation_error",
         message: "Idempotency-Key header must match body.idempotencyKey.",
       },
     });

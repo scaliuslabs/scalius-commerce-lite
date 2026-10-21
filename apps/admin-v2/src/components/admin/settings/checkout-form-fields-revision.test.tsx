@@ -74,7 +74,7 @@ describe("checkout form fields (the two-tab repro)", () => {
       .mockImplementationOnce(() => Promise.resolve({
         error: {
           error: {
-            code: "SETTINGS_REVISION_CONFLICT",
+            code: "settings_revision_conflict",
             message: "These settings changed in another session.",
             details: { document: "checkout_language", expectedRevision: 0, currentRevision: 1 },
           },

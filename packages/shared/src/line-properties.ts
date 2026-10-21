@@ -376,7 +376,7 @@ export interface ResolvedLineProperty {
   priceMinor: number;
 }
 
-export const LINE_PROPERTY_ISSUE_CODES = ["PROPERTIES_REQUIRED", "PROPERTIES_INVALID"] as const;
+export const LINE_PROPERTY_ISSUE_CODES = ["properties_required", "properties_invalid"] as const;
 export type LinePropertyIssueCode = (typeof LINE_PROPERTY_ISSUE_CODES)[number];
 
 export type ResolveLinePropertiesResult =
@@ -430,7 +430,7 @@ export function canonicalizeLineProperties(
 }
 
 function invalid(key: string | null, reason: string): ResolveLinePropertiesResult {
-  return { ok: false, code: "PROPERTIES_INVALID", key, reason };
+  return { ok: false, code: "properties_invalid", key, reason };
 }
 
 /**
@@ -492,7 +492,7 @@ export function resolveLineProperties(
     const value = values.get(field.key);
     if (value === undefined) {
       if (field.required) {
-        return { ok: false, code: "PROPERTIES_REQUIRED", key: field.key, reason: "required" };
+        return { ok: false, code: "properties_required", key: field.key, reason: "required" };
       }
       continue;
     }

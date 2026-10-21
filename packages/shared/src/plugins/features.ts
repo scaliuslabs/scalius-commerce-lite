@@ -29,6 +29,7 @@ import { z } from "zod";
 import { isEventTopicFilter, type EventTopicFilter } from "../events";
 import { PLUGIN_HOST_PATTERN, pluginKeySchema, pluginUrlNameSchema } from "./manifest-patterns";
 import { PLUGIN_SCOPE_NAMES, type PluginScope } from "./scopes";
+import { STOREFRONT_UI_SLOTS } from "./storefront-protocol";
 import type { PluginManifest } from "./manifest";
 
 /** The most features one app declares. */
@@ -70,12 +71,13 @@ export const pluginFeatureSchema = z.object({
   functions: z.array(z.string().min(1).max(64)).max(16).default([]),
   /** Dashboard pages, cards, actions and widgets (by id; a page id may be kebab-case). */
   admin: urlNames(40),
-  /** Storefront surfaces by their declared names. */
+  /** Storefront surfaces by their declared names; extensions by their UI slot. */
   storefront: z.object({
     sections: keys(32),
     components: keys(16),
     skins: keys(30),
-  }).strict().default({ sections: [], components: [], skins: [] }),
+    extensions: z.array(z.enum(STOREFRONT_UI_SLOTS)).max(STOREFRONT_UI_SLOTS.length).default([]),
+  }).strict().default({ sections: [], components: [], skins: [], extensions: [] }),
 }).strict();
 
 export type PluginFeature = z.output<typeof pluginFeatureSchema>;
@@ -90,7 +92,7 @@ export const pluginFeatureTranslationSchema = z.object({
 // ── Ownership ─────────────────────────────────────────────────────────────
 
 type FeatureManifest = Pick<PluginManifest,
-  "features" | "providers" | "settings" | "settingsGroups" | "routes" | "cron" | "events" | "functions" | "admin" | "storefront">;
+  "features" | "providers" | "settings" | "routes" | "cron" | "events" | "functions" | "admin" | "storefront">;
 
 /** Which feature owns each claimed item, by item kind (absent: the base). */
 export interface PluginFeatureOwners {
@@ -107,6 +109,7 @@ export interface PluginFeatureOwners {
   sections: Map<string, string>;
   components: Map<string, string>;
   skins: Map<string, string>;
+  extensions: Map<string, string>;
 }
 
 /** The owner maps (first claim wins; the manifest refuses a second one). */
@@ -114,7 +117,7 @@ export function pluginFeatureOwners(manifest: FeatureManifest): PluginFeatureOwn
   const owners: PluginFeatureOwners = {
     providers: new Map(), settingsGroups: new Map(), settings: new Map(), adminRoutes: new Map(), publicRoutes: new Map(),
     webhooks: new Map(), cron: new Map(), events: new Map(), functions: new Map(), admin: new Map(),
-    sections: new Map(), components: new Map(), skins: new Map(),
+    sections: new Map(), components: new Map(), skins: new Map(), extensions: new Map(),
   };
   const claim = (map: Map<string, string>, values: readonly string[], feature: string) => {
     for (const value of values) if (!map.has(value)) map.set(value, feature);
@@ -132,6 +135,7 @@ export function pluginFeatureOwners(manifest: FeatureManifest): PluginFeatureOwn
     claim(owners.sections, feature.storefront.sections, feature.id);
     claim(owners.components, feature.storefront.components, feature.id);
     claim(owners.skins, feature.storefront.skins, feature.id);
+    claim(owners.extensions, feature.storefront.extensions, feature.id);
   }
   // A field belongs to the feature of its group: a provider's or a settings group's.
   for (const field of manifest.settings) {
@@ -170,7 +174,6 @@ export function pluginManifestWithFeatures(manifest: PluginManifest, enabled: It
     allowedHosts: union(manifest.allowedHosts, onFeatures.flatMap((feature) => feature.allowedHosts)),
     providers: manifest.providers.filter((provider) => keep(owners.providers, provider.id)),
     settings: manifest.settings.filter((field) => keep(owners.settings, field.key)),
-    settingsGroups: manifest.settingsGroups.filter((group) => keep(owners.settingsGroups, group.id)),
     routes: {
       admin: manifest.routes.admin.filter((route) => keep(owners.adminRoutes, route.name)),
       public: manifest.routes.public.filter((route) => keep(owners.publicRoutes, route.name)),
@@ -185,12 +188,14 @@ export function pluginManifestWithFeatures(manifest: PluginManifest, enabled: It
       cards: manifest.admin.cards.filter((card) => keep(owners.admin, card.id)),
       actions: manifest.admin.actions.filter((action) => keep(owners.admin, action.id)),
       widgets: manifest.admin.widgets.filter((widget) => keep(owners.admin, widget.id)),
+      settingsGroups: manifest.admin.settingsGroups.filter((group) => keep(owners.settingsGroups, group.id)),
     },
     storefront: {
       ...manifest.storefront,
       sections: manifest.storefront.sections.filter((section) => keep(owners.sections, section.type)),
       components: manifest.storefront.components.filter((component) => keep(owners.components, component.type)),
       skins: manifest.storefront.skins.filter((skin) => keep(owners.skins, skin.id)),
+      extensions: manifest.storefront.extensions.filter((extension) => keep(owners.extensions, extension.target)),
     },
   };
 }
@@ -255,7 +260,7 @@ export function pluginFeatureIssues(manifest: PluginManifest): Issue[] {
 
   const declared = {
     providers: new Set(manifest.providers.map((provider) => provider.id)),
-    settingsGroups: new Set(manifest.settingsGroups.map((group) => group.id)),
+    settingsGroups: new Set(manifest.admin.settingsGroups.map((group) => group.id)),
     adminRoutes: new Set(manifest.routes.admin.map((route) => route.name)),
     publicRoutes: new Set(manifest.routes.public.map((route) => route.name)),
     webhooks: new Set(manifest.routes.webhooks.map((route) => route.name)),
@@ -266,6 +271,7 @@ export function pluginFeatureIssues(manifest: PluginManifest): Issue[] {
     sections: new Set(manifest.storefront.sections.map((section) => section.type)),
     components: new Set(manifest.storefront.components.map((component) => component.type)),
     skins: new Set(manifest.storefront.skins.map((skin) => skin.id)),
+    extensions: new Set<string>(manifest.storefront.extensions.map((extension) => extension.target)),
   };
   const claimed = new Map<string, string>();
   manifest.features.forEach((feature, index) => {
@@ -292,6 +298,7 @@ export function pluginFeatureIssues(manifest: PluginManifest): Issue[] {
     check("sections", feature.storefront.sections, at("storefront", "sections"), "Section");
     check("components", feature.storefront.components, at("storefront", "components"), "Component");
     check("skins", feature.storefront.skins, at("storefront", "skins"), "Skin");
+    check("extensions", feature.storefront.extensions, at("storefront", "extensions"), "Extension");
     feature.scopes.forEach((scope, scopeIndex) => {
       if (manifest.scopes.includes(scope)) issues.push({ path: at("scopes", scopeIndex), message: `${scope} is already a base scope of the app.` });
     });

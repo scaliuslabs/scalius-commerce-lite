@@ -640,7 +640,7 @@ app.openapi(createRoute({
   path: "/theme/restore",
   tags: ["Admin - Settings"],
   summary: "Put a published version in the draft (it goes live only when the draft is published)",
-  description: "A version that names images deleted from Files since is refused with THEME_VERSION_IMAGES_MISSING (details.missingImages: how many); send withoutMissingImages to restore it without them (slides, cards and tiles showing one are left out, other images become empty).",
+  description: "A version that names images deleted from Files since is refused with theme_version_images_missing (details.missingImages: how many); send withoutMissingImages to restore it without them (slides, cards and tiles showing one are left out, other images become empty).",
   operationId: "dashboard.theme.version_restore",
   request: {
     body: {

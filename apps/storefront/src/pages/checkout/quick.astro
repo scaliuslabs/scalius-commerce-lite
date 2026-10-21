@@ -297,7 +297,7 @@ if (!codAvailable) {
     errorMessage =
       (ruleErrors
         ? copy.cartRulesBlockedText
-        : "errorCode" in result && result.errorCode === "STOREFRONT_CHECKOUT_QUOTE_CONFLICT"
+        : "errorCode" in result && result.errorCode === "storefront_checkout_quote_conflict"
           ? copy.totalChangedReviewText
           : typeof resultError === "string"
             ? resultError

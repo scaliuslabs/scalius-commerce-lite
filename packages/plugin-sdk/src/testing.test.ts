@@ -83,7 +83,7 @@ describe("harness migrations", () => {
 
   it("refuses a migration the manifest does not declare", async () => {
     const harness = createPluginTestHarness({ default: plugin() });
-    expect(await harness.runMigration(9)).toMatchObject({ ok: false, error: { code: "plugin.no_handler" } });
+    expect(await harness.runMigration(9)).toMatchObject({ ok: false, error: { code: "plugin_no_handler" } });
   });
 });
 
@@ -101,7 +101,7 @@ describe("the harness is as strict as the platform", () => {
   it("returns the host's function.invalid_output for an answer production would skip", async () => {
     const harness = createPluginTestHarness({ default: strict({ prices: [{ lineId: "line_1", unitPriceMinor: 0.5 }] }) });
     const result = await harness.fn("cart.line_prices", { cart: fixtures.cart(), lines: [{ lineId: "line_1", source: "base", bundle: null }] });
-    expect(result).toMatchObject({ ok: false, value: null, error: { code: "function.invalid_output" } });
+    expect(result).toMatchObject({ ok: false, value: null, error: { code: "function_invalid_output" } });
     expect(result.error?.message).toMatch(/^Invalid cart\.line_prices output at prices\.0\.unitPriceMinor: /);
   });
 
@@ -115,7 +115,7 @@ describe("the harness is as strict as the platform", () => {
 
   it("never lets read_customers relay mail to any address, as the host does", async () => {
     const refused = createPluginTestHarness({ default: strict({ prices: [] }, ["read_customers"]) });
-    expect(await refused.deliver(fixtures.event("order.created"))).toMatchObject({ ok: false, error: { code: "messaging.recipient_not_allowed" } });
+    expect(await refused.deliver(fixtures.event("order.created"))).toMatchObject({ ok: false, error: { code: "messaging_recipient_not_allowed" } });
     expect(refused.sent.emails).toEqual([]);
     const any = createPluginTestHarness({ default: strict({ prices: [] }, ["send_messages_any"]) });
     expect(await any.deliver(fixtures.event("order.created"))).toMatchObject({ ok: true });
@@ -144,9 +144,9 @@ describe("the harness is as strict as the platform", () => {
     const harness = createPluginTestHarness({ default: app() }, { staff: ["Owner@Shop.test"] });
     const send = (body: Record<string, unknown>) => harness.route("admin", "send", { method: "POST", body });
     expect(await send({ to: "owner@shop.test" })).toMatchObject({ ok: true });
-    expect(await send({ to: "reader@example.test" })).toMatchObject({ ok: false, error: { code: "messaging.recipient_not_allowed" } });
+    expect(await send({ to: "reader@example.test" })).toMatchObject({ ok: false, error: { code: "messaging_recipient_not_allowed" } });
     expect(await send({ to: "reader@example.test", subscribe: "reader@example.test" })).toMatchObject({ ok: true });
-    expect(await send({ customerId: "cus_1" })).toMatchObject({ ok: false, error: { code: "messaging.not_allowed" } });
+    expect(await send({ customerId: "cus_1" })).toMatchObject({ ok: false, error: { code: "messaging_not_allowed" } });
     expect(harness.sent.emails).toHaveLength(2);
     const customers = createPluginTestHarness({ default: app(["read_customers"]) });
     expect(await customers.route("admin", "send", { method: "POST", body: { customerId: "cus_1" } })).toMatchObject({ ok: true });
@@ -156,7 +156,7 @@ describe("the harness is as strict as the platform", () => {
       events: { "order.created": async (event, ctx) => void await ctx.messaging.email({ to: "a@example.test", subject: "Big", html: "অ".repeat(40_000) }) },
     });
     expect(await createPluginTestHarness({ default: big }).deliver(fixtures.event("order.created")))
-      .toMatchObject({ ok: false, error: { code: "messaging.invalid", message: expect.stringContaining("html is text of at most 102400 bytes.") } });
+      .toMatchObject({ ok: false, error: { code: "messaging_invalid", message: expect.stringContaining("html is text of at most 102400 bytes.") } });
   });
 });
 
@@ -193,7 +193,7 @@ describe("money in objects and custom fields", () => {
     });
     expect(harness.records.get("wallets")!.get("cus_1")).toEqual({ balance: 125000, history: [125000, 125000] });
     for (const refused of [1250, "1250.00", { amountMinor: 125000, currency: "USD" }]) {
-      expect(await harness.route("admin", "credit", { method: "POST", body: { balance: refused } })).toMatchObject({ ok: false, error: { code: "object.invalid" } });
+      expect(await harness.route("admin", "credit", { method: "POST", body: { balance: refused } })).toMatchObject({ ok: false, error: { code: "object_invalid" } });
     }
   });
 });

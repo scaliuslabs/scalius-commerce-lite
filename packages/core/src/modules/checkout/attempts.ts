@@ -43,7 +43,7 @@ export type CheckoutAttemptReplayResult<TResponse> = { status: "replay"; respons
 
 const CHECKOUT_ATTEMPT_REQUEST_KEY_PREFIX = "checkout_submit:v1:";
 const CHECKOUT_STATUS_TOKEN_PREFIX = "cst_";
-const CHECKOUT_ATTEMPT_ATOMIC_COMMIT_CONFLICT = "CHECKOUT_ATTEMPT_ATOMIC_COMMIT_CONFLICT";
+const CHECKOUT_ATTEMPT_ATOMIC_COMMIT_CONFLICT = "checkout_attempt_atomic_commit_conflict";
 
 export type CheckoutAttemptRow = typeof checkoutAttempts.$inferSelect & {
   linkedOrderId: string | null;
@@ -72,7 +72,7 @@ export function isEndedCheckoutOrder(order: {
 
 class CheckoutAttemptError extends ConflictError {
   constructor(
-    public override readonly code: "CHECKOUT_ATTEMPT_EXPIRED" | "CHECKOUT_ATTEMPT_CONFLICT",
+    public override readonly code: "checkout_attempt_expired" | "checkout_attempt_conflict",
     message: string,
     public override readonly details?: { orderId: string; paymentMethod: string | null },
   ) {
@@ -166,7 +166,7 @@ export function resolveCheckoutAttemptRow<TResponse>(
     paidAmountMinor: existing.linkedOrderPaidAmountMinor,
   })) {
     throw new CheckoutAttemptError(
-      "CHECKOUT_ATTEMPT_EXPIRED",
+      "checkout_attempt_expired",
       "This checkout has ended. Return to your cart to review it and start a new checkout.",
     );
   }
@@ -304,7 +304,7 @@ function assertSameCheckoutRequest(
   if (!row) return;
   if (row.requestHash !== identity.requestHash) {
     throw new CheckoutAttemptError(
-      "CHECKOUT_ATTEMPT_CONFLICT",
+      "checkout_attempt_conflict",
       "An earlier checkout already uses this request. Review that checkout before placing another order.",
       row.linkedOrderId ? { orderId: row.linkedOrderId, paymentMethod: row.linkedOrderPaymentMethod } : undefined,
     );

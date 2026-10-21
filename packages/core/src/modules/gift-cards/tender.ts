@@ -20,12 +20,12 @@ import { convertStoreCurrencyMinor, type StoreCurrencyRate } from "@scalius/shar
 import { deriveGiftCardKeys, hashGiftCardCode, type GiftCardKeys } from "./crypto";
 import { openGiftCardApplyHandle, sealGiftCardApplyHandle } from "./apply-handle";
 
-export const GIFT_CARD_UNUSABLE_CODE = "GIFT_CARD_UNUSABLE";
+export const GIFT_CARD_UNUSABLE_CODE = "gift_card_unusable";
 export const GIFT_CARD_UNUSABLE_MESSAGE = "This gift card can't be used.";
-export const GIFT_CARD_NOT_FOUND_CODE = "GIFT_CARD_NOT_FOUND";
+export const GIFT_CARD_NOT_FOUND_CODE = "gift_card_not_found";
 export const GIFT_CARD_NOT_FOUND_MESSAGE = "We couldn't find a gift card with that code. Check it and try again.";
 /** Cart issue / error code when a card changed between the quote and the order (§4.3). */
-export const GIFT_CARD_CHANGED_CODE = "GIFT_CARD_CHANGED";
+export const GIFT_CARD_CHANGED_CODE = "gift_card_changed";
 export const GIFT_CARD_CHANGED_MESSAGE = "Your gift card balance changed; review and place the order again.";
 
 export class GiftCardUnusableError extends AppError {
@@ -183,7 +183,7 @@ export async function resolveGiftCardTenderCards(
     if (input.handles.length === 0) return { cards: [], unusableHandles: [] };
     if (!input.masterSecret) return { cards: [], unusableHandles: [...input.handles] };
     if (input.handles.length > MAX_GIFT_CARDS_PER_ORDER) {
-        throw new AppError(400, "GIFT_CARD_LIMIT", `Use at most ${MAX_GIFT_CARDS_PER_ORDER} gift cards on one order.`);
+        throw new AppError(400, "gift_card_limit", `Use at most ${MAX_GIFT_CARDS_PER_ORDER} gift cards on one order.`);
     }
     const opened = await Promise.all(input.handles.map(async (handle) => ({
         handle,

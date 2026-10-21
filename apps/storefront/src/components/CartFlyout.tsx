@@ -295,7 +295,7 @@ export default function CartFlyout({ onReady }: Props) {
     }
     const issue = issues[addedKey];
     const line = cart.items[addedKey];
-    if (!line || issue?.code !== "QUANTITY_UNAVAILABLE" || typeof issue.availableQuantity !== "number") return;
+    if (!line || issue?.code !== "quantity_unavailable" || typeof issue.availableQuantity !== "number") return;
     const left = Math.max(0, Math.floor(issue.availableQuantity));
     // The buyer asked for more than is left: the line takes what is left,
     // instead of an "added" note beside an error on the same line.

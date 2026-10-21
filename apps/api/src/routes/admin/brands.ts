@@ -2,6 +2,7 @@
 // writes. Every write is buyer-visible (brand page, product brand line, feed
 // and JSON-LD brand); database triggers advance the affected dependencies.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { nullableIsoTimestampSchema } from "../../schemas/timestamps";
 import {
   createBrand,
   getBrandById,
@@ -54,9 +55,9 @@ const brandRowSchema = z.object({
   excludeFromSitemap: z.boolean(),
   productCount: z.number().int().min(0),
   logo: logoSchema.nullable(),
-  createdAt: z.string().nullable(),
-  updatedAt: z.string().nullable(),
-  deletedAt: z.string().nullable(),
+  createdAt: nullableIsoTimestampSchema,
+  updatedAt: nullableIsoTimestampSchema,
+  deletedAt: nullableIsoTimestampSchema,
 });
 
 const brandDetailSchema = brandRowSchema.extend({

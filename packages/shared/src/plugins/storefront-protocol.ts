@@ -16,7 +16,7 @@ export const STOREFRONT_COMPONENT_ABI = 1 as const;
  * unit's public projection (the data the core renderer uses), and core draws
  * the unit whenever the skin is missing, fails or draws nothing.
  */
-export const STOREFRONT_SKIN_UNITS = ["header", "footer", "product-card", "product-main", "listing-main"] as const;
+export const STOREFRONT_SKIN_UNITS = ["header", "footer", "product_card", "product_main", "listing_main"] as const;
 export type StorefrontSkinUnit = (typeof STOREFRONT_SKIN_UNITS)[number];
 /** A core section's skin targets `section:<core section type>` (`section:hero`). */
 export const STOREFRONT_SECTION_SKIN_PREFIX = "section:";
@@ -37,7 +37,7 @@ export type StorefrontSkinTarget = StorefrontSkinUnit | `section:${string}`;
 //   component with its default values. `page` is an app page that a proxy
 //   route answers.
 // - **UI slots** are on the buyer's own pages (cart, checkout, the receipt,
-//   the account), where no app code runs: a `buyer.ui` function answers a
+//   the account), where no app code runs: a storefront extension answers a
 //   `ui` tree (ui.ts, buyer surface) and the store draws it.
 //
 // A slot nobody fills renders nothing and costs no read.
@@ -69,7 +69,7 @@ export function storefrontComponentProductSlot(targets: readonly string[]): Stor
 export const STOREFRONT_COMPONENT_TARGETS = [...STOREFRONT_COMPONENT_SLOTS, "page"] as const;
 export type StorefrontComponentTarget = (typeof STOREFRONT_COMPONENT_TARGETS)[number];
 
-/** Slots on the buyer's own pages that `buyer.ui` trees fill, with the page group that draws each. */
+/** Slots on the buyer's own pages that storefront extensions (`storefront.extensions`) fill, with the page group that draws each. */
 export const STOREFRONT_UI_SLOT_PAGES = {
   // The cart page (checkout's information step).
   "checkout.contact.after": "checkout",
@@ -100,7 +100,7 @@ export function storefrontUiSlotsOn(page: StorefrontUiSlotPage): StorefrontUiSlo
  * and scripts, so an app composes the store's buy form, filters and paging
  * instead of re-implementing them. The markup around an embed is the app's.
  *
- * - `buy-form`: the product's price, options, buyer inputs, quantity and
+ * - `buy_form`: the product's price, options, buyer inputs, quantity and
  *   buttons (a real form; works before hydration). `data-title="false"`
  *   leaves out its heading when the skin draws the product title itself.
  * - `reviews`, `recommendations`: the product's reviews and related products.
@@ -108,14 +108,14 @@ export function storefrontUiSlotsOn(page: StorefrontUiSlotPage): StorefrontUiSlo
  *   them (one main image with thumbnails, a swipeable stage on phones,
  *   zoom, and the chosen SKU's photo when a variant is picked).
  * - `filters`, `toolbar` (sort and page size), `pagination`: the listing's.
- * - `order-form`: the single-page order form of a landing page, for a
+ * - `order_form`: the single-page order form of a landing page, for a
  *   product the section was given (`data-product`, `data-max-quantity`,
  *   `data-submit-label`).
  * - `slot`: a component slot of the unit (`data-name`, `<Slot name="…" />`),
  *   where active apps' components render (a header skin places
  *   `header.actions`, a footer skin `footer.columns`).
  */
-export const STOREFRONT_EMBED_KINDS = ["buy-form", "reviews", "recommendations", "filters", "toolbar", "pagination", "order-form", "gallery", "slot"] as const;
+export const STOREFRONT_EMBED_KINDS = ["buy_form", "reviews", "recommendations", "filters", "toolbar", "pagination", "order_form", "gallery", "slot"] as const;
 export type StorefrontEmbedKind = (typeof STOREFRONT_EMBED_KINDS)[number];
 export const STOREFRONT_EMBED_TAG = "scalius-embed";
 
@@ -140,14 +140,14 @@ const NO_EMBEDS: StorefrontEmbedRule = { allowed: {}, required: [], appended: []
 export function storefrontEmbedRule(unit: "section" | "component" | StorefrontSkinTarget): StorefrontEmbedRule {
   switch (unit) {
     case "section":
-      return { allowed: { "order-form": 2 }, required: [], appended: [] };
+      return { allowed: { "order_form": 2 }, required: [], appended: [] };
     case "header":
       return { allowed: { slot: 1 }, required: [], appended: [], slots: ["header.actions"] };
     case "footer":
       return { allowed: { slot: 1 }, required: [], appended: [], slots: ["footer.columns"] };
-    case "product-main":
-      return { allowed: { "buy-form": 1, reviews: 1, recommendations: 1, gallery: 1 }, required: ["buy-form"], appended: [] };
-    case "listing-main":
+    case "product_main":
+      return { allowed: { "buy_form": 1, reviews: 1, recommendations: 1, gallery: 1 }, required: ["buy_form"], appended: [] };
+    case "listing_main":
       return { allowed: { filters: 1, toolbar: 1, pagination: 1 }, required: [], appended: ["pagination"] };
     default:
       return NO_EMBEDS;
@@ -254,9 +254,14 @@ export interface StorefrontImage {
   alt: string;
 }
 
-/** An amount in the page's currency: the number and the store's formatting of it. */
+/**
+ * An amount of money, as every app boundary carries it: integer minor units
+ * of `currency` (ISO 4217), with the store's text for it on this page
+ * (`formatted`, the format of the store's own prices).
+ */
 export interface StorefrontMoney {
-  amount: number;
+  amountMinor: number;
+  currency: string;
   formatted: string;
 }
 
@@ -282,8 +287,8 @@ export interface StorefrontProductCard {
   needsOptions: boolean;
   /** Short facts the store shows on cards (key specs, delivery). */
   facts: string[];
-  /** Requested storefront-visible custom fields, keyed by namespace.key. */
-  fields: Record<string, CustomFieldWireValue>;
+  /** Requested storefront-visible custom fields, keyed by namespace.key (money as `StorefrontMoney`). */
+  fields: Record<string, CustomFieldWireValue | StorefrontMoney | StorefrontMoney[]>;
 }
 
 /** A navigation entry: a title, a store path or https link, and its children (three levels at most). */
@@ -359,14 +364,14 @@ export interface StorefrontFooterData {
   year: number;
 }
 
-/** What a product-card skin gets: the card, its place in its list, and whether it shows before the first scroll. */
+/** What a product_card skin gets: the card, its place in its list, and whether it shows before the first scroll. */
 export interface StorefrontProductCardData {
   product: StorefrontProductCard;
   position: number;
   aboveFold: boolean;
 }
 
-/** Storefront-visible custom fields, by `<namespace>.<key>` (JSON per type; money in major units). */
+/** Storefront-visible custom fields, by `<namespace>.<key>` (JSON per type; money as `StorefrontMoney`). */
 export type StorefrontFieldValues = Record<string, unknown>;
 
 /** A page link: its title and store path. */
@@ -376,9 +381,9 @@ export interface StorefrontLink {
 }
 
 /**
- * What a product-main skin and a product block get: the product as the core
+ * What a product_main skin and a product block get: the product as the core
  * product page shows it, priced in the page's market. Availability is a
- * band, never a quantity. The buy form (`<scalius-embed kind="buy-form">`)
+ * band, never a quantity. The buy form (`<scalius-embed kind="buy_form">`)
  * is the only way to buy: it keeps price and stock current as the buyer
  * chooses options.
  */
@@ -443,7 +448,7 @@ export interface StorefrontProductState {
   inputs: Record<string, string>;
 }
 
-/** What a listing-main skin gets: the listing as the core listing page shows it (this page of it). */
+/** What a listing_main skin gets: the listing as the core listing page shows it (this page of it). */
 export interface StorefrontListingPage {
   kind: "category" | "collection" | "brand" | "search";
   title: string;
@@ -647,23 +652,23 @@ export interface StorefrontNewsletterSkinSettings {
 /** Each skinnable core section type's projection (`data.settings` of a `section:<type>` skin). */
 export interface StorefrontSectionSkinSettings {
   hero: StorefrontHeroSkinSettings;
-  "usp-strip": StorefrontUspStripSkinSettings;
-  "category-tiles": StorefrontCategoryTilesSkinSettings;
+  "usp_strip": StorefrontUspStripSkinSettings;
+  "category_tiles": StorefrontCategoryTilesSkinSettings;
   collections: StorefrontCollectionsSkinSettings;
-  "product-rail": StorefrontProductRailSkinSettings;
-  "product-grid": StorefrontProductGridSkinSettings;
-  "deal-block": StorefrontDealBlockSkinSettings;
-  "product-tabs": StorefrontProductTabsSkinSettings;
+  "product_rail": StorefrontProductRailSkinSettings;
+  "product_grid": StorefrontProductGridSkinSettings;
+  "deal_block": StorefrontDealBlockSkinSettings;
+  "product_tabs": StorefrontProductTabsSkinSettings;
   lookbook: StorefrontLookbookSkinSettings;
   banner: StorefrontBannerSkinSettings;
-  "shop-by": StorefrontShopBySkinSettings;
-  "banner-mosaic": StorefrontBannerMosaicSkinSettings;
-  "brand-wall": StorefrontBrandWallSkinSettings;
+  "shop_by": StorefrontShopBySkinSettings;
+  "banner_mosaic": StorefrontBannerMosaicSkinSettings;
+  "brand_wall": StorefrontBrandWallSkinSettings;
   editorial: StorefrontEditorialSkinSettings;
   faq: StorefrontFaqSkinSettings;
   specifications: StorefrontSpecificationsSkinSettings;
-  "utility-cards": StorefrontUtilityCardsSkinSettings;
-  "seo-text": StorefrontSeoTextSkinSettings;
+  "utility_cards": StorefrontUtilityCardsSkinSettings;
+  "seo_text": StorefrontSeoTextSkinSettings;
   newsletter: StorefrontNewsletterSkinSettings;
 }
 /** A core section type a skin may draw (`section:<type>`). */
@@ -676,23 +681,23 @@ export type StorefrontSkinnableSection = keyof StorefrontSectionSkinSettings;
  */
 export const STOREFRONT_SECTION_SKIN_PROJECTIONS = {
   hero: 1,
-  "usp-strip": 1,
-  "category-tiles": 1,
+  "usp_strip": 1,
+  "category_tiles": 1,
   collections: 1,
-  "product-rail": 1,
-  "product-grid": 1,
-  "deal-block": 1,
-  "product-tabs": 1,
+  "product_rail": 1,
+  "product_grid": 1,
+  "deal_block": 1,
+  "product_tabs": 1,
   lookbook: 1,
   banner: 1,
-  "shop-by": 1,
-  "banner-mosaic": 1,
-  "brand-wall": 1,
+  "shop_by": 1,
+  "banner_mosaic": 1,
+  "brand_wall": 1,
   editorial: 1,
   faq: 1,
   specifications: 1,
-  "utility-cards": 1,
-  "seo-text": 1,
+  "utility_cards": 1,
+  "seo_text": 1,
   newsletter: 1,
 } as const satisfies Record<StorefrontSkinnableSection, number>;
 
@@ -763,9 +768,9 @@ interface SkinJobBase {
 export type StorefrontSkinJob =
   | (SkinJobBase & { target: "header"; data: StorefrontHeaderData })
   | (SkinJobBase & { target: "footer"; data: StorefrontFooterData })
-  | (SkinJobBase & { target: "product-card"; data: StorefrontProductCardData })
-  | (SkinJobBase & { target: "product-main"; data: StorefrontProductPage })
-  | (SkinJobBase & { target: "listing-main"; data: StorefrontListingPage })
+  | (SkinJobBase & { target: "product_card"; data: StorefrontProductCardData })
+  | (SkinJobBase & { target: "product_main"; data: StorefrontProductPage })
+  | (SkinJobBase & { target: "listing_main"; data: StorefrontListingPage })
   | (SkinJobBase & {
     target: `section:${string}`;
     /** The theme's id of the section placement. */
@@ -777,7 +782,7 @@ export type StorefrontRenderJob =
   | {
     id: string;
     kind: "section";
-    /** Published records from the section's declared public object reads. */
+    /** Published records from the section's declared public object reads (money fields as `StorefrontMoney`). */
     objects?: Record<string, { records: Array<{ id: string; handle: string | null; data: Record<string, unknown> }>; fields: Record<string, string> }>;
     /** The manifest section type. */
     type: string;
@@ -841,8 +846,8 @@ export interface StorefrontIslandContext {
   /** The page's language (BCP 47). */
   language: string;
   currency: string;
-  /** Formats an amount in the page's currency as the store does. */
-  formatMoney(amount: number): string;
+  /** Formats an amount (integer minor units of its currency) as the store does. */
+  formatMoney(money: { amountMinor: number; currency: string }): string;
   /** Opens the cart drawer. */
   openCart(): void;
   /**
@@ -852,7 +857,7 @@ export interface StorefrontIslandContext {
    */
   quickAdd(productUrl: string): Promise<boolean>;
   /** Calls the cart's listener now and on every change; returns the unsubscribe. */
-  onCart(listener: (cart: { count: number; total: number }) => void): () => void;
+  onCart(listener: (cart: { count: number; total: StorefrontMoney }) => void): () => void;
   /** Calls the app's public routes through the storefront proxy (`/apps/<plugin id>/<path>`). */
   fetchApp(path: string, init?: RequestInit): Promise<Response>;
   /**

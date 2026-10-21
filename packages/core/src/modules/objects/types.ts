@@ -17,12 +17,12 @@ export type ObjectWriter = { kind: "merchant" } | { kind: "plugin"; pluginId: st
 export const MERCHANT_OBJECT_WRITER: ObjectWriter = Object.freeze({ kind: "merchant" });
 export class ObjectRevisionConflictError extends AppError {
   constructor(id: string, expectedRevision: number) {
-    super(409, "OBJECT_REVISION_CONFLICT", "This changed while you were editing. Reload it and try again.", { id, expectedRevision });
+    super(409, "object_revision_conflict", "This changed while you were editing. Reload it and try again.", { id, expectedRevision });
   }
 }
 export class ObjectNamespaceError extends AppError {
   constructor(namespace: string) {
-    super(403, "OBJECT_NAMESPACE_FORBIDDEN", namespace === OBJECT_MERCHANT_NAMESPACE
+    super(403, "object_namespace_forbidden", namespace === OBJECT_MERCHANT_NAMESPACE
       ? "This object type belongs to the merchant." : `This object type belongs to the app ${namespace}; its manifest changes it.`, { namespace });
   }
 }
@@ -93,11 +93,11 @@ export async function createObjectType(db: Database, input: ObjectTypeInput, wri
   const namespace = namespaceOf(writer);
   const spec = await parseType(db, input);
   const total = await db.select({ n: count() }).from(objectTypes).get();
-  if (Number(total?.n ?? 0) >= OBJECT_TYPES_MAX) throw new AppError(409, "OBJECT_LIMIT", `A store holds at most ${OBJECT_TYPES_MAX} object types.`);
+  if (Number(total?.n ?? 0) >= OBJECT_TYPES_MAX) throw new AppError(409, "object_limit", `A store holds at most ${OBJECT_TYPES_MAX} object types.`);
   const id = objectTypeId(namespace, spec.type);
   const inserted = await db.insert(objectTypes).values({ id, namespace, type: spec.type, ...values(spec, namespace) })
     .onConflictDoNothing().returning();
-  if (!inserted.length) throw new AppError(409, "OBJECT_TYPE_TAKEN", `Object type ${objectTypeHandle(namespace, spec.type)} already exists.`);
+  if (!inserted.length) throw new AppError(409, "object_type_taken", `Object type ${objectTypeHandle(namespace, spec.type)} already exists.`);
   return presentType(inserted[0]!, 0);
 }
 async function assertFieldTypesKept(db: Database, current: ObjectTypeView, fields: readonly ObjectField[]): Promise<void> {
@@ -129,10 +129,10 @@ export async function updateObjectType(
   if (rebuild) {
     try {
       await reindexObjectType(db, current.namespace, current.type, spec, [
-        buildBatchGuard(db, sql`EXISTS (SELECT 1 FROM ${objectTypes} WHERE ${objectTypes.id} = ${current.id} AND ${objectTypes.revision} = ${expectedRevision})`, "OBJECT_TYPE_REVISION_CONFLICT"), update,
+        buildBatchGuard(db, sql`EXISTS (SELECT 1 FROM ${objectTypes} WHERE ${objectTypes.id} = ${current.id} AND ${objectTypes.revision} = ${expectedRevision})`, "object_type_revision_conflict"), update,
       ]);
     } catch (error) {
-      if (isBatchGuardError(error, "OBJECT_TYPE_REVISION_CONFLICT")) throw new ObjectRevisionConflictError(current.id, expectedRevision);
+      if (isBatchGuardError(error, "object_type_revision_conflict")) throw new ObjectRevisionConflictError(current.id, expectedRevision);
       throw error;
     }
   } else if (!(await update).length) throw new ObjectRevisionConflictError(current.id, expectedRevision);

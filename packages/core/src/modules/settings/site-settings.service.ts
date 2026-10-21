@@ -313,7 +313,7 @@ function serializeThemeSettings(theme: StorefrontThemeDocument): {
   return { theme: result.data, serialized };
 }
 
-const THEME_REVISION_CONFLICT_SENTINEL = "THEME_REVISION_CONFLICT";
+const THEME_REVISION_CONFLICT_SENTINEL = "theme_revision_conflict";
 const DRAFT_CONFLICT = "The storefront style or its draft changed in another session. Reload the latest draft before continuing.";
 
 function isThemeRevisionConflict(error: unknown): boolean {
@@ -491,7 +491,7 @@ async function readMissingThemeImages(db: Database, theme: StorefrontThemeDocume
 }
 
 /** A restore refused because the version names images deleted from Files since (`details.missingImages`: how many). */
-export const THEME_VERSION_IMAGES_MISSING = "THEME_VERSION_IMAGES_MISSING";
+export const THEME_VERSION_IMAGES_MISSING = "theme_version_images_missing";
 
 function buildPublishedThemeRevisionGuard(db: Database, expectedRevision: number) {
   return buildBatchGuard(db, expectedRevision === 0
@@ -995,7 +995,7 @@ export async function draftThemeSections(
 
 const THEME_PREVIEW_CONTINUATION_TTL_MS = 5 * 60 * 1000;
 const THEME_PREVIEW_SESSION_TTL_MS = 30 * 60 * 1000;
-const THEME_PREVIEW_CONTINUATION_CONSUME_SENTINEL = "THEME_PREVIEW_CONTINUATION_CONSUME_CONFLICT";
+const THEME_PREVIEW_CONTINUATION_CONSUME_SENTINEL = "theme_preview_continuation_consume_conflict";
 
 /**
  * Preview bearers are `tpc_`/`tpv_` plus 48 characters: `D` and 47 random

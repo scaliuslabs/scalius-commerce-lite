@@ -33,7 +33,7 @@ import type { SQLiteUpdateSetSource } from "drizzle-orm/sqlite-core";
 import { AppError, ConflictError, NotFoundError, ServiceUnavailableError, ValidationError } from "../../errors";
 import { encodeEncryptedCredential, encryptCredentials, readStoredCredentialStrict } from "../../utils/credential-encryption";
 
-export const WEBHOOK_VERSION_CONFLICT = "WEBHOOK_VERSION_CONFLICT";
+export const WEBHOOK_VERSION_CONFLICT = "webhook_version_conflict";
 
 /** A webhook edit raced another: 409 with the versions so the dashboard can rebase. */
 export class WebhookVersionConflictError extends AppError {

@@ -176,8 +176,9 @@ export function checkPromotionRule(
     rule: {
         method: "automatic" | "code";
         codes: Array<{ code: string }>;
-        startsAtEpochSeconds: number | null;
-        endsAtEpochSeconds: number | null;
+        /** A stored rule's schedule (an input checks its own ISO times). */
+        startsAtEpochSeconds?: number | null;
+        endsAtEpochSeconds?: number | null;
         maxRedemptions: number | null;
         maxRedemptionsPerCustomer: number | null;
         maxDiscountSpendMinor: number | null;
@@ -201,8 +202,8 @@ export function checkPromotionRule(
         issue(["maxRedemptions"], "Usage limits apply to discount codes only.");
     }
     if (
-        rule.startsAtEpochSeconds !== null
-        && rule.endsAtEpochSeconds !== null
+        rule.startsAtEpochSeconds != null
+        && rule.endsAtEpochSeconds != null
         && rule.endsAtEpochSeconds <= rule.startsAtEpochSeconds
     ) {
         issue(["endsAtEpochSeconds"], "The end date must be after the start date.");

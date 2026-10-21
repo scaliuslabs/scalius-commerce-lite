@@ -134,7 +134,7 @@ describe("automatic promotions beyond the first twenty by priority (d1)", () => 
         const extra = await createPromotionDraft(db, { method: "automatic", name: "One too many", effects: [lineOff(500, { productIds: ["prod_phone"] })] });
         await expect(activatePromotion(db, extra.id, extra.revision, NOW - 3_600)).rejects.toMatchObject({
             status: 409,
-            code: "PROMOTION_AUTOMATIC_CAP",
+            code: "promotion_automatic_cap",
         });
         const status = sqlite!.prepare("SELECT status, revision FROM promotions WHERE id = ?").get(extra.id) as { status: string; revision: number };
         expect(status).toEqual({ status: "draft", revision: extra.revision });

@@ -19,8 +19,8 @@ function dto(posterUrl: string | null): MediaFileDto {
     folderId: null,
     status: "ready",
     version: 2,
-    createdAt: 1,
-    updatedAt: 1,
+    createdAt: "1970-01-01T00:00:01.000Z",
+    updatedAt: "1970-01-01T00:00:01.000Z",
     trashedAt: null,
     deletedAt: null,
   };
@@ -44,7 +44,7 @@ describe("MediaApiClient reads", () => {
     return {
       data: {
         success: true,
-        data: { files, pagination: { limit: 24, hasMore: false, nextCursor: null } },
+        data: { files, nextCursor: null },
       },
     };
   }

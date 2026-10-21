@@ -293,9 +293,9 @@ describe("Continue with an app", () => {
       try {
         const { cookie, state } = await start();
         const response = await get(`/identity/${providerPath()}/callback?code=refused&state=${state}`, cookie);
-        expect(response.headers.get("location")).not.toMatch(/refused|acme\.refused/);
+        expect(response.headers.get("location")).not.toMatch(/refused|acme_refused/);
         const logged = JSON.stringify(warn.mock.calls);
-        expect(logged).toContain("acme.refused");
+        expect(logged).toContain("acme_refused");
         expect(logged).not.toContain(state);
         expect(logged).not.toContain("The code was refused");
       } finally {

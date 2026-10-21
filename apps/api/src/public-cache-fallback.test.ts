@@ -81,7 +81,7 @@ describe("strict public reads bypass retired Workers Cache", () => {
     // This fixture has no database binding; an eligible miss cannot validate.
     const { response, publicApi } = await readThroughCache(new Response("old cache"));
     expect(response.status).toBe(503);
-    expect(await response.json()).toMatchObject({ success: false, error: { code: "PUBLIC_READ_UNAVAILABLE" } });
+    expect(await response.json()).toMatchObject({ success: false, error: { code: "public_read_unavailable" } });
     expect(response.headers.get("Cache-Control")).toBe("private, no-store");
     expect(response.headers.get("Cloudflare-CDN-Cache-Control")).toBe("no-store");
     expect(response.headers.get("CDN-Cache-Control")).toBe("no-store");

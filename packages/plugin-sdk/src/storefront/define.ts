@@ -44,9 +44,9 @@ export interface SkinProps<Data, Settings = StorefrontResolvedSettings> {
 export type HeaderProps<Settings = StorefrontResolvedSettings> = SkinProps<StorefrontHeaderData, Settings>;
 export type FooterProps<Settings = StorefrontResolvedSettings> = SkinProps<StorefrontFooterData, Settings>;
 export type ProductCardProps<Settings = StorefrontResolvedSettings> = SkinProps<StorefrontProductCardData, Settings>;
-/** A product-main skin: place the store's buy form with `<BuyForm />` (exactly one; without it core draws the page). */
+/** A product_main skin: place the store's buy form with `<BuyForm />` (exactly one; without it core draws the page). */
 export type ProductMainProps<Settings = StorefrontResolvedSettings> = SkinProps<StorefrontProductPage, Settings>;
-/** A listing-main skin: `<Filters />`, `<Toolbar />` and `<Pagination />` place the store's own (pagination is appended when left out). */
+/** A listing_main skin: `<Filters />`, `<Toolbar />` and `<Pagination />` place the store's own (pagination is appended when left out). */
 export type ListingMainProps<Settings = StorefrontResolvedSettings> = SkinProps<StorefrontListingPage, Settings>;
 /** A core section's skin (`section:<type>`): the section's sealed projection (`StorefrontSectionSkinSettings[type]`). */
 export type SectionSkinProps<Type extends StorefrontSkinnableSection = StorefrontSkinnableSection, Settings = StorefrontResolvedSettings> =
@@ -64,7 +64,7 @@ export type ComponentProps<Settings = StorefrontResolvedSettings, Props = Record
   | {
     target: StorefrontProductSlot;
     settings: Settings;
-    /** The product page, as a product-main skin gets it. */
+    /** The product page, as a product_main skin gets it. */
     data: StorefrontProductPage;
     /** The theme's id of this placement. */
     instanceId: string;

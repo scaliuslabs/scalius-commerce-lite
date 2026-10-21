@@ -6,7 +6,7 @@ describe("admin API detail-loader errors", () => {
   it("recognizes transport and serialized 404 failures", () => {
     expect(
       isAdminApiNotFoundError(
-        new AdminApiResponseError("Product not found", 404, "NOT_FOUND"),
+        new AdminApiResponseError("Product not found", 404, "not_found"),
       ),
     ).toBe(true);
     expect(isAdminApiNotFoundError({ status: 404 })).toBe(true);
@@ -33,32 +33,32 @@ describe("admin API detail-loader errors", () => {
     expect(isAdminApiRetryableReadError(new AdminApiResponseError(
       "Service unavailable",
       503,
-      "SERVICE_UNAVAILABLE",
+      "service_unavailable",
     ))).toBe(true);
     expect(isAdminApiRetryableReadError(new AdminApiResponseError(
       "Try later",
       429,
-      "RATE_LIMIT",
+      "rate_limited",
     ))).toBe(true);
     expect(isAdminApiRetryableReadError(new AdminApiResponseError(
       "Invalid input",
       400,
-      "VALIDATION_ERROR",
+      "validation_error",
     ))).toBe(false);
     expect(isAdminApiRetryableReadError(new AdminApiResponseError(
       "Not signed in",
       401,
-      "UNAUTHORIZED",
+      "unauthorized",
     ))).toBe(false);
-    expect(isAdminApiRetryableReadError({ code: "UNAUTHORIZED" })).toBe(false);
-    expect(isAdminApiRetryableReadError({ code: "SERVICE_UNAVAILABLE" })).toBe(true);
+    expect(isAdminApiRetryableReadError({ code: "unauthorized" })).toBe(false);
+    expect(isAdminApiRetryableReadError({ code: "service_unavailable" })).toBe(true);
   });
 
   it("extracts only authoritative manual-order discount boundaries", () => {
     const error = new AdminApiResponseError(
       "Discount exceeds the order",
       400,
-      "VALIDATION_ERROR",
+      "validation_error",
       {
         reason: "MANUAL_ORDER_DISCOUNT_EXCEEDS_SUBTOTAL",
         maximumDiscountAmountMinor: 22_900,
@@ -74,7 +74,7 @@ describe("admin API detail-loader errors", () => {
     expect(readManualOrderDiscountLimitError({
       cause: {
         statusCode: 400,
-        code: "VALIDATION_ERROR",
+        code: "validation_error",
         details: {
           reason: "MANUAL_ORDER_DISCOUNT_EXCEEDS_SUBTOTAL",
           maximumDiscountAmountMinor: 2_472,
@@ -90,7 +90,7 @@ describe("admin API detail-loader errors", () => {
     expect(readManualOrderDiscountLimitError(new AdminApiResponseError(
       "Malformed",
       400,
-      "VALIDATION_ERROR",
+      "validation_error",
       {
         reason: "MANUAL_ORDER_DISCOUNT_EXCEEDS_SUBTOTAL",
         maximumDiscountAmountMinor: -1,
@@ -101,8 +101,8 @@ describe("admin API detail-loader errors", () => {
     expect(readManualOrderDiscountLimitError(new AdminApiResponseError(
       "Different validation",
       400,
-      "VALIDATION_ERROR",
-      { reason: "SKU_UNAVAILABLE" },
+      "validation_error",
+      { reason: "sku_unavailable" },
     ))).toBeNull();
   });
 
@@ -110,7 +110,7 @@ describe("admin API detail-loader errors", () => {
     const conflict = new AdminApiResponseError(
       "This product changed while you were editing.",
       409,
-      "PRODUCT_REVISION_CONFLICT",
+      "product_revision_conflict",
       { expectedRevision: 3, currentRevision: 4 },
     );
 
@@ -122,14 +122,14 @@ describe("admin API detail-loader errors", () => {
       readProductRevisionConflict({
         status: 409,
         cause: {
-          code: "PRODUCT_REVISION_CONFLICT",
+          code: "product_revision_conflict",
           details: { expectedRevision: 4, currentRevision: null },
         },
       }),
     ).toEqual({ expectedRevision: 4, currentRevision: null });
     expect(
       readProductRevisionConflict(
-        new AdminApiResponseError("Slug exists", 409, "CONFLICT"),
+        new AdminApiResponseError("Slug exists", 409, "conflict"),
       ),
     ).toBeNull();
     expect(
@@ -137,7 +137,7 @@ describe("admin API detail-loader errors", () => {
         new AdminApiResponseError(
           "Malformed conflict",
           409,
-          "PRODUCT_REVISION_CONFLICT",
+          "product_revision_conflict",
           { expectedRevision: 0, currentRevision: "4" },
         ),
       ),
@@ -148,14 +148,14 @@ describe("admin API detail-loader errors", () => {
     expect(readPromotionRevisionConflict(new AdminApiResponseError(
       "Promotion changed",
       409,
-      "PROMOTION_REVISION_CONFLICT",
+      "promotion_revision_conflict",
       { expectedRevision: 4, currentRevision: 5 },
     ))).toEqual({ expectedRevision: 4, currentRevision: 5 });
 
     expect(readPromotionRevisionConflict(new AdminApiResponseError(
       "Promotion code is already reserved",
       409,
-      "CONFLICT",
+      "conflict",
       { code: "WELCOME10" },
     ))).toBeNull();
   });
@@ -164,20 +164,20 @@ describe("admin API detail-loader errors", () => {
     expect(readSettingsRevisionConflict(new AdminApiResponseError(
       "Settings changed",
       409,
-      "SETTINGS_REVISION_CONFLICT",
+      "settings_revision_conflict",
       { document: "checkout", expectedRevision: 0, currentRevision: 1 },
     ))).toEqual({ document: "checkout", expectedRevision: 0, currentRevision: 1 });
 
     expect(readSettingsRevisionConflict(new AdminApiResponseError(
       "Wrong conflict",
       409,
-      "CONFLICT",
+      "conflict",
       { document: "checkout", expectedRevision: 2, currentRevision: 3 },
     ))).toBeNull();
     expect(readSettingsRevisionConflict(new AdminApiResponseError(
       "Bad revision",
       409,
-      "SETTINGS_REVISION_CONFLICT",
+      "settings_revision_conflict",
       { document: "checkout", expectedRevision: 0, currentRevision: "3" },
     ))).toBeNull();
   });
@@ -186,14 +186,14 @@ describe("admin API detail-loader errors", () => {
     expect(readAdminOrderCreateRequestMismatch(new AdminApiResponseError(
       "Previous request failed",
       409,
-      "ADMIN_ORDER_CREATE_REQUEST_MISMATCH",
+      "admin_order_create_request_mismatch",
       { state: "failed", canRetryWithNewKey: true },
     ))).toEqual({ state: "failed", canRetryWithNewKey: true });
 
     expect(readAdminOrderCreateRequestMismatch(new AdminApiResponseError(
       "Order already created",
       409,
-      "ADMIN_ORDER_CREATE_REQUEST_MISMATCH",
+      "admin_order_create_request_mismatch",
       { state: "committed", canRetryWithNewKey: false, orderId: "01ABCDEF23456789" },
     ))).toEqual({
       state: "committed",
@@ -204,13 +204,13 @@ describe("admin API detail-loader errors", () => {
     expect(readAdminOrderCreateRequestMismatch(new AdminApiResponseError(
       "Malformed",
       409,
-      "ADMIN_ORDER_CREATE_REQUEST_MISMATCH",
+      "admin_order_create_request_mismatch",
       { state: "committed", canRetryWithNewKey: true, orderId: "" },
     ))).toBeNull();
     expect(readAdminOrderCreateRequestMismatch(new AdminApiResponseError(
       "Generic conflict",
       409,
-      "CONFLICT",
+      "conflict",
       { state: "failed", canRetryWithNewKey: true },
     ))).toBeNull();
   });
@@ -230,10 +230,10 @@ describe("admin API detail-loader errors", () => {
       affectedSkus: [{ id: "var_white", sku: "SHOE-WHITE", imageId: "pmed_white" }],
     };
     expect(readProductMediaSkuReferenceConflict(
-      new AdminApiResponseError("Confirm fallback", 409, "PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT", details),
+      new AdminApiResponseError("Confirm fallback", 409, "product_media_sku_reference_conflict", details),
     )).toEqual(details);
     expect(readProductMediaSkuReferenceConflict(
-      new AdminApiResponseError("Bad shape", 409, "PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT", {
+      new AdminApiResponseError("Bad shape", 409, "product_media_sku_reference_conflict", {
         ...details,
         affectedAssociationIds: Array.from({ length: 21 }, (_, index) => `pmed_${index}`),
       }),
@@ -245,14 +245,14 @@ describe("customer phone conflict", () => {
   const other = { id: "cust_2", name: "Rahim", phone: "+8801712345678", kind: "guest" };
 
   it("reads the other customer from a 400 validation error", () => {
-    expect(readCustomerPhoneConflict(new AdminApiResponseError("taken", 400, "VALIDATION_ERROR", { customer: other }))).toEqual(other);
-    expect(readCustomerPhoneConflict({ cause: { status: 400, code: "VALIDATION_ERROR", details: { customer: other } } })).toEqual(other);
+    expect(readCustomerPhoneConflict(new AdminApiResponseError("taken", 400, "validation_error", { customer: other }))).toEqual(other);
+    expect(readCustomerPhoneConflict({ cause: { status: 400, code: "validation_error", details: { customer: other } } })).toEqual(other);
   });
 
   it("ignores other failures and malformed details", () => {
-    expect(readCustomerPhoneConflict(new AdminApiResponseError("taken", 409, "VALIDATION_ERROR", { customer: other }))).toBeNull();
-    expect(readCustomerPhoneConflict(new AdminApiResponseError("bad", 400, "VALIDATION_ERROR", { fields: [] }))).toBeNull();
-    expect(readCustomerPhoneConflict(new AdminApiResponseError("bad", 400, "VALIDATION_ERROR", { customer: { ...other, kind: "owner" } }))).toBeNull();
+    expect(readCustomerPhoneConflict(new AdminApiResponseError("taken", 409, "validation_error", { customer: other }))).toBeNull();
+    expect(readCustomerPhoneConflict(new AdminApiResponseError("bad", 400, "validation_error", { fields: [] }))).toBeNull();
+    expect(readCustomerPhoneConflict(new AdminApiResponseError("bad", 400, "validation_error", { customer: { ...other, kind: "owner" } }))).toBeNull();
   });
 });
 
@@ -262,8 +262,8 @@ describe("failure classes", () => {
     expect(classifyAdminError(Object.assign(new Error("signal timed out"), { name: "TimeoutError" }))).toBe("network");
     expect(classifyAdminError(new AdminApiResponseError("API error", 500))).toBe("server");
     expect(classifyAdminError({ cause: { statusCode: 503 } })).toBe("server");
-    expect(classifyAdminError(new AdminApiResponseError("Order not found", 404, "NOT_FOUND"))).toBe("notFound");
-    expect(classifyAdminError(new AdminApiResponseError("No access", 403, "FORBIDDEN"))).toBe("other");
+    expect(classifyAdminError(new AdminApiResponseError("Order not found", 404, "not_found"))).toBe("notFound");
+    expect(classifyAdminError(new AdminApiResponseError("No access", 403, "forbidden"))).toBe("other");
     expect(classifyAdminError(new AdminApiResponseError("Already used", 409))).toBe("other");
     expect(classifyAdminError(new Error("Something odd"))).toBe("other");
   });

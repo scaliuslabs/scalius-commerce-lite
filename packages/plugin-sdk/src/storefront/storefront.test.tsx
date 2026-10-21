@@ -139,7 +139,7 @@ describe("primitives", () => {
   });
 
   it("prices in Bangla with a from-price and no struck price when not discounted", () => {
-    const out = Price({ price: { amount: 900, formatted: "৳900" }, compareAt: { amount: 900, formatted: "৳900" }, from: true, context: fixtureContext({ store: { name: "x", currency: "BDT", locale: "bn-BD", language: "bn", timeZone: "Asia/Dhaka" } }) }).value;
+    const out = Price({ price: { amountMinor: 90000, currency: "BDT", formatted: "৳900" }, compareAt: { amountMinor: 90000, currency: "BDT", formatted: "৳900" }, from: true, context: fixtureContext({ store: { name: "x", currency: "BDT", locale: "bn-BD", language: "bn", timeZone: "Asia/Dhaka" } }) }).value;
     expect(out).toContain("৳900 থেকে");
     expect(out).not.toContain("data-price-regular");
   });
@@ -207,7 +207,9 @@ describe("words, numbers and dates in the page's locale", () => {
     expect(plural(store("bn", "bn-BD"), 12, reviews)).toBe("১২টি রিভিউ");
     expect(formatNumber(store("en", "en-BD"), 1234567)).toBe("12,34,567");
     expect(formatNumber(store("bn", "bn-BD"), 4.5, { minimumFractionDigits: 1 })).toBe("৪.৫");
-    expect(formatMoney(store("en", "en-US"), 1250.5)).toBe("$1,250.50");
+    expect(formatMoney(store("en", "en-US"), { amountMinor: 125050, currency: "USD" })).toBe("$1,250.50");
+    expect(formatMoney(store("en", "en-US"), { amountMinor: 1250, currency: "JPY" })).toBe("¥1,250");
+    expect(formatMoney(store("bn", "bn-BD"), { amountMinor: 175000, currency: "BDT" })).toBe("৳১,৭৫০");
   });
 
   it("reads dates and merchant wall times in the store's time zone", () => {
@@ -217,7 +219,7 @@ describe("words, numbers and dates in the page's locale", () => {
   });
 
   it("embeds the order form by product id, never by a URL a canonical path can change", () => {
-    expect(OrderForm({ product: fixtureProductCard({ id: "prod_9", url: "/products/another" }) }).value).toBe('<scalius-embed kind="order-form" data-product="prod_9"></scalius-embed>');
+    expect(OrderForm({ product: fixtureProductCard({ id: "prod_9", url: "/products/another" }) }).value).toBe('<scalius-embed kind="order_form" data-product="prod_9"></scalius-embed>');
     expect(OrderForm({ product: null }).value).toBe("");
   });
 });

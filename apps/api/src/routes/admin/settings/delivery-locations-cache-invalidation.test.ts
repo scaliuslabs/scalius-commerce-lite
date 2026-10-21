@@ -272,7 +272,7 @@ describe("delivery location write behavior", () => {
     expect(await response.json()).toMatchObject({
       success: false,
       error: {
-        code: "VALIDATION_ERROR",
+        code: "validation_error",
       },
     });
     expect(mocks.deletePlaces).not.toHaveBeenCalled();

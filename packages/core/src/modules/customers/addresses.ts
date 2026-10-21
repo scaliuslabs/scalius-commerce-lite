@@ -294,14 +294,15 @@ export interface CustomerAddress extends ResolvedAddress {
     isDefault: boolean;
     /** The default billing address (migration 0119); none means the default address bills too. */
     isDefaultBilling: boolean;
-    createdAt: number;
-    updatedAt: number;
+    /** ISO 8601. */
+    createdAt: string;
+    updatedAt: string;
 }
 
 type CustomerAddressRow = typeof customerAddresses.$inferSelect;
 
-const seconds = (value: Date | number | null | undefined): number =>
-    value instanceof Date ? Math.floor(value.getTime() / 1000) : Number(value ?? 0);
+const iso = (value: Date | number | null | undefined): string =>
+    (value instanceof Date ? value : new Date(Number(value ?? 0) * 1000)).toISOString();
 
 export function customerAddressFromRow(row: CustomerAddressRow): CustomerAddress {
     return {
@@ -327,8 +328,8 @@ export function customerAddressFromRow(row: CustomerAddressRow): CustomerAddress
         zoneName: row.zoneName,
         areaName: row.areaName,
         validationSkipped: Boolean(row.validationSkipped),
-        createdAt: seconds(row.createdAt),
-        updatedAt: seconds(row.updatedAt),
+        createdAt: iso(row.createdAt),
+        updatedAt: iso(row.updatedAt),
     };
 }
 

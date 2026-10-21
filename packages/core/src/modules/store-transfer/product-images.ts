@@ -214,7 +214,7 @@ async function attachImages(
       db.select({ id: productVariants.id, sku: productVariants.sku, imageId: productVariants.imageId, isDefault: productVariants.isDefault })
         .from(productVariants).where(and(eq(productVariants.productId, productId), isNull(productVariants.deletedAt))),
     ]);
-    if (!current) throw new AppError(404, "NOT_FOUND", "This product is not in the store.");
+    if (!current) throw new AppError(404, "not_found", "This product is not in the store.");
     const attachedMedia = new Set(existing.map((row) => row.mediaId));
     const room = MAX_PRODUCT_MEDIA_ASSOCIATIONS - existing.length;
     const fresh = images.filter((image) => !attachedMedia.has(image.media.id)).slice(0, Math.max(0, room));

@@ -116,7 +116,7 @@ async function assertGenericCancellationPaymentSafe(
 // Gift-card tender on cancel (Wave B §4.3, G4)
 // ─────────────────────────────────────────
 
-const GIFT_CARD_CANCEL_RELEASE_CONFLICT = "GIFT_CARD_CANCEL_RELEASE_CONFLICT";
+const GIFT_CARD_CANCEL_RELEASE_CONFLICT = "gift_card_cancel_release_conflict";
 
 /**
  * The money on the order is gift-card tender only (no gateway or cash was

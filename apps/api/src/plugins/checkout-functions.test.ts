@@ -339,7 +339,7 @@ describe("checkout app functions (real schema, bundled and test apps)", () => {
     // An input the platform built wrong (a platform bug): the runner refuses it.
     const broken = { cart: { lines: "not a cart" } } as never;
     await expect(runner.run("checkout.discounts", broken)).resolves.toEqual([]);
-    await expect(runner.run("cart.validate", broken)).rejects.toMatchObject({ details: { reason: "CHECKOUT_APP_UNAVAILABLE" } });
+    await expect(runner.run("cart.validate", broken)).rejects.toMatchObject({ details: { reason: "checkout_app_unavailable" } });
     errors.mockRestore();
   });
 

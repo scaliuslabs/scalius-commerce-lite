@@ -20,6 +20,10 @@
 // the platform cannot take (an undeclared or per-line read, a key with no id,
 // an invalid record) invalidates the whole answer: a discount must never
 // apply without the write that pays for it.
+//
+// Storefront extensions (manifest `storefront.extensions`) render through
+// this runner under PLUGIN_EXTENSION_RUN: an app runs for a UI slot it
+// declares and the grant approved, with the reads that slot declares.
 
 import type { Database } from "@scalius/database/client";
 import { getDb } from "@scalius/database/client";
@@ -39,14 +43,17 @@ import {
 } from "@scalius/core/modules/checkout";
 import type { AppObjectCommit } from "@scalius/shared/checkout-app-facts";
 import {
-  PLUGIN_FUNCTION_SCHEMAS,
+  PLUGIN_EXTENSION_RUN,
+  pluginRunSchemas,
+  pluginRunSource,
+  type FunctionReadDeclaration,
   type PluginFunctionInput,
   type PluginFunctionOutput,
-  type PluginFunctionPoint,
+  type PluginRunPoint,
 } from "@scalius/shared/plugins";
 import type { PluginHost, PluginHostOptions } from "./host";
 
-export interface PluginFunctionResult<P extends PluginFunctionPoint> {
+export interface PluginFunctionResult<P extends PluginRunPoint> {
   pluginId: string;
   priority: number;
   output: PluginFunctionOutput<P>;
@@ -56,7 +63,7 @@ export interface PluginFunctionResult<P extends PluginFunctionPoint> {
 
 /** An app registered with `onError: "block"` could not answer: checkout must stop. */
 export class PluginFunctionsBlockedError extends Error {
-  constructor(readonly point: PluginFunctionPoint, readonly pluginIds: string[]) {
+  constructor(readonly point: PluginRunPoint, readonly pluginIds: string[]) {
     super(`Checkout is paused: ${pluginIds.join(", ")} could not answer ${point}.`);
     this.name = "PluginFunctionsBlockedError";
   }
@@ -65,12 +72,29 @@ export class PluginFunctionsBlockedError extends Error {
 /** Plugins asked at once; each is CPU-bound and wall-limited, so a few in flight bound latency. */
 const CONCURRENCY = 4;
 
+/** An app's declared reads at `point`: its function's, or every read its extensions declare (one `as`, one read). */
+function declaredReads(installation: RegisteredPlugin["installation"], point: PluginRunPoint): FunctionReadDeclaration[] {
+  if (point !== PLUGIN_EXTENSION_RUN) return installation.manifest.functions.find((fn) => fn.point === point)?.reads ?? [];
+  const byName = new Map<string, FunctionReadDeclaration>();
+  for (const extension of installation.manifest.storefront.extensions) {
+    for (const read of extension.reads) if (!byName.has(read.as)) byName.set(read.as, read);
+  }
+  return [...byName.values()];
+}
+
+/** Whether the approved grant lets the app run at `point` (an extension: at least one approved slot). */
+function grantAllows(installation: RegisteredPlugin["installation"], point: PluginRunPoint): boolean {
+  return point === PLUGIN_EXTENSION_RUN
+    ? (installation.grant?.extensions ?? []).length > 0
+    : Boolean(installation.grant?.functions.includes(point));
+}
+
 /** The declared reads of these registrations at `point`. */
-export function functionReadRequests(registered: readonly RegisteredPlugin[], point: PluginFunctionPoint): AppFunctionReadRequest[] {
+export function functionReadRequests(registered: readonly RegisteredPlugin[], point: PluginRunPoint): AppFunctionReadRequest[] {
   return registered.flatMap(({ installation }) => {
-    const declaration = installation.manifest.functions.find((fn) => fn.point === point);
-    return declaration?.reads?.length
-      ? [{ pluginId: installation.pluginId, point, reads: declaration.reads, objects: installation.manifest.objects }]
+    const reads = declaredReads(installation, point);
+    return reads.length
+      ? [{ pluginId: installation.pluginId, point, reads, objects: installation.manifest.objects }]
       : [];
   });
 }
@@ -83,7 +107,7 @@ export function functionReadRequests(registered: readonly RegisteredPlugin[], po
  * schema; a mismatch is a platform bug and throws. A plugin whose approved
  * grant does not include the point never runs.
  */
-export async function runPluginFunctions<P extends PluginFunctionPoint>(
+export async function runPluginFunctions<P extends PluginRunPoint>(
   point: P,
   input: Omit<PluginFunctionInput<P>, "reads">,
   env: Env,
@@ -101,10 +125,10 @@ export async function runPluginFunctions<P extends PluginFunctionPoint>(
 ): Promise<Array<PluginFunctionResult<P>>> {
   const db = options.db ?? getDb(env);
   const registered = (options.registered ?? await listActiveFunctionPlugins(db, point))
-    .filter((registration) => registration.name === point && registration.installation.grant?.functions.includes(point));
+    .filter((registration) => registration.name === point && grantAllows(registration.installation, point));
   if (registered.length === 0) return [];
 
-  const checked = PLUGIN_FUNCTION_SCHEMAS[point].input.safeParse(input);
+  const checked = pluginRunSchemas(point).input.safeParse(input);
   if (!checked.success) {
     throw new TypeError(`runPluginFunctions(${point}) received an input that does not match the point's schema.`);
   }
@@ -126,25 +150,31 @@ export async function runPluginFunctions<P extends PluginFunctionPoint>(
       const declaration = installation.manifest.functions.find((fn) => fn.point === point);
       const fail = () => {
         // Only an approved grant lets an app pause checkout.
-        if (declaration?.onError === "block" && installation.grant?.blockingFunctions.includes(point)) blocked.push(installation.pluginId);
+        if (declaration?.onError === "block" && installation.grant?.blockingFunctions.some((blockingPoint) => blockingPoint === point)) blocked.push(installation.pluginId);
       };
       let scopedInput = checked.data as Record<string, unknown>;
-      if (point === "buyer.ui") {
-        const buyer = checked.data as PluginFunctionInput<"buyer.ui">;
-        if (!declaration?.targets?.includes(buyer.target)) continue;
+      // An extension sees only the reads its own slot declares.
+      let readNames: ReadonlySet<string> | null = null;
+      if (point === PLUGIN_EXTENSION_RUN) {
+        const buyer = checked.data as PluginFunctionInput<typeof PLUGIN_EXTENSION_RUN>;
+        const extension = installation.manifest.storefront.extensions.find((entry) => entry.target === buyer.target);
+        if (!extension || !installation.grant?.extensions.includes(buyer.target)) continue;
+        readNames = new Set(extension.reads.map((read) => read.as));
         const prefix = `${installation.pluginId}.`;
         const own = Object.fromEntries(Object.entries(buyer.attributes).filter(([key]) => key.startsWith(prefix)));
         scopedInput = { ...buyer, attributes: Object.fromEntries(Object.entries(own).map(([key, value]) => [key.slice(prefix.length), value])), cart: buyer.cart ? { ...buyer.cart, attributes: own } : null };
       }
-      const read: AppFunctionReadResult = readsCache && declaration?.reads?.length
+      const wantsReads = readNames ? readNames.size > 0 : Boolean(declaration?.reads?.length);
+      const read: AppFunctionReadResult = readsCache && wantsReads
         ? await readsCache.get(requests, readContext, installation.pluginId, point)
         : NO_APP_FUNCTION_READS;
       if (!read.ok) {
-        await host.incident(installation, `function:${point}`, `${read.reason} The function did not run.`);
+        await host.incident(installation, pluginRunSource(point, scopedInput), `${read.reason} The function did not run.`);
         fail();
         continue;
       }
-      const outcome = await host.invokeFunction(installation, point, { ...scopedInput, reads: read.reads });
+      const reads = readNames ? Object.fromEntries(Object.entries(read.reads).filter(([as]) => readNames.has(as))) : read.reads;
+      const outcome = await host.invokeFunction(installation, point, { ...scopedInput, reads });
       if (!outcome.ok || !outcome.value) {
         fail();
         continue;
@@ -168,7 +198,7 @@ export async function runPluginFunctions<P extends PluginFunctionPoint>(
 async function prepareCommits(
   host: PluginHost,
   installation: RegisteredPlugin["installation"],
-  point: PluginFunctionPoint,
+  point: PluginRunPoint,
   read: Extract<AppFunctionReadResult, { ok: true }>,
   commits: ReadonlyArray<{ as: string; record: unknown }>,
 ): Promise<AppObjectCommit[] | null> {

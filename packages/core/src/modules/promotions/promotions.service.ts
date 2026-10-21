@@ -94,8 +94,8 @@ function toEpochSeconds(value: Date | number | null): number | null {
     return Number.isFinite(value) ? Math.floor(value) : null;
 }
 
-function fromEpochSeconds(value: number | null): Date | null {
-    return value === null ? null : new Date(value * 1_000);
+function fromIso(value: string | null): Date | null {
+    return value === null ? null : new Date(value);
 }
 
 function parseConfig(value: string): unknown {
@@ -349,8 +349,8 @@ export async function createPromotionDraft(
         priority: input.priority,
         conflictPolicy: input.conflictPolicy,
         ...combinesWithColumns(input),
-        startsAt: fromEpochSeconds(input.startsAtEpochSeconds),
-        endsAt: fromEpochSeconds(input.endsAtEpochSeconds),
+        startsAt: fromIso(input.startsAt),
+        endsAt: fromIso(input.endsAt),
         timezone: input.timezone,
         maxRedemptions: input.maxRedemptions,
         maxRedemptionsPerCustomer: input.maxRedemptionsPerCustomer,
@@ -617,8 +617,8 @@ export async function updatePromotionDraft(
             priority: input.priority,
             conflictPolicy: input.conflictPolicy,
             ...combinesWithColumns(input),
-            startsAt: fromEpochSeconds(input.startsAtEpochSeconds),
-            endsAt: fromEpochSeconds(input.endsAtEpochSeconds),
+            startsAt: fromIso(input.startsAt),
+            endsAt: fromIso(input.endsAt),
             timezone: input.timezone,
             maxRedemptions: input.maxRedemptions,
             maxRedemptionsPerCustomer: input.maxRedemptionsPerCustomer,

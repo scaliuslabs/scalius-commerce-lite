@@ -12,9 +12,9 @@ import { toLatinDigits } from "@scalius/shared/phone-input";
 export const DEFAULT_RESEND_AFTER_SECONDS = 60;
 
 /** No channel the store chose reaches a contact on the order: say so and show the store's contact. */
-export const NO_CODE_CHANNEL = "NO_CODE_CHANNEL";
+export const NO_CODE_CHANNEL = "no_code_channel";
 /** The store's chosen channel can't send right now (fail closed, never another channel). */
-export const CODE_CHANNEL_UNAVAILABLE = "CODE_CHANNEL_UNAVAILABLE";
+export const CODE_CHANNEL_UNAVAILABLE = "code_channel_unavailable";
 
 /**
  * A failure the buyer can't fix on this page (no code channel, codes

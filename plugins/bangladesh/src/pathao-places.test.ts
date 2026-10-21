@@ -106,7 +106,7 @@ describe("refresh from Pathao", () => {
         return { status: 404, body: "{}" };
       },
       api: (operationId, input) => {
-        expect(operationId).toBe("dashboard.delivery_locations.import");
+        expect(operationId).toBe("delivery_locations.import");
         const body = (input as { body: { version: string; places: PlaceEntry[]; finish?: boolean; source: string } }).body;
         imports.push(body);
         return { ok: true, status: 200, data: { created: body.places.length, updated: 0, unchanged: 0, skipped: 0, deactivated: 0, conflicts: [], conflictCount: 0 }, error: null };

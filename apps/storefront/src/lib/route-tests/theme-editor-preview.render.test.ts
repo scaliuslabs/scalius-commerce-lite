@@ -113,14 +113,14 @@ const SECTIONS: StorefrontSection[] = [
       { image: "d2", focalPoint: { x: 30, y: 60 }, alt: "Second banner", link: null },
     ],
   }),
-  section("usp-strip", "usp", { style: "icons", source: { kind: "custom", items: [{ title: "Free returns", detail: "Within 7 days" }] } }),
-  section("category-tiles", "tiles", { style: "photo", title: "Shop by category", categoryIds: ["cat-0", "cat-1", "cat-2"] }),
-  section("product-rail", "rail", { title: "New in", source: { kind: "newest" }, limit: 8 }),
+  section("usp_strip", "usp", { style: "icons", source: { kind: "custom", items: [{ title: "Free returns", detail: "Within 7 days" }] } }),
+  section("category_tiles", "tiles", { style: "photo", title: "Shop by category", categoryIds: ["cat-0", "cat-1", "cat-2"] }),
+  section("product_rail", "rail", { title: "New in", source: { kind: "newest" }, limit: 8 }),
   section("banner", "banner-a", { layout: "two-up", heading: "Sarees", text: "Hand woven", mediaId: "b1", cta: { label: "Shop", href: "/collections/sarees" } }),
   section("banner", "banner-b", { layout: "two-up", heading: "Panjabi", text: "", mediaId: "b2", cta: null }),
   section("editorial", "story", { layout: "rich-text", heading: "Our story", body: "Made in Dhaka.\n\nSince 1998." }),
   section("faq", "faq", { heading: "Questions", items: [{ question: "Do you deliver?", answer: "Everywhere in Bangladesh." }] }),
-  section("seo-text", "seo", { heading: "About", body: "Long copy for search." }),
+  section("seo_text", "seo", { heading: "About", body: "Long copy for search." }),
 ];
 
 function fixedTheme(): StorefrontThemeDocument {
@@ -504,7 +504,7 @@ describe("the preview render route", () => {
   it("does not replace a required dependency failure with successful empty HTML", async () => {
     for (const path of ["/api/v1/storefront/theme-preview/homepage", "/api/v1/shipping-methods", "/api/v1/checkout/config"]) {
       const sections = path.endsWith("homepage") ? fixedTheme().pages.home
-        : [section("usp-strip", "delivery", { source: { kind: "delivery-facts" } })];
+        : [section("usp_strip", "delivery", { source: { kind: "delivery-facts" } })];
       const result = await render(homeBody({ sections }), {}, { ...draft(), unavailable: [path] });
       expect(result.response.status, path).toBe(503);
       expect(result.response.headers.get("Cache-Control"), path).toContain("no-store");
@@ -513,7 +513,7 @@ describe("the preview render route", () => {
   });
 
   it.each([false, true])("reads no unrelated catalog or delivery data for a data-free unit edit (phone hero: %s)", async (phoneHero) => {
-    const sections = [...fixedTheme().pages.home, section("usp-strip", "delivery", { source: { kind: "delivery-facts" } })];
+    const sections = [...fixedTheme().pages.home, section("usp_strip", "delivery", { source: { kind: "delivery-facts" } })];
     if (phoneHero) sections.unshift(section("hero", "phone", { phonePlacement: "after-categories", slides: [
       { image: "d1", alt: "Hero", focalPoint: { x: 50, y: 50 }, link: null },
     ] }));
@@ -528,7 +528,7 @@ describe("the preview render route", () => {
 
   it("reads only the target region while retaining banner and phone context", async () => {
     const seen: string[][] = [];
-    const sections = [section("product-rail", "above"), section("banner", "one", { layout: "two-up", mediaId: "b1" }),
+    const sections = [section("product_rail", "above"), section("banner", "one", { layout: "two-up", mediaId: "b1" }),
       section("faq", "empty", { items: [] }), section("banner", "two", { layout: "two-up", mediaId: "b2" })];
     const result = await render({ scope: { kind: "template", template: "product", main: 1 }, sections, only: "two" }, {},
       { ...draft(), onPreviewSections: (ids) => seen.push(ids) });
@@ -538,7 +538,7 @@ describe("the preview render route", () => {
     seen.length = 0;
     const phone = [section("hero", "phone", { phonePlacement: "after-categories", slides: [
       { image: "d1", alt: "Hero", focalPoint: { x: 50, y: 50 }, link: null },
-    ] }), section("category-tiles", "categories", { categoryIds: ["cat-0", "cat-1"] }), section("faq", "faq")];
+    ] }), section("category_tiles", "categories", { categoryIds: ["cat-0", "cat-1"] }), section("faq", "faq")];
     const phoneResult = await render(homeBody({ sections: phone, only: "categories" }), {}, {
       ...draft(), storeShape: { ...EMPTY_STORE_SHAPE, topCategoryCount: 2 }, onPreviewSections: (ids) => seen.push(ids),
     });
@@ -585,7 +585,7 @@ describe("initial preview dependency failures", () => {
 
   it.each(["/api/v1/shipping-methods", "/api/v1/checkout/config"])("refuses required initial-preview delivery failures at %s", async (path) => {
     const document = fixedTheme();
-    document.pages.home = [section("usp-strip", "delivery", { source: { kind: "delivery-facts" } })];
+    document.pages.home = [section("usp_strip", "delivery", { source: { kind: "delivery-facts" } })];
     document.pages.landing.eid = { title: "Eid", description: "", sections: document.pages.home };
     for (const [component, url] of [[HomePage, "https://shop.test/"], [LandingPage, "https://shop.test/pages/eid"]] as const) {
       const result = await renderPage(component, { document, preview: document, unavailable: [path] }, { url, cookie: PREVIEW_COOKIE });
@@ -632,7 +632,7 @@ describe("the preview paint route", () => {
 
 
 describe("one private library document", () => {
-  const url = (section = "product-grid", page = "/") => `https://shop.test/theme-preview/library?${new URLSearchParams({ section, page, v: "library-document-1" })}`;
+  const url = (section = "product_grid", page = "/") => `https://shop.test/theme-preview/library?${new URLSearchParams({ section, page, v: "library-document-1" })}`;
   it("renders the real selected product grid with saved styles and one bounded data request", async () => {
     const result = await renderPage(LibraryPage, { document: fixedTheme(), preview: fixedTheme() }, { url: url(), cookie: PREVIEW_COOKIE });
     expect(result.response.status).toBe(200);
@@ -643,7 +643,7 @@ describe("one private library document", () => {
     expect(result.html).toContain("</body></html>");
     expect(result.html).not.toContain('const SELF = "scalius-theme-preview"');
     expect(result.html).not.toContain('const EDITOR = "scalius-theme-editor"');
-    expect(result.html).toContain('data-home-section="product-grid"');
+    expect(result.html).toContain('data-home-section="product_grid"');
     expect(result.html).toContain("Product 1");
     expect(result.html).not.toContain("Our story");
     expect(result.html).toContain("data-library-preview");

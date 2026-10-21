@@ -31,12 +31,12 @@ function associatedData(pluginId: string, field: string): Uint8Array<ArrayBuffer
   return encoder.encode(`${HKDF_PURPOSE}\u0000${pluginId}\u0000${field}`);
 }
 
-/** The settings key for one request; throws `settings.key_unavailable` without the installed key. */
+/** The settings key for one request; throws `settings_key_unavailable` without the installed key. */
 export async function derivePluginSettingsKey(credentialEncryptionKey: string | null | undefined): Promise<CryptoKey> {
   const material = typeof credentialEncryptionKey === "string" ? credentialEncryptionKey.trim() : "";
   if (material.length < 16) {
     throw new PluginError(
-      "settings.key_unavailable",
+      "settings_key_unavailable",
       "Plugin secrets are unavailable: the credential encryption key is not configured.",
     );
   }

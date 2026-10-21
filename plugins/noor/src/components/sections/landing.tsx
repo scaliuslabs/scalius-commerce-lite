@@ -42,7 +42,7 @@ function Empty({ context, words }: { context: Context; words: { en: string; bn: 
 }
 
 function Savings({ product, context }: { product: StorefrontProductCard; context: Context }) {
-  if (!product.compareAt || product.compareAt.amount <= product.price.amount) return null;
+  if (!product.compareAt || product.compareAt.amountMinor <= product.price.amountMinor) return null;
   const off = percent(context, product.percentOff ?? 0);
   return <span class="noor-save">{t(context, { en: `Save ${off}`, bn: `${off} ছাড়` })}</span>;
 }

@@ -21,7 +21,7 @@ import {
 } from "../inventory";
 
 export const PRODUCT_AGGREGATE_REVISION_CONFLICT =
-    "PRODUCT_AGGREGATE_REVISION_CONFLICT";
+    "product_aggregate_revision_conflict";
 
 export type ProductAggregateRevisionResult = {
     aggregateRevision: number;
@@ -33,7 +33,7 @@ export class ProductRevisionConflictError extends AppError {
     constructor(expectedRevision: number, currentRevision: number | null) {
         super(
             409,
-            "PRODUCT_REVISION_CONFLICT",
+            "product_revision_conflict",
             "This product changed while you were editing. Reload the latest product and try again.",
             { expectedRevision, currentRevision },
         );
@@ -45,7 +45,7 @@ export class ProductStateConflictError extends AppError {
     constructor(requiredState: ProductAggregateLifecycle) {
         super(
             409,
-            "PRODUCT_STATE_CONFLICT",
+            "product_state_conflict",
             requiredState === "active"
                 ? "This product is no longer active. Return to products and reload."
                 : "This product is not in trash. Return to products and reload.",

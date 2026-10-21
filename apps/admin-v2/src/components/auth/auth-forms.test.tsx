@@ -211,7 +211,7 @@ describe("sign-in forms keep credentials out of URLs", () => {
   });
 
   it("says a session that ended while turning on two-step verification ended, not that the password is wrong", async () => {
-    authClient.twoFactor.enable.mockResolvedValueOnce({ data: null, error: { status: 401, code: "UNAUTHORIZED" } } as never);
+    authClient.twoFactor.enable.mockResolvedValueOnce({ data: null, error: { status: 401, code: "unauthorized" } } as never);
     await render(<TwoFactorSetup userEmail="karim@example.com" />);
     type(container.querySelector("#setup-password"), SECRET);
     await submit();

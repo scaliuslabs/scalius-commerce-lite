@@ -24,12 +24,12 @@ describe("API field errors", () => {
   });
 
   it("reads a service validation error that names its field", () => {
-    const error = new AdminApiResponseError("Phone number is required", 400, "VALIDATION_ERROR", { field: "phone" });
+    const error = new AdminApiResponseError("Phone number is required", 400, "validation_error", { field: "phone" });
     expect(readApiFieldIssues(error)).toEqual([{ path: "phone", message: "Phone number is required" }]);
   });
 
   it("reads a service issue list, bare (the theme draft) or under `issues`, with dotted or array paths", () => {
-    const theme = new AdminApiResponseError("That image is not in Files any more. Choose another image.", 400, "VALIDATION_ERROR", [
+    const theme = new AdminApiResponseError("That image is not in Files any more. Choose another image.", 400, "validation_error", [
       { path: "brand.logo", message: "That image is not in Files any more. Choose another image." },
       { path: "pages.homeMode.productId", message: "That product is unavailable or in trash. Choose another product." },
     ]);
@@ -37,7 +37,7 @@ describe("API field errors", () => {
       { path: "brand.logo", message: "That image is not in Files any more. Choose another image." },
       { path: "pages.homeMode.productId", message: "That product is unavailable or in trash. Choose another product." },
     ]);
-    const business = new AdminApiResponseError("Use the profile's https:// address.", 400, "VALIDATION_ERROR", {
+    const business = new AdminApiResponseError("Use the profile's https:// address.", 400, "validation_error", {
       issues: [{ path: ["socialLinks", 1, "url"], message: "Use the profile's https:// address." }],
     });
     expect(readApiFieldIssues(business)).toEqual([{ path: "socialLinks.1.url", message: "Use the profile's https:// address." }]);
@@ -45,7 +45,7 @@ describe("API field errors", () => {
 
   it("ignores errors that aren't about fields", () => {
     expect(readApiFieldIssues(new AdminApiResponseError("Conflict", 409))).toBeNull();
-    expect(readApiFieldIssues(new AdminApiResponseError("Bad checkout", 400, "VALIDATION_ERROR"))).toBeNull();
+    expect(readApiFieldIssues(new AdminApiResponseError("Bad checkout", 400, "validation_error"))).toBeNull();
     expect(readApiFieldIssues(new Error("offline"))).toBeNull();
   });
 });

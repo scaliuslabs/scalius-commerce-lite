@@ -95,18 +95,18 @@ export function parseStorefrontProductSourceKey(key: string): StorefrontProductS
 /** The product lists a section shows (a tabbed block has one per tab), with how many products each needs. */
 export function homeSectionProductLists(section: StorefrontSection): Array<{ source: StorefrontProductSource; limit: number }> {
   switch (section.type) {
-    case "product-rail":
+    case "product_rail":
       return [{ source: section.settings.source, limit: section.settings.limit }];
-    case "product-grid":
+    case "product_grid":
       return [{ source: section.settings.source, limit: section.settings.columns * section.settings.rows }];
-    case "deal-block":
+    case "deal_block":
       return [{ source: section.settings.source, limit: HOME_DEAL_LIMIT }];
-    case "product-tabs":
+    case "product_tabs":
       return section.settings.tabs.map((tab) => ({ source: tab.source, limit: section.settings.limit }));
     case "lookbook":
       return [{ source: section.settings.source, limit: HOME_LOOKBOOK_LIMIT }];
     // Daraz "Just For You": the newest products, the listing continues them.
-    case "endless-grid":
+    case "endless_grid":
       return [{ source: { kind: "newest" }, limit: section.settings.pageSize }];
     // A store without homepage collections shows its newest products instead.
     case "collections":
@@ -128,14 +128,14 @@ export function homeSectionMediaIds(section: StorefrontSection): string[] {
       ];
     case "banner":
     case "lookbook":
-    case "deal-block":
+    case "deal_block":
     case "newsletter":
       return section.settings.mediaId ? [section.settings.mediaId] : [];
     case "editorial":
       return section.settings.layout === "image-with-text" && section.settings.mediaId ? [section.settings.mediaId] : [];
-    case "shop-by":
+    case "shop_by":
       return section.settings.cards.map((card) => card.mediaId);
-    case "banner-mosaic":
+    case "banner_mosaic":
       return section.settings.tiles.map((tile) => tile.mediaId);
     default:
       return [];
@@ -148,7 +148,7 @@ export function homeSectionMediaIds(section: StorefrontSection): string[] {
  * one does.
  */
 export function homeSectionsShowDeliveryFacts(sections: readonly StorefrontSection[]): boolean {
-  return sections.some((section) => !section.hidden && section.type === "usp-strip" && section.settings.source.kind === "delivery-facts");
+  return sections.some((section) => !section.hidden && section.type === "usp_strip" && section.settings.source.kind === "delivery-facts");
 }
 
 /**
@@ -191,13 +191,13 @@ export function homeSectionRequests(
     for (const id of homeSectionMediaIds(section)) {
       if (mediaIds.size < HOME_MAX_MEDIA) mediaIds.add(id);
     }
-    if (section.type === "category-tiles") {
+    if (section.type === "category_tiles") {
       for (const id of section.settings.categoryIds) if (categoryIds.size < HOME_MAX_CATEGORIES) categoryIds.add(id);
     }
     if (section.type === "collections") {
       for (const id of section.settings.collectionIds) if (collectionIds.size < HOME_MAX_COLLECTIONS) collectionIds.add(id);
     }
-    if (section.type === "brand-wall") brandLimit = HOME_BRAND_LIMIT;
+    if (section.type === "brand_wall") brandLimit = HOME_BRAND_LIMIT;
     if (section.type === "objects" && section.settings.typeId) {
       const existing = objects.get(section.settings.typeId);
       if (existing) existing.limit = Math.max(existing.limit, section.settings.limit);
@@ -205,7 +205,7 @@ export function homeSectionRequests(
         objects.set(section.settings.typeId, { typeId: section.settings.typeId, limit: section.settings.limit });
       }
     }
-    if (section.type === "deal-block" && section.settings.promotionId && promotionIds.size < HOME_MAX_PROMOTIONS) {
+    if (section.type === "deal_block" && section.settings.promotionId && promotionIds.size < HOME_MAX_PROMOTIONS) {
       promotionIds.add(section.settings.promotionId);
     }
   }

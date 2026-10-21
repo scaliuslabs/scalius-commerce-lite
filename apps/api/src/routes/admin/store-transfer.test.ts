@@ -184,7 +184,7 @@ describe("store transfer routes", () => {
     const big = JSON.stringify({ mode: "create", items: Array.from({ length: 12 }, (_, index) => product({ ref: `p${index}`, handle: `product-${index}`, descriptionHtml: "x".repeat(99_000) })) });
     const oversized = await post("/products", JSON.parse(big), { "Content-Length": String(new TextEncoder().encode(big).byteLength) });
     expect(oversized.status).toBe(413);
-    expect(oversized.body.error.code).toBe("PAYLOAD_TOO_LARGE");
+    expect(oversized.body.error.code).toBe("payload_too_large");
     const badPhone = await post("/customers", { mode: "create", items: [{ ref: "x", phone: "01712345678", name: "X", email: null, address: null }] });
     expect(badPhone.status).toBe(400);
   });

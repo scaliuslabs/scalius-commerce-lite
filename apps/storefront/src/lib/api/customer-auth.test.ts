@@ -144,7 +144,7 @@ describe("customer auth API helpers", () => {
   it("extracts customer payment-session API errors", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
       success: false,
-      error: { code: "SERVICE_UNAVAILABLE", message: "Gateway unavailable" },
+      error: { code: "service_unavailable", message: "Gateway unavailable" },
     }), { status: 503, headers: { "Content-Type": "application/json" } })));
 
     await expect(createCustomerOrderPaymentSession("order_1")).resolves.toEqual({
@@ -614,10 +614,10 @@ describe("customer auth API helpers", () => {
   it("keeps the server's phone code failures: waits, unavailable setup, wrong codes and conflicts", async () => {
     const reply = (status: number, error: unknown) => new Response(JSON.stringify({ success: false, error }), { status });
     vi.stubGlobal("fetch", vi.fn()
-      .mockResolvedValueOnce(reply(429, { code: "RATE_LIMITED", message: "Too many codes.", details: { retryAfterSeconds: 90 } }))
-      .mockResolvedValueOnce(reply(503, { code: "OTP_UNAVAILABLE", message: "Text message codes aren't available right now." }))
-      .mockResolvedValueOnce(reply(400, { code: "INVALID_CODE", message: "That code isn't right. 4 attempts left.", details: { attemptsLeft: 4 } }))
-      .mockResolvedValueOnce(reply(409, { code: "CONFLICT", message: "This phone number is verified on another account. Sign in with it instead." })));
+      .mockResolvedValueOnce(reply(429, { code: "rate_limited", message: "Too many codes.", details: { retryAfterSeconds: 90 } }))
+      .mockResolvedValueOnce(reply(503, { code: "otp_unavailable", message: "Text message codes aren't available right now." }))
+      .mockResolvedValueOnce(reply(400, { code: "invalid_code", message: "That code isn't right. 4 attempts left.", details: { attemptsLeft: 4 } }))
+      .mockResolvedValueOnce(reply(409, { code: "conflict", message: "This phone number is verified on another account. Sign in with it instead." })));
 
     await expect(sendPhoneVerificationCode()).resolves.toEqual({
       success: false, status: 429, error: "Too many codes.", retryAfterSeconds: 90,

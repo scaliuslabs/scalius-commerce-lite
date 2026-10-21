@@ -53,8 +53,8 @@ export default {
     wallet: {
       kind: "payment",
       async createSession(input, ctx) {
-        if (input.amountMinor === 1300) throw providerError("declined", "The wallet declined the payment.", { code: "wallet.declined" });
-        if (input.amountMinor === 1400) throw providerError("retryable", "Timed out after sending; secret " + ctx.settings.secret, { uncertain: true, code: "wallet.timeout" });
+        if (input.amountMinor === 1300) throw providerError("declined", "The wallet declined the payment.", { code: "wallet_declined" });
+        if (input.amountMinor === 1400) throw providerError("retryable", "Timed out after sending; secret " + ctx.settings.secret, { uncertain: true, code: "wallet_timeout" });
         if (input.amountMinor === 1500) return { redirectUrl: "http://insecure.example/pay" };
         if (input.amountMinor === 1600) throw new TypeError("boom");
         const existing = await ctx.objects.sessions.get(input.attemptKey);
@@ -159,7 +159,7 @@ export default {
     parcel: {
       kind: "courier",
       async createShipment(input, ctx) {
-        if (input.orderId === "ORD-DECLINE") throw providerError("declined", "Acme Parcel does not deliver to this area.", { code: "parcel.area" });
+        if (input.orderId === "ORD-DECLINE") throw providerError("declined", "Acme Parcel does not deliver to this area.", { code: "parcel_area" });
         const existing = await ctx.objects.bookings.get(input.idempotencyKey);
         if (existing) return existing.booking;
         const booking = {
@@ -174,7 +174,7 @@ export default {
         await ctx.objects.bookings.put(input.idempotencyKey, { booking });
         await ctx.objects.orders.put(input.orderId, { booking });
         if (input.orderId === "ORD-TIMEOUT") {
-          throw providerError("retryable", "Acme Parcel did not answer; key " + ctx.settings.secret, { uncertain: true, code: "parcel.timeout" });
+          throw providerError("retryable", "Acme Parcel did not answer; key " + ctx.settings.secret, { uncertain: true, code: "parcel_timeout" });
         }
         return booking;
       },

@@ -31,6 +31,7 @@ import {
 import { looksLikePlaceholderCredential } from "@scalius/shared/plugins/placeholder-credentials";
 import { currentProviderKind } from "@scalius/shared/plugins/providers/kinds";
 import {
+  PLUGIN_EXTENSION_RUN,
   FIRST_PARTY_PLUGIN_VENDOR,
   isPluginScope,
   knownPluginFeatures,
@@ -147,6 +148,8 @@ export function parseStoredPluginGrant(value: string | null): PluginGrantRequest
   if (features === null) return null;
   const messageRecipients = raw.messageRecipients === undefined ? [] : stringList(raw.messageRecipients);
   if (messageRecipients === null) return null;
+  const extensions = raw.extensions === undefined ? [] : stringList(raw.extensions);
+  if (extensions === null) return null;
   return {
     ...(parsed as Record<(typeof lists)[number], string[]>),
     publicRoutes: raw.publicRoutes,
@@ -155,16 +158,59 @@ export function parseStoredPluginGrant(value: string | null): PluginGrantRequest
     storefrontConnect: connect,
     features,
     messageRecipients,
+    extensions,
   } as PluginGrantRequest;
 }
 
 /**
- * A manifest stored before scopes, read as the scopes it asked for: each RBAC
- * permission becomes the first scope that confers it (`legacyPermissionScope`),
- * an admin route's `permission` gate its `scope`. Only the stored row's read
- * shape changes; its grant still needs approval (`parseStoredPluginGrant`).
+ * A stored manifest read in the current shape. Each step is pure and leaves a
+ * current manifest as it is; only the stored row's read shape changes, and
+ * its grant still needs approval (`parseStoredPluginGrant`).
+ *
+ * 1. Before scopes: each RBAC permission becomes the first scope that confers
+ *    it (`legacyPermissionScope`), an admin route's `permission` its `scope`.
+ * 2. Before storefront extensions: a `buyer.ui` function becomes one
+ *    `storefront.extensions` entry per target, with the function's reads.
+ * 3. Before admin nesting: top-level `timeline` and `settingsGroups` move to
+ *    `admin.timeline` and `admin.settingsGroups`.
  */
 export function upgradeStoredPluginManifest(manifest: Record<string, unknown>): Record<string, unknown> {
+  return nestAdminParts(buyerUiAsExtensions(permissionsAsScopes(manifest)));
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function buyerUiAsExtensions(manifest: Record<string, unknown>): Record<string, unknown> {
+  if (!Array.isArray(manifest.functions)) return manifest;
+  const buyerUi = manifest.functions.find((fn) => isObject(fn) && fn.point === "buyer.ui");
+  if (!isObject(buyerUi)) return manifest;
+  const storefront = isObject(manifest.storefront) ? manifest.storefront : {};
+  const targets = Array.isArray(buyerUi.targets) ? buyerUi.targets : [];
+  const reads = Array.isArray(buyerUi.reads) ? buyerUi.reads : [];
+  return {
+    ...manifest,
+    functions: manifest.functions.filter((fn) => fn !== buyerUi),
+    storefront: { ...storefront, extensions: targets.map((target) => ({ target, reads })) },
+  };
+}
+
+function nestAdminParts(manifest: Record<string, unknown>): Record<string, unknown> {
+  if (manifest.timeline === undefined && manifest.settingsGroups === undefined) return manifest;
+  const { timeline, settingsGroups, ...rest } = manifest;
+  const admin = isObject(rest.admin) ? rest.admin : {};
+  return {
+    ...rest,
+    admin: {
+      ...admin,
+      ...(timeline !== undefined ? { timeline } : {}),
+      ...(settingsGroups !== undefined ? { settingsGroups } : {}),
+    },
+  };
+}
+
+function permissionsAsScopes(manifest: Record<string, unknown>): Record<string, unknown> {
   if (manifest.scopes !== undefined || !Array.isArray(manifest.permissions)) return manifest;
   const { permissions, ...rest } = manifest;
   const scopes = [...new Set((permissions as unknown[])
@@ -226,7 +272,7 @@ export async function getPluginInstallation(db: Database, pluginId: string): Pro
 
 export async function requirePluginInstallation(db: Database, pluginId: string): Promise<PluginInstallation> {
   const installation = await getPluginInstallation(db, pluginId);
-  if (!installation) throw new PluginError("installation.not_found", `Plugin ${pluginId} is not installed.`);
+  if (!installation) throw new PluginError("installation_not_found", `Plugin ${pluginId} is not installed.`);
   return installation;
 }
 
@@ -315,7 +361,7 @@ interface InstallationBeforeUpdate {
 
 async function installationBeforeUpdate(db: Database, pluginId: string): Promise<InstallationBeforeUpdate> {
   const row = await db.select().from(pluginInstallations).where(eq(pluginInstallations.pluginId, pluginId)).get();
-  if (!row) throw new PluginError("installation.not_found", `Plugin ${pluginId} is not installed.`);
+  if (!row) throw new PluginError("installation_not_found", `Plugin ${pluginId} is not installed.`);
   const installation = toPluginInstallation(row);
   if (installation) return installation;
   const grant = parseStoredPluginGrant(row.grantJson);
@@ -337,10 +383,10 @@ export function requireInstallableManifest(value: unknown, source: PluginInstall
   // The plugin API version and the platform release first: a clear "needs a
   // newer Scalius" instead of a schema error.
   const compatible = pluginCompatibility(value);
-  if (!compatible.ok) throw new PluginError("installation.incompatible", compatible.message, { reason: compatible.reason });
+  if (!compatible.ok) throw new PluginError("installation_incompatible", compatible.message, { reason: compatible.reason });
   const parsed = parsePluginManifest(value);
   if (!parsed.ok) {
-    throw new PluginError("manifest.invalid", `The plugin manifest is invalid: ${parsed.issues[0]?.path} ${parsed.issues[0]?.message}`, {
+    throw new PluginError("manifest_invalid", `The plugin manifest is invalid: ${parsed.issues[0]?.path} ${parsed.issues[0]?.message}`, {
       issues: parsed.issues,
     });
   }
@@ -349,7 +395,7 @@ export function requireInstallableManifest(value: unknown, source: PluginInstall
   // whatever path it arrives by (audit R2 F6): first-party standing (beta
   // operations, surviving the emergency stop) goes by this prefix.
   if (source !== "bundled" && manifest.id.startsWith(`${FIRST_PARTY_PLUGIN_VENDOR}.`)) {
-    throw new PluginError("manifest.reserved_vendor", `Plugin ids under ${FIRST_PARTY_PLUGIN_VENDOR}.* are reserved for apps bundled with Scalius.`);
+    throw new PluginError("manifest_reserved_vendor", `Plugin ids under ${FIRST_PARTY_PLUGIN_VENDOR}.* are reserved for apps bundled with Scalius.`);
   }
   return manifest;
 }
@@ -359,6 +405,8 @@ function registrationRows(pluginId: string, manifest: PluginManifest) {
   return [
     ...manifest.events.map((filter) => ({ kind: "event" as const, name: filter, pluginId, priority: 100 })),
     ...manifest.functions.map((fn) => ({ kind: "function" as const, name: fn.point, pluginId, priority: fn.priority })),
+    // Storefront extensions render through the function pipeline under one run name.
+    ...(manifest.storefront.extensions.length > 0 ? [{ kind: "function" as const, name: PLUGIN_EXTENSION_RUN, pluginId, priority: 100 }] : []),
     ...manifest.cron.map((job) => ({ kind: "cron" as const, name: job.name, pluginId, priority: 100 })),
     // One row per port the app provides: "who provides payment" is one index read.
     ...[...new Set(manifest.providers.map((provider) => provider.kind))]
@@ -437,7 +485,7 @@ function registrationInserts(db: Database, pluginId: string, declared: PluginMan
 }
 
 function requireSha256(value: string): string {
-  if (!SHA256.test(value)) throw new PluginError("manifest.invalid", "The bundle SHA-256 must be 64 lowercase hex characters.");
+  if (!SHA256.test(value)) throw new PluginError("manifest_invalid", "The bundle SHA-256 must be 64 lowercase hex characters.");
   return value;
 }
 
@@ -450,7 +498,7 @@ function isPrimaryKeyConflict(error: unknown): boolean {
   return false;
 }
 
-const REVISION_GUARD = "PLUGIN_REVISION_CONFLICT";
+const REVISION_GUARD = "plugin_revision_conflict";
 
 /** Fails the whole batch unless the installation is still at `expectedRevision`. */
 function revisionGuard(db: Database, pluginId: string, expectedRevision: number) {
@@ -470,9 +518,9 @@ async function requireRevision(
   if (updated.length > 0) return;
   const current = await db.select({ revision: pluginInstallations.revision })
     .from(pluginInstallations).where(eq(pluginInstallations.pluginId, pluginId)).get();
-  if (!current) throw new PluginError("installation.not_found", `Plugin ${pluginId} is not installed.`);
+  if (!current) throw new PluginError("installation_not_found", `Plugin ${pluginId} is not installed.`);
   throw new PluginError(
-    "installation.revision_conflict",
+    "installation_revision_conflict",
     `Plugin ${pluginId} changed since revision ${expectedRevision}; reload and try again.`,
     { currentRevision: current.revision },
   );
@@ -499,7 +547,7 @@ export async function installPlugin(db: Database, input: InstallPluginInput): Pr
   const manifest = requireInstallableManifest(input.manifest, input.source);
   const sha256 = requireSha256(input.bundleSha256);
   if (await getPluginInstallation(db, manifest.id)) {
-    throw new PluginError("installation.exists", `Plugin ${manifest.id} is already installed.`);
+    throw new PluginError("installation_exists", `Plugin ${manifest.id} is already installed.`);
   }
   try {
     await safeBatch(db, [
@@ -523,7 +571,7 @@ export async function installPlugin(db: Database, input: InstallPluginInput): Pr
       ...salesChannelStatements(db, manifest.id, manifest.salesChannels, false),
     ] as never);
   } catch (error) {
-    if (isPrimaryKeyConflict(error)) throw new PluginError("installation.exists", `Plugin ${manifest.id} is already installed.`);
+    if (isPrimaryKeyConflict(error)) throw new PluginError("installation_exists", `Plugin ${manifest.id} is already installed.`);
     throw error;
   }
   await syncInstallationObjects(db, manifest.id, manifest);
@@ -567,11 +615,11 @@ export async function activatePlugin(
   const installation = withFeatures(current, features);
   const missing = missingRequiredSettings(installation);
   if (missing.length > 0) {
-    throw new PluginError("installation.settings_incomplete", `Fill in the required settings first: ${missing.join(", ")}.`, { missing });
+    throw new PluginError("installation_settings_incomplete", `Fill in the required settings first: ${missing.join(", ")}.`, { missing });
   }
   const grant = pluginGrantRequest(installation.declaredManifest, features);
   if (options.expectedGrantKey !== undefined && options.expectedGrantKey !== pluginGrantKey(grant)) {
-    throw new PluginError("installation.grant_changed", `${installation.manifest.name} now asks for different access; review it again.`, {
+    throw new PluginError("installation_grant_changed", `${installation.manifest.name} now asks for different access; review it again.`, {
       currentRevision: installation.revision,
     });
   }
@@ -632,25 +680,25 @@ export async function setPluginFeature(
   const installation = await requirePluginInstallation(db, pluginId);
   const declared = installation.declaredManifest;
   if (!declared.features.some((feature) => feature.id === options.feature)) {
-    throw new PluginError("feature.not_found", `${declared.name} has no feature ${options.feature}.`);
+    throw new PluginError("feature_not_found", `${declared.name} has no feature ${options.feature}.`);
   }
   if (installation.revision !== options.expectedRevision) await requireRevision(db, pluginId, options.expectedRevision, []);
   const on = installation.features.includes(options.feature);
   if (on === options.enabled) return { installation, changed: false };
   if (options.enabled && (installation.status !== "active" || !installation.grant)) {
-    throw new PluginError("installation.inactive", `Turn on ${declared.name} first, then its features.`);
+    throw new PluginError("installation_inactive", `Turn on ${declared.name} first, then its features.`);
   }
-  if (!installation.grant) throw new PluginError("installation.inactive", `${declared.name} is not approved.`);
+  if (!installation.grant) throw new PluginError("installation_inactive", `${declared.name} is not approved.`);
   const features = options.enabled
     ? [...installation.features, options.feature]
     : installation.features.filter((feature) => feature !== options.feature);
   const grant = pluginGrantRequest(declared, features);
   // Off only ever narrows: an update still waiting for approval is not approved by it.
   if (!options.enabled && pluginGrantExpands(installation.grant, grant)) {
-    throw new PluginError("installation.needs_approval", `${declared.name} waits for its update's approval; approve or remove it first.`);
+    throw new PluginError("installation_needs_approval", `${declared.name} waits for its update's approval; approve or remove it first.`);
   }
   if (options.enabled && options.expectedGrantKey !== undefined && options.expectedGrantKey !== pluginGrantKey(grant)) {
-    throw new PluginError("installation.grant_changed", `${declared.name} now asks for different access; review it again.`, {
+    throw new PluginError("installation_grant_changed", `${declared.name} now asks for different access; review it again.`, {
       currentRevision: installation.revision,
     });
   }
@@ -729,7 +777,7 @@ async function syncInstallationObjects(db: Database, pluginId: string, manifest:
     reason = `${manifest.name}'s object types could not be saved.`;
   }
   await markPluginFailed(db, pluginId, reason);
-  throw new PluginError("installation.objects_invalid", reason);
+  throw new PluginError("installation_objects_invalid", reason);
 }
 
 /** Stored values that are still valid under a new settings schema; new fields take their defaults. */
@@ -773,7 +821,7 @@ export function requirePinnedSigner(
   if (update.signerKeyId === current.signerKeyId) return;
   const name = current.manifest?.name ?? current.pluginId;
   throw new PluginError(
-    "signature.signer_changed",
+    "signature_signer_changed",
     update.signerKeyId === null
       ? `${name} was installed from a signed release; an update must be signed by the same developer.`
       : `${name} was installed from a release signed by another developer. To move it to this developer, uninstall it (keeping its data) and install this release.`,
@@ -799,7 +847,7 @@ export async function updatePluginInstallation(
 ): Promise<PluginInstallation> {
   const current = await installationBeforeUpdate(db, pluginId);
   const manifest = requireInstallableManifest(input.manifest, input.source);
-  if (manifest.id !== pluginId) throw new PluginError("manifest.invalid", `The manifest is for ${manifest.id}, not ${pluginId}.`);
+  if (manifest.id !== pluginId) throw new PluginError("manifest_invalid", `The manifest is for ${manifest.id}, not ${pluginId}.`);
   requirePinnedSigner({ ...current, pluginId }, { source: input.source, signerKeyId: input.signerKeyId ?? null });
   const sha256 = requireSha256(input.bundleSha256);
   // Features stay as they were (those the new manifest still declares); a new feature starts off.
@@ -974,14 +1022,14 @@ export async function writePluginSettings(
     const owner = pluginFeatureOwners(installation.declaredManifest).settings.get(dormant);
     const feature = installation.declaredManifest.features.find((entry) => entry.id === owner);
     const message = `Turn on ${feature?.name ?? "its feature"} first.`;
-    throw new PluginError("settings.invalid", `${dormant}: ${message}`, { errors: [{ key: dormant, message }] });
+    throw new PluginError("settings_invalid", `${dormant}: ${message}`, { errors: [{ key: dormant, message }] });
   }
   const secretsSet = new Set(schema
     .filter((field) => field.type === "secret" && isSealedPluginSecret(installation.storedSettings[field.key]))
     .map((field) => field.key));
   const checked = validatePluginSettingValues(schema, values, secretsSet);
   if (!checked.ok) {
-    throw new PluginError("settings.invalid", checked.errors[0] ? `${checked.errors[0].key}: ${checked.errors[0].message}` : "Invalid settings.", {
+    throw new PluginError("settings_invalid", checked.errors[0] ? `${checked.errors[0].key}: ${checked.errors[0].message}` : "Invalid settings.", {
       errors: checked.errors,
     });
   }
@@ -993,7 +1041,7 @@ export async function writePluginSettings(
     && looksLikePlaceholderCredential(checked.values[field.key] as string));
   if (placeholder) {
     const message = `${placeholder.label} looks like a placeholder. Save a real provider value.`;
-    throw new PluginError("settings.invalid", `${placeholder.key}: ${message}`, { errors: [{ key: placeholder.key, message }] });
+    throw new PluginError("settings_invalid", `${placeholder.key}: ${message}`, { errors: [{ key: placeholder.key, message }] });
   }
   const writesSecret = schema.some((field) => field.type === "secret" && typeof checked.values[field.key] === "string");
   const key = writesSecret ? await derivePluginSettingsKey(options.credentialEncryptionKey) : null;

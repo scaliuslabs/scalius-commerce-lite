@@ -141,7 +141,7 @@ describe("plugin event deliveries", () => {
     const retried = await retryPluginEventDelivery(db, "alpha.all", ids[1]!);
     expect(retried).toMatchObject({ status: "pending", attempts: 0, error: null });
     expect(await listDuePluginEventDeliveries(db, 10)).toContain(ids[1]);
-    await expect(retryPluginEventDelivery(db, "alpha.all", ids[0]!)).rejects.toMatchObject({ pluginCode: "delivery.not_retryable" });
+    await expect(retryPluginEventDelivery(db, "alpha.all", ids[0]!)).rejects.toMatchObject({ pluginCode: "delivery_not_retryable" });
 
     const page = await listPluginEventDeliveries(db, "alpha.all", { limit: 2 });
     // Newest first by id (time-sortable; ids minted in one millisecond order by their random tail).
@@ -167,7 +167,7 @@ describe("plugin event deliveries", () => {
     await cancelPluginEventDelivery(db, again.delivery, again.claimId, "The app is not active.");
     expect(sqlite.prepare("SELECT status FROM plugin_event_deliveries WHERE id = ?").get(deliveryId)).toEqual({ status: "cancelled" });
     await markPluginFailed(db, "alpha.all", "broken");
-    await expect(retryPluginEventDelivery(db, "alpha.all", deliveryId)).rejects.toMatchObject({ pluginCode: "installation.inactive" });
+    await expect(retryPluginEventDelivery(db, "alpha.all", deliveryId)).rejects.toMatchObject({ pluginCode: "installation_inactive" });
   });
 });
 
@@ -248,7 +248,7 @@ describe("plugin updates, approval and uninstall", () => {
     expect(pluginNeedsApproval(wider)).toBe(true);
 
     await expect(activatePlugin(db, "acme.loyalty", { actorUserId: "owner", expectedRevision: wider.revision, expectedGrantKey: oldKey }))
-      .rejects.toMatchObject({ pluginCode: "installation.grant_changed" });
+      .rejects.toMatchObject({ pluginCode: "installation_grant_changed" });
     const approved = await activatePlugin(db, "acme.loyalty", {
       actorUserId: "owner",
       expectedRevision: wider.revision,

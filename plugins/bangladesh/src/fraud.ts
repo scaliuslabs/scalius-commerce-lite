@@ -261,7 +261,7 @@ function normalizeFraudResponse(raw: unknown, phone: string): NormalizedFraudSta
     const statusOnly = normalizeStatusResponse(raw, phone);
     if (statusOnly) return statusOnly;
 
-    throw new ProviderError("declined", "The fraud check service answered without a status or courier delivery statistics.", { code: "bangladesh.fraud_unreadable" });
+    throw new ProviderError("declined", "The fraud check service answered without a status or courier delivery statistics.", { code: "bangladesh_fraud_unreadable" });
   }
 
   return {
@@ -389,10 +389,10 @@ function serviceUrl(checker: Checker, ctx: PluginContext): string {
   try {
     parsed = new URL(value);
   } catch {
-    throw new ProviderError("misconfigured", `${checker.label} API URL must be a valid HTTPS address.`, { code: "bangladesh.fraud_url" });
+    throw new ProviderError("misconfigured", `${checker.label} API URL must be a valid HTTPS address.`, { code: "bangladesh_fraud_url" });
   }
   if (parsed.protocol !== "https:" || parsed.username || parsed.password || (parsed.port && parsed.port !== "443") || parsed.search || parsed.hash || !hostAllowed(parsed.hostname, checker.hosts)) {
-    throw new ProviderError("misconfigured", `${checker.label} API URL must be an HTTPS address on ${checker.hosts.filter((host) => !host.startsWith("*.")).join(" or ")}.`, { code: "bangladesh.fraud_url" });
+    throw new ProviderError("misconfigured", `${checker.label} API URL must be an HTTPS address on ${checker.hosts.filter((host) => !host.startsWith("*.")).join(" or ")}.`, { code: "bangladesh_fraud_url" });
   }
   return parsed.href;
 }
@@ -405,8 +405,8 @@ async function lookup(checker: Checker, phone: string, ctx: PluginContext): Prom
     response = await ctx.http.fetch(url, { method: "POST", ...request, timeoutMs: REQUEST_TIMEOUT_MS });
   } catch (error) {
     const code = platformErrorCode(error);
-    throw new ProviderError("retryable", code === "http.timeout" ? `${checker.label} did not answer in time.` : `${checker.label} could not be reached.`, {
-      code: code === "http.timeout" ? "bangladesh.fraud_timeout" : "bangladesh.fraud_unreachable",
+    throw new ProviderError("retryable", code === "http_timeout" ? `${checker.label} did not answer in time.` : `${checker.label} could not be reached.`, {
+      code: code === "http_timeout" ? "bangladesh_fraud_timeout" : "bangladesh_fraud_unreachable",
     });
   }
   let data: unknown = {};

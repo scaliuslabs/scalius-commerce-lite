@@ -240,7 +240,7 @@ await resolveRequestTheme(Astro, layoutData, resourceBindingContext(category, `/
   <CatalogListingPage
     template
     kind="category"
-    fields={storefrontFieldValues(category.customFields)}
+    fields={storefrontFieldValues(category.customFields, { currencyCode, currencySymbol })}
     data={{
       "data-category-name": category.name,
       "data-products-for-analytics": JSON.stringify(analyticsProductData),

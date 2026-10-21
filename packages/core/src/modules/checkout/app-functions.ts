@@ -31,6 +31,7 @@ import { DELIVERY_HIERARCHY_COUNTRY, MARKET_COUNTRY_PATTERN } from "@scalius/sha
 import type { Database } from "@scalius/database/client";
 import { BACKUP_MARKET_ID, categoryClosure, collections, customerTagLinks, customers, orders, productVariants, products } from "@scalius/database/schema";
 import {
+  PLUGIN_EXTENSION_RUN,
   functionCartSchema,
   type FunctionCart,
   type CheckoutAttribute,
@@ -39,7 +40,7 @@ import {
   type StorefrontUiSlot,
   type PluginFunctionInput,
   type PluginFunctionOutput,
-  type PluginFunctionPoint,
+  type PluginRunPoint,
 } from "@scalius/shared/plugins";
 import { parseQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { floorToIncrementMinor, percentOfMinor, roundToIncrementMinor } from "@scalius/shared/money";
@@ -54,9 +55,9 @@ export type { AppDiscountTarget, AppliedAppDiscount, AppObjectCommit, CheckoutRa
 // ── The runner checkout is given ────────────────────────────────────────────
 
 /** Checkout refused because an app registered with `onError: "block"` could not answer. */
-export const CHECKOUT_APP_UNAVAILABLE_REASON = "CHECKOUT_APP_UNAVAILABLE";
+export const CHECKOUT_APP_UNAVAILABLE_REASON = "checkout_app_unavailable";
 
-export interface CheckoutAppFunctionResult<P extends PluginFunctionPoint> {
+export interface CheckoutAppFunctionResult<P extends PluginRunPoint> {
   pluginId: string;
   /** The app's name, as the merchant sees it (manifest `name`). */
   appName: string;
@@ -75,17 +76,17 @@ export interface CheckoutAppFunctionResult<P extends PluginFunctionPoint> {
  * point with the same input returns the same outcome within the request.
  */
 export interface CheckoutAppFunctions {
-  readonly points: ReadonlySet<PluginFunctionPoint>;
+  readonly points: ReadonlySet<PluginRunPoint>;
   readonly attributes?: ReadonlyArray<{ appId: string; fields: CheckoutAttribute[] }>;
   buyerUi?(input: Partial<Omit<BuyerUiInput, "target">> & { targets: readonly StorefrontUiSlot[]; currency: string }): Promise<BuyerUiBlock[]>;
   /** `reads` is the platform's: each app gets its own declared reads. */
-  run<P extends PluginFunctionPoint>(point: P, input: Omit<PluginFunctionInput<P>, "reads">): Promise<Array<CheckoutAppFunctionResult<P>>>;
+  run<P extends PluginRunPoint>(point: P, input: Omit<PluginFunctionInput<P>, "reads">): Promise<Array<CheckoutAppFunctionResult<P>>>;
   /** The declared reads of the apps at these points (none: no read). */
-  readRequests?(points: readonly PluginFunctionPoint[]): AppFunctionReadRequest[];
+  readRequests?(points: readonly PluginRunPoint[]): AppFunctionReadRequest[];
   /** The request's resolved reads: a facts batch remembers what it read, `run` takes them from here. */
   readonly reads?: AppReadsCache;
   /** A valid-looking output checkout could not use (an unknown line or rate): logged for the merchant. */
-  report(pluginId: string, point: PluginFunctionPoint, message: string): void;
+  report(pluginId: string, point: PluginRunPoint, message: string): void;
 }
 
 export const NO_CHECKOUT_APP_FUNCTIONS: CheckoutAppFunctions = {
@@ -95,15 +96,15 @@ export const NO_CHECKOUT_APP_FUNCTIONS: CheckoutAppFunctions = {
 };
 
 /** Points that need the app cart. */
-const CART_POINTS: readonly PluginFunctionPoint[] = [
+const CART_POINTS: readonly PluginRunPoint[] = [
   "cart.validate",
   "checkout.discounts",
   "checkout.shipping_rates",
   "checkout.payment_methods",
-  "buyer.ui",
+  PLUGIN_EXTENSION_RUN,
 ];
 
-export function wantsAppCart(apps: CheckoutAppFunctions | undefined, points: readonly PluginFunctionPoint[] = CART_POINTS): boolean {
+export function wantsAppCart(apps: CheckoutAppFunctions | undefined, points: readonly PluginRunPoint[] = CART_POINTS): boolean {
   return Boolean(apps && points.some((point) => apps.points.has(point)));
 }
 
@@ -167,7 +168,7 @@ export async function loadAppFunctionCartFacts(
     marketCountry: string | null;
     /** The apps whose declared reads at `points` ride this batch. */
     apps?: Pick<CheckoutAppFunctions, "readRequests" | "reads"> | undefined;
-    points?: readonly PluginFunctionPoint[];
+    points?: readonly PluginRunPoint[];
     /** The validated checkout attributes the cart will carry (`attribute.<key>` reads). */
     attributes?: Record<string, string>;
   },

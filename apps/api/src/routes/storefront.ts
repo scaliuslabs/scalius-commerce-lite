@@ -219,7 +219,7 @@ const homepageSectionsSchema = z.object({
         key: z.string(),
         name: z.string(),
         type: z.string(),
-        value: z.unknown().openapi({ description: "The custom-field HTTP contract, as public custom fields: text, dates, URLs, colours and media ids (in media) as strings; integers and money (decimal major units of the store currency) as numbers; booleans; lists as arrays." }),
+        value: z.unknown().openapi({ description: "The custom-field HTTP contract, as public custom fields: text, dates, URLs, colours and media ids (in media) as strings; integers as numbers; money as `{ amountMinor, currency }` (integer minor units of the store currency); booleans; lists as arrays." }),
       })),
     })),
   })).optional().openapi({
@@ -417,7 +417,7 @@ const layoutDataSchema = z.object({
     sectionSettings: z.record(z.string(), z.array(z.record(z.string(), z.unknown()))),
     skins: z.array(z.object({
       id: z.string(),
-      target: z.string().openapi({ description: "The unit the skin draws: header, footer, product-card, product-main, listing-main or section:<core section type>." }),
+      target: z.string().openapi({ description: "The unit the skin draws: header, footer, product_card, product_main, listing_main or section:<core section type>." }),
       settings: z.array(z.record(z.string(), z.unknown())),
     })),
     components: z.array(z.object({
@@ -598,7 +598,7 @@ app.openapi(extensionFileRoute, async (c) => {
   const { readPluginStorefrontFile } = await import("../plugins/storefront-files");
   const file = await readPluginStorefrontFile(c.env, c.get("db"), pluginId, release, c.req.valid("query").path);
   if (!file) {
-    return new Response(JSON.stringify({ success: false, error: { code: "NOT_FOUND", message: "File not found" } }), {
+    return new Response(JSON.stringify({ success: false, error: { code: "not_found", message: "File not found" } }), {
       status: 404,
       headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
     }) as never;

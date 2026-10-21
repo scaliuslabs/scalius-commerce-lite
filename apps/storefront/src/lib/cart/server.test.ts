@@ -164,7 +164,7 @@ describe("cart server order processing", () => {
     );
   });
 
-  it.each(["CHECKOUT_ATTEMPT_EXPIRED", "CHECKOUT_ATTEMPT_CONFLICT"])("preserves %s for page recovery without treating it as a new order", async (errorCode) => {
+  it.each(["checkout_attempt_expired", "checkout_attempt_conflict"])("preserves %s for page recovery without treating it as a new order", async (errorCode) => {
     const refusal = {
       success: false, status: 409, errorCode, error: "Checkout needs review",
       details: { orderId: "old_order", paymentMethod: "cod" },
@@ -305,7 +305,7 @@ describe("cart server order processing", () => {
       cartKey: "line_1",
       productId: "product-1",
       variantId: null,
-      code: "PRODUCT_UNAVAILABLE" as const,
+      code: "product_unavailable" as const,
       action: "remove" as const,
       message: "Product 1 is no longer available.",
       productName: "Product 1",
@@ -383,7 +383,7 @@ describe("cart server order processing", () => {
         cartKey: "line_a",
         productId: "product-a",
         variantId: "variant_a",
-        code: "QUANTITY_UNAVAILABLE" as const,
+        code: "quantity_unavailable" as const,
         action: "reduce_quantity" as const,
         message: "Only 1 Product A left.",
         productName: "Product A",
@@ -396,7 +396,7 @@ describe("cart server order processing", () => {
         cartKey: "line_b",
         productId: "product-b",
         variantId: "variant_b",
-        code: "PRODUCT_UNAVAILABLE" as const,
+        code: "product_unavailable" as const,
         action: "remove" as const,
         message: "Product B is no longer available.",
         productName: "Product B",
@@ -438,7 +438,7 @@ describe("cart server order processing", () => {
       cartKey: "line_1",
       productId: "product-1",
       variantId: "variant_1",
-      code: "PRICE_CHANGED" as const,
+      code: "price_changed" as const,
       action: "refresh_item" as const,
       message: "Product 1 price changed.",
       productName: "Product 1",

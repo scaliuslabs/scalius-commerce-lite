@@ -94,14 +94,14 @@ describe("app providers through the bundled loader", () => {
   it("maps every failure to the port's error", async () => {
     const attempt = (amountMinor: number) => host.invokeProvider(installation, "payment", "wallet", "createSession", walletSessionInput(amountMinor))
       .then(() => null, (error: unknown) => error);
-    expect(await attempt(1300)).toMatchObject({ category: "declined", uncertain: false, code: "wallet.declined", message: "The wallet declined the payment." });
+    expect(await attempt(1300)).toMatchObject({ category: "declined", uncertain: false, code: "wallet_declined", message: "The wallet declined the payment." });
     const timeout = await attempt(1400) as ProviderError;
     expect(timeout).toBeInstanceOf(ProviderError);
-    expect(timeout).toMatchObject({ category: "retryable", uncertain: true, code: "wallet.timeout" });
+    expect(timeout).toMatchObject({ category: "retryable", uncertain: true, code: "wallet_timeout" });
     // The app's own message cannot leak its secret.
     expect(timeout.message).not.toContain(WALLET_FIXTURE_SECRET);
-    expect(await attempt(1500)).toMatchObject({ category: "retryable", uncertain: true, code: "provider.invalid_response" });
-    expect(await attempt(1600)).toMatchObject({ category: "retryable", uncertain: true, code: "provider.error" });
+    expect(await attempt(1500)).toMatchObject({ category: "retryable", uncertain: true, code: "provider_invalid_response" });
+    expect(await attempt(1600)).toMatchObject({ category: "retryable", uncertain: true, code: "provider_error" });
     const logged = JSON.stringify(await listPluginLogs(db, WALLET_FIXTURE_ID));
     expect(logged).toContain("Invalid createSession answer at redirectUrl.");
     expect(logged).not.toContain(WALLET_FIXTURE_SECRET);
@@ -109,7 +109,7 @@ describe("app providers through the bundled loader", () => {
 
   it("refuses what the app did not declare or was not approved for, without running it", async () => {
     await expect(host.invokeProvider(installation, "payment", "wallet", "listRefunds", { sourceRef: "W-1" }))
-      .rejects.toMatchObject({ category: "misconfigured", code: "provider.unsupported" });
+      .rejects.toMatchObject({ category: "misconfigured", code: "provider_unsupported" });
     await expect(host.invokeProvider(installation, "courier", "wallet", "trackShipment", { externalId: "x" }))
       .rejects.toMatchObject({ category: "misconfigured" });
     const unapproved = { ...installation, grant: { ...installation.grant!, providers: [] } };
@@ -128,6 +128,6 @@ describe("app providers through the bundled loader", () => {
       loaderFor: () => { throw new Error("must not load"); },
     });
     await expect(otherKeyHost.invokeProvider(installation, "payment", "wallet", "createSession", walletSessionInput(100)))
-      .rejects.toMatchObject({ category: "misconfigured", code: "provider.settings_unreadable" });
+      .rejects.toMatchObject({ category: "misconfigured", code: "provider_settings_unreadable" });
   });
 });

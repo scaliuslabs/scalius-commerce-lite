@@ -2,7 +2,7 @@ import { AdminApiResponseError } from "~/lib/admin-api-error";
 import type { LibraryMediaFile } from "../types";
 
 export function isMediaVersionConflict(error: unknown): boolean {
-  return error instanceof AdminApiResponseError && error.status === 409 && error.code === "CONFLICT";
+  return error instanceof AdminApiResponseError && error.status === 409 && error.code === "conflict";
 }
 
 export function mediaMetadata(file: LibraryMediaFile) {

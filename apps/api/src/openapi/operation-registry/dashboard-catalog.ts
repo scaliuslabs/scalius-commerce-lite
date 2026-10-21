@@ -35,14 +35,16 @@ export const DASHBOARD_CATALOG_OPERATIONS = {
     reason: "Legacy oversized category aggregate; use dashboard.categories.get_section.",
   },
   "dashboard.categories.get_ancestors": {},
-  "dashboard.categories.get_section": { stability: "stable" },
+  // Editor-shaped (offset into one rich-text field): beta.
+  "dashboard.categories.get_section": {},
   "dashboard.categories.list": {
     exposure: "excluded",
     reason:
       "Legacy dashboard list may include oversized category rich text; use dashboard.categories.list_summaries.",
   },
   "dashboard.categories.list_children": { stability: "stable" },
-  "dashboard.categories.list_summaries": { stability: "stable" },
+  // Page-numbered (dashboard-shaped): beta until a cursor list joins the stable API.
+  "dashboard.categories.list_summaries": {},
   "dashboard.categories.move": { revision: "required" },
   "dashboard.categories.publish_readiness": {},
   "dashboard.categories.restore": { stability: "stable", revision: "required" },
@@ -66,8 +68,10 @@ export const DASHBOARD_CATALOG_OPERATIONS = {
     reason: "Legacy oversized aggregate projection; use dashboard.collections.get_section.",
   },
   "dashboard.collections.get_by_ids": { stability: "stable" },
-  "dashboard.collections.get_section": { stability: "stable" },
-  "dashboard.collections.list": { stability: "stable" },
+  // Editor-shaped (offset into one rich-text field): beta.
+  "dashboard.collections.get_section": {},
+  // Page-numbered (dashboard-shaped): beta until a cursor list joins the stable API.
+  "dashboard.collections.list": {},
   "dashboard.collections.product_options": {},
   "dashboard.collections.reorder": { revision: "required" },
   "dashboard.collections.restore": { stability: "stable", revision: "optional" },

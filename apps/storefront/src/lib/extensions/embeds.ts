@@ -27,7 +27,7 @@ export type EmbedRenderers = Partial<Record<StorefrontEmbedKind, (embed: EmbedPl
 const PRODUCT_ID = /^[A-Za-z0-9][A-Za-z0-9_:-]{0,127}$/;
 
 /**
- * The order form of a component section (`kind="order-form"`): only for a
+ * The order form of a component section (`kind="order_form"`): only for a
  * product the component was given (id to handle), with its quantity cap
  * (1 to 10, 5 by default) and submit words. Ids stay unique per placement.
  */
@@ -35,7 +35,7 @@ export function orderFormEmbed(
   OrderForm: EmbedRender["component"],
   products: ReadonlyMap<string, string>,
   options: { instanceId: string; preview: boolean },
-): NonNullable<EmbedRenderers["order-form"]> {
+): NonNullable<EmbedRenderers["order_form"]> {
   const prefix = encodeURIComponent(options.instanceId);
   return ({ data, index }) => {
     const product = data.product?.trim() ?? "";

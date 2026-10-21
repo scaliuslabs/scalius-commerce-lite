@@ -36,7 +36,7 @@ const CLOSED_ORDER_STATUSES = ["cancelled", "refunded", "returned", "delivered",
 /** A location does not hold the units a stock movement takes from it. */
 export class InventoryLocationShortfallError extends AppError {
     constructor(message: string, details?: unknown) {
-        super(409, "INVENTORY_LOCATION_SHORTFALL", message, details);
+        super(409, "inventory_location_shortfall", message, details);
         this.name = "InventoryLocationShortfallError";
     }
 }

@@ -305,7 +305,7 @@ describe("navigation authority D1 commands", () => {
     const db = createDatabase();
     await createNavigationMenu(db, { name: "Main menu" });
     await expect(createNavigationMenu(db, { name: "Main menu" })).rejects.toMatchObject({
-      code: "CONFLICT",
+      code: "conflict",
       message: "Another menu already has this name. Use a different name.",
     });
   });

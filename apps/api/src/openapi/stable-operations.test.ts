@@ -12,6 +12,9 @@
 //   3. the snapshot equals the current contract exactly, so an additive
 //      change is reviewed: accept it with `vitest run -u` on this file.
 //
+// The snapshot is keyed by app name (`orders.get`, plugins/app-operations.ts):
+// the one name an app passes to `ctx.api.call`, sealed with its contract.
+//
 // A breaking change needs a new operation (or a new plugin API version), not
 // an edited snapshot. Before the v2 lock a deliberate break (a security fix)
 // is accepted only by an entry in `stable-operations.breaks.json` naming the
@@ -25,6 +28,7 @@ import { protectedMarkerCategories } from "@scalius/shared/plugins/protected-dat
 import { eventDataTruncation } from "@scalius/shared/events";
 import { AGENT_COMPONENT_SCHEMAS, AGENT_OPERATIONS } from "../generated/agent-operations.gen";
 import { isOperationAvailableToPlugin, pluginRbacSatisfied } from "../plugins/authority";
+import { appOperationName, resolveAppOperation } from "../plugins/app-operations";
 import type { AgentOperationManifestEntry } from "./agent-operation-manifest";
 import { referencedComponentSchemas } from "@scalius/shared/openapi-schema-refs";
 import { inputBreakingChanges, schemaBreakingChanges } from "@scalius/shared/schema-compat";
@@ -68,6 +72,8 @@ function appView<T>(schema: T): T {
 }
 
 interface StableOperationSnapshot {
+  /** The operation the app name resolves to (its OpenAPI operationId); not part of the app contract. */
+  operationId: string;
   method: string;
   path: string;
   risk: string;
@@ -91,7 +97,8 @@ function coveringScopes(operation: AgentOperationManifestEntry): PluginScope[] {
 const stable = AGENT_OPERATIONS.filter((operation) => operation.stability === "stable");
 
 function currentSnapshot(): StableSnapshot {
-  const operations = Object.fromEntries(stable.map((operation) => [operation.operationId, {
+  const operations = Object.fromEntries(stable.map((operation) => [appOperationName(operation.operationId) ?? operation.operationId, {
+    operationId: operation.operationId,
     method: operation.method,
     path: operation.pathTemplate,
     risk: operation.risk,
@@ -197,6 +204,89 @@ function moneyProblems(operations: readonly AgentOperationManifestEntry[], compo
   return [...problems];
 }
 
+/** A field name that names an instant (`createdAt`, `failingSince`, `startsAtEpochSeconds`). */
+const TIME_KEY = /(At|Since|Until|EpochSeconds|Epoch)$/u;
+/** Names that end like a time but are not one. */
+const NOT_TIME_KEY = /^compareAt/u;
+
+/**
+ * Every place a stable schema carries an instant in another form than an
+ * ISO 8601 `date-time` string (or null): an integer, epoch seconds, a bare
+ * string or a union of forms.
+ */
+function timeProblems(operations: readonly AgentOperationManifestEntry[], components: Record<string, unknown> = AGENT_COMPONENT_SCHEMAS as Record<string, unknown>): string[] {
+  const problems = new Set<string>();
+  const resolve = (node: unknown): SchemaNode | null => {
+    if (!node || typeof node !== "object") return null;
+    const ref = (node as { $ref?: unknown }).$ref;
+    return typeof ref === "string" ? resolve(components[ref.replace("#/components/schemas/", "")]) : node as SchemaNode;
+  };
+  /** The non-null forms a schema allows. */
+  const forms = (schema: SchemaNode): SchemaNode[] => {
+    const variants = [...((schema.anyOf ?? []) as unknown[]), ...((schema.oneOf ?? []) as unknown[])].map(resolve).filter((each): each is SchemaNode => each !== null);
+    if (variants.length > 0) return variants.flatMap(forms);
+    return schema.type === "null" ? [] : [schema];
+  };
+  const isIso = (schema: SchemaNode) => forms(schema).length > 0 && forms(schema).every((form) => form.type === "string" && form.format === "date-time");
+  const walk = (label: string, node: unknown, path: string[], refs: Set<string>) => {
+    const ref = node && typeof node === "object" ? (node as { $ref?: unknown }).$ref : undefined;
+    if (typeof ref === "string") {
+      if (refs.has(ref)) return;
+      refs = new Set([...refs, ref]);
+    }
+    const schema = resolve(node);
+    if (!schema) return;
+    const key = path.filter((segment) => segment !== "*").at(-1);
+    if (key && TIME_KEY.test(key) && !NOT_TIME_KEY.test(key) && !isIso(schema)) problems.add(`${label} ${path.join(".")}: an instant is an ISO 8601 date-time string.`);
+    for (const [child, value] of Object.entries((schema.properties ?? {}) as Record<string, unknown>)) walk(label, value, [...path, child], refs);
+    if (schema.items) walk(label, schema.items, [...path, "*"], refs);
+    if (schema.additionalProperties && typeof schema.additionalProperties === "object") walk(label, schema.additionalProperties, [...path, "*"], refs);
+    for (const variant of [...((schema.anyOf ?? []) as unknown[]), ...((schema.oneOf ?? []) as unknown[]), ...((schema.allOf ?? []) as unknown[])]) {
+      walk(label, variant, path, refs);
+    }
+  };
+  for (const operation of operations) {
+    const input = (operation.inputSchema ?? {}) as { parameters?: { name: string; schema?: unknown }[]; requestBody?: { content?: Record<string, { schema?: unknown }> } };
+    for (const parameter of input.parameters ?? []) walk(`${operation.operationId} input`, parameter.schema, [parameter.name], new Set());
+    for (const media of Object.values(input.requestBody?.content ?? {})) walk(`${operation.operationId} input`, media.schema, [], new Set());
+    walk(`${operation.operationId} output`, operation.outputSchema, [], new Set());
+  }
+  return [...problems];
+}
+
+/** Page navigation other than one cursor: request parameters and response keys. */
+const PAGE_PARAMETERS = new Set(["page", "pageSize", "offset", "after", "before"]);
+const PAGE_RESPONSE_KEYS = new Set(["pagination", "page", "totalPages", "hasMore", "hasNextPage", "nextAfter", "nextOffset", "offset", "pageInfo"]);
+
+/**
+ * Every stable list pages one way: `cursor` + `limit` in, `{ <plural>,
+ * nextCursor }` out (`nextCursor: string | null`). A bounded lookup (a
+ * `limit` with no cursor: the top tags, one tree level) returns at most
+ * `limit` and no paging.
+ */
+function paginationProblems(operations: readonly AgentOperationManifestEntry[], components: Record<string, unknown> = AGENT_COMPONENT_SCHEMAS as Record<string, unknown>): string[] {
+  const problems: string[] = [];
+  const resolve = (node: unknown): SchemaNode | null => {
+    if (!node || typeof node !== "object") return null;
+    const ref = (node as { $ref?: unknown }).$ref;
+    return typeof ref === "string" ? resolve(components[ref.replace("#/components/schemas/", "")]) : node as SchemaNode;
+  };
+  for (const operation of operations) {
+    const input = (operation.inputSchema ?? {}) as { parameters?: { name: string; in: string }[] };
+    const query = new Set((input.parameters ?? []).filter((parameter) => parameter.in === "query").map((parameter) => parameter.name));
+    for (const name of query) if (PAGE_PARAMETERS.has(name)) problems.push(`${operation.operationId}: pages by ${name}; take cursor and limit.`);
+    const envelope = resolve(operation.outputSchema);
+    const data = resolve(((envelope?.properties ?? {}) as Record<string, unknown>).data);
+    const keys = Object.keys((data?.properties ?? {}) as Record<string, unknown>);
+    for (const key of keys) if (PAGE_RESPONSE_KEYS.has(key)) problems.push(`${operation.operationId}: returns ${key}; return nextCursor.`);
+    const pages = query.has("cursor") || keys.includes("nextCursor");
+    if (pages && !(query.has("cursor") && query.has("limit") && keys.includes("nextCursor"))) {
+      problems.push(`${operation.operationId}: a cursor list takes cursor and limit and returns nextCursor.`);
+    }
+  }
+  return problems;
+}
+
 describe("the stable app API", () => {
   it("is a deliberate, coherent set every third-party app can reach through a scope", () => {
     expect(stable.length).toBeGreaterThanOrEqual(100);
@@ -281,6 +371,20 @@ describe("the stable app API", () => {
     expect([...new Set(unmarked)]).toEqual([]);
   });
 
+  it("names every operation once, by resource and verb, never by the dashboard's route tree", () => {
+    for (const operation of stable) {
+      const name = appOperationName(operation.operationId);
+      expect(name, operation.operationId).toMatch(/^(?!dashboard\.|resources\.)[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/u);
+      expect(resolveAppOperation(name!)?.operationId).toBe(operation.operationId);
+    }
+    // Where the dashboard has its own operation beside the resource, the resource owns the name.
+    expect(resolveAppOperation("products.create")?.operationId).toBe("dashboard.resources.products.create");
+    expect(resolveAppOperation("orders.list")?.operationId).toBe("dashboard.resources.orders.list");
+    expect(appOperationName("dashboard.products.create")).toBeNull();
+    expect(resolveAppOperation("dashboard.resources.orders.get")).toBeNull();
+    expect(resolveAppOperation("storefront.products.list")).toBeNull();
+  });
+
   it("never reaches people, credentials, webhooks or apps", () => {
     for (const operation of stable) {
       expect(operation.operationId).not.toMatch(/^dashboard\.(account|team|agent_access|apps|webhooks|security)\./);
@@ -291,6 +395,14 @@ describe("the stable app API", () => {
     const storefront = AGENT_OPERATIONS.filter((operation) => operation.surface === "storefront");
     expect(storefront.length).toBeGreaterThan(0);
     expect(storefront.filter((operation) => operation.stability !== "beta" && operation.exposure === "execute").map((operation) => operation.operationId)).toEqual([]);
+  });
+
+  it("pages every list one way: cursor and limit in, nextCursor out", () => {
+    expect(paginationProblems(stable)).toEqual([]);
+  });
+
+  it("carries every instant as one ISO 8601 date-time string", () => {
+    expect(timeProblems(stable)).toEqual([]);
   });
 
   it("carries money only as integer minor units, with a currency beside every amount it returns", () => {
@@ -330,7 +442,7 @@ describe("the stable app API", () => {
       // harmless; a restore in between makes the item not_in_trash.
       "dashboard.resources.app_content.delete",
     ]);
-    const creates = /\.(create|import_url|comment_add)$/u;
+    const creates = /\.(create|import_url)$/u;
     const unguarded = stable
       .filter((operation) => operation.risk !== "read" && !creates.test(operation.operationId) && operation.revision === "none")
       .map((operation) => operation.operationId);
@@ -378,8 +490,8 @@ describe("the breaking-change check", () => {
   const object = (properties: Record<string, unknown>, required: string[] = []) => ({ type: "object", properties, required });
   const snapshot = (operation: Partial<StableOperationSnapshot>): StableSnapshot => ({
     operations: {
-      "dashboard.things.get": {
-        method: "GET", path: "/api/v1/admin/things/{id}", risk: "read", idempotency: "none", revision: "none", scopes: ["read_products"],
+      "things.get": {
+        operationId: "dashboard.things.get", method: "GET", path: "/api/v1/admin/things/{id}", risk: "read", idempotency: "none", revision: "none", scopes: ["read_products"],
         input: { parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }] },
         output: object({ id: { type: "string" }, status: { type: "string", enum: ["a", "b"] } }, ["id", "status"]),
         ...operation,
@@ -412,16 +524,16 @@ describe("the breaking-change check", () => {
     });
     const problems = stableBreakingChanges(before, after);
     expect(problems).toEqual(expect.arrayContaining([
-      "dashboard.things.get: the read_products scope no longer covers it.",
-      "dashboard.things.get: revision is now required.",
-      "dashboard.things.get input body.tags[]: maxLength tightened to 100.",
-      'dashboard.things.get input body.kind: no longer accepts "y".',
-      "dashboard.things.get input body.owner: a new required field.",
-      "dashboard.things.get output id: the field is no longer always present.",
-      "dashboard.things.get output status: the field was removed.",
+      "things.get: the read_products scope no longer covers it.",
+      "things.get: revision is now required.",
+      "things.get input body.tags[]: maxLength tightened to 100.",
+      'things.get input body.kind: no longer accepts "y".',
+      "things.get input body.owner: a new required field.",
+      "things.get output id: the field is no longer always present.",
+      "things.get output status: the field was removed.",
     ]));
     expect(stableBreakingChanges(before, { operations: {}, components: {} }))
-      .toEqual(["dashboard.things.get: removed from the stable app API."]);
+      .toEqual(["things.get: removed from the stable app API."]);
   });
 
   it("follows component references and matches union variants by their discriminator", () => {
@@ -437,7 +549,7 @@ describe("the breaking-change check", () => {
     expect(stableBreakingChanges(before, reordered)).toEqual([]);
     const retyped: StableSnapshot = { ...reordered, components: { Count: { type: "string" } } };
     expect(stableBreakingChanges(before, retyped)).toEqual([
-      "dashboard.things.get output [variant 1].count: type changed from integer to string.",
+      "things.get output [variant 1].count: type changed from integer to string.",
     ]);
   });
 });

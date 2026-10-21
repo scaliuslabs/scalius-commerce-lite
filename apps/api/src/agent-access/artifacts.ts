@@ -117,7 +117,7 @@ export async function createAgentArtifact(
             AND agent_credentials.revoked_at IS NULL
             AND agent_credentials.expires_at > unixepoch()
         )`,
-    "AGENT_ARTIFACT_AUTHORITY_INACTIVE",
+    "agent_artifact_authority_inactive",
   );
   const insert = db.insert(agentArtifactHandles).values({
     id: artifactId,

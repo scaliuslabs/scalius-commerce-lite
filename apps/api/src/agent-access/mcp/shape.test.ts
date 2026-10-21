@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { AGENT_OPERATIONS_BY_ID } from "../../generated/agent-operations.gen";
 import { AgentDispatchError } from "../dispatch";
-import { applyListControls, fitToBudget, jsonBytes, paginationMeta, selectPointers, unwrapRouteBody } from "./shape";
+import { applyListControls, cursorMeta, fitToBudget, jsonBytes, selectPointers, unwrapRouteBody } from "./shape";
 
 const operation = (id: string) => {
   const found = AGENT_OPERATIONS_BY_ID[id];
@@ -68,19 +68,14 @@ describe("MCP response shaping", () => {
     expect((newestFirst.data as { rows: unknown[] }).rows[0]).toEqual(today);
   });
 
-  it("turns each pagination style into one opaque cursor and restores it", () => {
-    const versions = operation("dashboard.theme.versions_list");
-    const meta = paginationMeta(versions, { versions: [], nextBeforeRevision: 15 });
-    expect(meta).toMatchObject({ hasMore: true, nextCursor: expect.stringMatching(/^sc1\./) });
-    expect(applyListControls(versions, {}, { cursor: meta.nextCursor! }).query).toMatchObject({ beforeRevision: 15 });
-    expect(paginationMeta(versions, { versions: [], nextBeforeRevision: null })).toEqual({ hasMore: false, nextCursor: null });
-
-    const orders = operation("dashboard.orders.list");
-    const page = paginationMeta(orders, { orders: [], pagination: { page: 2, limit: 20, total: 45, totalPages: 3 } });
-    expect(page).toMatchObject({ hasMore: true, total: 45 });
-    expect(applyListControls(orders, { query: { status: "pending" } }, { cursor: page.nextCursor! }).query).toEqual({ status: "pending", page: 3 });
-    expect(() => applyListControls(versions, {}, { cursor: page.nextCursor! })).toThrow(/does not belong/);
-    expect(() => applyListControls(orders, {}, { cursor: "raw-cursor" })).toThrow(/does not page by cursor/);
+  it("reports a cursor list's next page and passes the cursor straight back", () => {
+    const orders = operation("dashboard.resources.orders.list");
+    expect(cursorMeta({ orders: [], nextCursor: "abc" })).toEqual({ hasMore: true, nextCursor: "abc" });
+    expect(cursorMeta({ orders: [], nextCursor: null })).toEqual({ hasMore: false, nextCursor: null });
+    // Only cursor lists page through the tool: a page-numbered list reads its own `page`.
+    expect(cursorMeta({ orders: [], pagination: { page: 2, totalPages: 3 } })).toEqual({});
+    expect(applyListControls(orders, { query: { status: "pending" } }, { cursor: "abc" }).query).toMatchObject({ status: "pending", cursor: "abc" });
+    expect(() => applyListControls(operation("dashboard.orders.list"), {}, { cursor: "abc" })).toThrow(/does not page by cursor/);
   });
 
   it("defaults list limits to 20 within the operation's own maximum", () => {

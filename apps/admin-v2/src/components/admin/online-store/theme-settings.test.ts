@@ -57,7 +57,7 @@ function withContent(theme: StorefrontThemeDocument): StorefrontThemeDocument {
       homeMode: { kind: "product", productId: "prod_honey" },
       home: theme.pages.home.map((section) => {
         if (section.type === "hero") return { ...section, settings: { ...section.settings, slides: [SLIDE] } };
-        if (section.type === "category-tiles") return { ...section, settings: { ...section.settings, categoryIds: ["cat_honey", "cat_ghee"] } };
+        if (section.type === "category_tiles") return { ...section, settings: { ...section.settings, categoryIds: ["cat_honey", "cat_ghee"] } };
         return section;
       }),
     },
@@ -92,8 +92,8 @@ describe("templates", () => {
     expect(applied.blocks.footer.settings).toMatchObject({ tagline: "Pure honey", about: "From the Sundarbans.", copyright: "Mou Ghor" });
     const hero = applied.pages.home.find((section) => section.type === "hero");
     expect(hero?.type === "hero" && hero.settings.slides).toEqual([SLIDE]);
-    const tiles = applied.pages.home.find((section) => section.type === "category-tiles");
-    expect(tiles?.type === "category-tiles" && tiles.settings.categoryIds).toEqual(["cat_honey", "cat_ghee"]);
+    const tiles = applied.pages.home.find((section) => section.type === "category_tiles");
+    expect(tiles?.type === "category_tiles" && tiles.settings.categoryIds).toEqual(["cat_honey", "cat_ghee"]);
     expect(storefrontThemeDocumentSchema.safeParse(applied).success).toBe(true);
   });
 

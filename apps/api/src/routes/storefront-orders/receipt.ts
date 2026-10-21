@@ -35,7 +35,7 @@ import {
   orderLineFulfilmentShape,
 } from "../../schemas/order-lines";
 import { fromMinor } from "@scalius/shared/money";
-import { buyerUiBlockSchema, readCheckoutAttributes } from "@scalius/shared/plugins";
+import { buyerUiBlockSchema, PLUGIN_EXTENSION_RUN, readCheckoutAttributes } from "@scalius/shared/plugins";
 import { listActiveCheckoutRegistrations } from "@scalius/core/modules/plugins";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { createCheckoutAppFunctions } from "../../plugins/checkout-functions";
@@ -588,7 +588,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
     db,
     registrations,
   });
-  const buyerUi = apps.points.has("buyer.ui")
+  const buyerUi = apps.points.has(PLUGIN_EXTENSION_RUN)
     ? await apps.buyerUi?.({
       targets: ["order.confirmation", "account.order"],
       language: c.req.header("x-storefront-language"),

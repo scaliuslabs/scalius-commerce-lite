@@ -54,7 +54,7 @@ export function buyerOrderCondition(buyer: ReviewBuyer): SQL {
 export async function requireReviewSettings(db: Database): Promise<ReviewSettings> {
   const read = await readReviewSettings(db);
   if (!read.ok) throw new ServiceUnavailableError("Reviews are unavailable right now. Please try again later.");
-  if (!read.value.enabled) throw new AppError(403, "REVIEWS_DISABLED", "This store is not taking reviews.");
+  if (!read.value.enabled) throw new AppError(403, "reviews_disabled", "This store is not taking reviews.");
   return read.value;
 }
 

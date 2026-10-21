@@ -223,7 +223,7 @@ describe("admin product write behavior", () => {
         {
           id: "prod_blocked",
           status: "blocked",
-          code: "CONFLICT",
+          code: "conflict",
           message: "Inventory history must be retained.",
         },
       ],
@@ -245,7 +245,7 @@ describe("admin product write behavior", () => {
         deletedIds: ["prod_1"],
         outcomes: [
           { id: "prod_1", status: "deleted" },
-          { id: "prod_blocked", status: "blocked", code: "CONFLICT" },
+          { id: "prod_blocked", status: "blocked", code: "conflict" },
         ],
       },
     });
@@ -259,7 +259,7 @@ describe("admin product write behavior", () => {
       outcomes: [{
         id: "prod_1",
         status: "blocked",
-        code: "CONFLICT",
+        code: "conflict",
         message: "Inventory history must be retained.",
       }],
     });

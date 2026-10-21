@@ -20,7 +20,7 @@ export const STOREFRONT_BLOCK_CONTENT_KEYS = {
 /** Section settings that are the merchant's content, by section type. */
 export const STOREFRONT_SECTION_CONTENT_KEYS: Partial<Record<StorefrontSectionType, readonly string[]>> = {
   hero: ["slides", "sideBanners"],
-  "category-tiles": ["categoryIds", "title"],
+  "category_tiles": ["categoryIds", "title"],
   collections: ["collectionIds"],
 };
 
@@ -123,14 +123,14 @@ function sectionMediaReferences(section: StorefrontSection, at: string): Storefr
       ];
     case "banner":
     case "lookbook":
-    case "deal-block":
+    case "deal_block":
     case "newsletter":
       return ref("mediaId", section.settings.mediaId);
     case "editorial":
       return section.settings.layout === "image-with-text" ? ref("mediaId", section.settings.mediaId) : [];
-    case "shop-by":
+    case "shop_by":
       return section.settings.cards.flatMap((card, index) => ref(`cards.${index}.mediaId`, card.mediaId));
-    case "banner-mosaic":
+    case "banner_mosaic":
       return section.settings.tiles.flatMap((tile, index) => ref(`tiles.${index}.mediaId`, tile.mediaId));
     default:
       return [];
@@ -176,16 +176,16 @@ function sectionWithoutMedia(section: StorefrontSection, missing: ReadonlySet<st
     }
     case "banner":
     case "lookbook":
-    case "deal-block":
+    case "deal_block":
     case "newsletter":
       return gone(section.settings.mediaId) ? { ...section, settings: { ...section.settings, mediaId: null } } as StorefrontSection : section;
     case "editorial":
       return section.settings.layout === "image-with-text" && gone(section.settings.mediaId)
         ? { ...section, settings: { ...section.settings, mediaId: null } }
         : section;
-    case "shop-by":
+    case "shop_by":
       return { ...section, settings: { ...section.settings, cards: section.settings.cards.filter((card) => !gone(card.mediaId)) } };
-    case "banner-mosaic":
+    case "banner_mosaic":
       return { ...section, settings: { ...section.settings, tiles: section.settings.tiles.filter((tile) => !gone(tile.mediaId)) } };
     default:
       return section;

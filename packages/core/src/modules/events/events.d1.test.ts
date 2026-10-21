@@ -409,7 +409,7 @@ describe("webhook subscriptions", () => {
   it("refuses unsafe URLs, unknown topics, duplicates, stale versions and a missing key", async () => {
     const options = { actorId: null, encryptionKey: ENCRYPTION_KEY };
     await expect(createWebhookSubscription(db, { url: "http://hooks.example.com/a", topics: ["*"] }, options))
-      .rejects.toMatchObject({ code: "VALIDATION_ERROR", details: { field: "url", issue: "not_https" } });
+      .rejects.toMatchObject({ code: "validation_error", details: { field: "url", issue: "not_https" } });
     await expect(createWebhookSubscription(db, { url: "https://169.254.169.254/", topics: ["*"] }, options))
       .rejects.toMatchObject({ details: { issue: "private_address" } });
     await expect(createWebhookSubscription(db, { url: "https://hooks.example.com/a", topics: ["order.shipped"] }, options))
@@ -420,7 +420,7 @@ describe("webhook subscriptions", () => {
     await expect(createWebhookSubscription(db, { url: "https://hooks.example.com/a", topics: ["*"] }, options))
       .rejects.toMatchObject({ status: 409 });
     await expect(updateWebhookSubscription(db, subscription.id, { expectedVersion: 9, description: "x" }))
-      .rejects.toMatchObject({ code: "WEBHOOK_VERSION_CONFLICT", details: { expectedVersion: 9, currentVersion: 1 } });
+      .rejects.toMatchObject({ code: "webhook_version_conflict", details: { expectedVersion: 9, currentVersion: 1 } });
     const disabled = await updateWebhookSubscription(db, subscription.id, { expectedVersion: 1, status: "disabled" });
     expect(disabled).toMatchObject({ status: "disabled", disabledReason: "manual", version: 2 });
     await deleteWebhookSubscription(db, subscription.id);

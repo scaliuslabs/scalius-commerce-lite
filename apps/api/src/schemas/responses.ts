@@ -100,14 +100,14 @@ export const listingPageInfoSchema = z.object({
 /** The `cursor` query parameter shared by every buyer-facing product listing. */
 export const listingCursorQuerySchema = {
   cursor: z.string().max(1024).optional().openapi({
-    description: "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR.",
+    description: "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with invalid_cursor.",
   }),
 };
 
 /** The `after`/`before` query parameters shared by every keyset-paged list. */
 export const keysetQuerySchema = {
   after: z.string().max(1024).optional().openapi({
-    description: "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR.",
+    description: "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with invalid_cursor.",
   }),
   before: z.string().max(1024).optional().openapi({
     description: "Rows before this cursor (pageInfo.startCursor of the next page). Not with `after`.",

@@ -141,7 +141,7 @@ export async function markStaffAlertRead(db: Database, userId: string, seq: numb
   integer(seq, "sequence");
   const scopeAccess = sql.join(STAFF_ALERT_SCOPES.map((scope) => sql`(i.scope = ${scope} AND ${staffPermissionSql(sql`${userId}`, permission(scope))})`), sql` OR `);
   const exists = sql`EXISTS (SELECT 1 FROM staff_alert_inbox i WHERE i.user_id = ${userId} AND i.seq = ${seq} AND (${scopeAccess}))`;
-  const marker = "STAFF_ALERT_NOT_FOUND";
+  const marker = "staff_alert_not_found";
   try {
     await safeBatch(db, [
       buildBatchGuard(db, exists, marker),
@@ -182,7 +182,7 @@ async function clearOrUndo(db: Database, userId: string, input: StaffAlertClearI
       AND ${staffPermissionSql(sql`${userId}`, permission(entry.scope))}
       AND ${undo ? sql`s.revision = ${entry.revision} AND s.clear_operation_id = ${input.operationId}`
         : sql`((s.revision = ${entry.revision} AND coalesce(s.clear_operation_id, '') <> ${input.operationId}) OR (s.revision = ${entry.revision + 1} AND s.clear_operation_id = ${input.operationId}))`})`);
-  const marker = "STAFF_ALERT_CLEAR_CONFLICT";
+  const marker = "staff_alert_clear_conflict";
   const affected = sql.join(input.scopes.map((entry) => sql`(scope = ${entry.scope} AND revision = ${entry.revision})`), sql` OR `);
   try {
     await safeBatch(db, [

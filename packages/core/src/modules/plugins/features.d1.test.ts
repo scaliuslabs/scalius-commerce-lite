@@ -78,7 +78,7 @@ describe("app features", () => {
     // Consent to something nobody was shown is refused.
     await expect(setPluginFeature(db, "acme.pack", {
       feature: "places", enabled: true, expectedRevision: app.revision, actorUserId: "second", expectedGrantKey: "stale",
-    })).rejects.toMatchObject({ pluginCode: "installation.grant_changed" });
+    })).rejects.toMatchObject({ pluginCode: "installation_grant_changed" });
 
     const shown = pluginGrantKey(pluginGrantRequest(app.declaredManifest, ["places"]));
     const on = await setPluginFeature(db, "acme.pack", {
@@ -114,11 +114,11 @@ describe("app features", () => {
   it("refuses to turn a feature on before the app runs, and unknown features", async () => {
     const installed = await installPlugin(db, { manifest: PACK, source: "upload", bundleSha256: SHA });
     await expect(setPluginFeature(db, "acme.pack", { feature: "places", enabled: true, expectedRevision: installed.revision }))
-      .rejects.toMatchObject({ pluginCode: "installation.inactive" });
+      .rejects.toMatchObject({ pluginCode: "installation_inactive" });
     await expect(setPluginFeature(db, "acme.pack", { feature: "ghost", enabled: true, expectedRevision: installed.revision }))
       .rejects.toBeInstanceOf(PluginError);
     await expect(setPluginFeature(db, "acme.pack", { feature: "places", enabled: true, expectedRevision: 99 }))
-      .rejects.toMatchObject({ pluginCode: "installation.revision_conflict" });
+      .rejects.toMatchObject({ pluginCode: "installation_revision_conflict" });
   });
 
   it("keeps an off feature's settings stored but out of the running app", async () => {
@@ -161,7 +161,7 @@ describe("app features", () => {
     expect(pluginNeedsApproval(app)).toBe(true);
     // Turning a feature off does not approve the waiting update.
     await expect(setPluginFeature(db, "acme.pack", { feature: "payments", enabled: false, expectedRevision: app.revision }))
-      .rejects.toMatchObject({ pluginCode: "installation.needs_approval" });
+      .rejects.toMatchObject({ pluginCode: "installation_needs_approval" });
     app = await activatePlugin(db, "acme.pack", { actorUserId: "owner", expectedRevision: app.revision });
     expect(app.grant?.allowedHosts).toEqual(["base.example", "pay.example", "pay2.example"]);
     expect((await requirePluginInstallation(db, "acme.pack")).features).toEqual(["payments"]);

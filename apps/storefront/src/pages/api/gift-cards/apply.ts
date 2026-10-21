@@ -73,16 +73,16 @@ async function readCode(request: Request): Promise<unknown> {
 }
 
 const FAILURES = {
-  unusable: { status: 400, errorCode: "GIFT_CARD_UNUSABLE" },
-  not_found: { status: 400, errorCode: "GIFT_CARD_UNUSABLE" },
-  signed_out: { status: 400, errorCode: "GIFT_CARD_UNUSABLE" },
-  rate_limited: { status: 429, errorCode: "RATE_LIMITED" },
-  unavailable: { status: 503, errorCode: "GIFT_CARDS_UNAVAILABLE" },
+  unusable: { status: 400, errorCode: "gift_card_unusable" },
+  not_found: { status: 400, errorCode: "gift_card_unusable" },
+  signed_out: { status: 400, errorCode: "gift_card_unusable" },
+  rate_limited: { status: 429, errorCode: "rate_limited" },
+  unavailable: { status: 503, errorCode: "gift_cards_unavailable" },
 } as const;
 
 export const POST: APIRoute = async ({ request }) => {
   if (isCrossOrigin(request)) {
-    return json({ success: false, errorCode: "FORBIDDEN" }, 403);
+    return json({ success: false, errorCode: "forbidden" }, 403);
   }
   const contentType = request.headers.get("Content-Type")?.toLowerCase() ?? "";
   if (!contentType.includes("application/json")) {

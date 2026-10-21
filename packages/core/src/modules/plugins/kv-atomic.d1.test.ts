@@ -13,15 +13,15 @@ afterEach(() => sqlite.close());
 describe("kv compare-and-set", () => {
   it("writes only at the revision read, treating an expired entry as absent", async () => {
     expect(await compareAndSetPluginKv(db, PLUGIN, "lock", null, { owner: "a" })).toEqual({ revision: 1 });
-    await expect(compareAndSetPluginKv(db, PLUGIN, "lock", null, { owner: "b" })).rejects.toMatchObject({ pluginCode: "kv.conflict" });
+    await expect(compareAndSetPluginKv(db, PLUGIN, "lock", null, { owner: "b" })).rejects.toMatchObject({ pluginCode: "kv_conflict" });
     expect(await compareAndSetPluginKv(db, PLUGIN, "lock", 1, { owner: "b" }, { ttlSeconds: 60 })).toEqual({ revision: 2 });
     expect(await getPluginKvVersion(db, PLUGIN, "lock")).toEqual({ value: { owner: "b" }, revision: 2 });
     expect(await setPluginKv(db, PLUGIN, "lock", { owner: "c" }, { ttlSeconds: 60 })).toEqual({ revision: 3 });
 
     sqlite.prepare("UPDATE plugin_kv SET expires_at = unixepoch() - 1 WHERE key = 'lock'").run();
     expect(await getPluginKvVersion(db, PLUGIN, "lock")).toBeNull();
-    await expect(compareAndSetPluginKv(db, PLUGIN, "lock", 3, { owner: "d" })).rejects.toMatchObject({ pluginCode: "kv.conflict" });
+    await expect(compareAndSetPluginKv(db, PLUGIN, "lock", 3, { owner: "d" })).rejects.toMatchObject({ pluginCode: "kv_conflict" });
     expect(await compareAndSetPluginKv(db, PLUGIN, "lock", null, { owner: "d" })).toEqual({ revision: 4 });
-    await expect(compareAndSetPluginKv(db, PLUGIN, "lock", 0, "x")).rejects.toMatchObject({ pluginCode: "kv.invalid_revision" });
+    await expect(compareAndSetPluginKv(db, PLUGIN, "lock", 0, "x")).rejects.toMatchObject({ pluginCode: "kv_invalid_revision" });
   });
 });

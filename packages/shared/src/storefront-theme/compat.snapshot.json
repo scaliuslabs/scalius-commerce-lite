@@ -1,5 +1,5 @@
 {
- "version": 11,
+ "version": 12,
  "oldestReadable": 10,
  "sections": {
   "hero": {
@@ -206,7 +206,7 @@
     }
    }
   },
-  "usp-strip": {
+  "usp_strip": {
    "version": 1,
    "text": [
     "source.items.*.title",
@@ -319,7 +319,7 @@
     }
    }
   },
-  "category-tiles": {
+  "category_tiles": {
    "version": 1,
    "text": [
     "title"
@@ -410,7 +410,7 @@
     }
    }
   },
-  "product-rail": {
+  "product_rail": {
    "version": 1,
    "text": [
     "title"
@@ -521,7 +521,7 @@
     }
    }
   },
-  "product-grid": {
+  "product_grid": {
    "version": 1,
    "text": [
     "title"
@@ -638,7 +638,7 @@
     }
    }
   },
-  "deal-block": {
+  "deal_block": {
    "version": 1,
    "text": [
     "title"
@@ -763,7 +763,7 @@
     }
    }
   },
-  "product-tabs": {
+  "product_tabs": {
    "version": 1,
    "text": [
     "title",
@@ -925,7 +925,7 @@
     }
    }
   },
-  "shop-by": {
+  "shop_by": {
    "version": 1,
    "text": [
     "title",
@@ -1015,7 +1015,7 @@
     }
    }
   },
-  "banner-mosaic": {
+  "banner_mosaic": {
    "version": 1,
    "text": [
     "tiles.*.alt"
@@ -1301,7 +1301,7 @@
     "additionalProperties": false
    }
   },
-  "brand-wall": {
+  "brand_wall": {
    "version": 1,
    "text": [
     "title"
@@ -1703,7 +1703,7 @@
     }
    }
   },
-  "utility-cards": {
+  "utility_cards": {
    "version": 1,
    "text": [
     "cards.*.title",
@@ -1782,7 +1782,7 @@
     }
    }
   },
-  "endless-grid": {
+  "endless_grid": {
    "version": 1,
    "text": [
     "title"
@@ -1819,7 +1819,7 @@
     "additionalProperties": false
    }
   },
-  "seo-text": {
+  "seo_text": {
    "version": 1,
    "text": [
     "heading",
@@ -1845,7 +1845,7 @@
     "additionalProperties": false
    }
   },
-  "recently-viewed": {
+  "recently_viewed": {
    "version": 1,
    "text": [
     "title"
@@ -2017,7 +2017,7 @@
   "$defs": {
    "__schema0": {
     "type": "number",
-    "const": 11
+    "const": 12
    },
    "__schema1": {
     "type": "string",
@@ -3818,13 +3818,13 @@
        "footer": {
         "$ref": "#/$defs/__schema41"
        },
-       "product-card": {
+       "product_card": {
         "$ref": "#/$defs/__schema41"
        },
-       "product-main": {
+       "product_main": {
         "$ref": "#/$defs/__schema41"
        },
-       "listing-main": {
+       "listing_main": {
         "$ref": "#/$defs/__schema41"
        }
       },
@@ -4038,7 +4038,7 @@
        },
        "type": {
         "type": "string",
-        "const": "usp-strip"
+        "const": "usp_strip"
        },
        "version": {
         "type": "number",
@@ -4129,7 +4129,7 @@
        },
        "type": {
         "type": "string",
-        "const": "category-tiles"
+        "const": "category_tiles"
        },
        "version": {
         "type": "number",
@@ -4260,7 +4260,7 @@
        },
        "type": {
         "type": "string",
-        "const": "product-rail"
+        "const": "product_rail"
        },
        "version": {
         "type": "number",
@@ -4317,7 +4317,7 @@
        },
        "type": {
         "type": "string",
-        "const": "product-grid"
+        "const": "product_grid"
        },
        "version": {
         "type": "number",
@@ -4380,7 +4380,7 @@
        },
        "type": {
         "type": "string",
-        "const": "deal-block"
+        "const": "deal_block"
        },
        "version": {
         "type": "number",
@@ -4444,7 +4444,7 @@
        },
        "type": {
         "type": "string",
-        "const": "product-tabs"
+        "const": "product_tabs"
        },
        "version": {
         "type": "number",
@@ -4506,7 +4506,7 @@
        },
        "type": {
         "type": "string",
-        "const": "shop-by"
+        "const": "shop_by"
        },
        "version": {
         "type": "number",
@@ -4561,7 +4561,7 @@
        },
        "type": {
         "type": "string",
-        "const": "banner-mosaic"
+        "const": "banner_mosaic"
        },
        "version": {
         "type": "number",
@@ -4766,7 +4766,7 @@
        },
        "type": {
         "type": "string",
-        "const": "brand-wall"
+        "const": "brand_wall"
        },
        "version": {
         "type": "number",
@@ -5076,7 +5076,7 @@
        },
        "type": {
         "type": "string",
-        "const": "utility-cards"
+        "const": "utility_cards"
        },
        "version": {
         "type": "number",
@@ -5127,7 +5127,7 @@
        },
        "type": {
         "type": "string",
-        "const": "endless-grid"
+        "const": "endless_grid"
        },
        "version": {
         "type": "number",
@@ -5191,7 +5191,7 @@
        },
        "type": {
         "type": "string",
-        "const": "seo-text"
+        "const": "seo_text"
        },
        "version": {
         "type": "number",
@@ -5243,7 +5243,7 @@
        },
        "type": {
         "type": "string",
-        "const": "recently-viewed"
+        "const": "recently_viewed"
        },
        "version": {
         "type": "number",

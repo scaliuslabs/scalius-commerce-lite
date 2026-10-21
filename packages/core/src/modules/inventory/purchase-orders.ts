@@ -47,7 +47,7 @@ import { spreadsheetSafeCsvCell } from "@scalius/shared/spreadsheet-csv";
 
 export const PURCHASE_ORDER_MAX_LINES = 100;
 export const PURCHASE_ORDER_OPEN_STATUSES = ["ordered", "partially_received"] as const satisfies readonly PurchaseOrderStatus[];
-const STALE = "PURCHASE_ORDER_STALE";
+const STALE = "purchase_order_stale";
 const NUMBER_START = 1000;
 
 // ─────────────────────────────────────────

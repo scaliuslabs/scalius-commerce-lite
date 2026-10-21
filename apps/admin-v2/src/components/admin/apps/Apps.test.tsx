@@ -53,13 +53,14 @@ const VIEWER = ["apps.view"];
 const MANAGER = ["apps.view", "apps.manage"];
 const ok = <T,>(data: T) => Promise.resolve({ data: { success: true, data }, response: { status: 200 } });
 const refused = (status: number, details: Record<string, unknown>) =>
-  Promise.resolve({ error: { success: false, error: { code: "PLUGIN_ERROR", message: "Refused.", details } }, response: { status } });
+  Promise.resolve({ error: { success: false, error: { code: "plugin_error", message: "Refused.", details } }, response: { status } });
 
 const grant = (overrides: Record<string, unknown> = {}) => ({
   scopes: ["read_customers", "read_orders"],
   allowedHosts: ["api.acme.example"],
   events: ["order.created"],
   functions: ["checkout.discounts"],
+  extensions: [],
   blockingFunctions: [],
   providers: [],
   publicRoutes: true,
@@ -93,6 +94,7 @@ function summary(overrides: Record<string, unknown> = {}) {
     updatedAt: "2026-10-01T08:00:00.000Z",
     featureCount: { on: 0, total: 0 },
     functions: [],
+    extensions: [],
     ...overrides,
   };
 }
@@ -562,13 +564,17 @@ describe("App page", () => {
     expect(text()).toContain("Reads its \"balances\" records at checkout and may update them with the order");
   });
 
-  it("explains buyer UI access in the consent list and function list", async () => {
+  it("explains storefront extensions and their reads in the consent list, not among checkout functions", async () => {
     await renderApp(detail({
-      request: grant({ functions: ["buyer.ui"] }),
-      functions: [{ point: "buyer.ui", priority: 10, onError: "skip", reads: [] }],
+      request: grant({ extensions: ["checkout.actions.before", "account.overview"] }),
+      extensions: [
+        { target: "checkout.actions.before", reads: [{ as: "balance", object: "balances", customFields: [], key: "customer" }] },
+        { target: "account.overview", reads: [{ as: "balance", object: "balances", customFields: [], key: "customer" }] },
+      ],
     }), VIEWER);
-    expect(text()).toContain("Shows content and asks buyers questions in the cart, checkout and account");
-    expect(text()).toContain("Shows content and questions to buyers");
+    expect(text()).toContain("Shows content and asks buyers questions in the cart, checkout, order and account pages");
+    expect(text().split("Reads its \"balances\" records to show buyers its content")).toHaveLength(2);
+    expect(text()).not.toContain("Checkout functions");
   });
 
   it("lists its checkout functions in plain words with their priority, in checkout order", async () => {
@@ -665,7 +671,7 @@ describe("App page", () => {
   });
 
   it("refetches and asks to review again when the request changed meanwhile", async () => {
-    sdk.postApiV1AdminAppsByIdActivate.mockImplementation(() => refused(409, { code: "installation.grant_changed" }));
+    sdk.postApiV1AdminAppsByIdActivate.mockImplementation(() => refused(409, { code: "installation_grant_changed" }));
     await renderApp(detail(), [], true);
     await click(button("Review and activate"));
     sdk.getApiV1AdminAppsById.mockClear();
@@ -1411,7 +1417,7 @@ describe("Upload and emergency stop on the Apps list", () => {
   it("stops at a warning for a developer the store does not trust; a Super Admin can trust and install", async () => {
     sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST()));
     sdk.postApiV1AdminAppsUpload
-      .mockImplementationOnce(() => refused(422, { code: "signature.untrusted", keyId: "key_new", developer: "Newcomer Ltd" }))
+      .mockImplementationOnce(() => refused(422, { code: "signature_untrusted", keyId: "key_new", developer: "Newcomer Ltd" }))
       .mockImplementationOnce(() => ok({ app: detail({ id: "acme.wrap" }), updated: false, rolledBack: false, error: null }));
     await render(<AppsList />, MANAGER, true);
     await vi.waitFor(() => expect(hasButton("Upload app")).toBe(true));
@@ -1429,7 +1435,7 @@ describe("Upload and emergency stop on the Apps list", () => {
 
   it("tells anyone else to ask a Super Admin instead of offering the choice", async () => {
     sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST()));
-    sdk.postApiV1AdminAppsUpload.mockImplementation(() => refused(422, { code: "signature.untrusted", keyId: "key_new", developer: "Newcomer Ltd" }));
+    sdk.postApiV1AdminAppsUpload.mockImplementation(() => refused(422, { code: "signature_untrusted", keyId: "key_new", developer: "Newcomer Ltd" }));
     await render(<AppsList />, MANAGER);
     await vi.waitFor(() => expect(hasButton("Upload app")).toBe(true));
     await click(button("Upload app"));
@@ -1444,7 +1450,7 @@ describe("Upload and emergency stop on the Apps list", () => {
   it("warns that an unsigned app could have been changed, and a Super Admin can install it anyway", async () => {
     sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST()));
     sdk.postApiV1AdminAppsUpload
-      .mockImplementationOnce(() => refused(422, { code: "signature.missing" }))
+      .mockImplementationOnce(() => refused(422, { code: "signature_missing" }))
       .mockImplementationOnce(() => ok({ app: detail({ id: "acme.wrap", signer: null }), updated: false, rolledBack: false, error: null }));
     await render(<AppsList />, MANAGER, true);
     await vi.waitFor(() => expect(hasButton("Upload app")).toBe(true));

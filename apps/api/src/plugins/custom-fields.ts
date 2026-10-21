@@ -30,7 +30,7 @@ export async function setPluginCustomFieldValues(
   const keys = Object.keys(values);
   if (keys.length === 0) return;
   const undeclared = keys.find((key) => !byKey.has(key));
-  if (undeclared) throw new PluginError("custom_fields.undeclared", `Custom field ${ownerType}.${undeclared} is not declared in the manifest.`);
+  if (undeclared) throw new PluginError("custom_fields_undeclared", `Custom field ${ownerType}.${undeclared} is not declared in the manifest.`);
   const namespace = pluginCustomFieldNamespace(pluginId);
   const writer: CustomFieldWriter = { kind: "plugin", pluginId };
   const type = ownerType as CustomFieldOwnerType;

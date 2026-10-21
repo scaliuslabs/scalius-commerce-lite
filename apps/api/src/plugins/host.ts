@@ -31,10 +31,11 @@ import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { storeTimeZoneOf } from "../utils/store-time-zone";
 import {
   checkPluginFunctionOutput,
+  pluginRunSource,
   pluginHandlerInventory,
   validatePluginSettingValues,
   type PluginFunctionOutput,
-  type PluginFunctionPoint,
+  type PluginRunPoint,
   type PluginLifecycleHook,
 } from "@scalius/shared/plugins";
 import {
@@ -118,7 +119,7 @@ export function pluginBridgeAuthority(installation: PluginInstallation): PluginB
         ...(field.to ? { to: field.to } : {}),
       })),
     appName: manifest.name,
-    timeline: manifest.timeline.map((entry) => ({ kind: entry.kind, title: entry.title })),
+    timeline: manifest.admin.timeline.map((entry) => ({ kind: entry.kind, title: entry.title })),
   };
 }
 
@@ -187,17 +188,18 @@ export class PluginHost {
       installation.source === "bundled" ? bundled : sandbox);
   }
 
-  async invokeFunction<P extends PluginFunctionPoint>(
+  async invokeFunction<P extends PluginRunPoint>(
     installation: PluginInstallation,
     point: P,
     input: unknown,
   ): Promise<PluginInvocationOutcome<PluginFunctionOutput<P>>> {
     const wallMs = Math.min(installation.manifest.limits.wallMs, PLUGIN_FUNCTION_WALL_MS);
-    const outcome = await this.run(installation, { kind: "function", point, input }, `function:${point}`, wallMs);
+    const source = pluginRunSource(point, input);
+    const outcome = await this.run(installation, { kind: "function", point, input }, source, wallMs);
     if (!outcome.ok) return failed(outcome);
     const checked = checkPluginFunctionOutput(point, outcome.value);
     if (!checked.ok) {
-      await this.incident(installation, `function:${point}`, checked.message);
+      await this.incident(installation, source, checked.message);
       return { ok: false, value: null, error: checked.message, failure: "invalid" };
     }
     return { ok: true, value: checked.value, error: null };
@@ -227,7 +229,7 @@ export class PluginHost {
       throw new ProviderError("misconfigured", `${installation.manifest.name} is not approved to provide ${kind}.`);
     }
     if (!declaredProviderOperations(declaration).includes(operation)) {
-      throw new ProviderError("misconfigured", `${declaration.name} does not support ${operation}.`, { code: "provider.unsupported" });
+      throw new ProviderError("misconfigured", `${declaration.name} does not support ${operation}.`, { code: "provider_unsupported" });
     }
     const schemas = providerOperationSchemas(kind, operation)!;
     const checked = schemas.input.safeParse(input);
@@ -238,7 +240,7 @@ export class PluginHost {
     const ungranted = PROVIDER_PROTECTED_DATA[kind].required.filter((category) => !granted.has(category));
     if (ungranted.length > 0) {
       throw new ProviderError("misconfigured", `${installation.manifest.name} is not approved to receive buyers' ${ungranted.join(", ")}.`, {
-        code: "provider.customer_data_not_approved",
+        code: "provider_customer_data_not_approved",
       });
     }
     const projected = projectProviderInput(kind, operation, checked.data, granted);
@@ -257,7 +259,7 @@ export class PluginHost {
       const issue = parsed.error.issues[0];
       // The path only: an invalid answer can hold provider payloads or buyer data.
       await this.incident(installation, source, `Invalid ${operation} answer${issue ? ` at ${issue.path.join(".") || "(root)"}` : ""}.`);
-      throw new ProviderError("retryable", `${declaration.name} returned an invalid answer.`, { uncertain: true, code: "provider.invalid_response" });
+      throw new ProviderError("retryable", `${declaration.name} returned an invalid answer.`, { uncertain: true, code: "provider_invalid_response" });
     }
     return parsed.data as ProviderOperationOutput<K, M>;
   }
@@ -536,7 +538,7 @@ export class PluginHost {
       if (result.droppedLogs > 0) lines.push({ level: "warn", source: "host", message: `${result.droppedLogs} log lines past the limit were dropped.` });
       if (!result.ok) {
         error = result.error?.message ?? `${source} failed.`;
-        if (result.error?.code === "plugin.handlers_mismatch" || result.error?.code === "plugin.identity_mismatch") {
+        if (result.error?.code === "plugin_handlers_mismatch" || result.error?.code === "plugin_identity_mismatch") {
           await markPluginFailed(this.db, installation.pluginId, error);
           failure = "load_failed";
         } else if (result.error?.category) {
@@ -600,20 +602,20 @@ function providerFailure(outcome: Extract<RunOutcome, { ok: false }>, providerNa
   }
   switch (outcome.failure) {
     case "timeout":
-      return new ProviderError("retryable", `${providerName} did not answer in time.`, { uncertain: true, code: "provider.timeout" });
+      return new ProviderError("retryable", `${providerName} did not answer in time.`, { uncertain: true, code: "provider_timeout" });
     case "outdated":
-      return new ProviderError("retryable", `${providerName} was just updated; try again.`, { code: "provider.updated" });
+      return new ProviderError("retryable", `${providerName} was just updated; try again.`, { code: "provider_updated" });
     case "limited":
-      return new ProviderError("retryable", `${providerName} is busy; try again shortly.`, { code: "provider.limited" });
+      return new ProviderError("retryable", `${providerName} is busy; try again shortly.`, { code: "provider_limited" });
     case "inactive":
     case "unavailable":
     case "load_failed":
     case "settings_unreadable":
     case "migration_failed":
-      return new ProviderError("misconfigured", outcome.error.slice(0, 300), { code: `provider.${outcome.failure}` });
+      return new ProviderError("misconfigured", outcome.error.slice(0, 300), { code: `provider_${outcome.failure}` });
     default:
       // A throw that was not a ProviderError: the provider may have acted before it.
-      return new ProviderError("retryable", `${providerName} could not complete the operation.`, { uncertain: true, code: "provider.error" });
+      return new ProviderError("retryable", `${providerName} could not complete the operation.`, { uncertain: true, code: "provider_error" });
   }
 }
 

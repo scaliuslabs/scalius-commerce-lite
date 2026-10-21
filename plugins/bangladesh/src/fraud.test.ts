@@ -99,7 +99,7 @@ describe("Bangladesh fraud checkers", () => {
     const result = await refused.instance.provider("fraudbd", "check", { phone: "+8801711111111" });
     expect(result).toMatchObject({ ok: false, error: { category: "misconfigured" } });
     expect(JSON.stringify(result)).not.toMatch(/fraudbd-key|8801711111111/);
-    const down = harness(FRAUDBD, Object.assign(new Error("[http.timeout] The request timed out."), { code: "http.timeout" }));
+    const down = harness(FRAUDBD, Object.assign(new Error("[http_timeout] The request timed out."), { code: "http_timeout" }));
     expect(await down.instance.provider("fraudbd", "check", { phone: "+8801711111111" })).toMatchObject({ ok: false, error: { category: "retryable" } });
   });
 

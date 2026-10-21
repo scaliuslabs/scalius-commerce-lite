@@ -72,13 +72,13 @@ type AdminOrderItemWithInventory<T extends AdminOrderSkuItem> = T & {
     customizationSchema: string | null;
 };
 type AdminOrderSkuIssueCode =
-    | "SKU_REQUIRED"
-    | "VARIANT_UNAVAILABLE"
-    | "VARIANT_MISMATCH"
-    | "PRODUCT_UNAVAILABLE"
-    | "PROPERTIES_REQUIRED"
-    | "PROPERTIES_INVALID"
-    | "FULFILMENT_UNAVAILABLE";
+    | "sku_required"
+    | "variant_unavailable"
+    | "variant_mismatch"
+    | "product_unavailable"
+    | "properties_required"
+    | "properties_invalid"
+    | "fulfilment_unavailable";
 
 /** The delivery method a manual order uses, as snapshotted on the order. */
 export interface ManualOrderDeliveryMethod {
@@ -296,7 +296,7 @@ function resolveManualOrderLineProperties(
         if (foreignCurrency && !(retained && retained.variantId === item.variantId)) {
             // Catalogue prices are the shop currency's; the order's locked rate
             // prices only what the buyer agreed to.
-            addAdminOrderSkuIssue(issues, item, index, "PRODUCT_UNAVAILABLE",
+            addAdminOrderSkuIssue(issues, item, index, "product_unavailable",
                 `This order is in ${foreignCurrency}. Its items keep their prices; add other items in a new order.`);
             return null;
         }
@@ -312,13 +312,13 @@ function resolveManualOrderLineProperties(
         }
         const schema = parseStoredCustomizationSchema(item.customizationSchema);
         if (!schema.ok) {
-            addAdminOrderSkuIssue(issues, item, index, "PRODUCT_UNAVAILABLE",
+            addAdminOrderSkuIssue(issues, item, index, "product_unavailable",
                 "This product's buyer inputs are misconfigured. Fix them on the product first.");
             return null;
         }
         const resolved = resolveLineProperties(schema.schema, item.properties);
         if (!resolved.ok) {
-            addAdminOrderSkuIssue(issues, item, index, resolved.code, resolved.code === "PROPERTIES_REQUIRED"
+            addAdminOrderSkuIssue(issues, item, index, resolved.code, resolved.code === "properties_required"
                 ? "Fill in the buyer inputs this product requires."
                 : "Check the buyer inputs for this item.");
             return null;
@@ -423,7 +423,7 @@ export async function prepareManualOrderQuote(
         isGiftCard: item.isGiftCard,
     })), chosenKind);
     if (!plan.ok) {
-        throw new ValidationError(plan.issue === "DELIVERY_METHOD_REQUIRED"
+        throw new ValidationError(plan.issue === "delivery_method_required"
             ? "This order has no delivery method, so it can't take items that ship. Create a new order for them."
             : "Add at least one sellable item.");
     }
@@ -432,7 +432,7 @@ export async function prepareManualOrderQuote(
     const unavailable: AdminOrderSkuIssue[] = [];
     plan.lineTypes.forEach((type, index) => {
         if (isAutoFulfillmentType(type)) {
-            addAdminOrderSkuIssue(unavailable, resolvedItems[index]!, index, "FULFILMENT_UNAVAILABLE",
+            addAdminOrderSkuIssue(unavailable, resolvedItems[index]!, index, "fulfilment_unavailable",
                 "Digital items and gift cards can't be added to an order yet.");
         }
     });
@@ -455,7 +455,7 @@ export async function prepareManualOrderQuote(
             const override = submitted?.unitPriceMinor;
             if (override !== undefined && !isIncrementMultipleMinor(override, currency.priceIncrementMinor)) {
                 throw new ValidationError(priceIncrementMessage(currency.code, currency.priceIncrementMinor), {
-                    issues: [{ index, field: "unitPriceMinor", code: "PRICE_INCREMENT" }],
+                    issues: [{ index, field: "unitPriceMinor", code: "price_increment" }],
                 });
             }
             return {
@@ -477,7 +477,7 @@ export async function prepareManualOrderQuote(
     const outOfRange = trackedItems.findIndex((item) => !isLineAmountInRange(item.unitPriceMinor, item.quantity));
     if (outOfRange >= 0) {
         throw new ValidationError("That line comes to more than one order can hold. Lower its quantity.", {
-            issues: [{ index: outOfRange, code: "QUANTITY_UNAVAILABLE" }],
+            issues: [{ index: outOfRange, code: "quantity_unavailable" }],
         });
     }
     const money = calculateManualOrderMoney(
@@ -615,7 +615,7 @@ function assertAdminOrderItemsUseSkus(items: AdminOrderSkuItem[]) {
                 issues,
                 item,
                 index,
-                "SKU_REQUIRED",
+                "sku_required",
                 "Select a product SKU before saving the order.",
             );
         }
@@ -702,7 +702,7 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
                 issues,
                 item,
                 index,
-                "VARIANT_UNAVAILABLE",
+                "variant_unavailable",
                 "Selected SKU is no longer available.",
             );
             return;
@@ -712,7 +712,7 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
                 issues,
                 item,
                 index,
-                "VARIANT_MISMATCH",
+                "variant_mismatch",
                 "Selected SKU does not belong to this product.",
             );
             return;
@@ -722,7 +722,7 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
                 issues,
                 item,
                 index,
-                "VARIANT_UNAVAILABLE",
+                "variant_unavailable",
                 "Selected SKU has been deleted.",
             );
             return;
@@ -732,7 +732,7 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
                 issues,
                 item,
                 index,
-                "PRODUCT_UNAVAILABLE",
+                "product_unavailable",
                 "Selected product is not active.",
             );
             return;

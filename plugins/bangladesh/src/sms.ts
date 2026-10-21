@@ -29,13 +29,13 @@ async function post(ctx: PluginContext, gateway: string, url: string, init: { he
     return await ctx.http.fetch(url, { method: "POST", ...init, timeoutMs: SEND_TIMEOUT_MS });
   } catch (error) {
     const code = platformErrorCode(error);
-    if (code === "http.not_allowed" || code === "http.invalid_request") {
-      throw new ProviderError("misconfigured", `${gateway} cannot be reached at this address.`, { code: "bangladesh.sms_address" });
+    if (code === "http_not_allowed" || code === "http_invalid_request") {
+      throw new ProviderError("misconfigured", `${gateway} cannot be reached at this address.`, { code: "bangladesh_sms_address" });
     }
-    const timedOut = code === "http.timeout";
+    const timedOut = code === "http_timeout";
     throw new ProviderError("retryable", timedOut ? `${gateway} did not answer in time.` : `${gateway} could not be reached.`, {
       uncertain: true,
-      code: timedOut ? "bangladesh.sms_timeout" : "bangladesh.sms_unreachable",
+      code: timedOut ? "bangladesh_sms_timeout" : "bangladesh_sms_unreachable",
     });
   }
 }
@@ -164,7 +164,7 @@ export async function sendGennet(input: SmsSendInput, ctx: PluginContext): Promi
   const baseUrl = requireText(ctx, "gennet_base_url", "Gennet base URL");
   const sid = requireText(ctx, "gennet_sid", "Gennet SID (sender ID)");
   const issue = gennetBaseUrlIssue(baseUrl);
-  if (issue) throw new ProviderError("misconfigured", `${issue}.`, { code: "bangladesh.gennet_base_url" });
+  if (issue) throw new ProviderError("misconfigured", `${issue}.`, { code: "bangladesh_gennet_base_url" });
   const csmsId = normalizeCsmsId(input.idempotencyKey);
   const response = await post(ctx, "GenNet", `${baseUrl.replace(/\/$/, "")}/api/v3/send-sms`, {
     headers: { "Content-Type": "application/json" },

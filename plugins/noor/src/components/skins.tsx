@@ -138,7 +138,7 @@ function Showcase({ settings, heading, tabs, link, layout, context, instanceId, 
 }
 
 /** Tabs: each core tab is a tab here, its products the tab's list. */
-export function ProductTabsSkin({ settings, data, context, instanceId }: SectionSkinProps<"product-tabs", ProductsSkinSettings>) {
+export function ProductTabsSkin({ settings, data, context, instanceId }: SectionSkinProps<"product_tabs", ProductsSkinSettings>) {
   const tabs = listOf(data.settings.tabs);
   const { title, limit = 8 } = data.settings;
   return (
@@ -149,7 +149,7 @@ export function ProductTabsSkin({ settings, data, context, instanceId }: Section
 }
 
 /** A grid: the core grid's columns and rows. */
-export function ProductGridSkin({ settings, data, context, instanceId }: SectionSkinProps<"product-grid", ProductsSkinSettings>) {
+export function ProductGridSkin({ settings, data, context, instanceId }: SectionSkinProps<"product_grid", ProductsSkinSettings>) {
   const { title, products: source, columns = 4, rows = 2 } = data.settings;
   return (
     <ProductShowcase objects={{}} instanceId={instanceId} context={context} settings={{
@@ -169,7 +169,7 @@ export function ProductGridSkin({ settings, data, context, instanceId }: Section
 }
 
 /** A scrolling row. */
-export function ProductRailSkin({ settings, data, context, instanceId }: SectionSkinProps<"product-rail", ProductsSkinSettings>) {
+export function ProductRailSkin({ settings, data, context, instanceId }: SectionSkinProps<"product_rail", ProductsSkinSettings>) {
   const { title, products: source, limit = 12 } = data.settings;
   return (
     <Showcase settings={settings} heading={title} context={context} instanceId={instanceId} layout="row" eager={data.aboveFold === true}
@@ -209,7 +209,7 @@ function Tiles({ settings, heading, tiles, context, instanceId }: {
 }
 
 /** The merchant's categories as photo tiles (a category without a photo is left out). */
-export function CategoryTilesSkin({ settings, data, context, instanceId }: SectionSkinProps<"category-tiles", TilesSkinSettings>) {
+export function CategoryTilesSkin({ settings, data, context, instanceId }: SectionSkinProps<"category_tiles", TilesSkinSettings>) {
   return (
     <Tiles settings={settings} heading={data.settings.title} context={context} instanceId={instanceId}
       tiles={listOf(data.settings.categories).map((tile) => ({ image: tile.image, title: tile.title, link: tile.url }))} />
@@ -217,7 +217,7 @@ export function CategoryTilesSkin({ settings, data, context, instanceId }: Secti
 }
 
 /** "Shop by" cards (a photo, a label and a link each) as photo tiles. */
-export function ShopByTilesSkin({ settings, data, context, instanceId }: SectionSkinProps<"shop-by", TilesSkinSettings>) {
+export function ShopByTilesSkin({ settings, data, context, instanceId }: SectionSkinProps<"shop_by", TilesSkinSettings>) {
   return (
     <Tiles settings={settings} heading={data.settings.title} context={context} instanceId={instanceId}
       tiles={listOf(data.settings.cards).map((card) => ({ image: card.image, title: card.title, subtitle: card.subtitle, link: card.href }))} />
@@ -229,7 +229,7 @@ interface PromoSkinSettings extends Shell {
 }
 
 /** The banner mosaic's photos as large promo tiles; a tile's alt text is its heading. */
-export function PromoTilesSkin({ settings, data, context, instanceId }: SectionSkinProps<"banner-mosaic", PromoSkinSettings>) {
+export function PromoTilesSkin({ settings, data, context, instanceId }: SectionSkinProps<"banner_mosaic", PromoSkinSettings>) {
   return (
     <PromoTiles objects={{}} instanceId={instanceId} context={context} settings={{
       items: listOf(data.settings.tiles).slice(0, 3).map((tile) => ({ image: tile.image, eyebrow: null, heading: text(tile.alt), label: null, link: tile.href })),
@@ -277,7 +277,7 @@ interface SaleSkinSettings extends Shell {
 }
 
 /** A deal block as a banner counting down to its promotion's end, then its products in a row. */
-export function SaleSkin({ settings, data, context, instanceId }: SectionSkinProps<"deal-block", SaleSkinSettings>) {
+export function SaleSkin({ settings, data, context, instanceId }: SectionSkinProps<"deal_block", SaleSkinSettings>) {
   const { title, products: source, promotion } = data.settings;
   const end = promotion ? Date.parse(promotion.endsAt) : Number.NaN;
   const products = listOf(source?.cards);
@@ -328,7 +328,7 @@ function promiseIcon(title: string): IconName {
 }
 
 /** The store's delivery facts or the merchant's own points as Noor's icon promises. */
-export function PromisesSkin({ settings, data, context, instanceId }: SectionSkinProps<"usp-strip", PromisesSkinSettings>) {
+export function PromisesSkin({ settings, data, context, instanceId }: SectionSkinProps<"usp_strip", PromisesSkinSettings>) {
   return (
     <Promises objects={{}} instanceId={instanceId} context={context} settings={{
       eyebrow: settings.eyebrow,
@@ -378,7 +378,7 @@ export function StorySkin({ settings, data, context, instanceId }: SectionSkinPr
 }
 
 /** Long text below the page as Noor's text block. */
-export function TextSkin({ settings, data, context, instanceId }: SectionSkinProps<"seo-text", StorySkinSettings>) {
+export function TextSkin({ settings, data, context, instanceId }: SectionSkinProps<"seo_text", StorySkinSettings>) {
   return (
     <RichText objects={{}} instanceId={instanceId} context={context} settings={{
       eyebrow: settings.eyebrow, heading: none(data.settings.heading), text: data.settings.body,

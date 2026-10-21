@@ -174,9 +174,9 @@ const section = (type: StorefrontSectionType, id: string, settings: Record<strin
   ({ ...storefrontSectionDefault(type, id), settings: { ...storefrontSectionDefault(type, id).settings, ...settings } }) as StorefrontSection;
 
 const HOME = [
-  section("product-rail", "rail", { title: "New honey" }),
+  section("product_rail", "rail", { title: "New honey" }),
   section("faq", "faq", { heading: "Questions", items: [{ question: "Is it raw?", answer: "Yes." }] }),
-  section("seo-text", "story", { heading: "Our story", body: "From the Sundarbans." }),
+  section("seo_text", "story", { heading: "Our story", body: "From the Sundarbans." }),
 ];
 
 function themeWith(home: StorefrontSection[], base: StorefrontThemeDocument = DEFAULT_STOREFRONT_THEME): StorefrontThemeDocument {
@@ -545,7 +545,7 @@ describe("theme editor: live preview and saving", () => {
     const theirs = workspaceOf(themeWith([HOME[2]!]));
     (theirs.draft as { revision: number; updatedByName: string | null }).revision = 5;
     (theirs.draft as { updatedByName: string | null }).updatedByName = "Rahima";
-    api.draft.mockRejectedValueOnce(new AdminApiResponseError("Theme draft changed", 409, "CONFLICT"));
+    api.draft.mockRejectedValueOnce(new AdminApiResponseError("Theme draft changed", 409, "conflict"));
     render(theme, { refetch: async () => ({ data: theirs }) });
     act(() => row("rail").focus());
     key(row("rail"), { key: "ArrowDown", altKey: true });
@@ -568,7 +568,7 @@ describe("theme editor: live preview and saving", () => {
     let current = 0;
     api.draft.mockImplementation(async ({ body }: { body: { expectedDraftRevision: number } }) => {
       await Promise.resolve();
-      if (body.expectedDraftRevision !== current) throw new AdminApiResponseError("Theme draft changed", 409, "CONFLICT");
+      if (body.expectedDraftRevision !== current) throw new AdminApiResponseError("Theme draft changed", 409, "conflict");
       return { revision: (current += 1), basePublishedRevision: 1, updatedAt: null };
     });
     render(themeWith(HOME), { noDraft: true, strict: true });

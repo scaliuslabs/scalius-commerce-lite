@@ -27,15 +27,15 @@ const resolver: CoreSectionResolver = {
 describe("skin targets", () => {
   it("names the fixed units and the skinnable core sections", () => {
     expect(isStorefrontSkinTarget("header")).toBe(true);
-    expect(isStorefrontSkinTarget("listing-main")).toBe(true);
+    expect(isStorefrontSkinTarget("listing_main")).toBe(true);
     expect(isStorefrontSkinTarget("section:hero")).toBe(true);
     expect(isStorefrontSkinTarget(storefrontSectionSkinTarget("faq"))).toBe(true);
     // The buyer's history, an endless feed and content types have no projection.
-    for (const type of ["recently-viewed", "endless-grid", "objects", "app", "nope"]) {
+    for (const type of ["recently_viewed", "endless_grid", "objects", "app", "nope"]) {
       expect(isStorefrontSkinTarget(`section:${type}`)).toBe(false);
     }
     expect(isStorefrontSkinTarget("sidebar")).toBe(false);
-    expect(storefrontSkinTargetSection("section:deal-block")).toBe("deal-block");
+    expect(storefrontSkinTargetSection("section:deal_block")).toBe("deal_block");
     expect(storefrontSkinTargetSection("header")).toBeNull();
     expect(STOREFRONT_SKINNABLE_SECTION_TYPES).toContain("newsletter");
   });
@@ -44,7 +44,7 @@ describe("skin targets", () => {
     const hero = { ...storefrontSectionDefault("hero", "hero"), skin: { app: "acme.theme/hero", values: { scrim: 40 } } };
     const document = {
       ...DEFAULT_STOREFRONT_THEME,
-      apps: { skins: { "product-main": { app: "acme.theme/pdp", values: { gallery: "stack" } } } },
+      apps: { skins: { "product_main": { app: "acme.theme/pdp", values: { gallery: "stack" } } } },
       pages: { ...DEFAULT_STOREFRONT_THEME.pages, home: [hero] },
     };
     expect(storefrontThemeDocumentSchema.safeParse(document).success).toBe(true);
@@ -60,7 +60,7 @@ describe("a core section's projection", () => {
     expect(STOREFRONT_SKINNABLE_SECTION_TYPES).toEqual(Object.keys(STOREFRONT_SECTION_SKIN_PROJECTIONS));
     expect(STOREFRONT_SKINNABLE_SECTION_TYPES.filter((type) => !STOREFRONT_SECTION_RENDERERS.includes(type))).toEqual([]);
     expect(STOREFRONT_SECTION_RENDERERS.filter((type) => !(STOREFRONT_SKINNABLE_SECTION_TYPES as string[]).includes(type)))
-      .toEqual(["endless-grid", "recently-viewed", "objects"]);
+      .toEqual(["endless_grid", "recently_viewed", "objects"]);
   });
 
   it("leaves out what only the editor reads: hidden marks and dynamic sources", () => {
@@ -83,7 +83,7 @@ describe("a core section's projection", () => {
   });
 
   it("resolves restored section images and preserves a tile's subtitle", () => {
-    const deal = storefrontSectionDefault("deal-block", "sale");
+    const deal = storefrontSectionDefault("deal_block", "sale");
     deal.settings.mediaId = "sale-photo";
     expect(coreSectionSkinSettings(deal, resolver).image).toEqual(image("sale-photo"));
     const newsletter = storefrontSectionDefault("newsletter", "newsletter");
@@ -91,7 +91,7 @@ describe("a core section's projection", () => {
     expect(coreSectionSkinSettings(newsletter, resolver).image).toEqual(image("signup-photo"));
     newsletter.settings.mediaId = "gone";
     expect(coreSectionSkinSettings(newsletter, resolver).image).toBeNull();
-    const cards = storefrontSectionDefault("shop-by", "cards");
+    const cards = storefrontSectionDefault("shop_by", "cards");
     cards.settings.cards = [{ mediaId: "tile", title: "Linen", subtitle: "Made for summer", href: "/linen" }];
     expect(coreSectionSkinSettings(cards, resolver).cards[0]).toEqual({ subtitle: "Made for summer", image: image("tile"), title: "Linen", href: "/linen" });
   });
@@ -115,23 +115,23 @@ describe("a core section's projection", () => {
     expect(settings.slides[0]!.link).toBe("/sale");
     expect(settings.sideBanners).toEqual([{ image: image("m3"), alt: "Side", href: "/new" }]);
 
-    const deal: StorefrontSectionOf<"deal-block"> = {
-      ...storefrontSectionDefault("deal-block", "deal"),
-      settings: { ...storefrontSectionDefault("deal-block", "deal").settings, source: { kind: "category", categoryId: "cat_1" }, promotionId: "promo_live" },
+    const deal: StorefrontSectionOf<"deal_block"> = {
+      ...storefrontSectionDefault("deal_block", "deal"),
+      settings: { ...storefrontSectionDefault("deal_block", "deal").settings, source: { kind: "category", categoryId: "cat_1" }, promotionId: "promo_live" },
     };
     const dealSettings = coreSectionSkinSettings(deal, resolver);
     expect(dealSettings.products).toEqual({ title: "category", url: "/search", cards: [] });
     expect(dealSettings.promotion).toEqual({ endsAt: "2026-12-01T00:00:00.000Z" });
 
-    const tiles: StorefrontSectionOf<"category-tiles"> = {
-      ...storefrontSectionDefault("category-tiles", "tiles"),
-      settings: { ...storefrontSectionDefault("category-tiles", "tiles").settings, categoryIds: ["cat_1", "gone", "cat_2"] },
+    const tiles: StorefrontSectionOf<"category_tiles"> = {
+      ...storefrontSectionDefault("category_tiles", "tiles"),
+      settings: { ...storefrontSectionDefault("category_tiles", "tiles").settings, categoryIds: ["cat_1", "gone", "cat_2"] },
     };
     expect(coreSectionSkinSettings(tiles, resolver).categories.map((each) => each.id)).toEqual(["cat_1", "cat_2"]);
 
-    const strip = storefrontSectionDefault("usp-strip", "usp");
+    const strip = storefrontSectionDefault("usp_strip", "usp");
     expect(coreSectionSkinSettings(strip, resolver).source).toEqual({ kind: "delivery-facts", items: [{ title: "Free delivery", detail: "Over ৳2,000" }] });
-    const custom: StorefrontSectionOf<"usp-strip"> = { ...strip, settings: { style: "icons", source: { kind: "custom", items: [{ title: "Gift wrap", detail: "Free" }] } } };
+    const custom: StorefrontSectionOf<"usp_strip"> = { ...strip, settings: { style: "icons", source: { kind: "custom", items: [{ title: "Gift wrap", detail: "Free" }] } } };
     expect(coreSectionSkinSettings(custom, resolver).source).toEqual({ kind: "custom", items: [{ title: "Gift wrap", detail: "Free" }] });
   });
 });

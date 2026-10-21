@@ -37,7 +37,7 @@ const PLACEMENT_MESSAGES: Record<CategoryPlacementRefusal, string> = {
 
 export class CategoryPlacementError extends AppError {
     constructor(public readonly reason: CategoryPlacementRefusal, categoryId: string | null, parentId: string | null) {
-        super(400, "CATEGORY_PLACEMENT_REFUSED", PLACEMENT_MESSAGES[reason], { reason, categoryId, parentId });
+        super(400, "category_placement_refused", PLACEMENT_MESSAGES[reason], { reason, categoryId, parentId });
         this.name = "CategoryPlacementError";
     }
 }

@@ -31,13 +31,13 @@ describe("theme setting labels", () => {
   });
 
   it("reads the most specific label first, then the shared one", () => {
-    expect(settingLabelKey(["s.category-tiles"], "title")).toBe("s.category-tiles.title");
-    expect(settingLabelKey(["s.product-rail"], "title")).toBe("f.title");
+    expect(settingLabelKey(["s.category_tiles"], "title")).toBe("s.category_tiles.title");
+    expect(settingLabelKey(["s.product_rail"], "title")).toBe("f.title");
     expect(settingLabelKey(["b.card.standard", "b.card"], "facts")).toBe("b.card.facts");
     expect(settingLabelKey(["b.card.standard", "b.card"], "action", "quick-add")).toBe("b.card.action.quick-add");
     expect(settingLabelKey(["b.buyBox.classic", "b.buyBox"], "features")).toBe("b.buyBox.features");
     expect(settingLabelKey(["b.buyBox.classic", "b.buyBox"], "cta", "stack")).toBe("b.buyBox.cta.stack");
-    expect(settingLabelKey(["s.product-tabs"], "tabs.source.kind", "on-sale")).toBe("f.source.kind.on-sale");
+    expect(settingLabelKey(["s.product_tabs"], "tabs.source.kind", "on-sale")).toBe("f.source.kind.on-sale");
     expect(settingLabelKey(["s.hero"], "nothing.here")).toBeNull();
   });
 });
@@ -59,12 +59,12 @@ describe("registry introspection", () => {
     expect(field("layout")).toMatchObject({ kind: "choice", values: expect.arrayContaining(["split", "full-bleed"]) });
     expect(field("slides")).toMatchObject({ kind: "list", max: 10, min: 0 });
     expect(field("phonePlacement")).toMatchObject({ kind: "choice", optional: true, values: ["after-categories"] });
-    const rail = sectionSettingSpec("product-rail");
+    const rail = sectionSettingSpec("product_rail");
     if (rail.kind !== "object") throw new Error("object");
     expect(rail.fields.find((each) => each.key === "limit")!.spec).toEqual({ kind: "number", min: 4, max: 24, int: true });
     expect(rail.fields.find((each) => each.key === "title")!.spec).toEqual({ kind: "text", min: 0, max: 80 });
     expect(rail.fields.find((each) => each.key === "source")!.spec).toMatchObject({ kind: "variants", key: "kind" });
-    expect(sectionSettingSpec("endless-grid")).toMatchObject({ fields: [expect.anything(), { key: "pageSize", spec: { kind: "choice", values: [12, 24, 36] } }] });
+    expect(sectionSettingSpec("endless_grid")).toMatchObject({ fields: [expect.anything(), { key: "pageSize", spec: { kind: "choice", values: [12, 24, 36] } }] });
   });
 
   it("switches a variant keeping the settings both declare", () => {
@@ -76,7 +76,7 @@ describe("registry introspection", () => {
   });
 
   it("starts a list at its minimum length", () => {
-    const tabs = describeSetting(STOREFRONT_SECTION_REGISTRY["product-tabs"].settings);
+    const tabs = describeSetting(STOREFRONT_SECTION_REGISTRY["product_tabs"].settings);
     if (tabs.kind !== "object") throw new Error("object");
     const list = tabs.fields.find((each) => each.key === "tabs")!.spec;
     expect(settingDefault(list)).toEqual([

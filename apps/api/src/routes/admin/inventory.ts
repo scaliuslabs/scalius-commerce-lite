@@ -50,7 +50,7 @@ import { ok } from "../../utils/api-response";
 import { successEnvelope, paginationSchema, errorResponses, conflictResponse } from "../../schemas/responses";
 import { rebuildCatalogProjectionsAfterWrite } from "../../background/catalog";
 
-import { nullableTimestampSchema, timestampSchema } from "../../schemas/timestamps";
+import { isoTimestampSchema, nullableTimestampSchema, timestampSchema } from "../../schemas/timestamps";
 import { parseStoreDateOnlyBoundary } from "./order-date-filter";
 import { presentSkuCost } from "./cost-access";
 import { commerceCalendarDateKey } from "@scalius/shared/commerce-time";
@@ -243,8 +243,8 @@ const inventoryLocationSchema = z.object({
     version: z.number().int().min(1),
     onHand: z.number().int().openapi({ description: "Units on hand there, every SKU" }),
     stockedSkus: z.number().int().openapi({ description: "SKUs with units on hand there" }),
-    createdAt: timestampSchema,
-    updatedAt: timestampSchema,
+    createdAt: isoTimestampSchema,
+    updatedAt: isoTimestampSchema,
 });
 
 const variantInventoryLevelsSchema = z.object({

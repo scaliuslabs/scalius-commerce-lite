@@ -14,11 +14,11 @@ function fakeStore(options: { failAt?: number; status?: number } = {}) {
   const keys = new Set<string>();
   const instance = createPluginTestHarness(pack, {
     api: (operationId, input) => {
-      expect(operationId).toBe("dashboard.delivery_locations.import");
+      expect(operationId).toBe("delivery_locations.import");
       const call = input as ImportCall;
       calls.push(call);
       if (options.failAt === calls.length) {
-        return { ok: false, status: options.status ?? 503, data: null, error: { code: "service.unavailable", message: "busy" } };
+        return { ok: false, status: options.status ?? 503, data: null, error: { code: "service_unavailable", message: "busy" } };
       }
       let created = 0;
       for (const place of call.body.places) {

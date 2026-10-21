@@ -136,7 +136,7 @@ export function BrandForm({ defaultValues }: { defaultValues?: BrandFormInput })
       }
     },
     onError: (error, message) => {
-      if (readAdminApiErrorCode(error) === "BRAND_REVISION_CONFLICT") throw new SaveConflict(t("conflict"));
+      if (readAdminApiErrorCode(error) === "brand_revision_conflict") throw new SaveConflict(t("conflict"));
       if (message.includes("slug already exists")) {
         form.setError("slug", { type: "server", message: t("addressTaken") });
         return t("addressTaken");

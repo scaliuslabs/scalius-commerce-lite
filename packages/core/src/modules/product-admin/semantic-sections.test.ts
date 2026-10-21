@@ -211,7 +211,7 @@ describe("product semantic sections", () => {
             expectedAggregateRevision: 6,
         })).rejects.toMatchObject({
             status: 409,
-            code: "PRODUCT_REVISION_CONFLICT",
+            code: "product_revision_conflict",
             details: { expectedRevision: 6, currentRevision: 7 },
         });
         expect(sqlite.prepare(`SELECT name, aggregate_revision FROM products WHERE id = ?`).get("prod_semantic")).toMatchObject({

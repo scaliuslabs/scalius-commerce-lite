@@ -21,11 +21,11 @@ describe("apiData envelope handling", () => {
 
   it("keeps status, code and details from API error bodies", async () => {
     const error = await apiData(Promise.resolve({
-      error: { success: false, error: { code: "REVISION_CONFLICT", message: "Stale", details: { currentRevision: 3 } } },
+      error: { success: false, error: { code: "revision_conflict", message: "Stale", details: { currentRevision: 3 } } },
       response: new Response(null, { status: 409 }),
     })).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(AdminApiResponseError);
-    expect(error).toMatchObject({ message: "Stale", status: 409, code: "REVISION_CONFLICT", details: { currentRevision: 3 } });
+    expect(error).toMatchObject({ message: "Stale", status: 409, code: "revision_conflict", details: { currentRevision: 3 } });
   });
 
   it("falls back to the status when the error body is not an envelope", async () => {

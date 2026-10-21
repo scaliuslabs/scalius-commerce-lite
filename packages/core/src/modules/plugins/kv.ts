@@ -18,7 +18,7 @@ const PRUNE_PER_WRITE = 20;
 
 export function requireKvKey(key: unknown): string {
   if (typeof key !== "string" || key.length < 1 || key.length > PLUGIN_KV_KEY_MAX_LENGTH || /\p{Cc}/u.test(key)) {
-    throw new PluginError("kv.invalid_key", `KV keys are 1 to ${PLUGIN_KV_KEY_MAX_LENGTH} printable characters.`);
+    throw new PluginError("kv_invalid_key", `KV keys are 1 to ${PLUGIN_KV_KEY_MAX_LENGTH} printable characters.`);
   }
   return key;
 }
@@ -40,7 +40,7 @@ export async function getPluginKv(db: Database, pluginId: string, key: string): 
   return (await getPluginKvVersion(db, pluginId, key))?.value ?? null;
 }
 
-const CONFLICT_MARKER = "PLUGIN_KV_CONFLICT";
+const CONFLICT_MARKER = "plugin_kv_conflict";
 
 export async function setPluginKv(
   db: Database,
@@ -54,7 +54,7 @@ export async function setPluginKv(
 
 /**
  * Sets the entry only while it is still at `expectedRevision` (null: no live
- * entry); otherwise nothing changes and it fails `kv.conflict`.
+ * entry); otherwise nothing changes and it fails `kv_conflict`.
  */
 export async function compareAndSetPluginKv(
   db: Database,
@@ -65,7 +65,7 @@ export async function compareAndSetPluginKv(
   options: { ttlSeconds?: number } = {},
 ): Promise<{ revision: number }> {
   if (expectedRevision !== null && !(typeof expectedRevision === "number" && Number.isSafeInteger(expectedRevision) && expectedRevision >= 1)) {
-    throw new PluginError("kv.invalid_revision", "expectedRevision is a revision you read (a whole number from 1), or null for an absent entry.");
+    throw new PluginError("kv_invalid_revision", "expectedRevision is a revision you read (a whole number from 1), or null for an absent entry.");
   }
   return writePluginKv(db, pluginId, key, value, options, expectedRevision);
 }
@@ -85,13 +85,13 @@ async function writePluginKv(
   } catch {
     json = undefined;
   }
-  if (json === undefined) throw new PluginError("kv.value_too_large", "KV values must be JSON-serializable.");
+  if (json === undefined) throw new PluginError("kv_value_too_large", "KV values must be JSON-serializable.");
   if (new TextEncoder().encode(json).byteLength > PLUGIN_KV_VALUE_MAX_BYTES) {
-    throw new PluginError("kv.value_too_large", `KV values are at most ${PLUGIN_KV_VALUE_MAX_BYTES} bytes of JSON.`);
+    throw new PluginError("kv_value_too_large", `KV values are at most ${PLUGIN_KV_VALUE_MAX_BYTES} bytes of JSON.`);
   }
   const ttl = options.ttlSeconds;
   if (ttl !== undefined && (!Number.isInteger(ttl) || ttl < 1 || ttl > PLUGIN_KV_MAX_TTL_SECONDS)) {
-    throw new PluginError("kv.invalid_ttl", `ttlSeconds is a whole number from 1 to ${PLUGIN_KV_MAX_TTL_SECONDS}.`);
+    throw new PluginError("kv_invalid_ttl", `ttlSeconds is a whole number from 1 to ${PLUGIN_KV_MAX_TTL_SECONDS}.`);
   }
   const expiresAt = ttl === undefined ? null : sql`unixepoch() + ${ttl}`;
   const entry = and(eq(pluginKv.pluginId, pluginId), eq(pluginKv.key, kvKey));
@@ -126,7 +126,7 @@ async function writePluginKv(
     ] as never) as unknown[];
   } catch (error) {
     if (guards.length > 0 && isBatchGuardError(error, CONFLICT_MARKER)) {
-      throw new PluginError("kv.conflict", `${kvKey} changed since it was read: read it again and retry.`);
+      throw new PluginError("kv_conflict", `${kvKey} changed since it was read: read it again and retry.`);
     }
     throw error;
   }
@@ -142,7 +142,7 @@ export async function deletePluginKv(db: Database, pluginId: string, key: string
 /** Live keys with the prefix (all keys without one), in key order, at most 1000. */
 export async function listPluginKv(db: Database, pluginId: string, prefix = ""): Promise<string[]> {
   if (typeof prefix !== "string" || prefix.length > PLUGIN_KV_KEY_MAX_LENGTH) {
-    throw new PluginError("kv.invalid_key", "The prefix is at most 256 characters.");
+    throw new PluginError("kv_invalid_key", "The prefix is at most 256 characters.");
   }
   const rows = await db.select({ key: pluginKv.key }).from(pluginKv)
     .where(and(

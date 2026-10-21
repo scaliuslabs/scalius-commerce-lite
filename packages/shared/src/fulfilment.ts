@@ -84,7 +84,7 @@ export type CheckoutFulfilmentIssue =
   /** The cart has no lines. */
   | "EMPTY"
   /** A physical line needs a delivery or pickup method. */
-  | "DELIVERY_METHOD_REQUIRED";
+  | "delivery_method_required";
 
 export interface CheckoutFulfilmentPlan {
   /** One type per input line, in input order. */
@@ -126,7 +126,7 @@ export function resolveCheckoutFulfilment(
   const requiresDeliveryMethod = lines.some((line) =>
     !line.isGiftCard && line.fulfillmentKind === "physical");
   if (requiresDeliveryMethod && chosenDeliveryMethodKind === null) {
-    return { ok: false, issue: "DELIVERY_METHOD_REQUIRED" };
+    return { ok: false, issue: "delivery_method_required" };
   }
   const deliveryMethodKind = requiresDeliveryMethod ? chosenDeliveryMethodKind : null;
   const lineTypes = lines.map((line) => resolveLineFulfillmentType(line, deliveryMethodKind)!);

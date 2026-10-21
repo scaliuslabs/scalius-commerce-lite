@@ -194,7 +194,7 @@ const OBJECT_STORES: HomepageObject = {
         { key: "map", name: "Map", type: "url", value: "/pages/stores" },
         { key: "evil", name: "Evil", type: "url", value: "javascript:alert(1)" },
         { key: "brand", name: "Brand colour", type: "color", value: "#1f5f4a" },
-        { key: "deposit", name: "Deposit", type: "money", value: 1250 },
+        { key: "deposit", name: "Deposit", type: "money", value: { amountMinor: 125000, currency: "BDT" } },
         { key: "parking", name: "Parking", type: "boolean", value: true },
         { key: "opened", name: "Opened", type: "date", value: "2019-04-14" },
         { key: "photo", name: "Photo", type: "media_reference", value: "m-story" },
@@ -274,45 +274,45 @@ const section = <Type extends StorefrontSectionType>(type: Type, id: string, set
 const hero = (settings: Record<string, unknown> = {}) => section("hero", "hero", { slides: HERO_SLIDES, ...settings });
 /** Every fixture category, in the large store's order (the tiny store has the first two). */
 const CATEGORY_IDS = Array.from({ length: 12 }, (_, index) => `cat-${index}`);
-const tiles = (settings: Record<string, unknown> = {}) => section("category-tiles", "tiles", { categoryIds: CATEGORY_IDS, ...settings });
+const tiles = (settings: Record<string, unknown> = {}) => section("category_tiles", "tiles", { categoryIds: CATEGORY_IDS, ...settings });
 const COLLECTION_IDS = ["col-grid", "col-rail"];
 
 /** Every renderable section type with settings that read the fixtures' data. */
 const EVERY_SECTION: StorefrontSection[] = [
   hero({ layout: "contained-banners", sideBanners: [{ mediaId: "m-side-1", alt: "Side one", href: "/sale" }, { mediaId: "m-side-2", alt: "", href: null }] }),
-  section("usp-strip", "usp"),
+  section("usp_strip", "usp"),
   tiles({ style: "round" }),
   section("collections", "collections", { collectionIds: COLLECTION_IDS }),
-  section("product-rail", "rail", { title: "", source: { kind: "newest" }, limit: 12 }),
-  section("product-grid", "grid", { title: BANGLA, source: { kind: "category", categoryId: "cat-sarees" }, columns: 4, rows: 2 }),
-  section("deal-block", "deal", { title: "Flash sale", source: { kind: "on-sale" }, promotionId: "promo-eid" }),
-  section("product-tabs", "tabs", { title: "", limit: 8, tabs: [
+  section("product_rail", "rail", { title: "", source: { kind: "newest" }, limit: 12 }),
+  section("product_grid", "grid", { title: BANGLA, source: { kind: "category", categoryId: "cat-sarees" }, columns: 4, rows: 2 }),
+  section("deal_block", "deal", { title: "Flash sale", source: { kind: "on-sale" }, promotionId: "promo-eid" }),
+  section("product_tabs", "tabs", { title: "", limit: 8, tabs: [
     { label: "", source: { kind: "newest" } },
     { label: BANGLA, source: { kind: "popular" } },
     { label: "Sarees", source: { kind: "category", categoryId: "cat-sarees" } },
   ] }),
   section("lookbook", "look", { title: "Eid looks", mediaId: "m-look", source: { kind: "collection", collectionId: "col-eid" } }),
-  section("shop-by", "shop-by", { title: "Shop by occasion", cards: [
+  section("shop_by", "shop_by", { title: "Shop by occasion", cards: [
     { mediaId: "m-card-1", title: "Eid", href: "/collections/eid" },
     { mediaId: "m-card-2", title: BANGLA, href: "/categories/sarees" },
     { mediaId: "m-missing", title: "Gone", href: "/gone" },
   ] }),
-  section("banner-mosaic", "mosaic", { tiles: [
+  section("banner_mosaic", "mosaic", { tiles: [
     { mediaId: "m-tile-1", alt: "Eid sale", href: "/sale" },
     { mediaId: "m-tile-2", alt: "", href: "/new" },
     { mediaId: "m-tile-3", alt: "Sarees", href: null },
   ] }),
-  section("brand-wall", "brands", { title: "", style: "rail" }),
-  section("recently-viewed", "recent", { title: "" }),
+  section("brand_wall", "brands", { title: "", style: "rail" }),
+  section("recently_viewed", "recent", { title: "" }),
   section("banner", "banner-1", { layout: "two-up", heading: "Eid sale", text: BANGLA, mediaId: "m-banner", cta: { label: "Shop", href: "/sale" } }),
   section("banner", "banner-2", { layout: "two-up", heading: "", text: "", mediaId: "m-banner-2", cta: null }),
   { id: "story", type: "editorial", version: 1, settings: { layout: "image-with-text", heading: "Our story", body: BANGLA, mediaId: "m-story", imageSide: "end" } },
   section("specifications", "specifications", { heading: "Specifications", rows: [{ label: "Fabric", value: "Cotton" }] }),
   section("faq", "faq", { heading: "", items: [{ question: "Do you deliver outside Dhaka?", answer: BANGLA }] }),
-  section("utility-cards", "utility", { cards: [{ title: "Track order", text: "Where is my parcel", href: "/track-order" }, { title: "Stores", text: "", href: "/pages/stores" }] }),
-  section("endless-grid", "endless", { title: "", pageSize: 24 }),
+  section("utility_cards", "utility", { cards: [{ title: "Track order", text: "Where is my parcel", href: "/track-order" }, { title: "Stores", text: "", href: "/pages/stores" }] }),
+  section("endless_grid", "endless", { title: "", pageSize: 24 }),
   section("objects", "meta", { heading: "", typeId: "oty_custom.stores", layout: "list", limit: 12 }),
-  section("seo-text", "seo", { heading: "About us", body: "## Sarees in Bangladesh\nHandwoven.\n\nMore text." }),
+  section("seo_text", "seo", { heading: "About us", body: "## Sarees in Bangladesh\nHandwoven.\n\nMore text." }),
   section("newsletter", "news", { heading: "", text: "", email: "optional", whatsapp: true }),
 ];
 
@@ -443,7 +443,7 @@ describe("homepage section library", () => {
   });
 
   it("scrolls rails with CSS scroll-snap and shows short lists as a grid", async () => {
-    const large = await render([section("product-rail", "rail", { title: "", source: { kind: "newest" }, limit: 12 })], store("large"));
+    const large = await render([section("product_rail", "rail", { title: "", source: { kind: "newest" }, limit: 12 })], store("large"));
     const track = large.querySelector("[data-product-rail-track]")!;
     expect(track.className).toContain("snap-x");
     expect(track.className).toContain("overflow-x-auto");
@@ -455,7 +455,7 @@ describe("homepage section library", () => {
     expect(text(large.querySelector("h2"))).toBe("New arrivals");
     expect(large.querySelector('a[href="/search"]')).not.toBeNull();
     // Three products are not a rail.
-    const tiny = await render([section("product-rail", "rail", { title: "", source: { kind: "popular" }, limit: 12 })], store("tiny"));
+    const tiny = await render([section("product_rail", "rail", { title: "", source: { kind: "popular" }, limit: 12 })], store("tiny"));
     expect(tiny.querySelector("[data-product-rail-track]")).toBeNull();
     expect(tiny.querySelectorAll(".product-grid > *")).toHaveLength(3);
     // Popular has no listing to link to.
@@ -464,27 +464,27 @@ describe("homepage section library", () => {
 
   it("puts one or two products in a capped two-column grid, and shows rail arrows only when the cards overflow", async () => {
     // One or two cards are never stretched across the row or left beside empty tracks.
-    const two = await render([section("product-grid", "grid", { title: "", source: { kind: "newest" }, columns: 2, rows: 1 })], store("large"));
+    const two = await render([section("product_grid", "grid", { title: "", source: { kind: "newest" }, columns: 2, rows: 1 })], store("large"));
     expect(two.querySelectorAll(".product-grid > *")).toHaveLength(2);
     expect(two.querySelector(".product-grid-frame[data-sparse]")).not.toBeNull();
     expect(two.querySelector(".home-grid-capped")).toBeNull();
-    const full = await render([section("product-grid", "grid", { title: "", source: { kind: "newest" }, columns: 5, rows: 2 })], store("large"));
+    const full = await render([section("product_grid", "grid", { title: "", source: { kind: "newest" }, columns: 5, rows: 2 })], store("large"));
     expect(full.querySelector("[data-sparse]")).toBeNull();
-    const pair = await render([section("product-rail", "rail", { title: "", source: { kind: "newest" }, limit: 2 })], store("large"));
+    const pair = await render([section("product_rail", "rail", { title: "", source: { kind: "newest" }, limit: 2 })], store("large"));
     expect(pair.querySelector("[data-product-rail-track]")).toBeNull();
     expect(pair.querySelector(".product-grid-frame[data-sparse]")).not.toBeNull();
     // Three or more are the normal grid.
-    const tiny = await render([section("product-rail", "rail", { title: "", source: { kind: "popular" }, limit: 12 })], store("tiny"));
+    const tiny = await render([section("product_rail", "rail", { title: "", source: { kind: "popular" }, limit: 12 })], store("tiny"));
     expect(tiny.querySelector("[data-sparse]")).toBeNull();
     // Arrows: none for four cards (they fit from 1024px), xl-only hidden for five, always for twelve.
-    const arrows = async (limit: number) => (await render([section("product-rail", "rail", { title: "", source: { kind: "newest" }, limit })], store("large"))).querySelector(".home-rail-arrows");
+    const arrows = async (limit: number) => (await render([section("product_rail", "rail", { title: "", source: { kind: "newest" }, limit })], store("large"))).querySelector(".home-rail-arrows");
     expect(await arrows(4)).not.toBeNull();
     expect((await arrows(4))!.hasAttribute("data-fits-lg")).toBe(true);
     expect((await arrows(5))!.hasAttribute("data-fits-lg")).toBe(false);
     expect((await arrows(5))!.hasAttribute("data-fits-xl")).toBe(true);
     expect((await arrows(12))!.hasAttribute("data-fits-xl")).toBe(false);
     // Every rail track is marked for focus reveal.
-    const rail = await render([section("product-rail", "rail", { title: "", source: { kind: "newest" }, limit: 12 })], store("large"));
+    const rail = await render([section("product_rail", "rail", { title: "", source: { kind: "newest" }, limit: 12 })], store("large"));
     expect(rail.querySelector("[data-product-rail-track]")!.hasAttribute("data-h-rail")).toBe(true);
   });
 
@@ -515,14 +515,14 @@ describe("homepage section library", () => {
     expect(classicTile.querySelector("img")!.getAttribute("sizes")).toBe("(max-width: 639px) 30vw, 112px");
 
     const retail = await render([tiles({ style: "round-row" })], store("large"));
-    const retailRow = retail.querySelector("[data-home-section='category-tiles'] ul")!;
+    const retailRow = retail.querySelector("[data-home-section='category_tiles'] ul")!;
     // One scrolling row on phones (a grid from 640px); the plain round style is always a grid.
     expect(retailRow.className).toContain("cat-round-row");
-    expect(classic.querySelector("[data-home-section='category-tiles'] ul")!.className).not.toContain("cat-round-row");
+    expect(classic.querySelector("[data-home-section='category_tiles'] ul")!.className).not.toContain("cat-round-row");
   });
 
   it("fills a product grid with columns x rows and caps its columns", async () => {
-    const page = await render([section("product-grid", "grid", { title: "", source: { kind: "category", categoryId: "cat-sarees" }, columns: 5, rows: 2 })], store("large"));
+    const page = await render([section("product_grid", "grid", { title: "", source: { kind: "category", categoryId: "cat-sarees" }, columns: 5, rows: 2 })], store("large"));
     expect(page.querySelectorAll(".product-grid > *")).toHaveLength(10);
     expect(page.querySelector(".home-grid-capped")!.getAttribute("style")).toContain("--home-grid-columns: 5");
     // Card photos use the selected maximum column count.
@@ -536,21 +536,21 @@ describe("homepage section library", () => {
   });
 
   it("counts a deal down only to its running promotion's end", async () => {
-    const ahead = await render([section("deal-block", "deal", { title: "", source: { kind: "on-sale" }, promotionId: "promo-eid" })], store("large"));
+    const ahead = await render([section("deal_block", "deal", { title: "", source: { kind: "on-sale" }, promotionId: "promo-eid" })], store("large"));
     const countdown = ahead.querySelector("[data-deal-countdown]")!;
     expect(countdown.classList.contains("invisible")).toBe(true); // shown by the script, its box laid out already
     expect(text(countdown.querySelector("time"))).toMatch(/^(\d+d )?\d{2}:\d{2}:\d{2}$/);
     expect(ahead.querySelector('a[href="/search?hasDiscount=true"]')).not.toBeNull();
     const ended = await render(
-      [section("deal-block", "deal", { title: "", source: { kind: "on-sale" }, promotionId: "promo-eid" })],
+      [section("deal_block", "deal", { title: "", source: { kind: "on-sale" }, promotionId: "promo-eid" })],
       { ...store("large"), promotionEnds: new Map([["promo-eid", "2020-01-01T00:00:00Z"]]) },
     );
     expect(ended.querySelector("[data-deal-countdown]")).toBeNull();
     expect(ended.querySelector("[data-deal-block]")).not.toBeNull();
     // A typed-in date is never a countdown: only a promotion's end is.
-    const none = await render([section("deal-block", "deal", { title: "", source: { kind: "on-sale" }, promotionId: null })], store("large"));
+    const none = await render([section("deal_block", "deal", { title: "", source: { kind: "on-sale" }, promotionId: null })], store("large"));
     expect(none.querySelector("[data-deal-countdown]")).toBeNull();
-    const unknown = await render([section("deal-block", "deal", { title: "", source: { kind: "on-sale" }, promotionId: "promo-gone" })], store("large"));
+    const unknown = await render([section("deal_block", "deal", { title: "", source: { kind: "on-sale" }, promotionId: "promo-gone" })], store("large"));
     expect(unknown.querySelector("[data-deal-countdown]")).toBeNull();
   });
 
@@ -614,7 +614,7 @@ describe("homepage section library", () => {
       { id: "cols", type: "editorial", version: 1, settings: { layout: "multicolumn", heading: "Why us", columns: [{ title: "Handmade", text: "<b>By hand</b>" }, { title: "", text: "" }] } },
       { id: "quotes", type: "editorial", version: 1, settings: { layout: "testimonial", quotes: [{ quote: BANGLA, author: "Rina" }] } },
       section("faq", "faq", { heading: "", items: [{ question: "Returns?", answer: "Within 7 days." }] }),
-      section("seo-text", "seo", { heading: "", body: "## Heading one\nText one.\n\nPlain paragraph." }),
+      section("seo_text", "seo", { heading: "", body: "## Heading one\nText one.\n\nPlain paragraph." }),
     ], store("tiny"));
     expect(page.querySelectorAll('[data-section-id="cols"] li')).toHaveLength(1);
     expect(page.querySelector("b")).toBeNull();
@@ -626,14 +626,14 @@ describe("homepage section library", () => {
   });
 
   it("offers the endless grid's next listing page as a real link", async () => {
-    const page = await render([section("endless-grid", "endless", { title: "", pageSize: 24 })], store("large"));
+    const page = await render([section("endless_grid", "endless", { title: "", pageSize: 24 })], store("large"));
     expect(page.querySelectorAll(".product-grid > *")).toHaveLength(24);
     expect(page.querySelector("[data-endless-more]")!.getAttribute("href")).toBe("/search?page=2");
     expect(text(page.querySelector("h2"))).toBe("More to explore");
   });
 
   it("renders the ticker as one still line: nothing moves, so nothing needs a pause", async () => {
-    const page = await render([section("usp-strip", "notice", { style: "ticker", source: { kind: "custom", items: [{ title: "New branch in Sylhet", detail: "Open daily" }] } })], store("tiny"));
+    const page = await render([section("usp_strip", "notice", { style: "ticker", source: { kind: "custom", items: [{ title: "New branch in Sylhet", detail: "Open daily" }] } })], store("tiny"));
     expect(page.querySelector(".usp-still")!.textContent).toContain("New branch in Sylhet: Open daily");
     expect(page.querySelector('input[type="checkbox"]')).toBeNull();
     expect(page.querySelector("[aria-hidden='true'] li")).toBeNull();
@@ -641,8 +641,8 @@ describe("homepage section library", () => {
 
   it("hides the delivery-facts strip below two facts and centres one custom point", async () => {
     const one: HomepageContent = { ...store("tiny"), deliveryFacts: [{ kind: "cod", title: "Cash on delivery", detail: "Pay when it arrives" }] };
-    expect(homepageSectionRenders(section("usp-strip", "usp"), one)).toBe(false);
-    const single = await render([section("usp-strip", "usp", { style: "icons", source: { kind: "custom", items: [{ title: "Free returns", detail: "" }] } })], store("tiny"));
+    expect(homepageSectionRenders(section("usp_strip", "usp"), one)).toBe(false);
+    const single = await render([section("usp_strip", "usp", { style: "icons", source: { kind: "custom", items: [{ title: "Free returns", detail: "" }] } })], store("tiny"));
     expect(single.querySelector(".usp-single")!.textContent).toContain("Free returns");
   });
 
@@ -680,7 +680,7 @@ describe("homepage section library", () => {
     const merchantRound = await render([tiles({ style: "round" })], store("large"), storefrontTemplateTheme("boutique"));
     expect(merchantRound.querySelector("[data-heritage-departments]")).toBeNull();
     // The section's title is a real heading with no stray "Explore by department" text.
-    expect(text(classic.querySelector('[data-home-section="category-tiles"]'))).not.toContain("Explore by department");
+    expect(text(classic.querySelector('[data-home-section="category_tiles"]'))).not.toContain("Explore by department");
   });
 
   it("shortens only an image-only compact phone hero so departments appear sooner", async () => {
@@ -761,12 +761,12 @@ describe("homepage section library", () => {
 
   it("renders restored core tile subtitles and deal/newsletter media, omitting missing images", async () => {
     const sections = [
-      section("shop-by", "shop-by", { cards: [{ mediaId: "m-card-1", title: "Linen", subtitle: "Made for summer", href: "/linen" }] }),
-      section("deal-block", "sale", { title: "Sale", mediaId: "m-banner" }),
+      section("shop_by", "shop_by", { cards: [{ mediaId: "m-card-1", title: "Linen", subtitle: "Made for summer", href: "/linen" }] }),
+      section("deal_block", "sale", { title: "Sale", mediaId: "m-banner" }),
       section("newsletter", "news", { heading: "News", mediaId: "m-story" }),
     ];
     const page = await render(sections, store("large"));
-    expect(text(page.querySelector('[data-home-section="shop-by"]'))).toContain("Made for summer");
+    expect(text(page.querySelector('[data-home-section="shop_by"]'))).toContain("Made for summer");
     expect(page.querySelector('[data-deal-block] .deal-image')).not.toBeNull();
     expect(page.querySelector('[data-newsletter-section] img')).not.toBeNull();
     const withoutMedia = await render(sections, { ...store("large"), media: new Map() });
@@ -777,19 +777,19 @@ describe("homepage section library", () => {
 
   it("draws shop-by cards and mosaic tiles only for photos that exist", async () => {
     const page = await render([
-      EVERY_SECTION.find((each) => each.id === "shop-by")!,
+      EVERY_SECTION.find((each) => each.id === "shop_by")!,
       EVERY_SECTION.find((each) => each.id === "mosaic")!,
     ], store("large"));
-    const shopBy = page.querySelector('[data-home-section="shop-by"]')!;
+    const shopBy = page.querySelector('[data-home-section="shop_by"]')!;
     expect(Array.from(shopBy.querySelectorAll("li a")).map((link) => link.getAttribute("href"))).toEqual(["/collections/eid", "/categories/sarees"]);
-    const mosaic = page.querySelector('[data-home-section="banner-mosaic"]')!;
+    const mosaic = page.querySelector('[data-home-section="banner_mosaic"]')!;
     expect(mosaic.querySelectorAll("img")).toHaveLength(3);
     expect(mosaic.querySelectorAll("a")).toHaveLength(2); // the tile without a link is not a link
     expect(mosaic.querySelector('a[href="/new"]')!.getAttribute("aria-label")).toBe("Promotion 2");
   });
 
   it("shows a brand wall only with four brands, each linking to its brand page", async () => {
-    const wall = [section("brand-wall", "brands", { title: "", style: "grid" })];
+    const wall = [section("brand_wall", "brands", { title: "", style: "grid" })];
     const large = await render(wall, store("large"));
     const links = Array.from(large.querySelectorAll("[data-brand-wall] a"));
     expect(links).toHaveLength(6);
@@ -801,7 +801,7 @@ describe("homepage section library", () => {
   });
 
   it("ships recently viewed empty and hidden, filled only from this browser", async () => {
-    const page = await render([section("recently-viewed", "recent", { title: "" })], store("large"));
+    const page = await render([section("recently_viewed", "recent", { title: "" })], store("large"));
     const island = page.querySelector("[data-recently-viewed]")!;
     expect(island.hasAttribute("hidden")).toBe(true);
     expect(island.querySelectorAll("li")).toHaveLength(0);
@@ -936,20 +936,20 @@ describe("homepage sections from the theme's own data", () => {
   it("draws the category tiles the section names, in its order, under its title", async () => {
     const named = tiles({ style: "square", title: "", categoryIds: ["cat-4", "cat-missing", "cat-2"] });
     const page = await render([named], store("large"));
-    expect(Array.from(page.querySelectorAll('[data-home-section="category-tiles"] a')).map((link) => link.getAttribute("href")))
+    expect(Array.from(page.querySelectorAll('[data-home-section="category_tiles"] a')).map((link) => link.getAttribute("href")))
       .toEqual(["/categories/category-4", "/categories/category-2"]);
-    expect(text(page.querySelector('[data-home-section="category-tiles"] h2'))).toBe("Shop by category");
+    expect(text(page.querySelector('[data-home-section="category_tiles"] h2'))).toBe("Shop by category");
     const titled = await render([tiles({ style: "photo", title: "Departments", categoryIds: ["cat-2"] })], store("large"));
-    const heading = titled.querySelector('[data-home-section="category-tiles"] h2')!;
+    const heading = titled.querySelector('[data-home-section="category_tiles"] h2')!;
     expect(text(heading)).toBe("Departments");
-    expect(titled.querySelector('[data-home-section="category-tiles"] section')!.getAttribute("aria-labelledby")).toBe(heading.id);
+    expect(titled.querySelector('[data-home-section="category_tiles"] section')!.getAttribute("aria-labelledby")).toBe(heading.id);
     // Two sections, two sets of tiles, unique ids.
     const twice = await render([
       tiles({ style: "photo", categoryIds: ["cat-1"] }),
       { ...tiles({ style: "round", categoryIds: ["cat-3", "cat-5"] }), id: "more-tiles" },
     ], store("large"));
     expect(duplicateIds(twice)).toEqual([]);
-    expect(twice.querySelectorAll('[data-home-section="category-tiles"]')).toHaveLength(2);
+    expect(twice.querySelectorAll('[data-home-section="category_tiles"]')).toHaveLength(2);
   });
 
   it("shows the collections the section names, in its order, and the newest products without one", async () => {
@@ -965,12 +965,12 @@ describe("homepage sections from the theme's own data", () => {
   });
 
   it("shows the store's delivery facts in a delivery-facts strip and nowhere without one", async () => {
-    const withStrip = await render([section("usp-strip", "usp"), section("product-rail", "rail", { source: { kind: "newest" } })], store("large"));
-    expect(text(withStrip.querySelector('[data-home-section="usp-strip"]'))).toContain("Cash on delivery");
-    const without = await render([section("product-rail", "rail", { source: { kind: "newest" } })], store("large"));
+    const withStrip = await render([section("usp_strip", "usp"), section("product_rail", "rail", { source: { kind: "newest" } })], store("large"));
+    expect(text(withStrip.querySelector('[data-home-section="usp_strip"]'))).toContain("Cash on delivery");
+    const without = await render([section("product_rail", "rail", { source: { kind: "newest" } })], store("large"));
     expect(text(without.body)).not.toContain("Cash on delivery");
     // A strip without facts to show renders nothing.
-    expect((await render([section("usp-strip", "usp")], { ...store("large"), deliveryFacts: [] })).querySelector("[data-home-section]")).toBeNull();
+    expect((await render([section("usp_strip", "usp")], { ...store("large"), deliveryFacts: [] })).querySelector("[data-home-section]")).toBeNull();
   });
 });
 
@@ -1053,7 +1053,7 @@ describe("app sections", () => {
   }
 
   it("tells a core section's skin whether it is the page's lead, so it loads its first row of photos eagerly", async () => {
-    const skinned = (id: string) => ({ ...section("product-rail", id, { source: { kind: "newest" } }), skin: { app: "acme.skin/rail", values: {} } }) as StorefrontSection;
+    const skinned = (id: string) => ({ ...section("product_rail", id, { source: { kind: "newest" } }), skin: { app: "acme.skin/rail", values: {} } }) as StorefrontSection;
     const sections = [skinned("first"), skinned("second")];
     const content = store("large");
     const jobs: Array<{ instanceId?: string; data?: { aboveFold?: boolean } }> = [];
@@ -1064,7 +1064,7 @@ describe("app sections", () => {
     try {
       await requestRuntime.run({ layout: Promise.resolve({ currency: { code: "BDT", symbol: "৳" }, appExtensions: [{
         pluginId: "acme.skin", version: "1.0.0", source: "bundled", release: "b".repeat(64),
-        sections: [], sectionSettings: {}, skins: [{ id: "rail", target: "section:product-rail", settings: [] }], components: [], islands: [], stylesheet: false, connect: [],
+        sections: [], sectionSettings: {}, skins: [{ id: "rail", target: "section:product_rail", settings: [] }], components: [], islands: [], stylesheet: false, connect: [],
       }] } as unknown as import("@/lib/api/storefront").LayoutData) }, () => renderWith(sections, content, {}));
     } finally {
       draw.mockRestore();
@@ -1074,11 +1074,11 @@ describe("app sections", () => {
   });
 
   it("renders what the app's module drew in page order, and nothing (no box) for a section it was not given", async () => {
-    const sections = [app("greeting"), section("product-rail", "rail", { source: { kind: "newest" } }), app("gone", "acme.gone/banner")];
+    const sections = [app("greeting"), section("product_rail", "rail", { source: { kind: "newest" } }), app("gone", "acme.gone/banner")];
     const content = given(store("large"), ["greeting"]);
     const page = await renderGreeting(sections, content);
     expect(Array.from(page.querySelectorAll("[data-home-section]")).map((node) => node.getAttribute("data-home-section")))
-      .toEqual(["app", "product-rail"]);
+      .toEqual(["app", "product_rail"]);
     const drawn = page.querySelector('[data-home-section="app"] [data-sx-app="acme.hello"]')!;
     expect(drawn.innerHTML).toBe('<p class="hello">Hello <a href="/sale">sale</a></p>');
     expect(page.querySelector('[data-section-id="gone"]')).toBeNull();
@@ -1113,7 +1113,7 @@ describe("section skins", () => {
   const SKIN_LAYOUT = { currency: { code: "BDT", symbol: "৳" }, appExtensions: [{
     pluginId: "acme.hello", version: "1.0.0", source: "bundled", release: "b".repeat(64),
     sections: [], sectionSettings: {}, components: [], islands: [], stylesheet: false, connect: [],
-    skins: [{ id: "faq", target: "section:faq", settings: [] }, { id: "rail", target: "section:product-rail", settings: [] }],
+    skins: [{ id: "faq", target: "section:faq", settings: [] }, { id: "rail", target: "section:product_rail", settings: [] }],
   }] } as unknown as import("@/lib/api/storefront").LayoutData;
   const skinned = (each: StorefrontSection, app: string) => ({ ...each, skin: { app, values: {} } }) as StorefrontSection;
 
@@ -1126,15 +1126,15 @@ describe("section skins", () => {
   }
 
   it("draws a core section through its skin from the resolved projection, in the section's own unit", async () => {
-    const rail = skinned(section("product-rail", "rail", { title: "", source: { kind: "newest" }, limit: 4 }), "acme.hello/rail");
+    const rail = skinned(section("product_rail", "rail", { title: "", source: { kind: "newest" }, limit: 4 }), "acme.hello/rail");
     const draw = vi.spyOn(ExtensionHost.prototype, "render").mockResolvedValue('<ul class="acme-rail"><li>skin</li></ul>');
     try {
       const page = await renderSkinned([rail], store("large"));
       expect(draw).toHaveBeenCalledOnce();
       const job = draw.mock.calls[0]![1] as unknown as { kind: string; target: string; instanceId: string; data: { type: string; version: number; settings: { products: { title: string; url: string | null; cards: unknown[] } } } };
-      expect(job).toMatchObject({ kind: "skin", target: "section:product-rail", instanceId: "rail" });
+      expect(job).toMatchObject({ kind: "skin", target: "section:product_rail", instanceId: "rail" });
       // The product source as the core rail shows it: its title, its listing and as many cards as the rail's limit.
-      expect(job.data.type).toBe("product-rail");
+      expect(job.data.type).toBe("product_rail");
       expect(job.data.version).toBe(1);
       expect(job.data.settings.products).toMatchObject({ title: "New arrivals", url: "/search" });
       expect(job.data.settings.products.cards).toHaveLength(4);

@@ -40,14 +40,16 @@ export interface PluginApiResult<T = unknown> {
 
 export interface PluginApi {
   /**
-   * Calls a stable app-API operation by id (`dashboard.resources.orders.get`):
-   * `x-scalius-agent.stability: "stable"` in the OpenAPI contract. Any other
-   * operation refuses with `api.operation_not_stable`, and one the approved
-   * scopes do not cover with `api.operation_forbidden`. Buyer contact
+   * Calls a stable app-API operation by its app name, the resource and the
+   * verb (`orders.get`, `products.create`; `stableContract.operations` in
+   * `@scalius/plugin-sdk/testing` lists them). A dashboard operation id
+   * (`dashboard.resources.orders.get`) is unknown here. Any other
+   * operation refuses with `api_operation_not_stable`, and one the approved
+   * scopes do not cover with `api_operation_forbidden`. Buyer contact
    * fields (`x-scalius-protected` in the contract) read null unless the app
    * holds the matching `read_customer_*` scope.
    */
-  call<T = unknown>(operationId: string, input?: PluginApiCallInput): Promise<PluginApiResult<T>>;
+  call<T = unknown>(operation: string, input?: PluginApiCallInput): Promise<PluginApiResult<T>>;
 }
 
 /**
@@ -81,7 +83,7 @@ export interface PluginRecordVersion<T extends Record<string, unknown> = Record<
 /**
  * The revision a write requires: the one you read (the record is unchanged
  * since), or null (the record must not exist). A write that finds anything
- * else changes nothing and fails with `object.conflict`.
+ * else changes nothing and fails with `object_conflict`.
  */
 export interface PluginWriteCondition {
   expectedRevision?: number | null;
@@ -98,7 +100,7 @@ export interface PluginObjectCollection<T extends Record<string, unknown> = Reco
   getVersion(id: string): Promise<PluginRecordVersion<T> | null>;
   put(id: string, record: T, options?: PluginWriteCondition & { handle?: string | null; status?: "active" | "draft" | "published" }): Promise<{ revision: number }>;
   /**
-   * Merges top-level fields into an existing record (`object.not_found`
+   * Merges top-level fields into an existing record (`object_not_found`
    * otherwise). Without `expectedRevision` a concurrent write is re-read and
    * merged again, so no update is lost.
    */
@@ -107,7 +109,7 @@ export interface PluginObjectCollection<T extends Record<string, unknown> = Reco
    * Adds `delta` to a whole-number field (absent: 0; a missing record is
    * created), atomically. A money field is not a whole number: `update` it
    * with the new `PluginMoney`. A result outside `min`/`max` changes nothing and
-   * fails with `object.out_of_range`: a balance never goes below its floor,
+   * fails with `object_out_of_range`: a balance never goes below its floor,
    * however many debits race.
    */
   increment(id: string, field: string, delta: number, options?: { min?: number; max?: number }): Promise<{ value: number; revision: number }>;
@@ -126,7 +128,7 @@ export type PluginObjectOperation =
  * The app's declared objects by name (`ctx.objects.points`), and
  * `batch`: up to 25 puts, deletes and checks across objects, written
  * all-or-nothing in one database batch. Any failed condition aborts it with
- * `object.conflict` (`error.details.index` is not exposed; re-read and retry).
+ * `object_conflict` (`error.details.index` is not exposed; re-read and retry).
  */
 export type PluginObjects = Record<string, PluginObjectCollection> & {
   batch(operations: PluginObjectOperation[]): Promise<{ revisions: Array<number | null> }>;
@@ -139,7 +141,7 @@ export interface PluginKv {
   set(key: string, value: unknown, options?: { ttlSeconds?: number }): Promise<{ revision: number }>;
   /**
    * Sets the entry only while it is still at `expectedRevision` (null: no
-   * live entry); otherwise nothing changes and it fails with `kv.conflict`.
+   * live entry); otherwise nothing changes and it fails with `kv_conflict`.
    */
   compareAndSet(key: string, expectedRevision: number | null, value: unknown, options?: { ttlSeconds?: number }): Promise<{ revision: number }>;
   delete(key: string): Promise<void>;
@@ -159,6 +161,12 @@ export interface PluginHttp {
   fetch(url: string, init?: { method?: string; headers?: Record<string, string>; body?: string; timeoutMs?: number }): Promise<PluginHttpResponse>;
 }
 
+/**
+ * The app's own custom fields (its namespace, declared in `customFields`).
+ * The merchant's fields (`custom` namespace) are `ctx.api.call`
+ * operations (`custom_fields.get_<owner>_values`, `set_<owner>_values`),
+ * which never show an app another app's fields.
+ */
 export interface PluginCustomFields {
   /** Values of this plugin's own fields on one resource, typed per field (money as `PluginMoney`). */
   get(ownerType: string, ownerId: string): Promise<Record<string, unknown>>;
@@ -171,7 +179,7 @@ export interface PluginMessaging {
    * - `customerId` (needs `read_customers`): the platform resolves the address and never returns it;
    * - `to`: a staff member's email, or an address held in a `messaging.recipients` field of
    *   your own records, exactly as the record holds it; any other address needs the sensitive
-   *   `send_messages_any` scope (`messaging.recipient_not_allowed` otherwise).
+   *   `send_messages_any` scope (`messaging_recipient_not_allowed` otherwise).
    * `marketing: true` (with `customerId`) sends only when the customer is subscribed on that
    * channel now (`queued: false` otherwise); e-mail then carries the store's unsubscribe
    * footer and RFC 8058 List-Unsubscribe headers. Transactional mail leaves it unset.
@@ -204,7 +212,11 @@ export interface PluginMessaging {
   pushCustomer(input: { customerId: string; title: string; body?: string; url?: string; tag?: string }): Promise<{ delivered: boolean }>;
 }
 
-/** Typed lines on order timelines (needs `orders.edit`; each kind declared in `manifest.timeline`). */
+/**
+ * Typed lines on order timelines (needs `orders.edit`; each kind declared in
+ * `manifest.admin.timeline`): the one way an app writes on a timeline. Staff
+ * notes (`orders.comment_add`) are the dashboard's, not the app API's.
+ */
 export interface PluginTimeline {
   /**
    * Adds a line staff see on the order (and agents read): your app's name,

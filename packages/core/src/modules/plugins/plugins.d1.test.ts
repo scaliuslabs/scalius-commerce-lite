@@ -82,16 +82,16 @@ describe("plugin installations", () => {
       { kind: "function", name: "checkout.discounts", priority: 50 },
     ]);
     await expect(installPlugin(db, { manifest: manifest(), source: "upload", bundleSha256: SHA }))
-      .rejects.toMatchObject({ pluginCode: "installation.exists" });
+      .rejects.toMatchObject({ pluginCode: "installation_exists" });
     // Raw RBAC names (reserved or not) are not scopes: no scope reaches team, webhooks, agent access or apps.
     for (const scopes of [["team.manage"], ["webhooks.view"], ["orders.view"], ["manage_staff"]]) {
       await expect(installPlugin(db, { manifest: manifest({ id: "acme.raw", scopes: scopes as never }), source: "upload", bundleSha256: SHA }))
-        .rejects.toMatchObject({ pluginCode: "manifest.invalid" });
+        .rejects.toMatchObject({ pluginCode: "manifest_invalid" });
     }
     // scalius.* belongs to apps bundled with Scalius, whatever path another arrives by (audit R2 F6).
     for (const source of ["upload", "registry"] as const) {
       await expect(installPlugin(db, { manifest: manifest({ id: "scalius.fake" }), source, bundleSha256: SHA }))
-        .rejects.toMatchObject({ pluginCode: "manifest.reserved_vendor" });
+        .rejects.toMatchObject({ pluginCode: "manifest_reserved_vendor" });
     }
     await expect(installPlugin(db, { manifest: manifest({ id: "scalius.fake" }), source: "bundled", bundleSha256: SHA }))
       .resolves.toMatchObject({ pluginId: "scalius.fake" });
@@ -105,8 +105,8 @@ describe("plugin installations", () => {
       manifest: manifest({ version: "1.1.0" }), source, bundleSha256: "b".repeat(64), expectedRevision: 1, signerKeyId,
     });
     // Another trusted developer cannot ship code under this app's id and grant, and neither can an unsigned upload.
-    await expect(update("key_other_0002")).rejects.toMatchObject({ pluginCode: "signature.signer_changed" });
-    await expect(update(null, "upload")).rejects.toMatchObject({ pluginCode: "signature.signer_changed" });
+    await expect(update("key_other_0002")).rejects.toMatchObject({ pluginCode: "signature_signer_changed" });
+    await expect(update(null, "upload")).rejects.toMatchObject({ pluginCode: "signature_signer_changed" });
     expect(await requirePluginInstallation(db, "acme.loyalty")).toMatchObject({ version: "1.0.0", revision: 1, signerKeyId: SIGNER });
     await expect(update(SIGNER)).resolves.toMatchObject({ version: "1.1.0", signerKeyId: SIGNER });
 
@@ -116,16 +116,16 @@ describe("plugin installations", () => {
       manifest: manifest({ id: "acme.unsigned", version: `1.${expectedRevision}.0` }), source: "registry", bundleSha256: "c".repeat(64), expectedRevision, signerKeyId,
     });
     await expect(signedUpdate(SIGNER, 1)).resolves.toMatchObject({ signerKeyId: SIGNER });
-    await expect(signedUpdate("key_other_0002", 2)).rejects.toMatchObject({ pluginCode: "signature.signer_changed" });
+    await expect(signedUpdate("key_other_0002", 2)).rejects.toMatchObject({ pluginCode: "signature_signer_changed" });
   });
 
   it("seals secrets, never echoes them, opens them only with the right key, and keeps them when omitted", async () => {
     await installPlugin(db, { manifest: manifest(), source: "upload", bundleSha256: SHA });
     await expect(activatePlugin(db, "acme.loyalty", { actorUserId: "owner", expectedRevision: 1 }))
-      .rejects.toMatchObject({ pluginCode: "installation.settings_incomplete" });
+      .rejects.toMatchObject({ pluginCode: "installation_settings_incomplete" });
 
     await expect(writePluginSettings(db, "acme.loyalty", { rate: 3, api_key: "sk_live_secret_value" }, { expectedRevision: 1, credentialEncryptionKey: undefined }))
-      .rejects.toMatchObject({ pluginCode: "settings.key_unavailable" });
+      .rejects.toMatchObject({ pluginCode: "settings_key_unavailable" });
     const written = await writePluginSettings(db, "acme.loyalty", { rate: 3, api_key: "sk_live_secret_value" }, { expectedRevision: 1, credentialEncryptionKey: KEY });
     const stored = String((sqlite.prepare("SELECT settings_json FROM plugin_installations").get() as { settings_json: string }).settings_json);
     expect(stored).not.toContain("sk_live_secret_value");
@@ -143,11 +143,11 @@ describe("plugin installations", () => {
     const kept = await writePluginSettings(db, "acme.loyalty", { rate: 4 }, { expectedRevision: written.revision, credentialEncryptionKey: KEY });
     expect((await readPluginRuntimeSettings(kept, KEY)).values).toEqual({ rate: 4, api_key: "sk_live_secret_value" });
     await expect(writePluginSettings(db, "acme.loyalty", { rate: 4, api_key: null }, { expectedRevision: kept.revision, credentialEncryptionKey: KEY }))
-      .rejects.toMatchObject({ pluginCode: "settings.invalid" });
+      .rejects.toMatchObject({ pluginCode: "settings_invalid" });
     await expect(writePluginSettings(db, "acme.loyalty", { rate: 11 }, { expectedRevision: kept.revision, credentialEncryptionKey: KEY }))
-      .rejects.toMatchObject({ pluginCode: "settings.invalid" });
+      .rejects.toMatchObject({ pluginCode: "settings_invalid" });
     await expect(writePluginSettings(db, "acme.loyalty", { rate: 2 }, { expectedRevision: 1, credentialEncryptionKey: KEY }))
-      .rejects.toMatchObject({ pluginCode: "installation.revision_conflict" });
+      .rejects.toMatchObject({ pluginCode: "installation_revision_conflict" });
   });
 
   it("activates with the approved grant, narrows without re-approval and waits for approval when an update widens it", async () => {
@@ -184,7 +184,7 @@ describe("plugin installations", () => {
       source: "upload",
       bundleSha256: "d".repeat(64),
       expectedRevision: narrower.revision,
-    })).rejects.toMatchObject({ pluginCode: "installation.revision_conflict" });
+    })).rejects.toMatchObject({ pluginCode: "installation_revision_conflict" });
 
     const reactivated = await activatePlugin(db, "acme.loyalty", { actorUserId: "owner", expectedRevision: wider.revision });
     expect(reactivated.grant?.scopes).toEqual(["read_customers", "read_orders"]);
@@ -255,7 +255,7 @@ describe("plugin objects", () => {
 
   it("enforces declared unique indexes and exempts records missing the field", async () => {
     await put("r1", { ref: "o1" });
-    await expect(put("r2", { ref: "o1" })).rejects.toMatchObject({ objectCode: "object.unique_violation" });
+    await expect(put("r2", { ref: "o1" })).rejects.toMatchObject({ objectCode: "object_unique_violation" });
     await put("r3", { customer_id: "c9" });
     await put("r4", { customer_id: "c9" });
     // Another plugin may use the same value.
@@ -300,24 +300,24 @@ describe("plugin objects", () => {
     expect(descending.records.map((record) => record.data.at)).toEqual([100, 90, 80, 70, 60]);
     // Numbers order numerically, negatives included.
     await put("neg", { kind: "earn", at: -5 });
-    await expect(put("frac", { kind: "earn", at: 60.5 })).rejects.toMatchObject({ objectCode: "object.invalid" });
+    await expect(put("frac", { kind: "earn", at: 60.5 })).rejects.toMatchObject({ objectCode: "object_invalid" });
     const ordered = await queryObjectRecords(db, "acme.loyalty", "ledger", LEDGER, { where: { kind: "earn" }, orderBy: { field: "at" } });
     expect(ordered.records.map((record) => record.data.at)).toEqual([-5, 60, 70, 80, 90, 100]);
 
     await expect(queryObjectRecords(db, "acme.loyalty", "ledger", LEDGER, { where: { points: 1 } }))
-      .rejects.toMatchObject({ objectCode: "object.unindexed_query" });
+      .rejects.toMatchObject({ objectCode: "object_unindexed_query" });
     await expect(queryObjectRecords(db, "acme.loyalty", "ledger", LEDGER, { where: { kind: "earn" }, orderBy: { field: "ref" } }))
-      .rejects.toMatchObject({ objectCode: "object.unindexed_query" });
+      .rejects.toMatchObject({ objectCode: "object_unindexed_query" });
     await expect(queryObjectRecords(db, "acme.loyalty", "ledger", LEDGER, { where: { kind: "burn" }, orderBy: { field: "at" }, cursor: firstPage.nextCursor }))
-      .rejects.toMatchObject({ objectCode: "object.invalid_cursor" });
+      .rejects.toMatchObject({ objectCode: "object_invalid_cursor" });
   });
 
   it("refuses invalid ids, oversized records and non-scalar indexed values", async () => {
-    await expect(put("", {})).rejects.toMatchObject({ objectCode: "object.invalid_id" });
-    await expect(put("x".repeat(129), {})).rejects.toMatchObject({ objectCode: "object.invalid_id" });
-    await expect(put("big", { blob: "x".repeat(70_000) })).rejects.toMatchObject({ objectCode: "object.record_too_large" });
-    await expect(put("obj", { customer_id: { nested: true } })).rejects.toMatchObject({ objectCode: "object.invalid" });
-    await expect(putObjectRecord(db, "acme.loyalty", "ledger", LEDGER, "arr", [] as never)).rejects.toMatchObject({ objectCode: "object.invalid_record" });
+    await expect(put("", {})).rejects.toMatchObject({ objectCode: "object_invalid_id" });
+    await expect(put("x".repeat(129), {})).rejects.toMatchObject({ objectCode: "object_invalid_id" });
+    await expect(put("big", { blob: "x".repeat(70_000) })).rejects.toMatchObject({ objectCode: "object_record_too_large" });
+    await expect(put("obj", { customer_id: { nested: true } })).rejects.toMatchObject({ objectCode: "object_invalid" });
+    await expect(putObjectRecord(db, "acme.loyalty", "ledger", LEDGER, "arr", [] as never)).rejects.toMatchObject({ objectCode: "object_invalid_record" });
   });
 });
 
@@ -345,8 +345,8 @@ describe("plugin kv and logs", () => {
     await deletePluginKv(db, "acme.loyalty", "count");
     expect(await getPluginKv(db, "acme.loyalty", "count")).toBeNull();
     expect(await getPluginKv(db, "acme.other", "cache:b")).toBeNull();
-    await expect(setPluginKv(db, "acme.loyalty", "x", "y", { ttlSeconds: 0 })).rejects.toMatchObject({ pluginCode: "kv.invalid_ttl" });
-    await expect(setPluginKv(db, "acme.loyalty", "", "y")).rejects.toMatchObject({ pluginCode: "kv.invalid_key" });
+    await expect(setPluginKv(db, "acme.loyalty", "x", "y", { ttlSeconds: 0 })).rejects.toMatchObject({ pluginCode: "kv_invalid_ttl" });
+    await expect(setPluginKv(db, "acme.loyalty", "", "y")).rejects.toMatchObject({ pluginCode: "kv_invalid_key" });
   });
 
   it("masks secrets, credentials and contact details and keeps a bounded ring", async () => {

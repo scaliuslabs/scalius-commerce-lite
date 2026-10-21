@@ -99,10 +99,10 @@ export function normalizeCursorSearchParam(value: unknown): string | undefined {
     : undefined;
 }
 
-/** True for an API paging refusal (`INVALID_CURSOR`, `PAGE_TOO_DEEP`): the list starts again from its first page. */
+/** True for an API paging refusal (`invalid_cursor`, `page_too_deep`): the list starts again from its first page. */
 export function isPagingRefusal(error: unknown): boolean {
   const code = (error as { code?: unknown } | null | undefined)?.code;
-  return code === "INVALID_CURSOR" || code === "PAGE_TOO_DEEP";
+  return code === "invalid_cursor" || code === "page_too_deep";
 }
 
 export type SearchValidatorInput<T extends object = object> = {

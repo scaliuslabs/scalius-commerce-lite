@@ -48,7 +48,7 @@ The public routes (`apps/api/src/routes/collections.ts`, `/api/v1/collections`) 
 
 ## Rules
 
-- **Version guard.** `updateCollection`, `updateCollectionProducts`, bulk activate, bulk restore and `reorderCollections` compare the stored `version` and advance it by one. A stale write throws `COLLECTION_REVISION_CONFLICT` (409). Reorder needs the full current list or it conflicts.
+- **Version guard.** `updateCollection`, `updateCollectionProducts`, bulk activate, bulk restore and `reorderCollections` compare the stored `version` and advance it by one. A stale write throws `collection_revision_conflict` (409). Reorder needs the full current list or it conflicts.
 - **Publish readiness.** An active manual collection needs at least one product. An active dynamic collection needs at least one category. On create, on activation and on a `config` change, the members of an active collection and any featured product must exist, and the categories of an active collection must be published.
 - **`is_active`** publishes the collection page only. It does not place the collection on the homepage.
 - **Canonical path** is `/collections/<collectionId>` or blank. Create refuses a canonical path because the id does not exist yet. Update accepts only the collection's own id route. The collection id is the route, not a slug.

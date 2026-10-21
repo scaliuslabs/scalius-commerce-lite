@@ -40,7 +40,7 @@ import { addedQuantitySql, commandActorUserIdSql, executeStockCommand, idsFromJs
 
 export const INVENTORY_TRANSFER_MAX_LINES = 100;
 export const INVENTORY_TRANSFER_OPEN_STATUSES = ["in_transit", "partially_received"] as const satisfies readonly InventoryTransferStatus[];
-const STALE = "INVENTORY_TRANSFER_STALE";
+const STALE = "inventory_transfer_stale";
 const NUMBER_START = 1000;
 
 const locationIdSchema = z.string().trim().min(1).max(100);

@@ -93,7 +93,7 @@ export interface PriceProps {
  */
 export function Price(props: PriceProps): Html {
   const { price, compareAt, context } = props;
-  const discounted = compareAt !== null && compareAt !== undefined && compareAt.amount > price.amount;
+  const discounted = compareAt !== null && compareAt !== undefined && compareAt.amountMinor > price.amountMinor;
   const current = props.from ? t(context, { en: `From ${price.formatted}`, bn: `${price.formatted} থেকে` }) : price.formatted;
   const label = discounted ? t(context, { en: "Sale price", bn: "বিক্রয় মূল্য" }) : t(context, { en: "Price", bn: "মূল্য" });
   let out = `<span data-price${props.class ? ` class="${escapeHtml(props.class)}"` : ""}${discounted ? " data-discounted" : ""}>`;
@@ -207,27 +207,27 @@ export interface BuyFormProps {
 }
 
 /**
- * The store's buy form (product-main skins, required, exactly one): price,
+ * The store's buy form (product_main skins, required, exactly one): price,
  * options, buyer inputs, quantity and the buy buttons, kept current as the
  * buyer chooses. A real form, so it works before hydration. Without it the
  * store draws its own product page instead of the skin.
  */
 export function BuyForm(props: BuyFormProps = {}): Html {
-  return embed("buy-form", { title: props.title === false ? "false" : undefined });
+  return embed("buy_form", { title: props.title === false ? "false" : undefined });
 }
 
-/** The product's reviews and review form (product-main skins); the store's own module below then stays out. */
+/** The product's reviews and review form (product_main skins); the store's own module below then stays out. */
 export function Reviews(): Html {
   return embed("reviews");
 }
 
-/** Related products (product-main skins); the store's own module below then stays out. */
+/** Related products (product_main skins); the store's own module below then stays out. */
 export function Recommendations(): Html {
   return embed("recommendations");
 }
 
 /**
- * The store's product gallery (product-main skins, at most one): the theme's
+ * The store's product gallery (product_main skins, at most one): the theme's
  * gallery with thumbnails, a swipeable stage and position on phones, zoom,
  * and the chosen variant's own photo, kept in step with the buy form. Its
  * first photo is the page's LCP image (preloaded by the store).
@@ -236,17 +236,17 @@ export function Gallery(): Html {
   return embed("gallery");
 }
 
-/** The listing's filters, a GET form that works without JavaScript (listing-main skins). */
+/** The listing's filters, a GET form that works without JavaScript (listing_main skins). */
 export function Filters(): Html {
   return embed("filters");
 }
 
-/** The listing's sort and page-size controls (listing-main skins). */
+/** The listing's sort and page-size controls (listing_main skins). */
 export function Toolbar(): Html {
   return embed("toolbar");
 }
 
-/** The listing's page links (listing-main skins); the store appends them when a skin leaves them out. */
+/** The listing's page links (listing_main skins); the store appends them when a skin leaves them out. */
 export function Pagination(): Html {
   return embed("pagination");
 }
@@ -272,7 +272,7 @@ export interface OrderFormProps {
 export function OrderForm(props: OrderFormProps): Html {
   const id = props.product?.id ?? "";
   if (!id) return EMPTY_HTML;
-  return embed("order-form", { product: id, "max-quantity": props.maxQuantity, "submit-label": props.submitLabel });
+  return embed("order_form", { product: id, "max-quantity": props.maxQuantity, "submit-label": props.submitLabel });
 }
 
 export interface SlotProps {

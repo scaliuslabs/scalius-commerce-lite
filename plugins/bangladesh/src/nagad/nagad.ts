@@ -79,15 +79,15 @@ function textSetting(settings: Settings, key: string): string {
 export function nagadEndpoint(settings: Settings): NagadEndpoint {
   const environment = textSetting(settings, "nagad_environment") || "sandbox";
   if (environment !== "sandbox" && environment !== "live") {
-    throw misconfigured("Choose the Nagad environment: sandbox or live.", "nagad.environment");
+    throw misconfigured("Choose the Nagad environment: sandbox or live.", "nagad_environment");
   }
   const merchantId = textSetting(settings, "nagad_merchant_id");
   if (!MERCHANT_ID.test(merchantId)) {
-    throw misconfigured("Enter your Nagad merchant ID (letters and digits) in the Nagad settings.", "nagad.merchant_id");
+    throw misconfigured("Enter your Nagad merchant ID (letters and digits) in the Nagad settings.", "nagad_merchant_id");
   }
   const serverIp = textSetting(settings, "nagad_server_ip") || DEFAULT_SERVER_IP;
   if (!IPV4.test(serverIp)) {
-    throw misconfigured("The server IP in the Nagad settings must be an IPv4 address, such as 203.0.113.10.", "nagad.server_ip");
+    throw misconfigured("The server IP in the Nagad settings must be an IPv4 address, such as 203.0.113.10.", "nagad_server_ip");
   }
   return {
     environment,
@@ -119,7 +119,7 @@ const KEY_PROBLEMS = {
 
 async function importKey<T>(owner: keyof typeof KEY_PROBLEMS, text: string, load: (text: string) => Promise<T>): Promise<T> {
   const problems = KEY_PROBLEMS[owner];
-  const code = `nagad.${owner}_key`;
+  const code = `nagad_${owner}_key`;
   if (text === "") throw misconfigured(problems.missing, code);
   try {
     return await load(text);
@@ -135,13 +135,13 @@ export async function nagadCredentials(settings: Settings): Promise<NagadCredent
   // Accepted with or without the +88 country prefix; Nagad's accountNumber is the local form.
   const merchantNumber = textSetting(settings, "nagad_merchant_number").replace(/^\+?88/, "") || null;
   if (merchantNumber !== null && !MERCHANT_NUMBER.test(merchantNumber)) {
-    throw misconfigured("The merchant number must be the 11-digit Nagad wallet number (01XXXXXXXXX), or empty.", "nagad.merchant_number");
+    throw misconfigured("The merchant number must be the 11-digit Nagad wallet number (01XXXXXXXXX), or empty.", "nagad_merchant_number");
   }
   const merchantKey = await importKey("merchant", textSetting(settings, "nagad_merchant_private_key"), importRsaPrivateKey);
   const nagadKey = await importKey("nagad", textSetting(settings, "nagad_public_key"), importRsaPublicKey);
   // The most likely key mix-up: the merchant's own public key pasted where Nagad's belongs.
   if (nagadKey.modulus === merchantKey.modulus) {
-    throw misconfigured("The Nagad public key field holds your own public key. Paste the public key Nagad gave you.", "nagad.nagad_key");
+    throw misconfigured("The Nagad public key field holds your own public key. Paste the public key Nagad gave you.", "nagad_nagad_key");
   }
   return { ...endpoint, merchantNumber, merchantKey, nagadKey };
 }
@@ -207,24 +207,24 @@ function isHttpsUrl(value: string): boolean {
 
 type Step = "initialize" | "complete" | "verify";
 
-/** The platform's refusal code (`http.timeout`, `http.not_allowed`, …), when the error carries one. */
+/** The platform's refusal code (`http_timeout`, `http_not_allowed`, …), when the error carries one. */
 function platformCode(error: unknown): string | null {
   return error instanceof Error && "code" in error && typeof error.code === "string" ? error.code : null;
 }
 
 function transportFailure(error: unknown, mayHaveActed: boolean): ProviderError {
   const code = platformCode(error);
-  if (code === "http.not_allowed" || code === "http.invalid_request") {
-    return misconfigured("Scalius refused to send the request to Nagad's address. Check the Nagad environment setting.", "nagad.not_allowed");
+  if (code === "http_not_allowed" || code === "http_invalid_request") {
+    return misconfigured("Scalius refused to send the request to Nagad's address. Check the Nagad environment setting.", "nagad_not_allowed");
   }
   // The platform's own limit: the request never left.
   if (code === "rate_limited") {
-    return new ProviderError("retryable", "Too many requests to Nagad right now. Try again in a minute.", { code: "nagad.rate_limited" });
+    return new ProviderError("retryable", "Too many requests to Nagad right now. Try again in a minute.", { code: "nagad_rate_limited" });
   }
-  const timedOut = code === "http.timeout";
+  const timedOut = code === "http_timeout";
   return new ProviderError("retryable", timedOut ? "Nagad did not answer in time." : "Nagad could not be reached.", {
     uncertain: mayHaveActed,
-    code: timedOut ? "nagad.timeout" : "nagad.unreachable",
+    code: timedOut ? "nagad_timeout" : "nagad_unreachable",
   });
 }
 
@@ -240,9 +240,9 @@ function refusal(status: number, answer: Answer | null): ProviderError {
   const token = reason && /^(?:[A-Za-z][A-Za-z0-9_]{0,39}|\d{1,6})$/.test(reason) ? reason.toLowerCase() : `http_${status}`;
   const said = answer ? `${reason ?? ""} ${textField(answer, "message") ?? ""}` : "";
   if (status === 401 || status === 403 || MERCHANT_SIDE.test(said)) {
-    return misconfigured("Nagad rejected the merchant credentials or signature. Check the merchant ID, keys and server IP in the Nagad settings.", `nagad.${token}`);
+    return misconfigured("Nagad rejected the merchant credentials or signature. Check the merchant ID, keys and server IP in the Nagad settings.", `nagad_${token}`);
   }
-  return new ProviderError("declined", "Nagad declined the payment request.", { code: `nagad.${token}` });
+  return new ProviderError("declined", "Nagad declined the payment request.", { code: `nagad_${token}` });
 }
 
 async function jsonObject(response: PluginHttpResponse): Promise<Answer | null> {
@@ -255,7 +255,7 @@ async function jsonObject(response: PluginHttpResponse): Promise<Answer | null> 
 }
 
 function unreadable(mayHaveActed: boolean): ProviderError {
-  return new ProviderError("retryable", "Nagad's answer could not be read.", { uncertain: mayHaveActed, code: "nagad.unreadable_answer" });
+  return new ProviderError("retryable", "Nagad's answer could not be read.", { uncertain: mayHaveActed, code: "nagad_unreadable_answer" });
 }
 
 async function callNagad(
@@ -280,10 +280,10 @@ async function callNagad(
     throw transportFailure(error, mayHaveActed);
   }
   if (response.status >= 500) {
-    throw new ProviderError("retryable", "Nagad answered with a server error.", { uncertain: mayHaveActed, code: "nagad.server_error" });
+    throw new ProviderError("retryable", "Nagad answered with a server error.", { uncertain: mayHaveActed, code: "nagad_server_error" });
   }
   if (response.status === 429) {
-    throw new ProviderError("retryable", "Nagad is limiting requests. Try again in a minute.", { code: "nagad.rate_limited" });
+    throw new ProviderError("retryable", "Nagad is limiting requests. Try again in a minute.", { code: "nagad_rate_limited" });
   }
   const answer = await jsonObject(response);
   if (!response.ok) throw refusal(response.status, answer);
@@ -300,7 +300,7 @@ async function seal(credentials: NagadCredentials, payload: Record<string, strin
   try {
     encrypted = encryptPkcs1v15(credentials.nagadKey, plaintext);
   } catch {
-    throw misconfigured("The request is too long for the Nagad public key. Check the merchant ID and the key.", "nagad.nagad_key");
+    throw misconfigured("The request is too long for the Nagad public key. Check the merchant ID and the key.", "nagad_nagad_key");
   }
   return { sensitiveData: bytesToBase64(encrypted), signature: bytesToBase64(await signSha256(credentials.merchantKey, plaintext)) };
 }
@@ -324,11 +324,11 @@ async function unseal(credentials: NagadCredentials, answer: Answer): Promise<An
   } catch {
     throw misconfigured(
       "Nagad's answer could not be decrypted with the merchant private key. Check that Nagad has your current public key.",
-      "nagad.decrypt_failed",
+      "nagad_decrypt_failed",
     );
   }
   if (!(await signedByNagad(credentials, signature, plaintext))) {
-    throw misconfigured("Nagad's answer failed its signature check. Check the Nagad public key in the Nagad settings.", "nagad.bad_signature");
+    throw misconfigured("Nagad's answer failed its signature check. Check the Nagad public key in the Nagad settings.", "nagad_bad_signature");
   }
   try {
     const value: unknown = JSON.parse(new TextDecoder().decode(plaintext));
@@ -366,7 +366,7 @@ export async function initializePayment(
   // The echoed challenge binds the answer to this request, so an old signed answer cannot be replayed.
   const echoed = textField(reply, "challenge");
   if (echoed !== challenge) {
-    throw misconfigured("Nagad's answer did not carry this request's challenge, so it was not trusted.", "nagad.challenge_mismatch");
+    throw misconfigured("Nagad's answer did not carry this request's challenge, so it was not trusted.", "nagad_challenge_mismatch");
   }
   return { paymentReferenceId, challenge: echoed };
 }
@@ -391,7 +391,7 @@ export async function completePayment(
   });
   const callBackUrl = textField(answer, "callBackUrl");
   if (textField(answer, "status")?.toLowerCase() !== "success" || !callBackUrl) throw refusal(200, answer);
-  if (!isHttpsUrl(callBackUrl)) throw misconfigured("Nagad sent a payment page address that is not https.", "nagad.insecure_redirect");
+  if (!isHttpsUrl(callBackUrl)) throw misconfigured("Nagad sent a payment page address that is not https.", "nagad_insecure_redirect");
   return callBackUrl;
 }
 

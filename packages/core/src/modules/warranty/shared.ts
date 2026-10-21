@@ -50,13 +50,13 @@ export async function claimIdFor(warrantyId: string, clientKey: string): Promise
 export const CLAIM_CLIENT_KEY_PATTERN = /^[A-Za-z0-9_-]{8,100}$/;
 
 export function warrantyNotActive(message = "This warranty is no longer active."): AppError {
-  return new AppError(409, "WARRANTY_NOT_ACTIVE", message);
+  return new AppError(409, "warranty_not_active", message);
 }
 
 export function warrantyExpired(expiresAt: number): AppError {
   return new AppError(
     409,
-    "WARRANTY_EXPIRED",
+    "warranty_expired",
     `This warranty ended on ${formatClaimDate(expiresAt)}. Message the store about the order if you need help.`,
   );
 }
@@ -64,7 +64,7 @@ export function warrantyExpired(expiresAt: number): AppError {
 export function claimAlreadyOpen(conversationId: string | null): AppError {
   return new AppError(
     409,
-    "WARRANTY_CLAIM_OPEN",
+    "warranty_claim_open",
     "A claim for this item is already open. Continue in that conversation.",
     conversationId ? { conversationId } : undefined,
   );

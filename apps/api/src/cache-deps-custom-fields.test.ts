@@ -134,7 +134,7 @@ describe("custom fields in buyer reads", () => {
     };
     expect(product.product.customFields).toEqual([
       { namespace: "custom", key: "care_guide", name: "Care guide", type: "multi_line_text", value: "Hand wash" },
-      { namespace: "custom", key: "msrp", name: "MSRP", type: "money", value: 3000 },
+      { namespace: "custom", key: "msrp", name: "MSRP", type: "money", value: { amountMinor: 300000, currency: "BDT" } },
     ]);
     expect(product.variants.find((variant) => variant.id === "v_linen")?.customFields).toEqual([
       { namespace: "custom", key: "fit", name: "Fit", type: "single_line_text", value: "Slim" },

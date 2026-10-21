@@ -26,7 +26,7 @@ const RELEASE_READYZ_SAMPLES = 4;
 const MAX_BODY_PREVIEW_LENGTH = 180;
 const ADMIN_BUSINESS_SETTINGS_PATH = "/api/v1/admin/settings/business";
 const INVALID_ADMIN_SESSION_COOKIE = "better-auth.session_token=release-check-invalid";
-const ADMIN_API_READ_TIMEOUT_CODE = "ADMIN_API_READ_TIMEOUT";
+const ADMIN_API_READ_TIMEOUT_CODE = "admin_api_read_timeout";
 
 /** The UCP release the storefront implements (apps/storefront/src/lib/ucp/catalog.ts). */
 export const UCP_EXPECTED_VERSION = "2026-08-25";

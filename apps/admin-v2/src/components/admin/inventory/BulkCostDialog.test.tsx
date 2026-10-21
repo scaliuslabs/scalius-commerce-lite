@@ -106,7 +106,7 @@ describe("BulkCostDialog", () => {
   });
 
   it("says when a cost changed meanwhile and reloads it, keeping the other typed costs", async () => {
-    mocks.putCosts.mockRejectedValueOnce(new AdminApiResponseError("A SKU's cost changed", 409, "CONFLICT"));
+    mocks.putCosts.mockRejectedValueOnce(new AdminApiResponseError("A SKU's cost changed", 409, "conflict"));
     const onReload = vi.fn(async () => [variant("var_m", "M", 104.4), variant("var_l", "L", null)]);
     await render({ onReload });
     await act(async () => type(costInput("M"), "110"));

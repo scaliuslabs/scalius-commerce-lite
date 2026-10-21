@@ -170,7 +170,7 @@ describe("rules and refusals in an error answer", () => {
 
   it("reads a rules refusal, and still blocks when its rules are unreadable", () => {
     const rules = [{ code: "max_qty", message: "At most 10 per order.", index: 0, cartKey: "line_1" }];
-    expect(cartRuleRefusal({ success: false, error: { code: "VALIDATION_ERROR", details: { reason: "cart_rules", ruleErrors: rules } } }))
+    expect(cartRuleRefusal({ success: false, error: { code: "validation_error", details: { reason: "cart_rules", ruleErrors: rules } } }))
       .toEqual(rules);
     expect(cartRuleRefusal({ details: { reason: "cart_rules", ruleErrors: "nope" } }))
       .toEqual([{ code: "cart_rules", message: "", index: null, cartKey: null }]);

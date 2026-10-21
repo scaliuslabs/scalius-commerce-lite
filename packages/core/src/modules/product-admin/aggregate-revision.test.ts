@@ -105,7 +105,7 @@ describe("product aggregate revision batches", () => {
         expect(error).toBeInstanceOf(ProductRevisionConflictError);
         expect(error).toMatchObject({
             status: 409,
-            code: "PRODUCT_REVISION_CONFLICT",
+            code: "product_revision_conflict",
             details: { expectedRevision: 4, currentRevision: 7 },
         });
     });

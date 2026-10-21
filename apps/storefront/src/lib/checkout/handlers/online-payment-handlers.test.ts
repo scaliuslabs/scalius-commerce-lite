@@ -332,7 +332,7 @@ describe("hosted online payment handlers", () => {
       "Order creation failed (503)",
       {
         status: 503,
-        errorCode: "CHECKOUT_CONFIG_UNAVAILABLE",
+        errorCode: "checkout_config_unavailable",
         details: { retryable: true },
         cartIssues: [],
       },
@@ -344,7 +344,7 @@ describe("hosted online payment handlers", () => {
     expect(result).toMatchObject({
       success: false,
       error: "Order creation failed (503)",
-      errorCode: "CHECKOUT_CONFIG_UNAVAILABLE",
+      errorCode: "checkout_config_unavailable",
       status: 503,
     });
   });

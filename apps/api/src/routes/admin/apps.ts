@@ -47,6 +47,7 @@ import {
   PLUGIN_NAV_PLACEMENTS,
   PLUGIN_SCOPE_NAMES,
   STOREFRONT_COMPONENT_TARGETS,
+  STOREFRONT_UI_SLOTS,
   isSensitivePluginScope,
   knownPluginFeatures,
   pluginFeatureOwners,
@@ -60,6 +61,7 @@ import {
   type PluginGrantRequest,
   type PluginManifest,
   functionReadKey,
+  type FunctionReadDeclaration,
   type FunctionReadKey,
 } from "@scalius/shared/plugins";
 import { PROVIDER_KINDS, qualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
@@ -117,11 +119,20 @@ function noStore(c: { header(name: string, value: string): void }) {
 
 // ── Schemas ──
 
+/** One declared read of a function or extension, as the dashboard lists it. */
+const appReadSchema = z.object({
+  as: z.string(),
+  object: z.string().nullable().openapi({ description: "The app's object type read; null for a custom-field read." }),
+  customFields: z.array(z.string()).openapi({ description: "The app's own custom fields read (`<owner>:<key>`); empty for an object read." }),
+  key: z.string().openapi({ description: "What the read is keyed by: customer, line.variantId, line.productId, attribute.<key>, or from:<read>.<field>." }),
+});
+
 const grantSchema = z.object({
   scopes: z.array(z.enum(PLUGIN_SCOPE_NAMES)).openapi({ description: "Access scopes: store data and actions the app may read or change." }),
   allowedHosts: z.array(z.string()),
   events: z.array(z.string()),
   functions: z.array(z.string()),
+  extensions: z.array(z.string()).openapi({ description: "UI slots of the buyer's cart, checkout, receipt and account pages the app shows content in." }),
   blockingFunctions: z.array(z.string()).openapi({ description: "Function points where the app may pause checkout when it cannot answer." }),
   providers: z.array(z.string()),
   publicRoutes: z.boolean(),
@@ -209,13 +220,12 @@ const appSummarySchema = z.object({
     point: z.enum(PLUGIN_FUNCTION_POINTS),
     priority: z.number().int().openapi({ description: "Lower runs first among apps at the same point." }),
     onError: z.enum(["skip", "block"]).openapi({ description: "block: the app pauses checkout when it cannot answer (needs approval)." }),
-    reads: z.array(z.object({
-      as: z.string(),
-      object: z.string().nullable().openapi({ description: "The app's object type read; null for a custom-field read." }),
-      customFields: z.array(z.string()).openapi({ description: "The app's own custom fields read (`<owner>:<key>`); empty for an object read." }),
-      key: z.string().openapi({ description: "What the read is keyed by: customer, line.variantId, line.productId, attribute.<key>, or from:<read>.<field>." }),
-    })).openapi({ description: "The app's data the function reads at checkout (checkout.discounts may also update those records with the order)." }),
-  })).openapi({ description: "The checkout function points the app implements (cart rules, prices, discounts, delivery options, payment methods, buyer UI)." }),
+    reads: z.array(appReadSchema).openapi({ description: "The app's data the function reads at checkout (checkout.discounts may also update those records with the order)." }),
+  })).openapi({ description: "The checkout function points the app implements (cart rules, prices, discounts, delivery options, payment methods)." }),
+  extensions: z.array(z.object({
+    target: z.enum(STOREFRONT_UI_SLOTS),
+    reads: z.array(appReadSchema).openapi({ description: "The app's data the extension reads to draw its content." }),
+  })).openapi({ description: "Where the app shows content on the buyer's cart, checkout, receipt and account pages (storefront extensions)." }),
 }).openapi("AppSummary");
 
 const settingValueSchema = appSettingValueSchema;
@@ -411,13 +421,18 @@ function summary(installation: PluginInstallation) {
       point: fn.point,
       priority: fn.priority,
       onError: fn.onError,
-      reads: fn.reads.map((read) => ({
-        as: read.as,
-        object: "object" in read ? read.object : null,
-        customFields: "customFields" in read ? read.customFields : [],
-        key: readKeyLabel(functionReadKey(read)),
-      })),
+      reads: fn.reads.map(readRow),
     })),
+    extensions: manifest.storefront.extensions.map((extension) => ({ target: extension.target, reads: extension.reads.map(readRow) })),
+  };
+}
+
+function readRow(read: FunctionReadDeclaration) {
+  return {
+    as: read.as,
+    object: "object" in read ? read.object : null,
+    customFields: "customFields" in read ? read.customFields : [],
+    key: readKeyLabel(functionReadKey(read)),
   };
 }
 
@@ -739,6 +754,7 @@ function unreadableSummary(installation: UnreadablePluginInstallation): ReturnTy
     updatedAt: iso(installation.updatedAt),
     featureCount: { on: 0, total: 0 },
     functions: [],
+    extensions: [],
   };
 }
 
@@ -788,7 +804,7 @@ const assetRoute = createRoute({
 app.openapi(assetRoute, async (c) => {
   const { id, asset } = c.req.valid("param");
   const version = c.req.valid("query").v ?? "";
-  const missing = () => new Response(JSON.stringify({ success: false, error: { code: "NOT_FOUND", message: "Image not found" } }), {
+  const missing = () => new Response(JSON.stringify({ success: false, error: { code: "not_found", message: "Image not found" } }), {
     status: 404,
     headers: { "Content-Type": "application/json", "Cache-Control": "private, no-store" },
   });

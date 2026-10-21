@@ -168,7 +168,7 @@ describe("POST /payment/{provider}/session", () => {
 
     const rejected = await post(app, path, { orderId: "order_1", receiptToken: RECEIPT });
     expect(rejected.status).toBe(500);
-    await expect(rejected.json()).resolves.toMatchObject({ error: { code: "PAYMENT_ERROR", message: "Store is inactive" } });
+    await expect(rejected.json()).resolves.toMatchObject({ error: { code: "payment_error", message: "Store is inactive" } });
     expect(sqlite.prepare("SELECT status FROM payment_session_attempts").get()).toEqual({ status: "failed" });
 
     expect((await post(app, path, { orderId: "order_1", receiptToken: RECEIPT })).status).toBe(200);

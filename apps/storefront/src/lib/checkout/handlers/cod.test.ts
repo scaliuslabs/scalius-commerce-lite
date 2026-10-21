@@ -70,7 +70,7 @@ describe("COD checkout handler", () => {
       "Order creation failed (429)",
       {
         status: 429,
-        errorCode: "CHECKOUT_RATE_LIMITED",
+        errorCode: "checkout_rate_limited",
         details: { retryAfterSeconds: 60 },
         cartIssues: [],
       },
@@ -81,7 +81,7 @@ describe("COD checkout handler", () => {
     expect(result).toMatchObject({
       success: false,
       error: "Order creation failed (429)",
-      errorCode: "CHECKOUT_RATE_LIMITED",
+      errorCode: "checkout_rate_limited",
       status: 429,
     });
   });

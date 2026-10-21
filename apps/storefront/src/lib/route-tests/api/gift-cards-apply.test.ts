@@ -76,19 +76,19 @@ describe("POST /api/gift-cards/apply", () => {
   it("answers a card the API refuses with the uniform code and no echo", async () => {
     mocks.apiFetch.mockResolvedValue(Response.json({
       success: false,
-      error: { code: "GIFT_CARD_UNUSABLE", message: "This gift card can't be used." },
+      error: { code: "gift_card_unusable", message: "This gift card can't be used." },
     }, { status: 400 }));
     const response = await POST(jsonRequest({ code: CODE }));
     expect(response.status).toBe(400);
     const body = await response.text();
-    expect(JSON.parse(body)).toEqual({ success: false, errorCode: "GIFT_CARD_UNUSABLE" });
+    expect(JSON.parse(body)).toEqual({ success: false, errorCode: "gift_card_unusable" });
     expect(body).not.toContain("ABCD");
   });
 
   it("passes a rate limit on with its wait", async () => {
     mocks.apiFetch.mockResolvedValue(Response.json({
       success: false,
-      error: { code: "RATE_LIMIT", message: "Slow down", details: { retryAfterSeconds: 42 } },
+      error: { code: "rate_limited", message: "Slow down", details: { retryAfterSeconds: 42 } },
     }, { status: 429 }));
     const response = await POST(jsonRequest({ code: CODE }));
     expect(response.status).toBe(429);

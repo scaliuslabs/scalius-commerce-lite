@@ -1363,12 +1363,12 @@ async function processPayment(): Promise<void> {
     }
 
     if (!result.success) {
-      if (result.errorCode === "CHECKOUT_ATTEMPT_EXPIRED") {
+      if (result.errorCode === "checkout_attempt_expired") {
         hideCheckoutLoadingOverlay();
         endExpiredCheckout();
         return;
       }
-      if (result.errorCode === "CHECKOUT_ATTEMPT_CONFLICT") {
+      if (result.errorCode === "checkout_attempt_conflict") {
         hideCheckoutLoadingOverlay();
         // Do not associate the changed cart with the old order or overwrite its
         // submitted snapshot. The receipt requires its own cookie or account.
@@ -1422,7 +1422,7 @@ async function processPayment(): Promise<void> {
         return;
       }
 
-      if (result.errorCode === "STOREFRONT_CHECKOUT_QUOTE_CONFLICT") {
+      if (result.errorCode === "storefront_checkout_quote_conflict") {
         hideCheckoutLoadingOverlay();
         let refreshed: Awaited<ReturnType<typeof fetchQuoteForCheckout>>;
         try {
@@ -1440,7 +1440,7 @@ async function processPayment(): Promise<void> {
         showError(checkoutCopy.totalChangedReviewText);
         return;
       }
-      if (result.errorCode === "GIFT_CARD_CHANGED") {
+      if (result.errorCode === "gift_card_changed") {
         // A card's balance, status or expiry moved since the quote: price it again.
         hideCheckoutLoadingOverlay();
         isProcessing = false;
@@ -1448,7 +1448,7 @@ async function processPayment(): Promise<void> {
         if (requoted) showError(giftCopy.giftCardChangedText);
         return;
       }
-      if (result.errorCode === "VALIDATION_ERROR") showReturnToCartAction();
+      if (result.errorCode === "validation_error") showReturnToCartAction();
       throw new Error(getPaymentResultErrorMessage(result));
     }
   } catch (err: unknown) {

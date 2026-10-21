@@ -112,11 +112,11 @@ describe("newsletter signup", () => {
 
   it("maps refusals, limits and failures to outcome flags", async () => {
     const signup = readNewsletterSignup(signupForm({ phone: "123", channel: "sms" }));
-    api(400, { success: false, error: { code: "VALIDATION_ERROR", message: "Enter a valid phone number.", details: { field: "email" } } });
+    api(400, { success: false, error: { code: "validation_error", message: "Enter a valid phone number.", details: { field: "email" } } });
     expect(await subscribeToNewsletter(buyer(), signup)).toEqual({ status: "invalid", field: "email" });
-    api(429, { success: false, error: { code: "RATE_LIMIT", details: { retryAfterSeconds: 42 } } });
+    api(429, { success: false, error: { code: "rate_limited", details: { retryAfterSeconds: 42 } } });
     expect(await subscribeToNewsletter(buyer(), signup)).toEqual({ status: "rate_limited", retryAfterSeconds: 42 });
-    api(503, { success: false, error: { code: "SERVICE_UNAVAILABLE" } });
+    api(503, { success: false, error: { code: "service_unavailable" } });
     expect(await subscribeToNewsletter(buyer(), signup)).toEqual({ status: "error" });
     mocks.apiFetch.mockRejectedValueOnce(new Error("socket hang up"));
     expect(await subscribeToNewsletter(buyer(), signup)).toEqual({ status: "error" });

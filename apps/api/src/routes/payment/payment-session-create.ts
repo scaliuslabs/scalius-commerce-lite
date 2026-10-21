@@ -345,7 +345,7 @@ async function createPaymentSessionForOrder(
     if (error instanceof PaymentProviderError) {
       throw error.timedOut
         ? createPaymentProviderTimeoutError(gateway.label)
-        : new AppError(500, "PAYMENT_ERROR", error.message);
+        : new AppError(500, "payment_error", error.message);
     }
     throw error;
   }
@@ -681,7 +681,7 @@ async function ensureOrderCanUseGateway(
 
     try {
       await safeBatch(db, [
-        buildBatchGuard(db, replacementAuthority, "PAYMENT_ATTEMPT_REPLACEMENT_CONFLICT"),
+        buildBatchGuard(db, replacementAuthority, "payment_attempt_replacement_conflict"),
         db.update(orderPayments).set({
           status: PaymentRecordStatus.CANCELLED,
           updatedAt: sql`unixepoch()`,
@@ -718,7 +718,7 @@ async function ensureOrderCanUseGateway(
         )),
       ]);
     } catch (error: unknown) {
-      if (isBatchGuardError(error, "PAYMENT_ATTEMPT_REPLACEMENT_CONFLICT")) {
+      if (isBatchGuardError(error, "payment_attempt_replacement_conflict")) {
         throw new ValidationError("This checkout changed while payment was being replaced. Refresh the receipt and try again.");
       }
       throw error;

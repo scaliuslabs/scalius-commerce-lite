@@ -92,7 +92,7 @@ export function seedHomepageTheme(db, theme, { categoryIds }) {
     link: "/search?q=laptop",
   }));
   const collectionIds = db.prepare("SELECT id FROM collections WHERE is_active = 1 AND deleted_at IS NULL ORDER BY sort_order, id LIMIT 8").all().map((row) => row.id);
-  const content = { hero: { slides }, "category-tiles": { title: "Shop by category", categoryIds }, collections: { collectionIds } };
+  const content = { hero: { slides }, "category_tiles": { title: "Shop by category", categoryIds }, collections: { collectionIds } };
   const placed = new Set();
   const home = theme.pages.home.map((section) => {
     if (placed.has(section.type) || !content[section.type]) return section;

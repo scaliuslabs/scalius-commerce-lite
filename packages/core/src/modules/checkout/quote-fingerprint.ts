@@ -68,7 +68,7 @@ export class StorefrontCheckoutQuoteConflictError extends AppError {
   constructor() {
     super(
       409,
-      "STOREFRONT_CHECKOUT_QUOTE_CONFLICT",
+      "storefront_checkout_quote_conflict",
       "Your order total or checkout terms changed. Review the refreshed total and confirm the order again.",
     );
     this.name = "StorefrontCheckoutQuoteConflictError";

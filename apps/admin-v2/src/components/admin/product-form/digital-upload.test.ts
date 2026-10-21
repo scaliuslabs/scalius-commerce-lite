@@ -56,7 +56,7 @@ describe("digital file upload", () => {
   });
 
   it("stops on a refused part with the server's reason and never completes", async () => {
-    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ success: false, error: { code: "VALIDATION_ERROR", message: "Part 1 must be exactly 4 bytes." } }), { status: 400 }));
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ success: false, error: { code: "validation_error", message: "Part 1 must be exactly 4 bytes." } }), { status: 400 }));
     await expect(sendDigitalFile({
       assetId: "dga_1", session: session(), file: new Blob(["0123456789"]), signal: new AbortController().signal, onProgress: () => {},
     })).rejects.toMatchObject({ status: 400, message: "Part 1 must be exactly 4 bytes." });

@@ -107,7 +107,7 @@ The default is `{ email: optional, whatsapp: off, channels: [email], phoneOption
 
 ## Admin records (`customers.service.ts`)
 
-- **List.** Keyset (`after`, `before`) with `page` for the first rows only (1,000 on Free, 10,000 on Paid; `PAGE_TOO_DEEP` beyond). Search: the text index (`customers_fts` on D1, `search_fts_terms` on TursoDB and PostgreSQL) for words of the name, phone and e-mail, and the phone in any of its forms as a prefix. Filters: `tag`, `segment`, `subscribed`. Trash hides merged guest records.
+- **List.** Keyset (`after`, `before`) with `page` for the first rows only (1,000 on Free, 10,000 on Paid; `page_too_deep` beyond). Search: the text index (`customers_fts` on D1, `search_fts_terms` on TursoDB and PostgreSQL) for words of the name, phone and e-mail, and the phone in any of its forms as a prefix. Filters: `tag`, `segment`, `subscribed`. Trash hides merged guest records.
 - **Create** makes a `merchant` customer, refuses a phone another active customer uses, applies the `customer_countries` policy and writes a `created` history row. Without a phone, it needs an e-mail no other phoneless customer uses and the store's opt-in. A saved phone can be changed but not removed. **Update** writes nothing when no field changes, otherwise an `updated` row. Naming a guest record makes it `merchant`.
 - **Soft delete** sets `deleted_at`, revokes sessions and writes `deleted`. **Restore** clears `deleted_at` and writes `restored`. A merged guest record cannot be restored.
 - **Permanent delete** is refused when any order has the customer as `customer_id` or `account_owner_customer_id`. Otherwise it deletes sessions, history and the customer. Bulk delete is soft (no history rows) or permanent (same guard).

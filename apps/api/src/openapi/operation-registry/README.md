@@ -71,6 +71,34 @@ mirror a dashboard screen, an editor section or a summary card.
   a decimal major-unit amount, in or out (`docs/ARCHITECTURE.md`, Money on the
   wire). The test fails on a decimal money field or a `*Minor` field with no
   currency in reach.
+- **An instant is one ISO 8601 `date-time` string** (`2026-10-21T09:30:00.000Z`,
+  UTC), in or out, as in the webhook representations: no epoch seconds or
+  milliseconds, no bare string, no union of forms. Discount schedules are
+  `startsAt`/`endsAt`. The test fails on any `*At`/`*Since` field of another
+  form (`isoTimestampSchema` in `schemas/timestamps.ts`).
+- **Apps name an operation by resource and verb.** `ctx.api.call` takes the
+  app name (`orders.get`, `products.create`, `objects.upsert`), never the
+  operation id: `dashboard.resources.` or `dashboard.` is dropped, and where
+  the dashboard has its own operation beside the resource one
+  (`dashboard.products.create`), the resource owns the name and the
+  dashboard's has none (`@scalius/shared/plugins/app-operations`).
+  `stable-operations.snapshot.json` is keyed by app name, so the alias table
+  is sealed with the contract. Agents, MCP and the CLI keep operation ids.
+- **One lane per owner.** Operations reach the merchant's data; an app's
+  own data goes through `ctx`. An app writes typed order timeline lines with
+  `ctx.timeline.add` (`orders.comment_add`, the staff note, is beta), and its
+  own custom fields with `ctx.customFields`; the `custom_fields.*` operations
+  show an app only the merchant's `custom` namespace.
+- **Error codes are one lower_snake vocabulary** (`not_found`, `validation_error`,
+  `price_changed`, `product_revision_conflict`, `api_operation_not_stable`); an
+  area prefix is `<area>_<code>`, never dotted or upper-case.
+  `apps/api/src/error-vocabulary.test.ts` holds every producer to it. Batch
+  guard markers stay upper-case inside SQL (`buildBatchGuard` spells them so);
+  the dashboard's sign-in and account-security flows keep Better Auth's codes.
+- **Lists page one way**: `cursor` + `limit` in, `{ <plural>, nextCursor }` out.
+  Page-numbered and offset lists (the dashboard's brands, categories,
+  collections, content and discounts lists, `*.get_section`) are beta; a
+  bounded lookup (`limit` without a cursor) returns at most `limit`.
 - **Regional and editor fields stay out.** `emiEligible`, product-level
   `freeDelivery` and product-level discount fields belong to the dashboard's
   editor routes (beta); no stable schema carries them.

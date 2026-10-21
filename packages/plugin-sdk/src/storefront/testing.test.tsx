@@ -46,13 +46,13 @@ describe("skins and blocks", () => {
     },
   });
 
-  it("renders a product-main skin over the fixture page and holds it to one buy form", () => {
-    expect(renderSkin(app, "pdp", "product-main")).toBe('<article class="pdp"><h1>Linen shirt</h1><scalius-embed kind="buy-form" data-title="false"></scalius-embed><scalius-embed kind="reviews"></scalius-embed></article>');
-    expect(() => renderSkin(app, "broken", "product-main")).toThrow(/must place <scalius-embed kind="buy-form">/);
+  it("renders a product_main skin over the fixture page and holds it to one buy form", () => {
+    expect(renderSkin(app, "pdp", "product_main")).toBe('<article class="pdp"><h1>Linen shirt</h1><scalius-embed kind="buy_form" data-title="false"></scalius-embed><scalius-embed kind="reviews"></scalius-embed></article>');
+    expect(() => renderSkin(app, "broken", "product_main")).toThrow(/must place <scalius-embed kind="buy_form">/);
   });
 
   it("renders listing and section skins and component blocks", () => {
-    expect(renderSkin(app, "grid", "listing-main")).toBe('<section><scalius-embed kind="toolbar"></scalius-embed><ul><li>Linen shirt</li><li>Oxford shirt</li></ul></section>');
+    expect(renderSkin(app, "grid", "listing_main")).toBe('<section><scalius-embed kind="toolbar"></scalius-embed><ul><li>Linen shirt</li><li>Oxford shirt</li></ul></section>');
     expect(renderSkin(app, "hero", "section:hero", {}, fixtureSectionSkinData("hero", { slides: [{ alt: "Eid sale" }] }))).toBe('<section id="acme-hero"><p>Eid sale</p></section>');
     expect(renderComponent(app, "guide", "product.buy_box.after", {}, { data: fixtureProductPage() })).toBe('<aside data-target="product.buy_box.after">Size</aside>');
     expect(renderComponent(app, "guide", "header.actions")).toBe('<span data-target="header.actions">Guide</span>');

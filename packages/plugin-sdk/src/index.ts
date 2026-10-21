@@ -5,6 +5,7 @@
 //     manifest,
 //     events: { "order.paid": async (event, ctx) => { … } },
 //     functions: { "checkout.discounts": (input, settings) => ({ discounts: [] }) },
+//     extensions: { "checkout.actions.before": (input, settings) => ({ ui: null }) },
 //     routes: { admin: { dashboard: async (request, ctx) => ({ body: … }) } },
 //     cron: { "expire-points": async (ctx) => { … } },
 //     providers: { wallet: definePaymentProvider({ createSession: async (input, ctx) => { … }, … }) },
@@ -24,6 +25,7 @@ import type {
   PluginFunctionPoint,
   PluginManifestInput,
   PluginSettingValue,
+  StorefrontUiSlot,
 } from "@scalius/shared/plugins";
 import type { ProviderImplementation, ProviderKind } from "@scalius/shared/plugins/providers";
 import type { PluginContext, PluginEvent, PluginRouteRequest, PluginRouteResponse } from "./context";
@@ -109,6 +111,17 @@ export type PluginFunctionHandler<P extends PluginFunctionPoint, Settings = Read
   settings: Settings,
 ) => PluginFunctionAnswer<P> | Promise<PluginFunctionAnswer<P>>;
 
+/**
+ * A storefront extension's render (manifest `storefront.extensions`): pure,
+ * like a function. It gets the slot's input (`target`, the cart or order,
+ * the buyer's id, its declared reads) and the settings, and answers
+ * `{ ui }`, a buyer-surface `ui` tree, or `{ ui: null }` to show nothing.
+ */
+export type PluginExtensionHandler<Settings = Readonly<Record<string, PluginSettingValue>>> = (
+  input: PluginFunctionInput<"buyer.ui">,
+  settings: Settings,
+) => PluginFunctionAnswer<"buyer.ui"> | Promise<PluginFunctionAnswer<"buyer.ui">>;
+
 export type { FunctionReadRecord, FunctionReads };
 
 /** A single-key read (`customer`, `attribute.<key>`, a hop) from `input.reads`: the record, or null. */
@@ -152,6 +165,8 @@ export interface PluginDefinition<M extends PluginManifestInput = PluginManifest
   /** Keyed like the manifest's `events`: an exact topic, a `<resource>.*` wildcard or `*`. */
   events?: { [T in EventTopic]?: PluginEventHandler<T, Ctx> } & { [F in Exclude<EventTopicFilter, EventTopic>]?: PluginEventHandler<EventTopic, Ctx> };
   functions?: { [P in PluginFunctionPoint]?: PluginFunctionHandler<P, PluginSettingsOf<M>> };
+  /** Keyed like the manifest's `storefront.extensions[].target`: one render per UI slot. */
+  extensions?: { [T in StorefrontUiSlot]?: PluginExtensionHandler<PluginSettingsOf<M>> };
   routes?: {
     admin?: Record<string, PluginRouteHandler<Ctx>>;
     public?: Record<string, PluginRouteHandler<Ctx>>;

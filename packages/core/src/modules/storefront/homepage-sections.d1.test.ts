@@ -108,7 +108,7 @@ describe("homepage brand wall and deal countdown reads", () => {
               ('m_logo', 'logo.png', 'image', 'media/logo.png', 1, 'image/png', 'ready', 400, 400, 400, 'Shop', NULL, NULL),
               ('m_slide', 'slide.jpg', 'image', 'media/slide.jpg', 1, 'image/jpeg', 'ready', 1600, 600, 1600, NULL, NULL, NULL);
         `);
-        const shopBy = storefrontSectionDefault("shop-by", "cards");
+        const shopBy = storefrontSectionDefault("shop_by", "cards");
         const sections: StorefrontSection[] = [{
             ...shopBy,
             settings: { title: "", cards: ["m_card", "m_video", "m_gone"].map((mediaId) => ({ mediaId, title: mediaId, href: "/sale" })) },

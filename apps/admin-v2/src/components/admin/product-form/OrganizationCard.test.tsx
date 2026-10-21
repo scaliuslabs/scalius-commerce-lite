@@ -117,7 +117,7 @@ describe("OrganizationCard category create", () => {
   it("shows the server's reason next to the Create button instead of a toast", async () => {
     api.create.mockRejectedValue(new AdminApiResponseError(JSON.stringify([
       { path: ["name"], code: "too_small", origin: "string", minimum: 3, message: "Too small" },
-    ]), 400, "VALIDATION_ERROR"));
+    ]), 400, "validation_error"));
     await openAndSearch("ab");
 
     await act(async () => createButton().click());

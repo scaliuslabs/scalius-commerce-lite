@@ -173,7 +173,7 @@ describe("notification template routes", () => {
         });
 
         expect(status).toBe(409);
-        expect(body.error).toMatchObject({ code: "SETTINGS_REVISION_CONFLICT", details: { expectedRevision: 0, currentRevision: 1 } });
+        expect(body.error).toMatchObject({ code: "settings_revision_conflict", details: { expectedRevision: 0, currentRevision: 1 } });
     });
 
     it("rejects an SMS body over 1,000 characters", async () => {

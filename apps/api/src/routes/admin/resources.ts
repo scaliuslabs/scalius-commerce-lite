@@ -39,7 +39,7 @@ import {
   deletePriceList,
   getPriceList,
   listPriceLists,
-  listPriceListVariants,
+  listPriceListVariantsAfter,
   PRICE_LIST_WRITE_MAX_VARIANTS,
   setPriceListPrices,
   updatePriceList,
@@ -975,11 +975,11 @@ app.openapi(createRoute({
   path: "/price-lists/{id}/prices",
   tags: ["App API - Products"],
   summary: "One page of a price list's SKUs and their prices",
-  description: "By product name then SKU, in minor units. `search` matches the product name or the SKU code.",
+  description: "By product name then SKU, in minor units; follow nextCursor. `search` matches the product name or the SKU code.",
   request: {
     params: priceListId,
     query: z.object({
-      page: z.coerce.number().int().min(1).max(1_000).default(1),
+      cursor: pageQuery.cursor,
       limit: z.coerce.number().int().min(1).max(100).default(50),
       search: z.string().trim().max(120).optional(),
     }),
@@ -987,17 +987,29 @@ app.openapi(createRoute({
   responses: {
     200: {
       description: "The page",
-      content: { "application/json": { schema: successEnvelope(z.object({ items: z.array(PriceListSku), total: z.number().int(), page: z.number().int(), limit: z.number().int() })) } },
+      content: { "application/json": { schema: successEnvelope(z.object({ prices: z.array(PriceListSku), nextCursor: nextCursorSchema })) } },
     },
     ...readResponses,
   },
 }), async (c) => {
   const db = c.get("db");
   const { id } = c.req.valid("param");
-  const [, page, store] = await Promise.all([getPriceList(db, id), listPriceListVariants(db, id, c.req.valid("query")), readStoreCurrency(db)]);
+  const query = c.req.valid("query");
+  const after = query.cursor ? readListCursor(query.cursor, PRICE_LIST_CURSOR) : null;
+  const [, page, store] = await Promise.all([
+    getPriceList(db, id),
+    listPriceListVariantsAfter(db, id, {
+      limit: query.limit,
+      search: query.search,
+      after: after ? { productName: String(after.values[0]), variantId: after.id } : null,
+    }),
+    readStoreCurrency(db),
+  ]);
   return ok(c, {
-    ...page,
-    items: page.items.map((item) => ({
+    nextCursor: page.next
+      ? encodeListCursorOrNull({ sort: PRICE_LIST_CURSOR.sort, direction: "asc", values: [page.next.productName], id: page.next.variantId })
+      : null,
+    prices: page.items.map((item) => ({
       variantId: item.variantId,
       productId: item.productId,
       sku: item.sku,
@@ -1012,6 +1024,9 @@ app.openapi(createRoute({
     })),
   });
 });
+
+/** A price list page's cursor: the last SKU's product name and id. */
+const PRICE_LIST_CURSOR: ListCursorShape = { sort: "productName", direction: "asc", kinds: ["text"] };
 
 const priceTierMinor = z.object({
   amountMinor: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).openapi({ description: "The price of one unit, in minor units of the list's currency, at its price increment." }),

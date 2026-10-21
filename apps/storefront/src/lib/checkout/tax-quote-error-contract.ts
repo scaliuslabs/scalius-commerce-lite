@@ -5,15 +5,15 @@ import { parseQuotedShippingRate, type QuotedShippingRate } from "./tax-quote-co
 // Every code and action the API answers with (a Record, so a new one fails to
 // compile here): an issue this list does not know would read as an outage.
 const ISSUE_CODES = new Set(Object.keys({
-  PRODUCT_UNAVAILABLE: true,
-  VARIANT_REQUIRED: true,
-  VARIANT_UNAVAILABLE: true,
-  VARIANT_MISMATCH: true,
-  QUANTITY_UNAVAILABLE: true,
-  PRICE_CHANGED: true,
-  PROPERTIES_REQUIRED: true,
-  PROPERTIES_INVALID: true,
-  FULFILMENT_UNAVAILABLE: true,
+  product_unavailable: true,
+  variant_required: true,
+  variant_unavailable: true,
+  variant_mismatch: true,
+  quantity_unavailable: true,
+  price_changed: true,
+  properties_required: true,
+  properties_invalid: true,
+  fulfilment_unavailable: true,
 } satisfies Record<CartValidationIssue["code"], true>));
 const ISSUE_ACTIONS = new Set(Object.keys({
   remove: true,

@@ -19,6 +19,6 @@ describe("acme.risk-guard", () => {
   it("is refused without the order scopes, as on the platform", async () => {
     const readOnly = { ...riskGuard, manifest: { ...riskGuard.manifest, scopes: ["read_orders" as const] } };
     const harness = createPluginTestHarness(readOnly);
-    expect(await harness.deliver(fixtures.event("order.created"))).toMatchObject({ ok: false, error: { code: "orders.not_allowed" } });
+    expect(await harness.deliver(fixtures.event("order.created"))).toMatchObject({ ok: false, error: { code: "orders_not_allowed" } });
   });
 });

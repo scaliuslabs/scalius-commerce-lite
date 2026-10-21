@@ -83,7 +83,7 @@ function missingMasterSecretResponse(request: Request): Response {
     {
       success: false,
       error: describeMissingMasterSecret(),
-      code: "RUNTIME_SECRET_MISSING",
+      code: "runtime_secret_missing",
     },
     { status: 503, headers: { "Cache-Control": "private, no-store" } },
   );
@@ -175,7 +175,7 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
       const [result] = await reader.readParts([readRequest], null);
       if (result!.status === "rejected") {
         const unavailable = Response.json(
-          { success: false, error: { code: "PUBLIC_READ_UNAVAILABLE", message: "This content is temporarily unavailable. Please try again." } },
+          { success: false, error: { code: "public_read_unavailable", message: "This content is temporarily unavailable. Please try again." } },
           { status: 503, headers: { "Cache-Control": "private, no-store", "Cloudflare-CDN-Cache-Control": "no-store", "CDN-Cache-Control": "no-store" } },
         );
         return applyBaselineSecurityHeaders(request, request.method === "HEAD"

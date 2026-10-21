@@ -10,7 +10,7 @@ const buyer = {
 describe("acme.notes buyer UI", () => {
   it("draws the declared delivery field and keeps text as data", async () => {
     const harness = createPluginTestHarness(notes, { settings: { delivery_note: "<script>alert(1)</script>" } });
-    expect((await harness.fn("buyer.ui", buyer)).value).toEqual({ ui: { version: 1, root: { type: "stack", children: [
+    expect((await harness.extension(buyer)).value).toEqual({ ui: { version: 1, root: { type: "stack", children: [
       { type: "text", text: "<script>alert(1)</script>" },
       { type: "field", attribute: "delivery_instructions" },
     ] } } });
@@ -20,9 +20,9 @@ describe("acme.notes buyer UI", () => {
   it("reads account text only from the buyer's declared read", async () => {
     const harness = createPluginTestHarness(notes);
     const input = { ...buyer, target: "account.overview" as const, customer: { id: "cust_1" } };
-    expect((await harness.fn("buyer.ui", { ...input, reads: { note: { revision: 2, data: { text: "Your next delivery is on Friday." } } } })).value)
+    expect((await harness.extension({ ...input, reads: { note: { revision: 2, data: { text: "Your next delivery is on Friday." } } } })).value)
       .toEqual({ ui: { version: 1, root: { type: "stack", children: [{ type: "text", text: "Your next delivery is on Friday." }] } } });
-    expect((await harness.fn("buyer.ui", { ...input, reads: { note: null } })).value)
+    expect((await harness.extension({ ...input, reads: { note: null } })).value)
       .toEqual({ ui: { version: 1, root: { type: "stack", children: [{ type: "text", text: "Earn points on every order." }] } } });
   });
 });

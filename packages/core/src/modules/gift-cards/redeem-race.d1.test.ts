@@ -1,7 +1,7 @@
 // G2: concurrent redemptions never overspend. Two checkouts quote the same
 // card while it still holds enough for each; both commit at once, and
 // together they want more than the balance. The ledger guard in the commit
-// batch lets exactly one through; the other gets GIFT_CARD_CHANGED and writes
+// batch lets exactly one through; the other gets gift_card_changed and writes
 // nothing (no order, no stock hold, no debit).
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -41,7 +41,7 @@ describe("G2: concurrent gift-card redemptions", () => {
         expect(fulfilled).toHaveLength(1);
         expect(rejected).toHaveLength(1);
         expect(rejected[0]!.reason).toBeInstanceOf(GiftCardChangedError);
-        expect(rejected[0]!.reason).toMatchObject({ code: "GIFT_CARD_CHANGED", status: 409 });
+        expect(rejected[0]!.reason).toMatchObject({ code: "gift_card_changed", status: 409 });
 
         expect(store.balance(card.giftCardId)).toBe(14_000);
         expect(store.one("SELECT count(*) AS n FROM orders")).toEqual({ n: 1 });

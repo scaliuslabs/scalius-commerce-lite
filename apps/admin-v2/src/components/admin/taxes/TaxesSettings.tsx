@@ -155,7 +155,7 @@ export function TaxCollectionCard() {
         // "Reload and keep my edits" (the card's reload merges the newer version under the edits).
         const latest = await fetchTaxSettings().catch(() => null);
         if (!latest || latest.version === draft.version) throw error;
-        throw new AdminApiResponseError(t("conflict"), 409, "SETTINGS_REVISION_CONFLICT", {
+        throw new AdminApiResponseError(t("conflict"), 409, "settings_revision_conflict", {
           document: "tax",
           expectedRevision: draft.version,
           currentRevision: latest.version,

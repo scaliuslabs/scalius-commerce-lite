@@ -74,9 +74,9 @@ interface ProductMutationVariables {
 /** What a product Save sends besides its fields: the variant draft and the page's sections (costs are added here). */
 export type ProductSaveParts = ProductUpdateComposition & ProductSectionChanges & Pick<UpdateProductInput, "skuCosts">;
 
-/** SKU conflicts name the product that owns the SKU (`SKU_TAKEN`, 409). */
+/** SKU conflicts name the product that owns the SKU (`sku_taken`, 409). */
 export function readSkuTaken(error: unknown): { path: string; message: string } | null {
-  if (!(error instanceof AdminApiResponseError) || error.code !== "SKU_TAKEN") return null;
+  if (!(error instanceof AdminApiResponseError) || error.code !== "sku_taken") return null;
   const details = error.details as { field?: string; sku?: string; productName?: string } | undefined;
   return {
     path: details?.field ?? "sku",

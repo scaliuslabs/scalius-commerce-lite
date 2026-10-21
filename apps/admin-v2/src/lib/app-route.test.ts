@@ -47,10 +47,10 @@ describe("app route transport", () => {
   });
 
   it("throws the platform's failure envelope with its code and the app's masked reason", async () => {
-    answer(504, { success: false, error: { code: "APP_TIMEOUT", message: "The app took too long to answer." } });
+    answer(504, { success: false, error: { code: "app_timeout", message: "The app took too long to answer." } });
     const error = await fetchAppRoute("acme.app", "dashboard").catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(AdminApiResponseError);
-    expect(error).toMatchObject({ status: 504, code: "APP_TIMEOUT", message: "The app took too long to answer." });
+    expect(error).toMatchObject({ status: 504, code: "app_timeout", message: "The app took too long to answer." });
   });
 
   it("refuses an answer that is not JSON", async () => {

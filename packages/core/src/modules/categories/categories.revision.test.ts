@@ -56,7 +56,7 @@ describe("category revision authority", () => {
       new Error("D1_ERROR: malformed JSON"),
       "active",
     )).rejects.toMatchObject({
-      code: "CATEGORY_REVISION_CONFLICT",
+      code: "category_revision_conflict",
       details: { categoryId: "cat_1", expectedRevision: 6, currentRevision: 7 },
     } satisfies Partial<CategoryRevisionConflictError>);
   });

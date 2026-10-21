@@ -88,7 +88,7 @@ describe("buy again", () => {
 
   it("counts only the lines that went in", async () => {
     const lines = [orderLine("var_25", 25), orderLine("var_50", 50)];
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(validated(lines, [{ index: 1, code: "VARIANT_UNAVAILABLE" }])))));
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(validated(lines, [{ index: 1, code: "variant_unavailable" }])))));
     await expect(addOrderToCart(lines)).resolves.toEqual({ added: 1, missing: 1 });
     expect(quantities()).toEqual({ var_25: 1 });
   });

@@ -86,7 +86,7 @@ describe("acme.wishlist end to end", () => {
       method: "POST",
       headers: { ...proxied("application/json"), "content-type": "application/x-www-form-urlencoded" },
       body: "productId=p_linen",
-    })).toMatchObject({ status: 403, json: { error: { code: "FORM_EXPIRED" } } });
+    })).toMatchObject({ status: 403, json: { error: { code: "form_expired" } } });
     // The same without JavaScript: a page in the store layout.
     expect((await call("/api/v1/plugins/acme.wishlist/public/toggle", {
       method: "POST",

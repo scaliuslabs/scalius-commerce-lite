@@ -28,7 +28,7 @@ import {
 
 const MAX_RETRIES = 3;
 const BASE_BACKOFF_MS = 50;
-const INVENTORY_RESERVATION_CONFLICT = "INVENTORY_RESERVATION_CONFLICT";
+const INVENTORY_RESERVATION_CONFLICT = "inventory_reservation_conflict";
 type ReservationPool = "regular" | "preorder" | "backorder";
 type SQLiteBatchItem = BatchItem<"sqlite">;
 

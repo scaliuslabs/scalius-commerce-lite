@@ -222,7 +222,7 @@ export function ThemeSettingsPanel({ theme, resolved, media, apps, setDraft, rev
       </SettingsGroup>
       {/* One card for the whole store: its facts, buy action and hover photo; its shape follows the style above. */}
       <SettingsGroup title={t("productCards")} name="productCards">
-        <AppSkinSettings unit="product-card" theme={theme} apps={apps} media={media} setDraft={setDraft}>
+        <AppSkinSettings unit="product_card" theme={theme} apps={apps} media={media} setDraft={setDraft}>
           {() => (
             <>
               <div className="max-w-48">

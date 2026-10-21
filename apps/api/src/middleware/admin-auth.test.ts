@@ -207,7 +207,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
           createContext(lifecyclePath, "POST") as never,
           lifecycleNext,
         ),
-      ).rejects.toMatchObject({ status: 403, code: "FORBIDDEN" });
+      ).rejects.toMatchObject({ status: 403, code: "forbidden" });
       expect(editNext).toHaveBeenCalledTimes(1);
       expect(lifecycleNext).not.toHaveBeenCalled();
     },
@@ -347,7 +347,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       ),
     ).rejects.toMatchObject({
       status: 403,
-      code: "FORBIDDEN",
+      code: "forbidden",
       message: "Cookie and agent credentials cannot be combined",
     });
 
@@ -570,7 +570,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       env,
     }) as never, vi.fn())).rejects.toMatchObject({
       status: 413,
-      code: "PAYLOAD_TOO_LARGE",
+      code: "payload_too_large",
     });
 
     await expect(adminAuthMiddleware(createContext(path, "PUT", {
@@ -582,7 +582,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       env,
     }) as never, vi.fn())).rejects.toMatchObject({
       status: 413,
-      code: "PAYLOAD_TOO_LARGE",
+      code: "payload_too_large",
     });
   });
 
@@ -648,7 +648,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       },
     }) as never, next)).rejects.toMatchObject({
       status: 400,
-      code: "INVALID_REQUEST_BODY",
+      code: "invalid_request_body",
     });
     expect(next).not.toHaveBeenCalled();
   });
@@ -728,14 +728,14 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
         headers: { Authorization: `Bearer ${validShape}` },
       }) as never,
       next,
-    )).rejects.toMatchObject({ status: 401, code: "UNAUTHORIZED" });
+    )).rejects.toMatchObject({ status: 401, code: "unauthorized" });
 
     await expect(adminAuthMiddleware(
       createContext("/api/v1/admin/products", "GET", {
         headers: { Authorization: "Bearer infrastructure.jwt.token" },
       }) as never,
       next,
-    )).rejects.toMatchObject({ status: 401, code: "UNAUTHORIZED" });
+    )).rejects.toMatchObject({ status: 401, code: "unauthorized" });
     expect(next).not.toHaveBeenCalled();
   });
 
@@ -876,7 +876,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       ),
     ).rejects.toMatchObject({
       status: 403,
-      code: "FORBIDDEN",
+      code: "forbidden",
       message: "You do not have permission to perform this action",
     });
     expect(createNext).not.toHaveBeenCalled();
@@ -905,7 +905,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
         createContext(pathname, "POST") as never,
         next,
       ),
-    ).rejects.toMatchObject({ status: 403, code: "FORBIDDEN" });
+    ).rejects.toMatchObject({ status: 403, code: "forbidden" });
 
     mocks.getUserPermissions.mockResolvedValue(
       new Set([PERMISSIONS.TEAM_MANAGE]),
@@ -943,7 +943,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       adminAuthMiddleware(context as never, next),
     ).rejects.toMatchObject({
       status: 401,
-      code: "UNAUTHORIZED",
+      code: "unauthorized",
       message: "Admin access requires a valid dashboard session cookie.",
     });
     expect(mocks.getUserPermissions).not.toHaveBeenCalled();
@@ -964,7 +964,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       adminAuthMiddleware(context as never, next),
     ).rejects.toMatchObject({
       status: 401,
-      code: "UNAUTHORIZED",
+      code: "unauthorized",
       message: "Admin access requires a valid dashboard session cookie.",
     });
     expect(mocks.getUserPermissions).not.toHaveBeenCalled();
@@ -985,7 +985,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       ),
     ).rejects.toMatchObject({
       status: 401,
-      code: "UNAUTHORIZED",
+      code: "unauthorized",
     });
 
     await expect(
@@ -998,7 +998,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       ),
     ).rejects.toMatchObject({
       status: 401,
-      code: "UNAUTHORIZED",
+      code: "unauthorized",
     });
 
     expect(db.select).not.toHaveBeenCalled();
@@ -1021,7 +1021,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       ),
     ).rejects.toMatchObject({
       status: 403,
-      code: "FORBIDDEN",
+      code: "forbidden",
       message: "Password setup required before admin access",
     });
 
@@ -1060,7 +1060,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       ),
     ).rejects.toMatchObject({
       status: 403,
-      code: "FORBIDDEN",
+      code: "forbidden",
       message: "Two-factor setup required before admin access",
     });
     expect(mocks.getUserPermissions).not.toHaveBeenCalled();
@@ -1101,7 +1101,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       ),
     ).rejects.toMatchObject({
       status: 403,
-      code: "FORBIDDEN",
+      code: "forbidden",
       message: "Two-factor verification required",
     });
     expect(mocks.getUserPermissions).not.toHaveBeenCalled();
@@ -1163,7 +1163,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       ),
     ).rejects.toMatchObject({
       status: 403,
-      code: "FORBIDDEN",
+      code: "forbidden",
       message: "Two-factor verification required",
     });
     expect(mocks.getUserPermissions).not.toHaveBeenCalled();
@@ -1187,7 +1187,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       ),
     ).rejects.toMatchObject({
       status: 403,
-      code: "FORBIDDEN",
+      code: "forbidden",
       message: "Two-factor verification required",
     });
     expect(next).not.toHaveBeenCalled();
@@ -1206,7 +1206,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       ),
     ).rejects.toMatchObject({
       status: 403,
-      code: "FORBIDDEN",
+      code: "forbidden",
       message: "This admin endpoint is not configured for RBAC",
     });
     expect(next).not.toHaveBeenCalled();
@@ -1253,7 +1253,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       ),
     ).rejects.toMatchObject({
       status: 403,
-      code: "FORBIDDEN",
+      code: "forbidden",
       message: "You do not have permission to perform this action",
     });
     expect(next).not.toHaveBeenCalled();
@@ -1272,7 +1272,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       ),
     ).rejects.toMatchObject({
       status: 403,
-      code: "FORBIDDEN",
+      code: "forbidden",
       message: "You do not have permission to perform this action",
     });
     await expect(
@@ -1285,7 +1285,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       ),
     ).rejects.toMatchObject({
       status: 403,
-      code: "FORBIDDEN",
+      code: "forbidden",
       message: "You do not have permission to perform this action",
     });
 
@@ -1322,7 +1322,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       ),
     ).rejects.toMatchObject({
       status: 403,
-      code: "FORBIDDEN",
+      code: "forbidden",
       message: "You do not have permission to perform this action",
     });
 
@@ -1394,7 +1394,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       ),
     ).rejects.toMatchObject({
       status: 403,
-      code: "FORBIDDEN",
+      code: "forbidden",
       message: "Scanner sessions can only access scanner inventory endpoints",
     });
     expect(mocks.readScannerSession).toHaveBeenCalledWith(expect.objectContaining({ id: "db" }), sessionId);
@@ -1417,7 +1417,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       ),
     ).rejects.toMatchObject({
       status: 401,
-      code: "UNAUTHORIZED",
+      code: "unauthorized",
     });
     expect(next).not.toHaveBeenCalled();
   });

@@ -46,7 +46,7 @@ export async function executeIdempotentCommand(command, {
       return { logicalKey: command.logicalKey, status: "adopted_after_ambiguous_response", resourceId: afterFailure.id ?? null, authority: safeAuthority(afterFailure) };
     }
     if (error instanceof ApplyHttpError && error.status === 409) {
-      return { logicalKey: command.logicalKey, status: "conflict", resourceId: afterFailure?.id ?? null, code: error.code ?? "REVISION_CONFLICT" };
+      return { logicalKey: command.logicalKey, status: "conflict", resourceId: afterFailure?.id ?? null, code: error.code ?? "revision_conflict" };
     }
     throw error;
   }

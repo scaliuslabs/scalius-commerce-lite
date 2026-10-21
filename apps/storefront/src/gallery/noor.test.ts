@@ -63,7 +63,8 @@ describe("packed Noor gallery integration", () => {
       }));
       const products = new Map(component.lists.map((list) => [list.source, list.products.map((value) => {
         const card = value as ProductCardProduct;
-        return productCardData(card, productCardModel(card, { currencySymbol: currency.symbol, currencyCode: currency.code, hoverImage: true, ratings: true }));
+        const page = { currencySymbol: currency.symbol, currencyCode: currency.code };
+        return productCardData(card, productCardModel(card, { ...page, hoverImage: true, ratings: true }), page);
       })]));
       const host = new ExtensionHost({ runtime: { env: {} }, context: {
         store: { name: "Gallery store", currency: "BDT", locale: entry.scenario.locale === "ar" ? "ar-AE" : "en-BD", language: "en", timeZone: "Asia/Dhaka" },
@@ -87,9 +88,9 @@ describe("packed Noor gallery integration", () => {
     expect(readStorefrontExtensions(layout.appExtensions)).toEqual([NOOR_EXTENSION]);
     expect(NOOR_EXTENSION.release).toBe(BUNDLED_STOREFRONT_EXTENSIONS[NOOR_EXTENSION.pluginId]!.release);
     expect(NOOR_EXTENSION.skins.map((skin) => skin.target)).toEqual([
-      "header", "footer", "product-card", "product-main", "section:hero", "section:product-tabs", "section:product-grid", "section:product-rail",
-      "section:category-tiles", "section:shop-by", "section:banner-mosaic", "section:lookbook", "section:deal-block", "section:usp-strip",
-      "section:editorial", "section:seo-text", "section:specifications", "section:faq", "section:newsletter",
+      "header", "footer", "product_card", "product_main", "section:hero", "section:product_tabs", "section:product_grid", "section:product_rail",
+      "section:category_tiles", "section:shop_by", "section:banner_mosaic", "section:lookbook", "section:deal_block", "section:usp_strip",
+      "section:editorial", "section:seo_text", "section:specifications", "section:faq", "section:newsletter",
     ]);
     expect((await read("noor-product-missing", "storefront/layout")).appExtensions).toEqual([]);
     expect(galleryEntry("noor-product-missing")!.theme.apps!.skins!.header).toEqual(galleryEntry("noor-product")!.theme.apps!.skins!.header);

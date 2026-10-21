@@ -64,7 +64,7 @@ const choice = z.object({ value: z.string().min(1).max(64), label }).strict();
 
 /**
  * A settings group (snake_case) or a provider id (snake_case or
- * kebab-case: it is a URL path segment): `manifest.settingsGroups[].id`,
+ * kebab-case: it is a URL path segment): `manifest.admin.settingsGroups[].id`,
  * `manifest.providers.*[].id`.
  */
 export const PLUGIN_SETTING_GROUP = PLUGIN_URL_NAME_PATTERN;

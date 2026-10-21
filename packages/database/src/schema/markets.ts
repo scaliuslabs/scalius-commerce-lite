@@ -54,7 +54,7 @@ export const markets = sqliteTable("markets", {
      * at base prices and its fixed price lists; `fx` derives its prices from
      * the base prices at its exchange rate, adjustment, rounding and ending.
      * The backup market is always `fixed` (its prices are the base prices).
-     * Triggers keep the shape (`MARKET_PRICING_INVALID`).
+     * Triggers keep the shape (`market_pricing_invalid`).
      */
     priceMode: text("price_mode", { enum: MARKET_PRICE_MODES }).notNull().default("fixed"),
     /**

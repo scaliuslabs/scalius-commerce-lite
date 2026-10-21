@@ -613,7 +613,7 @@ describe("cart validation preflight", () => {
           cartKey: "line_1",
           productId: "product_1",
           variantId: "variant_1",
-          code: "QUANTITY_UNAVAILABLE",
+          code: "quantity_unavailable",
           action: "reduce_quantity",
           message: "Only 2 left for Queue Product.",
           productName: "Queue Product",
@@ -657,7 +657,7 @@ describe("cart validation preflight", () => {
         issues: [
           {
             cartKey: "line_1",
-            code: "QUANTITY_UNAVAILABLE",
+            code: "quantity_unavailable",
             message: "Only 2 left for Queue Product.",
             availableQuantity: 2,
           },
@@ -1329,7 +1329,7 @@ describe("create order commit ordering", () => {
     expect(await response.json()).toMatchObject({
       success: false,
       error: {
-        code: "STOREFRONT_CHECKOUT_QUOTE_CONFLICT",
+        code: "storefront_checkout_quote_conflict",
         message: expect.stringContaining("Review the refreshed total"),
       },
     });
@@ -1596,7 +1596,7 @@ describe("create order commit ordering", () => {
           index: 0,
           productId: "product_1",
           variantId: "variant_1",
-          code: "PRICE_CHANGED",
+          code: "price_changed",
           action: "refresh_item",
           message: "The price for Queue Product changed. Please review the updated cart total.",
           productName: "Queue Product",
@@ -1627,12 +1627,12 @@ describe("create order commit ordering", () => {
     expect(await response.json()).toMatchObject({
       success: false,
       error: {
-        code: "VALIDATION_ERROR",
+        code: "validation_error",
         message: "Some items in your cart need attention.",
         details: {
           itemIssues: [
             {
-              code: "PRICE_CHANGED",
+              code: "price_changed",
               message: "The price for Queue Product changed. Please review the updated cart total.",
               currentPrice: 120,
             },
@@ -2034,7 +2034,7 @@ describe("create order commit ordering", () => {
       expect(await response.json()).toMatchObject({
         success: false,
         error: {
-          code: "CUSTOMER_SIGN_IN_REQUIRED",
+          code: "customer_sign_in_required",
           message: "Sign in to place your order. This store sells only to signed-in customers.",
         },
       });

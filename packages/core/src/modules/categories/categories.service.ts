@@ -75,7 +75,7 @@ function categoryDeleteUsageGuard(
             )
               AND ${products.deletedAt} IS NULL
         )
-    `, "CATEGORY_DELETE_IN_USE");
+    `, "category_delete_in_use");
 }
 
 function categoriesHaveNoAssignedProductsCondition(
@@ -1008,7 +1008,7 @@ export async function bulkDeleteCategories(
             if (isBatchGuardError(error, "CATEGORY_DELETE_HAS_CHILDREN")) {
                 throwCategoryChildBlockers(await loadCategoryChildBlockers(db, claimsJson, { liveOnly: false }), true);
             }
-            if (isBatchGuardError(error, "CATEGORY_DELETE_IN_USE")) {
+            if (isBatchGuardError(error, "category_delete_in_use")) {
                 throw new ValidationError(
                     "Cannot delete categories while active products are still assigned to them.",
                     {

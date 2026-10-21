@@ -170,7 +170,7 @@ function assertCheckoutOrderPolicy(
   if (checkoutSettings?.guestCheckoutEnabled ?? true) {
     return { customerIdentity: null, checkoutSettings: checkoutSettingsSnapshot, sessionEnded: session.sent };
   }
-  throw new AppError(401, "CUSTOMER_SIGN_IN_REQUIRED", CUSTOMER_SIGN_IN_REQUIRED_MESSAGE);
+  throw new AppError(401, "customer_sign_in_required", CUSTOMER_SIGN_IN_REQUIRED_MESSAGE);
 }
 
 /**
@@ -325,7 +325,7 @@ const createOrderSchema = z.object({
   marketingConsent: z.object({ language: z.string().trim().max(16).nullable(), channels: z.array(z.enum(["email", "sms", "whatsapp"])).min(1).max(3) }).strict().nullable().optional(),
   trackingSignals: checkoutTrackingSignalsSchema.nullable().optional(),
   expectedAmountDueMinor: z.number().int().nonnegative().optional().openapi({
-    description: "The amount due the buyer reviewed in the tax quote (`amountDueMinor`). Required with gift cards: a card that changed since then is a 409 GIFT_CARD_CHANGED.",
+    description: "The amount due the buyer reviewed in the tax quote (`amountDueMinor`). Required with gift cards: a card that changed since then is a 409 gift_card_changed.",
   }),
 }).superRefine((order, context) => {
   if ((order.giftCards?.length ?? 0) > 0 && order.expectedAmountDueMinor === undefined) {

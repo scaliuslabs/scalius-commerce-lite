@@ -137,7 +137,7 @@ describe("publications", () => {
         expect((await validateStorefrontCartItems(db, cart)).valid).toBe(true);
         const agent = await validateStorefrontCartItems(db, cart, { salesChannelId: AGENTS_CHANNEL_ID });
         expect(agent.valid).toBe(false);
-        expect(agent.issues[0]).toMatchObject({ code: "PRODUCT_UNAVAILABLE", productId: "prod_cap" });
+        expect(agent.issues[0]).toMatchObject({ code: "product_unavailable", productId: "prod_cap" });
     });
 
     it("names a staff order's channel: the online store by default, else an active channel", async () => {
@@ -170,7 +170,7 @@ describe("channel stock locations", () => {
         sqlite.exec("UPDATE product_variants SET reserved_stock = 1 WHERE id = 'var_prod_tee'");
 
         const tooMany = await validateStorefrontCartItems(db, [{ productId: "prod_tee", variantId: "var_prod_tee", quantity: 3 }]);
-        expect(tooMany.issues[0]).toMatchObject({ code: "QUANTITY_UNAVAILABLE", availableQuantity: 2 });
+        expect(tooMany.issues[0]).toMatchObject({ code: "quantity_unavailable", availableQuantity: 2 });
         // Google still sells both locations.
         const google = await validateStorefrontCartItems(db, [{ productId: "prod_tee", variantId: "var_prod_tee", quantity: 4 }], { salesChannelId: GOOGLE_CHANNEL_ID });
         expect(google.valid).toBe(true);

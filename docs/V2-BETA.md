@@ -6,7 +6,7 @@ The v2 beta core is deployed. The contract baseline is sealed in the manifest, p
 
 - Objects replace both metaobjects and app records: typed definitions, scoped records, revisions, indexes, dashboard/API/CLI access, related records and bounded public reads.
 - Custom fields can reference a declared Object type. Deleted or non-public targets resolve to null in public reads.
-- Buyer extensions use the declarative `buyer.ui` function and host actions. Checkout attributes are validated, persisted and bound to quotes and retries. Account and receipt output stays private. Static checkout app blocks and `request.render` are retired.
+- Buyer extensions are declarative storefront extensions (`storefront.extensions`, one render per UI slot) with host actions. Checkout attributes are validated, persisted and bound to quotes and retries. Account and receipt output stays private. Static checkout app blocks and `request.render` are retired.
 - Shipping methods can use app-calculated courier rates. Requests have bounded deadlines and fallback policy; signed quotes bind the selected rate through checkout, including cash collection for deposits. The Bangladesh pack supplies Pathao rates.
 - Theme v10 adds dynamic sources, selected custom fields on product cards and Specifications. Core and Noor share typed product/listing projections.
 - Events are emitted only when an active subscriber needs the topic. The expanded catalog remains facts-only; realtime writes retain their own observer.

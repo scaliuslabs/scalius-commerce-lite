@@ -102,7 +102,7 @@ export const giftCardHandlesSchema = z
 export const giftCardIssueSchema = z.object({
   /** The handle the issue is about; null for an order-level issue. */
   handle: z.string().nullable(),
-  code: z.enum(["GIFT_CARD_UNUSABLE", "GIFT_CARD_DUPLICATE", "GIFT_CARD_NOT_NEEDED", "GIFT_CARD_NOT_ELIGIBLE"]),
+  code: z.enum(["gift_card_unusable", "gift_card_duplicate", "gift_card_not_needed", "gift_card_not_eligible"]),
   message: z.string(),
 });
 

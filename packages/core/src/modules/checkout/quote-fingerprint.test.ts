@@ -135,7 +135,7 @@ describe("storefront checkout quote fingerprint", () => {
     } catch (error) {
       expect(error).toMatchObject({
         status: 409,
-        code: "STOREFRONT_CHECKOUT_QUOTE_CONFLICT",
+        code: "storefront_checkout_quote_conflict",
         message: expect.stringContaining("Review the refreshed total"),
       });
     }

@@ -128,7 +128,7 @@ describe("checkout validate-cart proxy", () => {
       cartKey: "line_1",
       productId: "prod_1",
       variantId: "var_1",
-      code: "PRODUCT_UNAVAILABLE",
+      code: "product_unavailable",
       action: "remove",
       message: "Cotton Panjabi is no longer available.",
       productName: "Cotton Panjabi",

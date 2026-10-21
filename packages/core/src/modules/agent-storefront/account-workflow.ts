@@ -299,7 +299,7 @@ export async function bindAgentStorefrontCustomerSession(
       AND ${agentStorefrontContinuations.kind} = 'customer_auth'
       AND ${agentStorefrontContinuations.status} = 'pending'
       AND ${agentStorefrontContinuations.expiresAt} > unixepoch()
-  )`, "AGENT_STOREFRONT_CUSTOMER_CONTINUATION_CONFLICT") as SQLiteBatchItem;
+  )`, "agent_storefront_customer_continuation_conflict") as SQLiteBatchItem;
   const contextGuard = buildBatchGuard(db, sql`EXISTS (
     SELECT 1 FROM ${agentStorefrontContexts}
     WHERE ${agentStorefrontContexts.id} = ${context.id}
@@ -307,7 +307,7 @@ export async function bindAgentStorefrontCustomerSession(
       AND ${agentStorefrontContexts.closedAt} IS NULL
       AND ${agentStorefrontContexts.expiresAt} > unixepoch()
       AND ${agentStorefrontContexts.revision} = ${context.revision}
-  )`, "AGENT_STOREFRONT_CUSTOMER_CONTEXT_CONFLICT") as SQLiteBatchItem;
+  )`, "agent_storefront_customer_context_conflict") as SQLiteBatchItem;
   await safeBatch(db, [
     continuationGuard,
     contextGuard,
@@ -359,7 +359,7 @@ export async function bindAgentStorefrontRecoveredOrder(
         AND ${agentStorefrontContinuations.kind} = 'payment_recovery'
         AND ${agentStorefrontContinuations.status} = 'pending'
         AND ${agentStorefrontContinuations.expiresAt} > unixepoch()
-    )`, "AGENT_STOREFRONT_RECOVERY_CONTINUATION_CONFLICT") as SQLiteBatchItem,
+    )`, "agent_storefront_recovery_continuation_conflict") as SQLiteBatchItem,
     db.insert(agentStorefrontOrderGrants).values({
       contextId: context.id,
       orderId: input.orderId,
@@ -473,7 +473,7 @@ export async function logoutAgentStorefrontCustomer(
   await safeBatch(db, [
     buildBatchGuard(db, sql`EXISTS (
       SELECT 1 FROM ${agentStorefrontContexts} WHERE ${activeGuard}
-    )`, "AGENT_STOREFRONT_LOGOUT_CONFLICT"),
+    )`, "agent_storefront_logout_conflict"),
     ...(context.customerSessionTokenHash ? [
       db.update(customerSessions).set({
         revokedAt: nowSeconds(now),

@@ -86,7 +86,7 @@ pnpm --filter @scalius/database upgrade:schema --provider postgres \
 
 `DATABASE_MIGRATION_FREEZE` on the API Worker (`1`, `true` or `on`) stops all writes while an operator copies the database. The API Worker is the only Worker that writes to the database.
 
-- A request gets 503 `DATABASE_MIGRATION_IN_PROGRESS` with `Retry-After: 60`. Only `GET` and `HEAD` of `/api/v1/health`, `/api/v1/readyz` and `/api/v1/meta` pass.
+- A request gets 503 `database_migration_in_progress` with `Retry-After: 60`. Only `GET` and `HEAD` of `/api/v1/health`, `/api/v1/readyz` and `/api/v1/meta` pass.
 - The cron run does nothing. Background rows that are due wait in the database and run after the freeze ends.
 
 ## Cutover: D1 to TursoDB
@@ -96,7 +96,7 @@ Persist a record of each step. Do not skip a gate.
 1. Pin the source: set `DATABASE_PROVIDER=d1` on the API Worker before you install any Turso credential. Without the pin, Turso credentials switch the provider at once.
    Gate: `GET /api/v1/readyz` shows `checks.d1.status` as `ok`.
 2. Set `DATABASE_MIGRATION_FREEZE=1` on the API Worker. Wait for in-flight requests to finish.
-   Gate: an API write answers 503 `DATABASE_MIGRATION_IN_PROGRESS`, and `/api/v1/readyz` still answers.
+   Gate: an API write answers 503 `database_migration_in_progress`, and `/api/v1/readyz` still answers.
 3. Read the D1 Time Travel bookmark and persist it.
    ```bash
    pnpm --dir apps/api exec wrangler d1 time-travel info <d1-database> --json

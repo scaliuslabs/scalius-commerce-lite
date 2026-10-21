@@ -74,17 +74,17 @@ const V3_CLASSIC = {
     "theme-card-min-phone": "9.25rem", "theme-card-min-tablet": "11rem", "theme-card-min-desktop": "12.5rem",
     "theme-grid-gap-phone": "0.5rem", "theme-grid-gap-desktop": "1rem", "theme-container-width": "75rem", // the department mall measures 1200px
   },
-  sections: ["hero", "collections", "category-tiles", "usp-strip"],
+  sections: ["hero", "collections", "category_tiles", "usp_strip"],
 } as const;
 
-describe("storefront theme document v11", () => {
+describe("storefront theme document v12", () => {
   it("parses every template as a complete document in its own palette", () => {
     expect(STOREFRONT_TEMPLATES.map((template) => template.id)).toEqual([...STOREFRONT_TEMPLATE_IDS]);
     expect(STOREFRONT_TEMPLATE_IDS).toHaveLength(5);
     for (const template of STOREFRONT_TEMPLATES) {
       const theme = storefrontTemplateTheme(template.id);
       expect(issues(theme), template.id).toEqual([]);
-      expect(theme).toMatchObject({ version: 11, template: template.id });
+      expect(theme).toMatchObject({ version: 12, template: template.id });
       expect(theme.tokens.colors).toEqual(STOREFRONT_THEME_PALETTES[template.palette]);
       expect(Object.isFrozen(template.blocks.product.below)).toBe(true);
     }
@@ -233,7 +233,7 @@ describe("storefront theme document v11", () => {
   it("validates sections from the registry: unique ids, versioned strict settings", () => {
     expect(STOREFRONT_SECTION_TYPES.length).toBeGreaterThanOrEqual(16);
     const theme = clone();
-    theme.pages.home.push(storefrontSectionDefault("product-rail", "rail-2"), storefrontSectionDefault("product-rail", "rail-3"));
+    theme.pages.home.push(storefrontSectionDefault("product_rail", "rail-2"), storefrontSectionDefault("product_rail", "rail-3"));
     expect(issues(theme)).toEqual([]);
     const sameId = clone();
     sameId.pages.home[1] = { ...sameId.pages.home[1]!, id: sameId.pages.home[0]!.id };
@@ -247,7 +247,7 @@ describe("storefront theme document v11", () => {
     expect(issues(pages([{ id: "x", type: "hero", version: 1, settings: { layout: "split", slides: [], extra: 1 } }]))).not.toEqual([]);
     expect(issues(pages([{ id: "x", type: "banner", version: 1, settings: { layout: "full", heading: "", text: "", mediaId: null, cta: { label: "Go", href: "javascript:alert(1)" } } }]))).not.toEqual([]);
     expect(issues(pages([{ id: "x", type: "banner", version: 1, settings: { layout: "full", heading: "", text: "", mediaId: null, cta: { label: "Go", href: "//evil.test" } } }]))).not.toEqual([]);
-    expect(issues(pages([{ id: "x", type: "product-rail", version: 1, settings: { title: "", source: { kind: "collection" }, limit: 12 } }]))).not.toEqual([]);
+    expect(issues(pages([{ id: "x", type: "product_rail", version: 1, settings: { title: "", source: { kind: "collection" }, limit: 12 } }]))).not.toEqual([]);
     // Rich text is plain text with the same limits as before.
     expect(issues(pages([{ id: "story", type: "editorial", version: 1, settings: { layout: "rich-text", heading: "Our story", body: "Hand-made in Rajshahi." } }]))).toEqual([]);
     expect(issues({ ...clone(), pages: { ...clone().pages, home: [], homeMode: { kind: "sections" } } })).toEqual([]);
@@ -282,7 +282,7 @@ describe("storefront theme document v11", () => {
     expect(parseStoredStorefrontThemeDocument(null)).toBeNull();
     expect(parseStoredStorefrontThemeDocument("{not json")).toBeNull();
     expect(parseStoredStorefrontThemeDocument(JSON.stringify({ ...clone(), version: 9 }))).toBeNull();
-    expect(parseStoredStorefrontThemeDocument(JSON.stringify({ ...clone(), version: 12 }))).toBeNull();
+    expect(parseStoredStorefrontThemeDocument(JSON.stringify({ ...clone(), version: 13 }))).toBeNull();
     // A version 10 document reads through the chain.
     expect(parseStoredStorefrontThemeDocument(JSON.stringify({ ...clone(), version: 10 }))).toEqual(DEFAULT_STOREFRONT_THEME);
   });
@@ -327,7 +327,7 @@ describe("storefront theme document v11", () => {
     const schema = storefrontThemeDocumentJsonSchema();
     expect(schema).toMatchObject({ type: "object", required: expect.arrayContaining(["version", "template", "tokens", "blocks", "pages"]) });
     const text = JSON.stringify(schema);
-    expect(text).toContain("usp-strip");
+    expect(text).toContain("usp_strip");
     expect(text).toContain("marketplace-3col");
   });
 });

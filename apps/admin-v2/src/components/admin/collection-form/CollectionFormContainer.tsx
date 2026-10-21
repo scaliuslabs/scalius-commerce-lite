@@ -175,7 +175,7 @@ export function CollectionForm({
           path: { id: entityId },
           body: { ...submission, expectedVersion },
         })).catch((error: unknown) => {
-          if (error instanceof AdminApiResponseError && error.code === "COLLECTION_REVISION_CONFLICT") throw new SaveConflict();
+          if (error instanceof AdminApiResponseError && error.code === "collection_revision_conflict") throw new SaveConflict();
           throw error;
         });
         saved = { id: result.id, version: result.version };

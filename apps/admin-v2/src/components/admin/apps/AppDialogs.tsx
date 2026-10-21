@@ -77,7 +77,7 @@ export function ActivateAppDialog({ app, open, onOpenChange }: DialogProps) {
     onError: (error) => {
       // Changed meanwhile: the dialog stays open on the fresh request to review again.
       if (result.changed(error)) return;
-      if (appErrorCode(error) === "installation.settings_incomplete") {
+      if (appErrorCode(error) === "installation_settings_incomplete") {
         toast.error(t("settingsIncomplete"));
         void queryClient.invalidateQueries({ queryKey: queryKeys.apps.detail(app.id) });
         return;

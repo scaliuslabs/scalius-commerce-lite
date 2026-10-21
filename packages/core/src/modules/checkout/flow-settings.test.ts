@@ -49,7 +49,7 @@ describe("checkout flow settings revision authority", () => {
         expect(error).toBeInstanceOf(SettingsRevisionConflictError);
         expect(error).toMatchObject({
             status: 409,
-            code: "SETTINGS_REVISION_CONFLICT",
+            code: "settings_revision_conflict",
             details: { document: "checkout", expectedRevision: 0, currentRevision: 1 },
         });
         await expect(getCheckoutFlowSettingsDocument(db)).resolves.toMatchObject({ revision: 1, checkoutMode: "gateways_only" });

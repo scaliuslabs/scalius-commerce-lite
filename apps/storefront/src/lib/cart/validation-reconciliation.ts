@@ -150,7 +150,7 @@ export function repriceCartForCurrency(
   writeCartCurrency(code);
   if (!previous || previous === code) return [...issues];
   const repriced = issues.filter((issue) =>
-    issue.code === "PRICE_CHANGED" && typeof issue.currentPrice === "number" && typeof issue.cartKey === "string" && cartStore.get().items[issue.cartKey]);
+    issue.code === "price_changed" && typeof issue.currentPrice === "number" && typeof issue.cartKey === "string" && cartStore.get().items[issue.cartKey]);
   if (repriced.length === 0) return [...issues];
   updateCartItemsByKeyAtomically(repriced.map((issue) => ({
     lineKey: issue.cartKey!,

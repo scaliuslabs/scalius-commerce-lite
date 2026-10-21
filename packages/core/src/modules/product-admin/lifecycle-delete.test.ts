@@ -122,7 +122,7 @@ describe("admin product permanent delete inventory guards", () => {
                     {
                         id: "prod_1",
                         status: "blocked",
-                        code: "CONFLICT",
+                        code: "conflict",
                         message: "Cannot permanently delete product. One or more SKUs have inventory history; move the product to trash instead.",
                     },
                     {
@@ -154,7 +154,7 @@ describe("admin product permanent delete inventory guards", () => {
             {
                 id: "prod_ordered",
                 status: "blocked",
-                code: "CONFLICT",
+                code: "conflict",
                 message: "Cannot delete product. It is part of one or more existing orders.",
             },
             {
@@ -259,7 +259,7 @@ describe("admin product permanent delete inventory guards", () => {
             {
                 id: "prod_failed",
                 status: "failed",
-                code: "PRODUCT_PERMANENT_DELETE_FAILED",
+                code: "product_permanent_delete_failed",
                 message: expect.stringContaining("Retry it individually"),
             },
             {

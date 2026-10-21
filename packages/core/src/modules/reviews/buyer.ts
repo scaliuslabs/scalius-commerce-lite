@@ -122,11 +122,11 @@ function isConstraintFailure(error: unknown, pattern: RegExp): boolean {
 }
 
 function notEligible(): AppError {
-  return new AppError(409, "REVIEW_NOT_ELIGIBLE", "This item can be reviewed once it has been delivered.");
+  return new AppError(409, "review_not_eligible", "This item can be reviewed once it has been delivered.");
 }
 
 function alreadyReviewed(reviewId: string): AppError {
-  return new AppError(409, "REVIEW_EXISTS", "You've already reviewed this product. You can edit your review instead.", { reviewId });
+  return new AppError(409, "review_exists", "You've already reviewed this product. You can edit your review instead.", { reviewId });
 }
 
 function buyerReviewSelect() {
@@ -408,7 +408,7 @@ export async function editReview(
   const current = await readBuyerReviewRow(db, buyer, reviewId);
   if (!current) throw notFoundReview();
   if (current.status !== "pending" && current.status !== "published") {
-    throw new AppError(409, "REVIEW_NOT_EDITABLE", "This review can no longer be edited.");
+    throw new AppError(409, "review_not_editable", "This review can no longer be edited.");
   }
   if (current.version !== input.version) {
     throw new ConflictError("This review changed since you opened it. Reload and try again.");
@@ -436,7 +436,7 @@ export async function editReview(
   const check = checkReviewContent({ title, body }, { blockWords: settings.blockWords });
   const status = reviewStatusAfterCheck(settings.moderation, check);
   if (status !== current.status && !canTransitionReviewStatus(current.status, status, "system")) {
-    throw new AppError(409, "REVIEW_NOT_EDITABLE", "This review can no longer be edited.");
+    throw new AppError(409, "review_not_editable", "This review can no longer be edited.");
   }
   const nextVersion = current.version + 1;
   const update = db.update(productReviews)
@@ -481,7 +481,7 @@ export async function withdrawReview(
   const current = await readBuyerReviewRow(db, buyer, reviewId);
   if (!current) throw notFoundReview();
   if (!canTransitionReviewStatus(current.status, "withdrawn", "buyer")) {
-    throw new AppError(409, "REVIEW_NOT_EDITABLE", "This review can no longer be changed.");
+    throw new AppError(409, "review_not_editable", "This review can no longer be changed.");
   }
   const now = nowSeconds();
   const updated = await db.update(productReviews)

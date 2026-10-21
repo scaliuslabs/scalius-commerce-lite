@@ -112,7 +112,8 @@
       "dueAt": {
        "type": "string",
        "minLength": 1,
-       "maxLength": 40
+       "maxLength": 40,
+       "format": "date-time"
       }
      },
      "required": [
@@ -469,18 +470,21 @@
     "createdAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "updatedAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "deletedAt": {
      "nullable": true,
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     }
    },
    "required": [
@@ -553,31 +557,36 @@
     "requestedAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "approvedAt": {
      "nullable": true,
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "completedAt": {
      "nullable": true,
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "rejectedAt": {
      "nullable": true,
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "cancelledAt": {
      "nullable": true,
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "lines": {
      "type": "array",
@@ -647,12 +656,14 @@
     "createdAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "updatedAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     }
    },
    "required": [
@@ -781,18 +792,21 @@
     "createdAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "updatedAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "deletedAt": {
      "nullable": true,
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     }
    },
    "required": [
@@ -868,7 +882,8 @@
     "updatedAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     }
    },
    "required": [
@@ -920,7 +935,8 @@
      "nullable": true,
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "mergedIntoCustomerId": {
      "nullable": true,
@@ -962,7 +978,8 @@
        "updatedAt": {
         "type": "string",
         "minLength": 1,
-        "maxLength": 40
+        "maxLength": 40,
+        "format": "date-time"
        }
       },
       "required": [
@@ -976,18 +993,21 @@
     "createdAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "updatedAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "deletedAt": {
      "nullable": true,
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     }
    },
    "required": [
@@ -1114,29 +1134,34 @@
      "nullable": true,
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "receivedAt": {
      "nullable": true,
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "cancelledAt": {
      "nullable": true,
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "createdAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "updatedAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     }
    },
    "required": [
@@ -1253,29 +1278,34 @@
      "nullable": true,
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "receivedAt": {
      "nullable": true,
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "cancelledAt": {
      "nullable": true,
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "createdAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "updatedAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     }
    },
    "required": [
@@ -1372,13 +1402,15 @@
     "createdAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "voidedAt": {
      "nullable": true,
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     }
    },
    "required": [
@@ -1467,17 +1499,20 @@
      "nullable": true,
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "createdAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "updatedAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     }
    },
    "required": [
@@ -1554,12 +1589,14 @@
     "createdAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "updatedAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     }
    },
    "required": [
@@ -1600,17 +1637,20 @@
      "nullable": true,
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "createdAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "updatedAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     }
    },
    "required": [
@@ -1668,13 +1708,15 @@
      "nullable": true,
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "endsAt": {
      "nullable": true,
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "maxRedemptions": {
      "nullable": true,
@@ -1690,18 +1732,21 @@
     "createdAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "updatedAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "deletedAt": {
      "nullable": true,
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     }
    },
    "required": [
@@ -1782,13 +1827,15 @@
      "nullable": true,
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "repliedAt": {
      "nullable": true,
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "version": {
      "type": "integer",
@@ -1798,12 +1845,14 @@
     "createdAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "updatedAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     }
    },
    "required": [
@@ -1905,7 +1954,8 @@
      "nullable": true,
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "version": {
      "type": "integer",
@@ -1915,12 +1965,14 @@
     "createdAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "updatedAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     }
    },
    "required": [
@@ -1987,7 +2039,8 @@
     "createdAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     }
    },
    "required": [
@@ -2037,12 +2090,14 @@
     "createdAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "updatedAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     }
    },
    "required": [

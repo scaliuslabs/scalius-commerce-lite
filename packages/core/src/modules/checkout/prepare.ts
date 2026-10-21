@@ -444,7 +444,7 @@ export function assertStorefrontLineFulfilment(
                 cartKey: item.cartKey ?? null,
                 productId: item.productId,
                 variantId: item.variantId,
-                code: "FULFILMENT_UNAVAILABLE",
+                code: "fulfilment_unavailable",
                 action: "remove",
                 message: `${item.productName}${item.variantLabel ? ` (${item.variantLabel})` : ""} can't be ordered online right now.`,
                 productName: item.productName,
@@ -593,7 +593,7 @@ export async function quoteStorefrontGiftCardTender(
     for (const handle of handles) {
         // Another handle already named the same card (the resolver kept the first).
         if (!unusable.has(handle) && !resolvedHandles.has(handle)) {
-            issues.push({ handle, code: "GIFT_CARD_DUPLICATE", message: GIFT_CARD_DUPLICATE_MESSAGE });
+            issues.push({ handle, code: "gift_card_duplicate", message: GIFT_CARD_DUPLICATE_MESSAGE });
         }
     }
     if (isGiftCardTenderBlocked(quote.tender)) {
@@ -606,7 +606,7 @@ export async function quoteStorefrontGiftCardTender(
             const giftCardLinesLeft = giftCardLineTotalMinor > 0;
             issues.push({
                 handle: cardById.get(issue.id)?.handle ?? null,
-                code: giftCardLinesLeft ? "GIFT_CARD_NOT_ELIGIBLE" : "GIFT_CARD_NOT_NEEDED",
+                code: giftCardLinesLeft ? "gift_card_not_eligible" : "gift_card_not_needed",
                 message: giftCardLinesLeft ? GIFT_CARD_NOT_ELIGIBLE_MESSAGE : GIFT_CARD_NOT_NEEDED_MESSAGE,
             });
         }
@@ -663,7 +663,7 @@ export function giftCardTenderRates(money: PresentmentMoney | undefined): StoreC
 /**
  * The order the buyer reviewed is the order placed (checked after the quote
  * fingerprint): every card still usable and the amount due unchanged, or
- * `GiftCardChangedError` (409 `GIFT_CARD_CHANGED`) before anything is
+ * `GiftCardChangedError` (409 `gift_card_changed`) before anything is
  * written. Requests without gift cards pass untouched.
  */
 export function assertStorefrontGiftCardTenderReviewed(

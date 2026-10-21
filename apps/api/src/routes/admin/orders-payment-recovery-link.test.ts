@@ -106,7 +106,7 @@ describe("admin order payment recovery link route", () => {
         };
 
         expect(response.status).toBe(503);
-        expect(body.error?.code).toBe("SERVICE_UNAVAILABLE");
+        expect(body.error?.code).toBe("service_unavailable");
         expect(mocks.previewOrderPaymentRecoveryLink).not.toHaveBeenCalled();
     });
 });

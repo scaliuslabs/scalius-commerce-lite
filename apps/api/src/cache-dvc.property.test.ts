@@ -407,7 +407,7 @@ describe("DVC directed scenarios", () => {
       sqlite.exec(`
         UPDATE promotions SET max_redemptions = 3 WHERE id = 'promo_code';
         UPDATE theme_settings SET colors = json_set(colors, '$.pages.landing.eid.sections[' || (
-          SELECT key FROM json_each(theme_settings.colors, '$.pages.landing.eid.sections') WHERE json_extract(value, '$.type') = 'deal-block'
+          SELECT key FROM json_each(theme_settings.colors, '$.pages.landing.eid.sections') WHERE json_extract(value, '$.type') = 'deal_block'
         ) || '].settings.promotionId', 'promo_code') WHERE id = 'default';
         INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, status, created_at, updated_at, customer_id) VALUES
           ('o_dvc_r2', 'A', '01700000001', 'Road', 'city', 'zone', 'pending', ${DVC_SEED_EPOCH}, ${DVC_SEED_EPOCH}, 'cus_1'),

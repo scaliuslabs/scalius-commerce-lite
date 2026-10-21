@@ -21,7 +21,8 @@ export const DASHBOARD_CONTENT_OPERATIONS = {
   },
   "dashboard.content.create": { stability: "stable" },
   "dashboard.content.get": { stability: "stable" },
-  "dashboard.content.list": { stability: "stable" },
+  // Page-numbered (dashboard-shaped): beta until a cursor list joins the stable API.
+  "dashboard.content.list": {},
   "dashboard.content.permanently_delete": {
     risk: "destructive",
     revision: "required",

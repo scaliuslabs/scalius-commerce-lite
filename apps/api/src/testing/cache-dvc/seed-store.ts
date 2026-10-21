@@ -63,15 +63,15 @@ export function everySectionTheme() {
     sideBanners: [{ mediaId: "media_side", alt: "Side", href: "/sale" }],
   });
   // A draft category among the tiles: publishing it later must show it.
-  set("category-tiles", { style: "photo", title: "Shop by category", categoryIds: ["cat_panjabi", "cat_saree", "cat_draft"] });
+  set("category_tiles", { style: "photo", title: "Shop by category", categoryIds: ["cat_panjabi", "cat_saree", "cat_draft"] });
   set("collections", { carousel: "large", collectionIds: ["col_manual", "col_dynamic", "col_hidden"] });
-  set("product-rail", { title: "", source: { kind: "popular" }, limit: 12 });
-  set("product-grid", { title: "", source: { kind: "category", categoryId: "cat_panjabi" }, columns: 4, rows: 2 });
-  set("deal-block", { title: "", source: { kind: "on-sale" } });
+  set("product_rail", { title: "", source: { kind: "popular" }, limit: 12 });
+  set("product_grid", { title: "", source: { kind: "category", categoryId: "cat_panjabi" }, columns: 4, rows: 2 });
+  set("deal_block", { title: "", source: { kind: "on-sale" } });
   set("lookbook", { title: "", mediaId: "media_look", source: { kind: "collection", collectionId: "col_manual" }, photo: "tall" });
   set("banner", { layout: "two-up", heading: "Eid", text: "", mediaId: "media_banner", cta: null });
   set("editorial", { layout: "image-with-text", heading: "Story", body: "Woven by hand.", mediaId: "media_story", imageSide: "end" });
-  set("product-rail", { title: "", source: { kind: "newest" }, limit: 8 }, "rail-newest");
+  set("product_rail", { title: "", source: { kind: "newest" }, limit: 8 }, "rail-newest");
   // A content type with storefront access: its published entries show; a change to the type or an entry must too.
   set("objects", { heading: "FAQ", typeId: "oty_custom.faq", layout: "accordion", limit: 6 });
   theme.pages.home = sections;

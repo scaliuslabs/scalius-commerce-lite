@@ -119,7 +119,7 @@ describe("page save bar", () => {
 
   it("says someone else changed it and offers the reload that keeps the edits", async () => {
     const reload = vi.fn(async () => undefined);
-    const conflict = new AdminApiResponseError("Changed", 409, "SETTINGS_REVISION_CONFLICT", {
+    const conflict = new AdminApiResponseError("Changed", 409, "settings_revision_conflict", {
       document: "checkout",
       expectedRevision: 3,
       currentRevision: 4,

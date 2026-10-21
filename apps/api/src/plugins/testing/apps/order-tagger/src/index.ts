@@ -42,7 +42,6 @@ export const manifest = {
       indexes: ["tagged_at"],
     },
   },
-  timeline: [{ kind: "tagged", title: "Order tagged" }],
   customFields: [
     { ownerType: "order", key: "tag", name: "Tag", type: "single_line_text", description: "Set by Order tagger when the order is paid." },
   ],
@@ -53,6 +52,7 @@ export const manifest = {
   ],
   admin: {
     pages: [{ id: "overview", title: "Order tagger", route: "summary" }],
+    timeline: [{ kind: "tagged", title: "Order tagged" }],
   },
   translations: {
     bn: {
@@ -118,7 +118,7 @@ export default definePlugin({
       const orderId = event.resource.id;
       if (await tagged(ctx).get(orderId)) return;
 
-      const order = await ctx.api.call<{ totalMinor?: number; orderNumber?: number | null }>("dashboard.resources.orders.get", { path: { id: orderId } });
+      const order = await ctx.api.call<{ totalMinor?: number; orderNumber?: number | null }>("orders.get", { path: { id: orderId } });
       if (!order.ok) throw new Error(`The order could not be read (${order.error?.code ?? order.status}).`);
       const taggedAt = Date.parse(event.occurredAt) || 0;
       const orderNumber = typeof order.data?.orderNumber === "number" ? order.data.orderNumber : null;

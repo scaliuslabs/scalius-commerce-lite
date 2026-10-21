@@ -174,7 +174,7 @@ describe("PUT /products/{id} with the editor's variants", () => {
     const refused = await call("PUT", "/products/prod_copy", details({ optionMatrix: colours({ sku: "kurta-red" }) }));
 
     expect(refused.status).toBe(409);
-    expect(refused.body.error.code).toBe("SKU_TAKEN");
+    expect(refused.body.error.code).toBe("sku_taken");
     expect(refused.body.error.details).toMatchObject({ field: "optionMatrix.variants.0.sku" });
     expect(snapshot()).toEqual(before);
   });
@@ -185,7 +185,7 @@ describe("PUT /products/{id} with the editor's variants", () => {
     const stale = await call("PUT", "/products/prod_copy", details({ expectedAggregateRevision: 2, optionMatrix: colours() }));
 
     expect(stale.status).toBe(409);
-    expect(stale.body.error.code).toBe("PRODUCT_REVISION_CONFLICT");
+    expect(stale.body.error.code).toBe("product_revision_conflict");
     expect(snapshot()).toEqual(before);
   });
 
@@ -330,7 +330,7 @@ describe("PUT /products/{id} with the hidden SKU of a product without options", 
     const refused = await call("PUT", "/products/prod_copy", details({ defaultSku: simple({ sku: "KURTA-RED" }) }));
 
     expect(refused.status).toBe(409);
-    expect(refused.body.error.code).toBe("SKU_TAKEN");
+    expect(refused.body.error.code).toBe("sku_taken");
     expect(snapshot()).toEqual(before);
   });
 
@@ -345,7 +345,7 @@ describe("PUT /products/{id} with the hidden SKU of a product without options", 
 });
 
 describe("PUT /products/{id} with a digital SKU, whose stock is its licence keys", () => {
-  const digitalRule = { code: "VALIDATION_ERROR", message: DIGITAL_STOCK_IS_KEYS_MESSAGE, details: { reason: DIGITAL_STOCK_IS_KEYS_REASON } };
+  const digitalRule = { code: "validation_error", message: DIGITAL_STOCK_IS_KEYS_MESSAGE, details: { reason: DIGITAL_STOCK_IS_KEYS_REASON } };
 
   it("refuses the hidden SKU's quantity inside a combined save and changes nothing", async () => {
     sqlite.exec("UPDATE product_variants SET fulfillment_kind = 'digital' WHERE id = 'var_default'");

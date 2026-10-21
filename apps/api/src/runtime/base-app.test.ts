@@ -31,7 +31,7 @@ describe("runtime security headers", () => {
     expect(res.status).toBe(429);
     expect(res.headers.get("Retry-After")).toBe("95");
     await expect(res.json()).resolves.toMatchObject({
-      error: { code: "RATE_LIMIT", details: { retryAfterSeconds: 95 } },
+      error: { code: "rate_limited", details: { retryAfterSeconds: 95 } },
     });
   });
 });

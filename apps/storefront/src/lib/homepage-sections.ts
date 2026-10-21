@@ -121,7 +121,7 @@ export function homepageHero(section: StorefrontSectionOf<"hero">, content: Home
 }
 
 /** The title category tiles show: the section's own, else "Shop by category". */
-export function homepageCategoryTilesTitle(section: StorefrontSectionOf<"category-tiles">, language: StorefrontLanguage = "en"): string {
+export function homepageCategoryTilesTitle(section: StorefrontSectionOf<"category_tiles">, language: StorefrontLanguage = "en"): string {
   return section.settings.title.trim() || storefrontCopy(language).home.shopByCategory;
 }
 
@@ -146,7 +146,7 @@ export function balancedColumns(count: number, max: number, min = 2): number {
 
 /** A category-tiles section's categories, in the section's order (ones that are not public are skipped). */
 export function homepageCategoryTiles(
-  section: StorefrontSectionOf<"category-tiles">,
+  section: StorefrontSectionOf<"category_tiles">,
   content: HomepageContent,
 ): HomepageCategory[] {
   return section.settings.categoryIds.flatMap((id) => {
@@ -239,7 +239,7 @@ export function homepageSectionProducts(
   section: StorefrontSection,
   content: HomepageContent,
 ): HomepageSectionProducts | null {
-  if (section.type === "collections" || section.type === "product-tabs") return null;
+  if (section.type === "collections" || section.type === "product_tabs") return null;
   const [request] = homeSectionProductLists(section);
   if (!request) return null;
   const shown = homepageSourceProducts(request.source, request.limit, content);
@@ -255,7 +255,7 @@ export interface HomepageProductTab extends HomepageSectionProducts {
 
 /** The tabs that have products, in order; a tab without a label is named after its source. */
 export function homepageSectionTabs(
-  section: StorefrontSectionOf<"product-tabs">,
+  section: StorefrontSectionOf<"product_tabs">,
   content: HomepageContent,
 ): HomepageProductTab[] {
   const seen = new Set<string>();
@@ -297,7 +297,7 @@ export function homepageMedia(content: HomepageContent, id: string | null | unde
  * and the end is still ahead. A countdown only ever counts to a real end.
  */
 export function dealEndsAt(
-  section: StorefrontSectionOf<"deal-block">,
+  section: StorefrontSectionOf<"deal_block">,
   content: Pick<HomepageContent, "promotionEnds">,
   now = Date.now(),
 ): string | null {
@@ -324,7 +324,7 @@ function textPresent(...values: Array<string | null | undefined>): boolean {
 }
 
 /** A "shop by" section's cards whose photos exist, each with its photo. */
-export function homepageShopByCards(section: StorefrontSectionOf<"shop-by">, content: HomepageContent) {
+export function homepageShopByCards(section: StorefrontSectionOf<"shop_by">, content: HomepageContent) {
   return section.settings.cards.flatMap((card) => {
     const photo = homepageMedia(content, card.mediaId);
     return photo ? [{ ...card, photo }] : [];
@@ -332,7 +332,7 @@ export function homepageShopByCards(section: StorefrontSectionOf<"shop-by">, con
 }
 
 /** A banner mosaic's tiles whose photos exist, each with its photo. */
-export function homepageMosaicTiles(section: StorefrontSectionOf<"banner-mosaic">, content: HomepageContent) {
+export function homepageMosaicTiles(section: StorefrontSectionOf<"banner_mosaic">, content: HomepageContent) {
   return section.settings.tiles.flatMap((tile) => {
     const photo = homepageMedia(content, tile.mediaId);
     return photo ? [{ ...tile, photo }] : [];
@@ -346,35 +346,35 @@ export function homepageSectionRenders(section: StorefrontSection, content: Home
   if (section.type === "app") return homepageAppSurface(section, content) !== null;
   if (storefrontSectionRenderer(section) === null || storefrontSectionNeedsContent(section)) return false;
   switch (section.type) {
-    case "product-tabs":
+    case "product_tabs":
       return homepageSectionTabs(section, content).length > 0;
-    case "shop-by":
+    case "shop_by":
       return homepageShopByCards(section, content).length > 0;
-    case "banner-mosaic":
+    case "banner_mosaic":
       return homepageMosaicTiles(section, content).length > 0;
-    case "brand-wall":
+    case "brand_wall":
       return content.brands.length >= HOME_BRAND_WALL_MIN;
     // A client island: it fills itself from this browser's own history
     // before it paints, and stays hidden (no box) for a first visit.
-    case "recently-viewed":
+    case "recently_viewed":
       return true;
     case "hero":
       return homepageHero(section, content).desktop.length > 0;
-    case "usp-strip":
+    case "usp_strip":
       return section.settings.source.kind === "delivery-facts"
         ? content.deliveryFacts.length >= HOME_USP_MIN_FACTS
         : section.settings.source.items.length > 0;
-    case "category-tiles":
+    case "category_tiles":
       // Photo tiles are a rail (one category is enough there); the denser
       // styles need two to be a choice at all.
       return homepageCategoryTiles(section, content).length >= storefrontCategoryTilesMinimum(section.settings.style);
     case "collections":
       return homepageCollections(section, content).length > 0 || homepageCollectionsFallback(section, content).length > 0;
-    case "product-rail":
-    case "product-grid":
-    case "deal-block":
+    case "product_rail":
+    case "product_grid":
+    case "deal_block":
     case "lookbook":
-    case "endless-grid":
+    case "endless_grid":
       return homepageSectionProducts(section, content) !== null;
     case "banner":
       return homepageMedia(content, section.settings.mediaId) !== null
@@ -399,9 +399,9 @@ export function homepageSectionRenders(section: StorefrontSection, content: Home
       return Boolean(content.resourceFields?.some((field) => field.type === "object_reference"
         && `${field.namespace}.${field.key}` === section.settings.objectField && field.object?.fields.length))
         || section.settings.rows.some((row) => textPresent(row.label) && textPresent(row.value));
-    case "utility-cards":
+    case "utility_cards":
       return section.settings.cards.length > 0;
-    case "seo-text":
+    case "seo_text":
       return seoTextBlocks(section.settings.body).length > 0;
     case "objects":
       return homepageObject(section, content) !== null;
@@ -422,14 +422,14 @@ function leadsWithPhoto(section: StorefrontSection, content: HomepageContent): b
   switch (section.type) {
     case "hero":
     case "collections":
-    case "product-rail":
-    case "product-grid":
-    case "deal-block":
-    case "product-tabs":
+    case "product_rail":
+    case "product_grid":
+    case "deal_block":
+    case "product_tabs":
     case "lookbook":
-    case "endless-grid":
-    case "shop-by":
-    case "banner-mosaic":
+    case "endless_grid":
+    case "shop_by":
+    case "banner_mosaic":
       return true;
     case "banner":
       return homepageMedia(content, section.settings.mediaId) !== null;
@@ -452,7 +452,7 @@ export function homepageLeadSection(
 ): StorefrontSection | null {
   return sections.find((section) =>
     homepageSectionRenders(section, content) &&
-    (leadsWithPhoto(section, content) || (categoryTilesLead && section.type === "category-tiles" && homepageCategoryTiles(section, content).some((category) => Boolean(category.imageUrl))))
+    (leadsWithPhoto(section, content) || (categoryTilesLead && section.type === "category_tiles" && homepageCategoryTiles(section, content).some((category) => Boolean(category.imageUrl))))
   ) ?? null;
 }
 
@@ -462,7 +462,7 @@ export function homepagePhoneSections(
   content: HomepageContent,
 ): readonly StorefrontSection[] {
   const heroIndex = sections.findIndex((section) => section.type === "hero" && section.settings.phonePlacement === "after-categories" && homepageSectionRenders(section, content));
-  const categoryIndex = sections.findIndex((section) => section.type === "category-tiles" && homepageSectionRenders(section, content));
+  const categoryIndex = sections.findIndex((section) => section.type === "category_tiles" && homepageSectionRenders(section, content));
   if (heroIndex < 0 || categoryIndex <= heroIndex) return sections;
   const ordered = [...sections];
   const [hero] = ordered.splice(heroIndex, 1);

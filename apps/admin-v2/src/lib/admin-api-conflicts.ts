@@ -55,11 +55,11 @@ export function isAdminApiRetryableReadError(error: unknown): boolean {
   if (parsed.status == null) {
     const permanentCodes = [
       "BAD_REQUEST",
-      "CONFLICT",
-      "FORBIDDEN",
-      "NOT_FOUND",
-      "UNAUTHORIZED",
-      "VALIDATION_ERROR",
+      "conflict",
+      "forbidden",
+      "not_found",
+      "unauthorized",
+      "validation_error",
     ];
     return !permanentCodes.includes(parsed.code ?? "")
       && !parsed.code?.endsWith("_CONFLICT");
@@ -76,7 +76,7 @@ export function readManualOrderDiscountLimitError(
   const parsed = readAdminApiError(error);
   if (
     parsed?.status !== 400
-    || parsed.code !== "VALIDATION_ERROR"
+    || parsed.code !== "validation_error"
     || !parsed.details
     || typeof parsed.details !== "object"
   ) {
@@ -142,7 +142,7 @@ export function readAdminOrderCreateRequestMismatch(
   const parsed = readAdminApiError(error);
   if (
     parsed?.status !== 409 ||
-    parsed.code !== "ADMIN_ORDER_CREATE_REQUEST_MISMATCH" ||
+    parsed.code !== "admin_order_create_request_mismatch" ||
     !parsed.details ||
     typeof parsed.details !== "object"
   ) {
@@ -182,7 +182,7 @@ export function readProductRevisionConflict(
   const parsed = readAdminApiError(error);
   if (
     parsed?.status !== 409 ||
-    parsed.code !== "PRODUCT_REVISION_CONFLICT" ||
+    parsed.code !== "product_revision_conflict" ||
     !parsed.details ||
     typeof parsed.details !== "object"
   ) {
@@ -219,7 +219,7 @@ export function readPromotionRevisionConflict(
   const parsed = readAdminApiError(error);
   if (
     parsed?.status !== 409 ||
-    parsed.code !== "PROMOTION_REVISION_CONFLICT" ||
+    parsed.code !== "promotion_revision_conflict" ||
     !parsed.details ||
     typeof parsed.details !== "object"
   ) {
@@ -256,7 +256,7 @@ export function readProductMediaSkuReferenceConflict(
   const parsed = readAdminApiError(error);
   if (
     parsed?.status !== 409 ||
-    parsed.code !== "PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT" ||
+    parsed.code !== "product_media_sku_reference_conflict" ||
     !parsed.details ||
     typeof parsed.details !== "object"
   ) {
@@ -302,7 +302,7 @@ export function readCategoryRevisionConflict(
   const parsed = readAdminApiError(error);
   if (
     parsed?.status !== 409 ||
-    parsed.code !== "CATEGORY_REVISION_CONFLICT" ||
+    parsed.code !== "category_revision_conflict" ||
     !parsed.details ||
     typeof parsed.details !== "object"
   ) {
@@ -343,7 +343,7 @@ export interface CustomerPhoneConflict {
 /** The other active customer that already uses a phone (a 400 VALIDATION_ERROR on customer create/update). */
 export function readCustomerPhoneConflict(error: unknown): CustomerPhoneConflict | null {
   const parsed = readAdminApiError(error);
-  if (parsed?.status !== 400 || parsed.code !== "VALIDATION_ERROR") return null;
+  if (parsed?.status !== 400 || parsed.code !== "validation_error") return null;
   const customer = (parsed.details as { customer?: Record<string, unknown> } | null | undefined)?.customer;
   if (!customer || typeof customer !== "object") return null;
   const { id, name, phone, kind } = customer;

@@ -37,13 +37,13 @@ import {
   type FunctionReadRecord,
   type FunctionReads,
 } from "@scalius/shared/plugins/function-reads";
-import type { PluginFunctionPoint } from "@scalius/shared/plugins";
+import type { PluginRunPoint } from "@scalius/shared/plugins";
 import { storeCurrencyCodeSql, storeCurrencyFromCode, storeDecimalPlacesFromCode } from "../settings";
 
 /** One app's reads at one point, with the declarations they name. */
 export interface AppFunctionReadRequest {
   pluginId: string;
-  point: PluginFunctionPoint;
+  point: PluginRunPoint;
   reads: readonly FunctionReadDeclaration[];
   objects: Readonly<Record<string, Pick<ObjectTypeDeclaration, "fields">>>;
 }
@@ -79,7 +79,7 @@ export interface AppFunctionReadSet {
 
 export const NO_APP_FUNCTION_READS: AppFunctionReadResult = { ok: true, reads: {}, targets: {} };
 
-export function appReadKey(pluginId: string, point: PluginFunctionPoint): string {
+export function appReadKey(pluginId: string, point: PluginRunPoint): string {
   return `${pluginId}\u0000${point}`;
 }
 
@@ -362,7 +362,7 @@ export async function loadAppFunctionReads(
  */
 export interface AppReadsCache {
   remember(set: AppFunctionReadSet): void;
-  get(requests: readonly AppFunctionReadRequest[], context: AppFunctionReadContext, pluginId: string, point: PluginFunctionPoint): Promise<AppFunctionReadResult>;
+  get(requests: readonly AppFunctionReadRequest[], context: AppFunctionReadContext, pluginId: string, point: PluginRunPoint): Promise<AppFunctionReadResult>;
 }
 
 export function createAppReadsCache(db: Database): AppReadsCache {

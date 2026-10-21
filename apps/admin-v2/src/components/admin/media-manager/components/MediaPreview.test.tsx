@@ -85,7 +85,7 @@ async function type(id: string, value: string) {
 
 describe("media preview drafts", () => {
   it("loads a fresh version and preserves local changes without automatically retrying", async () => {
-    onUpdate.mockRejectedValueOnce(new AdminApiResponseError("Changed", 409, "CONFLICT"));
+    onUpdate.mockRejectedValueOnce(new AdminApiResponseError("Changed", 409, "conflict"));
     const fresh = media({ filename: "server-renamed.webp", version: 2 });
     onReload.mockResolvedValue(fresh);
     await render();
@@ -105,7 +105,7 @@ describe("media preview drafts", () => {
   });
 
   it("requires a choice for overlapping edits and keeps the old base when cancelled", async () => {
-    onUpdate.mockRejectedValue(new AdminApiResponseError("Changed", 409, "CONFLICT"));
+    onUpdate.mockRejectedValue(new AdminApiResponseError("Changed", 409, "conflict"));
     onReload.mockResolvedValue(media({ altText: "Their alt text", version: 2 }));
     await render();
     await type("media-description", "My alt text");
@@ -124,12 +124,12 @@ describe("media preview drafts", () => {
   });
 
   it("retains copyable edits when the file was removed, and never reloads dependency conflicts", async () => {
-    onUpdate.mockRejectedValueOnce(new AdminApiResponseError("Changed", 409, "MEDIA_DEPENDENCY_CONFLICT"));
+    onUpdate.mockRejectedValueOnce(new AdminApiResponseError("Changed", 409, "media_dependency_conflict"));
     await render();
     await type("media-description", "Keep this text");
     await act(async () => save().click());
     expect(onReload).not.toHaveBeenCalled();
-    onUpdate.mockRejectedValueOnce(new AdminApiResponseError("Changed", 409, "CONFLICT"));
+    onUpdate.mockRejectedValueOnce(new AdminApiResponseError("Changed", 409, "conflict"));
     onReload.mockResolvedValue(null);
     await act(async () => save().click());
     expect(save().disabled).toBe(true);

@@ -20,35 +20,35 @@ export class AppError extends Error {
 
 export class ValidationError extends AppError {
   constructor(message: string, details?: unknown) {
-    super(400, "VALIDATION_ERROR", message, details);
+    super(400, "validation_error", message, details);
     this.name = "ValidationError";
   }
 }
 
 export class NotFoundError extends AppError {
   constructor(message = "Resource not found") {
-    super(404, "NOT_FOUND", message);
+    super(404, "not_found", message);
     this.name = "NotFoundError";
   }
 }
 
 export class UnauthorizedError extends AppError {
   constructor(message = "Unauthorized") {
-    super(401, "UNAUTHORIZED", message);
+    super(401, "unauthorized", message);
     this.name = "UnauthorizedError";
   }
 }
 
 export class ForbiddenError extends AppError {
   constructor(message = "Forbidden") {
-    super(403, "FORBIDDEN", message);
+    super(403, "forbidden", message);
     this.name = "ForbiddenError";
   }
 }
 
 export class ConflictError extends AppError {
   constructor(message: string) {
-    super(409, "CONFLICT", message);
+    super(409, "conflict", message);
     this.name = "ConflictError";
   }
 }
@@ -57,14 +57,14 @@ export class RateLimitError extends AppError {
   constructor(message = "Too many requests", public readonly retryAfterSeconds?: number) {
     // The wait travels in the body (details) and the Retry-After header so
     // buyers see an honest countdown instead of "try again later".
-    super(429, "RATE_LIMIT", message, retryAfterSeconds ? { retryAfterSeconds } : undefined);
+    super(429, "rate_limited", message, retryAfterSeconds ? { retryAfterSeconds } : undefined);
     this.name = "RateLimitError";
   }
 }
 
 export class ServiceUnavailableError extends AppError {
   constructor(message = "Service temporarily unavailable") {
-    super(503, "SERVICE_UNAVAILABLE", message);
+    super(503, "service_unavailable", message);
     this.name = "ServiceUnavailableError";
   }
 }

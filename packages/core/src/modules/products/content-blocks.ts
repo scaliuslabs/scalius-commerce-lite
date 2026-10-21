@@ -43,7 +43,7 @@ export const PRODUCT_CONTENT_BLOCK_LIST_INLINE_BYTES = 36_000;
 /** Distinct media one product's blocks may reference. */
 export const PRODUCT_CONTENT_BLOCK_MEDIA_MAX = 90;
 /** Batch guard marker: a file the blocks name stopped being ready before the write committed. */
-export const PRODUCT_CONTENT_BLOCK_MEDIA_GUARD = "PRODUCT_CONTENT_BLOCK_MEDIA_UNAVAILABLE";
+export const PRODUCT_CONTENT_BLOCK_MEDIA_GUARD = "product_content_block_media_unavailable";
 export const PRODUCT_CONTENT_BLOCK_MEDIA_UNAVAILABLE_MESSAGE =
     "Some files in these blocks are missing or in trash. Choose them again.";
 

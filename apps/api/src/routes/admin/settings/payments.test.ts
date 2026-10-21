@@ -101,7 +101,7 @@ async function expectValidationError(response: Response, message?: string) {
     if (message) {
         await expect(response.json()).resolves.toMatchObject({
             success: false,
-            error: { code: "VALIDATION_ERROR", message },
+            error: { code: "validation_error", message },
         });
     }
 }
@@ -358,7 +358,7 @@ describe("payment settings", () => {
 
             expect(response.status).toBe(503);
             await expect(response.json()).resolves.toMatchObject({
-                error: { code: "SERVICE_UNAVAILABLE", message: "CREDENTIAL_ENCRYPTION_KEY is required to store provider credentials." },
+                error: { code: "service_unavailable", message: "CREDENTIAL_ENCRYPTION_KEY is required to store provider credentials." },
             });
             expect(storedRows(sqlite, path.slice(1))).toEqual({});
 

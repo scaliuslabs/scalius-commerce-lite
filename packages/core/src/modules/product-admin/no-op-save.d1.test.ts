@@ -85,7 +85,7 @@ describe("product editor save", () => {
 
         // A stale revision is still a conflict, change or not.
         await expect(updateProduct(db, id, updateProductSchema.parse({ ...saved, expectedAggregateRevision: first.aggregateRevision - 1 })))
-            .rejects.toMatchObject({ code: "PRODUCT_REVISION_CONFLICT" });
+            .rejects.toMatchObject({ code: "product_revision_conflict" });
 
         // One price change: one bump, and the product's own key advances.
         const clock = (sqlite.prepare("SELECT seq FROM cache_clock").get() as { seq: number }).seq;

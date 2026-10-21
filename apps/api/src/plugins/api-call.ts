@@ -1,9 +1,11 @@
-// `ctx.api.call(operationId, input)`: a plugin's `/api/v1` operation call,
+// `ctx.api.call(operation, input)`: a plugin's `/api/v1` operation call,
 // dispatched in-process exactly as an agent's (agent-access/dispatch.ts) but
 // as the plugin principal. The result is the route's own response, unwrapped
 // from the `{ success, data }` envelope; refusals are results, not throws.
+// An app names an operation by its app name (`orders.get`, app-operations.ts),
+// never by the dashboard's operation id (`dashboard.resources.orders.get`).
 // A third-party app reaches the stable app API only (`x-scalius-agent.stability`);
-// anything else refuses with `api.operation_not_stable`. Buyer contact fields
+// anything else refuses with `api_operation_not_stable`. Buyer contact fields
 // the grant does not reveal read null (protected-response.ts, H5). The input's
 // `idempotencyKey` is sent as the Idempotency-Key header: the one retry key
 // every stable mutation takes.
@@ -19,13 +21,11 @@ import {
   type OperationDispatchAuthority,
 } from "../agent-access/dispatch";
 import { writeAgentAuditEvent } from "../agent-access/audit";
-import { AGENT_OPERATIONS_BY_ID } from "../generated/agent-operations.gen";
 import type { PluginPrincipal } from "../agent-access/types";
 import { authorizePluginOperation, pluginTierAllows, pluginWithinRateLimit, resolvePluginPrincipal } from "./authority";
 import { redactOperationResponse } from "./protected-response";
 import { IDEMPOTENCY_KEY_PATTERN } from "../routes/admin/idempotency";
-
-const OPERATION_ID = /^(?:dashboard(\.[a-z][a-z0-9_]*){2,}|objects\.(?:types\.(?:list|get|create|update|delete)|list|get|upsert|delete))$/;
+import { appOperationName, resolveAppOperation } from "./app-operations";
 
 function refusal(status: number, code: string, message: string): PluginApiResult<never> {
   return { ok: false, status, data: null, error: { code, message } };
@@ -111,32 +111,31 @@ function unwrap(status: number, ok: boolean, body: unknown): PluginApiResult {
         // name it as the MCP and the SDK's createContractApi do.
         code: typeof error.code === "string"
           ? error.code
-          : error.name === "ZodError" ? "VALIDATION_ERROR" : "ERROR",
+          : error.name === "ZodError" ? "validation_error" : "internal_error",
         message: typeof error.message === "string" ? error.message : "The operation failed.",
       },
     };
   }
   return ok
     ? { ok, status, data: body ?? null, error: null }
-    : { ok, status, data: null, error: { code: "ERROR", message: "The operation failed." } };
+    : { ok, status, data: null, error: { code: "internal_error", message: "The operation failed." } };
 }
 
 /**
  * The resources a successful create operation made, by operation: the id
  * paths in its `{ success, data }` body. Recorded as the app's own
- * (`app_resource_owners`) so `dashboard.resources.app_content.delete` can let
+ * (`app_resource_owners`) so `app_content.delete` can let
  * it permanently delete them later. A replayed create answers the same ids.
  */
 const APP_CREATE_OPERATIONS: Readonly<Record<string, { type: AppOwnedResourceType; ids: (data: unknown) => unknown[] }>> = {
-  "dashboard.resources.products.create": { type: "product", ids: (data) => [dataPath(data, "product", "id")] },
-  "dashboard.resources.products.bulk_create": { type: "product", ids: (data) => createdItemIds(data, "product") },
-  "dashboard.products.create": { type: "product", ids: (data) => [dataPath(data, "product", "id") ?? dataPath(data, "id")] },
-  "dashboard.categories.create": { type: "category", ids: (data) => [dataPath(data, "id")] },
-  "dashboard.resources.categories.bulk_create": { type: "category", ids: (data) => createdItemIds(data, "category") },
-  "dashboard.brands.create": { type: "brand", ids: (data) => [dataPath(data, "id") ?? dataPath(data, "brand", "id")] },
-  "dashboard.resources.brands.bulk_create": { type: "brand", ids: (data) => createdItemIds(data, "brand") },
-  "dashboard.collections.create": { type: "collection", ids: (data) => [dataPath(data, "id")] },
-  "dashboard.media.import_url": { type: "media", ids: (data) => [dataPath(data, "file", "id")] },
+  "products.create": { type: "product", ids: (data) => [dataPath(data, "product", "id")] },
+  "products.bulk_create": { type: "product", ids: (data) => createdItemIds(data, "product") },
+  "categories.create": { type: "category", ids: (data) => [dataPath(data, "id")] },
+  "categories.bulk_create": { type: "category", ids: (data) => createdItemIds(data, "category") },
+  "brands.create": { type: "brand", ids: (data) => [dataPath(data, "id") ?? dataPath(data, "brand", "id")] },
+  "brands.bulk_create": { type: "brand", ids: (data) => createdItemIds(data, "brand") },
+  "collections.create": { type: "collection", ids: (data) => [dataPath(data, "id")] },
+  "media.import_url": { type: "media", ids: (data) => [dataPath(data, "file", "id")] },
 };
 
 function dataPath(value: unknown, ...keys: string[]): unknown {
@@ -150,8 +149,8 @@ function createdItemIds(value: unknown, key: string): unknown[] {
   return Array.isArray(items) ? items.map((item) => (isRecord(item) && isRecord(item[key]) ? item[key].id : undefined)) : [];
 }
 
-async function recordAppCreatedResources(db: Database, pluginId: string, operationId: string, body: unknown): Promise<void> {
-  const spec = APP_CREATE_OPERATIONS[operationId];
+async function recordAppCreatedResources(db: Database, pluginId: string, name: string, body: unknown): Promise<void> {
+  const spec = APP_CREATE_OPERATIONS[name];
   if (!spec) return;
   const ids = [...new Set(spec.ids(body).filter((id): id is string => typeof id === "string" && id.length > 0 && id.length <= 160))];
   // Insert-or-ignore: an id already recorded keeps its first owner.
@@ -173,17 +172,20 @@ export async function callPluginOperation(options: {
   env: Env;
   ctx: ExecutionContext;
 }): Promise<PluginApiResult> {
-  if (typeof options.operationId !== "string" || !OPERATION_ID.test(options.operationId)) {
-    return refusal(404, "api.unknown_operation", "Plugins call dashboard or objects operations by their reviewed id.");
+  const name = options.operationId;
+  if (typeof name !== "string" || name.length > 128) {
+    return refusal(404, "api_unknown_operation", "Apps call an operation by its app name, such as orders.get.");
   }
-  // A call needs the operation's schemas (body properties, protected output): the full manifest.
-  const operation = Object.hasOwn(AGENT_OPERATIONS_BY_ID, options.operationId) ? AGENT_OPERATIONS_BY_ID[options.operationId] : undefined;
-  if (!operation) return refusal(404, "api.unknown_operation", `Unknown operation ${options.operationId}.`);
+  const operation = resolveAppOperation(name);
+  if (!operation) {
+    const appName = appOperationName(name);
+    return refusal(404, "api_unknown_operation", appName ? `Apps call ${name} as ${appName}.` : `Unknown operation ${name}.`);
+  }
   const input = normalizePluginApiInput(options.input);
-  if (typeof input === "string") return refusal(400, "api.invalid_input", input);
+  if (typeof input === "string") return refusal(400, "api_invalid_input", input);
   const principal = await resolvePluginPrincipal(options.db, options.pluginId);
   if (!principal || principal.version !== options.version) {
-    return refusal(401, "installation.inactive", "The plugin is not active.");
+    return refusal(401, "installation_inactive", "The plugin is not active.");
   }
   try {
     const result = await dispatchOperationAs(createPluginDispatchAuthority(options.db), {
@@ -193,16 +195,16 @@ export async function callPluginOperation(options: {
       env: options.env,
       ctx: options.ctx,
     });
-    if (result.ok) await recordAppCreatedResources(options.db, options.pluginId, operation.operationId, result.data);
+    if (result.ok) await recordAppCreatedResources(options.db, options.pluginId, name, result.data);
     // Buyer contact fields the grant does not reveal read as null (H5).
     const body = result.ok ? redactOperationResponse(operation, result.data, principal.protectedData) : result.data;
     return unwrap(result.status, result.ok, body);
   } catch (error) {
     if (error instanceof AgentDispatchError) {
       if (error.code === "operation_forbidden" && !pluginTierAllows(principal.firstParty, operation.stability)) {
-        return refusal(403, "api.operation_not_stable", `${operation.operationId} is not part of the stable app API.`);
+        return refusal(403, "api_operation_not_stable", `${name} is not part of the stable app API.`);
       }
-      const code = error.code === "operation_forbidden" ? "api.operation_forbidden" : error.code;
+      const code = error.code === "operation_forbidden" ? "api_operation_forbidden" : error.code;
       return refusal(error.status, code, error.message);
     }
     return refusal(500, "internal", "The operation could not be completed.");

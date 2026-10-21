@@ -1234,7 +1234,7 @@ function buildRefundStateNotificationFact(params: {
 }
 
 /** Batch-guard marker: the refund claim predicate no longer holds. */
-const REFUND_CLAIM_CONFLICT = "REFUND_CLAIM_CONFLICT";
+const REFUND_CLAIM_CONFLICT = "refund_claim_conflict";
 const GIFT_CARD_LEDGER_REASON_MAX_LENGTH = 500;
 
 function refundLedgerReason(reason: string): string | null {

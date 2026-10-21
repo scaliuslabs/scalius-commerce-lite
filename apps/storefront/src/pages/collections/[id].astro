@@ -181,7 +181,7 @@ await resolveRequestTheme(Astro, layoutData, resourceBindingContext(collection, 
   <CatalogListingPage
     template
     kind="collection"
-    fields={storefrontFieldValues(collection.customFields)}
+    fields={storefrontFieldValues(collection.customFields, { currencyCode, currencySymbol })}
     hero={{
       title: collection.name,
       description: pagination.page === 1 ? collectionDescription : null,

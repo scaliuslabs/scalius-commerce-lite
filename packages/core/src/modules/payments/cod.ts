@@ -48,7 +48,7 @@ interface NormalizedCodCollection {
   newBalanceDueMinor: number;
 }
 
-const COD_COLLECTION_BATCH_GUARD = "COD_COLLECTION_STATE_CHANGED";
+const COD_COLLECTION_BATCH_GUARD = "cod_collection_state_changed";
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
 function codCollectionPaymentId(orderId: string): string {

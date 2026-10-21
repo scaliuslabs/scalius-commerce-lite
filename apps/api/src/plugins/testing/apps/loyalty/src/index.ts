@@ -18,7 +18,7 @@
 // in this example; the ledger keeps what each order earned for a merchant to
 // adjust by hand.
 
-import { definePlugin, PLUGIN_API_VERSION, readOne, ui, type PluginContext, type PluginManifestInput } from "@scalius/plugin-sdk";
+import { definePlugin, PLUGIN_API_VERSION, readOne, ui, type PluginContext, type PluginExtensionHandler, type PluginManifestInput } from "@scalius/plugin-sdk";
 import { formatNumber } from "@scalius/shared/locale-format";
 
 export const manifest = {
@@ -36,8 +36,13 @@ export const manifest = {
   events: ["order.paid"],
   functions: [
     { point: "checkout.discounts", priority: 200, reads: [{ as: "balance", object: "balances", key: "customer" }] },
-    { point: "buyer.ui", targets: ["checkout.actions.before", "account.overview"], reads: [{ as: "balance", object: "balances", key: "customer" }] },
   ],
+  storefront: {
+    extensions: [
+      { target: "checkout.actions.before", reads: [{ as: "balance", object: "balances", key: "customer" }] },
+      { target: "account.overview", reads: [{ as: "balance", object: "balances", key: "customer" }] },
+    ],
+  },
   objects: {
     // Record id: the buyer's customer id. `{ points, earned, spent }`.
     balances: {
@@ -92,6 +97,20 @@ function balanceOf(data: Record<string, unknown> | null | undefined): Balance {
   return { ...data, points: whole(data?.points), earned: whole(data?.earned), spent: whole(data?.spent) };
 }
 
+/** The buyer's balance, with a redeem button at checkout when the points cover the minimum. */
+const showBalance: PluginExtensionHandler = ({ target, cart, customer, reads, locale }, settings) => {
+  if (!customer) return { ui: null };
+  const balance = balanceOf(readOne(reads, "balance")?.data);
+  const code = String(settings.code ?? "").trim().toUpperCase();
+  const canRedeem = target.startsWith("checkout.") && cart && code
+    && balance.points >= Math.max(1, wholeSetting(settings.min_redeem, 50))
+    && !cart.discountCodes.some((value) => value.trim().toUpperCase() === code);
+  return { ui: ui.view([
+    ui.keyValue([{ label: "Loyalty points", value: formatNumber(balance.points, locale) }]),
+    ...(canRedeem ? [ui.button("Redeem points", ui.cart.applyCode(code))] : []),
+  ]) };
+};
+
 /** One point's value in the store currency's minor units (at least one). */
 export function pointValueMinor(settings: Record<string, unknown>, decimalPlaces: number): number {
   const value = typeof settings.point_value === "number" && settings.point_value > 0 ? settings.point_value : 1;
@@ -105,7 +124,7 @@ export function pointsEarned(totalMinor: number, settings: Record<string, unknow
   return per100 > 0 && totalMinor > 0 ? Math.floor((totalMinor * per100) / hundred) : 0;
 }
 
-/** The fields loyalty reads of `dashboard.resources.orders.get` (the order as webhooks carry it). */
+/** The fields loyalty reads of `orders.get` (the order as webhooks carry it). */
 interface PaidOrder {
   id: string;
   totalMinor: number;
@@ -118,7 +137,7 @@ interface PaidOrder {
  * the entry; a concurrent credit or spend is re-read and retried.
  */
 async function earn(orderId: string, ctx: PluginContext): Promise<void> {
-  const result = await ctx.api.call<PaidOrder>("dashboard.resources.orders.get", { path: { id: orderId } });
+  const result = await ctx.api.call<PaidOrder>("orders.get", { path: { id: orderId } });
   if (!result.ok || !result.data) {
     ctx.log.warn("Could not read the paid order", { orderId, status: result.status });
     if (result.status >= 500) throw new Error("The order could not be read; the event will be retried.");
@@ -150,7 +169,7 @@ async function earn(orderId: string, ctx: PluginContext): Promise<void> {
       ctx.log.info("Points earned", { orderId, points });
       return;
     } catch (error) {
-      if ((error as { code?: string }).code !== "object.conflict") throw error;
+      if ((error as { code?: string }).code !== "object_conflict") throw error;
     }
   }
   throw new Error("Points could not be credited after concurrent changes; the event will be retried.");
@@ -163,19 +182,12 @@ export default definePlugin({
     "order.paid": async (event, ctx) => earn(event.resource.id, ctx),
   },
 
+  extensions: {
+    "checkout.actions.before": showBalance,
+    "account.overview": showBalance,
+  },
+
   functions: {
-    "buyer.ui": ({ target, cart, customer, reads, locale }, settings) => {
-      if (!customer) return { ui: null };
-      const balance = balanceOf(readOne(reads, "balance")?.data);
-      const code = String(settings.code ?? "").trim().toUpperCase();
-      const canRedeem = target.startsWith("checkout.") && cart && code
-        && balance.points >= Math.max(1, wholeSetting(settings.min_redeem, 50))
-        && !cart.discountCodes.some((value) => value.trim().toUpperCase() === code);
-      return { ui: ui.view([
-        ui.keyValue([{ label: "Loyalty points", value: formatNumber(balance.points, locale) }]),
-        ...(canRedeem ? [ui.button("Redeem points", ui.cart.applyCode(code))] : []),
-      ]) };
-    },
     "checkout.discounts": ({ cart, reads }, settings) => {
       const code = String(settings.code ?? "").trim().toUpperCase();
       const entered = cart.discountCodes.some((value) => value.trim().toUpperCase() === code);

@@ -8,7 +8,7 @@ import type { Database } from "@scalius/database/client";
 import { errorResponseFromError } from "../../utils/api-response";
 import { adminOrdersRoutes } from "./orders";
 
-type Page = { events: Array<{ id: string; kind: string; own: boolean; body: string | null; actorName: string | null }>; nextCursor: string | null; hasMore: boolean };
+type Page = { events: Array<{ id: string; kind: string; own: boolean; body: string | null; actorName: string | null }>; nextCursor: string | null };
 
 describe("order timeline cursor HTTP contract", () => {
   let sqlite: DatabaseSync;
@@ -58,8 +58,7 @@ describe("order timeline cursor HTTP contract", () => {
       const current = await page(cursor);
       const actual = current.events.filter((event) => event.kind !== "placed");
       expect(actual.length).toBeLessThanOrEqual(50);
-      expect(current.hasMore).toBe(current.nextCursor !== null);
-      expect(current.events.filter((event) => event.kind === "placed")).toHaveLength(current.hasMore ? 0 : 1);
+      expect(current.events.filter((event) => event.kind === "placed")).toHaveLength(current.nextCursor !== null ? 0 : 1);
       expect(actual.every((event) => event.own && event.actorName === "Staff")).toBe(true);
       seen.push(...actual.map((event) => event.id));
       cursor = current.nextCursor ?? undefined;
@@ -71,7 +70,7 @@ describe("order timeline cursor HTTP contract", () => {
   it.each([0, 50, 51])("places the final marker correctly at the %i-event boundary", async (count) => {
     seed(count);
     const first = await page();
-    expect(first.hasMore).toBe(count > 50);
+    expect(first.nextCursor !== null).toBe(count > 50);
     expect(first.events.at(-1)?.kind === "placed").toBe(count <= 50);
     if (first.nextCursor) expect((await page(first.nextCursor)).events.at(-1)?.id).toBe("placed_order_a");
   });
@@ -84,7 +83,7 @@ describe("order timeline cursor HTTP contract", () => {
     for (const [orderId, cursor] of [["order_a", "bad"], ["order_a", ""], ["order_b", good], ["order_a", fractional], ["order_a", wrongSort]]) {
       const response = await app.request(`/api/v1/admin/orders/${orderId}/timeline?cursor=${encodeURIComponent(cursor!)}`, {}, env);
       expect(response.status).toBe(400);
-      expect(await response.json()).toMatchObject({ error: { code: "INVALID_CURSOR" } });
+      expect(await response.json()).toMatchObject({ error: { code: "invalid_cursor" } });
     }
   });
 

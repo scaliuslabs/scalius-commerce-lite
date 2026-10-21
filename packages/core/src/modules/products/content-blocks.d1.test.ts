@@ -146,7 +146,7 @@ describe("product content blocks", () => {
             section: "content_blocks",
             expectedAggregateRevision: stale,
             blocks: [block("after-buy-box", { type: "guarantee", version: 1, settings: { heading: "", text: "x" } })] as ProductContentBlockInput[],
-        })).rejects.toMatchObject({ status: 409, code: "PRODUCT_REVISION_CONFLICT" });
+        })).rejects.toMatchObject({ status: 409, code: "product_revision_conflict" });
         expect(sqlite.prepare("SELECT count(*) AS n FROM product_content_blocks WHERE type = 'guarantee'").get()).toEqual({ n: 0 });
     });
 

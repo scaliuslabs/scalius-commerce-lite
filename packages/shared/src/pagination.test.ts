@@ -74,7 +74,7 @@ describe("list cursors", () => {
       expect.unreachable();
     } catch (error) {
       expect(error).toBeInstanceOf(InvalidCursorError);
-      expect((error as InvalidCursorError).code).toBe("INVALID_CURSOR");
+      expect((error as InvalidCursorError).code).toBe("invalid_cursor");
     }
   });
 

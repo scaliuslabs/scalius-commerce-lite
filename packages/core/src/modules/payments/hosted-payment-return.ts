@@ -45,7 +45,7 @@ export interface ReconcileHostedPaymentReturnInput {
   providerCorrelationId: string;
 }
 
-const HOSTED_PAYMENT_RETURN_GUARD = "HOSTED_PAYMENT_RETURN_CONFLICT";
+const HOSTED_PAYMENT_RETURN_GUARD = "hosted_payment_return_conflict";
 const UNSAFE_PAYMENT_STATUSES = [
   PaymentRecordStatus.PENDING,
   PaymentRecordStatus.CONFIRMED,

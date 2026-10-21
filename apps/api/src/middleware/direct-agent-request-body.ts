@@ -29,14 +29,14 @@ export async function enforceDirectAgentRequestBodyLimit(
     if (error instanceof AgentPayloadTooLargeError) {
       throw new AppError(
         413,
-        "PAYLOAD_TOO_LARGE",
+        "payload_too_large",
         `Agent request body exceeds the ${operation.maxRequestBytes} byte operation limit`,
       );
     }
     if (error instanceof AgentRequestLengthMismatchError) {
       throw new AppError(
         400,
-        "INVALID_REQUEST_BODY",
+        "invalid_request_body",
         "Agent request body does not match the declared Content-Length",
       );
     }

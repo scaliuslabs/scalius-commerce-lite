@@ -346,7 +346,7 @@ describe("API Worker startup boundaries", () => {
     );
     expect(blocked.status).toBe(503);
     expect(await blocked.json()).toMatchObject({
-      code: "DATABASE_MIGRATION_IN_PROGRESS",
+      code: "database_migration_in_progress",
     });
     expect(fetch).not.toHaveBeenCalled();
 
@@ -432,7 +432,7 @@ describe("API Worker startup boundaries", () => {
       ["/api/v1/products"],
       ["/api/v1/mcp/dashboard"],
       ["/api/v1/unknown"],
-    ])("fails closed with 503 RUNTIME_SECRET_MISSING for %s without loading a route family", async (path) => {
+    ])("fails closed with 503 runtime_secret_missing for %s without loading a route family", async (path) => {
       const loaded: Record<RuntimeAppName, boolean> = {
         probe: false,
         public: false,
@@ -457,7 +457,7 @@ describe("API Worker startup boundaries", () => {
       expect(response.headers.get("Cache-Control")).toBe("private, no-store");
       await expect(response.json()).resolves.toMatchObject({
         success: false,
-        code: "RUNTIME_SECRET_MISSING",
+        code: "runtime_secret_missing",
         error: expect.stringContaining("SCALIUS_SECRET"),
       });
       expect(agentFetch).not.toHaveBeenCalled();
@@ -485,7 +485,7 @@ describe("API Worker startup boundaries", () => {
       const response = await worker.fetch(new Request("https://api.example.test/api/v1/products"));
 
       expect(response.status).toBe(503);
-      await expect(response.json()).resolves.toMatchObject({ code: "RUNTIME_SECRET_MISSING" });
+      await expect(response.json()).resolves.toMatchObject({ code: "runtime_secret_missing" });
       expect(loaded.public).toBe(false);
     });
 

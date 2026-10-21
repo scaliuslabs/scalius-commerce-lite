@@ -56,10 +56,10 @@ describe("plugin storage helpers", () => {
   it("writes conditionally on the revision read", async () => {
     const { run } = harnessFor();
     expect(await run((ctx) => ctx.objects.balances!.put("c1", { points: 10 }, { expectedRevision: null }))).toEqual({ ok: true, value: { revision: 1 } });
-    expect(await run((ctx) => ctx.objects.balances!.put("c1", { points: 11 }, { expectedRevision: null }))).toEqual({ ok: false, code: "object.conflict" });
+    expect(await run((ctx) => ctx.objects.balances!.put("c1", { points: 11 }, { expectedRevision: null }))).toEqual({ ok: false, code: "object_conflict" });
     expect(await run((ctx) => ctx.objects.balances!.getVersion("c1"))).toEqual({ ok: true, value: { data: { points: 10 }, revision: 1, handle: null, status: "active" } });
     expect(await run((ctx) => ctx.objects.balances!.put("c1", { points: 12 }, { expectedRevision: 1 }))).toEqual({ ok: true, value: { revision: 2 } });
-    expect(await run((ctx) => ctx.objects.balances!.delete("c1", { expectedRevision: 1 }))).toEqual({ ok: false, code: "object.conflict" });
+    expect(await run((ctx) => ctx.objects.balances!.delete("c1", { expectedRevision: 1 }))).toEqual({ ok: false, code: "object_conflict" });
     expect(await run((ctx) => ctx.objects.balances!.delete("c1"))).toEqual({ ok: true, value: true });
     expect(await run((ctx) => ctx.objects.balances!.delete("c1"))).toEqual({ ok: true, value: false });
   });
@@ -73,8 +73,8 @@ describe("plugin storage helpers", () => {
     ]);
     expect(await run((ctx) => ctx.objects.balances!.getVersion("c1")))
       .toEqual({ ok: true, value: { data: { points: 1, tier: "silver", nickname: "Ana" }, revision: 3, handle: null, status: "active" } });
-    expect(await run((ctx) => ctx.objects.balances!.update("c1", { tier: "gold" }, { expectedRevision: 2 }))).toEqual({ ok: false, code: "object.conflict" });
-    expect(await run((ctx) => ctx.objects.balances!.update("c9", { tier: "gold" }))).toEqual({ ok: false, code: "object.not_found" });
+    expect(await run((ctx) => ctx.objects.balances!.update("c1", { tier: "gold" }, { expectedRevision: 2 }))).toEqual({ ok: false, code: "object_conflict" });
+    expect(await run((ctx) => ctx.objects.balances!.update("c9", { tier: "gold" }))).toEqual({ ok: false, code: "object_not_found" });
   });
 
   it("never spends a balance twice when debits race", async () => {
@@ -83,7 +83,7 @@ describe("plugin storage helpers", () => {
     const debits = await Promise.all(Array.from({ length: 5 }, () =>
       run((ctx) => ctx.objects.balances!.increment("c1", "points", -40, { min: 0 }))));
     expect(debits.filter((debit) => debit.ok)).toHaveLength(2);
-    expect(debits.filter((debit) => !debit.ok).every((debit) => debit.code === "object.out_of_range")).toBe(true);
+    expect(debits.filter((debit) => !debit.ok).every((debit) => debit.code === "object_out_of_range")).toBe(true);
     expect(await run((ctx) => ctx.objects.balances!.get("c1"))).toEqual({ ok: true, value: { points: 20 } });
     expect(await run((ctx) => ctx.objects.balances!.increment("c2", "points", 5))).toEqual({ ok: true, value: { value: 5, revision: 1 } });
   });
@@ -97,12 +97,12 @@ describe("plugin storage helpers", () => {
     ]);
     expect(await run(earn)).toEqual({ ok: true, value: { revisions: [1, 2] } });
     // Redelivered: the ledger entry exists, so nothing changes.
-    expect(await run(earn)).toEqual({ ok: false, code: "object.conflict" });
+    expect(await run(earn)).toEqual({ ok: false, code: "object_conflict" });
     expect(harness.records.get("balances")!.get("c1")).toEqual({ points: 150 });
     expect(await run((ctx) => ctx.objects.batch([
       { op: "put", object: "balances", id: "c1", record: { points: 0 } },
       { op: "put", object: "ledger", id: "earn:o2", record: { ref: "o1" } },
-    ]))).toEqual({ ok: false, code: "object.unique_violation" });
+    ]))).toEqual({ ok: false, code: "object_unique_violation" });
     expect(harness.records.get("balances")!.get("c1")).toEqual({ points: 150 });
   });
 
@@ -111,15 +111,15 @@ describe("plugin storage helpers", () => {
     await run((ctx) => ctx.objects.content!.put("c1", { points: 10 }, { handle: "ana", status: "draft" }));
     await run((ctx) => ctx.objects.content!.increment("c1", "points", 5));
     expect(await run((ctx) => ctx.objects.content!.getByHandle("ana"))).toEqual({ ok: true, value: { id: "c1", data: { points: 15 }, revision: 2, handle: "ana", status: "draft" } });
-    expect(await run((ctx) => ctx.objects.content!.put("c2", { points: 3 }, { handle: "ana" }))).toEqual({ ok: false, code: "object.unique_violation" });
-    expect(await run((ctx) => ctx.objects.content!.put("c1", { points: "bad" }))).toEqual({ ok: false, code: "object.invalid" });
+    expect(await run((ctx) => ctx.objects.content!.put("c2", { points: 3 }, { handle: "ana" }))).toEqual({ ok: false, code: "object_unique_violation" });
+    expect(await run((ctx) => ctx.objects.content!.put("c1", { points: "bad" }))).toEqual({ ok: false, code: "object_invalid" });
     expect(await run((ctx) => ctx.objects.content!.get("c1"))).toEqual({ ok: true, value: { points: 15 } });
   });
 
   it("compare-and-sets KV entries", async () => {
     const { run } = harnessFor();
     expect(await run((ctx) => ctx.kv.compareAndSet("lock", null, "a"))).toEqual({ ok: true, value: { revision: 1 } });
-    expect(await run((ctx) => ctx.kv.compareAndSet("lock", null, "b"))).toEqual({ ok: false, code: "kv.conflict" });
+    expect(await run((ctx) => ctx.kv.compareAndSet("lock", null, "b"))).toEqual({ ok: false, code: "kv_conflict" });
     expect(await run((ctx) => ctx.kv.getVersion("lock"))).toEqual({ ok: true, value: { value: "a", revision: 1 } });
     expect(await run((ctx) => ctx.kv.set("lock", "c"))).toEqual({ ok: true, value: { revision: 2 } });
     expect(await run((ctx) => ctx.kv.get("lock"))).toEqual({ ok: true, value: "c" });

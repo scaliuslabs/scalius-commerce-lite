@@ -90,7 +90,7 @@ export interface OrderReturnView {
   cancelledAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
-  receiptRecovery: { required: true; startedAt: number | null } | null;
+  receiptRecovery: { required: true; startedAt: string | null } | null;
   receipts: OrderReturnReceiptView[];
   lines: OrderReturnLineView[];
 }
@@ -131,6 +131,11 @@ type ReturnCommandReplay = {
 };
 
 /** A receipt returns the whole order only from these; a courier return already did. */
+/** When a receipt command started (stored epoch seconds), as ISO 8601. */
+function commandStartedAt(seconds: number | null): string | null {
+  return seconds === null ? null : new Date(seconds * 1000).toISOString();
+}
+
 const WHOLE_RETURN_FROM_STATUSES = [
   OrderStatus.SHIPPED,
   OrderStatus.DELIVERED,
@@ -375,7 +380,7 @@ export async function getOrderReturn(
     status: header.status as OrderReturnStatus,
     source: header.source as OrderReturnSource,
     receiptRecovery: activeCommandKey
-      ? { required: true, startedAt: activeCommandStartedAt }
+      ? { required: true, startedAt: commandStartedAt(activeCommandStartedAt) }
       : null,
     receipts,
     lines: lines.map((line) => ({
@@ -433,7 +438,7 @@ export async function listOrderReturns(
       status: header.status as OrderReturnStatus,
       source: header.source as OrderReturnSource,
       receiptRecovery: activeCommandKey
-        ? { required: true as const, startedAt: activeCommandStartedAt }
+        ? { required: true as const, startedAt: commandStartedAt(activeCommandStartedAt) }
         : null,
       receipts: receiptsByReturn.get(header.id) ?? [],
       lines: linesByReturn.get(header.id) ?? [],

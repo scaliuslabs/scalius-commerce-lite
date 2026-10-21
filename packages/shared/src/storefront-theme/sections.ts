@@ -24,7 +24,7 @@ const blockHidden = { hidden: z.boolean().optional(), bindings: storefrontSettin
  */
 const aiDraft = z.literal(true).optional();
 
-/** How `category-tiles` draws the categories (see the section's comment). */
+/** How `category_tiles` draws the categories (see the section's comment). */
 export const STOREFRONT_CATEGORY_TILE_STYLES = ["photo", "photo-grid", "round", "round-small", "round-row", "icons", "quad", "square"] as const;
 export type StorefrontCategoryTileStyle = (typeof STOREFRONT_CATEGORY_TILE_STYLES)[number];
 
@@ -178,8 +178,8 @@ function storefrontSectionRegistryOf(
       defaults: { layout: "full-bleed", slides: [] },
     }),
     /** Delivery facts or the merchant's points. The section's presence is its switch. */
-    "usp-strip": section({
-      type: "usp-strip",
+    "usp_strip": section({
+      type: "usp_strip",
       settings: z.object({
         style: z.enum(["icons", "ticker"]),
         source: z.discriminatedUnion("kind", [
@@ -203,8 +203,8 @@ function storefrontSectionRegistryOf(
      * `icons` Star Tech's icon grid; `quad` Amazon's cards of four; `square`
      * eBay's gallery.
      */
-    "category-tiles": section({
-      type: "category-tiles",
+    "category_tiles": section({
+      type: "category_tiles",
       settings: z.object({
         style: z.enum(STOREFRONT_CATEGORY_TILE_STYLES),
         title,
@@ -230,13 +230,13 @@ function storefrontSectionRegistryOf(
       }).strict(),
       defaults: { carousel: "large", collectionIds: [] },
     }),
-    "product-rail": section({
-      type: "product-rail",
+    "product_rail": section({
+      type: "product_rail",
       settings: z.object({ title, source: productSource, limit: z.number().int().min(4).max(24) }).strict(),
       defaults: { title: "", source: { kind: "newest" }, limit: 12 },
     }),
-    "product-grid": section({
-      type: "product-grid",
+    "product_grid": section({
+      type: "product_grid",
       settings: z.object({
         title,
         source: productSource,
@@ -251,8 +251,8 @@ function storefrontSectionRegistryOf(
      * never to a typed-in date. Without one, or once it has ended, the row has
      * no countdown.
      */
-    "deal-block": section({
-      type: "deal-block",
+    "deal_block": section({
+      type: "deal_block",
       settings: z.object({
         title,
         source: productSource,
@@ -266,8 +266,8 @@ function storefrontSectionRegistryOf(
      * tabs, each a product source. Works without script (radio tabs); each tab
      * shows its first `limit` products.
      */
-    "product-tabs": section({
-      type: "product-tabs",
+    "product_tabs": section({
+      type: "product_tabs",
       settings: z.object({
         title,
         tabs: z.array(z.object({ label: z.string().trim().max(40), source: productSource, ...blockHidden }).strict()).min(2).max(4),
@@ -287,8 +287,8 @@ function storefrontSectionRegistryOf(
      * "Shop by" image cards (Target's and Walmart's occasion cards, Amazon's
      * quad cards): the merchant's photos, each with a label and a link.
      */
-    "shop-by": section({
-      type: "shop-by",
+    "shop_by": section({
+      type: "shop_by",
       settings: z.object({
         title,
         cards: z.array(z.object({ mediaId: recordId, title: z.string().trim().min(1).max(60), subtitle: z.string().trim().max(120).optional(), href, ...blockHidden }).strict()).max(8),
@@ -299,8 +299,8 @@ function storefrontSectionRegistryOf(
      * A promo banner mosaic (Daraz, Aarong, Walmart): one large tile beside up
      * to four smaller ones, each an image with its link.
      */
-    "banner-mosaic": section({
-      type: "banner-mosaic",
+    "banner_mosaic": section({
+      type: "banner_mosaic",
       settings: z.object({
         tiles: z.array(z.object({
           mediaId: recordId,
@@ -338,8 +338,8 @@ function storefrontSectionRegistryOf(
       }).strict(),
       defaults: { layout: "full", heading: "", text: "", mediaId: null, cta: null },
     }),
-    "brand-wall": section({
-      type: "brand-wall",
+    "brand_wall": section({
+      type: "brand_wall",
       settings: z.object({ title, style: z.enum(["grid", "rail"]) }).strict(),
       defaults: { title: "", style: "rail" },
       requires: [atLeast("brandCount", 4)],
@@ -392,29 +392,29 @@ function storefrontSectionRegistryOf(
       }).strict(),
       defaults: { heading: "", items: [] },
     }),
-    "utility-cards": section({
-      type: "utility-cards",
+    "utility_cards": section({
+      type: "utility_cards",
       settings: z.object({
         cards: z.array(z.object({ title: z.string().trim().min(1).max(60), text: z.string().trim().max(120), href, ...blockHidden }).strict()).max(4),
       }).strict(),
       defaults: { cards: [] },
     }),
     // Daraz "Just For You": off below 40 products.
-    "endless-grid": section({
-      type: "endless-grid",
+    "endless_grid": section({
+      type: "endless_grid",
       settings: z.object({ title, pageSize: z.union([z.literal(12), z.literal(24), z.literal(36)]) }).strict(),
       defaults: { title: "", pageSize: 24 },
       requires: [atLeast("productCount", 40)],
     }),
     // Long copy below everything (Star Tech, Apple Gadgets).
-    "seo-text": section({
-      type: "seo-text",
+    "seo_text": section({
+      type: "seo_text",
       settings: z.object({ heading, body: z.string().trim().max(8000) }).strict(),
       defaults: { heading: "", body: "" },
     }),
     // A client island after load; never part of the cached page.
-    "recently-viewed": section({
-      type: "recently-viewed",
+    "recently_viewed": section({
+      type: "recently_viewed",
       settings: z.object({ title }).strict(),
       defaults: { title: "" },
     }),
@@ -563,25 +563,25 @@ export function storefrontSectionDefault<Type extends StorefrontSectionType>(typ
 /** Section types the storefront renders (every registered type today). */
 export const STOREFRONT_SECTION_RENDERERS = [
   "hero",
-  "usp-strip",
-  "category-tiles",
+  "usp_strip",
+  "category_tiles",
   "collections",
-  "product-rail",
-  "product-grid",
-  "deal-block",
-  "product-tabs",
+  "product_rail",
+  "product_grid",
+  "deal_block",
+  "product_tabs",
   "lookbook",
   "banner",
-  "shop-by",
-  "banner-mosaic",
-  "brand-wall",
+  "shop_by",
+  "banner_mosaic",
+  "brand_wall",
   "editorial",
   "faq",
   "specifications",
-  "utility-cards",
-  "endless-grid",
-  "seo-text",
-  "recently-viewed",
+  "utility_cards",
+  "endless_grid",
+  "seo_text",
+  "recently_viewed",
   "objects",
   "newsletter",
 ] as const satisfies readonly StorefrontSectionType[];
@@ -610,15 +610,15 @@ export function storefrontSectionNeedsContent(section: StorefrontSection): boole
   switch (each.type) {
     case "hero":
       return each.settings.slides.length === 0;
-    case "category-tiles":
+    case "category_tiles":
       return each.settings.categoryIds.length < storefrontCategoryTilesMinimum(each.settings.style);
-    case "usp-strip":
+    case "usp_strip":
       return each.settings.source.kind === "custom" && each.settings.source.items.length === 0;
     case "banner":
       return each.settings.mediaId === null && !filled(each.settings.heading, each.settings.text);
-    case "shop-by":
+    case "shop_by":
       return each.settings.cards.length === 0;
-    case "banner-mosaic":
+    case "banner_mosaic":
       return each.settings.tiles.length === 0;
     case "editorial":
       switch (each.settings.layout) {
@@ -637,9 +637,9 @@ export function storefrontSectionNeedsContent(section: StorefrontSection): boole
       return each.settings.items.length === 0;
     case "specifications":
       return !filled(each.settings.objectField) && !each.settings.rows.some((row) => filled(row.label) && filled(row.value));
-    case "utility-cards":
+    case "utility_cards":
       return each.settings.cards.length === 0;
-    case "seo-text":
+    case "seo_text":
       return !filled(each.settings.body);
     // Nothing to show until a content type is picked; its entries are store data.
     case "objects":
@@ -660,14 +660,14 @@ export function storefrontSectionNeedsContent(section: StorefrontSection): boole
  */
 export const STOREFRONT_SECTION_BLOCKS = {
   hero: [{ path: "slides", kind: "slide" }, { path: "sideBanners", kind: "side-banner" }],
-  "usp-strip": [{ path: "source.items", kind: "point" }],
-  "product-tabs": [{ path: "tabs", kind: "tab" }],
-  "shop-by": [{ path: "cards", kind: "card" }],
-  "banner-mosaic": [{ path: "tiles", kind: "tile" }],
+  "usp_strip": [{ path: "source.items", kind: "point" }],
+  "product_tabs": [{ path: "tabs", kind: "tab" }],
+  "shop_by": [{ path: "cards", kind: "card" }],
+  "banner_mosaic": [{ path: "tiles", kind: "tile" }],
   editorial: [{ path: "columns", kind: "column" }, { path: "quotes", kind: "quote" }],
   faq: [{ path: "items", kind: "question" }],
   specifications: [{ path: "rows", kind: "specification" }],
-  "utility-cards": [{ path: "cards", kind: "link-card" }],
+  "utility_cards": [{ path: "cards", kind: "link-card" }],
 } as const satisfies Partial<Record<StorefrontSectionType, ReadonlyArray<{ path: string; kind: string }>>>;
 export type StorefrontBlockKind = (typeof STOREFRONT_SECTION_BLOCKS)[keyof typeof STOREFRONT_SECTION_BLOCKS][number]["kind"];
 

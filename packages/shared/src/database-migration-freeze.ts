@@ -45,7 +45,7 @@ export function createDatabaseMigrationFreezeResponse(
   return Response.json({
     success: false,
     error: "Commerce data migration is in progress. Please retry shortly.",
-    code: "DATABASE_MIGRATION_IN_PROGRESS",
+    code: "database_migration_in_progress",
   }, {
     status: 503,
     headers: {

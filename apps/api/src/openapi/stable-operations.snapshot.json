@@ -1,6 +1,7 @@
 {
  "operations": {
-  "dashboard.brands.create": {
+  "brands.create": {
+   "operationId": "dashboard.brands.create",
    "method": "POST",
    "path": "/api/v1/admin/brands",
    "risk": "write",
@@ -151,7 +152,8 @@
     ]
    }
   },
-  "dashboard.brands.get": {
+  "brands.get": {
+   "operationId": "dashboard.brands.get",
    "method": "GET",
    "path": "/api/v1/admin/brands/{id}",
    "risk": "read",
@@ -252,15 +254,18 @@
        },
        "createdAt": {
         "type": "string",
-        "nullable": true
+        "nullable": true,
+        "format": "date-time"
        },
        "updatedAt": {
         "type": "string",
-        "nullable": true
+        "nullable": true,
+        "format": "date-time"
        },
        "deletedAt": {
         "type": "string",
-        "nullable": true
+        "nullable": true,
+        "format": "date-time"
        },
        "description": {
         "type": "string",
@@ -316,249 +321,8 @@
     ]
    }
   },
-  "dashboard.brands.list": {
-   "method": "GET",
-   "path": "/api/v1/admin/brands",
-   "risk": "read",
-   "idempotency": "none",
-   "revision": "none",
-   "scopes": [
-    "read_products",
-    "write_products"
-   ],
-   "input": {
-    "parameters": [
-     {
-      "schema": {
-       "type": "integer",
-       "minimum": 1,
-       "maximum": 100000,
-       "default": 1
-      },
-      "required": false,
-      "name": "page",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "integer",
-       "minimum": 1,
-       "maximum": 100,
-       "default": 20
-      },
-      "required": false,
-      "name": "limit",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "maxLength": 100
-      },
-      "required": false,
-      "name": "search",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "enum": [
-        "draft",
-        "published"
-       ]
-      },
-      "required": false,
-      "name": "status",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "enum": [
-        "true",
-        "false"
-       ]
-      },
-      "required": false,
-      "name": "trashed",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "enum": [
-        "name",
-        "sortOrder",
-        "createdAt",
-        "updatedAt"
-       ],
-       "default": "updatedAt"
-      },
-      "required": false,
-      "name": "sort",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "enum": [
-        "asc",
-        "desc"
-       ]
-      },
-      "required": false,
-      "name": "order",
-      "in": "query"
-     }
-    ]
-   },
-   "output": {
-    "type": "object",
-    "properties": {
-     "success": {
-      "type": "boolean",
-      "enum": [
-       true
-      ]
-     },
-     "data": {
-      "type": "object",
-      "properties": {
-       "brands": {
-        "type": "array",
-        "items": {
-         "type": "object",
-         "properties": {
-          "id": {
-           "type": "string"
-          },
-          "name": {
-           "type": "string"
-          },
-          "slug": {
-           "type": "string"
-          },
-          "status": {
-           "type": "string",
-           "enum": [
-            "draft",
-            "published"
-           ]
-          },
-          "sortOrder": {
-           "type": "integer"
-          },
-          "revision": {
-           "type": "integer",
-           "minimum": 1
-          },
-          "noIndex": {
-           "type": "boolean"
-          },
-          "excludeFromSitemap": {
-           "type": "boolean"
-          },
-          "productCount": {
-           "type": "integer",
-           "minimum": 0
-          },
-          "logo": {
-           "type": "object",
-           "nullable": true,
-           "properties": {
-            "mediaId": {
-             "type": "string"
-            },
-            "url": {
-             "type": "string"
-            },
-            "alt": {
-             "type": "string"
-            },
-            "width": {
-             "type": "integer",
-             "nullable": true
-            },
-            "height": {
-             "type": "integer",
-             "nullable": true
-            }
-           },
-           "required": [
-            "mediaId",
-            "url",
-            "alt",
-            "width",
-            "height"
-           ]
-          },
-          "createdAt": {
-           "type": "string",
-           "nullable": true
-          },
-          "updatedAt": {
-           "type": "string",
-           "nullable": true
-          },
-          "deletedAt": {
-           "type": "string",
-           "nullable": true
-          }
-         },
-         "required": [
-          "id",
-          "name",
-          "slug",
-          "status",
-          "sortOrder",
-          "revision",
-          "noIndex",
-          "excludeFromSitemap",
-          "productCount",
-          "logo",
-          "createdAt",
-          "updatedAt",
-          "deletedAt"
-         ]
-        }
-       },
-       "pagination": {
-        "type": "object",
-        "properties": {
-         "page": {
-          "type": "number"
-         },
-         "limit": {
-          "type": "number"
-         },
-         "total": {
-          "type": "number"
-         },
-         "totalPages": {
-          "type": "number"
-         }
-        },
-        "required": [
-         "page",
-         "limit",
-         "total",
-         "totalPages"
-        ]
-       }
-      },
-      "required": [
-       "brands",
-       "pagination"
-      ]
-     }
-    },
-    "required": [
-     "success",
-     "data"
-    ]
-   }
-  },
-  "dashboard.brands.restore": {
+  "brands.restore": {
+   "operationId": "dashboard.brands.restore",
    "method": "POST",
    "path": "/api/v1/admin/brands/restore",
    "risk": "write",
@@ -649,7 +413,8 @@
     ]
    }
   },
-  "dashboard.brands.set_status": {
+  "brands.set_status": {
+   "operationId": "dashboard.brands.set_status",
    "method": "PATCH",
    "path": "/api/v1/admin/brands/{id}/status",
    "risk": "write",
@@ -747,7 +512,8 @@
     ]
    }
   },
-  "dashboard.brands.trash": {
+  "brands.trash": {
+   "operationId": "dashboard.brands.trash",
    "method": "POST",
    "path": "/api/v1/admin/brands/trash",
    "risk": "destructive",
@@ -838,7 +604,8 @@
     ]
    }
   },
-  "dashboard.brands.update": {
+  "brands.update": {
+   "operationId": "dashboard.brands.update",
    "method": "PUT",
    "path": "/api/v1/admin/brands/{id}",
    "risk": "write",
@@ -996,7 +763,8 @@
     ]
    }
   },
-  "dashboard.categories.create": {
+  "categories.create": {
+   "operationId": "dashboard.categories.create",
    "method": "POST",
    "path": "/api/v1/admin/categories",
    "risk": "write",
@@ -1094,23 +862,15 @@
             "maximum": 100000000
            },
            "createdAt": {
-            "anyOf": [
-             {
-              "type": "string",
-              "format": "date-time"
-             },
-             {
-              "type": "string"
-             }
-            ]
+            "type": "string",
+            "format": "date-time"
            }
           },
           "required": [
            "id",
            "url",
            "filename",
-           "size",
-           "createdAt"
+           "size"
           ]
          },
          "parentId": {
@@ -1186,227 +946,8 @@
     ]
    }
   },
-  "dashboard.categories.get_section": {
-   "method": "GET",
-   "path": "/api/v1/admin/categories/{id}/sections/{section}",
-   "risk": "read",
-   "idempotency": "none",
-   "revision": "none",
-   "scopes": [
-    "read_products",
-    "write_products"
-   ],
-   "input": {
-    "parameters": [
-     {
-      "schema": {
-       "type": "string",
-       "minLength": 1,
-       "maxLength": 180
-      },
-      "required": true,
-      "name": "id",
-      "in": "path"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "enum": [
-        "summary",
-        "text"
-       ]
-      },
-      "required": true,
-      "name": "section",
-      "in": "path"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "enum": [
-        "description",
-        "content"
-       ]
-      },
-      "required": false,
-      "name": "field",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "integer",
-       "nullable": true,
-       "minimum": 0,
-       "maximum": 100000,
-       "default": 0
-      },
-      "required": false,
-      "name": "offset",
-      "in": "query"
-     }
-    ]
-   },
-   "output": {
-    "type": "object",
-    "properties": {
-     "success": {
-      "type": "boolean",
-      "enum": [
-       true
-      ]
-     },
-     "data": {
-      "anyOf": [
-       {
-        "type": "object",
-        "properties": {
-         "section": {
-          "type": "string",
-          "enum": [
-           "summary"
-          ]
-         },
-         "category": {
-          "type": "object",
-          "properties": {
-           "id": {
-            "type": "string",
-            "maxLength": 180
-           },
-           "name": {
-            "type": "string",
-            "maxLength": 100
-           },
-           "slug": {
-            "type": "string",
-            "maxLength": 100
-           },
-           "imageUrl": {
-            "type": "string",
-            "nullable": true,
-            "maxLength": 2048
-           },
-           "metaTitle": {
-            "type": "string",
-            "nullable": true,
-            "maxLength": 70
-           },
-           "metaDescription": {
-            "type": "string",
-            "nullable": true,
-            "maxLength": 200
-           },
-           "canonicalPath": {
-            "type": "string",
-            "nullable": true,
-            "maxLength": 120
-           },
-           "noIndex": {
-            "type": "boolean"
-           },
-           "excludeFromSitemap": {
-            "type": "boolean"
-           },
-           "status": {
-            "type": "string",
-            "enum": [
-             "draft",
-             "published",
-             "internal"
-            ]
-           },
-           "revision": {
-            "type": "integer",
-            "minimum": 1
-           },
-           "descriptionCharacters": {
-            "type": "integer",
-            "minimum": 0
-           },
-           "contentCharacters": {
-            "type": "integer",
-            "minimum": 0
-           }
-          },
-          "required": [
-           "id",
-           "name",
-           "slug",
-           "imageUrl",
-           "metaTitle",
-           "metaDescription",
-           "canonicalPath",
-           "noIndex",
-           "excludeFromSitemap",
-           "status",
-           "revision",
-           "descriptionCharacters",
-           "contentCharacters"
-          ]
-         }
-        },
-        "required": [
-         "section",
-         "category"
-        ]
-       },
-       {
-        "type": "object",
-        "properties": {
-         "section": {
-          "type": "string",
-          "enum": [
-           "text"
-          ]
-         },
-         "field": {
-          "type": "string",
-          "enum": [
-           "description",
-           "content"
-          ]
-         },
-         "value": {
-          "type": "string",
-          "maxLength": 12000
-         },
-         "totalCharacters": {
-          "type": "integer",
-          "minimum": 0
-         },
-         "offset": {
-          "type": "integer",
-          "minimum": 0
-         },
-         "nextOffset": {
-          "type": "integer",
-          "nullable": true,
-          "minimum": 0
-         },
-         "isNull": {
-          "type": "boolean"
-         }
-        },
-        "required": [
-         "section",
-         "field",
-         "value",
-         "totalCharacters",
-         "offset",
-         "nextOffset",
-         "isNull"
-        ]
-       }
-      ]
-     }
-    },
-    "required": [
-     "success",
-     "data"
-    ]
-   }
-  },
-  "dashboard.categories.list_children": {
+  "categories.list_children": {
+   "operationId": "dashboard.categories.list_children",
    "method": "GET",
    "path": "/api/v1/admin/categories/children",
    "risk": "read",
@@ -1518,202 +1059,8 @@
     ]
    }
   },
-  "dashboard.categories.list_summaries": {
-   "method": "GET",
-   "path": "/api/v1/admin/categories/summaries",
-   "risk": "read",
-   "idempotency": "none",
-   "revision": "none",
-   "scopes": [
-    "read_products",
-    "write_products"
-   ],
-   "input": {
-    "parameters": [
-     {
-      "schema": {
-       "type": "integer",
-       "minimum": 1,
-       "maximum": 100000,
-       "default": 1
-      },
-      "required": false,
-      "name": "page",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "integer",
-       "minimum": 1,
-       "maximum": 50,
-       "default": 20
-      },
-      "required": false,
-      "name": "limit",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "maxLength": 100,
-       "default": ""
-      },
-      "required": false,
-      "name": "search",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "enum": [
-        "draft",
-        "published",
-        "internal"
-       ]
-      },
-      "required": false,
-      "name": "status",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "enum": [
-        "true",
-        "false"
-       ]
-      },
-      "required": false,
-      "name": "trashed",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "enum": [
-        "name",
-        "status",
-        "createdAt",
-        "updatedAt"
-       ],
-       "default": "updatedAt"
-      },
-      "required": false,
-      "name": "sort",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "enum": [
-        "asc",
-        "desc"
-       ],
-       "default": "desc"
-      },
-      "required": false,
-      "name": "order",
-      "in": "query"
-     }
-    ]
-   },
-   "output": {
-    "type": "object",
-    "properties": {
-     "success": {
-      "type": "boolean",
-      "enum": [
-       true
-      ]
-     },
-     "data": {
-      "type": "object",
-      "properties": {
-       "categories": {
-        "type": "array",
-        "items": {
-         "type": "object",
-         "properties": {
-          "id": {
-           "type": "string",
-           "maxLength": 180
-          },
-          "name": {
-           "type": "string",
-           "maxLength": 100
-          },
-          "slug": {
-           "type": "string",
-           "maxLength": 100
-          },
-          "status": {
-           "type": "string",
-           "enum": [
-            "draft",
-            "published",
-            "internal"
-           ]
-          },
-          "revision": {
-           "type": "integer",
-           "minimum": 1
-          },
-          "productCount": {
-           "type": "integer",
-           "minimum": 0
-          },
-          "publishReady": {
-           "type": "boolean"
-          }
-         },
-         "required": [
-          "id",
-          "name",
-          "slug",
-          "status",
-          "revision",
-          "productCount",
-          "publishReady"
-         ]
-        }
-       },
-       "pagination": {
-        "type": "object",
-        "properties": {
-         "page": {
-          "type": "number"
-         },
-         "limit": {
-          "type": "number"
-         },
-         "total": {
-          "type": "number"
-         },
-         "totalPages": {
-          "type": "number"
-         }
-        },
-        "required": [
-         "page",
-         "limit",
-         "total",
-         "totalPages"
-        ]
-       }
-      },
-      "required": [
-       "categories",
-       "pagination"
-      ]
-     }
-    },
-    "required": [
-     "success",
-     "data"
-    ]
-   }
-  },
-  "dashboard.categories.restore": {
+  "categories.restore": {
+   "operationId": "dashboard.categories.restore",
    "method": "POST",
    "path": "/api/v1/admin/categories/{id}/restore",
    "risk": "write",
@@ -1787,7 +1134,8 @@
     ]
    }
   },
-  "dashboard.categories.set_status": {
+  "categories.set_status": {
+   "operationId": "dashboard.categories.set_status",
    "method": "PATCH",
    "path": "/api/v1/admin/categories/{id}/status",
    "risk": "write",
@@ -1887,7 +1235,8 @@
     ]
    }
   },
-  "dashboard.categories.trash": {
+  "categories.trash": {
+   "operationId": "dashboard.categories.trash",
    "method": "DELETE",
    "path": "/api/v1/admin/categories/{id}",
    "risk": "destructive",
@@ -1943,7 +1292,8 @@
    },
    "output": null
   },
-  "dashboard.categories.update": {
+  "categories.update": {
+   "operationId": "dashboard.categories.update",
    "method": "PUT",
    "path": "/api/v1/admin/categories/{id}",
    "risk": "write",
@@ -2050,23 +1400,15 @@
             "maximum": 100000000
            },
            "createdAt": {
-            "anyOf": [
-             {
-              "type": "string",
-              "format": "date-time"
-             },
-             {
-              "type": "string"
-             }
-            ]
+            "type": "string",
+            "format": "date-time"
            }
           },
           "required": [
            "id",
            "url",
            "filename",
-           "size",
-           "createdAt"
+           "size"
           ]
          },
          "parentId": {
@@ -2148,7 +1490,8 @@
     ]
    }
   },
-  "dashboard.collections.create": {
+  "collections.create": {
+   "operationId": "dashboard.collections.create",
    "method": "POST",
    "path": "/api/v1/admin/collections",
    "risk": "write",
@@ -2329,7 +1672,8 @@
     ]
    }
   },
-  "dashboard.collections.get_by_ids": {
+  "collections.get_by_ids": {
+   "operationId": "dashboard.collections.get_by_ids",
    "method": "GET",
    "path": "/api/v1/admin/collections/by-ids",
    "risk": "read",
@@ -2404,456 +1748,8 @@
     ]
    }
   },
-  "dashboard.collections.get_section": {
-   "method": "GET",
-   "path": "/api/v1/admin/collections/{id}/sections/{section}",
-   "risk": "read",
-   "idempotency": "none",
-   "revision": "none",
-   "scopes": [
-    "read_products",
-    "write_products"
-   ],
-   "input": {
-    "parameters": [
-     {
-      "schema": {
-       "type": "string"
-      },
-      "required": true,
-      "name": "id",
-      "in": "path"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "enum": [
-        "summary",
-        "text"
-       ]
-      },
-      "required": true,
-      "name": "section",
-      "in": "path"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "enum": [
-        "description",
-        "content"
-       ]
-      },
-      "required": false,
-      "name": "field",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "integer",
-       "nullable": true,
-       "minimum": 0,
-       "maximum": 100000,
-       "default": 0
-      },
-      "required": false,
-      "name": "offset",
-      "in": "query"
-     }
-    ]
-   },
-   "output": {
-    "type": "object",
-    "properties": {
-     "success": {
-      "type": "boolean",
-      "enum": [
-       true
-      ]
-     },
-     "data": {
-      "anyOf": [
-       {
-        "type": "object",
-        "properties": {
-         "section": {
-          "type": "string",
-          "enum": [
-           "summary"
-          ]
-         },
-         "collection": {
-          "type": "object",
-          "properties": {
-           "id": {
-            "type": "string"
-           },
-           "name": {
-            "type": "string"
-           },
-           "presentation": {
-            "type": "string",
-            "enum": [
-             "grid",
-             "carousel"
-            ]
-           },
-           "config": {
-            "type": "string"
-           },
-           "sortOrder": {
-            "type": "number"
-           },
-           "isActive": {
-            "type": "boolean"
-           },
-           "version": {
-            "type": "integer",
-            "minimum": 1
-           },
-           "listingTemplate": {
-            "type": "string",
-            "nullable": true
-           },
-           "canonicalPath": {
-            "type": "string",
-            "nullable": true
-           },
-           "noIndex": {
-            "type": "boolean"
-           },
-           "excludeFromSitemap": {
-            "type": "boolean"
-           },
-           "createdAt": {
-            "$ref": "#/components/schemas/NullableTimestamp"
-           },
-           "updatedAt": {
-            "$ref": "#/components/schemas/NullableTimestamp"
-           },
-           "deletedAt": {
-            "$ref": "#/components/schemas/NullableTimestamp"
-           },
-           "metaTitle": {
-            "type": "string",
-            "nullable": true
-           },
-           "metaDescription": {
-            "type": "string",
-            "nullable": true
-           },
-           "descriptionCharacters": {
-            "type": "integer",
-            "minimum": 0
-           },
-           "contentCharacters": {
-            "type": "integer",
-            "minimum": 0
-           }
-          },
-          "required": [
-           "id",
-           "name",
-           "presentation",
-           "config",
-           "sortOrder",
-           "isActive",
-           "version",
-           "listingTemplate",
-           "canonicalPath",
-           "noIndex",
-           "excludeFromSitemap",
-           "createdAt",
-           "updatedAt",
-           "deletedAt",
-           "metaTitle",
-           "metaDescription",
-           "descriptionCharacters",
-           "contentCharacters"
-          ]
-         }
-        },
-        "required": [
-         "section",
-         "collection"
-        ]
-       },
-       {
-        "type": "object",
-        "properties": {
-         "section": {
-          "type": "string",
-          "enum": [
-           "text"
-          ]
-         },
-         "field": {
-          "type": "string",
-          "enum": [
-           "description",
-           "content"
-          ]
-         },
-         "value": {
-          "type": "string",
-          "maxLength": 12000
-         },
-         "totalCharacters": {
-          "type": "integer",
-          "minimum": 0
-         },
-         "offset": {
-          "type": "integer",
-          "minimum": 0
-         },
-         "nextOffset": {
-          "type": "integer",
-          "nullable": true,
-          "minimum": 0
-         },
-         "isNull": {
-          "type": "boolean"
-         }
-        },
-        "required": [
-         "section",
-         "field",
-         "value",
-         "totalCharacters",
-         "offset",
-         "nextOffset",
-         "isNull"
-        ]
-       }
-      ]
-     }
-    },
-    "required": [
-     "success",
-     "data"
-    ]
-   }
-  },
-  "dashboard.collections.list": {
-   "method": "GET",
-   "path": "/api/v1/admin/collections",
-   "risk": "read",
-   "idempotency": "none",
-   "revision": "none",
-   "scopes": [
-    "read_products",
-    "write_products"
-   ],
-   "input": {
-    "parameters": [
-     {
-      "schema": {
-       "type": "integer",
-       "minimum": 1,
-       "default": 1,
-       "description": "Page number"
-      },
-      "required": false,
-      "description": "Page number",
-      "name": "page",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "integer",
-       "minimum": 1,
-       "maximum": 100,
-       "default": 20,
-       "description": "Items per page"
-      },
-      "required": false,
-      "description": "Items per page",
-      "name": "limit",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "maxLength": 120,
-       "default": "",
-       "description": "Search term"
-      },
-      "required": false,
-      "description": "Search term",
-      "name": "search",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "enum": [
-        "true",
-        "false"
-       ],
-       "description": "Show trashed items"
-      },
-      "required": false,
-      "description": "Show trashed items",
-      "name": "trashed",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "enum": [
-        "name",
-        "presentation",
-        "isActive",
-        "updatedAt",
-        "sortOrder"
-       ],
-       "default": "sortOrder",
-       "description": "Sort field"
-      },
-      "required": false,
-      "description": "Sort field",
-      "name": "sort",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "enum": [
-        "asc",
-        "desc"
-       ],
-       "default": "asc",
-       "description": "Sort order"
-      },
-      "required": false,
-      "description": "Sort order",
-      "name": "order",
-      "in": "query"
-     }
-    ]
-   },
-   "output": {
-    "type": "object",
-    "properties": {
-     "success": {
-      "type": "boolean",
-      "enum": [
-       true
-      ]
-     },
-     "data": {
-      "type": "object",
-      "properties": {
-       "collections": {
-        "type": "array",
-        "items": {
-         "type": "object",
-         "properties": {
-          "id": {
-           "type": "string"
-          },
-          "name": {
-           "type": "string"
-          },
-          "presentation": {
-           "type": "string",
-           "enum": [
-            "grid",
-            "carousel"
-           ]
-          },
-          "config": {
-           "type": "string"
-          },
-          "sortOrder": {
-           "type": "number"
-          },
-          "isActive": {
-           "type": "boolean"
-          },
-          "version": {
-           "type": "integer",
-           "minimum": 1
-          },
-          "listingTemplate": {
-           "type": "string",
-           "nullable": true
-          },
-          "canonicalPath": {
-           "type": "string",
-           "nullable": true
-          },
-          "noIndex": {
-           "type": "boolean"
-          },
-          "excludeFromSitemap": {
-           "type": "boolean"
-          },
-          "createdAt": {
-           "$ref": "#/components/schemas/NullableTimestamp"
-          },
-          "updatedAt": {
-           "$ref": "#/components/schemas/NullableTimestamp"
-          },
-          "deletedAt": {
-           "$ref": "#/components/schemas/NullableTimestamp"
-          }
-         },
-         "required": [
-          "id",
-          "name",
-          "presentation",
-          "config",
-          "sortOrder",
-          "isActive",
-          "version",
-          "listingTemplate",
-          "canonicalPath",
-          "noIndex",
-          "excludeFromSitemap",
-          "createdAt",
-          "updatedAt",
-          "deletedAt"
-         ]
-        }
-       },
-       "pagination": {
-        "type": "object",
-        "properties": {
-         "page": {
-          "type": "number"
-         },
-         "limit": {
-          "type": "number"
-         },
-         "total": {
-          "type": "number"
-         },
-         "totalPages": {
-          "type": "number"
-         }
-        },
-        "required": [
-         "page",
-         "limit",
-         "total",
-         "totalPages"
-        ]
-       }
-      },
-      "required": [
-       "collections",
-       "pagination"
-      ]
-     }
-    },
-    "required": [
-     "success",
-     "data"
-    ]
-   }
-  },
-  "dashboard.collections.restore": {
+  "collections.restore": {
+   "operationId": "dashboard.collections.restore",
    "method": "POST",
    "path": "/api/v1/admin/collections/{id}/restore",
    "risk": "write",
@@ -2924,7 +1820,8 @@
     ]
    }
   },
-  "dashboard.collections.trash": {
+  "collections.trash": {
+   "operationId": "dashboard.collections.trash",
    "method": "DELETE",
    "path": "/api/v1/admin/collections/{id}",
    "risk": "destructive",
@@ -2970,7 +1867,8 @@
    },
    "output": null
   },
-  "dashboard.collections.update": {
+  "collections.update": {
+   "operationId": "dashboard.collections.update",
    "method": "PUT",
    "path": "/api/v1/admin/collections/{id}",
    "risk": "write",
@@ -3152,7 +2050,8 @@
     ]
    }
   },
-  "dashboard.collections.update_products": {
+  "collections.update_products": {
+   "operationId": "dashboard.collections.update_products",
    "method": "POST",
    "path": "/api/v1/admin/collections/{id}/products",
    "risk": "write",
@@ -3256,7 +2155,8 @@
     ]
    }
   },
-  "dashboard.content.create": {
+  "content.create": {
+   "operationId": "dashboard.content.create",
    "method": "POST",
    "path": "/api/v1/admin/pages",
    "risk": "write",
@@ -3381,34 +2281,6 @@
            "folderId": {
             "type": "string",
             "nullable": true
-           },
-           "createdAt": {
-            "anyOf": [
-             {
-              "type": "string"
-             },
-             {
-              "type": "number"
-             },
-             {
-              "type": "string",
-              "format": "date-time"
-             }
-            ]
-           },
-           "updatedAt": {
-            "anyOf": [
-             {
-              "type": "string"
-             },
-             {
-              "type": "number"
-             },
-             {
-              "type": "string",
-              "format": "date-time"
-             }
-            ]
            }
           },
           "required": [
@@ -3428,16 +2300,9 @@
           "default": "page"
          },
          "publishedAt": {
-          "anyOf": [
-           {
-            "type": "string",
-            "format": "date-time"
-           },
-           {
-            "type": "string"
-           },
-           {}
-          ]
+          "type": "string",
+          "nullable": true,
+          "format": "date-time"
          },
          "isPublished": {
           "type": "boolean",
@@ -3500,7 +2365,8 @@
     ]
    }
   },
-  "dashboard.content.get": {
+  "content.get": {
+   "operationId": "dashboard.content.get",
    "method": "GET",
    "path": "/api/v1/admin/pages/{id}",
    "risk": "read",
@@ -3631,26 +2497,6 @@
          "folderId": {
           "type": "string",
           "nullable": true
-         },
-         "createdAt": {
-          "anyOf": [
-           {
-            "type": "string"
-           },
-           {
-            "type": "number"
-           }
-          ]
-         },
-         "updatedAt": {
-          "anyOf": [
-           {
-            "type": "string"
-           },
-           {
-            "type": "number"
-           }
-          ]
          }
         },
         "required": [
@@ -3662,7 +2508,9 @@
         "additionalProperties": {}
        },
        "publishedAt": {
-        "$ref": "#/components/schemas/NullableTimestamp"
+        "type": "string",
+        "nullable": true,
+        "format": "date-time"
        },
        "sortOrder": {
         "type": "number"
@@ -3672,13 +2520,19 @@
         "minimum": 1
        },
        "createdAt": {
-        "$ref": "#/components/schemas/NullableTimestamp"
+        "type": "string",
+        "nullable": true,
+        "format": "date-time"
        },
        "updatedAt": {
-        "$ref": "#/components/schemas/NullableTimestamp"
+        "type": "string",
+        "nullable": true,
+        "format": "date-time"
        },
        "deletedAt": {
-        "$ref": "#/components/schemas/NullableTimestamp"
+        "type": "string",
+        "nullable": true,
+        "format": "date-time"
        }
       },
       "required": [
@@ -3713,354 +2567,8 @@
     ]
    }
   },
-  "dashboard.content.list": {
-   "method": "GET",
-   "path": "/api/v1/admin/pages",
-   "risk": "read",
-   "idempotency": "none",
-   "revision": "none",
-   "scopes": [
-    "read_content",
-    "write_content"
-   ],
-   "input": {
-    "parameters": [
-     {
-      "schema": {
-       "type": "number",
-       "nullable": true,
-       "default": 1,
-       "description": "Page number"
-      },
-      "required": false,
-      "description": "Page number",
-      "name": "page",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "number",
-       "nullable": true,
-       "maximum": 100,
-       "default": 10,
-       "description": "Items per page"
-      },
-      "required": false,
-      "description": "Items per page",
-      "name": "limit",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "default": "",
-       "description": "Search term"
-      },
-      "required": false,
-      "description": "Search term",
-      "name": "search",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "description": "Show trashed items"
-      },
-      "required": false,
-      "description": "Show trashed items",
-      "name": "trashed",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "enum": [
-        "draft",
-        "scheduled",
-        "published"
-       ],
-       "description": "Lifecycle status"
-      },
-      "required": false,
-      "description": "Lifecycle status",
-      "name": "status",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "enum": [
-        "page",
-        "article"
-       ],
-       "default": "page",
-       "description": "Content type"
-      },
-      "required": false,
-      "description": "Content type",
-      "name": "contentType",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "enum": [
-        "title",
-        "createdAt",
-        "updatedAt"
-       ],
-       "default": "updatedAt",
-       "description": "Sort field"
-      },
-      "required": false,
-      "description": "Sort field",
-      "name": "sort",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "enum": [
-        "asc",
-        "desc"
-       ],
-       "default": "desc",
-       "description": "Sort order"
-      },
-      "required": false,
-      "description": "Sort order",
-      "name": "order",
-      "in": "query"
-     }
-    ]
-   },
-   "output": {
-    "type": "object",
-    "properties": {
-     "success": {
-      "type": "boolean",
-      "enum": [
-       true
-      ]
-     },
-     "data": {
-      "type": "object",
-      "properties": {
-       "pages": {
-        "type": "array",
-        "items": {
-         "type": "object",
-         "properties": {
-          "id": {
-           "type": "string"
-          },
-          "contentType": {
-           "type": "string",
-           "enum": [
-            "page",
-            "article"
-           ]
-          },
-          "title": {
-           "type": "string"
-          },
-          "slug": {
-           "type": "string"
-          },
-          "content": {
-           "type": "string"
-          },
-          "excerpt": {
-           "type": "string",
-           "nullable": true
-          },
-          "author": {
-           "type": "string",
-           "nullable": true
-          },
-          "tags": {
-           "type": "array",
-           "items": {
-            "type": "string"
-           }
-          },
-          "metaTitle": {
-           "type": "string",
-           "nullable": true
-          },
-          "metaDescription": {
-           "type": "string",
-           "nullable": true
-          },
-          "canonicalPath": {
-           "type": "string",
-           "nullable": true
-          },
-          "noIndex": {
-           "type": "boolean"
-          },
-          "excludeFromSitemap": {
-           "type": "boolean"
-          },
-          "isPublished": {
-           "type": "boolean"
-          },
-          "hideHeader": {
-           "type": "boolean"
-          },
-          "hideFooter": {
-           "type": "boolean"
-          },
-          "hideTitle": {
-           "type": "boolean"
-          },
-          "featuredImage": {
-           "type": "object",
-           "nullable": true,
-           "properties": {
-            "id": {
-             "type": "string"
-            },
-            "url": {
-             "type": "string"
-            },
-            "filename": {
-             "type": "string"
-            },
-            "size": {
-             "type": "number"
-            },
-            "mimeType": {
-             "type": "string"
-            },
-            "altText": {
-             "type": "string",
-             "nullable": true
-            },
-            "width": {
-             "type": "number",
-             "nullable": true
-            },
-            "height": {
-             "type": "number",
-             "nullable": true
-            },
-            "folderId": {
-             "type": "string",
-             "nullable": true
-            },
-            "createdAt": {
-             "anyOf": [
-              {
-               "type": "string"
-              },
-              {
-               "type": "number"
-              }
-             ]
-            },
-            "updatedAt": {
-             "anyOf": [
-              {
-               "type": "string"
-              },
-              {
-               "type": "number"
-              }
-             ]
-            }
-           },
-           "required": [
-            "id",
-            "url",
-            "filename",
-            "size"
-           ],
-           "additionalProperties": {}
-          },
-          "publishedAt": {
-           "$ref": "#/components/schemas/NullableTimestamp"
-          },
-          "sortOrder": {
-           "type": "number"
-          },
-          "revision": {
-           "type": "integer",
-           "minimum": 1
-          },
-          "createdAt": {
-           "$ref": "#/components/schemas/NullableTimestamp"
-          },
-          "updatedAt": {
-           "$ref": "#/components/schemas/NullableTimestamp"
-          },
-          "deletedAt": {
-           "$ref": "#/components/schemas/NullableTimestamp"
-          }
-         },
-         "required": [
-          "id",
-          "contentType",
-          "title",
-          "slug",
-          "content",
-          "excerpt",
-          "author",
-          "tags",
-          "metaTitle",
-          "metaDescription",
-          "canonicalPath",
-          "noIndex",
-          "excludeFromSitemap",
-          "isPublished",
-          "hideHeader",
-          "hideFooter",
-          "hideTitle",
-          "sortOrder",
-          "revision",
-          "createdAt",
-          "updatedAt",
-          "deletedAt"
-         ]
-        }
-       },
-       "pagination": {
-        "type": "object",
-        "properties": {
-         "page": {
-          "type": "number"
-         },
-         "limit": {
-          "type": "number"
-         },
-         "total": {
-          "type": "number"
-         },
-         "totalPages": {
-          "type": "number"
-         }
-        },
-        "required": [
-         "page",
-         "limit",
-         "total",
-         "totalPages"
-        ]
-       }
-      },
-      "required": [
-       "pages",
-       "pagination"
-      ]
-     }
-    },
-    "required": [
-     "success",
-     "data"
-    ]
-   }
-  },
-  "dashboard.content.update": {
+  "content.update": {
+   "operationId": "dashboard.content.update",
    "method": "PUT",
    "path": "/api/v1/admin/pages/{id}",
    "risk": "write",
@@ -4157,16 +2665,9 @@
           "type": "boolean"
          },
          "publishedAt": {
-          "anyOf": [
-           {
-            "type": "string",
-            "format": "date-time"
-           },
-           {
-            "type": "string"
-           },
-           {}
-          ]
+          "type": "string",
+          "nullable": true,
+          "format": "date-time"
          },
          "hideHeader": {
           "type": "boolean"
@@ -4215,34 +2716,6 @@
            "folderId": {
             "type": "string",
             "nullable": true
-           },
-           "createdAt": {
-            "anyOf": [
-             {
-              "type": "string"
-             },
-             {
-              "type": "number"
-             },
-             {
-              "type": "string",
-              "format": "date-time"
-             }
-            ]
-           },
-           "updatedAt": {
-            "anyOf": [
-             {
-              "type": "string"
-             },
-             {
-              "type": "number"
-             },
-             {
-              "type": "string",
-              "format": "date-time"
-             }
-            ]
            }
           },
           "required": [
@@ -4291,7 +2764,8 @@
     ]
    }
   },
-  "dashboard.custom_field_definitions.get": {
+  "custom_field_definitions.get": {
+   "operationId": "dashboard.custom_field_definitions.get",
    "method": "GET",
    "path": "/api/v1/admin/custom-field-definitions/{id}",
    "risk": "read",
@@ -4341,7 +2815,8 @@
     ]
    }
   },
-  "dashboard.custom_field_definitions.list": {
+  "custom_field_definitions.list": {
+   "operationId": "dashboard.custom_field_definitions.list",
    "method": "GET",
    "path": "/api/v1/admin/custom-field-definitions",
    "risk": "read",
@@ -4419,7 +2894,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.get_brand_values": {
+  "custom_fields.get_brand_values": {
+   "operationId": "dashboard.custom_fields.get_brand_values",
    "method": "GET",
    "path": "/api/v1/admin/custom-fields/brand/{ownerId}",
    "risk": "read",
@@ -4485,7 +2961,8 @@
           },
           "updatedAt": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "format": "date-time"
           }
          },
          "required": [
@@ -4508,7 +2985,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.get_category_values": {
+  "custom_fields.get_category_values": {
+   "operationId": "dashboard.custom_fields.get_category_values",
    "method": "GET",
    "path": "/api/v1/admin/custom-fields/category/{ownerId}",
    "risk": "read",
@@ -4574,7 +3052,8 @@
           },
           "updatedAt": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "format": "date-time"
           }
          },
          "required": [
@@ -4597,7 +3076,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.get_collection_values": {
+  "custom_fields.get_collection_values": {
+   "operationId": "dashboard.custom_fields.get_collection_values",
    "method": "GET",
    "path": "/api/v1/admin/custom-fields/collection/{ownerId}",
    "risk": "read",
@@ -4663,7 +3143,8 @@
           },
           "updatedAt": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "format": "date-time"
           }
          },
          "required": [
@@ -4686,7 +3167,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.get_customer_values": {
+  "custom_fields.get_customer_values": {
+   "operationId": "dashboard.custom_fields.get_customer_values",
    "method": "GET",
    "path": "/api/v1/admin/custom-fields/customer/{ownerId}",
    "risk": "read",
@@ -4752,7 +3234,8 @@
           },
           "updatedAt": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "format": "date-time"
           }
          },
          "required": [
@@ -4775,7 +3258,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.get_order_values": {
+  "custom_fields.get_order_values": {
+   "operationId": "dashboard.custom_fields.get_order_values",
    "method": "GET",
    "path": "/api/v1/admin/custom-fields/order/{ownerId}",
    "risk": "read",
@@ -4843,7 +3327,8 @@
           },
           "updatedAt": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "format": "date-time"
           }
          },
          "required": [
@@ -4866,7 +3351,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.get_page_values": {
+  "custom_fields.get_page_values": {
+   "operationId": "dashboard.custom_fields.get_page_values",
    "method": "GET",
    "path": "/api/v1/admin/custom-fields/page/{ownerId}",
    "risk": "read",
@@ -4932,7 +3418,8 @@
           },
           "updatedAt": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "format": "date-time"
           }
          },
          "required": [
@@ -4955,7 +3442,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.get_product_values": {
+  "custom_fields.get_product_values": {
+   "operationId": "dashboard.custom_fields.get_product_values",
    "method": "GET",
    "path": "/api/v1/admin/custom-fields/product/{ownerId}",
    "risk": "read",
@@ -5021,7 +3509,8 @@
           },
           "updatedAt": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "format": "date-time"
           }
          },
          "required": [
@@ -5044,7 +3533,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.get_variant_values": {
+  "custom_fields.get_variant_values": {
+   "operationId": "dashboard.custom_fields.get_variant_values",
    "method": "GET",
    "path": "/api/v1/admin/custom-fields/variant/{ownerId}",
    "risk": "read",
@@ -5110,7 +3600,8 @@
           },
           "updatedAt": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "format": "date-time"
           }
          },
          "required": [
@@ -5133,7 +3624,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.set_brand_values": {
+  "custom_fields.set_brand_values": {
+   "operationId": "dashboard.custom_fields.set_brand_values",
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/brand/{ownerId}",
    "risk": "write",
@@ -5247,7 +3739,8 @@
           },
           "updatedAt": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "format": "date-time"
           }
          },
          "required": [
@@ -5270,7 +3763,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.set_category_values": {
+  "custom_fields.set_category_values": {
+   "operationId": "dashboard.custom_fields.set_category_values",
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/category/{ownerId}",
    "risk": "write",
@@ -5384,7 +3878,8 @@
           },
           "updatedAt": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "format": "date-time"
           }
          },
          "required": [
@@ -5407,7 +3902,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.set_collection_values": {
+  "custom_fields.set_collection_values": {
+   "operationId": "dashboard.custom_fields.set_collection_values",
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/collection/{ownerId}",
    "risk": "write",
@@ -5521,7 +4017,8 @@
           },
           "updatedAt": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "format": "date-time"
           }
          },
          "required": [
@@ -5544,7 +4041,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.set_customer_values": {
+  "custom_fields.set_customer_values": {
+   "operationId": "dashboard.custom_fields.set_customer_values",
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/customer/{ownerId}",
    "risk": "write",
@@ -5658,7 +4156,8 @@
           },
           "updatedAt": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "format": "date-time"
           }
          },
          "required": [
@@ -5681,7 +4180,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.set_order_values": {
+  "custom_fields.set_order_values": {
+   "operationId": "dashboard.custom_fields.set_order_values",
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/order/{ownerId}",
    "risk": "write",
@@ -5795,7 +4295,8 @@
           },
           "updatedAt": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "format": "date-time"
           }
          },
          "required": [
@@ -5818,7 +4319,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.set_page_values": {
+  "custom_fields.set_page_values": {
+   "operationId": "dashboard.custom_fields.set_page_values",
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/page/{ownerId}",
    "risk": "write",
@@ -5932,7 +4434,8 @@
           },
           "updatedAt": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "format": "date-time"
           }
          },
          "required": [
@@ -5955,7 +4458,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.set_product_values": {
+  "custom_fields.set_product_values": {
+   "operationId": "dashboard.custom_fields.set_product_values",
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/product/{ownerId}",
    "risk": "write",
@@ -6069,7 +4573,8 @@
           },
           "updatedAt": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "format": "date-time"
           }
          },
          "required": [
@@ -6092,7 +4597,8 @@
     ]
    }
   },
-  "dashboard.custom_fields.set_variant_values": {
+  "custom_fields.set_variant_values": {
+   "operationId": "dashboard.custom_fields.set_variant_values",
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/variant/{ownerId}",
    "risk": "write",
@@ -6206,7 +4712,8 @@
           },
           "updatedAt": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "format": "date-time"
           }
          },
          "required": [
@@ -6229,7 +4736,8 @@
     ]
    }
   },
-  "dashboard.customers.addresses_list": {
+  "customers.addresses_list": {
+   "operationId": "dashboard.customers.addresses_list",
    "method": "GET",
    "path": "/api/v1/admin/customers/{id}/addresses",
    "risk": "read",
@@ -6358,10 +4866,12 @@
            "type": "boolean"
           },
           "createdAt": {
-           "type": "integer"
+           "type": "string",
+           "format": "date-time"
           },
           "updatedAt": {
-           "type": "integer"
+           "type": "string",
+           "format": "date-time"
           }
          },
          "required": [
@@ -6404,7 +4914,8 @@
     ]
    }
   },
-  "dashboard.customers.create": {
+  "customers.create": {
+   "operationId": "dashboard.customers.create",
    "method": "POST",
    "path": "/api/v1/admin/customers",
    "risk": "write",
@@ -6565,7 +5076,8 @@
     ]
    }
   },
-  "dashboard.customers.marketing_get": {
+  "customers.marketing_get": {
+   "operationId": "dashboard.customers.marketing_get",
    "method": "GET",
    "path": "/api/v1/admin/customers/{id}/marketing",
    "risk": "read",
@@ -6670,19 +5182,23 @@
           },
           "subscribedAt": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "format": "date-time"
           },
           "unsubscribedAt": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "format": "date-time"
           },
           "requestedAt": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "format": "date-time"
           },
           "updatedAt": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "format": "date-time"
           }
          },
          "required": [
@@ -6781,7 +5297,8 @@
            "nullable": true
           },
           "createdAt": {
-           "type": "string"
+           "type": "string",
+           "format": "date-time"
           }
          },
          "required": [
@@ -6820,7 +5337,8 @@
     ]
    }
   },
-  "dashboard.customers.tags_list": {
+  "customers.tags_list": {
+   "operationId": "dashboard.customers.tags_list",
    "method": "GET",
    "path": "/api/v1/admin/customers/tags",
    "risk": "read",
@@ -6898,7 +5416,8 @@
     ]
    }
   },
-  "dashboard.customers.tags_set": {
+  "customers.tags_set": {
+   "operationId": "dashboard.customers.tags_set",
    "method": "PUT",
    "path": "/api/v1/admin/customers/{id}/tags",
    "risk": "write",
@@ -6987,7 +5506,8 @@
     ]
    }
   },
-  "dashboard.customers.update": {
+  "customers.update": {
+   "operationId": "dashboard.customers.update",
    "method": "PUT",
    "path": "/api/v1/admin/customers/{id}",
    "risk": "write",
@@ -7067,7 +5587,8 @@
     ]
    }
   },
-  "dashboard.delivery_locations.import": {
+  "delivery_locations.import": {
+   "operationId": "dashboard.delivery_locations.import",
    "method": "POST",
    "path": "/api/v1/admin/settings/delivery-locations/import",
    "risk": "write",
@@ -7267,7 +5788,8 @@
     ]
    }
   },
-  "dashboard.discounts.activate": {
+  "discounts.activate": {
+   "operationId": "dashboard.discounts.activate",
    "method": "POST",
    "path": "/api/v1/admin/discounts/{id}/activate",
    "risk": "write",
@@ -7366,7 +5888,8 @@
     ]
    }
   },
-  "dashboard.discounts.archive": {
+  "discounts.archive": {
+   "operationId": "dashboard.discounts.archive",
    "method": "DELETE",
    "path": "/api/v1/admin/discounts/{id}",
    "risk": "destructive",
@@ -7424,7 +5947,8 @@
    },
    "output": null
   },
-  "dashboard.discounts.create": {
+  "discounts.create": {
+   "operationId": "dashboard.discounts.create",
    "method": "POST",
    "path": "/api/v1/admin/discounts",
    "risk": "write",
@@ -7511,16 +6035,16 @@
           ],
           "additionalProperties": false
          },
-         "startsAtEpochSeconds": {
-          "type": "integer",
+         "startsAt": {
+          "type": "string",
           "nullable": true,
-          "minimum": 0,
+          "format": "date-time",
           "default": null
          },
-         "endsAtEpochSeconds": {
-          "type": "integer",
+         "endsAt": {
+          "type": "string",
           "nullable": true,
-          "minimum": 0,
+          "format": "date-time",
           "default": null
          },
          "timezone": {
@@ -7996,7 +6520,8 @@
     ]
    }
   },
-  "dashboard.discounts.get": {
+  "discounts.get": {
+   "operationId": "dashboard.discounts.get",
    "method": "GET",
    "path": "/api/v1/admin/discounts/{id}",
    "risk": "read",
@@ -8091,13 +6616,15 @@
          "shipping"
         ]
        },
-       "startsAtEpochSeconds": {
-        "type": "integer",
-        "nullable": true
+       "startsAt": {
+        "type": "string",
+        "nullable": true,
+        "format": "date-time"
        },
-       "endsAtEpochSeconds": {
-        "type": "integer",
-        "nullable": true
+       "endsAt": {
+        "type": "string",
+        "nullable": true,
+        "format": "date-time"
        },
        "timezone": {
         "type": "string"
@@ -8144,15 +6671,18 @@
         "minimum": 0,
         "description": "Total savings given, in minor units."
        },
-       "createdAtEpochSeconds": {
-        "type": "integer"
+       "createdAt": {
+        "type": "string",
+        "format": "date-time"
        },
-       "updatedAtEpochSeconds": {
-        "type": "integer"
+       "updatedAt": {
+        "type": "string",
+        "format": "date-time"
        },
-       "deletedAtEpochSeconds": {
-        "type": "integer",
-        "nullable": true
+       "deletedAt": {
+        "type": "string",
+        "nullable": true,
+        "format": "date-time"
        },
        "codes": {
         "type": "array",
@@ -8262,8 +6792,8 @@
        "priority",
        "conflictPolicy",
        "combinesWith",
-       "startsAtEpochSeconds",
-       "endsAtEpochSeconds",
+       "startsAt",
+       "endsAt",
        "timezone",
        "maxRedemptions",
        "maxRedemptionsPerCustomer",
@@ -8273,9 +6803,9 @@
        "redemptionCount",
        "customerRedemptionCount",
        "discountSpendMinor",
-       "createdAtEpochSeconds",
-       "updatedAtEpochSeconds",
-       "deletedAtEpochSeconds",
+       "createdAt",
+       "updatedAt",
+       "deletedAt",
        "codes",
        "conditions",
        "effects",
@@ -8289,415 +6819,8 @@
     ]
    }
   },
-  "dashboard.discounts.list": {
-   "method": "GET",
-   "path": "/api/v1/admin/discounts",
-   "risk": "read",
-   "idempotency": "none",
-   "revision": "none",
-   "scopes": [
-    "read_discounts",
-    "write_discounts"
-   ],
-   "input": {
-    "parameters": [
-     {
-      "schema": {
-       "type": "integer",
-       "minimum": 1,
-       "default": 1,
-       "description": "Page number; reaches the first 1,000 rows (10,000 on a Paid deployment)."
-      },
-      "required": false,
-      "description": "Page number; reaches the first 1,000 rows (10,000 on a Paid deployment).",
-      "name": "page",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "integer",
-       "minimum": 1,
-       "maximum": 90,
-       "default": 50
-      },
-      "required": false,
-      "name": "limit",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "maxLength": 120,
-       "description": "Matches the name or title anywhere, or a code from its start."
-      },
-      "required": false,
-      "description": "Matches the name or title anywhere, or a code from its start.",
-      "name": "search",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "enum": [
-        "active",
-        "scheduled",
-        "expired"
-       ],
-       "description": "active: on and started; scheduled: on, starts later; expired: its end has passed."
-      },
-      "required": false,
-      "description": "active: on and started; scheduled: on, starts later; expired: its end has passed.",
-      "name": "view",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "enum": [
-        "updated",
-        "titleAsc",
-        "titleDesc"
-       ],
-       "default": "updated"
-      },
-      "required": false,
-      "name": "sort",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "string"
-      },
-      "required": false,
-      "name": "includeDeleted",
-      "in": "query"
-     }
-    ]
-   },
-   "output": {
-    "type": "object",
-    "properties": {
-     "success": {
-      "type": "boolean",
-      "enum": [
-       true
-      ]
-     },
-     "data": {
-      "type": "object",
-      "properties": {
-       "discounts": {
-        "type": "array",
-        "items": {
-         "type": "object",
-         "properties": {
-          "id": {
-           "type": "string"
-          },
-          "revision": {
-           "type": "integer",
-           "minimum": 0,
-           "exclusiveMinimum": true
-          },
-          "name": {
-           "type": "string"
-          },
-          "title": {
-           "type": "string",
-           "nullable": true
-          },
-          "method": {
-           "type": "string",
-           "enum": [
-            "automatic",
-            "code"
-           ]
-          },
-          "status": {
-           "type": "string",
-           "enum": [
-            "draft",
-            "active",
-            "paused",
-            "archived"
-           ]
-          },
-          "priority": {
-           "type": "integer"
-          },
-          "conflictPolicy": {
-           "type": "string",
-           "enum": [
-            "best"
-           ]
-          },
-          "combinesWith": {
-           "type": "object",
-           "properties": {
-            "product": {
-             "type": "boolean"
-            },
-            "order": {
-             "type": "boolean"
-            },
-            "shipping": {
-             "type": "boolean"
-            }
-           },
-           "required": [
-            "product",
-            "order",
-            "shipping"
-           ]
-          },
-          "startsAtEpochSeconds": {
-           "type": "integer",
-           "nullable": true
-          },
-          "endsAtEpochSeconds": {
-           "type": "integer",
-           "nullable": true
-          },
-          "timezone": {
-           "type": "string"
-          },
-          "maxRedemptions": {
-           "type": "integer",
-           "nullable": true,
-           "minimum": 0,
-           "exclusiveMinimum": true
-          },
-          "maxRedemptionsPerCustomer": {
-           "type": "integer",
-           "nullable": true,
-           "minimum": 0,
-           "exclusiveMinimum": true
-          },
-          "currency": {
-           "type": "string",
-           "minLength": 3,
-           "maxLength": 3,
-           "description": "The store currency: rule amounts (amountMinor) and the spend are integer minor units of it."
-          },
-          "maxDiscountSpendMinor": {
-           "type": "integer",
-           "nullable": true,
-           "minimum": 0,
-           "exclusiveMinimum": true
-          },
-          "budgetCurrencyCode": {
-           "type": "string",
-           "nullable": true
-          },
-          "redemptionCount": {
-           "type": "integer",
-           "minimum": 0,
-           "description": "Orders that used this discount."
-          },
-          "customerRedemptionCount": {
-           "type": "integer",
-           "minimum": 0
-          },
-          "discountSpendMinor": {
-           "type": "integer",
-           "minimum": 0,
-           "description": "Total savings given, in minor units."
-          },
-          "createdAtEpochSeconds": {
-           "type": "integer"
-          },
-          "updatedAtEpochSeconds": {
-           "type": "integer"
-          },
-          "deletedAtEpochSeconds": {
-           "type": "integer",
-           "nullable": true
-          },
-          "codes": {
-           "type": "array",
-           "items": {
-            "type": "object",
-            "properties": {
-             "code": {
-              "type": "string"
-             },
-             "isActive": {
-              "type": "boolean"
-             }
-            },
-            "required": [
-             "code",
-             "isActive"
-            ]
-           }
-          },
-          "conditions": {
-           "type": "array",
-           "items": {
-            "type": "object",
-            "properties": {
-             "id": {
-              "type": "string"
-             },
-             "kind": {
-              "type": "string",
-              "enum": [
-               "minimum_merchandise_subtotal",
-               "minimum_item_quantity"
-              ]
-             },
-             "config": {
-              "type": "object",
-              "additionalProperties": {}
-             }
-            },
-            "required": [
-             "id",
-             "kind",
-             "config"
-            ]
-           }
-          },
-          "effects": {
-           "type": "array",
-           "items": {
-            "type": "object",
-            "properties": {
-             "id": {
-              "type": "string"
-             },
-             "kind": {
-              "type": "string",
-              "enum": [
-               "percentage_off",
-               "fixed_amount_off",
-               "free"
-              ]
-             },
-             "target": {
-              "type": "string",
-              "enum": [
-               "line",
-               "order",
-               "shipping"
-              ]
-             },
-             "allocation": {
-              "type": "string",
-              "enum": [
-               "across",
-               "once"
-              ]
-             },
-             "config": {
-              "type": "object",
-              "additionalProperties": {}
-             }
-            },
-            "required": [
-             "id",
-             "kind",
-             "target",
-             "allocation",
-             "config"
-            ]
-           }
-          },
-          "customerSegmentIds": {
-           "type": "array",
-           "items": {
-            "type": "string"
-           },
-           "description": "Only signed-in customers in any of these customer segments get this discount; empty means every customer."
-          },
-          "codeCount": {
-           "type": "integer",
-           "minimum": 0,
-           "description": "Codes the discount has; `codes` holds the first only."
-          }
-         },
-         "required": [
-          "id",
-          "revision",
-          "name",
-          "title",
-          "method",
-          "status",
-          "priority",
-          "conflictPolicy",
-          "combinesWith",
-          "startsAtEpochSeconds",
-          "endsAtEpochSeconds",
-          "timezone",
-          "maxRedemptions",
-          "maxRedemptionsPerCustomer",
-          "currency",
-          "maxDiscountSpendMinor",
-          "budgetCurrencyCode",
-          "redemptionCount",
-          "customerRedemptionCount",
-          "discountSpendMinor",
-          "createdAtEpochSeconds",
-          "updatedAtEpochSeconds",
-          "deletedAtEpochSeconds",
-          "codes",
-          "conditions",
-          "effects",
-          "customerSegmentIds",
-          "codeCount"
-         ]
-        }
-       },
-       "pagination": {
-        "type": "object",
-        "properties": {
-         "page": {
-          "type": "number",
-          "description": "Page number of this page; 0 for a cursor page deeper than the count cap."
-         },
-         "limit": {
-          "type": "number"
-         },
-         "total": {
-          "type": "number",
-          "description": "Matching rows: exact up to the count cap (1,000; 10,000 on a Paid deployment), otherwise the cap with totalIsCapped true."
-         },
-         "totalPages": {
-          "type": "number"
-         },
-         "totalIsCapped": {
-          "type": "boolean",
-          "description": "More rows match than `total` counts (show \"1,000+\")."
-         },
-         "offset": {
-          "type": "integer",
-          "nullable": true,
-          "description": "Zero-based index of the first row of this page; null deeper than the count cap."
-         }
-        },
-        "required": [
-         "page",
-         "limit",
-         "total",
-         "totalPages",
-         "totalIsCapped",
-         "offset"
-        ]
-       }
-      },
-      "required": [
-       "discounts",
-       "pagination"
-      ]
-     }
-    },
-    "required": [
-     "success",
-     "data"
-    ]
-   }
-  },
-  "dashboard.discounts.pause": {
+  "discounts.pause": {
+   "operationId": "dashboard.discounts.pause",
    "method": "POST",
    "path": "/api/v1/admin/discounts/{id}/pause",
    "risk": "write",
@@ -8796,7 +6919,8 @@
     ]
    }
   },
-  "dashboard.discounts.update": {
+  "discounts.update": {
+   "operationId": "dashboard.discounts.update",
    "method": "PUT",
    "path": "/api/v1/admin/discounts/{id}",
    "risk": "write",
@@ -8898,16 +7022,16 @@
           ],
           "additionalProperties": false
          },
-         "startsAtEpochSeconds": {
-          "type": "integer",
+         "startsAt": {
+          "type": "string",
           "nullable": true,
-          "minimum": 0,
+          "format": "date-time",
           "default": null
          },
-         "endsAtEpochSeconds": {
-          "type": "integer",
+         "endsAt": {
+          "type": "string",
           "nullable": true,
-          "minimum": 0,
+          "format": "date-time",
           "default": null
          },
          "timezone": {
@@ -9384,7 +7508,8 @@
     ]
    }
   },
-  "dashboard.inventory_locations.list": {
+  "inventory_locations.list": {
+   "operationId": "dashboard.inventory_locations.list",
    "method": "GET",
    "path": "/api/v1/admin/inventory/locations",
    "risk": "read",
@@ -9499,24 +7624,12 @@
            "description": "SKUs with units on hand there"
           },
           "createdAt": {
-           "anyOf": [
-            {
-             "type": "string"
-            },
-            {
-             "type": "number"
-            }
-           ]
+           "type": "string",
+           "format": "date-time"
           },
           "updatedAt": {
-           "anyOf": [
-            {
-             "type": "string"
-            },
-            {
-             "type": "number"
-            }
-           ]
+           "type": "string",
+           "format": "date-time"
           }
          },
          "required": [
@@ -9548,7 +7661,8 @@
     ]
    }
   },
-  "dashboard.inventory.adjust": {
+  "inventory.adjust": {
+   "operationId": "dashboard.inventory.adjust",
    "method": "POST",
    "path": "/api/v1/admin/inventory/{variantId}/adjust",
    "risk": "write",
@@ -9687,7 +7801,8 @@
     ]
    }
   },
-  "dashboard.inventory.levels": {
+  "inventory.levels": {
+   "operationId": "dashboard.inventory.levels",
    "method": "GET",
    "path": "/api/v1/admin/inventory/{variantId}/levels",
    "risk": "read",
@@ -9785,7 +7900,8 @@
     ]
    }
   },
-  "dashboard.inventory.product_levels": {
+  "inventory.product_levels": {
+   "operationId": "dashboard.inventory.product_levels",
    "method": "GET",
    "path": "/api/v1/admin/inventory/levels",
    "risk": "read",
@@ -9893,7 +8009,8 @@
     ]
    }
   },
-  "dashboard.inventory.set_stock": {
+  "inventory.set_stock": {
+   "operationId": "dashboard.inventory.set_stock",
    "method": "POST",
    "path": "/api/v1/admin/inventory/stock-set",
    "risk": "write",
@@ -10011,7 +8128,8 @@
     ]
    }
   },
-  "dashboard.languages.list": {
+  "languages.list": {
+   "operationId": "dashboard.languages.list",
    "method": "GET",
    "path": "/api/v1/admin/settings/languages",
    "risk": "read",
@@ -10051,7 +8169,8 @@
     ]
    }
   },
-  "dashboard.media.get": {
+  "media.get": {
+   "operationId": "dashboard.media.get",
    "method": "GET",
    "path": "/api/v1/admin/media/{id}",
    "risk": "read",
@@ -10165,30 +8284,22 @@
           "minimum": 1
          },
          "createdAt": {
-          "anyOf": [
-           {
-            "type": "string"
-           },
-           {
-            "type": "number"
-           }
-          ]
+          "type": "string",
+          "format": "date-time"
          },
          "updatedAt": {
-          "anyOf": [
-           {
-            "type": "string"
-           },
-           {
-            "type": "number"
-           }
-          ]
+          "type": "string",
+          "format": "date-time"
          },
          "trashedAt": {
-          "$ref": "#/components/schemas/NullableTimestamp"
+          "type": "string",
+          "nullable": true,
+          "format": "date-time"
          },
          "deletedAt": {
-          "$ref": "#/components/schemas/NullableTimestamp"
+          "type": "string",
+          "nullable": true,
+          "format": "date-time"
          }
         },
         "required": [
@@ -10221,7 +8332,8 @@
     ]
    }
   },
-  "dashboard.media.import_url": {
+  "media.import_url": {
+   "operationId": "dashboard.media.import_url",
    "method": "POST",
    "path": "/api/v1/admin/media/uploads/import-url",
    "risk": "write",
@@ -10367,30 +8479,22 @@
           "minimum": 1
          },
          "createdAt": {
-          "anyOf": [
-           {
-            "type": "string"
-           },
-           {
-            "type": "number"
-           }
-          ]
+          "type": "string",
+          "format": "date-time"
          },
          "updatedAt": {
-          "anyOf": [
-           {
-            "type": "string"
-           },
-           {
-            "type": "number"
-           }
-          ]
+          "type": "string",
+          "format": "date-time"
          },
          "trashedAt": {
-          "$ref": "#/components/schemas/NullableTimestamp"
+          "type": "string",
+          "nullable": true,
+          "format": "date-time"
          },
          "deletedAt": {
-          "$ref": "#/components/schemas/NullableTimestamp"
+          "type": "string",
+          "nullable": true,
+          "format": "date-time"
          }
         },
         "required": [
@@ -10423,7 +8527,8 @@
     ]
    }
   },
-  "dashboard.media.list": {
+  "media.list": {
+   "operationId": "dashboard.media.list",
    "method": "GET",
    "path": "/api/v1/admin/media",
    "risk": "read",
@@ -10641,30 +8746,22 @@
            "minimum": 1
           },
           "createdAt": {
-           "anyOf": [
-            {
-             "type": "string"
-            },
-            {
-             "type": "number"
-            }
-           ]
+           "type": "string",
+           "format": "date-time"
           },
           "updatedAt": {
-           "anyOf": [
-            {
-             "type": "string"
-            },
-            {
-             "type": "number"
-            }
-           ]
+           "type": "string",
+           "format": "date-time"
           },
           "trashedAt": {
-           "$ref": "#/components/schemas/NullableTimestamp"
+           "type": "string",
+           "nullable": true,
+           "format": "date-time"
           },
           "deletedAt": {
-           "$ref": "#/components/schemas/NullableTimestamp"
+           "type": "string",
+           "nullable": true,
+           "format": "date-time"
           },
           "usageCount": {
            "type": "integer",
@@ -10697,32 +8794,15 @@
          ]
         }
        },
-       "pagination": {
-        "type": "object",
-        "properties": {
-         "limit": {
-          "type": "integer",
-          "minimum": 0,
-          "exclusiveMinimum": true
-         },
-         "hasMore": {
-          "type": "boolean"
-         },
-         "nextCursor": {
-          "type": "string",
-          "nullable": true
-         }
-        },
-        "required": [
-         "limit",
-         "hasMore",
-         "nextCursor"
-        ]
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
        }
       },
       "required": [
        "files",
-       "pagination"
+       "nextCursor"
       ]
      }
     },
@@ -10732,7 +8812,8 @@
     ]
    }
   },
-  "dashboard.media.trash": {
+  "media.trash": {
+   "operationId": "dashboard.media.trash",
    "method": "POST",
    "path": "/api/v1/admin/media/{id}/trash",
    "risk": "destructive",
@@ -10876,30 +8957,22 @@
           "minimum": 1
          },
          "createdAt": {
-          "anyOf": [
-           {
-            "type": "string"
-           },
-           {
-            "type": "number"
-           }
-          ]
+          "type": "string",
+          "format": "date-time"
          },
          "updatedAt": {
-          "anyOf": [
-           {
-            "type": "string"
-           },
-           {
-            "type": "number"
-           }
-          ]
+          "type": "string",
+          "format": "date-time"
          },
          "trashedAt": {
-          "$ref": "#/components/schemas/NullableTimestamp"
+          "type": "string",
+          "nullable": true,
+          "format": "date-time"
          },
          "deletedAt": {
-          "$ref": "#/components/schemas/NullableTimestamp"
+          "type": "string",
+          "nullable": true,
+          "format": "date-time"
          }
         },
         "required": [
@@ -10932,7 +9005,8 @@
     ]
    }
   },
-  "dashboard.media.update": {
+  "media.update": {
+   "operationId": "dashboard.media.update",
    "method": "PATCH",
    "path": "/api/v1/admin/media/{id}",
    "risk": "write",
@@ -11123,30 +9197,22 @@
           "minimum": 1
          },
          "createdAt": {
-          "anyOf": [
-           {
-            "type": "string"
-           },
-           {
-            "type": "number"
-           }
-          ]
+          "type": "string",
+          "format": "date-time"
          },
          "updatedAt": {
-          "anyOf": [
-           {
-            "type": "string"
-           },
-           {
-            "type": "number"
-           }
-          ]
+          "type": "string",
+          "format": "date-time"
          },
          "trashedAt": {
-          "$ref": "#/components/schemas/NullableTimestamp"
+          "type": "string",
+          "nullable": true,
+          "format": "date-time"
          },
          "deletedAt": {
-          "$ref": "#/components/schemas/NullableTimestamp"
+          "type": "string",
+          "nullable": true,
+          "format": "date-time"
          }
         },
         "required": [
@@ -11179,148 +9245,8 @@
     ]
    }
   },
-  "dashboard.orders.comment_add": {
-   "method": "POST",
-   "path": "/api/v1/admin/orders/{id}/timeline",
-   "risk": "write",
-   "idempotency": "supported",
-   "revision": "none",
-   "scopes": [
-    "write_orders"
-   ],
-   "input": {
-    "parameters": [
-     {
-      "schema": {
-       "type": "string"
-      },
-      "required": true,
-      "name": "id",
-      "in": "path"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "pattern": "^[\\x20-\\x7E]{8,200}$",
-       "minLength": 8,
-       "maxLength": 200
-      },
-      "required": false,
-      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
-      "name": "idempotency-key",
-      "in": "header"
-     }
-    ],
-    "requestBody": {
-     "content": {
-      "application/json": {
-       "schema": {
-        "type": "object",
-        "properties": {
-         "body": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 2000
-         }
-        },
-        "required": [
-         "body"
-        ]
-       }
-      }
-     },
-     "required": true
-    }
-   },
-   "output": {
-    "type": "object",
-    "properties": {
-     "success": {
-      "type": "boolean",
-      "enum": [
-       true
-      ]
-     },
-     "data": {
-      "type": "object",
-      "properties": {
-       "id": {
-        "type": "string"
-       },
-       "kind": {
-        "type": "string",
-        "enum": [
-         "placed",
-         "comment",
-         "status_changed",
-         "details_edited",
-         "items_edited",
-         "shipment_created",
-         "cod_collected",
-         "cod_failed",
-         "cod_returned",
-         "payment_recorded",
-         "refund_recorded",
-         "return_created",
-         "return_approved",
-         "return_received",
-         "parcel_returned",
-         "request_submitted",
-         "request_resolved",
-         "archived",
-         "unarchived",
-         "invoice_issued",
-         "fulfillment_location_changed",
-         "prices_set",
-         "app_event"
-        ]
-       },
-       "body": {
-        "type": "string",
-        "nullable": true
-       },
-       "data": {
-        "type": "object",
-        "nullable": true,
-        "additionalProperties": {}
-       },
-       "actorName": {
-        "type": "string",
-        "nullable": true
-       },
-       "own": {
-        "type": "boolean",
-        "description": "The viewer wrote this comment and may delete it."
-       },
-       "createdAt": {
-        "anyOf": [
-         {
-          "type": "string"
-         },
-         {
-          "type": "number"
-         }
-        ]
-       }
-      },
-      "required": [
-       "id",
-       "kind",
-       "body",
-       "data",
-       "actorName",
-       "own",
-       "createdAt"
-      ]
-     }
-    },
-    "required": [
-     "success",
-     "data"
-    ]
-   }
-  },
-  "dashboard.orders.fulfillment_void": {
+  "orders.fulfillment_void": {
+   "operationId": "dashboard.orders.fulfillment_void",
    "method": "POST",
    "path": "/api/v1/admin/orders/{id}/fulfillments/{fulfillmentId}/void",
    "risk": "write",
@@ -11418,7 +9344,8 @@
     ]
    }
   },
-  "dashboard.orders.mark_delivered": {
+  "orders.mark_delivered": {
+   "operationId": "dashboard.orders.mark_delivered",
    "method": "POST",
    "path": "/api/v1/admin/orders/{id}/mark-delivered",
    "risk": "write",
@@ -11489,7 +9416,8 @@
     ]
    }
   },
-  "dashboard.orders.pickup_ready": {
+  "orders.pickup_ready": {
+   "operationId": "dashboard.orders.pickup_ready",
    "method": "POST",
    "path": "/api/v1/admin/orders/{id}/pickup-ready",
    "risk": "write",
@@ -11556,7 +9484,8 @@
         "type": "string"
        },
        "pickupReadyAt": {
-        "type": "string"
+        "type": "string",
+        "format": "date-time"
        },
        "replayed": {
         "type": "boolean"
@@ -11575,7 +9504,8 @@
     ]
    }
   },
-  "dashboard.orders.return_get": {
+  "orders.return_get": {
+   "operationId": "dashboard.orders.return_get",
    "method": "GET",
    "path": "/api/v1/admin/orders/{id}/returns/{returnId}",
    "risk": "read",
@@ -11719,8 +9649,9 @@
             ]
            },
            "startedAt": {
-            "type": "integer",
-            "nullable": true
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
            }
           },
           "required": [
@@ -11892,7 +9823,8 @@
     ]
    }
   },
-  "dashboard.orders.returns": {
+  "orders.returns": {
+   "operationId": "dashboard.orders.returns",
    "method": "GET",
    "path": "/api/v1/admin/orders/{id}/returns",
    "risk": "read",
@@ -12030,8 +9962,9 @@
              ]
             },
             "startedAt": {
-             "type": "integer",
-             "nullable": true
+             "type": "string",
+             "nullable": true,
+             "format": "date-time"
             }
            },
            "required": [
@@ -12204,7 +10137,8 @@
     ]
    }
   },
-  "dashboard.orders.timeline": {
+  "orders.timeline": {
+   "operationId": "dashboard.orders.timeline",
    "method": "GET",
    "path": "/api/v1/admin/orders/{id}/timeline",
    "risk": "read",
@@ -12229,10 +10163,23 @@
      {
       "schema": {
        "type": "string",
-       "maxLength": 1024
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
       },
       "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
       "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 100,
+       "default": 50
+      },
+      "required": false,
+      "name": "limit",
       "in": "query"
      }
     ]
@@ -12303,14 +10250,8 @@
            "description": "The viewer wrote this comment and may delete it."
           },
           "createdAt": {
-           "anyOf": [
-            {
-             "type": "string"
-            },
-            {
-             "type": "number"
-            }
-           ]
+           "type": "string",
+           "format": "date-time"
           }
          },
          "required": [
@@ -12327,15 +10268,11 @@
        "nextCursor": {
         "type": "string",
         "nullable": true
-       },
-       "hasMore": {
-        "type": "boolean"
        }
       },
       "required": [
        "events",
-       "nextCursor",
-       "hasMore"
+       "nextCursor"
       ]
      }
     },
@@ -12345,7 +10282,8 @@
     ]
    }
   },
-  "dashboard.orders.update_details": {
+  "orders.update_details": {
+   "operationId": "dashboard.orders.update_details",
    "method": "PUT",
    "path": "/api/v1/admin/orders/{id}/details",
    "risk": "write",
@@ -12555,7 +10493,8 @@
     ]
    }
   },
-  "dashboard.orders.update_status": {
+  "orders.update_status": {
+   "operationId": "dashboard.orders.update_status",
    "method": "PUT",
    "path": "/api/v1/admin/orders/{id}/status",
    "risk": "write",
@@ -12660,7 +10599,8 @@
     ]
    }
   },
-  "dashboard.product_variants.retire": {
+  "product_variants.retire": {
+   "operationId": "dashboard.product_variants.retire",
    "method": "DELETE",
    "path": "/api/v1/admin/products/{id}/variants/{variantId}",
    "risk": "destructive",
@@ -12738,7 +10678,8 @@
     ]
    }
   },
-  "dashboard.products.publications_set": {
+  "products.publications_set": {
+   "operationId": "dashboard.products.publications_set",
    "method": "PUT",
    "path": "/api/v1/admin/products/{id}/publications",
    "risk": "write",
@@ -12829,7 +10770,8 @@
     ]
    }
   },
-  "dashboard.products.restore": {
+  "products.restore": {
+   "operationId": "dashboard.products.restore",
    "method": "POST",
    "path": "/api/v1/admin/products/{id}/restore",
    "risk": "write",
@@ -12899,7 +10841,8 @@
     ]
    }
   },
-  "dashboard.products.trash": {
+  "products.trash": {
+   "operationId": "dashboard.products.trash",
    "method": "DELETE",
    "path": "/api/v1/admin/products/{id}",
    "risk": "destructive",
@@ -12969,7 +10912,8 @@
     ]
    }
   },
-  "dashboard.resources.app_content.delete": {
+  "app_content.delete": {
+   "operationId": "dashboard.resources.app_content.delete",
    "method": "POST",
    "path": "/api/v1/admin/resources/app-content/delete",
    "risk": "destructive",
@@ -13116,7 +11060,8 @@
     ]
    }
   },
-  "dashboard.resources.bulk_runs.get": {
+  "bulk_runs.get": {
+   "operationId": "dashboard.resources.bulk_runs.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/bulk-runs/{id}",
    "risk": "read",
@@ -13163,7 +11108,8 @@
     ]
    }
   },
-  "dashboard.resources.bulk_runs.list": {
+  "bulk_runs.list": {
+   "operationId": "dashboard.resources.bulk_runs.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/bulk-runs",
    "risk": "read",
@@ -13201,6 +11147,17 @@
       "required": false,
       "description": "The `nextCursor` of the page before.",
       "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 20,
+       "default": 20
+      },
+      "required": false,
+      "name": "limit",
       "in": "query"
      }
     ]
@@ -13241,7 +11198,8 @@
     ]
    }
   },
-  "dashboard.resources.customers.bulk_tag": {
+  "customers.bulk_tag": {
+   "operationId": "dashboard.resources.customers.bulk_tag",
    "method": "POST",
    "path": "/api/v1/admin/resources/customers/bulk-tag",
    "risk": "write",
@@ -13357,7 +11315,8 @@
     ]
    }
   },
-  "dashboard.resources.customers.get": {
+  "customers.get": {
+   "operationId": "dashboard.resources.customers.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/customers/{id}",
    "risk": "read",
@@ -13400,7 +11359,8 @@
     ]
    }
   },
-  "dashboard.resources.customers.list": {
+  "customers.list": {
+   "operationId": "dashboard.resources.customers.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/customers",
    "risk": "read",
@@ -13534,7 +11494,8 @@
     ]
    }
   },
-  "dashboard.resources.fulfillments.create": {
+  "fulfillments.create": {
+   "operationId": "dashboard.resources.fulfillments.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/orders/{id}/fulfillments",
    "risk": "write",
@@ -13685,7 +11646,8 @@
     ]
    }
   },
-  "dashboard.resources.fulfillments.list": {
+  "fulfillments.list": {
+   "operationId": "dashboard.resources.fulfillments.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/orders/{id}/fulfillments",
    "risk": "read",
@@ -13741,7 +11703,8 @@
     ]
    }
   },
-  "dashboard.resources.gift_cards.adjust": {
+  "gift_cards.adjust": {
+   "operationId": "dashboard.resources.gift_cards.adjust",
    "method": "POST",
    "path": "/api/v1/admin/resources/gift-cards/{id}/adjust",
    "risk": "financial",
@@ -13837,7 +11800,8 @@
     ]
    }
   },
-  "dashboard.resources.gift_cards.create": {
+  "gift_cards.create": {
+   "operationId": "dashboard.resources.gift_cards.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/gift-cards",
    "risk": "financial",
@@ -13961,7 +11925,8 @@
     ]
    }
   },
-  "dashboard.resources.gift_cards.get": {
+  "gift_cards.get": {
+   "operationId": "dashboard.resources.gift_cards.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/gift-cards/{id}",
    "risk": "read",
@@ -14012,7 +11977,8 @@
     ]
    }
   },
-  "dashboard.resources.gift_cards.list": {
+  "gift_cards.list": {
+   "operationId": "dashboard.resources.gift_cards.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/gift-cards",
    "risk": "read",
@@ -14098,7 +12064,8 @@
     ]
    }
   },
-  "dashboard.resources.gift_cards.update": {
+  "gift_cards.update": {
+   "operationId": "dashboard.resources.gift_cards.update",
    "method": "PATCH",
    "path": "/api/v1/admin/resources/gift-cards/{id}",
    "risk": "financial",
@@ -14206,7 +12173,8 @@
     ]
    }
   },
-  "dashboard.resources.orders.create": {
+  "orders.create": {
+   "operationId": "dashboard.resources.orders.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/orders",
    "risk": "write",
@@ -14602,7 +12570,8 @@
     ]
    }
   },
-  "dashboard.resources.orders.get": {
+  "orders.get": {
+   "operationId": "dashboard.resources.orders.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/orders/{id}",
    "risk": "read",
@@ -14647,7 +12616,8 @@
     ]
    }
   },
-  "dashboard.resources.orders.list": {
+  "orders.list": {
+   "operationId": "dashboard.resources.orders.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/orders",
    "risk": "read",
@@ -14834,7 +12804,8 @@
     ]
    }
   },
-  "dashboard.resources.payments.create": {
+  "payments.create": {
+   "operationId": "dashboard.resources.payments.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/orders/{id}/payments",
    "risk": "financial",
@@ -14947,7 +12918,8 @@
     ]
    }
   },
-  "dashboard.resources.payments.list": {
+  "payments.list": {
+   "operationId": "dashboard.resources.payments.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/orders/{id}/payments",
    "risk": "read",
@@ -15003,7 +12975,8 @@
     ]
    }
   },
-  "dashboard.resources.price_lists.create": {
+  "price_lists.create": {
+   "operationId": "dashboard.resources.price_lists.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/price-lists",
    "risk": "write",
@@ -15129,7 +13102,8 @@
     ]
    }
   },
-  "dashboard.resources.price_lists.delete": {
+  "price_lists.delete": {
+   "operationId": "dashboard.resources.price_lists.delete",
    "method": "DELETE",
    "path": "/api/v1/admin/resources/price-lists/{id}",
    "risk": "destructive",
@@ -15201,7 +13175,8 @@
     ]
    }
   },
-  "dashboard.resources.price_lists.get": {
+  "price_lists.get": {
+   "operationId": "dashboard.resources.price_lists.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/price-lists/{id}",
    "risk": "read",
@@ -15252,7 +13227,8 @@
     ]
    }
   },
-  "dashboard.resources.price_lists.list": {
+  "price_lists.list": {
+   "operationId": "dashboard.resources.price_lists.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/price-lists",
    "risk": "read",
@@ -15306,7 +13282,8 @@
     ]
    }
   },
-  "dashboard.resources.price_lists.prices_list": {
+  "price_lists.prices_list": {
+   "operationId": "dashboard.resources.price_lists.prices_list",
    "method": "GET",
    "path": "/api/v1/admin/resources/price-lists/{id}/prices",
    "risk": "read",
@@ -15330,13 +13307,13 @@
      },
      {
       "schema": {
-       "type": "integer",
-       "minimum": 1,
-       "maximum": 1000,
-       "default": 1
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
       },
       "required": false,
-      "name": "page",
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
       "in": "query"
      },
      {
@@ -15373,27 +13350,21 @@
      "data": {
       "type": "object",
       "properties": {
-       "items": {
+       "prices": {
         "type": "array",
         "items": {
          "$ref": "#/components/schemas/PriceListSku"
         }
        },
-       "total": {
-        "type": "integer"
-       },
-       "page": {
-        "type": "integer"
-       },
-       "limit": {
-        "type": "integer"
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
        }
       },
       "required": [
-       "items",
-       "total",
-       "page",
-       "limit"
+       "prices",
+       "nextCursor"
       ]
      }
     },
@@ -15403,7 +13374,8 @@
     ]
    }
   },
-  "dashboard.resources.price_lists.prices_set": {
+  "price_lists.prices_set": {
+   "operationId": "dashboard.resources.price_lists.prices_set",
    "method": "PUT",
    "path": "/api/v1/admin/resources/price-lists/{id}/prices",
    "risk": "write",
@@ -15552,7 +13524,8 @@
     ]
    }
   },
-  "dashboard.resources.price_lists.update": {
+  "price_lists.update": {
+   "operationId": "dashboard.resources.price_lists.update",
    "method": "PATCH",
    "path": "/api/v1/admin/resources/price-lists/{id}",
    "risk": "write",
@@ -15689,7 +13662,8 @@
     ]
    }
   },
-  "dashboard.resources.products.bulk_publish": {
+  "products.bulk_publish": {
+   "operationId": "dashboard.resources.products.bulk_publish",
    "method": "POST",
    "path": "/api/v1/admin/resources/products/bulk-publish",
    "risk": "write",
@@ -15813,7 +13787,8 @@
     ]
    }
   },
-  "dashboard.resources.products.bulk_set_status": {
+  "products.bulk_set_status": {
+   "operationId": "dashboard.resources.products.bulk_set_status",
    "method": "POST",
    "path": "/api/v1/admin/resources/products/bulk-set-status",
    "risk": "write",
@@ -15939,7 +13914,8 @@
     ]
    }
   },
-  "dashboard.resources.products.create": {
+  "products.create": {
+   "operationId": "dashboard.resources.products.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/products",
    "risk": "write",
@@ -16198,7 +14174,8 @@
     ]
    }
   },
-  "dashboard.resources.products.get": {
+  "products.get": {
+   "operationId": "dashboard.resources.products.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/products/{id}",
    "risk": "read",
@@ -16241,7 +14218,8 @@
     ]
    }
   },
-  "dashboard.resources.products.list": {
+  "products.list": {
+   "operationId": "dashboard.resources.products.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/products",
    "risk": "read",
@@ -16385,7 +14363,8 @@
     ]
    }
   },
-  "dashboard.resources.products.update": {
+  "products.update": {
+   "operationId": "dashboard.resources.products.update",
    "method": "PATCH",
    "path": "/api/v1/admin/resources/products/{id}",
    "risk": "write",
@@ -16531,7 +14510,8 @@
     ]
    }
   },
-  "dashboard.resources.shipments.create": {
+  "shipments.create": {
+   "operationId": "dashboard.resources.shipments.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/orders/{id}/shipments",
    "risk": "write",
@@ -16640,7 +14620,8 @@
     ]
    }
   },
-  "dashboard.resources.shipments.get": {
+  "shipments.get": {
+   "operationId": "dashboard.resources.shipments.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/shipments/{id}",
    "risk": "read",
@@ -16685,7 +14666,8 @@
     ]
    }
   },
-  "dashboard.resources.shipments.list": {
+  "shipments.list": {
+   "operationId": "dashboard.resources.shipments.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/orders/{id}/shipments",
    "risk": "read",
@@ -16741,7 +14723,8 @@
     ]
    }
   },
-  "dashboard.resources.variants.bulk_set_prices": {
+  "variants.bulk_set_prices": {
+   "operationId": "dashboard.resources.variants.bulk_set_prices",
    "method": "POST",
    "path": "/api/v1/admin/resources/variants/bulk-set-prices",
    "risk": "write",
@@ -16928,7 +14911,8 @@
     ]
    }
   },
-  "dashboard.resources.variants.bulk_set_stock": {
+  "variants.bulk_set_stock": {
+   "operationId": "dashboard.resources.variants.bulk_set_stock",
    "method": "POST",
    "path": "/api/v1/admin/resources/variants/bulk-set-stock",
    "risk": "write",
@@ -17033,7 +15017,8 @@
     ]
    }
   },
-  "dashboard.resources.variants.get": {
+  "variants.get": {
+   "operationId": "dashboard.resources.variants.get",
    "method": "GET",
    "path": "/api/v1/admin/resources/variants/{id}",
    "risk": "read",
@@ -17078,7 +15063,8 @@
     ]
    }
   },
-  "dashboard.resources.variants.lookup": {
+  "variants.lookup": {
+   "operationId": "dashboard.resources.variants.lookup",
    "method": "POST",
    "path": "/api/v1/admin/resources/variants/lookup",
    "risk": "read",
@@ -17148,7 +15134,8 @@
     ]
    }
   },
-  "dashboard.resources.webhook_subscriptions.create": {
+  "webhook_subscriptions.create": {
+   "operationId": "dashboard.resources.webhook_subscriptions.create",
    "method": "POST",
    "path": "/api/v1/admin/resources/webhook-subscriptions",
    "risk": "write",
@@ -17310,7 +15297,8 @@
     ]
    }
   },
-  "dashboard.resources.webhook_subscriptions.delete": {
+  "webhook_subscriptions.delete": {
+   "operationId": "dashboard.resources.webhook_subscriptions.delete",
    "method": "DELETE",
    "path": "/api/v1/admin/resources/webhook-subscriptions/{id}",
    "risk": "destructive",
@@ -17389,7 +15377,8 @@
     ]
    }
   },
-  "dashboard.resources.webhook_subscriptions.list": {
+  "webhook_subscriptions.list": {
+   "operationId": "dashboard.resources.webhook_subscriptions.list",
    "method": "GET",
    "path": "/api/v1/admin/resources/webhook-subscriptions",
    "risk": "read",
@@ -17439,7 +15428,8 @@
     ]
    }
   },
-  "dashboard.resources.webhook_subscriptions.update": {
+  "webhook_subscriptions.update": {
+   "operationId": "dashboard.resources.webhook_subscriptions.update",
    "method": "PATCH",
    "path": "/api/v1/admin/resources/webhook-subscriptions/{id}",
    "risk": "write",
@@ -17619,7 +15609,8 @@
     ]
    }
   },
-  "dashboard.sales_channels.products": {
+  "sales_channels.products": {
+   "operationId": "dashboard.sales_channels.products",
    "method": "GET",
    "path": "/api/v1/admin/settings/sales-channels/{id}/products",
    "risk": "read",
@@ -17646,11 +15637,11 @@
        "type": "string",
        "minLength": 1,
        "maxLength": 64,
-       "description": "The last product id of the previous page."
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
       },
       "required": false,
-      "description": "The last product id of the previous page.",
-      "name": "after",
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
       "in": "query"
      },
      {
@@ -17683,14 +15674,15 @@
          "type": "string"
         }
        },
-       "nextAfter": {
+       "nextCursor": {
         "type": "string",
-        "nullable": true
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
        }
       },
       "required": [
        "productIds",
-       "nextAfter"
+       "nextCursor"
       ]
      }
     },
@@ -17700,7 +15692,8 @@
     ]
    }
   },
-  "dashboard.settings.business_get": {
+  "settings.business_get": {
+   "operationId": "dashboard.settings.business_get",
    "method": "GET",
    "path": "/api/v1/admin/settings/business",
    "risk": "read",
@@ -17843,6 +15836,7 @@
    }
   },
   "objects.delete": {
+   "operationId": "objects.delete",
    "method": "DELETE",
    "path": "/api/v1/admin/objects/{type}/{id}",
    "risk": "destructive",
@@ -17899,6 +15893,7 @@
    "output": null
   },
   "objects.get": {
+   "operationId": "objects.get",
    "method": "GET",
    "path": "/api/v1/admin/objects/{type}/{id}",
    "risk": "read",
@@ -17960,6 +15955,7 @@
    }
   },
   "objects.list": {
+   "operationId": "objects.list",
    "method": "GET",
    "path": "/api/v1/admin/objects/{type}",
    "risk": "read",
@@ -18090,6 +16086,7 @@
    }
   },
   "objects.types.create": {
+   "operationId": "objects.types.create",
    "method": "POST",
    "path": "/api/v1/admin/objects/types",
    "risk": "write",
@@ -18239,6 +16236,7 @@
    }
   },
   "objects.types.delete": {
+   "operationId": "objects.types.delete",
    "method": "DELETE",
    "path": "/api/v1/admin/objects/types/{type}",
    "risk": "destructive",
@@ -18285,6 +16283,7 @@
    "output": null
   },
   "objects.types.get": {
+   "operationId": "objects.types.get",
    "method": "GET",
    "path": "/api/v1/admin/objects/types/{type}",
    "risk": "read",
@@ -18341,6 +16340,7 @@
    }
   },
   "objects.types.list": {
+   "operationId": "objects.types.list",
    "method": "GET",
    "path": "/api/v1/admin/objects/types",
    "risk": "read",
@@ -18382,6 +16382,7 @@
    }
   },
   "objects.types.update": {
+   "operationId": "objects.types.update",
    "method": "PATCH",
    "path": "/api/v1/admin/objects/types/{type}",
    "risk": "write",
@@ -18541,6 +16542,7 @@
    }
   },
   "objects.upsert": {
+   "operationId": "objects.upsert",
    "method": "PUT",
    "path": "/api/v1/admin/objects/{type}/{id}",
    "risk": "write",
@@ -18777,10 +16779,12 @@
      "minimum": 1
     },
     "createdAt": {
-     "type": "string"
+     "type": "string",
+     "format": "date-time"
     },
     "updatedAt": {
-     "type": "string"
+     "type": "string",
+     "format": "date-time"
     }
    },
    "required": [
@@ -18856,15 +16860,18 @@
     },
     "failingSince": {
      "type": "string",
-     "nullable": true
+     "nullable": true,
+     "format": "date-time"
     },
     "lastSuccessAt": {
      "type": "string",
-     "nullable": true
+     "nullable": true,
+     "format": "date-time"
     },
     "lastFailureAt": {
      "type": "string",
-     "nullable": true
+     "nullable": true,
+     "format": "date-time"
     },
     "secretHint": {
      "type": "string",
@@ -18877,10 +16884,12 @@
      "description": "Send it as `expectedVersion` to change or delete it."
     },
     "createdAt": {
-     "type": "string"
+     "type": "string",
+     "format": "date-time"
     },
     "updatedAt": {
-     "type": "string"
+     "type": "string",
+     "format": "date-time"
     }
    },
    "required": [
@@ -19003,11 +17012,13 @@
     },
     "createdAt": {
      "type": "string",
-     "nullable": true
+     "nullable": true,
+     "format": "date-time"
     },
     "finishedAt": {
      "type": "string",
-     "nullable": true
+     "nullable": true,
+     "format": "date-time"
     }
    },
    "required": [
@@ -19064,7 +17075,8 @@
      "type": "string",
      "nullable": true,
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "mergedIntoCustomerId": {
      "type": "string",
@@ -19106,7 +17118,8 @@
        "updatedAt": {
         "type": "string",
         "minLength": 1,
-        "maxLength": 40
+        "maxLength": 40,
+        "format": "date-time"
        }
       },
       "required": [
@@ -19120,18 +17133,21 @@
     "createdAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "updatedAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "deletedAt": {
      "type": "string",
      "nullable": true,
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     }
    },
    "required": [
@@ -19223,13 +17239,15 @@
     "createdAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "voidedAt": {
      "type": "string",
      "nullable": true,
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     }
    },
    "required": [
@@ -19505,18 +17523,6 @@
     "createdAt"
    ]
   },
-  "NullableTimestamp": {
-   "type": "string",
-   "nullable": true,
-   "anyOf": [
-    {
-     "type": "string"
-    },
-    {
-     "type": "number"
-    }
-   ]
-  },
   "ObjectField": {
    "type": "object",
    "properties": {
@@ -19663,10 +17669,12 @@
      "type": "integer"
     },
     "createdAt": {
-     "type": "string"
+     "type": "string",
+     "format": "date-time"
     },
     "updatedAt": {
-     "type": "string"
+     "type": "string",
+     "format": "date-time"
     }
    },
    "required": [
@@ -19781,10 +17789,12 @@
      "type": "integer"
     },
     "createdAt": {
-     "type": "string"
+     "type": "string",
+     "format": "date-time"
     },
     "updatedAt": {
-     "type": "string"
+     "type": "string",
+     "format": "date-time"
     }
    },
    "required": [
@@ -19902,7 +17912,8 @@
       "dueAt": {
        "type": "string",
        "minLength": 1,
-       "maxLength": 40
+       "maxLength": 40,
+       "format": "date-time"
       }
      },
      "required": [
@@ -20245,18 +18256,21 @@
     "createdAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "updatedAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "deletedAt": {
      "type": "string",
      "nullable": true,
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     }
    },
    "required": [
@@ -20345,12 +18359,14 @@
     "createdAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "updatedAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     }
    },
    "required": [
@@ -20643,18 +18659,21 @@
     "createdAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "updatedAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "deletedAt": {
      "type": "string",
      "nullable": true,
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     }
    },
    "required": [
@@ -20745,17 +18764,20 @@
      "type": "string",
      "nullable": true,
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "createdAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     },
     "updatedAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     }
    },
    "required": [
@@ -20864,7 +18886,8 @@
     "updatedAt": {
      "type": "string",
      "minLength": 1,
-     "maxLength": 40
+     "maxLength": 40,
+     "format": "date-time"
     }
    },
    "required": [

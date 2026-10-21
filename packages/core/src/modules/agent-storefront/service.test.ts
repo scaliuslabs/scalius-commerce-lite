@@ -9,7 +9,7 @@ describe("agent storefront service boundaries", () => {
     const error = new AgentStorefrontContextRevisionConflictError("asc_context", 4, 7);
     expect(error).toMatchObject({
       status: 409,
-      code: "AGENT_STOREFRONT_CONTEXT_REVISION_CONFLICT",
+      code: "agent_storefront_context_revision_conflict",
       details: { contextId: "asc_context", expectedRevision: 4, currentRevision: 7 },
     });
   });

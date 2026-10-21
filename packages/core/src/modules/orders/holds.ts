@@ -128,7 +128,7 @@ export async function assertOrderNotOnHold(db: Database, orderId: string): Promi
     .get();
   if (open) {
     throw new ValidationError(`This order is on hold for review (${open.appName}: ${open.reason.split("\n")[0]}). Release the hold first.`, {
-      reason: "ORDER_ON_HOLD",
+      reason: "order_on_hold",
     });
   }
 }

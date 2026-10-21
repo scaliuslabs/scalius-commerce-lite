@@ -77,7 +77,7 @@ export function saveRegistrySettings(
   return apiData(putApiV1AdminAppsRegistrySettings({ body: { expectedRevision, registries, trustedKeys } }));
 }
 
-/** The refusal's own details (`signature.untrusted` names the developer and key). */
+/** The refusal's own details (`signature_untrusted` names the developer and key). */
 export function appErrorDetails(error: unknown): { code: string | null; keyId: string | null; developer: string | null } {
   const details = error instanceof AdminApiResponseError ? (error.details as Record<string, unknown> | null | undefined) : null;
   const text = (value: unknown) => (typeof value === "string" ? value : null);

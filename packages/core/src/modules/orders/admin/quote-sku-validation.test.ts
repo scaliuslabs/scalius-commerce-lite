@@ -547,7 +547,7 @@ describe("resolveAdminOrderItemInventory", () => {
                 index: 0,
                 productId: "prod_1",
                 variantId: null,
-                code: "SKU_REQUIRED",
+                code: "sku_required",
                 message: "Select a product SKU before saving the order.",
             },
         ]);
@@ -598,11 +598,11 @@ describe("resolveAdminOrderItemInventory", () => {
         ]));
 
         expect(issues).toEqual([
-            expect.objectContaining({ index: 0, productId: "prod_missing", variantId: "var_missing", code: "VARIANT_UNAVAILABLE" }),
-            expect.objectContaining({ index: 1, productId: "prod_active", variantId: "var_foreign", code: "VARIANT_MISMATCH" }),
-            expect.objectContaining({ index: 2, productId: "prod_active", variantId: "var_deleted", code: "VARIANT_UNAVAILABLE" }),
-            expect.objectContaining({ index: 3, productId: "prod_inactive", variantId: "var_inactive_product", code: "PRODUCT_UNAVAILABLE" }),
-            expect.objectContaining({ index: 4, productId: "prod_deleted", variantId: "var_deleted_product", code: "PRODUCT_UNAVAILABLE" }),
+            expect.objectContaining({ index: 0, productId: "prod_missing", variantId: "var_missing", code: "variant_unavailable" }),
+            expect.objectContaining({ index: 1, productId: "prod_active", variantId: "var_foreign", code: "variant_mismatch" }),
+            expect.objectContaining({ index: 2, productId: "prod_active", variantId: "var_deleted", code: "variant_unavailable" }),
+            expect.objectContaining({ index: 3, productId: "prod_inactive", variantId: "var_inactive_product", code: "product_unavailable" }),
+            expect.objectContaining({ index: 4, productId: "prod_deleted", variantId: "var_deleted_product", code: "product_unavailable" }),
         ]);
     });
 
@@ -625,7 +625,7 @@ describe("resolveAdminOrderItemInventory", () => {
                 index: 0,
                 productId: "prod_active",
                 variantId: "var_foreign",
-                code: "VARIANT_MISMATCH",
+                code: "variant_mismatch",
             }),
         ]);
         expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
@@ -798,7 +798,7 @@ describe("resolveAdminOrderItemInventory", () => {
             discountAmount: 201,
         })).rejects.toMatchObject({
             status: 400,
-            code: "VALIDATION_ERROR",
+            code: "validation_error",
             details: {
                 reason: "MANUAL_ORDER_DISCOUNT_EXCEEDS_SUBTOTAL",
                 maximumDiscountAmountMinor: 20_000,

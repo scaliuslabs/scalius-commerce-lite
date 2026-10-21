@@ -159,10 +159,10 @@ describe("provider port contracts", () => {
   });
 
   it("carries the error category across a loader boundary", () => {
-    const thrown = new ProviderError("retryable", "Timed out", { uncertain: true, code: "bkash.timeout" });
-    expect(providerErrorOf(structuredClone({ ...thrown, message: thrown.message }))).toMatchObject({ category: "retryable", uncertain: true, code: "bkash.timeout" });
+    const thrown = new ProviderError("retryable", "Timed out", { uncertain: true, code: "bkash_timeout" });
+    expect(providerErrorOf(structuredClone({ ...thrown, message: thrown.message }))).toMatchObject({ category: "retryable", uncertain: true, code: "bkash_timeout" });
     expect(providerErrorOf(new Error("plain"))).toBeNull();
-    expect(new ProviderError("declined", "No", { code: "Not A Code" }).code).toBe("provider.declined");
+    expect(new ProviderError("declined", "No", { code: "Not A Code" }).code).toBe("provider_declined");
   });
 });
 

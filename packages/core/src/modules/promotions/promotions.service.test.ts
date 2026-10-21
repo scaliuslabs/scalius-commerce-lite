@@ -29,8 +29,8 @@ function baseDraft() {
         method: "code" as const,
         priority: 100,
         conflictPolicy: "best" as const,
-        startsAtEpochSeconds: null,
-        endsAtEpochSeconds: null,
+        startsAt: null,
+        endsAt: null,
         timezone: "Asia/Dhaka",
         maxRedemptions: null,
         maxRedemptionsPerCustomer: null,
@@ -148,7 +148,7 @@ describe("promotion aggregate service", () => {
         `).get(originalEffect.id)).toMatchObject({ deleted_at: expect.any(Number) });
 
         await expect(updatePromotionDraft(db, created.id, replacement)).rejects.toMatchObject({
-            code: "PROMOTION_REVISION_CONFLICT",
+            code: "promotion_revision_conflict",
             details: { expectedRevision: 1, currentRevision: 2 },
         });
     });

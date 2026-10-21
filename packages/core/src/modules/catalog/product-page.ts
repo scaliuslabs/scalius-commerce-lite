@@ -42,8 +42,8 @@ import {
 } from "@scalius/database/schema";
 import { and, asc, sql, eq, isNull } from "drizzle-orm";
 import { unixToDate } from "@scalius/shared/utils";
-import { fromMinor, toMinor } from "@scalius/shared/money";
-import { getDecimalPlaces } from "@scalius/shared/currency";
+import { fromMinor } from "@scalius/shared/money";
+import { isCustomFieldMoney } from "@scalius/shared/custom-fields";
 import { listProductBuyGetOffers } from "../promotions";
 import { maskPublicBuyerAvailability } from "@scalius/shared/buyer-availability";
 import type { Database } from "@scalius/database/client";
@@ -550,7 +550,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
                 foreign && tier.discountType === "fixed_price" ? { ...tier, priceMinor: presentShopAmount(tier.priceMinor) } : tier,
                 decimalPlaces,
             )),
-            /** Storefront-visible custom fields, in definition order (money in decimal major units of the page's currency). */
+            /** Storefront-visible custom fields, in definition order (money as `{ amountMinor, currency }` in the page's currency). */
             customFields: foreign ? customFieldsInMarket(content.customFields, pageMarket!) : content.customFields,
             /** Published reviews (summary and the first page); null when the store's reviews are off. */
             reviews,
@@ -580,12 +580,15 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
     };
 }
 
-/** Money custom fields (shop-currency major units) in a foreign market's currency (MARKETS-DESIGN step 6). */
+/** Money custom fields (shop-currency `{ amountMinor, currency }`) in a foreign market's currency (MARKETS-DESIGN step 6). */
 function customFieldsInMarket<T extends { type: string; value: unknown }>(fields: readonly T[], market: MarketPriceContext): T[] {
-    const shopPlaces = getDecimalPlaces(market.shopCurrencyCode);
+    const present = (value: unknown) => isCustomFieldMoney(value) && value.currency === market.shopCurrencyCode
+        ? { amountMinor: marketShopAmountMinor(market, value.amountMinor), currency: market.currencyCode }
+        : value;
     return fields.map((field) => {
-        if (field.type !== "money" || typeof field.value !== "number" || !Number.isFinite(field.value) || field.value < 0) return field;
-        return { ...field, value: fromMinor(marketShopAmountMinor(market, toMinor(field.value, shopPlaces)), market.decimalPlaces) };
+        if (field.type === "money") return { ...field, value: present(field.value) };
+        if (field.type === "list.money" && Array.isArray(field.value)) return { ...field, value: field.value.map(present) };
+        return field;
     });
 }
 

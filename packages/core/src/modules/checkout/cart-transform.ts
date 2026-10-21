@@ -261,7 +261,7 @@ export function bundleLineProperties(bundle: CartLineBundle | null | undefined):
  * The buyer's view of a transformed cart: one line per buyer line (an
  * expanded line priced as the sum of its components per bundle unit) and
  * issues on the buyer's lines. An expanded line whose submitted price is not
- * that sum gets a PRICE_CHANGED issue, so the cart refreshes it as for any
+ * that sum gets a price_changed issue, so the cart refreshes it as for any
  * line. `valid` follows.
  */
 export function presentTransformedCart(
@@ -318,7 +318,7 @@ export function presentTransformedCartLines(
                 cartKey: buyer.cartKey ?? null,
                 productId: buyer.productId,
                 variantId: buyer.variantId,
-                code: "PRICE_CHANGED",
+                code: "price_changed",
                 action: "refresh_item",
                 message: `The price for ${expansion.title} changed. Please review the updated cart total.`,
                 productName: expansion.title,

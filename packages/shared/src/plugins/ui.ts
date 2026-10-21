@@ -5,8 +5,8 @@
 // - `admin`: the app's dashboard pages, resource cards and widgets (its admin
 //   routes answer a tree);
 // - `buyer`: the UI slots of the buyer's own pages (cart, checkout, the
-//   receipt, the account; storefront-protocol.ts), where a `buyer.ui`
-//   function answers a tree and no app code runs.
+//   receipt, the account; storefront-protocol.ts), where a storefront extension's
+//   render answers a tree and no app code runs.
 //
 // A node means the same on both surfaces; each surface allows a subset of the
 // nodes, actions and link targets (`PLUGIN_UI_SURFACES`). Text is always plain
@@ -197,8 +197,8 @@ export type PluginUiCell =
   | null
   | { badge: string; tone?: PluginUiTone }
   | { text: string; to: PluginUiTarget }
-  /** An amount in integer minor units of the store currency (or `currency`). */
-  | { money: number; currency?: string }
+  /** Money as every app boundary carries it (`PluginMoney`): integer minor units of `currency` (ISO 4217). */
+  | { amountMinor: number; currency: string }
   /** An ISO date or date-time, shown in the viewer's locale. */
   | { date: string };
 
@@ -275,7 +275,7 @@ const cellSchema = z.union([
   z.null(),
   z.object({ badge: optionalLabel, tone: tone.optional() }).strict(),
   z.object({ text: z.string().max(PLUGIN_UI_LIMITS.label * 2), to: pluginUiTargetSchema }).strict(),
-  z.object({ money: z.number().int().safe(), currency: z.string().regex(/^[A-Z]{3}$/).optional() }).strict(),
+  z.object({ amountMinor: z.number().int().safe(), currency: z.string().regex(/^[A-Z]{3}$/) }).strict(),
   z.object({ date: z.string().max(40).refine((value) => !Number.isNaN(Date.parse(value)), "Use an ISO date.") }).strict(),
 ]);
 const columnKey = z.string().regex(/^[A-Za-z][A-Za-z0-9_-]{0,47}$/);

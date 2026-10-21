@@ -84,10 +84,10 @@ describe("product and customer list cursor contract", () => {
                 const first = await (await list({ limit: "10" })).json() as ListBody;
                 const cursor = first.data.pageInfo.endCursor!;
                 for (const [query, code] of [
-                    [{ after: "!!!" }, "INVALID_CURSOR"],
-                    [{ after: cursor, sort: "name" }, "INVALID_CURSOR"],
-                    [{ after: cursor, before: cursor }, "INVALID_CURSOR"],
-                    [{ page: "101", limit: "10" }, "PAGE_TOO_DEEP"],
+                    [{ after: "!!!" }, "invalid_cursor"],
+                    [{ after: cursor, sort: "name" }, "invalid_cursor"],
+                    [{ after: cursor, before: cursor }, "invalid_cursor"],
+                    [{ page: "101", limit: "10" }, "page_too_deep"],
                 ] as const) {
                     const response = await list(query);
                     expect(response.status, JSON.stringify(query)).toBe(400);

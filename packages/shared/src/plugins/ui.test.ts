@@ -45,7 +45,7 @@ describe("plugin UI tree", () => {
             cells: {
               product: { text: "Panjabi", to: { kind: "resource", resource: "product", id: "p1" } },
               count: 3,
-              total: { money: 250000 },
+              total: { amountMinor: 250000, currency: "BDT" },
               at: { date: "2026-10-01T10:00:00Z" },
               state: { badge: "Live", tone: "success" },
             },

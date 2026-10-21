@@ -2063,7 +2063,7 @@ export const patchApiV1AdminResourcesPriceListsById = <ThrowOnError extends bool
 /**
  * One page of a price list's SKUs and their prices
  *
- * By product name then SKU, in minor units. `search` matches the product name or the SKU code.
+ * By product name then SKU, in minor units; follow nextCursor. `search` matches the product name or the SKU code.
  */
 export const getApiV1AdminResourcesPriceListsByIdPrices = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminResourcesPriceListsByIdPricesData, ThrowOnError>): RequestResult<GetApiV1AdminResourcesPriceListsByIdPricesResponses, GetApiV1AdminResourcesPriceListsByIdPricesErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminResourcesPriceListsByIdPricesResponses, GetApiV1AdminResourcesPriceListsByIdPricesErrors, ThrowOnError>({ url: '/api/v1/admin/resources/price-lists/{id}/prices', ...options });
 
@@ -2325,7 +2325,7 @@ export const getApiV1AdminCategoriesByIdAncestors = <ThrowOnError extends boolea
 /**
  * Move a category in the tree
  *
- * Moves the category and its whole subtree under `parentId` (null: the top level). Refused (400 CATEGORY_PLACEMENT_REFUSED) for a cycle, a fifth level, or a trashed or missing parent.
+ * Moves the category and its whole subtree under `parentId` (null: the top level). Refused (400 category_placement_refused) for a cycle, a fifth level, or a trashed or missing parent.
  */
 export const patchApiV1AdminCategoriesByIdParent = <ThrowOnError extends boolean = false>(options: Options<PatchApiV1AdminCategoriesByIdParentData, ThrowOnError>): RequestResult<PatchApiV1AdminCategoriesByIdParentResponses, PatchApiV1AdminCategoriesByIdParentErrors, ThrowOnError> => (options.client ?? client).patch<PatchApiV1AdminCategoriesByIdParentResponses, PatchApiV1AdminCategoriesByIdParentErrors, ThrowOnError>({
     url: '/api/v1/admin/categories/{id}/parent',
@@ -3410,7 +3410,7 @@ export const getApiV1AdminMediaByIdUsage = <ThrowOnError extends boolean = false
 /**
  * Permanently delete unreferenced trashed media
  *
- * Refused with 409 MEDIA_DEPENDENCY_CONFLICT while the file is used anywhere (see dashboard.media.usage) or kept by past orders.
+ * Refused with 409 media_dependency_conflict while the file is used anywhere (see dashboard.media.usage) or kept by past orders.
  */
 export const deleteApiV1AdminMediaByIdPermanent = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminMediaByIdPermanentData, ThrowOnError>): RequestResult<DeleteApiV1AdminMediaByIdPermanentResponses, DeleteApiV1AdminMediaByIdPermanentErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminMediaByIdPermanentResponses, DeleteApiV1AdminMediaByIdPermanentErrors, ThrowOnError>({ url: '/api/v1/admin/media/{id}/permanent', ...options });
 
@@ -4561,7 +4561,7 @@ export const postApiV1AdminSettingsThemePublish = <ThrowOnError extends boolean 
 /**
  * Put a published version in the draft (it goes live only when the draft is published)
  *
- * A version that names images deleted from Files since is refused with THEME_VERSION_IMAGES_MISSING (details.missingImages: how many); send withoutMissingImages to restore it without them (slides, cards and tiles showing one are left out, other images become empty).
+ * A version that names images deleted from Files since is refused with theme_version_images_missing (details.missingImages: how many); send withoutMissingImages to restore it without them (slides, cards and tiles showing one are left out, other images become empty).
  */
 export const postApiV1AdminSettingsThemeRestore = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsThemeRestoreData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsThemeRestoreResponses, PostApiV1AdminSettingsThemeRestoreErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsThemeRestoreResponses, PostApiV1AdminSettingsThemeRestoreErrors, ThrowOnError>({
     url: '/api/v1/admin/settings/theme/restore',
@@ -4684,7 +4684,7 @@ export const getApiV1AdminSettingsThemeRestorePoints = <ThrowOnError extends boo
 /**
  * Put a restore point back in the draft (it goes live only when the draft is published)
  *
- * The draft it replaces becomes a restore point too, so the restore can be undone. A point that names images deleted from Files since is refused with THEME_VERSION_IMAGES_MISSING; send withoutMissingImages to restore it without them.
+ * The draft it replaces becomes a restore point too, so the restore can be undone. A point that names images deleted from Files since is refused with theme_version_images_missing; send withoutMissingImages to restore it without them.
  */
 export const postApiV1AdminSettingsThemeRestorePoint = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsThemeRestorePointData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsThemeRestorePointResponses, PostApiV1AdminSettingsThemeRestorePointErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsThemeRestorePointResponses, PostApiV1AdminSettingsThemeRestorePointErrors, ThrowOnError>({
     url: '/api/v1/admin/settings/theme/restore-point',
@@ -4945,7 +4945,7 @@ export const getApiV1AdminSettingsStoreSetup = <ThrowOnError extends boolean = f
 /**
  * Set up a new store
  *
- * Name a new store and set its country (the backup market's one country), currency (default: the country's), store language, time zone and units (default: the country's system) in one write. Creates no tax region and no shipping zone. A store that has an order or edited markets answers 409 STORE_SETUP_DONE and nothing changes.
+ * Name a new store and set its country (the backup market's one country), currency (default: the country's), store language, time zone and units (default: the country's system) in one write. Creates no tax region and no shipping zone. A store that has an order or edited markets answers 409 store_setup_done and nothing changes.
  */
 export const postApiV1AdminSettingsStoreSetup = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsStoreSetupData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsStoreSetupResponses, PostApiV1AdminSettingsStoreSetupErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsStoreSetupResponses, PostApiV1AdminSettingsStoreSetupErrors, ThrowOnError>({
     url: '/api/v1/admin/settings/store-setup',
@@ -5752,7 +5752,7 @@ export const postApiV1AdminOrdersBulkFulfill = <ThrowOnError extends boolean = f
 });
 
 /**
- * Order timeline: 50 events per page, newest first; placed marker only at the end
+ * Order timeline: newest first, follow nextCursor; placed marker only at the end
  */
 export const getApiV1AdminOrdersByIdTimeline = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminOrdersByIdTimelineData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersByIdTimelineResponses, GetApiV1AdminOrdersByIdTimelineErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminOrdersByIdTimelineResponses, GetApiV1AdminOrdersByIdTimelineErrors, ThrowOnError>({ url: '/api/v1/admin/orders/{id}/timeline', ...options });
 

@@ -14,7 +14,7 @@ const issue = {
   cartKey: "line_1",
   productId: "prod_1",
   variantId: "var_1",
-  code: "PRICE_CHANGED" as const,
+  code: "price_changed" as const,
   action: "refresh_item" as const,
   message: "The price changed.",
   productName: "Cotton Panjabi",

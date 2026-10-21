@@ -90,7 +90,7 @@ async function syncOne(
         result.installed.push(pluginId);
       } catch (error) {
         // A concurrent sync installed it first.
-        if (!(error instanceof PluginError && error.pluginCode === "installation.exists")) throw error;
+        if (!(error instanceof PluginError && error.pluginCode === "installation_exists")) throw error;
       }
       return;
     }
@@ -102,7 +102,7 @@ async function syncOne(
     });
     result.updated.push(pluginId);
   } catch (error) {
-    if (error instanceof PluginError && error.pluginCode === "installation.revision_conflict") return; // another sync won
+    if (error instanceof PluginError && error.pluginCode === "installation_revision_conflict") return; // another sync won
     const reason = error instanceof Error ? error.message.slice(0, 300) : "unknown error";
     console.warn(`[plugins] Bundled plugin ${pluginId} could not be synced: ${reason}`);
     result.failed.push({ pluginId, reason });
@@ -142,7 +142,7 @@ export async function syncBundledPlugins(
       await uninstallPlugin(db, installation.pluginId, { keepData: true, expectedRevision: installation.revision });
       result.removed.push(installation.pluginId);
     } catch (error) {
-      if (error instanceof PluginError && error.pluginCode === "installation.revision_conflict") continue; // another sync won
+      if (error instanceof PluginError && error.pluginCode === "installation_revision_conflict") continue; // another sync won
       throw error;
     }
   }

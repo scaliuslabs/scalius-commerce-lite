@@ -131,7 +131,7 @@ export function takaToMinor(value: string): number | null {
   return Number.isSafeInteger(minor) ? minor : null;
 }
 
-const timedOut = (error: unknown) => platformErrorCode(error) === "http.timeout";
+const timedOut = (error: unknown) => platformErrorCode(error) === "http_timeout";
 
 // ── Validation ──────────────────────────────────────────────────────────────
 
@@ -231,17 +231,17 @@ async function merchantApi(ctx: PluginContext, account: Account, params: Record<
   } catch (error) {
     throw new ProviderError("retryable", "SSLCommerz could not be reached.", {
       uncertain: mutating,
-      code: timedOut(error) ? "sslcommerz.timeout" : "sslcommerz.unreachable",
+      code: timedOut(error) ? "sslcommerz_timeout" : "sslcommerz_unreachable",
     });
   }
   if (!response.ok) {
-    throw new ProviderError("retryable", `SSLCommerz answered HTTP ${response.status}.`, { uncertain: mutating, code: "sslcommerz.http" });
+    throw new ProviderError("retryable", `SSLCommerz answered HTTP ${response.status}.`, { uncertain: mutating, code: "sslcommerz_http" });
   }
   const data = answerOf(await response.text());
-  if (!data) throw new ProviderError("retryable", "SSLCommerz's answer could not be read.", { uncertain: mutating, code: "sslcommerz.unreadable" });
+  if (!data) throw new ProviderError("retryable", "SSLCommerz's answer could not be read.", { uncertain: mutating, code: "sslcommerz_unreadable" });
   if (data.APIConnect !== "DONE") {
     const state = clean(data.APIConnect).replace(/[^A-Z_]/g, "").slice(0, 20) || "unknown";
-    throw new ProviderError("retryable", `SSLCommerz API connection failed: ${state}.`, { uncertain: mutating, code: "sslcommerz.api_connect" });
+    throw new ProviderError("retryable", `SSLCommerz API connection failed: ${state}.`, { uncertain: mutating, code: "sslcommerz_api_connect" });
   }
   return data;
 }
@@ -287,20 +287,20 @@ export async function createSession(input: PaymentSessionInput, ctx: PluginConte
     });
   } catch (error) {
     if (timedOut(error)) {
-      throw new ProviderError("retryable", "SSLCommerz did not respond before the payment timeout. Please try again.", { code: "sslcommerz.timeout" });
+      throw new ProviderError("retryable", "SSLCommerz did not respond before the payment timeout. Please try again.", { code: "sslcommerz_timeout" });
     }
-    throw new ProviderError("declined", "Network error contacting SSLCommerz", { code: "sslcommerz.unreachable" });
+    throw new ProviderError("declined", "Network error contacting SSLCommerz", { code: "sslcommerz_unreachable" });
   }
-  if (!response.ok) throw new ProviderError("declined", `SSLCommerz API error: HTTP ${response.status}`, { code: "sslcommerz.http" });
+  if (!response.ok) throw new ProviderError("declined", `SSLCommerz API error: HTTP ${response.status}`, { code: "sslcommerz_http" });
   const data = answerOf(await response.text()) ?? {};
   const pageUrl = clean(data.GatewayPageURL);
   if (data.status !== "SUCCESS" || !pageUrl) {
     // SSLCommerz's short refusal ("Store Credential Error Or Store is De-active"): no credential or buyer data.
     const reason = clean(data.failedreason) || clean(data.status) || "Failed to initiate SSLCommerz session";
-    throw new ProviderError("declined", reason.slice(0, 200), { code: "sslcommerz.session_refused" });
+    throw new ProviderError("declined", reason.slice(0, 200), { code: "sslcommerz_session_refused" });
   }
   if (!pageUrl.startsWith("https://") || pageUrl.length > 2048 || !URL.canParse(pageUrl)) {
-    throw new ProviderError("declined", "SSLCommerz's answer did not include its payment page.", { code: "sslcommerz.page" });
+    throw new ProviderError("declined", "SSLCommerz's answer did not include its payment page.", { code: "sslcommerz_page" });
   }
   const sessionKey = clean(data.sessionkey);
   return { ...(REFERENCE.test(sessionKey) ? { providerRef: sessionKey } : {}), redirectUrl: pageUrl };
@@ -340,7 +340,7 @@ export async function verifyReturn(request: ProviderHttpRequest, ctx: PluginCont
  */
 export async function queryPayment(input: PaymentQueryInput, ctx: PluginContext): Promise<PaymentQuery> {
   if (!REFERENCE.test(input.providerRef)) {
-    throw new ProviderError("declined", "This is not an SSLCommerz session key.", { code: "sslcommerz.session_key" });
+    throw new ProviderError("declined", "This is not an SSLCommerz session key.", { code: "sslcommerz_session_key" });
   }
   const account = accountOf(ctx);
   const session = await merchantApi(ctx, account, { sessionkey: input.providerRef }, false);
@@ -348,9 +348,9 @@ export async function queryPayment(input: PaymentQueryInput, ctx: PluginContext)
   const valId = clean(session.val_id);
   if (!VALID_STATUSES.has(clean(session.status)) || !REFERENCE.test(valId)) return { providerStatus: status };
   const validation = await validate(ctx, account, valId);
-  if (!validation) throw new ProviderError("retryable", "SSLCommerz validation API call failed.", { code: "sslcommerz.validation" });
+  if (!validation) throw new ProviderError("retryable", "SSLCommerz validation API call failed.", { code: "sslcommerz_validation" });
   const verified = validatedEvent(validation, valId, { orderId: input.orderId });
-  if (verified.status === "retry") throw new ProviderError("retryable", verified.reason, { code: "sslcommerz.validation" });
+  if (verified.status === "retry") throw new ProviderError("retryable", verified.reason, { code: "sslcommerz_validation" });
   return verified.status === "event" && verified.event.kind === "confirmed"
     ? { providerStatus: status, event: verified.event }
     : { providerStatus: status };
@@ -358,7 +358,7 @@ export async function queryPayment(input: PaymentQueryInput, ctx: PluginContext)
 
 export async function refund(input: PaymentRefundInput, ctx: PluginContext): Promise<PaymentRefund> {
   if (!input.secondaryRef) {
-    throw new ProviderError("declined", "No SSLCommerz bank_tran_id found on payment record", { code: "sslcommerz.bank_tran_id" });
+    throw new ProviderError("declined", "No SSLCommerz bank_tran_id found on payment record", { code: "sslcommerz_bank_tran_id" });
   }
   // refund_trans_id: at most 30 characters, deterministic so retries reuse it.
   const refundTranId = input.reference.replace(/[^A-Za-z0-9]/g, "").slice(0, 30);
@@ -372,7 +372,7 @@ export async function refund(input: PaymentRefundInput, ctx: PluginContext): Pro
   if (data.status !== "success" && data.status !== "processing") {
     // A refusal is kept for reconciliation, never resent.
     const reason = clean(data.errorReason).slice(0, 200) || "Refund request failed";
-    throw new ProviderError("retryable", reason, { uncertain: true, code: "sslcommerz.refund_refused" });
+    throw new ProviderError("retryable", reason, { uncertain: true, code: "sslcommerz_refund_refused" });
   }
   const refundRef = clean(data.refund_ref_id);
   return { refundId: REFERENCE.test(refundRef) ? refundRef : refundTranId };

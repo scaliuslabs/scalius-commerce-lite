@@ -65,8 +65,8 @@ describe("newsletter signup endpoint", () => {
   });
 
   it.each([
-    [400, { success: false, error: { code: "VALIDATION_ERROR", details: { field: "phone" } } }, "invalid"],
-    [429, { success: false, error: { code: "RATE_LIMIT", details: { retryAfterSeconds: 60 } } }, "rate_limited"],
+    [400, { success: false, error: { code: "validation_error", details: { field: "phone" } } }, "invalid"],
+    [429, { success: false, error: { code: "rate_limited", details: { retryAfterSeconds: 60 } } }, "rate_limited"],
     [500, { success: false, error: { code: "INTERNAL" } }, "error"],
   ])("maps an API %s to ?status=%s", async (status, body, flag) => {
     api(status, body);
