@@ -27,6 +27,7 @@ const REVIEWED: ReadonlyArray<readonly [file: string, fragment: string, reason: 
   ["lib/theme-preview-library.ts", "", "reads a preview path after stripping its presence; the merchant's preview, never a buyer link"],
   ["components/order/review-form-client.ts", 'value.startsWith("/")', "validates a same-origin path"],
   ["lib/api/transport.ts", "", "API paths, not storefront pages"],
+  ["lib/api/browser-url.ts", "", "API paths, not storefront pages"],
   ["lib/browser-continuation-relay.ts", "", "private relays agents open by exact root URL"],
   ["lib/theme-preview-bridge.ts", "", "the merchant's theme preview, never under a presence"],
   ["lib/account-push.ts", "const padded", "base64 alphabet, not a page path"],
