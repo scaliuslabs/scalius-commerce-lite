@@ -1,4 +1,4 @@
-import { AGENT_COMPONENT_SCHEMAS, AGENT_OPERATIONS_BY_ID } from "../../generated/agent-operations.gen";
+import { AGENT_COMPONENT_SCHEMAS, AGENT_OPERATIONS_BY_ID, AGENT_WORKFLOW_CATALOG } from "../../generated/agent-operations.gen";
 import type { AgentOperationManifestEntry } from "../../openapi/agent-operation-manifest";
 import {
   referencedComponentSchemas,
@@ -37,6 +37,48 @@ export async function getAuthorizedOperation(
   return (await backend.authorizeOperation(principal, authorizationInput(operation)))
     ? operation
     : null;
+}
+
+/**
+ * A workflow id scalius_search returns (a reviewed route, or the workflow card
+ * it runs), when this connection can run every step: what it does, its steps
+ * in order (describe those for their inputs) and its rules. Null otherwise, so
+ * an id search would never return reads as not found.
+ */
+export async function describeAuthorizedWorkflow(
+  id: string,
+  surface: AgentResource,
+  principal: AgentPrincipal,
+): Promise<Record<string, unknown> | null> {
+  const routes = AGENT_WORKFLOW_CATALOG.routes.filter((route) => route.surface === surface);
+  const route = routes.find((candidate) => candidate.id === id) ?? routes.find((candidate) => candidate.workflowId === id);
+  if (!route) return null;
+  // A dashboard workflow may verify on the storefront with a buyer read: that
+  // step needs the storefront connection, as the search plan says.
+  const storefrontVerification: string[] = [];
+  for (const operationId of route.operationIds) {
+    const step = AGENT_OPERATIONS_BY_ID[operationId];
+    if (surface === "dashboard" && step?.surface === "storefront" && step.risk === "read" && isMcpOperationExposure(step)) {
+      storefrontVerification.push(operationId);
+      continue;
+    }
+    if (!(await getAuthorizedOperation(operationId, surface, principal))) return null;
+  }
+  const own = route.operationIds.filter((operationId) => !storefrontVerification.includes(operationId));
+  const answerable = route.kind === "read" && route.workflowId !== undefined;
+  return {
+    id: route.id,
+    kind: "workflow",
+    title: route.title,
+    purpose: route.summary,
+    steps: own,
+    ...(storefrontVerification.length > 0 ? { storefrontVerification } : {}),
+    requiresFacts: route.requiresFacts,
+    requiresConfirmation: route.requiresConfirmation,
+    requiresVerification: route.requiresVerification,
+    rules: route.rules,
+    next: `Describe the steps for their inputs: scalius_describe ${JSON.stringify(own.slice(0, 5))}${own.length > 5 ? " (5 at a time)" : ""}${answerable ? ", or ask the question with scalius_answer, which runs this workflow in one call" : ""}.`,
+  };
 }
 
 export function summarizeOperation(operation: AgentOperationManifestEntry) {

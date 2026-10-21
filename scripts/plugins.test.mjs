@@ -3,7 +3,7 @@ import { judgeApiBundle, measureWorkerOutput, API_BUNDLE_BUDGET_BYTES, WORKER_SI
 import { createPluginTestHarness, fixtures, parsePluginUiDocument } from "../packages/plugin-sdk/src/testing.ts";
 import { renderSection } from "../packages/plugin-sdk/src/storefront/testing.ts";
 import { isPathSource, packPlugin, renderBundledGen, renderCatalogGen, renderLockfile, sealBundle } from "./plugin-build.mjs";
-import { BUNDLE_MAX_BYTES } from "./plugin-registry.mjs";
+import { BUNDLE_MAX_BYTES, shownPath } from "./plugin-registry.mjs";
 import { editSource, makeTempPlugin } from "./plugin-test-helpers.mjs";
 import { BUNDLE_WARN_BYTES, formatChecks, validatePlugin } from "./plugin-validate.mjs";
 import { isWorkspacePackageDir, pluginSandboxEnabled, scaffoldFiles, shellPath, withPluginSandbox } from "./plugins.mjs";
@@ -120,6 +120,22 @@ describe("a standalone app (outside this repository)", () => {
     expect(JSON.parse(files["tsconfig.json"]).compilerOptions).toMatchObject({ jsxImportSource: "@scalius/plugin-sdk/storefront", moduleResolution: "Bundler" });
     expect(files[".gitignore"]).toContain("*.pem");
     expect(files["src/index.ts"]).toContain("defineManifest({");
+  });
+
+  it("names the package after the app id, whatever the folder is called", () => {
+    for (const folder of ["acme-engrave", "engrave", "my-app"]) {
+      const files = scaffoldFiles("acme.engrave", folder, { standalone: true });
+      expect(JSON.parse(files["package.json"]).name, folder).toBe("acme-engrave");
+      expect(files["src/index.ts"], folder).toContain('name: "Engrave"');
+    }
+  });
+
+  it("prints a path outside the folder the command ran in as absolute, never ../../..", () => {
+    const env = { INIT_CWD: "/work/scalius" };
+    expect(shownPath("/work/scalius/plugins/loyalty", env)).toBe("plugins/loyalty");
+    expect(shownPath("/work/scalius", env)).toBe(".");
+    expect(shownPath("/private/tmp/scratch/acme-engrave/dist", env)).toBe("/private/tmp/scratch/acme-engrave/dist");
+    expect(shownPath("/work/other/app", env)).toBe("/work/other/app");
   });
 
   it("installs the SDK build packed into its own vendor folder while the SDK is not on npm", () => {

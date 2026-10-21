@@ -53,7 +53,7 @@ import {
   errorFromUnknown,
   type AgentToolError,
 } from "./errors";
-import { getAuthorizedOperation } from "./operations";
+import { describeAuthorizedWorkflow, getAuthorizedOperation } from "./operations";
 import { registerAgentPrompts } from "./prompts";
 import {
   AGENT_STEP_ID_PATTERN,
@@ -62,7 +62,7 @@ import {
   resolveStepReferences,
 } from "./references";
 import { registerAgentResources } from "./resources";
-import { searchCapabilities } from "./search";
+import { answersQuestion, searchCapabilities, SEARCH_MAX_LIMIT } from "./search";
 import {
   AGENT_MAX_SELECT_POINTERS,
   AGENT_READ_BUDGET_BYTES,
@@ -1021,7 +1021,7 @@ export function createAgentMcpServer(deps: McpServerDependencies, options: Agent
   });
 
   server.registerTool("scalius_describe", {
-    description: "How to call up to 5 operations: purpose, inputs (! = required), write rules, one example input, response fields. detail full gives the exact schemas.",
+    description: "How to call up to 5 operations: purpose, inputs (! = required), write rules, one example input, response fields. detail full gives the exact schemas. A workflow id from scalius_search answers its steps and rules.",
     inputSchema: listed(z.object({
       ids: z.array(z.string().max(240)).min(1).max(5),
       detail: z.enum(["compact", "full", "examples"]).optional(),
@@ -1043,6 +1043,12 @@ export function createAgentMcpServer(deps: McpServerDependencies, options: Agent
       for (const id of [...new Set(ids)]) {
         const operation = await getAuthorizedOperation(id, deps.surface, principal);
         if (!operation) {
+          // A workflow scalius_search returned opens here too: its steps and rules.
+          const workflow = await describeAuthorizedWorkflow(id, deps.surface, principal);
+          if (workflow) {
+            operations.push(workflow);
+            continue;
+          }
           operations.push({ operationId: id, error: buildAgentToolError({ code: "operation_not_found", status: 404, message: "Operation is unavailable or not authorized" }) });
           continue;
         }
@@ -1078,8 +1084,18 @@ export function createAgentMcpServer(deps: McpServerDependencies, options: Agent
         ctx: deps.ctx,
       });
       if (answer.kind === "result") return toolResult({ ok: true, ...answer });
-      const search = await searchCapabilities({ query: question, limit: 3, surface: deps.surface, principal });
-      return toolResult({ ok: true, kind: "unavailable", hits: search.hits });
+      // A question is answered by reads: the closest reads (and any control to
+      // honour), never a change that happens to share its words.
+      const search = await searchCapabilities({ query: question, limit: SEARCH_MAX_LIMIT, surface: deps.surface, principal });
+      const hits = search.hits.filter(answersQuestion).slice(0, 3);
+      return toolResult({
+        ok: true,
+        kind: "unavailable",
+        message: hits.length > 0
+          ? "No reviewed answer covers this question. These reads can answer it: scalius_describe one, then scalius_read it."
+          : "No reviewed answer covers this question, and no read matched it. Try scalius_search with other words.",
+        hits,
+      });
     } catch (error) {
       return errorResult(error);
     }

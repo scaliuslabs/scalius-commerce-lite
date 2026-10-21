@@ -2,7 +2,7 @@ import { Buffer } from "node:buffer";
 import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { AGENT_OPERATIONS } from "../../generated/agent-operations.gen";
+import { AGENT_OPERATIONS, AGENT_WORKFLOW_CATALOG } from "../../generated/agent-operations.gen";
 import { AgentDispatchError, type AgentOperationResult } from "../dispatch";
 import type { AgentPrincipal } from "../types";
 
@@ -181,6 +181,54 @@ describe("MCP surface v2 execution", () => {
     const full = await tool("scalius_describe")({ ids: ["dashboard.products.create"], detail: "full" });
     expect(bytes(operations[0])).toBeLessThanOrEqual(bytes((full.structuredContent!.operations as unknown[])[0]));
     expect(bytes(operations[0])).toBeLessThanOrEqual(8 * 1024);
+  });
+
+  it("every workflow search returns opens in scalius_describe with its steps", async () => {
+    const queries = [
+      "Fulfill this paid order with the tracking number",
+      "What are today's booked sales and order count?",
+      "Refund an order",
+      "Set stock counts for many SKUs",
+      "How many products and orders do we have?",
+      "Create a product with sizes",
+    ];
+    let workflows = 0;
+    for (const query of queries) {
+      const search = await tool("scalius_search")({ query, limit: 10 });
+      for (const hit of search.structuredContent!.hits as Array<{ id: string; kind: string; operationIds?: string[] }>) {
+        if (hit.kind !== "workflow") continue;
+        workflows += 1;
+        const described = await tool("scalius_describe")({ ids: [hit.id] });
+        const [entry] = described.structuredContent!.operations as Array<Record<string, unknown>>;
+        expect(entry, `${query} -> ${hit.id}`).toMatchObject({ id: hit.id, kind: "workflow", steps: hit.operationIds });
+        expect(entry!.error).toBeUndefined();
+        expect(String(entry!.next)).toContain("scalius_describe");
+      }
+    }
+    expect(workflows).toBeGreaterThan(0);
+
+    // Every reviewed dashboard route opens, not only the ones these queries rank.
+    for (const route of AGENT_WORKFLOW_CATALOG.routes.filter((candidate) => candidate.surface === "dashboard")) {
+      const described = await tool("scalius_describe")({ ids: [route.id] });
+      expect((described.structuredContent!.operations as Array<Record<string, unknown>>)[0], route.id).toMatchObject({ kind: "workflow", steps: route.operationIds.filter((step) => step.startsWith("dashboard.")) });
+    }
+
+    // A workflow whose step this connection cannot run stays unavailable.
+    mocks.authorizeOperation.mockImplementation(async (_principal, input: { risk: string }) => input.risk === "read");
+    const refused = await tool("scalius_describe")({ ids: ["dashboard.order-fulfill"] });
+    expect((refused.structuredContent!.operations as Array<Record<string, unknown>>)[0]).toMatchObject({ error: { code: "operation_not_found" } });
+  });
+
+  it("a data question without a reviewed answer offers reads, never a change", async () => {
+    const output = await tool("scalius_answer")({ question: "How many products and orders do we have?" });
+    expect(output.structuredContent).toMatchObject({ ok: true, kind: "unavailable", message: expect.stringContaining("No reviewed answer") });
+    const hits = output.structuredContent!.hits as Array<{ id: string; kind: string; operationIds?: string[] }>;
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits[0]).toMatchObject({ id: "dashboard.product-counts", operationIds: ["dashboard.products.stats"] });
+    for (const hit of hits) {
+      const steps = hit.kind === "operation" ? [hit.id] : hit.operationIds ?? [];
+      for (const step of steps) expect(AGENT_OPERATIONS.find((operation) => operation.operationId === step)?.risk, `${hit.id}: ${step}`).toBe("read");
+    }
   });
 
   it("answers a reviewed daily data workflow in one projected call", async () => {

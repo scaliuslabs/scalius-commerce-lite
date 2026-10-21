@@ -3,6 +3,7 @@
 // Imported by both admin API routes and service methods.
 
 import { isSalesChannelId, SALES_CHANNEL_ID_MAX_LENGTH } from "@scalius/shared/sales-channels";
+import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
     isValidResourceCanonicalPath,
@@ -53,46 +54,84 @@ export const productMediaAssociationIdSchema = z.string()
     .trim()
     .min(10)
     .max(80)
-    .regex(/^pmed_[A-Za-z0-9_-]+$/u, "Product media association ID is invalid.");
+    .regex(
+        /^pmed_[A-Za-z0-9_-]+$/u,
+        "Expected this product's own attachment id: pmed_ followed by letters, digits, _ or -. It is not the media file's id (that goes in mediaId).",
+    );
 
 const globalMediaIdSchema = z.string()
     .trim()
     .min(8)
     .max(160)
-    .regex(/^[A-Za-z0-9_-]+$/u, "Media ID is invalid.");
+    .regex(/^[A-Za-z0-9_-]+$/u, "Media ID is invalid.")
+    .describe("The media file's id: the id a media upload or URL import returns.");
 
-/** Ordered product association contract; request order becomes dense sortOrder. */
-export const productMediaInputSchema = z.array(z.object({
-    id: productMediaAssociationIdSchema,
-    mediaId: globalMediaIdSchema,
-    altText: z.string().trim().max(500).nullable()
-        .transform((value) => value?.trim() ? value.trim() : null),
-    isPrimary: z.boolean(),
-})).max(
-    MAX_PRODUCT_MEDIA_ASSOCIATIONS,
-    `Attach at most ${MAX_PRODUCT_MEDIA_ASSOCIATIONS} media items to a product.`,
-).superRefine((items, context) => {
+const altTextSchema = z.string().trim().max(500).nullable()
+    .transform((value) => value?.trim() ? value.trim() : null);
+
+type MediaListItem = { id?: string; mediaId: string; isPrimary?: boolean };
+
+/** Unique attachments and files; at most one featured item, and exactly one once every item says. */
+function productMediaListIssues(items: readonly MediaListItem[], context: z.RefinementCtx): void {
     const ids = new Set<string>();
     const mediaIds = new Set<string>();
     let primaryCount = 0;
     items.forEach((item, index) => {
-        if (ids.has(item.id)) {
+        if (item.id !== undefined && ids.has(item.id)) {
             context.addIssue({ code: "custom", path: [index, "id"], message: "Each product media association ID must be unique." });
         }
         if (mediaIds.has(item.mediaId)) {
             context.addIssue({ code: "custom", path: [index, "mediaId"], message: "The same media asset can be attached only once." });
         }
-        ids.add(item.id);
+        if (item.id !== undefined) ids.add(item.id);
         mediaIds.add(item.mediaId);
-        if (item.isPrimary) primaryCount += 1;
+        if (item.isPrimary === true) primaryCount += 1;
     });
-    if (items.length > 0 && primaryCount !== 1) {
+    const unsaid = items.some((item) => item.isPrimary === undefined);
+    if (items.length > 0 && (primaryCount > 1 || (primaryCount === 0 && !unsaid))) {
         context.addIssue({
             code: "custom",
             message: "Choose exactly one featured media item.",
             path: [Math.max(0, items.findIndex((item) => item.isPrimary)), "isPrimary"],
         });
     }
+}
+
+/** Ordered product association contract; request order becomes dense sortOrder. */
+export const productMediaInputSchema = z.array(z.object({
+    id: productMediaAssociationIdSchema,
+    mediaId: globalMediaIdSchema,
+    altText: altTextSchema,
+    isPrimary: z.boolean(),
+})).max(
+    MAX_PRODUCT_MEDIA_ASSOCIATIONS,
+    `Attach at most ${MAX_PRODUCT_MEDIA_ASSOCIATIONS} media items to a product.`,
+).superRefine(productMediaListIssues);
+
+/**
+ * A new product's media: the files by `mediaId` (the id a media upload
+ * returns). The attachment `id` (pmed_) is needed only when a SKU's imageId
+ * names it; omitted, one is made. Without a featured item the first is.
+ */
+export const createProductMediaInputSchema = z.array(z.object({
+    id: productMediaAssociationIdSchema.optional()
+        .describe("Optional pmed_ id of your choosing, for a SKU's imageId to name this attachment. Omit it and one is made."),
+    mediaId: globalMediaIdSchema,
+    altText: altTextSchema.optional(),
+    isPrimary: z.boolean().optional().describe("The featured image. Omit on every item and the first is featured."),
+})).max(
+    MAX_PRODUCT_MEDIA_ASSOCIATIONS,
+    `Attach at most ${MAX_PRODUCT_MEDIA_ASSOCIATIONS} media items to a product.`,
+).superRefine(productMediaListIssues).transform((items) => {
+    const featured = items.some((item) => item.isPrimary === true)
+        ? -1
+        : items.findIndex((item) => item.isPrimary === undefined);
+    return items.map((item, index) => ({
+        id: item.id ?? `pmed_${nanoid()}`,
+        mediaId: item.mediaId,
+        altText: item.altText ?? null,
+        isPrimary: item.isPrimary ?? index === featured,
+    }));
 });
 
 /** A warranty policy id; the write checks it exists and is not archived. */
@@ -242,6 +281,7 @@ export const createProductSchema = productBaseSchema
         slug: productBaseSchema.shape.slug.optional()
             .describe("Omit to derive the web address from the name; a taken one gets a -2, -3… suffix."),
         productCondition: productConditionSchema,
+        media: createProductMediaInputSchema.default([]),
         optionMatrix: createProductOptionMatrixSchema.optional(),
         defaultSku: defaultSkuInputSchema.optional()
             .describe("Inventory for a product without options. Omit for an untracked SKU. Not allowed with optionMatrix."),

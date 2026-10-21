@@ -312,6 +312,13 @@ async function operationHits(
   return hits;
 }
 
+/** A hit that can answer a data question: a control to honour, or a read whose every step only reads. */
+export function answersQuestion(hit: SearchHit): boolean {
+  if (hit.kind === "control") return true;
+  const steps = hit.kind === "operation" ? [hit.id] : hit.operationIds ?? [];
+  return steps.length > 0 && steps.every((operationId) => AGENT_OPERATIONS_BY_ID[operationId]?.risk === "read");
+}
+
 /**
  * Up to `limit` ranked hits: curated workflow plans and controls first (a
  * confident plan inlines its compact steps), then operations the grant can

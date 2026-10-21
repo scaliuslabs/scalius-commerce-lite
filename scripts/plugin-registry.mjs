@@ -11,7 +11,7 @@
 
 import { createHash, createPrivateKey, createPublicKey } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { crc32, deflateRawSync } from "node:zlib";
 import {
   loadEsbuild,
@@ -56,6 +56,18 @@ export function parseCommandArgs(args) {
 /** A path the user typed, relative to where they ran `pnpm plugin` (pnpm sets INIT_CWD). */
 export function userPath(path, env = process.env) {
   return resolve(env.INIT_CWD || process.cwd(), path);
+}
+
+/**
+ * A path as the user should read it: relative to the folder they ran the
+ * command in when it is inside it, otherwise absolute (never a climb of
+ * `../../..` out to /tmp).
+ */
+export function shownPath(path, env = process.env) {
+  const absolute = resolve(path);
+  const shown = relative(env.INIT_CWD || process.cwd(), absolute);
+  if (shown === "") return ".";
+  return shown.startsWith("..") || isAbsolute(shown) ? absolute : shown;
 }
 
 // ── Contract ─────────────────────────────────────────────────────────────

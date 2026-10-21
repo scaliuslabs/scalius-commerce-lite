@@ -314,6 +314,14 @@ export function ucpProfileUnavailableResponse(): Response {
   return xmlDataUnavailableResponse("UCP profile is temporarily unavailable");
 }
 
+/** The store has no https web address yet: permanent until the merchant sets one, so no retry is offered. */
+export const UCP_NEEDS_STORE_URL =
+  "UCP discovery is off: the store has no https web address. The merchant sets its Store URL in Settings, Store details, Web addresses.";
+
+export function ucpProfileNotConfiguredResponse(): Response {
+  return ucpErrorResponse(404, "not_configured", UCP_NEEDS_STORE_URL, undefined, "unrecoverable");
+}
+
 function layoutCurrency(layout: LayoutData): UcpCatalogContext["currency"] {
   const code = (layout.currency?.code ?? DEFAULT_CURRENCY.code).toUpperCase();
   const decimalPlaces = Number.isInteger(layout.currency?.decimalPlaces)

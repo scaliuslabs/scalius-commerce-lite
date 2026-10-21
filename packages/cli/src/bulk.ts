@@ -3,13 +3,16 @@ import { CliError } from "./errors.js";
 import { amountToMinor, formatMinor, readStoreMoney, type StoreMoney } from "./money.js";
 import { getIndexedOperations } from "./openapi.js";
 import { writeDiagnostic } from "./output.js";
-import type { IndexedOperation, Runtime, StructuredInput } from "./types.js";
+import type { IndexedOperation, ResolvedProfile, Runtime, StructuredInput } from "./types.js";
 
 // `scalius bulk <kind>`: the store's bulk operations (prices, stock, tags,
 // status, publish; apps/api bulk-runs/inputs.ts). Friendly flags build the
 // operation's exact body; --input sends a raw body instead. A run of up to
 // 250 items finishes in its request (the run is `done`); a larger one answers
 // `running`, and --wait follows `bulk_runs.get` by the run's `data.run.id`.
+// Stock and prices name SKUs by code or id: codes are found through `variants.lookup`
+// first. A run (or a dry run) in which every item was refused is an error,
+// never `ok: true`.
 
 export const BULK_KINDS = {
   prices: "variants.bulk_set_prices",
@@ -21,6 +24,9 @@ export const BULK_KINDS = {
 export type BulkKind = keyof typeof BULK_KINDS;
 
 const RUN_READ = "dashboard.resources.bulk_runs.get";
+const SKU_LOOKUP = "dashboard.resources.variants.lookup";
+/** SKU codes one `variants.lookup` read takes. */
+const SKU_LOOKUP_MAX = 90;
 const WAIT_LIMIT_MS = 15 * 60 * 1_000;
 const POLL_MS = 2_000;
 
@@ -49,9 +55,9 @@ export interface BulkOptions {
   amount?: string;
   /** prices: --set and --amount are minor units, not the store currency. */
   minor?: boolean;
-  /** stock: `variantId=quantity,...` */
+  /** stock: `sku=quantity,...`, each SKU by its code or its id. */
   items?: string;
-  /** stock: the quantity for every --ids SKU. */
+  /** stock: the quantity for every --ids SKU (codes or ids). */
   quantity?: string;
   location?: string;
   reason?: string;
@@ -162,12 +168,12 @@ function stockItems(options: BulkOptions): Array<Record<string, unknown>> {
     if (options.ids || options.quantity !== undefined) throw invalid("Pass either --items, or --ids with --quantity.");
     return list(options.items).map((pair) => {
       const at = pair.lastIndexOf("=");
-      if (at < 1) throw invalid(`--items wants variantId=quantity pairs, got '${pair}'.`);
+      if (at < 1) throw invalid(`--items wants sku=quantity pairs (a SKU code or id), got '${pair}'.`);
       return { variantId: pair.slice(0, at).trim(), quantity: numberFlag("items quantity", pair.slice(at + 1), true) };
     });
   }
   const ids = list(options.ids);
-  if (ids.length === 0 || options.quantity === undefined) throw invalid("Say which SKUs and counts: --items var_1=20,var_2=0, or --ids var_1,var_2 --quantity 0.");
+  if (ids.length === 0 || options.quantity === undefined) throw invalid("Say which SKUs and counts: --items TS-RED-M=20,TS-RED-L=0, or --ids TS-RED-M,TS-RED-L --quantity 0 (SKU codes or ids).");
   const quantity = numberFlag("quantity", options.quantity, true);
   return ids.map((variantId) => ({ variantId, quantity }));
 }
@@ -180,7 +186,7 @@ function choice<T extends string>(flag: string, value: string | undefined, allow
 function bodyFor(kind: BulkKind, options: BulkOptions, money: StoreMoney | undefined): Record<string, unknown> {
   switch (kind) {
     case "prices": {
-      const { ids, filter } = selection(options, PRODUCT_FILTER_KEYS, "SKU ids");
+      const { ids, filter } = selection(options, PRODUCT_FILTER_KEYS, "SKU codes or ids");
       return { ...(filter ? { filter } : { variants: ids.map((id) => ({ id })) }), change: priceChange(options, money) };
     }
     case "stock": {
@@ -250,6 +256,93 @@ function runIdOf(data: unknown): string | undefined {
   return isRecord(data) && typeof data.id === "string" ? data.id : undefined;
 }
 
+function looksLikeSkuId(value: string): boolean {
+  return /^var_[A-Za-z0-9_-]+$/u.test(value);
+}
+
+/**
+ * Stock and price changes name SKUs by code (TS-RED-M) or id (var_...). Codes
+ * are read through `variants.lookup` (90 per read, any case) and replaced by
+ * their ids. A value that is no SKU's code is sent as given: the run reports
+ * it (not_found), and a run that applied nothing is an error.
+ */
+async function resolveSkuCodes(
+  runtime: Runtime,
+  profile: ResolvedProfile,
+  operations: readonly IndexedOperation[],
+  kind: BulkKind,
+  input: StructuredInput,
+): Promise<StructuredInput> {
+  const body = isRecord(input.body) ? input.body : {};
+  const field = kind === "stock" ? "items" : "variants";
+  const key = kind === "stock" ? "variantId" : "id";
+  const items = Array.isArray(body[field]) ? (body[field] as unknown[]).filter(isRecord) : [];
+  const codes = [...new Set(items.flatMap((item) => typeof item[key] === "string" && !looksLikeSkuId(item[key]) ? [item[key]] : []))];
+  if (codes.length === 0 || !operations.some((operation) => operation.id === SKU_LOOKUP)) return input;
+  const ids = new Map<string, string>();
+  for (let start = 0; start < codes.length; start += SKU_LOOKUP_MAX) {
+    const result = await readPage(runtime, profile, "dashboard", { operationId: SKU_LOOKUP, input: { body: { skus: codes.slice(start, start + SKU_LOOKUP_MAX) } } });
+    const data = result.value.data;
+    for (const variant of isRecord(data) && Array.isArray(data.variants) ? data.variants.filter(isRecord) : []) {
+      if (typeof variant.sku === "string" && typeof variant.id === "string") ids.set(variant.sku.trim().toLowerCase(), variant.id);
+    }
+  }
+  const seen = new Set<string>();
+  const resolved = items.map((item) => {
+    const named = String(item[key]);
+    const id = ids.get(named.trim().toLowerCase()) ?? named;
+    if (seen.has(id)) throw invalid(`Each SKU appears once: '${named}' names a SKU already in the list.`);
+    seen.add(id);
+    return { ...item, [key]: id };
+  });
+  return { ...input, body: { ...body, [field]: resolved } };
+}
+
+/** The run in an answer: `data.run`, a dry run's `preview` (as the server shapes it), or the counts themselves. */
+function findRun(value: unknown, depth = 0): Record<string, unknown> | undefined {
+  if (!isRecord(value) || depth > 3) return undefined;
+  if (typeof value.total === "number" && typeof value.failed === "number") return value;
+  for (const key of ["run", "preview", "data"]) {
+    const found = findRun(value[key], depth + 1);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+/**
+ * A run (or a dry run) in which every item was refused applied nothing: an
+ * error that says why, never `ok: true`. Unknown records get `not_found` and,
+ * for stock, the lookup that finds the right SKUs.
+ */
+export function nothingApplied(kind: BulkKind, data: unknown, dryRun: boolean): CliError | undefined {
+  const run = findRun(data);
+  if (!run) return undefined;
+  const failed = Number(run.failed);
+  const applied = (typeof run.changed === "number" ? run.changed : 0) + (typeof run.unchanged === "number" ? run.unchanged : 0);
+  if (failed < 1 || applied > 0) return undefined;
+  const byCode = new Map<string, string[]>();
+  for (const failure of Array.isArray(run.failures) ? run.failures.filter(isRecord) : []) {
+    const code = typeof failure.code === "string" ? failure.code : "refused";
+    byCode.set(code, [...(byCode.get(code) ?? []), String(failure.id)]);
+  }
+  const verb = dryRun ? "would change" : "changed";
+  const missing = byCode.get("not_found") ?? [];
+  const details = { run };
+  if (missing.length > 0 && byCode.size === 1) {
+    const what = kind === "stock" || kind === "prices" ? "SKU" : kind === "tags" ? "customer" : "product";
+    const listed = `${missing.slice(0, 10).join(", ")}${failed > Math.min(missing.length, 10) ? ", ..." : ""}`;
+    return new CliError(5, "not_found", `Nothing ${verb}: no ${what} matches ${listed}.`, details, {
+      hint: kind === "stock" || kind === "prices"
+        ? `Name SKUs by their code (TS-RED-M) or id (var_...). Check codes with: scalius read ${SKU_LOOKUP} --input '{"body":{"skus":["TS-RED-M"]}}'`
+        : `Check the ids with a list read: scalius search "list ${what}s".`,
+    });
+  }
+  const reasons = [...byCode.entries()].map(([code, ids]) => `${ids.length} ${code}`).join(", ");
+  return new CliError(5, "bulk_nothing_applied", `Nothing ${verb}: all ${failed} item(s) were refused${reasons ? ` (${reasons})` : ""}.`, details, {
+    hint: "details.run.failures names each refused item and why. Fix those items, then run the change again.",
+  });
+}
+
 export async function bulk(runtime: Runtime, output: OutputOptions, kind: BulkKind, options: BulkOptions): Promise<number> {
   const profile = await profileFor(runtime, "dashboard", output.profile);
   const { operations } = await getIndexedOperations(runtime, profile);
@@ -262,7 +355,8 @@ export async function bulk(runtime: Runtime, output: OutputOptions, kind: BulkKi
   // Prices are said in the store's currency: read it once to convert --set and
   // --amount, and to name it in the dry run (a failed read only costs the label).
   const money = kind === "prices" && !options.input && (convertsMoney(options) || options.dryRun) ? await readStoreMoney(runtime, profile) : undefined;
-  const input = bulkBody(kind, options, money);
+  const built = bulkBody(kind, options, money);
+  const input = (kind === "stock" || kind === "prices") && !options.input ? await resolveSkuCodes(runtime, profile, operations, kind, built) : built;
   const outcome = await write(runtime, output, operation.id, {
     input,
     dryRun: options.dryRun,
@@ -270,6 +364,10 @@ export async function bulk(runtime: Runtime, output: OutputOptions, kind: BulkKi
     approval: options.approval,
     print: !options.wait || options.dryRun,
     ...(options.dryRun && kind === "prices" ? { preview: pricePreview(input, money) } : {}),
+    check: (envelope, dryRun) => {
+      const refused = nothingApplied(kind, envelope.data, dryRun);
+      if (refused) throw refused;
+    },
   });
   if (options.dryRun) return outcome.code;
 
@@ -292,6 +390,8 @@ export async function bulk(runtime: Runtime, output: OutputOptions, kind: BulkKi
     const status = typeof current.status === "string" ? current.status : "";
     if (runtime.stderr.isTTY) writeDiagnostic(runtime, `Bulk run ${runId}: ${status || "running"}${typeof current.processed === "number" ? ` (${current.processed} of ${String(current.total ?? "?")} done)` : ""}`);
     if (status === "done" || status === "failed") {
+      const refused = status === "done" ? nothingApplied(kind, current, false) : undefined;
+      if (refused) throw refused;
       emit(runtime, output, { ok: status !== "failed", data: { run: current }, meta: { operationId: runRead.id, runId } });
       return status === "failed" ? 8 : 0;
     }

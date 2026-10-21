@@ -77,7 +77,7 @@ const matrixVariantInputSchema = z.object({
         .min(1)
         .max(MAX_PRODUCT_OPTION_AXES),
     imageId: z.string().trim().min(10).max(80)
-        .regex(/^pmed_[A-Za-z0-9_-]+$/u)
+        .regex(/^pmed_[A-Za-z0-9_-]+$/u, "Expected the pmed_ id of one of this product's media items (media[].id), or null for the featured image.")
         .nullable(),
     sku: z.string().trim().min(3).max(100),
     price: catalogMoneySchema,
