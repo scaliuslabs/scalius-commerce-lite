@@ -50,6 +50,19 @@ export function orderReferenceCondition(reference: string): SQL | null {
     return or(eq(orders.id, id), eq(orders.id, id.toUpperCase()))!;
 }
 
+/**
+ * The key a per-order rate limit counts under. It follows exactly how
+ * `orderReferenceCondition` resolves the text, so every spelling of one order
+ * ("1001", "#1001", "01001", "000001001", Bengali digits) shares one counter,
+ * and an id keys by the id. Unresolvable text still gets a key, so a reference
+ * that matches no order consumes its limit like any other.
+ */
+export function orderReferenceKey(reference: string): string {
+    const orderNumber = parseOrderNumberSearch(reference ?? "");
+    if (orderNumber !== null) return `n:${orderNumber}`;
+    return toLatinDigits(reference ?? "").trim().replace(/^#\s*/, "").toUpperCase();
+}
+
 export interface SendOrderLookupOtpInput {
     reference: string;
     /** The last 4 digits of the order's phone, or its email: the number alone sends nothing. */
@@ -84,8 +97,7 @@ export interface VerifyOrderLookupOtpResult {
 function parseLookupReference(reference: string): { condition: SQL; referenceKey: string } {
     const condition = orderReferenceCondition(reference);
     if (!condition) throw new ValidationError("Enter your order number, for example #1001.");
-    const referenceKey = toLatinDigits(reference).trim().replace(/^#\s*/, "").toUpperCase();
-    return { condition, referenceKey };
+    return { condition, referenceKey: orderReferenceKey(reference) };
 }
 
 function digitsOf(value: string | null | undefined): string {
