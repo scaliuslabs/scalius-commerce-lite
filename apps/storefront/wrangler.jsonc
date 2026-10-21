@@ -57,7 +57,7 @@
 		}
 	]
 	// No `vars`. Runtime configuration (storefront/API/dashboard/media URLs)
-	// lives in the dashboard: Settings -> System -> Platform, read through the
+	// lives in the dashboard: Settings > Store details > Web addresses, read through the
 	// BACKEND_API service binding at GET /api/v1/platform. The only installed
 	// secret is SCALIUS_SECRET (`wrangler secret put`). `pnpm check:env` fails
 	// on any `vars` block; `routes[].pattern` above is the public origin used by

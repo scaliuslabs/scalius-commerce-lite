@@ -475,7 +475,7 @@ const PLATFORM_URL_ISSUE_CODES: Record<PlatformUrlKey, string> = {
 };
 
 export const PLATFORM_READINESS_FIX =
-  "Set it in the dashboard under Settings -> System -> Platform.";
+  "Set it in the dashboard under Settings > Store details > Web addresses.";
 
 /**
  * The shared readiness vocabulary plus the typed extra callers need: exactly

@@ -579,6 +579,6 @@ describe("getPlatformConfigReadiness", () => {
       message: "API URL is not configured.",
       fix: PLATFORM_READINESS_FIX,
     });
-    expect(PLATFORM_READINESS_FIX).toContain("Settings -> System -> Platform");
+    expect(PLATFORM_READINESS_FIX).toContain("Settings > Store details > Web addresses");
   });
 });

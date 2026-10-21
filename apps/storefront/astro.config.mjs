@@ -10,7 +10,7 @@ import { partytownConfig } from "./src/lib/partytown-config.ts";
 import { isAbsolute } from "node:path";
 import cloudflare from "@astrojs/cloudflare";
 import { readBuildAssetsDirectory } from "./scripts/build-assets-directory.mjs";
-import { devOrigins, readDevPorts } from "../../scripts/dev-ports.mjs";
+import { devApiWorkerName, devOrigins, readDevPorts } from "../../scripts/dev-ports.mjs";
 import { writeDevWranglerConfig } from "../../scripts/dev-secrets.mjs";
 
 const persistStatePath = devStatePath(process.env.SCALIUS_WRANGLER_STATE);
@@ -18,7 +18,10 @@ const persistStatePath = devStatePath(process.env.SCALIUS_WRANGLER_STATE);
 // installed secret, so Wrangler binds SCALIUS_SECRET from .dev.vars or, when
 // that file is absent, from the process env, and nothing else from either.
 const devWranglerConfig = process.argv.includes("dev")
-  ? writeDevWranglerConfig(new URL("./wrangler.jsonc", import.meta.url), ["SCALIUS_SECRET"])
+  ? writeDevWranglerConfig(new URL("./wrangler.jsonc", import.meta.url), ["SCALIUS_SECRET"], {
+      // The SSR service binding (media, API reads) reaches this stack's API worker.
+      services: { BACKEND_API: devApiWorkerName() },
+    })
   : undefined;
 
 /** The shared Wrangler state; scripts/dev.sh exports it absolute. */

@@ -42,8 +42,9 @@
  */
 
 import { execSync } from "child_process";
-import { readFileSync, writeFileSync } from "fs";
-import { delimiter, resolve, dirname } from "path";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { delimiter, dirname, join, resolve } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import { getArgValue, resolvePnpmExecutable, shellQuote } from "./dev-local-utils.mjs";
 import { readLockfile } from "./plugin-build.mjs";
@@ -358,6 +359,30 @@ function deployTarget(target, apiWranglerConfigPath = null, plan = "free", plugi
   runWithRetry(cmd, label, cwd);
 }
 
+/**
+ * The deploy command with Wrangler's `--dry-run`: it reads the plan's config
+ * and bundles the Worker exactly as a deploy would, and uploads nothing.
+ */
+export function getDeployDryRunCommandForTarget(target, apiWranglerConfigPath, outdir) {
+  const { cmd, cwd } = getDeployCommandForTarget(target, apiWranglerConfigPath);
+  return { cmd: `${cmd} --dry-run --outdir ${shellQuote(outdir)}`, label: `Bundle the ${target} Worker as deployed, without uploading`, cwd };
+}
+
+/** A dry run proves what a deploy would send: the Worker env and bindings check, then each plan config bundled. */
+function validateDeployBundles(targets, apiWranglerConfigPath, plan, pluginSandbox) {
+  run("node scripts/check-worker-env.mjs", "Verify Worker bindings and env declarations");
+  const outdir = mkdtempSync(join(tmpdir(), "scalius-deploy-dry-run-"));
+  try {
+    for (const target of targets) {
+      if (target === "storefront") applyStorefrontPlan(plan, pluginSandbox);
+      const { cmd, label, cwd } = getDeployDryRunCommandForTarget(target, target === "api" ? apiWranglerConfigPath : null, join(outdir, target));
+      run(cmd, label, cwd);
+    }
+  } finally {
+    rmSync(outdir, { recursive: true, force: true });
+  }
+}
+
 export function getLatestDeployment(deployments) {
   if (!Array.isArray(deployments) || deployments.length === 0) return null;
   return deployments.reduce((latest, deployment) => {
@@ -619,7 +644,7 @@ function warnSetupPending(samples) {
   if (setupPending.length > 0) {
     console.warn(
       `⚠ API infrastructure is healthy but merchant setup is incomplete (${setupPending.join(", ")}). ` +
-      "Sign in to the dashboard and complete Settings -> System -> Platform; " +
+      "Sign in to the dashboard and complete Settings > Store details > Web addresses; " +
       "storefront browser features stay disabled until then.",
     );
   }
@@ -1005,7 +1030,7 @@ export async function resolveStorefrontVerificationUrl(deploymentUrls, {
     if (!platform.storefrontUrl) {
       throw new Error(
         "Could not verify live storefront: the dashboard Platform setting storefrontUrl is empty. "
-        + `Set it in Settings -> System -> Platform or ${STOREFRONT_URL_HINT}.`,
+        + `Set it in Settings > Store details > Web addresses or ${STOREFRONT_URL_HINT}.`,
       );
     }
     console.log(`✓ Using storefront origin ${platform.storefrontUrl} from dashboard Platform settings.`);
@@ -1015,11 +1040,11 @@ export async function resolveStorefrontVerificationUrl(deploymentUrls, {
   if (platform.storefrontUrl && platform.storefrontUrl !== storefrontUrl) {
     console.warn(
       `⚠ Dashboard Platform storefrontUrl (${platform.storefrontUrl}) differs from the deploy target `
-      + `(${storefrontUrl}). Update Settings -> System -> Platform so canonical and sitemap URLs match.`,
+      + `(${storefrontUrl}). Update Settings > Store details > Web addresses so canonical and sitemap URLs match.`,
     );
   } else if (!platform.storefrontUrl) {
     console.warn(
-      "⚠ Dashboard Platform storefrontUrl is empty; set it in Settings -> System -> Platform "
+      "⚠ Dashboard Platform storefrontUrl is empty; set it in Settings > Store details > Web addresses "
       + "so discovery XML and canonical links resolve.",
     );
   }
@@ -1393,6 +1418,7 @@ export async function main() {
       checkDistSecrets([requestedTarget]);
 
       if (dryRun) {
+        validateDeployBundles([requestedTarget], apiDeployConfigPath, plan, pluginSandbox);
         console.log("\nDRY RUN: skipping database migrations and Worker deploy.");
         console.log(`\n✓ Deploy dry run complete (${requestedTarget}).`);
         return;
@@ -1419,6 +1445,7 @@ export async function main() {
     checkDistSecrets(deployTargets);
 
     if (dryRun) {
+      validateDeployBundles(deployTargets, apiDeployConfigPath, plan, pluginSandbox);
       console.log("\nDRY RUN: skipping database migrations and Worker deploys.");
       console.log(`\n✓ Deploy dry run complete (${deployTargets.join(" + ")}).`);
       return;

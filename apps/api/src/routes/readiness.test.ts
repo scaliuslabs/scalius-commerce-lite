@@ -98,7 +98,7 @@ function createEnv(overrides: Partial<Env> = {}): Env {
     // Installed secrets: the master secret plus the credential key.
     SCALIUS_SECRET: "test-master-secret-with-at-least-thirty-two-characters",
     CREDENTIAL_ENCRYPTION_KEY: "test-credential-key",
-    // Resolved at Worker entry from Settings -> System -> Platform.
+    // Resolved at Worker entry from Settings > Store details > Web addresses.
     PLATFORM_CONFIG: {
       storefrontUrl: "https://storefront.example.test",
       apiUrl: "https://api.example.test",

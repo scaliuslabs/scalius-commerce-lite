@@ -288,7 +288,7 @@ export function collectWranglerVarsViolations(configPath, config) {
   return [
     `${configPath} declares Wrangler vars ${forbidden.join(", ")}. `
     + "Wrangler vars are not read: configure URLs, cookie domain, and CORS origins "
-    + "in the dashboard (Settings -> System -> Platform, served by GET /api/v1/platform) "
+    + "in the dashboard (Settings > Store details > Web addresses, served by GET /api/v1/platform) "
     + "and install secrets with `wrangler secret put`."
     + allowedNote,
   ];

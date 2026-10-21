@@ -1,5 +1,5 @@
 // apps/api/src/routes/admin/settings/platform.ts
-// Settings -> System -> Platform: the deployment's public origins.
+// Settings > Store details > Web addresses: the deployment's public origins.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { getPlatformSettingsDocument, savePlatformSettings } from "@scalius/core/modules/platform";

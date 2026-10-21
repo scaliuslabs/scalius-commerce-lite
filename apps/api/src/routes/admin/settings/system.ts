@@ -184,7 +184,7 @@ function inheritedSecuritySource(
 /**
  * Origins the storefront security policy trusts automatically. They are read
  * from the composed runtime env, which the Worker fills from the Platform
- * settings (Settings -> System -> Platform) at request time; they are not
+ * settings (Settings > Store details > Web addresses) at request time; they are not
  * Wrangler vars and cannot be edited on the Security page.
  */
 export function getInheritedSecuritySources(

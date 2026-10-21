@@ -43,7 +43,7 @@ describe("worker env check: Wrangler vars", () => {
     });
 
     expect(message).toContain("apps/api/wrangler.jsonc declares Wrangler vars DATABASE_PROVIDER, LOCAL_MAILPIT_URL, STOREFRONT_URL");
-    expect(message).toContain("Settings -> System -> Platform");
+    expect(message).toContain("Settings > Store details > Web addresses");
     expect(message).toContain("/api/v1/platform");
     expect(message).toContain("wrangler secret put");
     expect(message).not.toContain("storefront.example.test");
