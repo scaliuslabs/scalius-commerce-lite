@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Archive, ChevronDown, ChevronLeft, ChevronRight, MessageCircle, Phone } from "lucide-react";
+import { Archive, ChevronDown, ChevronLeft, ChevronRight, MessageCircle, Phone, XCircle } from "lucide-react";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { Alert } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
@@ -8,6 +8,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
@@ -29,7 +30,7 @@ import { OrderCustomerCard } from "./orderview/OrderCustomerCard";
 import { OrderFulfilmentCards, usePickupReadyAction } from "./orderview/OrderFulfilmentCards";
 import { LazyOrderHoldCard } from "./orderview/LazyOrderHoldCard";
 import { OrderNotesCard } from "./orderview/OrderNotesCard";
-import { OrderStatusCard } from "./orderview/OrderStatusCard";
+import { OrderStatusCard, orderCancelChoice, statusBlockText } from "./orderview/OrderStatusCard";
 import { LazyOrderConversationCard } from "./orderview/LazyOrderConversationCard";
 import { LazyOrderNotificationsCard, LazyOrderReturnsCard, LazyOrderTimelineCard } from "./orderview/LazyOrderCards";
 import { PaymentCard } from "./orderview/PaymentCard";
@@ -92,6 +93,8 @@ export function OrderView({ order }: { order: Order }) {
   // Finished orders (delivered, cancelled, returned, refunded) leave the working list (R3-ORD-11).
   const canArchive = actions.canBulkDeleteOrders && !archived && orderSkipReason(order, "archive") === null;
   const appActions = useAppActionRunner("order", false);
+  // Cancelling sits in More actions (where Shopify keeps it), beside the status menu that also offers it.
+  const cancelChoice = orderCancelChoice(order, actions.canChangeOrderStatus);
   const itemsLock = order.editReadiness.items;
   const editBlockedReason = order.activeRefundOperation?.active
     ? t("locked.refund")
@@ -180,7 +183,7 @@ export function OrderView({ order }: { order: Order }) {
                     {t("unarchive")}
                   </Button>
                 ) : null}
-                {actions.canPrintInvoices || canArchive || appActions.entries.length > 0 ? (
+                {actions.canPrintInvoices || canArchive || cancelChoice || appActions.entries.length > 0 ? (
                   // Polaris: secondary actions past the first fold into a named "More actions" menu (C4).
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -216,6 +219,23 @@ export function OrderView({ order }: { order: Order }) {
                           {entry.action.label}
                         </DropdownMenuItem>
                       ))}
+                      {cancelChoice ? (
+                        <>
+                          <DropdownMenuSeparator />
+                          {/* Blocked (a parcel is with the courier, money to refund first): the reason stays readable under it. */}
+                          <DropdownMenuItem
+                            variant="destructive"
+                            disabled={cancelChoice.block !== null}
+                            onSelect={() => setRequest({ action: "cancel", id: Date.now() })}
+                          >
+                            <span className="flex h-lh items-center"><XCircle className="size-4" /></span>
+                            {t("cancelOrder")}
+                          </DropdownMenuItem>
+                          {cancelChoice.block ? (
+                            <p className="max-w-64 px-2 pb-1.5 text-body text-muted-foreground">{statusBlockText(cancelChoice.block, order, t)}</p>
+                          ) : null}
+                        </>
+                      ) : null}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 ) : null}
@@ -257,7 +277,7 @@ export function OrderView({ order }: { order: Order }) {
               <div className="order-11 lg:order-none"><LazyOrderTimelineCard order={order} /></div>
             </div>
             <div className="contents lg:block lg:space-y-4">
-              <div className="order-1 lg:order-none"><OrderStatusCard order={order} /></div>
+              <div className="order-1 lg:order-none"><OrderStatusCard order={order} request={request} /></div>
               <div className="order-6 lg:order-none"><OrderCustomerCard order={order} /></div>
               <div className="order-7 empty:hidden lg:order-none"><LazyCustomFieldsCard ownerType="order" ownerId={order.id} canEdit={canEditCustomData} /></div>
               <div className="order-7 empty:hidden lg:order-none"><OrderAttributesCard attributes={order.attributes} /></div>

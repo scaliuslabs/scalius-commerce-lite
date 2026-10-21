@@ -17,7 +17,7 @@ export type OrderPrimaryAction =
   | "markDelivered"
   | "reviewCancellation";
 /** The next step asked of a card; a new `id` repeats the request. */
-export type OrderActionRequest = { action: OrderPrimaryAction | "refund"; id: number };
+export type OrderActionRequest = { action: OrderPrimaryAction | "refund" | "cancel"; id: number };
 
 const CLOSED_SHIPMENT_STATUSES = new Set(["cancelled", "failed", "returned"]);
 
