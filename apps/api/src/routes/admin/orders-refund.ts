@@ -6,6 +6,7 @@ import type { Database } from "@scalius/database/client";
 import {
     PartialRefundProcessedError,
     processRefund,
+    type RefundCaller,
     type RefundNotificationFact,
     type RefundRequest,
     type RefundServiceResult,
@@ -335,10 +336,13 @@ export async function executeOrderRefund(
     // The durable key also seals a store-credit card's code (fails closed when missing).
     const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
     let result: RefundServiceResult;
+    // Who asks comes from the request's principal, never from the body: an
+    // app or agent may not turn a COD or recorded payment into store credit.
+    const caller: RefundCaller = c.get("pluginPrincipal") ? "app" : c.get("agentPrincipal") ? "agent" : "staff";
     try {
         result = await processRefund(
             db,
-            request,
+            { ...request, caller },
             encryptionKey,
             // App gateways refund through the same port as built-in ones (read only when one is named).
             () => requestPaymentProviders(c),

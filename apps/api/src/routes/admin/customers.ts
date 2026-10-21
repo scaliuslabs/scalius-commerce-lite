@@ -44,6 +44,10 @@ import { successEnvelope, keysetPaginatedEnvelope, keysetQuerySchema, idResponse
 import { customerAddressSchema, customerSummarySchema, customerDetailSchema } from "../../schemas/entities";
 import { relatedObjectsProjection, withRelatedObjects } from "./related-objects";
 import { relatedObjectRecordSchema } from "../../schemas/related-objects";
+import { staffSavedPaymentMethod, staffSavedPaymentMethodSchema } from "../../schemas/saved-payment-methods";
+import { listCustomerPaymentMethods, removeCustomerPaymentMethod } from "@scalius/core/modules/payments";
+import { requestPaymentProviders } from "../../plugins/providers/payment";
+import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { timestampSchema, nullableTimestampSchema, optionalNullableTimestampSchema } from "../../schemas/timestamps";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -523,6 +527,61 @@ app.openapi(deleteAddressRoute, async (c) => {
     const { id, addressId } = c.req.valid("param");
     await deleteCustomerAddress(c.get("db"), id, addressId);
     return noContent(c);
+});
+
+// ── Saved payment methods (security audit N3) ──
+// The cards or wallets a provider kept for this customer, with what each was
+// kept for and the app that may charge it. Staff remove one when the buyer
+// asks; the buyer can also do it in their account.
+
+const paymentMethodListPayload = z.object({ paymentMethods: z.array(staffSavedPaymentMethodSchema) });
+
+const listPaymentMethodsRoute = createRoute({
+    operationId: "dashboard.customers.payment_methods_list",
+    method: "get",
+    path: "/{id}/payment-methods",
+    tags: ["Admin - Customers"],
+    summary: "List a customer's saved payment methods",
+    description: "Active cards or wallets kept by a payment provider for charges without the buyer, oldest first: brand, last four digits, expiry, what each was kept for and the app that may charge it. Never the provider's reference.",
+    request: { params: z.object({ id: z.string() }) },
+    responses: {
+        200: { description: "Saved payment methods", content: { "application/json": { schema: successEnvelope(paymentMethodListPayload) } } },
+        ...errorResponses,
+    },
+});
+
+app.openapi(listPaymentMethodsRoute, async (c) => {
+    const { id } = c.req.valid("param");
+    const methods = await listCustomerPaymentMethods(c.get("db"), id, { kind: "staff" });
+    return ok(c, { paymentMethods: methods.map(staffSavedPaymentMethod) });
+});
+
+const deletePaymentMethodRoute = createRoute({
+    operationId: "dashboard.customers.payment_methods_delete",
+    method: "delete",
+    path: "/{id}/payment-methods/{methodId}",
+    tags: ["Admin - Customers"],
+    summary: "Remove a customer's saved payment method",
+    description: "Detaches the method at its provider, then removes it: nothing can charge it again. Answers the customer's remaining methods.",
+    request: { params: z.object({ id: z.string(), methodId: z.string().min(1).max(128) }) },
+    responses: {
+        200: { description: "Saved payment methods", content: { "application/json": { schema: successEnvelope(paymentMethodListPayload) } } },
+        ...errorResponses,
+    },
+});
+
+app.openapi(deletePaymentMethodRoute, async (c) => {
+    const { id, methodId } = c.req.valid("param");
+    const db = c.get("db");
+    // Scoped to this customer's methods: a method id from another customer reads as not found.
+    await removeCustomerPaymentMethod(db, {
+        methodId,
+        actor: { kind: "customer", customerId: id },
+        providers: () => requestPaymentProviders(c),
+        encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
+    });
+    const methods = await listCustomerPaymentMethods(db, id, { kind: "staff" });
+    return ok(c, { paymentMethods: methods.map(staffSavedPaymentMethod) });
 });
 
 // ── Get Customer History ──

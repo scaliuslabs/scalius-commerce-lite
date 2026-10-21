@@ -4,5 +4,35 @@
   "from": "2127040f8b7ff645",
   "change": "dashboard.resources.payments.create: the write_orders scope no longer covers it.",
   "reason": "Pre-lock security fix (audit S3): a recorded payment settles an invoice with no money moving and hands over its gift cards and downloads, so it needs the Sensitive write_payments scope (orders.record_payment, migration 0166), not write_orders."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "ef65e7e9301eb76b",
+  "change": "payment_methods.delete: the write_payments scope no longer covers it.",
+  "reason": "Pre-lock security fix (audit N3): charging a buyer's saved card off-session is not recording a bank transfer, so saved methods and off-session charges move to their own Sensitive scope write_payment_methods (orders.charge_saved_methods, migration 0175)."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "ef65e7e9301eb76b",
+  "change": "payment_methods.list: the write_payments scope no longer covers it.",
+  "reason": "Pre-lock security fix (audit N3): see payment_methods.delete; an app now lists only the methods kept for its own purchase options."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "ef65e7e9301eb76b",
+  "change": "payments.capture: the write_payments scope no longer covers it.",
+  "reason": "Pre-lock security fix (audit N3): capture and void settle off-session authorizations, under write_payment_methods with the charge."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "ef65e7e9301eb76b",
+  "change": "payments.charge: the write_payments scope no longer covers it.",
+  "reason": "Pre-lock security fix (audit N3): an off-session charge needs the Sensitive write_payment_methods scope, and an app charges only a method kept for its own purchase option."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "ef65e7e9301eb76b",
+  "change": "payments.void: the write_payments scope no longer covers it.",
+  "reason": "Pre-lock security fix (audit N3): see payments.capture."
  }
 ]

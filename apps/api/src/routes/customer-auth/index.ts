@@ -17,6 +17,7 @@ import { customerPushRoutes } from "./push";
 import { customerReviewRoutes } from "./reviews";
 import { customerSessionRoutes } from "./session";
 import { customerWarrantyRoutes } from "./warranties";
+import { customerPaymentMethodRoutes } from "./payment-methods";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -35,5 +36,6 @@ app.route("/", customerMarketingRoutes);
 app.route("/", customerAddressRoutes);
 app.route("/", customerPushRoutes);
 app.route("/", customerIdentityRoutes);
+app.route("/", customerPaymentMethodRoutes);
 
 export { app as customerAuthRoutes };

@@ -1,7 +1,8 @@
 // An app's data lifecycle on the real migrated schema (D1 semantics): an
 // uninstall that keeps data keeps the app's name and settings too, lists its
-// data as a removed app's and gives it all back on reinstall (secrets only to
-// the same developer key); an uninstall that deletes data deletes every kind
+// data as a removed app's and gives it all back on a reinstall from the same
+// developer (another developer's release is refused until the data is
+// deleted); an uninstall that deletes data deletes every kind
 // it owns; data an app left without any record of its removal (an old
 // uninstall, a bundled app taken out of the deployment) is listed under its
 // id; "Delete data" deletes one removed app's group under its revision and
@@ -114,11 +115,37 @@ describe("app data lifecycle", () => {
     expect(count("SELECT count(*) AS n FROM system_kv WHERE key = 'plugin-retained:acme.bazaar'")).toBe(0);
     expect(count("SELECT count(*) AS n FROM object_records")).toBe(1);
 
-    // Code signed by another developer gets the plain settings but no secret.
+    // Security audit N4: another developer's release under this id never
+    // inherits the data. It is refused while the data is kept; the data
+    // stays listed and untouched, and once deleted the release starts clean.
     await uninstallPlugin(db, "acme.bazaar", { keepData: true, expectedRevision: reinstalled.revision });
     expect((await listRemovedAppData(db))[0]!.revision).toBe(1);
-    const moved = await installPlugin(db, { manifest: manifest(), source: "registry", bundleSha256: SHA, signerKeyId: "key_other" });
-    expect(describePluginSettings(moved)).toMatchObject({ values: { commission: 12 }, secrets: { api_key: false } });
+    await expect(installPlugin(db, { manifest: manifest(), source: "registry", bundleSha256: SHA, signerKeyId: "key_other" }))
+      .rejects.toMatchObject({ pluginCode: "retained_data_other_developer", status: 409 });
+    expect(count("SELECT count(*) AS n FROM plugin_installations")).toBe(0);
+    const kept = (await listRemovedAppData(db))[0]!;
+    expect(kept).toMatchObject({ pluginId: "acme.bazaar", records: 1, keyValues: 1, catalogItems: 1, settings: true });
+
+    await deleteRemovedAppData(db, "acme.bazaar", kept.revision);
+    // Defaults only: nothing of the first developer's settings or data comes back.
+    const clean = await installPlugin(db, { manifest: manifest(), source: "registry", bundleSha256: SHA, signerKeyId: "key_other" });
+    expect(describePluginSettings(clean)).toMatchObject({ values: { commission: 5 }, secrets: { api_key: false } });
+    for (const table of ["plugin_kv", "object_records", "app_resource_owners", "plugin_customer_roles"]) {
+      expect(count(`SELECT count(*) AS n FROM ${table}`), table).toBe(0);
+    }
+  });
+
+  it("gives kept data back only to the same developer: an unsigned upload never takes a signed app's data", async () => {
+    await installPlugin(db, { manifest: manifest(), source: "registry", bundleSha256: SHA, signerKeyId: "key_acme" });
+    await setPluginKv(db, "acme.bazaar", "refresh_token", "partner-token");
+    const installed = await requirePluginInstallation(db, "acme.bazaar");
+    await uninstallPlugin(db, "acme.bazaar", { keepData: true, expectedRevision: installed.revision });
+
+    await expect(installPlugin(db, { manifest: manifest(), source: "upload", bundleSha256: SHA }))
+      .rejects.toMatchObject({ pluginCode: "retained_data_other_developer" });
+    const back = await installPlugin(db, { manifest: manifest(), source: "registry", bundleSha256: SHA, signerKeyId: "key_acme" });
+    expect(back.signerKeyId).toBe("key_acme");
+    expect(count("SELECT count(*) AS n FROM plugin_kv WHERE plugin_id = 'acme.bazaar'")).toBe(1);
   });
 
   it("deletes every kind of data the app owns on an uninstall that does not keep it, and no one else's", async () => {

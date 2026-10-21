@@ -113,4 +113,22 @@ describe("track your order by number and contact", () => {
     limiter.allow = true;
     expect((await lookup("#1057", {})).status).toBe(401);
   });
+
+  it("counts every spelling of one order number under one per-order limit key", async () => {
+    const keysFor = async (reference: string) => {
+      rateLimiter.limit.mockClear();
+      await lookup(reference);
+      return rateLimiter.limit.mock.calls.map((call) => (call as unknown as [{ key: string }])[0].key);
+    };
+    const spellings = ["1057", "#1057", "# 1057", "01057", "000001057", "১০৫৭"];
+    const all = await Promise.all(spellings.map(keysFor));
+    // The IP keys repeat; the per-order key must be the one remaining key.
+    expect(new Set(all.flat()).size).toBe(3);
+    // A different order, and a reference that matches no order, count apart.
+    const other = await keysFor("#1058");
+    expect(new Set([...all.flat(), ...other]).size).toBe(4);
+    // The limit is consumed for a reference that matches no order too.
+    const missing = await keysFor("#9999");
+    expect(missing).toHaveLength(3);
+  });
 });

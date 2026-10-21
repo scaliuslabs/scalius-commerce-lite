@@ -88,6 +88,14 @@ export interface RefundRequest {
     /** The staff member recording the refund (gift-card ledger actor). */
     actorUserId?: string | null;
     /**
+     * Who asks (security audit N1). Store credit turns the refunded money
+     * into spendable stored value, so an app or an agent may issue it only
+     * for money a provider captured (or gift-card value): a cash-on-delivery
+     * or recorded payment is the store's word that money arrived, and only
+     * staff may convert it. Omitted means staff (the dashboard route).
+     */
+    caller?: RefundCaller;
+    /**
      * The order lines this refund is for (0172): recorded with the refund in
      * its claim batch and carried by its `refund.*` events, so an app can
      * tell which lines (a seller's, a subscription's) the money was for.
@@ -105,6 +113,10 @@ export interface RefundLineInput {
 
 export const REFUND_SETTLEMENTS = ["original", "store_credit"] as const;
 export type RefundSettlement = (typeof REFUND_SETTLEMENTS)[number];
+/** Who asks for a refund: staff in the dashboard, an installed app, or an agent acting for a staff member. */
+export type RefundCaller = "staff" | "app" | "agent";
+/** The refusal reason when an app or agent asks for store credit over a COD or recorded payment. */
+export const STORE_CREDIT_NEEDS_STAFF_REASON = "store_credit_needs_staff";
 
 /** The store-credit card a refund issued (never its code). */
 export interface RefundStoreCredit {
@@ -1613,6 +1625,15 @@ export async function processRefund(
         refundRows: priorRefundRows,
         currency,
     });
+    if (settlement === "store_credit" && (params.caller ?? "staff") !== "staff"
+        && allocations.some((allocation) => isManualSettlementMethod(allocation.sourcePayment.paymentMethod))) {
+        // Store credit over money no provider captured would mint a live
+        // gift card from a claim (an app's own "bank transfer").
+        throw new ValidationError(
+            "Store credit for a cash-on-delivery or recorded payment can only be issued by staff in the dashboard. Refund it to the original payment instead.",
+            { reason: STORE_CREDIT_NEEDS_STAFF_REASON },
+        );
+    }
     const actor = params.actorUserId
         ? { type: "admin" as const, id: params.actorUserId }
         : { type: "system" as const, id: null };

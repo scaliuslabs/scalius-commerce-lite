@@ -26,6 +26,7 @@ const REFUSALS: Record<string, AppsLifecycleMessageKey> = {
   "package_invalid": "packageInvalid",
   "signature_invalid": "signatureInvalid",
   "signature_signer_changed": "signerChanged",
+  "retained_data_other_developer": "retainedDataOtherDeveloper",
   "installation_incompatible": "incompatible",
   "installation_source_conflict": "sourceConflict",
   "installation_sandbox_required": "sandboxRequired",

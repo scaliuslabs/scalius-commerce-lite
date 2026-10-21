@@ -87,4 +87,13 @@ export const CUSTOMER_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/customers/*/addresses/*/default-billing": {
     POST: { permission: PERMISSIONS.CUSTOMERS_EDIT },
   },
+  // Saved cards on the customer page (brand and last four only). Removing one
+  // stops future charges for the buyer: an edit of the customer. Apps reach
+  // saved methods only through the stable payment_methods operations.
+  "/api/v1/admin/customers/*/payment-methods": {
+    GET: { permission: PERMISSIONS.CUSTOMERS_VIEW },
+  },
+  "/api/v1/admin/customers/*/payment-methods/*": {
+    DELETE: { permission: PERMISSIONS.CUSTOMERS_EDIT },
+  },
 };

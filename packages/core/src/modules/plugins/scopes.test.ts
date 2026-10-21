@@ -72,6 +72,14 @@ describe("PLUGIN_SCOPES", () => {
     expect(PERMISSION_METADATA["orders.record_payment"].isSensitive).toBe(true);
   });
 
+  // Security audit N3: an invoicing app that records transfers does not also charge cards.
+  it("keeps off-session charging out of write_payments, under its own Sensitive scope", () => {
+    expect(effectivePluginPermissions({ scopes: ["write_payments"] }).has("orders.charge_saved_methods")).toBe(false);
+    expect([...effectivePluginPermissions({ scopes: ["write_payment_methods"] })].sort()).toEqual(["orders.charge_saved_methods", "orders.view"]);
+    expect(isSensitivePluginScope("write_payment_methods")).toBe(true);
+    expect(PERMISSION_METADATA["orders.charge_saved_methods"].isSensitive).toBe(true);
+  });
+
   it("makes every write scope include its read scope", () => {
     for (const scope of PLUGIN_SCOPE_NAMES.filter((name) => name.startsWith("write_"))) {
       const read = `read_${scope.slice("write_".length)}` as keyof typeof PLUGIN_SCOPES;

@@ -226,3 +226,63 @@ export async function saveAccountProfile(request: Request, update: ProfileUpdate
   if (answer?.status === 400 || answer?.status === 422) return { ok: false, reason: "invalid", message: answer.error };
   return { ...failed(answer), message: null };
 }
+
+/** A saved card or wallet as the buyer sees it (security audit N3): never a card number or the provider's reference. */
+export interface AccountSavedPaymentMethod {
+  id: string;
+  brand: string | null;
+  last4: string | null;
+  expiryMonth: number | null;
+  expiryYear: number | null;
+  label: string | null;
+  /** The purchase option it was kept for, as the buyer chose it at checkout. */
+  savedFor: string | null;
+  createdAt: string;
+}
+
+const textOrNull = (value: unknown) => (typeof value === "string" && value.trim() ? value : null);
+const integerOrNull = (value: unknown) => (typeof value === "number" && Number.isInteger(value) ? value : null);
+
+function readPaymentMethods(data: unknown): AccountSavedPaymentMethod[] | null {
+  const rows = (data as { paymentMethods?: unknown } | null)?.paymentMethods;
+  if (!Array.isArray(rows)) return null;
+  return rows.flatMap((each) => {
+    const row = each as Record<string, unknown> | null;
+    if (!row || typeof row.id !== "string" || !row.id) return [];
+    return [{
+      id: row.id,
+      brand: textOrNull(row.brand),
+      last4: textOrNull(row.last4),
+      expiryMonth: integerOrNull(row.expiryMonth),
+      expiryYear: integerOrNull(row.expiryYear),
+      label: textOrNull(row.label),
+      savedFor: textOrNull(row.savedFor),
+      createdAt: typeof row.createdAt === "string" ? row.createdAt : "",
+    }];
+  });
+}
+
+/** The account's saved payment methods, oldest first. */
+export async function readAccountPaymentMethods(request: Request): Promise<AccountRead<AccountSavedPaymentMethod[]>> {
+  const answer = await callAccountApi(request, "/api/v1/customer-auth/payment-methods");
+  const methods = answer?.status === 200 ? readPaymentMethods(answer.data) : null;
+  return methods ? { ok: true, data: methods } : failed(answer);
+}
+
+export type AccountPaymentMethodRemoveResult =
+  | { ok: true; paymentMethods: AccountSavedPaymentMethod[] }
+  | { ok: false; reason: "signed_out" | "unavailable" | "refused" };
+
+/**
+ * Removes one saved method: the provider detaches it, then nothing can
+ * charge it again. A provider that refuses (or an id not on this account)
+ * reads as `refused`; one that cannot be reached as `unavailable` (the
+ * method stays, so the buyer can retry).
+ */
+export async function removeAccountPaymentMethod(request: Request, methodId: string): Promise<AccountPaymentMethodRemoveResult> {
+  const answer = await callAccountApi(request, `/api/v1/customer-auth/payment-methods/${encodeURIComponent(methodId)}`, { method: "DELETE" });
+  const methods = answer?.status === 200 ? readPaymentMethods(answer.data) : null;
+  if (methods) return { ok: true, paymentMethods: methods };
+  if (answer?.status === 400 || answer?.status === 404 || answer?.status === 409 || answer?.status === 422) return { ok: false, reason: "refused" };
+  return failed(answer);
+}

@@ -2732,6 +2732,29 @@ export type OpenedWarrantyClaim = {
     created: boolean;
 };
 
+export type CustomerSavedPaymentMethod = {
+    /**
+     * The saved method (`cpm_…`).
+     */
+    id: string;
+    /**
+     * The card network or wallet, lower case (`visa`).
+     */
+    brand: string | null;
+    /**
+     * The last four digits; the full number never reaches the store.
+     */
+    last4: string | null;
+    expiryMonth: number | null;
+    expiryYear: number | null;
+    label: string | null;
+    /**
+     * The purchase option it was kept for, as the buyer chose it at checkout ("Subscribe and save").
+     */
+    savedFor: string | null;
+    createdAt: string;
+};
+
 export type ProductPageContentBlock = {
     type: 'rich-text';
     version: 1;
@@ -3390,6 +3413,14 @@ export type PaymentMethodResource = {
      * The order whose payment kept it.
      */
     sourceOrderId: string | null;
+    /**
+     * The app whose purchase option the buyer kept it for: the only app that may charge it (null: only staff may). An app lists and charges only its own.
+     */
+    ownerAppId: string | null;
+    /**
+     * That purchase option (`<app id>.<key>`), when the order named exactly one.
+     */
+    purchaseOptionId: string | null;
     createdAt: string;
     updatedAt: string;
 };
@@ -3654,6 +3685,22 @@ export type CustomerSegmentDefinition = {
         op: 'equals' | 'is_set' | 'is_not_set';
         value?: string;
     }>;
+};
+
+export type StaffSavedPaymentMethod = CustomerSavedPaymentMethod & {
+    /**
+     * The payment provider that keeps it (`<app id>:<provider id>`, or a built-in gateway).
+     */
+    providerId: string;
+    /**
+     * The app whose purchase option kept it: the only app that may charge it. Null: only staff may.
+     */
+    ownerAppId: string | null;
+    purchaseOptionId: string | null;
+    /**
+     * The order whose payment kept it.
+     */
+    sourceOrderId: string | null;
 };
 
 export type PurchaseOrder = {
@@ -4908,7 +4955,7 @@ export type AppDetail = AppSummary & {
      * The requested scopes, for the consent screen.
      */
     scopes: Array<{
-        name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_refunds' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_themes' | 'write_navigation' | 'write_places';
+        name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_payment_methods' | 'write_refunds' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_themes' | 'write_navigation' | 'write_places';
         /**
          * The highest risk among the operations the scope lets this app call.
          */
@@ -5126,7 +5173,7 @@ export type AppGrant = {
     /**
      * Access scopes: store data and actions the app may read or change.
      */
-    scopes: Array<'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_refunds' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_themes' | 'write_navigation' | 'write_places'>;
+    scopes: Array<'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_payment_methods' | 'write_refunds' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_themes' | 'write_navigation' | 'write_places'>;
     allowedHosts: Array<string>;
     events: Array<string>;
     functions: Array<string>;
@@ -5178,7 +5225,7 @@ export type AppFeature = {
          * Store access this feature adds, for its consent dialog.
          */
         scopes: Array<{
-            name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_refunds' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_themes' | 'write_navigation' | 'write_places';
+            name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_payment_methods' | 'write_refunds' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_themes' | 'write_navigation' | 'write_places';
             /**
              * The highest risk among the operations the scope lets this app call.
              */
@@ -16198,6 +16245,108 @@ export type GetApiV1CustomerAuthIdentityByProviderIdCallbackData = {
     };
     url: '/api/v1/customer-auth/identity/{providerId}/callback';
 };
+
+export type GetApiV1CustomerAuthPaymentMethodsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/customer-auth/payment-methods';
+};
+
+export type GetApiV1CustomerAuthPaymentMethodsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1CustomerAuthPaymentMethodsError = GetApiV1CustomerAuthPaymentMethodsErrors[keyof GetApiV1CustomerAuthPaymentMethodsErrors];
+
+export type GetApiV1CustomerAuthPaymentMethodsResponses = {
+    /**
+     * The account's saved payment methods, oldest first
+     */
+    200: {
+        success: true;
+        data: {
+            paymentMethods: Array<CustomerSavedPaymentMethod>;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthPaymentMethodsResponse = GetApiV1CustomerAuthPaymentMethodsResponses[keyof GetApiV1CustomerAuthPaymentMethodsResponses];
+
+export type DeleteApiV1CustomerAuthPaymentMethodsByMethodIdData = {
+    body?: never;
+    path: {
+        methodId: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/payment-methods/{methodId}';
+};
+
+export type DeleteApiV1CustomerAuthPaymentMethodsByMethodIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type DeleteApiV1CustomerAuthPaymentMethodsByMethodIdError = DeleteApiV1CustomerAuthPaymentMethodsByMethodIdErrors[keyof DeleteApiV1CustomerAuthPaymentMethodsByMethodIdErrors];
+
+export type DeleteApiV1CustomerAuthPaymentMethodsByMethodIdResponses = {
+    /**
+     * The account's saved payment methods, oldest first
+     */
+    200: {
+        success: true;
+        data: {
+            paymentMethods: Array<CustomerSavedPaymentMethod>;
+        };
+    };
+};
+
+export type DeleteApiV1CustomerAuthPaymentMethodsByMethodIdResponse = DeleteApiV1CustomerAuthPaymentMethodsByMethodIdResponses[keyof DeleteApiV1CustomerAuthPaymentMethodsByMethodIdResponses];
 
 export type GetApiV1CheckoutLanguagesActiveData = {
     body?: never;
@@ -27472,7 +27621,7 @@ export type PostApiV1AdminResourcesOrdersByIdRefundsData = {
          */
         reason: string;
         /**
-         * `original`: back to the payments it came from. `store_credit`: one new gift card for the whole amount, sent to the order contact.
+         * `original`: back to the payments it came from. `store_credit`: one new gift card for the whole amount, sent to the order contact. An app or agent may give store credit only for money a provider captured (or gift-card value); over a cash-on-delivery or recorded payment it is refused with reason `store_credit_needs_staff`.
          */
         settlement?: 'original' | 'store_credit';
         /**
@@ -34466,6 +34615,111 @@ export type PostApiV1AdminCustomersByIdAddressesByAddressIdDefaultBillingRespons
 };
 
 export type PostApiV1AdminCustomersByIdAddressesByAddressIdDefaultBillingResponse = PostApiV1AdminCustomersByIdAddressesByAddressIdDefaultBillingResponses[keyof PostApiV1AdminCustomersByIdAddressesByAddressIdDefaultBillingResponses];
+
+export type GetApiV1AdminCustomersByIdPaymentMethodsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/customers/{id}/payment-methods';
+};
+
+export type GetApiV1AdminCustomersByIdPaymentMethodsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminCustomersByIdPaymentMethodsError = GetApiV1AdminCustomersByIdPaymentMethodsErrors[keyof GetApiV1AdminCustomersByIdPaymentMethodsErrors];
+
+export type GetApiV1AdminCustomersByIdPaymentMethodsResponses = {
+    /**
+     * Saved payment methods
+     */
+    200: {
+        success: true;
+        data: {
+            paymentMethods: Array<StaffSavedPaymentMethod>;
+        };
+    };
+};
+
+export type GetApiV1AdminCustomersByIdPaymentMethodsResponse = GetApiV1AdminCustomersByIdPaymentMethodsResponses[keyof GetApiV1AdminCustomersByIdPaymentMethodsResponses];
+
+export type DeleteApiV1AdminCustomersByIdPaymentMethodsByMethodIdData = {
+    body?: never;
+    path: {
+        id: string;
+        methodId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/customers/{id}/payment-methods/{methodId}';
+};
+
+export type DeleteApiV1AdminCustomersByIdPaymentMethodsByMethodIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type DeleteApiV1AdminCustomersByIdPaymentMethodsByMethodIdError = DeleteApiV1AdminCustomersByIdPaymentMethodsByMethodIdErrors[keyof DeleteApiV1AdminCustomersByIdPaymentMethodsByMethodIdErrors];
+
+export type DeleteApiV1AdminCustomersByIdPaymentMethodsByMethodIdResponses = {
+    /**
+     * Saved payment methods
+     */
+    200: {
+        success: true;
+        data: {
+            paymentMethods: Array<StaffSavedPaymentMethod>;
+        };
+    };
+};
+
+export type DeleteApiV1AdminCustomersByIdPaymentMethodsByMethodIdResponse = DeleteApiV1AdminCustomersByIdPaymentMethodsByMethodIdResponses[keyof DeleteApiV1AdminCustomersByIdPaymentMethodsByMethodIdResponses];
 
 export type GetApiV1AdminCustomersByIdHistoryData = {
     body?: never;

@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { accountCopy } from "./account-copy";
 import { downloadCopy } from "./account-downloads";
 import { giftCardPageCopy } from "./account-gift-cards";
+import { accountPaymentMethodCopy } from "./account-payment-methods";
 import { conversationCopy } from "./account-inbox";
 import { cartShareCopy } from "./conversation-cart-share";
 
@@ -20,6 +21,7 @@ const CATALOGUES = {
   account: accountCopy,
   downloads: downloadCopy,
   giftCards: giftCardPageCopy,
+  paymentMethods: accountPaymentMethodCopy,
   conversations: conversationCopy,
   cartShare: cartShareCopy,
 } as const;

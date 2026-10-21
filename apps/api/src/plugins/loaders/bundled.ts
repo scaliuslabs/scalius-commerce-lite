@@ -6,12 +6,18 @@
 // is structured-cloned exactly as Workers RPC would, so a plugin cannot share
 // references with the host or depend on behaviour the sandbox lacks.
 //
-// The one ambient authority the API Worker has and the sandbox does not is
-// the network (`globalOutbound: null` there). App code runs in an async scope
-// here, and the global `fetch` refuses inside it exactly as the sandbox does,
-// so `ctx.http.fetch` (allowedHosts, https, public, redirects re-checked) is
-// an app's only egress on both loaders. Bridge calls leave the scope: the
-// host's own fetches, including the guarded one, are unaffected.
+// A bundled app is trusted deployment code in the API Worker's own isolate.
+// This loader is NOT a sandbox. The one guard it adds is a best-effort egress
+// rule: the sandbox has no network (`globalOutbound: null`), the API Worker
+// does, so app code runs in an async scope in which the global `fetch`
+// refuses, steering an honest app to `ctx.http.fetch` (allowedHosts, https,
+// public, redirects re-checked). The guard covers `fetch` only: not
+// `WebSocket`, `caches`, `cloudflare:sockets` or anything else the isolate can
+// reach, and a hostile app can read host memory. Do not bundle code you do not
+// trust on the strength of it; untrusted apps belong in the sandbox. Bridge
+// calls leave the scope, and the guard sits over the fetch the host captured at
+// module load, so an app that assigns its own function to `globalThis.fetch`
+// cannot receive the host's requests (see `createEgressGuard`).
 
 import { AsyncLocalStorage } from "node:async_hooks";
 import { BUNDLED_PLUGINS } from "../bundled.gen";
@@ -60,33 +66,77 @@ const BRIDGE_METHODS = [
 
 /** The app whose code is running in this async context; null in host code. */
 const appScope = new AsyncLocalStorage<string | null>();
-const EGRESS_GUARD = Symbol.for("scalius.plugins.egressGuard");
+
+type FetchHolder = { fetch: typeof fetch };
 
 /**
- * Wraps the current global `fetch` once (again if something replaced it): in
- * an app's scope it refuses, as `globalOutbound: null` does in the sandbox;
- * elsewhere it is the fetch it wraps.
+ * The egress guard over a global scope: in an app's scope `fetch` refuses, as
+ * `globalOutbound: null` does in the sandbox; elsewhere it calls `original`,
+ * the host's own fetch captured before any app code could run. Nothing an app
+ * assigns is ever wrapped or called by the host: `ensure()` puts the guard
+ * back, over `original`, whenever `target.fetch` is anything else.
+ *
+ * With `lock` the guard is installed non-writable and non-configurable where
+ * the runtime allows it, so an app cannot replace it at all (a failed
+ * `defineProperty` falls back to plain assignment, and `ensure()` repairs it
+ * at every app run, app exit and bridge call). `adoptReplacement` is the test
+ * seam: unit tests stub `globalThis.fetch` on purpose and expect the host to
+ * reach the stub, so there a replacement becomes the original. It is never set
+ * in production (`scripts/vitest-setup.mjs` sets the flag for tests only).
  */
-function guardGlobalFetch(): void {
-  const current = globalThis.fetch as typeof fetch & { [EGRESS_GUARD]?: true };
-  if (current[EGRESS_GUARD]) return;
-  const guarded = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+export function createEgressGuard(
+  target: FetchHolder,
+  original: typeof fetch,
+  options: { lock?: boolean; adoptReplacement?: boolean } = {},
+): { guarded: typeof fetch; ensure: () => void } {
+  let base = original;
+  const guarded = ((input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const pluginId = appScope.getStore();
     if (pluginId) {
       return Promise.reject(new Error(
         `${pluginId} is not permitted to access the internet via global fetch(); use ctx.http.fetch, which reaches only the hosts in its allowedHosts.`,
       ));
     }
-    return Reflect.apply(current, globalThis, [input, init]) as Promise<Response>;
-  };
-  Object.defineProperty(guarded, EGRESS_GUARD, { value: true });
-  globalThis.fetch = guarded as typeof fetch;
+    return Reflect.apply(base, target, [input, init]) as Promise<Response>;
+  }) as typeof fetch;
+
+  function ensure(): void {
+    if (target.fetch === guarded) return;
+    if (options.adoptReplacement) base = target.fetch;
+    if (options.lock) {
+      try {
+        Object.defineProperty(target, "fetch", { value: guarded, writable: false, configurable: false, enumerable: true });
+        return;
+      } catch {
+        // The runtime refused (or fetch is already locked): fall back to assignment.
+      }
+    }
+    try {
+      target.fetch = guarded;
+    } catch {
+      // Locked by someone else: nothing more can be done from here.
+    }
+  }
+  return { guarded, ensure };
 }
 
+// Captured once at module load, before any app code has run.
+const HOST_FETCH = globalThis.fetch;
+const AMBIENT_HOST_FETCH = Reflect.get(globalThis, Symbol.for("scalius.plugins.ambientHostFetch")) === true;
+const egressGuard = createEgressGuard(globalThis as unknown as FetchHolder, HOST_FETCH, {
+  lock: !AMBIENT_HOST_FETCH,
+  adoptReplacement: AMBIENT_HOST_FETCH,
+});
+
 /** Runs app code (module load and handler, with everything it schedules) in the app's scope. */
-function runAsApp<T>(pluginId: string, run: () => Promise<T>): Promise<T> {
-  guardGlobalFetch();
-  return appScope.run(pluginId, run);
+async function runAsApp<T>(pluginId: string, run: () => Promise<T>): Promise<T> {
+  egressGuard.ensure();
+  try {
+    return await appScope.run(pluginId, run);
+  } finally {
+    // The app is done: whatever it left on `globalThis.fetch`, the host gets its own back.
+    egressGuard.ensure();
+  }
 }
 
 /** Loads a bundled app's module; its top-level code runs in the app's scope. */
@@ -99,6 +149,8 @@ export function createInProcessBridge(host: PluginBridgeApi): PluginRuntimeBridg
   const bridge: Record<string, (...args: unknown[]) => Promise<unknown>> = {};
   for (const method of BRIDGE_METHODS) {
     bridge[method] = (...args: unknown[]) => appScope.run(null, async () => {
+      // Host code runs here, possibly mid-invocation: it must reach its own fetch.
+      egressGuard.ensure();
       const call = host[method] as (...values: unknown[]) => Promise<unknown>;
       const result = await call.apply(host, structuredClone(args));
       return result === undefined ? undefined : structuredClone(result);
