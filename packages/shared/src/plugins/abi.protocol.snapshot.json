@@ -14701,6 +14701,14 @@
    "staff": "orders.record_payment",
    "sensitive": true
   },
+  "write_payment_methods": {
+   "rbac": [
+    "orders.view",
+    "orders.charge_saved_methods"
+   ],
+   "staff": "orders.charge_saved_methods",
+   "sensitive": true
+  },
   "write_refunds": {
    "rbac": [
     "orders.view",

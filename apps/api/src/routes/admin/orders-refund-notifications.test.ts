@@ -162,6 +162,8 @@ describe("admin refund notification routes", () => {
                 gateway: "cod",
                 manualSettlementConfirmed: true,
                 actorUserId: "admin_1",
+                // From the request's principal, never the body (security audit N1).
+                caller: "staff",
             },
             "credential-key",
             expect.any(Function),
