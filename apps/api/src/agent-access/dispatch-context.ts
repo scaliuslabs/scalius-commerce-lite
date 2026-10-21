@@ -67,6 +67,12 @@ function isPluginPrincipal(value: unknown): value is PluginPrincipal {
 export interface OperationDispatchClearance {
   confirmed: boolean;
   dryRun: boolean;
+  /**
+   * Check the request against the route's own validation and stop there: the
+   * admin boundary answers 204 (valid) or the route's refusal, and nothing
+   * runs. The MCP lane sends it before it asks anyone to approve a change.
+   */
+  validateOnly?: boolean;
 }
 
 const OPERATION_DISPATCH_CLEARANCE = Symbol("scalius.operation-dispatch-clearance");
@@ -94,7 +100,11 @@ export function withOperationDispatchPrincipal(
     configurable: false,
     enumerable: false,
     writable: false,
-    value: Object.freeze({ confirmed: clearance.confirmed === true, dryRun: clearance.dryRun === true }),
+    value: Object.freeze({
+      confirmed: clearance.confirmed === true,
+      dryRun: clearance.dryRun === true,
+      validateOnly: clearance.validateOnly === true,
+    }),
   });
   return wrapped;
 }

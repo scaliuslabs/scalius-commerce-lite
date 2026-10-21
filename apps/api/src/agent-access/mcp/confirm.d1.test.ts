@@ -217,6 +217,39 @@ describe("confirmed refunds through MCP on D1", () => {
     expect(snapshot(sqlite)).toEqual(afterConfirm);
   }, 60_000);
 
+  // Black-box M7: the approval used to come first, so a call the route refuses
+  // cost the merchant an approval, then failed on the replay.
+  it("refuses an input the route would refuse before anyone is asked, and asks for the corrected one", async () => {
+    const approvals = () => (sqlite.prepare(
+      "SELECT COUNT(*) AS count FROM agent_browser_handoffs WHERE substr(operation_id, 1, 9) = 'approval:'",
+    ).get() as { count: number }).count;
+    const body = refund().input.body;
+
+    const undeclared = await write({ ...refund(), input: { path: { id: orderId }, body: { ...body, orderIds: [orderId] } } });
+    expect(undeclared.isError).toBe(true);
+    expect(undeclared.structuredContent.error).toMatchObject({ code: "unknown_body_property" });
+    expect(undeclared.structuredContent.confirmation).toBeUndefined();
+
+    const wrongType = await write({ ...refund(), input: { path: { id: orderId }, body: { ...body, amount: "five hundred" } } });
+    expect(wrongType.isError).toBe(true);
+    expect(wrongType.structuredContent.error).toMatchObject({ status: 400 });
+    expect(wrongType.structuredContent.confirmation).toBeUndefined();
+    expect(approvals()).toBe(0);
+    expect(attempts().count).toBe(0);
+    // The checks are not calls: nothing is audited until the corrected call asks.
+    expect(audits()).toEqual([]);
+
+    const refused = await write(refund());
+    expect(refused.structuredContent.error).toMatchObject({ code: "confirmation_required" });
+    expect(refused.structuredContent.confirmation).toMatchObject({ summary: expect.stringContaining("amount=500") });
+    expect(approvals()).toBe(1);
+    const approvalId = refused.structuredContent.confirmation!.approvalId;
+    expect(await decideAgentApproval(db, approvalId, OWNER, "approve")).toBe(true);
+    const confirmed = await write({ ...refund(), approvalId });
+    expect(confirmed.isError, JSON.stringify(confirmed)).toBeUndefined();
+    expect(attempts().count).toBe(1);
+  }, 60_000);
+
   it("gives a personal access key the approval link even when its client offers a dialog", async () => {
     const credentialId = "agc_confirmrefundpat0001";
     const now = Math.floor(Date.now() / 1000);

@@ -21,7 +21,7 @@ vi.mock("./principal", () => ({
 
 import { createOrder } from "@scalius/core/modules/orders";
 import { fetchRuntimeApiApp } from "../runtime/fetch-runtime-app";
-import { APPROVAL_HEADER, decideAgentApproval } from "./approvals";
+import { APPROVAL_HEADER, decideAgentApproval, readAgentApproval } from "./approvals";
 
 const OWNER = "00000000-0000-4000-8000-000000000043";
 const GRANT = "agr_restconfirmrefund001";
@@ -65,14 +65,14 @@ describe("the confirmation gate on the direct REST lane", () => {
     state.principal = {
       kind: "agent", grantId: GRANT, credentialId: "agc_restconfirm000000001", ownerUserId: OWNER, isSuperAdmin: false,
       resource: "dashboard", grantKind: "pat", preset: "full",
-      permissions: new Set(["orders.view", "orders.refund", "conversations.view", "settings.general.view"]), riskCeiling: "security",
+      permissions: new Set(["orders.view", "orders.refund", "conversations.view", "settings.general.view", "products.bulk_operations"]), riskCeiling: "security",
       authorityRevision: 1, expiresAt: new Date(Date.now() + 3_600_000),
     };
     const now = Math.floor(Date.now() / 1000);
     sqlite.prepare("INSERT INTO user (id, name, email) VALUES (?, 'Owner', 'owner@example.test')").run(OWNER);
     sqlite.prepare(`INSERT INTO agent_grants (id, kind, owner_user_id, resource, label, preset, permissions_json, risk_ceiling,
       authority_revision, status, expires_at, created_at, updated_at)
-      VALUES (?, 'pat', ?, 'dashboard', 'CI', 'full', '["conversations.view","orders.refund","orders.view","settings.general.view"]', 'security', 1, 'active', ?, ?, ?)`)
+      VALUES (?, 'pat', ?, 'dashboard', 'CI', 'full', '["conversations.view","orders.refund","orders.view","products.bulk_operations","settings.general.view"]', 'security', 1, 'active', ?, ?, ?)`)
       .run(GRANT, OWNER, now + 3_600, now - 60, now - 60);
     sqlite.prepare(`INSERT INTO agent_credentials (id, grant_id, kind, token_hash, token_hint, expires_at, created_at, updated_at)
       VALUES (?, ?, 'pat', ?, 'sc_pat_agc_restconf', ?, ?, ?)`)
@@ -205,15 +205,77 @@ describe("the confirmation gate on the direct REST lane", () => {
     expect(attempts()).toBe(1);
   }, 60_000);
 
-  it("binds a body it cannot parse, and says so to the owner", async () => {
+  // Black-box M7: the gate used to ask the owner before the route validated,
+  // so a request the route refuses cost an approval and failed on the replay.
+  const approvalRows = () => (sqlite.prepare(
+    "SELECT COUNT(*) AS count FROM agent_browser_handoffs WHERE substr(operation_id, 1, 9) = 'approval:'",
+  ).get() as { count: number }).count;
+  const productStatus = () => sqlite.prepare("SELECT deleted_at FROM products WHERE id = 'product_1'").get() as { deleted_at: number | null };
+
+  it("refuses a content type the route does not take before anyone is asked", async () => {
     const refused = await callRaw(`/orders/${orderId}/refund`, "amount=500", "text/plain");
+    expect(refused.status, JSON.stringify(refused.body)).toBe(415);
+    expect(refused.body.error.code).toBe("unsupported_media_type");
+    const malformed = await callRaw(`/orders/${orderId}/refund`, "{\"amount\":", "application/json");
+    expect(malformed.status, JSON.stringify(malformed.body)).toBe(400);
+    expect(malformed.body.error.code).toBe("invalid_request");
+    expect(approvalRows()).toBe(0);
+    expect(attempts()).toBe(0);
+  }, 60_000);
+
+  it("refuses an undeclared body property or a schema refusal with the route's own error, and asks nobody", async () => {
+    const wrongName = await call("POST", "/products/bulk-delete", { productIds: ["product_1"] });
+    expect(wrongName.status, JSON.stringify(wrongName.body)).toBe(400);
+    expect(wrongName.body.error).toMatchObject({ code: "unknown_body_property", message: expect.stringContaining("productIds") });
+
+    const wrongShape = await call("POST", "/products/bulk-delete", { products: [{ id: "product_1" }] });
+    expect(wrongShape.status, JSON.stringify(wrongShape.body)).toBe(400);
+    expect(wrongShape.body.success).toBe(false);
+    expect(JSON.stringify(wrongShape.body)).toContain("expectedAggregateRevision");
+
+    const wrongPath = await call("POST", `/orders/${orderId}/refund`, { ...refundBody, amount: "five hundred" });
+    expect(wrongPath.status, JSON.stringify(wrongPath.body)).toBe(400);
+    expect(approvalRows()).toBe(0);
+    expect(attempts()).toBe(0);
+    expect(productStatus().deleted_at).toBeNull();
+    // Each refusal is audited as the route's answer, not as a request for approval.
+    const audits = sqlite.prepare("SELECT outcome, http_status, error_class FROM agent_audit_events ORDER BY created_at, rowid").all();
+    expect(audits).toEqual(Array(3).fill(expect.objectContaining({ outcome: "failed", http_status: 400 })));
+  }, 60_000);
+
+  it("asks for a valid bulk delete, names the product for the owner, and the approved replay runs", async () => {
+    const body = { products: [{ id: "product_1", expectedAggregateRevision: 1 }] };
+    const refused = await call("POST", "/products/bulk-delete", body);
     expect(refused.status, JSON.stringify(refused.body)).toBe(428);
-    expect(refused.body.error.details.confirmation.summary).toContain("10-byte text/plain body");
+    expect(refused.body.error.details.confirmation.summary).toBe("Bulk delete products: 1 product");
+    expect(approvalRows()).toBe(1);
+    const approvalId = refused.body.error.details.confirmation.approvalId as string;
+
+    const view = await readAgentApproval(db, env, approvalId, OWNER);
+    expect(view).toMatchObject({
+      status: "pending",
+      summary: "Bulk delete products: 1 product",
+      requester: { name: "CI", kind: "pat", client: null },
+      targets: [{ kind: "product", total: 1, names: ["Kurta"], matching: false }],
+    });
+
+    expect(await decideAgentApproval(db, approvalId, OWNER, "approve")).toBe(true);
+    const confirmed = await call("POST", "/products/bulk-delete", body, { [APPROVAL_HEADER]: approvalId });
+    expect(confirmed.status, JSON.stringify(confirmed.body)).toBe(200);
+    expect(confirmed.body.data.outcomes).toEqual([expect.objectContaining({ id: "product_1", status: "trashed" })]);
+    expect(productStatus().deleted_at).not.toBeNull();
+  }, 60_000);
+
+  it("an approval survives a replay the route would refuse: the invalid retry runs nothing and uses nothing", async () => {
+    const refused = await call("POST", `/orders/${orderId}/refund`, refundBody);
     const approvalId = refused.body.error.details.confirmation.approvalId as string;
     expect(await decideAgentApproval(db, approvalId, OWNER, "approve")).toBe(true);
-    const other = await callRaw(`/orders/${orderId}/refund`, "amount=999", "text/plain", { [APPROVAL_HEADER]: approvalId });
-    expect(other.body.error.code).toBe("approval_invalid");
-    expect(attempts()).toBe(0);
+    const invalid = await call("POST", `/orders/${orderId}/refund`, { ...refundBody, extra: true }, { [APPROVAL_HEADER]: approvalId });
+    expect(invalid.status).toBe(400);
+    expect(invalid.body.error.code).toBe("unknown_body_property");
+    const confirmed = await call("POST", `/orders/${orderId}/refund`, refundBody, { [APPROVAL_HEADER]: approvalId });
+    expect(confirmed.status, JSON.stringify(confirmed.body)).toBe(200);
+    expect(attempts()).toBe(1);
   }, 60_000);
 
   it("never runs a change its owner declined", async () => {

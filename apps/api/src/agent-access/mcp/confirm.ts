@@ -181,8 +181,30 @@ export async function consumeConfirmToken(
 function factValue(value: unknown): string | null {
   if (typeof value === "string") return value.length > 40 ? `${value.slice(0, 37)}...` : value;
   if (typeof value === "number" || typeof value === "boolean") return String(value);
-  if (Array.isArray(value)) return `${value.length} items`;
   return null;
+}
+
+/** "productIds" with 3 entries reads "3 products"; "lines" with 1 reads "1 line". */
+export function countedNoun(key: string, count: number): string {
+  const words = key.replace(/Ids?$/, "").replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/[-_]+/g, " ").toLowerCase().trim();
+  const base = !words || words === "ids" || words === "id" ? "item" : words;
+  const singular = base.endsWith("ies")
+    ? `${base.slice(0, -3)}y`
+    : /(ss|x|ch|sh)es$/.test(base)
+      ? base.slice(0, -2)
+      : base.endsWith("s") && !base.endsWith("ss") ? base.slice(0, -1) : base;
+  if (count === 1) return `1 ${singular}`;
+  const plural = /[^aeiou]y$/.test(singular)
+    ? `${singular.slice(0, -1)}ies`
+    : /(s|x|ch|sh)$/.test(singular) ? `${singular}es` : `${singular}s`;
+  return `${count} ${plural}`;
+}
+
+function bodyFact(key: string, value: unknown): string | null {
+  if (Array.isArray(value)) return countedNoun(key, value.length);
+  if (key === "matching" && typeof value === "object" && value !== null) return "all matching a filter";
+  const text = factValue(value);
+  return text === null ? null : `${key}=${text}`;
 }
 
 /** "Process order refund: id=ord_1, amount=500, reason=damaged": what the merchant approves. */
@@ -194,13 +216,13 @@ export function confirmSummary(steps: readonly ConfirmStep[]): string {
     if (typeof body === "object" && body !== null && !Array.isArray(body)) {
       for (const [key, value] of Object.entries(body)) {
         if (/key$|token|secret|password/i.test(key)) continue;
-        const text = factValue(value);
-        if (text !== null) facts.push(`${key}=${text}`);
+        const fact = bodyFact(key, value);
+        if (fact !== null) facts.push(fact);
       }
     }
     for (const [key, value] of Object.entries(input.query ?? {})) {
-      const text = factValue(value);
-      if (text !== null) facts.push(`${key}=${text}`);
+      const fact = Array.isArray(value) ? countedNoun(key, value.length) : factValue(value);
+      if (fact !== null) facts.push(Array.isArray(value) ? fact : `${key}=${fact}`);
     }
     const title = operation.summary || operation.operationId;
     return facts.length > 0 ? `${title}: ${facts.slice(0, 6).join(", ")}` : title;
@@ -210,4 +232,83 @@ export function confirmSummary(steps: readonly ConfirmStep[]): string {
     ? describe(gated[0]!)
     : `${gated.length} ${gated.length === 1 ? "change" : "changes"}: ${gated.map(describe).join("; ")}`;
   return text.length > 240 ? `${text.slice(0, 237)}...` : text;
+}
+
+/** The store records an approval can name for its owner. */
+export type ConfirmTargetKind = "product" | "variant" | "order" | "customer";
+
+/**
+ * What a gated change acts on, read from the very input the approval binds:
+ * ids by kind (at most 20 kept for names, all counted) and whether it selects
+ * "everything matching a filter". The approval page resolves the ids to
+ * product titles, SKUs, order numbers and customer names when the owner looks.
+ */
+export interface ConfirmTarget {
+  kind: ConfirmTargetKind;
+  ids: string[];
+  total: number;
+  matching: boolean;
+}
+
+export const CONFIRM_TARGET_IDS_KEPT = 20;
+
+/** Path segments and input keys that name a store record. */
+const SEGMENT_KINDS: Readonly<Record<string, ConfirmTargetKind>> = {
+  products: "product",
+  variants: "variant",
+  orders: "order",
+  customers: "customer",
+};
+const KEY_KINDS: Readonly<Record<string, ConfirmTargetKind>> = {
+  productId: "product", productIds: "product", products: "product",
+  variantId: "variant", variantIds: "variant", variants: "variant",
+  orderId: "order", orderIds: "order", orders: "order",
+  customerId: "customer", customerIds: "customer", customers: "customer",
+};
+
+function idsOf(value: unknown): string[] {
+  const one = (item: unknown): string | null => {
+    if (typeof item === "string") return item;
+    if (typeof item === "object" && item !== null && typeof (item as { id?: unknown }).id === "string") {
+      return (item as { id: string }).id;
+    }
+    return null;
+  };
+  if (Array.isArray(value)) return value.map(one).filter((id): id is string => id !== null && id.length > 0);
+  const id = one(value);
+  return id ? [id] : [];
+}
+
+export function confirmTargets(steps: readonly ConfirmStep[]): ConfirmTarget[] {
+  const byKind = new Map<ConfirmTargetKind, { ids: Set<string>; matching: boolean }>();
+  const add = (kind: ConfirmTargetKind, ids: readonly string[], matching = false) => {
+    const target = byKind.get(kind) ?? { ids: new Set<string>(), matching: false };
+    ids.forEach((id) => target.ids.add(id.slice(0, 64)));
+    target.matching ||= matching;
+    byKind.set(kind, target);
+  };
+  for (const { operation, input } of steps.filter((step) => isConfirmGated(step.operation))) {
+    const segments = operation.pathTemplate.split("/").filter(Boolean);
+    const resource = segments.map((segment) => SEGMENT_KINDS[segment]).find(Boolean);
+    segments.forEach((segment, index) => {
+      const name = /^\{([^}]+)\}$/.exec(segment)?.[1];
+      if (!name) return;
+      const kind = name === "id" ? SEGMENT_KINDS[segments[index - 1] ?? ""] : KEY_KINDS[name];
+      const value = input.path?.[name];
+      if (kind && value !== undefined) add(kind, [String(value)]);
+    });
+    const body = input.body;
+    if (typeof body !== "object" || body === null || Array.isArray(body)) continue;
+    for (const [key, value] of Object.entries(body)) {
+      const kind = KEY_KINDS[key] ?? (key === "ids" ? resource : undefined);
+      if (kind) add(kind, idsOf(value));
+      else if (key === "matching" && resource && typeof value === "object" && value !== null) add(resource, [], true);
+    }
+  }
+  return [...byKind].map(([kind, { ids, matching }]) => ({
+    kind,
+    ids: [...ids].slice(0, CONFIRM_TARGET_IDS_KEPT),
+    total: ids.size,
+    matching,
+  }));
 }

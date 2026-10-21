@@ -323,6 +323,7 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
     if (agentPrincipal) {
         const startedAt = Date.now();
         let operation: AgentOperationPolicy | null = null;
+        let refusal: Response | null = null;
         if (!dispatchPrincipal) await enforceAgentRateLimit(c, agentPrincipal);
         try {
             if (agentPrincipal.resource !== "dashboard") {
@@ -387,19 +388,28 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
                 await enforceDirectAgentRequestBodyLimit(c, operation);
             }
             // One confirmation gate for both lanes (MCP dispatch and direct REST).
-            const { enforceAgentConfirmation } = await import("../agent-access/confirm-gate");
-            await enforceAgentConfirmation(
-                c,
-                agentPrincipal,
-                operation,
-                pathname,
-                dispatchPrincipal ? getOperationDispatchClearance(c.env) ?? { confirmed: false, dryRun: false } : null,
-            );
+            // It validates with the route's own schemas before it asks anyone.
+            const gate = await import("../agent-access/confirm-gate");
+            const clearance = dispatchPrincipal
+                ? getOperationDispatchClearance(c.env) ?? { confirmed: false, dryRun: false }
+                : null;
+            if (clearance?.validateOnly) {
+                // MCP asks whether the route would take this request before it asks a person; nothing runs.
+                return (await gate.agentRequestValidationRefusal(c, operation, pathname)) ?? c.body(null, 204);
+            }
+            refusal = await gate.enforceAgentConfirmation(c, agentPrincipal, operation, pathname, clearance);
         } catch (error) {
             if (!dispatchPrincipal) {
                 await writeDeniedAgentRequestAudit(c, agentPrincipal, operation, startedAt, error);
             }
             throw error;
+        }
+        if (refusal) {
+            // The route's own answer to a request it would refuse, audited like the route's.
+            const answer = refusal;
+            if (dispatchPrincipal) return answer;
+            await enforceAgentRequestBoundary(c, agentPrincipal, operation, async () => { c.res = answer; }, true);
+            return c.res;
         }
         if (dispatchPrincipal) {
             // MCP dispatch already applies the per-step rate/audit boundary. The
