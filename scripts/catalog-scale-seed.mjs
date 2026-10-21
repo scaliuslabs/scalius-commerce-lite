@@ -355,7 +355,7 @@ const insCollection = insert(`INSERT INTO collections (id, name, description, pr
 // Customers carry no address columns any more: a customer's first address is
 // written by the orders_seed_customer_address trigger from the first shipping order.
 const insCustomer = insert(`INSERT INTO customers (id, name, email, phone, total_orders, last_order_at, origin, created_at, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-const insOrder = insert(`INSERT INTO orders (id, order_number, customer_name, customer_phone, customer_email, shipping_address, city, zone, city_name, zone_name, status, payment_method, payment_status, fulfillment_status, customer_id, currency_code, currency_decimal_places, subtotal_amount_minor, shipping_amount_minor, total_amount_minor, paid_amount_minor, balance_due_minor, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'BDT', 2, ?, ?, ?, ?, ?, ?, ?)`);
+const insOrder = insert(`INSERT INTO orders (id, order_number, customer_name, customer_phone, customer_email, shipping_address, city, zone, area, city_name, zone_name, area_name, shipping_method_kind, shipping_method_id, shipping_method_name, status, payment_method, payment_status, fulfillment_status, customer_id, currency_code, currency_decimal_places, subtotal_amount_minor, shipping_amount_minor, total_amount_minor, paid_amount_minor, balance_due_minor, payment_terms_days, payment_due_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'delivery', ?, ?, ?, ?, ?, ?, ?, 'BDT', 2, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
 const insShipFulfillment = insert(`INSERT INTO order_fulfillments (id, order_id, kind, status, request_key, actor_type, actor_id, created_at, location_id) VALUES (?, ?, 'ship', 'active', 'seed-0', 'system', NULL, ?, 'loc_default')`);
 const insShipFulfillmentLine = insert(`INSERT INTO order_fulfillment_lines (id, fulfillment_id, order_id, order_item_id, quantity, created_at) VALUES (?, ?, ?, ?, ?, ?)`);
 const insOrderItem = insert(`INSERT INTO order_items (id, order_id, product_id, variant_id, quantity, product_name, variant_label, inventory_tracked, unit_price_minor, line_subtotal_minor, taxable_amount_minor, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`);
@@ -379,6 +379,53 @@ function seedCodTracking(orderId, { status, paidMinor, shippedAt, collectedAt, c
   const collected = codStatus === "collected";
   insCodTracking.run(`cod_${orderId}`, orderId, attempts, attempts ? shippedAt : null, codStatus,
     collected ? collectedBy : null, collected ? paidMinor : null, collected ? collectedAt : null, createdAt, updatedAt);
+}
+/**
+ * The delivery places every seeded Bangladesh order names (docs/PLACES.md): each
+ * city in CITIES with three thanas of two areas, an "Inside Dhaka" zone (Dhaka)
+ * and an "Outside Dhaka" zone (the rest), and one flat delivery rate per zone at
+ * the fees the orders charge. Orders store the place ids, so editing a seeded
+ * order's address or items resolves its City/Thana/Area like a checkout order's.
+ */
+function seedDeliveryPlaces() {
+  const created = NOW - 900 * DAY;
+  const insPlace = db.prepare("INSERT INTO places (id, country_code, level, parent_id, name, external_ids, metadata, is_active, sort_order, created_at, updated_at) VALUES (?, 'BD', ?, ?, ?, '{}', '{}', 1, ?, ?, ?)");
+  const insZone = db.prepare("INSERT INTO delivery_zones (id, name, revision, sort_order, created_at, updated_at) VALUES (?, ?, 1, ?, ?, ?)");
+  const insZoneLocation = db.prepare("INSERT INTO delivery_zone_locations (location_id, zone_id) VALUES (?, ?)");
+  const insRate = db.prepare("INSERT INTO shipping_methods (id, name, fee_minor, rate_source, is_active, sort_order, created_at, updated_at, zone_id, kind) VALUES (?, ?, ?, 'flat', 1, ?, ?, ?, ?, 'delivery')");
+  const DHAKA_THANAS = ["Gulshan", "Dhanmondi", "Mirpur"];
+  const placesByCity = new Map();
+  tx(() => {
+    insZone.run("dz_scale_inside", "Inside Dhaka", 0, created, created);
+    insZone.run("dz_scale_outside", "Outside Dhaka", 1, created, created);
+    insRate.run("sm_scale_inside", "Inside Dhaka", 6000, 0, created, created, "dz_scale_inside");
+    insRate.run("sm_scale_outside", "Outside Dhaka", 12000, 1, created, created, "dz_scale_outside");
+    CITIES.forEach((city, cityIndex) => {
+      const cityId = `plc_scale_${pad(cityIndex, 2)}`;
+      insPlace.run(cityId, 1, null, city, cityIndex, created, created);
+      insZoneLocation.run(cityId, city === "Dhaka" ? "dz_scale_inside" : "dz_scale_outside");
+      const thanas = (city === "Dhaka" ? DHAKA_THANAS : [`${city} Sadar`, "Kotwali", "Station Road"]).map((name, thanaIndex) => {
+        const thanaId = `${cityId}_${thanaIndex}`;
+        insPlace.run(thanaId, 2, cityId, name, thanaIndex, created, created);
+        const areas = ["Block A", "Block B"].map((areaName, areaIndex) => {
+          const areaId = `${thanaId}_${areaIndex}`;
+          insPlace.run(areaId, 3, thanaId, `${name} ${areaName}`, areaIndex, created, created);
+          return { id: areaId, name: `${name} ${areaName}` };
+        });
+        return { id: thanaId, name, areas };
+      });
+      placesByCity.set(city, { id: cityId, name: city, thanas });
+    });
+  });
+  log(`delivery places: ${CITIES.length} cities, ${CITIES.length * 3} thanas, ${CITIES.length * 6} areas in 2 zones`);
+  return placesByCity;
+}
+/** An order's City/Thana/Area ids and names, picked from the seeded places by a stable number. */
+function deliveryLocation(placesByCity, cityName, pickNumber) {
+  const city = placesByCity.get(cityName);
+  const thana = city.thanas[pickNumber % city.thanas.length];
+  const area = thana.areas[Math.floor(pickNumber / city.thanas.length) % thana.areas.length];
+  return { city: city.id, zone: thana.id, area: area.id, cityName: city.name, zoneName: thana.name, areaName: area.name };
 }
 /** "Red / XL" per optioned SKU, axes in definition order; default SKUs have none. */
 function variantLabels() {
@@ -808,11 +855,17 @@ function seedHuge() {
   // Column list with literals ("name=value"), so placeholders can never drift from columns.
   const prepareInsert = (table, columns) => db.prepare(`INSERT INTO ${table} (${columns.map((column) => column.split("=")[0]).join(", ")}) VALUES (${columns.map((column) => (column.includes("=") ? column.split("=").slice(1).join("=") : "?")).join(", ")})`);
   const insOrderHuge = prepareInsert("orders", ["id", "order_number", "customer_name", "customer_phone", "customer_email", "customer_whatsapp",
-    "shipping_address", "shipping_country_code", "city", "zone", "city_name", "zone_name", "shipping_name", "shipping_phone", "shipping_locality", "shipping_admin_area", "shipping_postal_code", "billing_same_as_shipping=1",
+    "shipping_address", "shipping_country_code", "city", "zone", "area", "city_name", "zone_name", "area_name", "shipping_name", "shipping_phone", "shipping_locality", "shipping_admin_area", "shipping_postal_code", "billing_same_as_shipping=1",
     "status", "payment_method", "payment_status", "fulfillment_status", "customer_id", "market_id",
     "currency_code", "currency_decimal_places=2", "subtotal_amount_minor", "shipping_amount_minor", "discount_amount_minor", "tax_amount_minor", "tax_label", "total_amount_minor", "paid_amount_minor", "balance_due_minor",
     "shop_currency", "fx_rate", "fx_source", "fx_as_of", "fx_locked_until", "subtotal_shop_minor", "shipping_shop_minor", "discount_shop_minor", "tax_shop_minor", "total_shop_minor",
-    "channel", "shipping_method_kind='delivery'", "shipping_method_name", "notes", "archived_at", "deleted_at", "created_at", "updated_at"]);
+    "channel", "shipping_method_kind='delivery'", "shipping_method_id", "shipping_method_name", "notes", "archived_at", "deleted_at", "created_at", "updated_at"]);
+  // Checkout snapshots the tax it applied with every order (commit-order.ts): the market's
+  // one VAT rate on each taxed line, or no components when the order was not taxed.
+  const insTaxSnapshotHuge = db.prepare(`INSERT INTO order_tax_snapshots (order_id, currency_code, decimal_places, display_label, prices_include_tax, shipping_taxed, settings_version, calculation_version, destination_snapshot, rate_snapshot, provider_id, address_source, created_at)
+    VALUES (?, ?, 2, ?, 0, 0, 1, 'tax-v1', ?, ?, 'system', 'shipping', ?)`);
+  const insItemTaxSnapshotHuge = db.prepare(`INSERT INTO order_item_tax_snapshots (order_item_id, order_id, tax_class_id, tax_class_name, prices_include_tax, rate_snapshot, country_code, tax_region_id, provider_id, created_at)
+    VALUES (?, ?, NULL, NULL, 0, ?, ?, NULL, 'system', ?)`);
   const insItemHuge = db.prepare(`INSERT INTO order_items (id, order_id, product_id, variant_id, quantity, product_name, variant_label, inventory_tracked, unit_price_minor, base_unit_price_minor, line_subtotal_minor, discount_amount_minor, taxable_amount_minor, tax_amount_minor, product_image_media_id, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
   const insPayment = db.prepare(`INSERT INTO order_payments (id, order_id, currency, payment_method, payment_type, status, cod_collected_by, cod_collected_at, metadata, created_at, updated_at, provider_ref, amount_minor, settlement_currency, settlement_amount_minor, settlement_rate)
@@ -938,18 +991,20 @@ function seedHuge() {
     const archivedAt = archived ? Math.min(NOW - 10, updatedAt + 20 * DAY) : null;
     if (trashed) totals.trashed += 1;
     if (archived) totals.archived += 1;
-    const cityName = c.market === 0 ? c.city : c.city;
+    const location = c.market === 0 ? deliveryLocation(PLACES_BY_CITY, c.city, c.house)
+      : { city: null, zone: null, area: null, cityName: null, zoneName: null, areaName: null };
     const address = c.market === 0
       ? (c.bangla ? `বাসা ${c.house}, রোড ${c.road}, ${c.area}, ${c.city}` : `House ${c.house}, Road ${c.road}, ${c.area}, ${c.city}`)
       : `${c.house} ${c.market === 1 ? "Market St" : "Hauptstrasse"}`;
     insOrderHuge.run(orderId, orderNumber, c.name, c.phone, c.email, c.whatsapp && c.phone ? c.phone : null,
-      address, market.code, c.market === 0 ? c.city : null, c.market === 0 ? `zone-${(c.house % 9) + 1}` : null, c.market === 0 ? cityName : null, c.market === 0 ? c.area : null,
+      address, market.code, location.city, location.zone, location.area, location.cityName, location.zoneName, location.areaName,
       c.name, c.phone || null, c.market === 0 ? null : c.city, c.market === 1 ? "CA" : null, c.market === 1 ? "94107" : c.market === 2 ? "10115" : null,
       life.status, method, paymentStatus, life.fulfillment, c.id, market.id,
       market.currency, priced.subtotal, priced.shipping, priced.discount, priced.tax, taxBps > 0 ? market.taxLabel : null, total, paid, balance,
       "BDT", c.market === 0 ? "1" : market.orderRate, c.market === 0 ? "same_currency" : "manual", c.market === 0 ? null : ts, c.market === 0 ? null : ts + 1800,
       subtotalShop, shippingShopMinor, discountShop, taxShop, totalShop,
-      hrng.chance(0.08) ? "admin" : "online_store", c.market === 0 ? (priced.shipping === 0 ? "Free delivery" : "Standard delivery") : "International delivery",
+      hrng.chance(0.08) ? "admin" : "online_store", c.market === 0 ? (c.city === "Dhaka" ? "sm_scale_inside" : "sm_scale_outside") : null,
+      c.market === 0 ? (priced.shipping === 0 ? "Free delivery" : "Standard delivery") : "International delivery",
       hrng.chance(0.06) ? hrng.pick(NOTES) : null, archivedAt, deletedAt, ts, updatedAt);
     totals.orders += 1;
     totals.byStatus[life.status] = (totals.byStatus[life.status] ?? 0) + 1;
@@ -964,6 +1019,13 @@ function seedHuge() {
         line.unit, linesIn[k].list, line.subtotal, line.discount, line.taxable, line.tax, variant.mediaId, ts);
       totals.items += 1;
     });
+    const taxComponents = (amountMinor) => (taxBps > 0
+      ? [{ rateId: `txr_scale_${market.code.toLowerCase()}`, name: market.taxLabel, rateBps: taxBps, priority: 0, compound: false, jurisdictionType: "all", jurisdictionId: null, amountMinor }]
+      : []);
+    const shippingTax = { taxClassId: null, taxClassName: null, grossAmountMinor: priced.shipping, discountMinor: 0, taxableAmountMinor: priced.shipping, taxMinor: 0, totalMinor: priced.shipping, components: [] };
+    insTaxSnapshotHuge.run(orderId, market.currency, market.taxLabel ?? "VAT", JSON.stringify(location),
+      JSON.stringify({ lines: priced.lines.map((line, k) => ({ lineId: itemIds[k], taxClassId: null, taxClassName: null, components: taxComponents(line.tax) })), shipping: shippingTax }), ts);
+    priced.lines.forEach((line, k) => insItemTaxSnapshotHuge.run(itemIds[k], orderId, JSON.stringify(taxComponents(line.tax)), market.code, ts));
 
     // Discount allocations and the redemption of a code promotion.
     if (promo) {
@@ -1271,6 +1333,7 @@ function divRoundLocal(numerator, denominator) {
   return Math.floor((numerator * 2 + denominator) / (denominator * 2));
 }
 
+const PLACES_BY_CITY = seedDeliveryPlaces();
 if (HUGE) {
   seedHuge();
 } else {
@@ -1308,28 +1371,34 @@ for (let start = 0; start < ORDERS; start += 5000) {
       const lines = Array.from({ length: int(1, 4) }, () => pick(variantsByProduct));
       const quantities = lines.map(() => int(1, 3));
       const subtotal = lines.reduce((sum, line, lineIndex) => sum + line.price_minor * quantities[lineIndex], 0);
-      const shipping = pick([6000, 12000, 0]);
+      // The zone's rate (Inside or Outside Dhaka), free on about a third of orders.
+      const location = deliveryLocation(PLACES_BY_CITY, customer.city, index);
+      const inside = customer.city === "Dhaka";
+      const shipping = pick([6000, 12000, 0]) === 0 ? 0 : inside ? 6000 : 12000;
       const total = subtotal + shipping;
-      const paid = status === "completed" || status === "delivered" ? total : 0;
+      // One order in 40 is a business invoice on net 30 terms (paid later by its due date).
+      const netTerms = index % 40 === 7 && status !== "cancelled";
+      const paid = !netTerms && (status === "completed" || status === "delivered") ? total : 0;
       const id = `ord_scale_${pad(index, 6)}`;
       // Orders that left the warehouse carry a real shipping fulfilment (so a return can be recorded
       // against them); one in five multi-line shipped orders is only partly fulfilled.
       const shipped = SHIPPED_STATUSES.has(status);
       const fulfilment = !shipped ? "none" : status === "shipped" && lines.length > 1 && chance(0.2) ? "partial" : "complete";
       const address = `House ${int(1, 200)}, ${customer.city}`;
-      const method = chance(0.8) ? "cod" : "sslcommerz";
+      const method = chance(0.8) ? (netTerms ? "net_terms" : "cod") : netTerms ? "net_terms" : "sslcommerz";
       const updatedAt = createdAt + int(0, 10) * DAY;
       insOrder.run(id, 100000 + index, customer.name, customer.phone, null, address,
-        customer.city, "zone", customer.city, "Zone", status, method,
-        paid ? "paid" : "unpaid", fulfilment === "none" ? "pending" : fulfilment, customer.id,
-        subtotal, shipping, total, paid, total - paid, createdAt, updatedAt);
+        location.city, location.zone, location.area, location.cityName, location.zoneName, location.areaName,
+        inside ? "sm_scale_inside" : "sm_scale_outside", shipping === 0 ? "Free delivery" : inside ? "Inside Dhaka" : "Outside Dhaka",
+        status, method, paid ? "paid" : "unpaid", fulfilment === "none" ? "pending" : fulfilment, customer.id,
+        subtotal, shipping, total, paid, total - paid, netTerms ? 30 : null, netTerms ? createdAt + 30 * DAY : null, createdAt, updatedAt);
       lines.forEach((line, lineIndex) => {
         insOrderItem.run(`oi_scale_${pad(index, 6)}_${lineIndex}`, id, line.product_id, line.id, quantities[lineIndex],
           line.product_name, line.label, line.price_minor, line.price_minor * quantities[lineIndex], line.price_minor * quantities[lineIndex], createdAt);
         orderItems += 1;
       });
       seedUntaxedSnapshot(id, lines.map((_line, lineIndex) => `oi_scale_${pad(index, 6)}_${lineIndex}`), shipping,
-        { city: customer.city, zone: "zone", area: null, cityName: customer.city, zoneName: "Zone", areaName: null }, createdAt);
+        location, createdAt);
       const shippedAt = fulfilment === "none" ? null : createdAt + int(1, 3) * DAY;
       if (method === "cod") {
         seedCodTracking(id, { status, paidMinor: paid, shippedAt, collectedAt: shippedAt === null ? null : shippedAt + DAY,
@@ -1346,6 +1415,26 @@ for (let start = 0; start < ORDERS; start += 5000) {
       }
     }
   });
+}
+// One order with a long history (ord_scale_000001), so the timeline pages and reads at density:
+// eight rounds of a call note, a failed delivery attempt and a staff note, then the shipment.
+{
+  const insEvent = insert("INSERT INTO order_events (id, order_id, kind, body, data, actor_id, created_at) VALUES (?, ?, ?, ?, ?, NULL, ?)");
+  const order = db.prepare("SELECT id, created_at AS at FROM orders WHERE id = 'ord_scale_000001'").get();
+  if (order) {
+    const NOTES_LONG = ["Called the customer, no answer.", "Customer asked to deliver after 6 pm.", "Rider says the gate was locked; will try again tomorrow.", "Customer confirmed the address by phone: House 12, Road 5."];
+    const COD_REASONS = ["not_home", "refused", "no_cash", "wrong_address"];
+    const events = [["status_changed", null, { from: "pending", to: "confirmed" }], ["details_edited", null, {}]];
+    for (let round = 0; round < 8; round += 1) {
+      events.push(["comment", NOTES_LONG[round % NOTES_LONG.length], null]);
+      events.push(["cod_failed", null, { reason: COD_REASONS[round % COD_REASONS.length] }]);
+      events.push(["comment", `Attempt ${round + 2} booked with the courier.`, null]);
+    }
+    events.push(["shipment_created", null, { courierName: "Steadfast", quantity: 2, trackingId: "SF-88213490" }]);
+    db.prepare("DELETE FROM order_events WHERE order_id = ?").run(order.id);
+    tx(() => events.forEach(([kind, body, data], k) => insEvent.run(`oev_scale_long_${pad(k, 3)}`, order.id, kind, body, data ? JSON.stringify(data) : null, Math.min(NOW - 60, order.at + (k + 1) * 4 * 3600))));
+    log(`timeline: ${events.length} events on ${order.id}`);
+  }
 }
 db.exec(`UPDATE customers SET total_orders = (SELECT count(*) FROM orders WHERE orders.customer_id = customers.id), last_order_at = (SELECT max(created_at) FROM orders WHERE orders.customer_id = customers.id)`);
 // Same-currency money chain (migration 0111): the shop amounts analytics sum
