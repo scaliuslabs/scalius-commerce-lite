@@ -670,6 +670,8 @@ export interface CustomerOrderDetailOrder {
   pricesIncludeTax?: boolean;
   paymentStatus: string;
   paymentMethod: string;
+  /** An invoice's terms (pay later by its due date); null when the order is not paid by invoice. */
+  paymentTerms?: { kind: "net"; days: number; dueAt: string; overdue: boolean } | null;
   fulfillmentStatus: string;
   expectedDelivery: string | null;
   /** Null when nothing ships (pickup, service-only or digital orders). */
