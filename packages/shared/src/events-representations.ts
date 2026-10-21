@@ -224,6 +224,8 @@ export const customerRepresentationSchema = z.object({
   createdAt: iso,
   updatedAt: iso,
   deletedAt: iso.nullable(),
+  /** When staff erased the customer's personal data (`customer.erased`); null otherwise. Its contact then reads null or "[erased]". */
+  erasedAt: iso.nullable(),
 });
 
 const stockDocumentLine = z.object({

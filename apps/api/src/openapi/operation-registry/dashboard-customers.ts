@@ -13,6 +13,8 @@ export const DASHBOARD_CUSTOMER_OPERATIONS = {
     risk: "destructive",
     batch: "forbidden",
   },
+  // Erasure (final audit I10): Super Admin only, never an app; the merchant approves an agent's call.
+  "dashboard.customers.erase": { stability: "internal", risk: "destructive", openWorld: true, batch: "forbidden" },
   "dashboard.customers.get": {},
   "dashboard.customers.history": {},
   "dashboard.customers.list": {},

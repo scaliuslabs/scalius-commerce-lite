@@ -13,6 +13,7 @@ import {
     updateCustomerSchema,
     deleteCustomer,
     permanentlyDeleteCustomer,
+    eraseCustomer,
     restoreCustomer,
     bulkDeleteCustomers,
     bulkRestoreCustomers,
@@ -33,7 +34,7 @@ import { contactPhoneSql, customers, customerHistory, orders, user } from "@scal
 import { phoneOrNull } from "@scalius/shared/customer-auth-policy";
 import { eq, sql, isNull, isNotNull, and } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
-import { NotFoundError } from "../../utils/api-error";
+import { ForbiddenError, NotFoundError } from "../../utils/api-error";
 import { customerListFilterQuery, customerListFiltersFromQuery, customerMatchingSchema, readCustomerSlice } from "./customer-marketing";
 import { matchingResultSchema, requireOneSelection, type MatchingResult } from "../../schemas/bulk-matching";
 import { planLimits } from "@scalius/shared/plan-limits";
@@ -90,7 +91,7 @@ const customerHistoryEntrySchema = z.object({
     email: pii("email", z.string().nullable()),
     phone: pii("phone", z.string().nullable()),
     changeType: z.string().openapi({
-        description: "created, updated, deleted, signed_up, order_linked, or order_moved_in / order_moved_out (see `order`, `relatedCustomer` and `verifiedContact`)",
+        description: "created, updated, deleted, restored, signed_up, order_linked, order_moved_in / order_moved_out, or erased (see `order`, `relatedCustomer` and `verifiedContact`)",
     }),
     /** The proven contact behind signed_up / order_linked / order_moved_*. */
     verifiedContact: z.enum(["email", "phone"]).nullable(),
@@ -432,6 +433,55 @@ app.openapi(restoreCustomerRoute, async (c) => {
     return noContent(c);
 });
 
+// ── Erase a customer's personal data (final audit I10) ──
+
+const eraseResultSchema = z.object({
+    customerId: z.string(),
+    erased: z.boolean().openapi({ description: "False when the customer was already erased: nothing changed." }),
+    mergedRecords: z.number().int().openapi({ description: "Guest records merged into this customer, erased with it." }),
+    orders: z.number().int().openapi({ description: "Orders whose contact and addresses were scrubbed. Their money, lines and region stay." }),
+    files: z.number().int().openapi({ description: "The buyer's conversation images deleted from storage." }),
+}).openapi("CustomerErasureResult");
+
+const eraseCustomerRoute = createRoute({
+    operationId: "dashboard.customers.erase",
+    method: "post",
+    path: "/{id}/erase",
+    tags: ["Admin - Customers"],
+    summary: "Erase a customer's personal data",
+    description: "The right to erasure for a customer who ordered. Scrubs the customer's contact and every guest record merged into it; deletes their addresses, sign-in identities, sessions, saved payment methods (detached at their provider first), marketing consents, push subscriptions and app roles; scrubs the contact, recipient, street lines, phones and notes on their orders (money, lines and region stay for the books); gives their reviews the fallback name; and erases their words and images in conversations. The record is retired and cannot be restored. Emits `customer.erased` so apps erase their copies. Refused while an order is still in progress. Only a Super Admin may erase (an agent only for a Super Admin owner); it cannot be undone.",
+    request: {
+        params: z.object({ id: z.string().min(1).max(128) }),
+    },
+    responses: {
+        200: { description: "Erased", content: { "application/json": { schema: successEnvelope(eraseResultSchema) } } },
+        ...errorResponses,
+    },
+});
+
+app.openapi(eraseCustomerRoute, async (c) => {
+    c.header("Cache-Control", "private, no-store");
+    const actor = c.get("user") as { id?: string; isSuperAdmin?: boolean } | undefined;
+    // An agent acts for its owner: it may erase only when that owner is a Super Admin. Apps never may.
+    if (!actor?.id || actor.isSuperAdmin !== true || c.get("pluginPrincipal")) {
+        throw new ForbiddenError("Only a Super Admin can erase a customer's data.");
+    }
+    const { id } = c.req.valid("param");
+    const db = c.get("db");
+    // Detach saved methods at their provider while the references still exist; erasure deletes them either way.
+    const methods = await listCustomerPaymentMethods(db, id, { kind: "staff" });
+    for (const method of methods) {
+        await removeCustomerPaymentMethod(db, {
+            methodId: method.id,
+            actor: { kind: "customer", customerId: id },
+            providers: () => requestPaymentProviders(c),
+            encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
+        }).catch(() => undefined);
+    }
+    const result = await eraseCustomer(db, { customerId: id, actorId: actor.id, files: c.env.BUCKET ?? null });
+    return ok(c, result);
+});
+
 // ── The address book (MARKETS-DESIGN D7, Shopify's customer addresses) ──
 
 const addressListPayload = z.object({ addresses: z.array(customerAddressSchema) });
@@ -667,6 +717,7 @@ app.openapi(getHistoryRoute, async (c) => {
                 createdAt: sql<number>`CAST(${customers.createdAt} AS INTEGER)`,
                 updatedAt: sql<number>`CAST(${customers.updatedAt} AS INTEGER)`,
                 deletedAt: sql<number | null>`CAST(${customers.deletedAt} AS INTEGER)`,
+                erasedAt: sql<number | null>`CAST(${customers.erasedAt} AS INTEGER)`,
             })
             .from(customers)
             .leftJoin(orders, and(
@@ -760,6 +811,7 @@ app.openapi(getHistoryRoute, async (c) => {
         ...customerFacts,
         kind: customerKind({ accountClaimedAt: customer.accountClaimedAt, origin }),
         deletedAt: customer.deletedAt ? new Date(customer.deletedAt * 1000) : null,
+        erasedAt: customer.erasedAt ? new Date(customer.erasedAt * 1000) : null,
         mergedInto: mergedIntoId ? { id: mergedIntoId, name: mergedIntoName ?? "" } : null,
         samePhone: samePhoneRows.flatMap((row) => row.phone ? [{ id: row.id, name: row.name, phone: row.phone, kind: customerKind(row) }] : []),
         totalSpent: paidSpendAmount({ totalSpentMinor, spendDecimalPlaces }),

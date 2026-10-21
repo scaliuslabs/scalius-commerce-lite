@@ -35,6 +35,10 @@ export const CUSTOMER_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/customers/*/permanent": {
     DELETE: { permission: PERMISSIONS.CUSTOMERS_DELETE },
   },
+  // Erasure also needs a Super Admin (the route checks it).
+  "/api/v1/admin/customers/*/erase": {
+    POST: { permission: PERMISSIONS.CUSTOMERS_DELETE },
+  },
   // Customers & marketing: tags, saved segments, export, consent.
   "/api/v1/admin/customers/tags": {
     GET: { permission: PERMISSIONS.CUSTOMERS_VIEW },

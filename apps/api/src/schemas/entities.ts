@@ -778,6 +778,8 @@ export const customerDetailSchema = z.object({
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
   deletedAt: nullableTimestampSchema,
+  /** When staff erased the customer's personal data (the record is retired and its contact reads "[erased]"); null otherwise. */
+  erasedAt: optionalNullableTimestampSchema,
   /** On a retired guest record whose every order joined this account by a verified contact. */
   mergedInto: z.object({ id: z.string(), name: pii("name", z.string()) }).nullable(),
   /** Normalised tags, alphabetical. */

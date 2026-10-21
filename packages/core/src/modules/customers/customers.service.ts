@@ -678,6 +678,9 @@ export async function restoreCustomer(db: Database, id: string, actorId: string 
     const existing = await getCustomerById(db, id);
     if (!existing) throw new NotFoundError("Customer not found");
     if (!existing.deletedAt) return;
+    if (existing.erasedAt) {
+        throw new ValidationError("This customer's data was erased, so the record can't be restored.");
+    }
     if (existing.mergedIntoCustomerId) {
         throw new ValidationError("This guest record was merged into an account and can't be restored.");
     }

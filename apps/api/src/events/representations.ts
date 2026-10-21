@@ -447,6 +447,7 @@ export async function readCustomerRepresentations(db: Database, ids: readonly st
     createdAt: isoRequired(customer.createdAt),
     updatedAt: isoRequired(customer.updatedAt),
     deletedAt: iso(customer.deletedAt),
+    erasedAt: iso(customer.erasedAt),
   })])));
 }
 
