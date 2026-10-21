@@ -1157,6 +1157,7 @@ a.noor-split-media:hover .noor-cover:only-of-type { transform: scale(1.03); }
 
 .noor-crumbs ol { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem; margin: 0 0 1rem; font-size: 0.8125rem; color: var(--n-muted); }
 .noor-crumbs li { display: inline-flex; align-items: center; gap: 0.25rem; }
+.noor-crumbs [aria-current] { color: var(--n-ink); max-width: 40ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .noor-crumbs a:hover { color: var(--n-ink); text-decoration: underline; }
 .noor-pdp { display: grid; gap: clamp(1.25rem, 1rem + 2vw, 3rem); align-items: start; }
 .noor-pdp-media { min-inline-size: 0; }

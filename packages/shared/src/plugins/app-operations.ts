@@ -105,6 +105,9 @@ export const STABLE_APP_OPERATIONS = {
   "variants.get": "dashboard.resources.variants.get",
   "variants.lookup": "dashboard.resources.variants.lookup",
   "variants.retire": "dashboard.product_variants.retire",
+  "variants.create": "dashboard.resources.variants.create",
+  "variants.update": "dashboard.resources.variants.update",
+  "variants.restore": "dashboard.resources.variants.restore",
   "variants.bulk_set_prices": "dashboard.resources.variants.bulk_set_prices",
   "variants.bulk_set_stock": "dashboard.resources.variants.bulk_set_stock",
   "inventory.adjust": "dashboard.inventory.adjust",
@@ -123,6 +126,7 @@ export const STABLE_APP_OPERATIONS = {
   "app_content.delete": "dashboard.resources.app_content.delete",
 
   // ── Catalog content ──
+  "brands.list": "dashboard.resources.brands.list",
   "brands.get": "dashboard.brands.get",
   "brands.create": "dashboard.brands.create",
   "brands.batch_create": "dashboard.brands.batch_create",
@@ -145,6 +149,7 @@ export const STABLE_APP_OPERATIONS = {
   "collections.update_products": "dashboard.collections.update_products",
   "collections.trash": "dashboard.collections.trash",
   "collections.restore": "dashboard.collections.restore",
+  "pages.list": "dashboard.resources.pages.list",
   "pages.get": "dashboard.content.get",
   "pages.create": "dashboard.content.create",
   "pages.update": "dashboard.content.update",

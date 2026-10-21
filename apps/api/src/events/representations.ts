@@ -27,7 +27,10 @@ import {
   orderReturnLines,
   orderReturns,
   orders,
+  productOptionDefinitions,
+  productOptionValues,
   productReviews,
+  productVariantOptionValues,
   productVariants,
   products,
   promotionCodes,
@@ -40,7 +43,8 @@ import {
 import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getObjectEventRepresentation } from "@scalius/core/modules/objects";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
-import { loadProductMediaProjections, resolveProductImageRepresentation } from "@scalius/core/modules/products";
+import { loadProductMediaProjections, parsePublishedChannelIds, productVariantBarcodeIdentityIn, publishedChannelIdsSql, resolveProductImageRepresentation } from "@scalius/core/modules/products";
+import { getBarcodeIdentityKey } from "@scalius/shared/barcode-identity";
 import type { OutboxEvent, WebhookRepresentationResolver } from "@scalius/core/modules/events";
 import {
   buildEventRepresentation,
@@ -287,65 +291,153 @@ function returnFrom(row: typeof orderReturns.$inferSelect, lines: readonly (type
 
 /**
  * The products' sealed representations, in the order of `ids`: the products,
- * their live SKUs and the store currency, three reads for a whole page.
+ * their live SKUs with their option values, their options, the store currency
+ * and their galleries. The four catalogue reads go in one batch, so a whole
+ * page costs three D1 calls (the batch, the currency and the galleries, at
+ * most 90 products per gallery read).
  */
 export async function readProductRepresentations(db: Database, ids: readonly string[]): Promise<EventRepresentation<"product">[]> {
   if (ids.length === 0) return [];
-  const [rows, variantRows, currency, mediaByProduct] = await Promise.all([
-    db.select({
-      id: products.id,
-      name: products.name,
-      slug: products.slug,
-      isActive: products.isActive,
-      brandId: products.brandId,
-      categoryId: products.categoryId,
-      aggregateRevision: products.aggregateRevision,
-      isGiftCard: products.isGiftCard,
-      priceMinor: products.priceMinor,
-      createdAt: products.createdAt,
-      updatedAt: products.updatedAt,
-      deletedAt: products.deletedAt,
-    }).from(products).where(inArray(products.id, [...ids])).all(),
-    db.select({
-      productId: productVariants.productId,
-      id: productVariants.id,
-      sku: productVariants.sku,
-      priceMinor: productVariants.priceMinor,
-      barcode: productVariants.barcode,
-      trackInventory: productVariants.trackInventory,
-      fulfillmentKind: productVariants.fulfillmentKind,
-      isDefault: productVariants.isDefault,
-    }).from(productVariants)
-      .where(and(inArray(productVariants.productId, [...ids]), isNull(productVariants.deletedAt)))
-      .orderBy(asc(productVariants.productId), asc(productVariants.createdAt), asc(productVariants.id)).all(),
+  const productIds = [...new Set(ids)];
+  const productsRead = db.select({
+    id: products.id,
+    name: products.name,
+    slug: products.slug,
+    isActive: products.isActive,
+    brandId: products.brandId,
+    categoryId: products.categoryId,
+    aggregateRevision: products.aggregateRevision,
+    isGiftCard: products.isGiftCard,
+    priceMinor: products.priceMinor,
+    description: products.description,
+    productCondition: products.productCondition,
+    metaTitle: products.metaTitle,
+    metaDescription: products.metaDescription,
+    salesChannelIds: publishedChannelIdsSql(sql.raw('"products"."id"')),
+    createdAt: products.createdAt,
+    updatedAt: products.updatedAt,
+    deletedAt: products.deletedAt,
+  }).from(products).where(inArray(products.id, productIds));
+  const variantsRead = db.select({
+    productId: productVariants.productId,
+    id: productVariants.id,
+    sku: productVariants.sku,
+    priceMinor: productVariants.priceMinor,
+    barcode: productVariants.barcode,
+    barcodeType: productVariants.barcodeType,
+    weight: productVariants.weight,
+    imageId: productVariants.imageId,
+    trackInventory: productVariants.trackInventory,
+    fulfillmentKind: productVariants.fulfillmentKind,
+    isDefault: productVariants.isDefault,
+  }).from(productVariants)
+    .where(and(inArray(productVariants.productId, productIds), isNull(productVariants.deletedAt)))
+    .orderBy(asc(productVariants.productId), asc(productVariants.createdAt), asc(productVariants.id));
+  // Live options and their live values, in the merchant's order.
+  const optionsRead = db.select({
+    productId: productOptionDefinitions.productId,
+    optionId: productOptionDefinitions.id,
+    name: productOptionDefinitions.name,
+    standardMapping: productOptionDefinitions.standardMapping,
+    value: productOptionValues.value,
+  }).from(productOptionDefinitions)
+    .innerJoin(productOptionValues, and(eq(productOptionValues.optionDefinitionId, productOptionDefinitions.id), isNull(productOptionValues.deletedAt)))
+    .where(and(inArray(productOptionDefinitions.productId, productIds), isNull(productOptionDefinitions.deletedAt)))
+    .orderBy(asc(productOptionDefinitions.productId), asc(productOptionDefinitions.position), asc(productOptionValues.position), asc(productOptionValues.id));
+  // Each live SKU's value of each live option.
+  const selectionsRead = db.select({
+    variantId: productVariantOptionValues.variantId,
+    name: productOptionDefinitions.name,
+    value: productOptionValues.value,
+  }).from(productVariantOptionValues)
+    .innerJoin(productVariants, eq(productVariants.id, productVariantOptionValues.variantId))
+    .innerJoin(productOptionDefinitions, eq(productOptionDefinitions.id, productVariantOptionValues.optionDefinitionId))
+    .innerJoin(productOptionValues, eq(productOptionValues.id, productVariantOptionValues.optionValueId))
+    .where(and(
+      inArray(productVariants.productId, productIds),
+      isNull(productVariants.deletedAt),
+      isNull(productOptionDefinitions.deletedAt),
+    ))
+    .orderBy(asc(productVariantOptionValues.variantId), asc(productOptionDefinitions.position));
+  const [[rows, variantRows, optionRows, selectionRows], currency, mediaByProduct] = await Promise.all([
+    db.batch([productsRead, variantsRead, optionsRead, selectionsRead]),
     readStoreCurrency(db),
-    loadProductMediaProjections(db, ids),
+    loadProductMediaProjections(db, productIds),
   ]);
   const variants = groupBy(variantRows, (variant) => variant.productId);
-  return inIdOrder(ids, new Map(rows.map((product) => [product.id, sealed("product", {
-    id: product.id,
-    name: product.name,
-    slug: product.slug,
-    status: product.deletedAt ? "trashed" : product.isActive ? "active" : "draft",
-    brandId: product.brandId ?? null,
-    categoryId: product.categoryId ?? null,
-    revision: product.aggregateRevision,
-    isGiftCard: Boolean(product.isGiftCard),
-    imageUrl: resolveProductImageRepresentation(mediaByProduct.get(product.id) ?? [])?.url ?? null,
-    currency: currency.code,
-    priceMinor: product.priceMinor,
-    variants: (variants.get(product.id) ?? []).map(({ productId: _productId, ...variant }) => ({ ...variant, barcode: variant.barcode ?? null })),
-    createdAt: isoRequired(product.createdAt),
-    updatedAt: isoRequired(product.updatedAt),
-    deletedAt: iso(product.deletedAt),
-  })])));
+  const optionValues = new Map<string, Record<string, string>>();
+  for (const selection of selectionRows) {
+    const values = optionValues.get(selection.variantId) ?? {};
+    values[selection.name] = selection.value;
+    optionValues.set(selection.variantId, values);
+  }
+  const options = new Map<string, { id: string; name: string; standardMapping: string; values: string[] }[]>();
+  for (const row of optionRows) {
+    const list = options.get(row.productId) ?? [];
+    let option = list.at(-1);
+    if (option?.id !== row.optionId) {
+      option = { id: row.optionId, name: row.name, standardMapping: row.standardMapping, values: [] };
+      list.push(option);
+      options.set(row.productId, list);
+    }
+    option.values.push(row.value);
+  }
+  return inIdOrder(ids, new Map(rows.map((product) => {
+    const gallery = mediaByProduct.get(product.id) ?? [];
+    const mediaIdByAssociation = new Map(gallery.map((item) => [item.id, item.mediaId]));
+    return [product.id, sealed("product", {
+      id: product.id,
+      name: product.name,
+      slug: product.slug,
+      status: product.deletedAt ? "trashed" : product.isActive ? "active" : "draft",
+      brandId: product.brandId ?? null,
+      categoryId: product.categoryId ?? null,
+      revision: product.aggregateRevision,
+      isGiftCard: Boolean(product.isGiftCard),
+      imageUrl: resolveProductImageRepresentation(gallery)?.url ?? null,
+      currency: currency.code,
+      priceMinor: product.priceMinor,
+      variants: (variants.get(product.id) ?? []).map(({ productId: _productId, weight, imageId, ...variant }) => ({
+        ...variant,
+        barcode: variant.barcode ?? null,
+        barcodeType: variant.barcodeType ?? null,
+        weightGrams: weight ?? null,
+        optionValues: optionValues.get(variant.id) ?? {},
+        mediaId: imageId ? mediaIdByAssociation.get(imageId) ?? null : null,
+      })),
+      createdAt: isoRequired(product.createdAt),
+      updatedAt: isoRequired(product.updatedAt),
+      deletedAt: iso(product.deletedAt),
+      description: product.description ?? null,
+      condition: product.productCondition ?? null,
+      metaTitle: product.metaTitle ?? null,
+      metaDescription: product.metaDescription ?? null,
+      salesChannelIds: parsePublishedChannelIds(product.salesChannelIds),
+      media: [...gallery].sort((a, b) => a.sortOrder - b.sortOrder || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).map((item) => ({
+        id: item.id,
+        mediaId: item.mediaId,
+        kind: item.kind,
+        url: item.url,
+        altText: item.contextualAltText ?? null,
+        featured: item.isPrimary,
+      })),
+      options: options.get(product.id) ?? [],
+    })];
+  })));
 }
 
 async function productRepresentation(db: Database, productId: string) {
   return (await readProductRepresentations(db, [productId]))[0] ?? null;
 }
 
-type VariantWhere = { ids: readonly string[] } | { skus: readonly string[] };
+type VariantWhere = { ids: readonly string[] } | { skus: readonly string[] } | { barcodes: readonly string[] };
+
+/** The keys a lookup matches on: ids as given, SKU and barcode codes by their identity (`lower(trim(...))`). */
+function variantKeys(where: VariantWhere): string[] {
+  if ("ids" in where) return [...where.ids];
+  if ("skus" in where) return where.skus.map((sku) => sku.trim().toLowerCase());
+  return where.barcodes.flatMap((barcode) => getBarcodeIdentityKey(barcode) ?? []);
+}
 
 /**
  * The two reads of SKUs' sealed representations (the SKUs and their levels),
@@ -353,10 +445,12 @@ type VariantWhere = { ids: readonly string[] } | { skus: readonly string[] };
  * stock write appends them to its commit batch (`InventoryReadAfter`).
  */
 export function variantRepresentationReads(db: Database, where: VariantWhere) {
-  const keys = "ids" in where ? where.ids : where.skus.map((sku) => sku.trim().toLowerCase());
+  const keys = variantKeys(where);
   const matches = "ids" in where
-    ? inArray(productVariants.id, [...keys])
-    : inArray(sql`lower(trim(${productVariants.sku}))`, [...keys]);
+    ? inArray(productVariants.id, keys)
+    : "skus" in where
+      ? inArray(sql`lower(trim(${productVariants.sku}))`, keys)
+      : productVariantBarcodeIdentityIn(keys);
   const variantsRead = db.select({
     id: productVariants.id,
     productId: productVariants.productId,
@@ -365,6 +459,8 @@ export function variantRepresentationReads(db: Database, where: VariantWhere) {
     stock: productVariants.stock,
     stockVersion: productVariants.stockVersion,
     updatedAt: productVariants.updatedAt,
+    barcode: productVariants.barcode,
+    deletedAt: productVariants.deletedAt,
   }).from(productVariants).where(matches);
   const levelsRead = db.select({ variantId: inventoryLevels.variantId, locationId: inventoryLevels.locationId, onHand: inventoryLevels.onHand })
     .from(inventoryLevels).innerJoin(productVariants, eq(productVariants.id, inventoryLevels.variantId)).where(matches)
@@ -379,7 +475,8 @@ export function variantRepresentationReads(db: Database, where: VariantWhere) {
       const levelRows = (results[1] ?? []) as LevelRow[];
       if (rows.length === 0) return [];
       const levels = groupBy(levelRows, (level) => level.variantId);
-      const byKey = new Map(rows.map((variant) => ["ids" in where ? variant.id : variant.sku.trim().toLowerCase(), sealed("variant", {
+      const keyOf = (variant: VariantRow) => "ids" in where ? variant.id : "skus" in where ? variant.sku.trim().toLowerCase() : getBarcodeIdentityKey(variant.barcode) ?? "";
+      const byKey = new Map(rows.map((variant) => [keyOf(variant), sealed("variant", {
         id: variant.id,
         productId: variant.productId,
         sku: variant.sku,
@@ -388,6 +485,8 @@ export function variantRepresentationReads(db: Database, where: VariantWhere) {
         stockVersion: variant.stockVersion,
         levels: (levels.get(variant.id) ?? []).map(({ variantId: _variantId, ...level }) => level),
         updatedAt: isoRequired(variant.updatedAt),
+        barcode: variant.barcode ?? null,
+        retiredAt: iso(variant.deletedAt),
       })]));
       return inIdOrder([...new Set(keys)], byKey);
     },
@@ -396,12 +495,11 @@ export function variantRepresentationReads(db: Database, where: VariantWhere) {
 
 /**
  * SKUs' sealed representations (their stock in total and per location), by
- * id or by SKU code (`lower(trim(sku))`, the identity index): two reads in
- * one batch (one D1 call) for at most 90 SKUs.
+ * id, SKU code or barcode (`lower(trim(...))`, the identity indexes), retired
+ * ones too: two reads in one batch (one D1 call) for at most 90 SKUs.
  */
 export async function readVariantRepresentations(db: Database, where: VariantWhere) {
-  const keys = "ids" in where ? where.ids : where.skus;
-  if (keys.length === 0) return [];
+  if (variantKeys(where).length === 0) return [];
   const reads = variantRepresentationReads(db, where);
   return reads.assemble(await db.batch([reads.statements[0], reads.statements[1]]));
 }

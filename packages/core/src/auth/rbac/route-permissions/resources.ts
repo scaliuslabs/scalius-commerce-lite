@@ -50,6 +50,10 @@ export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   // An importer creates many products in one call, under the same permission as one.
   "/api/v1/admin/resources/products/batch": { POST: { permission: PERMISSIONS.PRODUCTS_CREATE } },
   "/api/v1/admin/resources/products/*": { GET: products, PATCH: productsEdit },
+  // A product's SKUs, one at a time, as the editor's option and SKU edits.
+  "/api/v1/admin/resources/products/*/variants": { POST: productsEdit },
+  "/api/v1/admin/resources/products/*/variants/*": { PATCH: productsEdit },
+  "/api/v1/admin/resources/products/*/variants/*/restore": { POST: productsEdit },
   // An app's own trashed content; each item re-checks its type's delete permission.
   "/api/v1/admin/resources/app-content/delete": {
     POST: { anyOf: [PERMISSIONS.PRODUCTS_DELETE, PERMISSIONS.CATEGORIES_DELETE, PERMISSIONS.COLLECTIONS_DELETE, PERMISSIONS.MEDIA_DELETE] },

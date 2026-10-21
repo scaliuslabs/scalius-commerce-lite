@@ -873,24 +873,34 @@ app.openapi(createRoute({
 /** SKUs one lookup reads: one bound list within D1's 100 parameters. */
 const VARIANT_LOOKUP_MAX = 90;
 
+const variantLookupBody = z.object({
+  skus: z.array(z.string().trim().min(1).max(100)).min(1).max(VARIANT_LOOKUP_MAX).optional()
+    .openapi({ description: "SKU codes, any case. Send skus or barcodes." }),
+  barcodes: z.array(z.string().trim().min(1).max(50)).min(1).max(VARIANT_LOOKUP_MAX).optional()
+    .openapi({ description: "Barcodes (EAN, UPC, GTIN or the store's own), any case. Send skus or barcodes." }),
+}).strict().refine((body) => (body.skus === undefined) !== (body.barcodes === undefined), "Send skus or barcodes, not both.");
+
 app.openapi(createRoute({
   operationId: "dashboard.resources.variants.lookup",
   method: "post",
   path: "/variants/lookup",
   tags: ["App API - Products"],
-  summary: "Find SKUs by their codes",
-  description: "Up to 90 SKU codes (any case) in one read: each found SKU's stock in total and per location with its stockVersion, in the order asked; codes that match nothing are left out. A read: nothing changes.",
+  summary: "Find SKUs by their codes or barcodes",
+  description: "Up to 90 SKU codes or barcodes (any case) in one read: each found SKU's stock in total and per location with its stockVersion, in the order asked; codes that match nothing are left out. A retired SKU is found too (`retiredAt`). A read: nothing changes.",
   request: {
     body: {
       required: true,
-      content: { "application/json": { schema: z.object({ skus: z.array(z.string().trim().min(1).max(100)).min(1).max(VARIANT_LOOKUP_MAX) }).strict() } },
+      content: { "application/json": { schema: variantLookupBody } },
     },
   },
   responses: {
     200: { description: "The SKUs found", content: { "application/json": { schema: successEnvelope(z.object({ variants: z.array(VariantResource) })) } } },
     ...readResponses,
   },
-}), async (c) => ok(c, { variants: await readVariantRepresentations(c.get("db"), { skus: c.req.valid("json").skus }) }));
+}), async (c) => {
+  const { skus, barcodes } = c.req.valid("json");
+  return ok(c, { variants: await readVariantRepresentations(c.get("db"), skus ? { skus } : { barcodes: barcodes! }) });
+});
 
 // ─── Customers ───────────────────────────────────────────────────────────────
 
