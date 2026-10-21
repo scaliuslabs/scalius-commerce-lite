@@ -18,7 +18,7 @@ import {
   describePluginSettings,
   getPluginKv,
   installPlugin,
-  listActiveEventPlugins,
+  listApprovedEventPlugins,
   listActiveFunctionPlugins,
   listPluginKv,
   listPluginLogs,
@@ -190,7 +190,8 @@ describe("plugin installations", () => {
     expect(reactivated.grant?.scopes).toEqual(["read_customers", "read_orders"]);
     const disabled = await deactivatePlugin(db, "acme.loyalty", { expectedRevision: reactivated.revision });
     expect(disabled.status).toBe("disabled");
-    expect(await listActiveEventPlugins(db, "order.created")).toEqual([]);
+    // A stopped app keeps its subscriptions: its events wait as held deliveries.
+    expect((await listApprovedEventPlugins(db, "order.created")).map((row) => [row.installation.pluginId, row.installation.status])).toEqual([["acme.loyalty", "disabled"]]);
   });
 
   it("orders function implementations by priority then plugin id and skips inactive ones", async () => {
@@ -205,7 +206,7 @@ describe("plugin installations", () => {
     const rows = await listActiveFunctionPlugins(db, "checkout.discounts");
     expect(rows.map((row) => [row.installation.pluginId, row.priority])).toEqual([["beta.three", 5], ["alpha.two", 10], ["zeta.one", 10]]);
     expect(await listActiveFunctionPlugins(db, "checkout.shipping_rates")).toEqual([]);
-    expect((await listActiveEventPlugins(db, "order.paid")).map((row) => row.installation.pluginId)).toEqual(["alpha.two", "beta.three", "zeta.one"]);
+    expect((await listApprovedEventPlugins(db, "order.paid")).map((row) => row.installation.pluginId)).toEqual(["alpha.two", "beta.three", "zeta.one"]);
   });
 
   it("uninstalls keeping or deleting data", async () => {

@@ -10,6 +10,7 @@ A failed call returns `{ok:false, error:{code, status, message, retryable, hint,
 | `confirm_token_used` | The approved write already ran. Read to verify; do not repeat it. |
 | 409, a stale revision | Someone changed it. `current` holds the new revision: reread, reapply only the requested fields, retry once. |
 | `idempotency_in_progress` | Wait 2 seconds and retry with the same idempotency key. |
+| `idempotency_outcome_unknown` | The first call stopped before its answer was kept and may have taken effect. Read to check; repeat with a new key only if it is missing. |
 | 422, `invalid_input` | `field` names the input at fault; `scalius_describe` shows the shape. |
 | `operation_not_found` | The id is wrong or this grant cannot run it: `scalius_search` again. |
 | 401, `credential_rejected` (exit 3) | Run `scalius doctor`, then `scalius init` to pair again. |

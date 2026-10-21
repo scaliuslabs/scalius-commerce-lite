@@ -927,6 +927,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 2,
         postgresStatements: 2,
       },
+      {
+        version: 176,
+        name: "0176_event_demand_approved_apps",
+        sqliteStatements: 31,
+        postgresStatements: 33,
+      },
     ]);
   });
 
@@ -1193,6 +1199,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 173, name: "0173_saved_payment_methods" },
           { version: 174, name: "0174_catalog_scale" },
           { version: 175, name: "0175_promotions_automatic_live" },
+          { version: 176, name: "0176_event_demand_approved_apps" },
         ],
       });
     } finally {

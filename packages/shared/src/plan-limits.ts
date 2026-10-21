@@ -153,6 +153,14 @@ export interface PlanLimits {
     readonly messagesPerMinute: number;
     /** Background jobs (`ctx.jobs.start`) one app may have running at once; a start beyond it is refused. */
     readonly runningJobs: number;
+    /**
+     * Days an approved app that is not running (turned off, stopped, failed,
+     * an update waiting for approval) keeps its events, delivered when it
+     * runs again; older ones are dropped.
+     */
+    readonly heldEventDays: number;
+    /** Events such an app keeps at most; beyond them its oldest are dropped. */
+    readonly heldEvents: number;
   };
 }
 
@@ -198,6 +206,8 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       breachesBeforeStop: 5,
       messagesPerMinute: 60,
       runningJobs: 3,
+      heldEventDays: 7,
+      heldEvents: 2_000,
     }),
   }),
   paid: Object.freeze({
@@ -241,6 +251,8 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       breachesBeforeStop: 5,
       messagesPerMinute: 300,
       runningJobs: 10,
+      heldEventDays: 30,
+      heldEvents: 50_000,
     }),
   }),
 }) as Readonly<Record<WorkersPlan, PlanLimits>>;

@@ -51,6 +51,7 @@ import { and, asc, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { appSalesChannelId } from "@scalius/shared/sales-channels";
 import { PluginError } from "./errors";
 import { appJobRowsCondition } from "./app-jobs";
+import { releaseHeldPluginDeliveriesStatement } from "./held-deliveries";
 import {
   appDataDeleteStatements,
   forgetRetainedAppStatement,
@@ -642,7 +643,10 @@ export async function activatePlugin(
         grantKey: pluginGrantKey(grant),
         failureReason: null,
         activatedBy: options.actorUserId,
-        activatedAt: sql`unixepoch()`,
+        // First approval: the app receives events from now. Approving it
+        // again (after a stop, a failure or an update) keeps the first time,
+        // so nothing that happened while it was off falls before it.
+        activatedAt: current.grant ? sql`COALESCE(${pluginInstallations.activatedAt}, unixepoch())` : sql`unixepoch()`,
         revision: sql`${pluginInstallations.revision} + 1`,
         updatedAt: sql`unixepoch()`,
       }).where(eq(pluginInstallations.pluginId, pluginId)),
@@ -650,6 +654,8 @@ export async function activatePlugin(
       ...registrationInserts(db, pluginId, installation.declaredManifest, features),
       // Its sales channels are on while it runs.
       ...salesChannelStatusStatements(db, pluginId, installation.manifest, true),
+      // The events kept while it was off become due.
+      releaseHeldPluginDeliveriesStatement(db, pluginId),
     ] as never);
   } catch (error) {
     if (isBatchGuardError(error, REVISION_GUARD)) await requireRevision(db, pluginId, options.expectedRevision, []);
@@ -910,6 +916,8 @@ export async function updatePluginInstallation(
       db.delete(pluginRegistrations).where(eq(pluginRegistrations.pluginId, pluginId)),
       ...registrationInserts(db, pluginId, manifest, registered),
       ...salesChannelStatements(db, pluginId, manifest.salesChannels, status === "active", (current.manifest?.salesChannels.length ?? 1) > 0),
+      // A failed app the update resumes receives the events kept while it was off.
+      ...(status === "active" ? [releaseHeldPluginDeliveriesStatement(db, pluginId)] : []),
     ] as never);
   } catch (error) {
     if (isBatchGuardError(error, REVISION_GUARD)) await requireRevision(db, pluginId, input.expectedRevision, []);
@@ -957,6 +965,7 @@ export async function restorePluginRelease(
       db.delete(pluginRegistrations).where(eq(pluginRegistrations.pluginId, pluginId)),
       ...registrationInserts(db, pluginId, declared, features),
       ...salesChannelStatements(db, pluginId, declared.salesChannels, previous.status === "active", current.manifest.salesChannels.length > 0),
+      ...(previous.status === "active" ? [releaseHeldPluginDeliveriesStatement(db, pluginId)] : []),
     ] as never);
   } catch (error) {
     if (isBatchGuardError(error, REVISION_GUARD)) await requireRevision(db, pluginId, options.expectedRevision, []);

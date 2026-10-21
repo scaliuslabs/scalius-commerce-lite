@@ -15,6 +15,7 @@ import type { Database } from "@scalius/database/client";
 import { chunkRowsForD1, safeBatch } from "@scalius/database/client";
 import {
   eventOutbox,
+  pluginEventDeliveries,
   pluginInstallations,
   webhookDeliveries,
   webhookSubscriptions,
@@ -762,7 +763,9 @@ export const PRUNE_BATCH_SIZE = 500;
 /**
  * Bounded deletes (at most 500 rows per table per run) of settled events and
  * terminal deliveries past retention. Deliveries keep their topic and
- * resource after their event is pruned (the foreign key sets null).
+ * resource after their event is pruned (the foreign key sets null). An event
+ * an app delivery still waits for (an app that is off keeps its events,
+ * plugins/event-deliveries.ts) stays until that delivery ends.
  */
 export async function pruneEventsAndDeliveries(db: Database, nowSeconds = Math.floor(Date.now() / 1000)): Promise<{ events: number; deliveries: number }> {
   const deliveries = await db
@@ -785,7 +788,12 @@ export async function pruneEventsAndDeliveries(db: Database, nowSeconds = Math.f
       db.select({ id: eventOutbox.id })
         .from(eventOutbox)
         .where(or(
-          and(eq(eventOutbox.status, "dispatched"), lt(eventOutbox.dispatchedAt, nowSeconds - EVENT_RETENTION_SECONDS)),
+          and(
+            eq(eventOutbox.status, "dispatched"),
+            lt(eventOutbox.dispatchedAt, nowSeconds - EVENT_RETENTION_SECONDS),
+            sql`NOT EXISTS (SELECT 1 FROM ${pluginEventDeliveries} WHERE ${pluginEventDeliveries.eventId} = ${eventOutbox.id}
+              AND ${pluginEventDeliveries.status} IN ('pending', 'processing', 'failed'))`,
+          ),
           and(eq(eventOutbox.status, "dead_lettered"), lt(eventOutbox.occurredAt, nowSeconds - DEAD_EVENT_RETENTION_SECONDS)),
         ))
         .limit(PRUNE_BATCH_SIZE),

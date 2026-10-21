@@ -252,7 +252,10 @@ export interface PluginOrders {
    * or moved on until staff release it (cancelling stays possible). One hold
    * per order and app; a hold staff released is not placed again. Nothing is
    * ever cancelled automatically. `reason` (plain text, 500 characters) is
-   * shown to staff: never put buyer contact data in it.
+   * shown to staff: never put buyer contact data in it. Gift cards and
+   * downloads of an order paid at checkout wait for the `order.created`
+   * delivery of every app granted `write_orders` (at most 10 minutes after
+   * the order was placed), so hold from that handler.
    */
   hold(input: { orderId: string; reason: string }): Promise<void>;
   /**
