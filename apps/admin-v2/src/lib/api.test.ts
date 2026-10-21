@@ -1,6 +1,51 @@
-import { describe, expect, it } from "vitest";
+import { postApiV1AdminAppsUpload } from "@scalius/api-client/sdk";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { AdminApiResponseError } from "./admin-api-error";
-import { apiData } from "./api";
+import { apiData, fetchAdminApi } from "./api";
+
+describe("fetchAdminApi transport", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  // Every byte value, including sequences that are invalid UTF-8 (0x80-0xFF alone).
+  const binary = Uint8Array.from({ length: 512 }, (_, index) => (index * 7) % 256);
+
+  function captureFetch() {
+    const sent: { body?: Uint8Array; init?: RequestInit } = {};
+    vi.stubGlobal("fetch", vi.fn(async (_url: string, init: RequestInit) => {
+      sent.init = init;
+      sent.body = init.body === undefined ? undefined : new Uint8Array(init.body as ArrayBuffer);
+      return new Response(JSON.stringify({ success: true, data: {} }), { status: 200, headers: { "content-type": "application/json" } });
+    }));
+    return sent;
+  }
+
+  it("sends a binary body byte-identical", async () => {
+    const sent = captureFetch();
+    await fetchAdminApi(new Request("https://admin-api.invalid/api/v1/admin/apps/upload", {
+      method: "POST",
+      headers: { "content-type": "application/zip" },
+      body: binary,
+    }));
+    expect(sent.body).toEqual(binary);
+    expect(new Headers(sent.init?.headers).get("content-type")).toBe("application/zip");
+  });
+
+  it("keeps an app ZIP byte-identical through the generated SDK", async () => {
+    const sent = captureFetch();
+    const file = new File([binary], "acme.engrave.zip", { type: "application/zip" });
+    await postApiV1AdminAppsUpload({ body: file, query: {} });
+    expect(sent.body?.byteLength).toBe(binary.byteLength);
+    expect(sent.body).toEqual(binary);
+  });
+
+  it("sends no body for GET and for an empty body", async () => {
+    const sent = captureFetch();
+    await fetchAdminApi(new Request("https://admin-api.invalid/api/v1/admin/apps"));
+    expect(sent.init?.body).toBeUndefined();
+    await fetchAdminApi(new Request("https://admin-api.invalid/api/v1/admin/apps/x/pause", { method: "POST" }));
+    expect(sent.init?.body).toBeUndefined();
+  });
+});
 
 const reply = (status: number, body: { data?: unknown; error?: unknown }) =>
   Promise.resolve({ ...body, response: new Response(null, { status: status === 204 ? 204 : 200 }) });
