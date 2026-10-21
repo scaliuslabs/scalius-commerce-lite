@@ -22,7 +22,7 @@ import { useCurrency } from "~/hooks/use-currency";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { useMessages, formatNumber } from "~/i18n";
 import { objectMessages } from "~/i18n/objects";
-import { OBJECT_RECORD_PAGE_SIZE, objectRecordsQueryOptions } from "~/lib/api-query-options/objects";
+import { OBJECT_RECORD_PAGE_SIZE, objectRecordsQueryOptions, objectTypeQueryOptions } from "~/lib/api-query-options/objects";
 import { AppOwnerBadge } from "~/components/admin/apps/app-owner";
 import { moneyMajor } from "~/components/admin/custom-fields/custom-field-draft";
 
@@ -35,10 +35,13 @@ export function ObjectRecordsList({ type }: { type: string }) {
   const [offsets, setOffsets] = useState([0]);
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const entries = useQuery({ ...objectRecordsQueryOptions(type, cursors[page - 1], where), placeholderData: keepPreviousData });
-  const definition = entries.data?.type;
+  const definitionQuery = useQuery(objectTypeQueryOptions(type));
+  const definition = definitionQuery.data;
   const canEdit = permissions.hasPermission(PERMISSIONS.OBJECTS_EDIT) && definition?.admin === "edit";
   const rows = useMemo(() => entries.data?.records ?? [], [entries.data]);
-  const total = entries.data?.total ?? 0;
+  // The type counts its records; a filtered page has no count (the list reads none).
+  const filtered = Object.keys(where).length > 0;
+  const total = filtered ? null : definition?.recordCount ?? null;
   const indexedKeys = useMemo(() => [...new Set([...(definition?.indexes ?? []), ...(definition?.unique ?? [])].flat())].filter((key) => key !== definition?.display).slice(0, 5), [definition]);
   const filterKeys = [...new Set([...(definition?.indexes ?? [])].map((index) => typeof index === "string" ? index : index[0]!))].slice(0, 4);
   const filterFields = definition?.fields.filter((field) => filterKeys.includes(field.key)) ?? [];
@@ -120,7 +123,7 @@ export function ObjectRecordsList({ type }: { type: string }) {
     getRowId: (row) => row.id,
     manualPagination: true,
     manualSorting: true,
-    rowCount: total,
+    rowCount: total ?? -1,
     pageCount: page + (entries.data?.nextCursor ? 1 : 0),
     state: { pagination: { pageIndex: page - 1, pageSize: OBJECT_RECORD_PAGE_SIZE }, sorting: [] },
     onPaginationChange: (updater) => {
@@ -133,7 +136,7 @@ export function ObjectRecordsList({ type }: { type: string }) {
       setPage(next.pageIndex + 1);
     },
   });
-  const nothingYet = !entries.isPending && !entries.isError && total === 0 && Object.keys(where).length === 0;
+  const nothingYet = !entries.isPending && !entries.isError && !filtered && rows.length === 0 && !entries.data?.nextCursor;
 
   return (
     <div className="pb-8">

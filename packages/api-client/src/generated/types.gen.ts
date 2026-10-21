@@ -3016,7 +3016,7 @@ export type OrderResource = {
         };
     } | null;
     fulfillmentLocationId: string | null;
-    version: number;
+    revision: number;
     lines: Array<{
         id: string;
         productId: string;
@@ -3268,9 +3268,9 @@ export type GiftCardSummaryResource = {
     customerId: string | null;
     recipientName: string | null;
     /**
-     * Send it as `expectedVersion` to change the card; every balance movement advances it.
+     * Send it as `expectedRevision` to change the card; every balance movement advances it.
      */
-    version: number;
+    revision: number;
     createdAt: string;
 };
 
@@ -3299,9 +3299,9 @@ export type GiftCardResource = {
     customerId: string | null;
     recipientName: string | null;
     /**
-     * Send it as `expectedVersion` to change the card; every balance movement advances it.
+     * Send it as `expectedRevision` to change the card; every balance movement advances it.
      */
-    version: number;
+    revision: number;
     createdAt: string;
     recipientEmail: string | null;
     recipientPhone: string | null;
@@ -3427,9 +3427,9 @@ export type AppWebhookSubscription = {
      */
     secretHint: string;
     /**
-     * Send it as `expectedVersion` to change or delete it.
+     * Send it as `expectedRevision` to change or delete it.
      */
-    version: number;
+    revision: number;
     createdAt: string;
     updatedAt: string;
 };
@@ -3827,6 +3827,28 @@ export type InventoryTransfer = {
             locationId: string;
         }>;
     }>;
+};
+
+export type ThemeResource = {
+    /**
+     * The theme document version section settings follow.
+     */
+    documentVersion: number;
+    publishedRevision: number;
+    draft: ThemeDraftReceipt;
+    draftDiffersFromLive: boolean;
+    /**
+     * The template the draft came from (`<app id>/<template id>`), if any.
+     */
+    template: string | null;
+    page: 'home' | 'landing';
+    slug: string | null;
+    sections: Array<ThemeSection>;
+    landingPages: Array<{
+        slug: string;
+        title: string;
+    }>;
+    readAt: string;
 };
 
 export type ThemeDraftReceipt = {
@@ -26997,9 +27019,9 @@ export type GetApiV1AdminResourcesGiftCardsByIdResponse = GetApiV1AdminResources
 export type PatchApiV1AdminResourcesGiftCardsByIdData = {
     body: {
         /**
-         * The card's `version` you read; a card changed since is refused with 409.
+         * The card's `revision` you read; a card changed since is refused with 409.
          */
-        expectedVersion: number;
+        expectedRevision: number;
         status?: 'active' | 'disabled';
         /**
          * null removes the expiry.
@@ -27071,9 +27093,9 @@ export type PatchApiV1AdminResourcesGiftCardsByIdResponse = PatchApiV1AdminResou
 export type PostApiV1AdminResourcesGiftCardsByIdAdjustData = {
     body: {
         /**
-         * The card's `version` you read; a card changed since is refused with 409.
+         * The card's `revision` you read; a card changed since is refused with 409.
          */
-        expectedVersion: number;
+        expectedRevision: number;
         amountMinor: number;
         reason: string;
     };
@@ -27859,7 +27881,16 @@ export type PostApiV1AdminResourcesPaymentsByIdVoidResponse = PostApiV1AdminReso
 export type GetApiV1AdminResourcesWebhookSubscriptionsData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many items (default and maximum 5).
+         */
+        limit?: number;
+    };
     url: '/api/v1/admin/resources/webhook-subscriptions';
 };
 
@@ -27901,10 +27932,9 @@ export type GetApiV1AdminResourcesWebhookSubscriptionsResponses = {
         data: {
             subscriptions: Array<AppWebhookSubscription>;
             /**
-             * How many one app may keep.
+             * Pass it as `cursor` for the next page; null on the last page.
              */
-            maxSubscriptions: number;
-            apiVersion: string;
+            nextCursor: string | null;
         };
     };
 };
@@ -27995,7 +28025,7 @@ export type DeleteApiV1AdminResourcesWebhookSubscriptionsByIdData = {
         id: string;
     };
     query: {
-        expectedVersion: number;
+        expectedRevision: number;
     };
     url: '/api/v1/admin/resources/webhook-subscriptions/{id}';
 };
@@ -28051,9 +28081,9 @@ export type DeleteApiV1AdminResourcesWebhookSubscriptionsByIdResponse = DeleteAp
 export type PatchApiV1AdminResourcesWebhookSubscriptionsByIdData = {
     body: {
         /**
-         * The subscription's `version` you read; a stale one is refused with 409.
+         * The subscription's `revision` you read; a stale one is refused with 409.
          */
-        expectedVersion: number;
+        expectedRevision: number;
         /**
          * HTTPS endpoint on one of the app's approved hosts (`allowedHosts`). Private, loopback and reserved addresses are refused.
          */
@@ -30679,7 +30709,16 @@ export type PutApiV1AdminPriceListsByIdPricesResponse = PutApiV1AdminPriceListsB
 export type GetApiV1AdminObjectsTypesData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many items (default and maximum 100).
+         */
+        limit?: number;
+    };
     url: '/api/v1/admin/objects/types';
 };
 
@@ -30719,7 +30758,11 @@ export type GetApiV1AdminObjectsTypesResponses = {
     200: {
         success: true;
         data: {
-            items: Array<ObjectType>;
+            types: Array<ObjectType>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
         };
     };
 };
@@ -30850,9 +30893,15 @@ export type DeleteApiV1AdminObjectsTypesByTypeError = DeleteApiV1AdminObjectsTyp
 
 export type DeleteApiV1AdminObjectsTypesByTypeResponses = {
     /**
-     * No content
+     * Deleted
      */
-    204: void;
+    200: {
+        success: true;
+        data: {
+            id: string;
+            deleted: true;
+        };
+    };
 };
 
 export type DeleteApiV1AdminObjectsTypesByTypeResponse = DeleteApiV1AdminObjectsTypesByTypeResponses[keyof DeleteApiV1AdminObjectsTypesByTypeResponses];
@@ -31038,10 +31087,11 @@ export type GetApiV1AdminObjectsByTypeResponses = {
     200: {
         success: true;
         data: {
-            type: ObjectType;
             records: Array<ObjectRecord>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
             nextCursor: string | null;
-            total: number;
         };
     };
 };
@@ -31101,9 +31151,15 @@ export type DeleteApiV1AdminObjectsByTypeByIdError = DeleteApiV1AdminObjectsByTy
 
 export type DeleteApiV1AdminObjectsByTypeByIdResponses = {
     /**
-     * No content
+     * Deleted
      */
-    204: void;
+    200: {
+        success: true;
+        data: {
+            id: string;
+            deleted: true;
+        };
+    };
 };
 
 export type DeleteApiV1AdminObjectsByTypeByIdResponse = DeleteApiV1AdminObjectsByTypeByIdResponses[keyof DeleteApiV1AdminObjectsByTypeByIdResponses];
@@ -41770,27 +41826,7 @@ export type GetApiV1AdminResourcesThemeResponses = {
     200: {
         success: true;
         data: {
-            theme: {
-                /**
-                 * The theme document version section settings follow.
-                 */
-                documentVersion: number;
-                publishedRevision: number;
-                draft: ThemeDraftReceipt;
-                draftDiffersFromLive: boolean;
-                /**
-                 * The template the draft came from (`<app id>/<template id>`), if any.
-                 */
-                template: string | null;
-                page: 'home' | 'landing';
-                slug: string | null;
-                sections: Array<ThemeSection>;
-                landingPages: Array<{
-                    slug: string;
-                    title: string;
-                }>;
-                readAt: string;
-            };
+            theme: ThemeResource;
         };
     };
 };
@@ -41804,9 +41840,9 @@ export type PostApiV1AdminResourcesThemeApplyTemplateData = {
          */
         template: string;
         /**
-         * The draft `revision` you read (`theme.get`); 0 when no draft was ever saved. A draft changed since is refused with 409 and nothing is saved.
+         * The draft `revision` you read (`theme.draft.revision`); 0 when no draft was ever saved. A draft changed since is refused with 409 and nothing is saved.
          */
-        expectedDraftRevision: number;
+        expectedRevision: number;
         /**
          * The draft's `basePublishedRevision` you read: the live theme it was based on.
          */
@@ -41858,12 +41894,12 @@ export type PostApiV1AdminResourcesThemeApplyTemplateError = PostApiV1AdminResou
 
 export type PostApiV1AdminResourcesThemeApplyTemplateResponses = {
     /**
-     * The draft with the template applied
+     * The theme with the template applied (its homepage), the template and the handles left out
      */
     200: {
         success: true;
         data: {
-            draft: ThemeDraftReceipt;
+            theme: ThemeResource;
             template: string;
             unresolved: Array<ThemeUnresolvedHandle>;
         };
@@ -41887,9 +41923,9 @@ export type PostApiV1AdminResourcesThemeSectionSettingsData = {
             [key: string]: unknown;
         };
         /**
-         * The draft `revision` you read (`theme.get`); 0 when no draft was ever saved. A draft changed since is refused with 409 and nothing is saved.
+         * The draft `revision` you read (`theme.draft.revision`); 0 when no draft was ever saved. A draft changed since is refused with 409 and nothing is saved.
          */
-        expectedDraftRevision: number;
+        expectedRevision: number;
         /**
          * The draft's `basePublishedRevision` you read: the live theme it was based on.
          */
@@ -41941,12 +41977,12 @@ export type PostApiV1AdminResourcesThemeSectionSettingsError = PostApiV1AdminRes
 
 export type PostApiV1AdminResourcesThemeSectionSettingsResponses = {
     /**
-     * The saved draft and the section as it now reads
+     * The theme as it now reads (the section's page) and the section
      */
     200: {
         success: true;
         data: {
-            draft: ThemeDraftReceipt;
+            theme: ThemeResource;
             section: ThemeSection;
         };
     };

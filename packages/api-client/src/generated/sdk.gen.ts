@@ -2311,7 +2311,7 @@ export const postApiV1AdminResourcesPaymentsByIdVoid = <ThrowOnError extends boo
 /**
  * List the app's own webhook subscriptions
  *
- * Only the calling app's subscriptions, with their health. The store's other webhooks are never visible.
+ * Only the calling app's subscriptions (at most 5), oldest first, with their health. The store's other webhooks are never visible.
  */
 export const getApiV1AdminResourcesWebhookSubscriptions = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminResourcesWebhookSubscriptionsData, ThrowOnError>): RequestResult<GetApiV1AdminResourcesWebhookSubscriptionsResponses, GetApiV1AdminResourcesWebhookSubscriptionsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminResourcesWebhookSubscriptionsResponses, GetApiV1AdminResourcesWebhookSubscriptionsErrors, ThrowOnError>({ url: '/api/v1/admin/resources/webhook-subscriptions', ...options });
 
@@ -2694,6 +2694,8 @@ export const putApiV1AdminPriceListsByIdPrices = <ThrowOnError extends boolean =
 
 /**
  * List object types available to staff
+ *
+ * Oldest first. An app sees the merchant's custom types and its own.
  */
 export const getApiV1AdminObjectsTypes = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminObjectsTypesData, ThrowOnError>): RequestResult<GetApiV1AdminObjectsTypesResponses, GetApiV1AdminObjectsTypesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminObjectsTypesResponses, GetApiV1AdminObjectsTypesErrors, ThrowOnError>({ url: '/api/v1/admin/objects/types', ...options });
 

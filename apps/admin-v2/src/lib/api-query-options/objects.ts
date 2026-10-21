@@ -45,7 +45,7 @@ export const objectKeys = {
 
 export const objectTypesQueryOptions = () => queryOptions({
   queryKey: objectKeys.definitions(),
-  queryFn: async () => (await apiData(apiClient.get<Envelope<{ items: ObjectType[] }>>({ url: `${base}/types` }))).items,
+  queryFn: async () => (await apiData(apiClient.get<Envelope<{ types: ObjectType[]; nextCursor: string | null }>>({ url: `${base}/types` }))).types,
   staleTime: 30_000,
 });
 
@@ -57,7 +57,7 @@ export const objectTypeQueryOptions = (type: string) => queryOptions({
 
 export const objectRecordsQueryOptions = (type: string, cursor?: string, where: Record<string, string> = {}) => queryOptions({
   queryKey: [...objectKeys.entryPage(type, cursor), where],
-  queryFn: () => apiData(apiClient.get<Envelope<{ type: ObjectType; records: ObjectRecord[]; total: number; nextCursor: string | null }>>({
+  queryFn: () => apiData(apiClient.get<Envelope<{ records: ObjectRecord[]; nextCursor: string | null }>>({
     url: recordsPath(type), query: { limit: OBJECT_RECORD_PAGE_SIZE, ...(cursor ? { cursor } : {}), ...(Object.keys(where).length ? { where: JSON.stringify(where) } : {}) },
   })),
   placeholderData: keepPreviousData,
@@ -85,7 +85,7 @@ export async function saveObjectRecord(type: string, id: string, body: UpdateObj
 export function useDeleteObjectType() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (type: Pick<ObjectType, "handle" | "revision">) => apiData(apiClient.delete<Envelope<{ deleted: boolean }>>({
+    mutationFn: (type: Pick<ObjectType, "handle" | "revision">) => apiData(apiClient.delete<Envelope<{ id: string; deleted: true }>>({
       url: typePath(type.handle), query: { expectedRevision: type.revision },
     })),
     onSettled: () => queryClient.invalidateQueries({ queryKey: objectKeys.all }),
@@ -94,7 +94,7 @@ export function useDeleteObjectType() {
 export function useDeleteObjectRecord(type: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (record: Pick<ObjectRecord, "id" | "revision">) => apiData(apiClient.delete<Envelope<{ deleted: boolean }>>({
+    mutationFn: (record: Pick<ObjectRecord, "id" | "revision">) => apiData(apiClient.delete<Envelope<{ id: string; deleted: true }>>({
       url: recordPath(type, record.id), query: { expectedRevision: record.revision },
     })),
     onSettled: () => queryClient.invalidateQueries({ queryKey: objectKeys.all }),

@@ -334,5 +334,23 @@
   "from": "a732072f468101d4",
   "change": "webhook_subscriptions.update output data.subscription.version: the field was removed.",
   "reason": "Pre-lock (audit L2): one optimistic-concurrency vocabulary. Every resource exposes `revision` and every write takes `expectedRevision` (in the body; a DELETE in the query); orders, returns, reviews, gift cards and webhook subscriptions exposed `version`, the theme took `expectedDraftRevision` (the same counters, renamed). `stockVersion`/`expectedStockVersion` and the theme's `basePublishedRevision` stay the named exceptions: they guard a different counter."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9bc84e4a3221bc59",
+  "change": "objects.list output data.type: the field was removed.",
+  "reason": "Pre-lock (audit L9): every stable list answers `{ <plural>, nextCursor }` and nothing else; objects.list dropped `type` (object_types.get reads it) and `total` (a count read on every filtered page; the type's `recordCount` counts its records)."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9bc84e4a3221bc59",
+  "change": "objects.list output data.total: the field was removed.",
+  "reason": "Pre-lock (audit L9): every stable list answers `{ <plural>, nextCursor }` and nothing else; objects.list dropped `type` (object_types.get reads it) and `total` (a count read on every filtered page; the type's `recordCount` counts its records)."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9bc84e4a3221bc59",
+  "change": "object_types.list output data.items: the field was removed.",
+  "reason": "Pre-lock (audit L9): every stable list answers `{ <plural>, nextCursor }` and takes `cursor` + `limit`; object_types.list answered `{ items }` and now answers `{ types, nextCursor }`."
  }
 ]

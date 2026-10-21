@@ -30,7 +30,11 @@ vi.mock("@scalius/api-client/sdk", () => sdk);
 vi.mock("~/lib/api", async (importOriginal) => {
   const original = await importOriginal<typeof import("~/lib/api")>();
   return { ...original, apiClient: {
-    get: (options: { url: string }) => options.url.endsWith("/types") ? sdk.getApiV1AdminObjectsDefinitions(options) : sdk.getApiV1AdminObjectsDefinitionsByIdEntries(options),
+    // A type read answers the type the entries fixture names; the entries list carries only records and nextCursor.
+    get: (options: { url: string }) => options.url.endsWith("/types") ? sdk.getApiV1AdminObjectsDefinitions(options)
+      : options.url.includes("/types/")
+        ? sdk.getApiV1AdminObjectsDefinitionsByIdEntries(options).then((result: { data: { data: { type: unknown } } }) => ({ ...result, data: { success: true, data: { type: result.data.data.type } } }))
+        : sdk.getApiV1AdminObjectsDefinitionsByIdEntries(options),
     post: (options: unknown) => sdk.postApiV1AdminObjectsDefinitions(options),
     patch: (options: unknown) => sdk.patchApiV1AdminObjectsDefinitionsById(options),
     put: (options: { body: { expectedRevision: number | null } }) => options.body.expectedRevision === null ? sdk.postApiV1AdminObjectsDefinitionsByIdEntries(options) : sdk.patchApiV1AdminObjectsDefinitionsByIdEntriesByEntryId(options),
@@ -90,7 +94,7 @@ describe("objects", () => {
     container = document.createElement("div");
     document.body.append(container);
     root = createRoot(container);
-    sdk.getApiV1AdminObjectsDefinitions.mockImplementation(() => envelope({ items: [faq, tiers] }));
+    sdk.getApiV1AdminObjectsDefinitions.mockImplementation(() => envelope({ nextCursor: null, types: [faq, tiers] }));
     sdk.getApiV1AdminObjectsDefinitionsByIdEntries.mockImplementation(() => envelope({ type: faq, records: [shipping], total: 1 }));
     sdk.getApiV1AdminApps.mockImplementation(() => envelope({ apps: [{ id: "acme.loyalty", name: "Acme Loyalty" }], available: [], sandboxAvailable: true }));
     sdk.getApiV1AdminAppsRemovedData.mockImplementation(() => envelope({ apps: [] }));
@@ -224,7 +228,7 @@ describe("objects", () => {
 
   it("names a removed app's types and lets only a Super Admin delete its data, under the listed revision", async () => {
     const demo: ObjectType = { ...tiers, id: "oty_scalius.bazaar.demo_items", handle: "scalius.bazaar.demo_items", namespace: "scalius.bazaar", type: "demo_items", name: "Demo items", admin: "read", recordCount: 3 };
-    sdk.getApiV1AdminObjectsDefinitions.mockImplementation(() => envelope({ items: [faq, tiers, demo] }));
+    sdk.getApiV1AdminObjectsDefinitions.mockImplementation(() => envelope({ nextCursor: null, types: [faq, tiers, demo] }));
     sdk.getApiV1AdminAppsRemovedData.mockImplementation(() => envelope({ apps: [{
       id: "scalius.bazaar", name: "Bazaar demo", removedAt: "2026-10-20T08:00:00.000Z", revision: 2,
       objectTypes: 1, records: 3, objectTypeHandles: ["scalius.bazaar.demo_items"], customFields: 0, keyValues: 0,

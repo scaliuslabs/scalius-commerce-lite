@@ -15602,7 +15602,7 @@
             "minLength": 1,
             "maxLength": 128
           },
-          "version": {
+          "revision": {
             "type": "integer"
           },
           "lines": {
@@ -15725,7 +15725,7 @@
           "shippingAddress",
           "billingAddress",
           "fulfillmentLocationId",
-          "version",
+          "revision",
           "lines",
           "createdAt",
           "updatedAt",
@@ -16696,11 +16696,11 @@
             "nullable": true,
             "x-scalius-protected": "name"
           },
-          "version": {
+          "revision": {
             "type": "integer",
             "minimum": 0,
             "exclusiveMinimum": true,
-            "description": "Send it as `expectedVersion` to change the card; every balance movement advances it."
+            "description": "Send it as `expectedRevision` to change the card; every balance movement advances it."
           },
           "createdAt": {
             "type": "string",
@@ -16719,7 +16719,7 @@
           "source",
           "customerId",
           "recipientName",
-          "version",
+          "revision",
           "createdAt"
         ]
       },
@@ -16779,11 +16779,11 @@
             "nullable": true,
             "x-scalius-protected": "name"
           },
-          "version": {
+          "revision": {
             "type": "integer",
             "minimum": 0,
             "exclusiveMinimum": true,
-            "description": "Send it as `expectedVersion` to change the card; every balance movement advances it."
+            "description": "Send it as `expectedRevision` to change the card; every balance movement advances it."
           },
           "createdAt": {
             "type": "string",
@@ -16834,7 +16834,7 @@
           "source",
           "customerId",
           "recipientName",
-          "version",
+          "revision",
           "createdAt",
           "recipientEmail",
           "recipientPhone",
@@ -17191,11 +17191,11 @@
             "type": "string",
             "description": "The signing secret's last four characters."
           },
-          "version": {
+          "revision": {
             "type": "integer",
             "minimum": 0,
             "exclusiveMinimum": true,
-            "description": "Send it as `expectedVersion` to change or delete it."
+            "description": "Send it as `expectedRevision` to change or delete it."
           },
           "createdAt": {
             "type": "string",
@@ -17220,7 +17220,7 @@
           "lastSuccessAt",
           "lastFailureAt",
           "secretHint",
-          "version",
+          "revision",
           "createdAt",
           "updatedAt"
         ]
@@ -19017,6 +19017,85 @@
           "createdBy",
           "lines",
           "activity"
+        ]
+      },
+      "ThemeResource": {
+        "type": "object",
+        "properties": {
+          "documentVersion": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "description": "The theme document version section settings follow."
+          },
+          "publishedRevision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "draft": {
+            "$ref": "#/components/schemas/ThemeDraftReceipt"
+          },
+          "draftDiffersFromLive": {
+            "type": "boolean"
+          },
+          "template": {
+            "type": "string",
+            "nullable": true,
+            "description": "The template the draft came from (`<app id>/<template id>`), if any."
+          },
+          "page": {
+            "type": "string",
+            "enum": [
+              "home",
+              "landing"
+            ]
+          },
+          "slug": {
+            "type": "string",
+            "nullable": true
+          },
+          "sections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ThemeSection"
+            },
+            "maxItems": 24
+          },
+          "landingPages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "slug": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "slug",
+                "title"
+              ]
+            },
+            "maxItems": 20
+          },
+          "readAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "documentVersion",
+          "publishedRevision",
+          "draft",
+          "draftDiffersFromLive",
+          "template",
+          "page",
+          "slug",
+          "sections",
+          "landingPages",
+          "readAt"
         ]
       },
       "ThemeDraftReceipt": {
@@ -101874,11 +101953,11 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "expectedVersion": {
+                  "expectedRevision": {
                     "type": "integer",
                     "minimum": 0,
                     "exclusiveMinimum": true,
-                    "description": "The card's `version` you read; a card changed since is refused with 409."
+                    "description": "The card's `revision` you read; a card changed since is refused with 409."
                   },
                   "status": {
                     "type": "string",
@@ -101906,7 +101985,7 @@
                   }
                 },
                 "required": [
-                  "expectedVersion"
+                  "expectedRevision"
                 ],
                 "additionalProperties": false
               }
@@ -102092,11 +102171,11 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "expectedVersion": {
+                  "expectedRevision": {
                     "type": "integer",
                     "minimum": 0,
                     "exclusiveMinimum": true,
-                    "description": "The card's `version` you read; a card changed since is refused with 409."
+                    "description": "The card's `revision` you read; a card changed since is refused with 409."
                   },
                   "amountMinor": {
                     "type": "integer",
@@ -102110,7 +102189,7 @@
                   }
                 },
                 "required": [
-                  "expectedVersion",
+                  "expectedRevision",
                   "amountMinor",
                   "reason"
                 ],
@@ -104323,7 +104402,33 @@
           "App API - Webhooks"
         ],
         "summary": "List the app's own webhook subscriptions",
-        "description": "Only the calling app's subscriptions, with their health. The store's other webhooks are never visible.",
+        "description": "Only the calling app's subscriptions (at most 5), oldest first, with their health. The store's other webhooks are never visible.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "The `nextCursor` of the page before; leave it out for the first page."
+            },
+            "required": false,
+            "description": "The `nextCursor` of the page before; leave it out for the first page.",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5,
+              "default": 5,
+              "description": "At most this many items (default and maximum 5)."
+            },
+            "required": false,
+            "description": "At most this many items (default and maximum 5).",
+            "name": "limit",
+            "in": "query"
+          }
+        ],
         "responses": {
           "200": {
             "description": "The app's subscriptions",
@@ -104348,18 +104453,15 @@
                           },
                           "maxItems": 5
                         },
-                        "maxSubscriptions": {
-                          "type": "integer",
-                          "description": "How many one app may keep."
-                        },
-                        "apiVersion": {
-                          "type": "string"
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Pass it as `cursor` for the next page; null on the last page."
                         }
                       },
                       "required": [
                         "subscriptions",
-                        "maxSubscriptions",
-                        "apiVersion"
+                        "nextCursor"
                       ]
                     }
                   },
@@ -104779,11 +104881,11 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "expectedVersion": {
+                  "expectedRevision": {
                     "type": "integer",
                     "minimum": 0,
                     "exclusiveMinimum": true,
-                    "description": "The subscription's `version` you read; a stale one is refused with 409."
+                    "description": "The subscription's `revision` you read; a stale one is refused with 409."
                   },
                   "url": {
                     "type": "string",
@@ -104886,7 +104988,7 @@
                   }
                 },
                 "required": [
-                  "expectedVersion"
+                  "expectedRevision"
                 ],
                 "additionalProperties": false
               }
@@ -105056,7 +105158,7 @@
               "exclusiveMinimum": true
             },
             "required": true,
-            "name": "expectedVersion",
+            "name": "expectedRevision",
             "in": "query"
           },
           {
@@ -113341,6 +113443,33 @@
           "Admin - Objects"
         ],
         "summary": "List object types available to staff",
+        "description": "Oldest first. An app sees the merchant's custom types and its own.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "The `nextCursor` of the page before; leave it out for the first page."
+            },
+            "required": false,
+            "description": "The `nextCursor` of the page before; leave it out for the first page.",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100,
+              "description": "At most this many items (default and maximum 100)."
+            },
+            "required": false,
+            "description": "At most this many items (default and maximum 100).",
+            "name": "limit",
+            "in": "query"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Object types",
@@ -113358,15 +113487,21 @@
                     "data": {
                       "type": "object",
                       "properties": {
-                        "items": {
+                        "types": {
                           "type": "array",
                           "items": {
                             "$ref": "#/components/schemas/ObjectType"
                           }
+                        },
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Pass it as `cursor` for the next page; null on the last page."
                         }
                       },
                       "required": [
-                        "items"
+                        "types",
+                        "nextCursor"
                       ]
                     }
                   },
@@ -114190,8 +114325,45 @@
           }
         ],
         "responses": {
-          "204": {
-            "description": "No content"
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "deleted": {
+                          "type": "boolean",
+                          "enum": [
+                            true
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "deleted"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -114399,9 +114571,6 @@
                     "data": {
                       "type": "object",
                       "properties": {
-                        "type": {
-                          "$ref": "#/components/schemas/ObjectType"
-                        },
                         "records": {
                           "type": "array",
                           "items": {
@@ -114410,17 +114579,13 @@
                         },
                         "nextCursor": {
                           "type": "string",
-                          "nullable": true
-                        },
-                        "total": {
-                          "type": "integer"
+                          "nullable": true,
+                          "description": "Pass it as `cursor` for the next page; null on the last page."
                         }
                       },
                       "required": [
-                        "type",
                         "records",
-                        "nextCursor",
-                        "total"
+                        "nextCursor"
                       ]
                     }
                   },
@@ -114959,8 +115124,45 @@
           }
         ],
         "responses": {
-          "204": {
-            "description": "No content"
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "deleted": {
+                          "type": "boolean",
+                          "enum": [
+                            true
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "deleted"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -150608,83 +150810,7 @@
                       "type": "object",
                       "properties": {
                         "theme": {
-                          "type": "object",
-                          "properties": {
-                            "documentVersion": {
-                              "type": "integer",
-                              "minimum": 0,
-                              "exclusiveMinimum": true,
-                              "description": "The theme document version section settings follow."
-                            },
-                            "publishedRevision": {
-                              "type": "integer",
-                              "minimum": 0
-                            },
-                            "draft": {
-                              "$ref": "#/components/schemas/ThemeDraftReceipt"
-                            },
-                            "draftDiffersFromLive": {
-                              "type": "boolean"
-                            },
-                            "template": {
-                              "type": "string",
-                              "nullable": true,
-                              "description": "The template the draft came from (`<app id>/<template id>`), if any."
-                            },
-                            "page": {
-                              "type": "string",
-                              "enum": [
-                                "home",
-                                "landing"
-                              ]
-                            },
-                            "slug": {
-                              "type": "string",
-                              "nullable": true
-                            },
-                            "sections": {
-                              "type": "array",
-                              "items": {
-                                "$ref": "#/components/schemas/ThemeSection"
-                              },
-                              "maxItems": 24
-                            },
-                            "landingPages": {
-                              "type": "array",
-                              "items": {
-                                "type": "object",
-                                "properties": {
-                                  "slug": {
-                                    "type": "string"
-                                  },
-                                  "title": {
-                                    "type": "string"
-                                  }
-                                },
-                                "required": [
-                                  "slug",
-                                  "title"
-                                ]
-                              },
-                              "maxItems": 20
-                            },
-                            "readAt": {
-                              "type": "string",
-                              "format": "date-time"
-                            }
-                          },
-                          "required": [
-                            "documentVersion",
-                            "publishedRevision",
-                            "draft",
-                            "draftDiffersFromLive",
-                            "template",
-                            "page",
-                            "slug",
-                            "sections",
-                            "landingPages",
-                            "readAt"
-                          ]
+                          "$ref": "#/components/schemas/ThemeResource"
                         }
                       },
                       "required": [
@@ -150834,10 +150960,10 @@
                     "maxLength": 160,
                     "description": "The template: its id in the calling app's manifest (`storefront.templates[].id`), or `<app id>/<template id>`. An app applies only its own templates."
                   },
-                  "expectedDraftRevision": {
+                  "expectedRevision": {
                     "type": "integer",
                     "minimum": 0,
-                    "description": "The draft `revision` you read (`theme.get`); 0 when no draft was ever saved. A draft changed since is refused with 409 and nothing is saved."
+                    "description": "The draft `revision` you read (`theme.draft.revision`); 0 when no draft was ever saved. A draft changed since is refused with 409 and nothing is saved."
                   },
                   "basePublishedRevision": {
                     "type": "integer",
@@ -150847,7 +150973,7 @@
                 },
                 "required": [
                   "template",
-                  "expectedDraftRevision",
+                  "expectedRevision",
                   "basePublishedRevision"
                 ],
                 "additionalProperties": false
@@ -150857,7 +150983,7 @@
         },
         "responses": {
           "200": {
-            "description": "The draft with the template applied",
+            "description": "The theme with the template applied (its homepage), the template and the handles left out",
             "content": {
               "application/json": {
                 "schema": {
@@ -150872,8 +150998,8 @@
                     "data": {
                       "type": "object",
                       "properties": {
-                        "draft": {
-                          "$ref": "#/components/schemas/ThemeDraftReceipt"
+                        "theme": {
+                          "$ref": "#/components/schemas/ThemeResource"
                         },
                         "template": {
                           "type": "string"
@@ -150887,7 +151013,7 @@
                         }
                       },
                       "required": [
-                        "draft",
+                        "theme",
                         "template",
                         "unresolved"
                       ]
@@ -151060,10 +151186,10 @@
                     "additionalProperties": {},
                     "description": "Settings to merge at the top level (an app section: into its values). Catalogue handles resolve as in apply_template."
                   },
-                  "expectedDraftRevision": {
+                  "expectedRevision": {
                     "type": "integer",
                     "minimum": 0,
-                    "description": "The draft `revision` you read (`theme.get`); 0 when no draft was ever saved. A draft changed since is refused with 409 and nothing is saved."
+                    "description": "The draft `revision` you read (`theme.draft.revision`); 0 when no draft was ever saved. A draft changed since is refused with 409 and nothing is saved."
                   },
                   "basePublishedRevision": {
                     "type": "integer",
@@ -151074,7 +151200,7 @@
                 "required": [
                   "sectionId",
                   "settings",
-                  "expectedDraftRevision",
+                  "expectedRevision",
                   "basePublishedRevision"
                 ],
                 "additionalProperties": false
@@ -151084,7 +151210,7 @@
         },
         "responses": {
           "200": {
-            "description": "The saved draft and the section as it now reads",
+            "description": "The theme as it now reads (the section's page) and the section",
             "content": {
               "application/json": {
                 "schema": {
@@ -151099,15 +151225,15 @@
                     "data": {
                       "type": "object",
                       "properties": {
-                        "draft": {
-                          "$ref": "#/components/schemas/ThemeDraftReceipt"
+                        "theme": {
+                          "$ref": "#/components/schemas/ThemeResource"
                         },
                         "section": {
                           "$ref": "#/components/schemas/ThemeSection"
                         }
                       },
                       "required": [
-                        "draft",
+                        "theme",
                         "section"
                       ]
                     }

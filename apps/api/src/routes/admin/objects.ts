@@ -7,10 +7,11 @@ import {
   createObjectType, deleteObjectType, getObjectType, listObjectTypes, updateObjectType,
   deleteObjectEntry, getObjectEntry, listObjectRecords, upsertObjectRecord,
 } from "@scalius/core/modules/objects";
-import { objectFieldSchema, OBJECT_STATUSES, type ObjectField } from "@scalius/shared/plugins/objects";
+import { objectFieldSchema, OBJECT_STATUSES, OBJECT_TYPES_MAX, type ObjectField } from "@scalius/shared/plugins/objects";
+import { boundedPage, boundedPageQuery, nextCursorSchema } from "../../utils/bounded-page";
 import { ForbiddenError, NotFoundError, ValidationError } from "../../utils/api-error";
-import { created, noContent, ok } from "../../utils/api-response";
-import { conflictResponse, errorResponses, namedSharedSchema, noContentResponse, successEnvelope } from "../../schemas/responses";
+import { created, ok } from "../../utils/api-response";
+import { conflictResponse, errorResponses, namedSharedSchema, successEnvelope } from "../../schemas/responses";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const TAG = "Admin - Objects";
@@ -48,6 +49,7 @@ const recordSchema = z.object({
 const typeParam = z.object({ type: z.string().min(1).max(160) });
 const recordParams = typeParam.extend({ id: z.string().min(1).max(128) });
 const revisionQuery = z.object({ expectedRevision: z.coerce.number().int().min(1) });
+const deletedResponse = { description: "Deleted", content: { "application/json": { schema: successEnvelope(z.object({ id: z.string(), deleted: z.literal(true) })) } } };
 
 app.use("*", async (c, next) => {
   c.header("Cache-Control", "private, no-store");
@@ -119,11 +121,17 @@ export function objectWhereQuery(url: string): Record<string, z.infer<typeof sca
 
 app.openapi(createRoute({
   operationId: "objects.types.list", method: "get", path: "/types", tags: [TAG], summary: "List object types available to staff",
-  responses: { 200: { description: "Object types", content: { "application/json": { schema: successEnvelope(z.object({ items: z.array(typeSchema) })) } } }, ...errorResponses },
+  description: "Oldest first. An app sees the merchant's custom types and its own.",
+  request: { query: z.object(boundedPageQuery(OBJECT_TYPES_MAX)) },
+  responses: { 200: { description: "Object types", content: { "application/json": { schema: successEnvelope(z.object({ types: z.array(typeSchema), nextCursor: nextCursorSchema })) } } }, ...errorResponses },
 }), async (c) => {
   const principal = c.get("pluginPrincipal") as { pluginId: string } | undefined;
-  const items = (await listObjectTypes(c.get("db"))).filter((type) => type.admin !== "none" && (!principal || type.namespace === "custom" || type.namespace === principal.pluginId));
-  return ok(c, { items });
+  const query = c.req.valid("query");
+  const types = (await listObjectTypes(c.get("db")))
+    .filter((type) => type.admin !== "none" && (!principal || type.namespace === "custom" || type.namespace === principal.pluginId))
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id));
+  const page = boundedPage(types, { name: "object_types", cursor: query.cursor, limit: query.limit, id: (type) => type.id, sort: { kind: "text", value: (type) => type.createdAt } });
+  return ok(c, { types: page.items, nextCursor: page.nextCursor });
 });
 
 app.openapi(createRoute({
@@ -153,11 +161,11 @@ app.openapi(createRoute({
 
 app.openapi(createRoute({
   operationId: "objects.types.delete", method: "delete", path: "/types/{type}", tags: [TAG], summary: "Delete a merchant object type and its records",
-  request: { params: typeParam, query: revisionQuery }, responses: { 204: noContentResponse, ...writeResponses },
+  request: { params: typeParam, query: revisionQuery }, responses: { 200: deletedResponse, ...writeResponses },
 }), async (c) => {
   const type = await customType(c, c.req.valid("param").type);
   await deleteObjectType(c.get("db"), type.id, c.req.valid("query").expectedRevision);
-  return noContent(c);
+  return ok(c, { id: type.id, deleted: true as const });
 });
 
 app.openapi(createRoute({
@@ -168,7 +176,7 @@ app.openapi(createRoute({
     limit: z.coerce.number().int().min(1).max(100).default(50), status: statusSchema.optional(),
     orderBy: z.string().max(64).optional(), direction: z.enum(["asc", "desc"]).optional(),
   }) },
-  responses: { 200: { description: "Object records", content: { "application/json": { schema: successEnvelope(z.object({ type: typeSchema, records: z.array(recordSchema), nextCursor: z.string().nullable(), total: z.number().int() })) } } }, ...errorResponses },
+  responses: { 200: { description: "Object records", content: { "application/json": { schema: successEnvelope(z.object({ records: z.array(recordSchema), nextCursor: nextCursorSchema })) } } }, ...errorResponses },
 }), async (c) => {
   const type = await accessibleType(c, c.req.valid("param").type);
   const { where: _where, orderBy, direction, ...query } = c.req.valid("query");
@@ -212,12 +220,12 @@ app.openapi(createRoute({
 
 app.openapi(createRoute({
   operationId: "objects.delete", method: "delete", path: "/{type}/{id}", tags: [TAG], summary: "Delete an object record at its current revision",
-  request: { params: recordParams, query: revisionQuery }, responses: { 204: noContentResponse, ...writeResponses },
+  request: { params: recordParams, query: revisionQuery }, responses: { 200: deletedResponse, ...writeResponses },
 }), async (c) => {
   const { type: handle, id } = c.req.valid("param");
   const type = await accessibleType(c, handle, true);
   await deleteObjectEntry(c.get("db"), type.id, id, c.req.valid("query").expectedRevision);
-  return noContent(c);
+  return ok(c, { id, deleted: true as const });
 });
 
 export { app as adminObjectRoutes };

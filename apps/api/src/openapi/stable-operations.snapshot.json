@@ -17878,7 +17878,39 @@
      }
     ]
    },
-   "output": null
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "id": {
+        "type": "string"
+       },
+       "deleted": {
+        "type": "boolean",
+        "enum": [
+         true
+        ]
+       }
+      },
+      "required": [
+       "id",
+       "deleted"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
   },
   "objects.get": {
    "operationId": "objects.get",
@@ -18042,9 +18074,6 @@
      "data": {
       "type": "object",
       "properties": {
-       "type": {
-        "$ref": "#/components/schemas/ObjectType"
-       },
        "records": {
         "type": "array",
         "items": {
@@ -18053,17 +18082,13 @@
        },
        "nextCursor": {
         "type": "string",
-        "nullable": true
-       },
-       "total": {
-        "type": "integer"
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
        }
       },
       "required": [
-       "type",
        "records",
-       "nextCursor",
-       "total"
+       "nextCursor"
       ]
      }
     },
@@ -18268,7 +18293,39 @@
      }
     ]
    },
-   "output": null
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "id": {
+        "type": "string"
+       },
+       "deleted": {
+        "type": "boolean",
+        "enum": [
+         true
+        ]
+       }
+      },
+      "required": [
+       "id",
+       "deleted"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
   },
   "object_types.get": {
    "operationId": "objects.types.get",
@@ -18338,7 +18395,34 @@
     "read_objects",
     "write_objects"
    ],
-   "input": {},
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 100,
+       "default": 100,
+       "description": "At most this many items (default and maximum 100)."
+      },
+      "required": false,
+      "description": "At most this many items (default and maximum 100).",
+      "name": "limit",
+      "in": "query"
+     }
+    ]
+   },
    "output": {
     "type": "object",
     "properties": {
@@ -18351,15 +18435,21 @@
      "data": {
       "type": "object",
       "properties": {
-       "items": {
+       "types": {
         "type": "array",
         "items": {
          "$ref": "#/components/schemas/ObjectType"
         }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
        }
       },
       "required": [
-       "items"
+       "types",
+       "nextCursor"
       ]
      }
     },
