@@ -62,6 +62,8 @@ A template or page preset is written for one theme document version (`themeVersi
 
 A page may hold 24 app sections, all of them component sections.
 
+Publishing the theme refuses a draft that draws with parts of an app that is inactive or no longer declares them (`theme_apps_unavailable`; the error names each app, why and its parts), so the storefront never silently falls back to the store's design. The editor shows the apps with a link to activate them. Deactivating, uninstalling or stopping an app lists the live parts that would fall back (`themeUsage` on the app's detail). Core section types, skin units (`product_card`, `product_main`, `listing_main`), `section:<type>` skin targets and embed kinds (`buy_form`, `order_form`) are snake_case from theme document v12.
+
 ## Skins
 
 A **skin** is app markup for a core-owned unit. It gets the unit's public projection (the data the core renderer draws from, built by `apps/storefront/src/lib/extensions/data.ts`), and core draws the unit whenever the skin is missing, its app is inactive, or it draws nothing, fails, is late or misses a required embed. A theme never breaks.
