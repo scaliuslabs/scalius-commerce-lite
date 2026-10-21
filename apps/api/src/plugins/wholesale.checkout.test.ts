@@ -4,7 +4,8 @@
 // the cart (a hop), per-SKU records and the product's custom field set the
 // minimums, an approved quote on the company is spent with the order at the
 // revision read, and every read rides the checkout's own facts batch: the
-// no more waves than the same app without reads.
+// same round trips as the same app without reads, only more statements in
+// batches it already sends (so no dependent wave either: a wave is a round trip).
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -39,23 +40,16 @@ const parsed = parsePluginManifest(wholesaleManifest);
 if (!parsed.ok) throw new Error("Invalid wholesale test manifest");
 const OBJECTS = parsed.manifest.objects;
 
-/** Counts D1 round trips (a batch is one) and dependent waves, as the checkout budget test does. */
+/**
+ * Counts D1 round trips (a batch is one) and each batch's statements. Both are
+ * fixed by the code path; timer-grouped "waves" were not (a loaded machine
+ * split them), so the budget is stated in these counts.
+ */
 function meteredBinding(inner: D1Database) {
-  const meter = { binding: inner, roundTrips: 0, waves: 0, batchSizes: [] as number[] };
-  let queued: Array<() => void> = [];
+  const meter = { binding: inner, roundTrips: 0, batchSizes: [] as number[] };
   const roundTrip = <T>(work: () => Promise<T>): Promise<T> => {
     meter.roundTrips += 1;
-    return new Promise<T>((resolve, reject) => {
-      queued.push(() => void work().then(resolve, reject));
-      if (queued.length === 1) {
-        setTimeout(() => {
-          meter.waves += 1;
-          const run = queued;
-          queued = [];
-          for (const start of run) start();
-        }, 0);
-      }
-    });
+    return work();
   };
   const wrap = (statement: D1PreparedStatement): D1PreparedStatement => new Proxy(statement, {
     get(target, property, receiver) {
@@ -144,20 +138,15 @@ describe("wholesale accounts through storefront checkout (declared reads)", () =
     }, env, ctx as never);
     const json = await response.json() as { success: boolean; data: Record<string, unknown>; error?: { message: string } };
     await Promise.all(waits);
-    return { status: response.status, json, roundTrips: metered.roundTrips, waves: metered.waves, batchSizes: metered.batchSizes };
+    return { status: response.status, json, roundTrips: metered.roundTrips, batchSizes: metered.batchSizes };
   }
 
   const quote = (items: unknown[], discountCodes: string[] = []) => ({ items, city: "city_1", zone: "zone_1", shippingMethodId: "m_std", discountCodes });
 
-  /**
-   * A route's dependent waves, as a structural lower bound: after a warm-up
-   * (a first module load can split a wave) the fewest of three runs, since a
-   * loaded machine can only split a wave, never merge two.
-   */
+  /** A route's round trips and batches after a warm-up (a first run fills per-isolate caches). */
   async function measured(run: () => ReturnType<typeof call>) {
     await run();
-    const runs = [await run(), await run(), await run()];
-    return { ...runs[0]!, waves: Math.min(...runs.map((entry) => entry.waves)) };
+    return await run();
   }
 
   it("prices from the company, blocks under the minimums, and spends a quote once with the order", async () => {
@@ -203,7 +192,7 @@ describe("wholesale accounts through storefront checkout (declared reads)", () =
     expect((await call("/orders/tax-quote", quote(items.map(({ price: _price, ...item }) => item), ["Q-7"]))).json.data).toMatchObject({ discountMinor: 0 });
   });
 
-  it("reads in the checkout's own batch: the same round trips and waves as the app without reads", async () => {
+  it("reads in the checkout's own batch: the same round trips as the app without reads", async () => {
     const items = [{ productId: "p_tea", variantId: "v_tea", quantity: 6 }, { productId: "p_mug", variantId: "v_mug", quantity: 3 }];
     await install({ ...wholesaleManifest, functions: wholesaleManifest.functions.map((fn) => ({ ...fn, reads: [] })) });
     await seed();
@@ -216,8 +205,6 @@ describe("wholesale accounts through storefront checkout (declared reads)", () =
     const withReads = await measured(() => call("/orders/tax-quote", quote(items, ["Q-7"])));
     expect(withReads.json.data).toMatchObject({ discountMinor: 5_000 });
     expect(withReads.roundTrips).toBe(without.roundTrips);
-    // Waves are a cost bound, not an exact count: a loaded machine can split a wave in one run and not the other.
-    expect(withReads.waves).toBeLessThanOrEqual(without.waves);
     // Only more statements in batches already sent: the line-price facts (member, company hop) and the
     // checkout facts (member, company hop, moq, the product field).
     expect(withReads.batchSizes.length).toBe(without.batchSizes.length);
