@@ -119,10 +119,10 @@ export function RecordPaymentDialog({
               options={RECORDED_PAYMENT_VIAS.map((each) => ({ value: each, label: orderDetailLabel(t, "netTerms.via.", each) }))}
             />
           </Field>
-          <Field id="recordPaymentReference" label={t("netTerms.reference")} help={t("netTerms.referenceHelp")}>
+          <Field id="recordPaymentReference" label={t("netTerms.reference")} optional help={t("netTerms.referenceHelp")}>
             <Input id="recordPaymentReference" value={reference} maxLength={120} onChange={(event) => setReference(event.target.value)} />
           </Field>
-          <Field id="recordPaymentNote" label={t("netTerms.note")}>
+          <Field id="recordPaymentNote" label={t("netTerms.note")} optional>
             <Textarea id="recordPaymentNote" value={note} maxLength={500} rows={2} onChange={(event) => setNote(event.target.value)} />
           </Field>
         </form>
