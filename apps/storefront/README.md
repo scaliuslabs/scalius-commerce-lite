@@ -138,6 +138,8 @@ Proxies exist where the browser needs a same-origin cookie, the derived `API_TOK
 
 The storefront imports only `@scalius/shared` (pure helpers and contracts) and `@scalius/api-client` (generated SDK and client factory, used through the configured clients in `src/lib/api/transport.ts`). It must not import `@scalius/core` or `@scalius/database`. Do not use the generated singleton client when a request needs runtime origin, auth, retry or service-binding behavior.
 
+Browser code never imports the SDK, `transport.ts` or a zod schema. It calls `fetch` with `browserApiUrl()` (`src/lib/api/browser-url.ts`), or a browser read such as `src/lib/api/browser-products.ts` that sends the SDK's request and shares the server's normalizers. `scripts/client-chunk-graph.test.ts` fails when zod or the generated SDK reaches the product, home or listing pages, their first add to cart, sign-in or search (run it after `pnpm --filter ./apps/storefront build`; `node apps/storefront/scripts/client-chunk-graph.mjs` prints the product page's chunks).
+
 ## Search client rules
 
 - Normalize search input with `normalizeSearchQuery()` (`src/lib/search-query.ts`) before you build an API URL or a `/search?q=` link. Equivalent queries then share one cache key.
