@@ -9,16 +9,19 @@ interface Props {
   product: Product;
   /** False when the buy box or "About this item" already lists the key features. */
   features?: boolean;
+  /** False when an app skin of the product page draws the description itself. */
+  description?: boolean;
 }
 
 // The warranty has one home: the buy box's warranty row (WarrantyRow.astro).
-const { product, features: showFeatures = true } = Astro.props;
+const { product, features: showFeatures = true, description: showDescription = true } = Astro.props;
 const features = showFeatures ? (product.features ?? []) : [];
+const description = showDescription ? product.description : null;
 
 const copy = catalogCopy((await currentRequestTheme(Astro.locals)).language).product;
 const tabs = [];
 
-if (product.description || features.length > 0) {
+if (description || features.length > 0) {
   tabs.push({ id: "description", label: copy.description });
 }
 
@@ -112,7 +115,7 @@ const tabbed = tabs.length > 1;
         </div>}
 
         <div class="mt-3 lg:mt-4">
-          {(product.description || features.length > 0) && (
+          {(description || features.length > 0) && (
             <div
               id="details-panel-description"
               role={tabbed ? "tabpanel" : undefined}
@@ -135,9 +138,9 @@ const tabbed = tabs.length > 1;
                   </ul>
                 </div>
               )}
-              {product.description && (
-                <div class="prose prose-sm max-w-none text-foreground">
-                  <RichContent content={product.description} />
+              {description && (
+                <div class="prose prose-sm max-w-prose text-foreground">
+                  <RichContent content={description} />
                 </div>
               )}
             </div>
@@ -153,7 +156,7 @@ const tabbed = tabs.length > 1;
                   data-tab-panel={section.id}
                   class="tab-panel hidden"
                 >
-                  <div class="prose prose-sm max-w-none text-foreground">
+                  <div class="prose prose-sm max-w-prose text-foreground">
                     <RichContent content={section.content} />
                   </div>
                 </div>

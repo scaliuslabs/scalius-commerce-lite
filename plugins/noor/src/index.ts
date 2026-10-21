@@ -596,7 +596,7 @@ const templates = [
         skinned("noor-tiles", "category_tiles", { style: "photo", title: "Shop by category", categoryIds: [] }, "noor_tiles_categories"),
         section("noor-feature", "featured_product", { eyebrow: "Featured product", points: [] }),
         skinned("noor-best", "product_rail", { title: "Popular products", source: { kind: "popular" }, limit: 12 }, "noor_products_rail", { link_label: "Shop all" }),
-        skinned("noor-signup", "newsletter", { heading: "Stay in touch", text: "", email: "optional", whatsapp: false }, "noor_signup"),
+        // No sign-up section: the Noor footer carries the sign-up band on every page.
       ],
     },
   },
@@ -644,7 +644,7 @@ export const manifest = {
     bn: {
       name: "নূর থিম",
       tagline: "ক্যাম্পেইন ল্যান্ডিং পেজসহ একটি সম্পাদকীয় থিম",
-      description: "নিজস্ব হেডার, ফুটার ও প্রোডাক্ট কার্ড, বিশটি সেকশন এবং একটি পণ্যের ক্যাম্পেইন পেজ বানানোর ল্যান্ডিং কিটসহ একটি সম্পাদকীয় স্টোরফ্রন্ট থিম। অর্ডার ফর্ম স্টোরের চেকআউট প্রস্তুতির ওপর নির্ভর করে।",
+      description: "নিজস্ব হেডার, ফুটার, প্রোডাক্ট কার্ড ও প্রোডাক্ট পেজ, স্টোরের নিজের সেকশনগুলোর জন্য একটি সাজ, নিজস্ব নয়টি সেকশন এবং একটি পণ্যের ক্যাম্পেইন পেজ বানানোর ল্যান্ডিং কিটসহ একটি সম্পাদকীয় স্টোরফ্রন্ট থিম। অর্ডার ফর্ম স্টোরের চেকআউট প্রস্তুতির ওপর নির্ভর করে। থিম এডিটরে সবকিছু বদলানো যায়।",
     },
   },
   storefront: {

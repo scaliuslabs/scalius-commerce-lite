@@ -649,7 +649,7 @@
 /* "More": the roots past the row over their links. A row item the store's
    script moves in reads the same: its name, then its links in place (its
    toggle and panel chrome stand down while its panel keeps hidden for the row). */
-.noor-more { inline-size: max-content; min-inline-size: 15rem; }
+.noor-drop.noor-more { inline-size: max-content; min-inline-size: 15rem; }
 .noor-more-list > li + li { margin-block-start: 0.25rem; }
 .noor-drop .noor-more-root { color: var(--n-ink); font-weight: 600; }
 .noor-more-list > .noor-nav-item { display: block; }
@@ -1058,6 +1058,10 @@ a.noor-split-media:hover .noor-cover:only-of-type { transform: scale(1.03); }
 .noor-promise-list.is-strip { padding-block: 0.25rem; }
 @media (min-width: 64rem) {
   .noor-promise-list { grid-template-columns: repeat(var(--p-cols, 4), minmax(0, 1fr)); gap: 1.5rem; }
+  .noor-promise-list.count-1 { --p-cols: 1; }
+  .noor-promise-list.count-2 { --p-cols: 2; }
+  /* One or two cards sit centred under the centred heading, not in the first columns of four. */
+  .noor-promise-list:is(.is-cards, .is-centered):is(.count-1, .count-2) { max-inline-size: 46rem; margin-inline: auto; }
   .noor-promise-list.count-3 { --p-cols: 3; }
   .noor-promise-list.count-5 { --p-cols: 5; }
   .noor-promise-list.count-6 { --p-cols: 6; }
@@ -1164,7 +1168,13 @@ a.noor-split-media:hover .noor-cover:only-of-type { transform: scale(1.03); }
 .noor-pdp-media .thumbnail-btn { border-color: var(--n-line); background-color: var(--n-soft); }
 .noor-pdp-media .gallery-show-all-label { border-color: var(--n-line); border-radius: var(--n-btn-radius); }
 .noor-pdp-buy { display: grid; gap: 0.75rem; align-content: start; }
+/* Real product names run long: the page title stays a headline, not a poster. */
+.noor-pdp-buy > .noor-h1 { font-size: clamp(1.75rem, 1.3rem + 1.4vw, 2.5rem); line-height: 1.1; }
 .noor-pdp-description { margin-block-start: clamp(2rem, 1.5rem + 3vw, 4rem); }
+/* The store's reviews and related products bring the page container; inside
+   Noor's wrap they add no second gutter, so every edge lines up at the wrap. */
+.site-root .noor-s-pdp .noor-wrap .sf-container { max-inline-size: none; padding-inline: 0; }
+.noor-s-pdp #related-products { margin-block-start: clamp(1.5rem, 1rem + 2vw, 3rem); padding-block: 0; background: none; }
 @media (min-width: 48rem) {
   .noor-pdp { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
   .noor-pdp.is-flipped .noor-pdp-media { order: 2; }
