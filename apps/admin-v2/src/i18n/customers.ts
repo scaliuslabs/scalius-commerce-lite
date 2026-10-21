@@ -54,7 +54,7 @@ export const customersMessages = defineMessages({
     tagsHelp: "Press Enter or type a comma to add a tag. Tags are saved in lower case, up to {count} characters.",
     tagTooLongNow: "{length} of {count} characters: shorten it to add it.",
     tagSavedAs: "Saved as “{tag}”.",
-    suggestedTags: "Suggested tags",
+    suggestedTags: "Add an existing tag:",
     noTagsYet: "No tags",
   },
   bn: {
@@ -109,7 +109,7 @@ export const customersMessages = defineMessages({
     tagsHelp: "ট্যাগ যোগ করতে এন্টার চাপুন বা কমা দিন। ট্যাগ ছোট হাতের অক্ষরে, সর্বোচ্চ {count} অক্ষরে সেভ হয়।",
     tagTooLongNow: "{count}টির মধ্যে {length}টি অক্ষর: যোগ করতে ছোট করুন।",
     tagSavedAs: "“{tag}” হিসেবে সেভ হবে।",
-    suggestedTags: "প্রস্তাবিত ট্যাগ",
+    suggestedTags: "আগের একটি ট্যাগ যোগ করুন:",
     noTagsYet: "কোনো ট্যাগ নেই",
   },
 });
