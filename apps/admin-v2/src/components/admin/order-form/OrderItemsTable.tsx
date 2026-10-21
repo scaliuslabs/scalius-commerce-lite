@@ -106,7 +106,8 @@ export function OrderItemsTable({ resolvedVariantsById = {} }: OrderItemsTablePr
                 ? undefined
                 : exceededStockMessage(maximumQuantity)}
             />
-            <p className="min-w-20 text-end text-body font-medium tabular-nums">
+            {/* Wide enough for a lakh-sized line total, so every row's quantity field sits in one column. */}
+            <p className="min-w-32 text-end text-body font-medium tabular-nums">
               {fmt(quotedLine?.lineSubtotal ?? item.price * item.quantity)}
             </p>
             <Button

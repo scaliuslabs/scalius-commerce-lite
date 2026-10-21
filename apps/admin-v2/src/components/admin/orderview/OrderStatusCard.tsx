@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { SearchableSelect } from "~/components/ui/searchable-select";
@@ -18,6 +18,7 @@ import type { OrderDetailMessageKey } from "~/i18n/order-detail";
 import { clearOrderNotice } from "~/lib/order-notice";
 import { useCancelRequestGuard } from "./CancelRequestGuard";
 import { restockedUnits, shippedCancelReason, unitsWithCourier } from "./cancel-order";
+import type { OrderActionRequest } from "./primary-action";
 import type { Order } from "./types";
 
 /** Why a status can't be chosen, in the same words the server uses. */
@@ -54,7 +55,23 @@ export function courierNextStep(order: Pick<Order, "status" | "paymentMethod">):
     : { href: "#order-shipments", label: "primary.markDelivered" };
 }
 
-export function OrderStatusCard({ order }: { order: Order }) {
+/** Nothing about the status can change now: no permission, a refund or courier booking is running, or the order is archived. */
+function statusLocked(order: Order, canChangeStatus: boolean): boolean {
+  return !canChangeStatus || Boolean(order.activeRefundOperation?.active) || order.shipmentRecovery?.activeLock === true || Boolean(order.archivedAt);
+}
+
+/**
+ * Whether the header's "Cancel order…" is offered (null: not at all) and what
+ * blocks it right now, from the same transitions the status card offers.
+ */
+export function orderCancelChoice(order: Order, canChangeStatus: boolean): { block: AdminOrderStatusBlock | null } | null {
+  if (statusLocked(order, canChangeStatus)) return null;
+  const option = getAdminOrderStatusOptions(order.status.toLowerCase(), { ...order, unitsWithCourier: unitsWithCourier(order) })
+    .find((candidate) => candidate.status === "cancelled");
+  return option ? { block: option.block ?? null } : null;
+}
+
+export function OrderStatusCard({ order, request }: { order: Order; request?: OrderActionRequest | null }) {
   const t = useMessages(orderDetailMessages);
   const o = useMessages(orderMessages);
   const r = useMessages(resourceMessages);
@@ -70,7 +87,7 @@ export function OrderStatusCard({ order }: { order: Order }) {
   const options = getAdminOrderStatusOptions(status, { ...order, unitsWithCourier: unitsWithCourier(order) });
   const blocked = new Map(options.filter((option) => option.block).map((option) => [option.status as string, option.block!]));
   const cancelBlock = blocked.get("cancelled");
-  const changeable = canChangeStatus && !refundLocked && !shipmentLocked && !order.archivedAt && options.length > 0;
+  const changeable = !statusLocked(order, canChangeStatus) && options.length > 0;
   const nextStep = changeable && cancelBlock?.code === "with_courier" ? courierNextStep(order) : null;
 
   const change = (next: string) => {
@@ -84,6 +101,13 @@ export function OrderStatusCard({ order }: { order: Order }) {
     if (next === "confirmed") cancelRequest.guard("confirm", run);
     else run();
   };
+
+  // "Cancel order…" in the header's More actions opens the same confirmation.
+  useEffect(() => {
+    if (request?.action === "cancel" && changeable) change("cancelled");
+    // Only a new request should open the dialog.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [request?.id]);
 
   const help = options.length === 0
     ? status === "cancelled" ? t("status.cancelledFinal") : t("status.final")

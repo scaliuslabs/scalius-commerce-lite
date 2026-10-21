@@ -103,7 +103,8 @@ const EDIT_LOCK_MESSAGES: Record<OrderEditLockReason, string> = {
     closed: "This order is closed, so it can't be changed.",
     archived: "Unarchive this order to change it.",
     busy: "A courier booking is in progress. Try again in a minute.",
-    online_payment: "Items on an online-paid order can't be changed. Refund or create a new order instead.",
+    // Every method but cash on delivery (online, invoice terms): the reason names the rule, not a payment.
+    online_payment: "Items can be changed only on unpaid cash-on-delivery orders. Create a new order instead.",
     paid: "Items can't be changed after payment. Refund or create a new order instead.",
     history: "Items can't be changed after a refund, return or invoice. Create a new order instead.",
     discount: "This order used a discount, so its items can't be changed. You can still edit the customer and address.",
