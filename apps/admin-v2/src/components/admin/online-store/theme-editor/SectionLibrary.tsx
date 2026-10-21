@@ -8,7 +8,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { ArrowLeft, Search, Sparkles, X } from "lucide-react";
+import { ArrowLeft, Info, Search, Sparkles, X } from "lucide-react";
 import { STOREFRONT_SECTION_RENDERERS, type StorefrontSectionType, type StorefrontThemeDocument } from "@scalius/shared/storefront-theme";
 import { cn } from "@scalius/shared/utils";
 import { Badge } from "~/components/ui/badge";
@@ -255,7 +255,7 @@ export function SectionLibrary({ open, onOpenChange, theme, options, apps, previ
                     <span className="min-w-0 truncate">{entry.name}</span>
                     {entry.app ? <Badge variant="secondary">{t("appBadge")}</Badge> : null}
                   </span>
-                  <span id={`library-${entry.key}-note`} className={cn("block px-1 pb-0.5 text-body", entry.option.blocked ? "text-destructive" : "text-muted-foreground")}>
+                  <span id={`library-${entry.key}-note`} className="block px-1 pb-0.5 text-body text-muted-foreground">
                     {entry.option.blocked ?? entry.option.note ?? entry.description}
                   </span>
                 </button>
@@ -279,7 +279,11 @@ export function SectionLibrary({ open, onOpenChange, theme, options, apps, previ
               </div>
             </div>
             {open && (desktop || detail) ? <SectionLibraryPreview selection={active.key} name={active.name} preview={preview} /> : null}
-            {active.option.blocked || active.option.note ? <p className={cn("text-body", active.option.blocked ? "text-destructive" : "text-muted-foreground")}>{active.option.blocked ?? active.option.note}</p> : null}
+            {/* Why a section cannot be added is information, not an error. */}
+            {active.option.blocked || active.option.note ? <p className="flex gap-1.5 text-body text-muted-foreground">
+              {active.option.blocked ? <span className="flex h-lh shrink-0 items-center"><Info aria-hidden="true" className="size-4" /></span> : null}
+              <span>{active.option.blocked ?? active.option.note}</span>
+            </p> : null}
             <Button type="button" disabled={active.option.blocked !== null} onClick={() => onAdd(active.option.choice)}>{t("libraryAdd", { name: active.name })}</Button>
           </> : <p className="m-auto p-6 text-center text-body text-muted-foreground">{t("librarySelectPrompt")}</p>}
         </div>
