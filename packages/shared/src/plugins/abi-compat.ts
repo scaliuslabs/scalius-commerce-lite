@@ -9,7 +9,8 @@
 // - what the host writes and an app reads promises no less (response rules):
 //   a function's input, a provider operation's input, an event's facts;
 // - nothing an app names disappears: a stable port or its operation, a
-//   function point, an event topic or its resource type, a scope, a
+//   function point, an event topic or its resource type, a scope, an error
+//   code (or its status), a
 //   storefront constant or a member of one of its lists, and no stable port
 //   goes back to beta.
 //
@@ -97,6 +98,14 @@ export function protocolBreakingChanges(before: unknown, after: unknown): string
 
   problems.push(...schemaBreaks("adminUi", was.adminUi, now.adminUi, "request"));
   problems.push(...removedKeys("scopes", was.scopes, now.scopes, "scope"));
+
+  const nowErrors = record(now.errors);
+  for (const [code, entry] of Object.entries(record(was.errors))) {
+    if (!(code in nowErrors)) problems.push(`errors.${code}: the error code was removed.`);
+    else if (record(entry).status !== record(nowErrors[code]).status) {
+      problems.push(`errors.${code}: the status changed from ${String(record(entry).status)} to ${String(record(nowErrors[code]).status)}.`);
+    }
+  }
 
   const events = record(was.events);
   const nowEvents = record(now.events);

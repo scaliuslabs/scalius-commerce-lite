@@ -317,7 +317,7 @@ describe("plugin objects", () => {
     await expect(put("x".repeat(129), {})).rejects.toMatchObject({ objectCode: "object_invalid_id" });
     await expect(put("big", { blob: "x".repeat(70_000) })).rejects.toMatchObject({ objectCode: "object_record_too_large" });
     await expect(put("obj", { customer_id: { nested: true } })).rejects.toMatchObject({ objectCode: "object_invalid" });
-    await expect(putObjectRecord(db, "acme.loyalty", "ledger", LEDGER, "arr", [] as never)).rejects.toMatchObject({ objectCode: "object_invalid_record" });
+    await expect(putObjectRecord(db, "acme.loyalty", "ledger", LEDGER, "arr", [] as never)).rejects.toMatchObject({ objectCode: "object_invalid" });
   });
 });
 

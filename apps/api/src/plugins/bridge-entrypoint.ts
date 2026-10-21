@@ -31,7 +31,7 @@ function requireProps(props: unknown): PluginBridgeProps {
     typeof candidate.authority !== "object" ||
     candidate.authority === null
   ) {
-    throw new Error("[internal] The plugin bridge was bound without an installation.");
+    throw new Error("[internal_error] The plugin bridge was bound without an installation.");
   }
   return candidate as PluginBridgeProps;
 }

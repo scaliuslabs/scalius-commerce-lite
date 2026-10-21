@@ -26,8 +26,31 @@ import { authorizePluginOperation, pluginTierAllows, pluginWithinRateLimit, reso
 import { redactOperationResponse } from "./protected-response";
 import { IDEMPOTENCY_KEY_PATTERN } from "../routes/admin/idempotency";
 import { appOperationName, resolveAppOperation } from "./app-operations";
+import { APP_ERROR_CODES, isAppErrorCode, type AppErrorCode } from "@scalius/shared/plugins/app-errors";
 
-function refusal(status: number, code: string, message: string): PluginApiResult<never> {
+/**
+ * A dispatch refusal as the app sees it: one of the sealed app error codes
+ * (`@scalius/shared/plugins/app-errors`), one code per fact.
+ */
+const DISPATCH_REFUSALS: Readonly<Record<string, AppErrorCode>> = {
+  operation_forbidden: "api_operation_forbidden",
+  operation_not_executable: "api_operation_forbidden",
+  unsupported_transport: "api_operation_forbidden",
+  invalid_input: "api_invalid_input",
+  invalid_json_body: "api_invalid_input",
+  missing_path_parameter: "api_invalid_input",
+  body_not_allowed: "api_invalid_input",
+  body_too_large: "payload_too_large",
+  operation_failed: "internal_error",
+  operation_dispatch_failed: "internal_error",
+  unauthorized: "installation_inactive",
+};
+
+export function dispatchRefusalCode(code: string): AppErrorCode {
+  return DISPATCH_REFUSALS[code] ?? (isAppErrorCode(code) ? code : "internal_error");
+}
+
+function refusal(status: number, code: AppErrorCode, message: string): PluginApiResult<never> {
   return { ok: false, status, data: null, error: { code, message } };
 }
 
@@ -85,7 +108,7 @@ export function createPluginDispatchAuthority(db: Database): OperationDispatchAu
     authorize: async (principal, operation) => authorizePluginOperation(principal, operation),
     surface: () => "dashboard",
     withinRateLimit: (principal, env) => pluginWithinRateLimit(env, "api", principal.pluginId),
-    inactive: { code: "plugin_inactive", message: "The plugin is not active." },
+    inactive: { code: "installation_inactive", message: "The app is not active." },
     auditActor: (principal) => ({
       grantId: null,
       credentialId: null,
@@ -186,7 +209,7 @@ export async function callPluginOperation(options: {
   if (typeof input === "string") return refusal(400, "api_invalid_input", input);
   const principal = await resolvePluginPrincipal(options.db, options.pluginId);
   if (!principal || principal.version !== options.version) {
-    return refusal(401, "installation_inactive", "The plugin is not active.");
+    return refusal(401, "installation_inactive", "The app is not active.");
   }
   try {
     const result = await dispatchOperationAs(createPluginDispatchAuthority(options.db), {
@@ -205,9 +228,9 @@ export async function callPluginOperation(options: {
       if (error.code === "operation_forbidden" && !pluginTierAllows(principal.firstParty, operation.stability)) {
         return refusal(403, "api_operation_not_stable", `${name} is not part of the stable app API.`);
       }
-      const code = error.code === "operation_forbidden" ? "api_operation_forbidden" : error.code;
-      return refusal(error.status, code, error.message);
+      const code = dispatchRefusalCode(error.code);
+      return refusal(APP_ERROR_CODES[code].status, code, error.message);
     }
-    return refusal(500, "internal", "The operation could not be completed.");
+    return refusal(500, "internal_error", "The operation could not be completed.");
   }
 }

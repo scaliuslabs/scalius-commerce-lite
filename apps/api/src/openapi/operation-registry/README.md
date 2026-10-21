@@ -109,6 +109,15 @@ mirror a dashboard screen, an editor section or a summary card.
   `apps/api/src/error-vocabulary.test.ts` holds every producer to it. Batch
   guard markers stay upper-case inside SQL (`buildBatchGuard` spells them so);
   the dashboard's sign-in and account-security flows keep Better Auth's codes.
+  What an app can branch on is sealed: `APP_ERROR_CODES`
+  (`@scalius/shared/plugins/app-errors`, exported by the SDK) lists every
+  `ctx.*` refusal code and every refused `ctx.api.call` code with its HTTP
+  status, one code per fact (`object_invalid`, `installation_inactive`,
+  `internal_error`, `app_principal_required`). It is part of
+  `abi.protocol.snapshot.json` (codes are only added, statuses never change);
+  `apps/api/src/app-error-codes.test.ts` holds the ctx hosts, the dispatch and
+  every stable route module to it, and the dispatch translates its own
+  refusals into it (`dispatchRefusalCode`).
 - **Lists page one way**: `cursor` + `limit` in, `{ <plural>, nextCursor }` out.
   Page-numbered and offset lists (the dashboard's brands, categories,
   collections, content and discounts lists, `*.get_section`) are beta; a

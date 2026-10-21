@@ -81,6 +81,6 @@ describe("an app's own trashed content", () => {
     expect(narrow.body.data.items[0].outcome).toBe("forbidden");
     const staff = await call({ items: [{ type: "brand", id: "brd_own0001", expectedRevision: 1 }] }, null);
     expect(staff.status).toBe(403);
-    expect(staff.body.error.code).toBe("app_only");
+    expect(staff.body.error.code).toBe("app_principal_required");
   });
 });

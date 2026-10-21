@@ -58,6 +58,17 @@ describe("plugin ABI breaking changes", () => {
     ]);
   });
 
+  it("refuses a removed error code or a changed status, and accepts a new code", () => {
+    const before = { errors: { object_conflict: { status: 409, meaning: "a" }, kv_conflict: { status: 409, meaning: "b" } } };
+    expect(protocolBreakingChanges(before, {
+      errors: { object_conflict: { status: 400, meaning: "a" }, jobs_limit: { status: 429, meaning: "c" } },
+    })).toEqual([
+      "errors.object_conflict: the status changed from 409 to 400.",
+      "errors.kv_conflict: the error code was removed.",
+    ]);
+    expect(protocolBreakingChanges(before, { errors: { ...before.errors, jobs_limit: { status: 429, meaning: "c" } } })).toEqual([]);
+  });
+
   it("accepts a break only for the snapshot it breaks from, with a reason", async () => {
     const from = await snapshotFingerprint("committed");
     expect(from).toMatch(/^[0-9a-f]{16}$/);

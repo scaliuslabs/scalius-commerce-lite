@@ -54,6 +54,7 @@ import {
 import { planLimits } from "@scalius/shared/plan-limits";
 import { STOREFRONT_CORE_ROUTES } from "@scalius/shared/storefront-routes";
 import type { EventTopic } from "@scalius/shared/events";
+import type { AppErrorCode } from "@scalius/shared/plugins/app-errors";
 import type { PluginApiCallInput, PluginApiResult, PluginEvent, PluginRouteRequest, PluginStoreInfo } from "./context";
 import {
   invokePluginDefinition,
@@ -138,7 +139,7 @@ export type PluginFunctionTestResult<P extends PluginRunPoint> = Omit<PluginInvo
 
 type Scalar = string | number | boolean | null;
 
-function refuse(code: string, message: string): never {
+function refuse(code: AppErrorCode, message: string): never {
   throw new Error(`[${code}] ${message}`);
 }
 
@@ -318,12 +319,12 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
           touched.push({ name, id, written: false });
         } else {
           const record = operation.record;
-          if (typeof record !== "object" || record === null || Array.isArray(record)) refuse("object_invalid_record", "A record is a plain JSON object.");
+          if (typeof record !== "object" || record === null || Array.isArray(record)) refuse("object_invalid", "A record is a plain JSON object.");
           const previous = stagedMetadata.get(revisionKey(name, id));
           const handle = operation.handle === undefined ? previous?.handle ?? null : operation.handle;
           const status = operation.status === undefined ? previous?.status ?? defaultStatus(name) : operation.status;
           if (operation.handle !== undefined && (!manifest.objects[name]!.handle || (handle !== null && (typeof handle !== "string" || !OBJECT_HANDLE_PATTERN.test(handle))))) refuse("object_invalid", "This object does not accept that handle.");
-          if (status !== "active" && status !== "draft" && status !== "published") refuse("object_invalid_record", "Status is active, draft or published.");
+          if (status !== "active" && status !== "draft" && status !== "published") refuse("object_invalid", "Status is active, draft or published.");
           if (manifest.objects[name]!.storefront ? status === "active" : status !== "active") refuse("object_invalid", "Only storefront objects have draft or published status.");
           stagedMetadata.set(revisionKey(name, id), { handle, status } as { handle: string | null; status: "active" | "draft" | "published" });
           const checked = prepareObjectData(manifest.objects[name]!, record as Record<string, unknown>, codec, status as "active" | "draft" | "published");

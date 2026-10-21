@@ -63,13 +63,13 @@ export function requireRecordId(id: unknown): string {
 
 function requireRecord(record: unknown): { data: Record<string, unknown>; json: string } {
   if (typeof record !== "object" || record === null || Array.isArray(record)) {
-    throw new ObjectError("object_invalid_record", "A record is a plain JSON object.");
+    throw new ObjectError("object_invalid", "A record is a plain JSON object.");
   }
   let json: string;
   try {
     json = JSON.stringify(record);
   } catch {
-    throw new ObjectError("object_invalid_record", "A record must be JSON-serializable.");
+    throw new ObjectError("object_invalid", "A record must be JSON-serializable.");
   }
   if (new TextEncoder().encode(json).byteLength > OBJECT_RECORD_MAX_BYTES) {
     throw new ObjectError("object_record_too_large", `A record is at most ${OBJECT_RECORD_MAX_BYTES} bytes of JSON.`);

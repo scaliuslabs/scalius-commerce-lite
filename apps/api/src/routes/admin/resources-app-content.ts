@@ -236,7 +236,7 @@ export function registerAppContentRoutes(app: OpenAPIHono<{ Bindings: Env }>): v
   }), async (c) => {
     const principal = c.get("pluginPrincipal") as { pluginId: string; permissions: ReadonlySet<string> } | undefined;
     if (!principal?.pluginId) {
-      throw new AppError(403, "app_only", "Only an app deletes its own content here; staff use each resource's permanent delete.");
+      throw new AppError(403, "app_principal_required", "Only an app deletes its own content here; staff use each resource's permanent delete.");
     }
     const { items } = c.req.valid("json");
     const outcomes = await deleteAppContent(c.get("db"), c.env, principal.pluginId, principal.permissions, items);

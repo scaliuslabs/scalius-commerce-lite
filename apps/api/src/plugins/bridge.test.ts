@@ -187,7 +187,7 @@ describe("plugin bridge", () => {
       db: () => { throw new Error("SQLITE_BUSY: database is locked at /var/secret/path"); },
     });
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    await expect(createInProcessBridge(broken).kvGet("k")).rejects.toThrow("[internal] The platform could not complete the request.");
+    await expect(createInProcessBridge(broken).kvGet("k")).rejects.toThrow("[internal_error] The platform could not complete the request.");
     expect(JSON.stringify(warn.mock.calls)).not.toContain("/var/secret/path");
     warn.mockRestore();
   });
