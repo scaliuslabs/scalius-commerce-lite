@@ -40,6 +40,15 @@ export const customers = sqliteTable("customers", {
      * and trash hide it and its page points at the account.
      */
     mergedIntoCustomerId: text("merged_into_customer_id"),
+    /**
+     * When staff erased the customer's personal data (migration 0179,
+     * `eraseCustomer`): contact, addresses, sign-in identities, saved
+     * methods, consents and their own words on orders, reviews and
+     * conversations are scrubbed, while orders and money records stay for
+     * the books. An erased record is retired (deleted_at) and never restored;
+     * trigger `evt_customers_erased` announces `customer.erased`.
+     */
+    erasedAt: integer("erased_at", { mode: "timestamp" }),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
@@ -173,9 +182,10 @@ export const customerHistory = sqliteTable("customer_history", {
      * signed_up: an account was created (or a guest record claimed) by a code.
      * order_linked: `orderId` was filed to this account at checkout by a verified contact.
      * order_moved_in / order_moved_out: `orderId` moved between this record and `relatedCustomerId`.
+     * erased: staff erased the customer's personal data (every earlier entry is scrubbed too).
      */
     changeType: text("change_type", {
-        enum: ["created", "updated", "deleted", "restored", "signed_up", "order_linked", "order_moved_in", "order_moved_out"],
+        enum: ["created", "updated", "deleted", "restored", "signed_up", "order_linked", "order_moved_in", "order_moved_out", "erased"],
     }).notNull(),
     orderId: text("order_id"),
     relatedCustomerId: text("related_customer_id"),
