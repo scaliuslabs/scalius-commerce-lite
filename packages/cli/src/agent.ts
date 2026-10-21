@@ -303,6 +303,8 @@ export interface WriteOptions {
   print?: boolean;
   /** A dry run's extra facts: `note` is printed above the preview, `fields` join the envelope. */
   preview?: { note?: string; fields?: Record<string, unknown> };
+  /** Throws for an answer that applied nothing (a dry run's too), before it is printed as a success. */
+  check?: (envelope: Record<string, unknown>, dryRun: boolean) => void;
 }
 
 export interface WriteOutcome {
@@ -510,6 +512,7 @@ export async function write(runtime: Runtime, output: OutputOptions, operationId
   if (options.dryRun) {
     const result = await tool(runtime, profile, audience, "scalius_write", dryRunArgs, true);
     const envelope = dryRunEnvelope(result, options.preview);
+    options.check?.(envelope, true);
     if (options.print !== false) emit(runtime, output, envelope, () => previewText(envelope, options.preview?.note));
     return { code: 11, envelope };
   }
@@ -526,6 +529,7 @@ export async function write(runtime: Runtime, output: OutputOptions, operationId
     localSummary(operation, options.input),
   );
   const envelope = okEnvelope(result);
+  options.check?.(envelope, false);
   if (options.print === false) return { code: 0, envelope };
   emit(runtime, output, envelope, () => {
     const meta = isRecord(envelope.meta) ? envelope.meta : {};

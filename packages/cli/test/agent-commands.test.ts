@@ -28,6 +28,7 @@ beforeEach(() => {
   api.state.bulkWrites.length = 0;
   api.state.bulkDryRuns.length = 0;
   api.state.bulkRunReads = 0;
+  api.state.skuLookups.length = 0;
   api.state.batchWrites = 0;
   api.state.store = { ...DEFAULT_STORE };
 });
@@ -328,6 +329,57 @@ describe("scalius bulk", () => {
     const byIds = await pairedRuntime();
     expect(await runProgram(byIds, ["bulk", "tags", "--ids", "cus_1", "--add", "VIP"])).toBe(0);
     expect(bulkBody()).toEqual({ customerIds: ["cus_1"], add: ["VIP"] });
+  });
+
+  it("stock and prices take SKU codes (any case): they are found through variants.lookup and sent as ids", async () => {
+    const codes = await pairedRuntime();
+    expect(await runProgram(codes, ["bulk", "stock", "--items", "ts-red-m=20,TS-RED-L=0"])).toBe(0);
+    expect(api.state.skuLookups).toEqual([["ts-red-m", "TS-RED-L"]]);
+    expect(bulkBody()).toEqual({ items: [{ variantId: "var_1", quantity: 20 }, { variantId: "var_2", quantity: 0 }] });
+    expect(JSON.parse(codes.stdoutText())).toMatchObject({ ok: true, data: { run: { changed: 2, failed: 0 } } });
+
+    // Ids are sent as they are, without a lookup.
+    api.state.skuLookups.length = 0;
+    const ids = await pairedRuntime();
+    expect(await runProgram(ids, ["bulk", "stock", "--ids", "var_1", "--quantity", "4"])).toBe(0);
+    expect(api.state.skuLookups).toEqual([]);
+
+    const prices = await pairedRuntime();
+    expect(await runProgram(prices, ["bulk", "prices", "--ids", "TS-RED-M", "--set", "900", "--yes"])).toBe(0);
+    expect(bulkBody()).toMatchObject({ variants: [{ id: "var_1" }] });
+
+    // A code and its own id name the same SKU twice: refused before anything is written.
+    const twice = await pairedRuntime();
+    const writes = api.state.bulkWrites.length;
+    expect(await runProgram(twice, ["bulk", "stock", "--items", "TS-RED-M=1,var_1=2"])).toBe(2);
+    expect(JSON.parse(twice.stderrText())).toMatchObject({ error: { code: "invalid_input", message: expect.stringContaining("appears once") } });
+    expect(api.state.bulkWrites).toHaveLength(writes);
+  });
+
+  it("a stock run in which no SKU exists fails (exit 5, not_found) and names the codes, never ok:true", async () => {
+    const unknown = await pairedRuntime();
+    expect(await runProgram(unknown, ["bulk", "stock", "--items", "NOPE-1=5,NOPE-2=5"])).toBe(5);
+    expect(unknown.stdoutText()).toBe("");
+    const error = JSON.parse(unknown.stderrText()) as { ok: boolean; error: Record<string, unknown> };
+    expect(error).toMatchObject({
+      ok: false,
+      error: {
+        code: "not_found",
+        message: "Nothing changed: no SKU matches NOPE-1, NOPE-2.",
+        hint: expect.stringContaining('dashboard.resources.variants.lookup --input \'{"body":{"skus":["TS-RED-M"]}}\''),
+        details: { run: { failed: 2, changed: 0 } },
+      },
+    });
+
+    // The dry run says the same before anything is written.
+    const preview = await pairedRuntime();
+    expect(await runProgram(preview, ["bulk", "stock", "--items", "NOPE-1=5", "--dry-run"])).toBe(5);
+    expect(JSON.parse(preview.stderrText())).toMatchObject({ error: { code: "not_found", message: "Nothing would change: no SKU matches NOPE-1." } });
+
+    // One known SKU among unknown ones: the run applied something, so it is a success that lists the failures.
+    const partial = await pairedRuntime();
+    expect(await runProgram(partial, ["bulk", "stock", "--items", "TS-RED-M=5,NOPE-1=5"])).toBe(0);
+    expect(JSON.parse(partial.stdoutText())).toMatchObject({ ok: true, data: { run: { changed: 1, failed: 1, failures: [{ id: "NOPE-1", code: "not_found" }] } } });
   });
 
   it("sends --input as the raw body and refuses to mix it with the friendly flags", async () => {

@@ -48,6 +48,9 @@ scalius bulk status  (--ids prod,.. | --filter ...) --status active|draft
 scalius bulk publish (--ids prod,.. | --filter ...) --channels ch,.. --action publish|unpublish
                      prices: amounts are in the store currency (--set 1500 is 1,500.00 BDT; --amount -100 takes 100 off);
                      the CLI reads the currency and its decimals from the store; --minor passes minor units (--set 150000 --minor)
+                     prices, stock: a SKU is its code (TS-RED-M, any case) or its id (var_...); the CLI finds codes with
+                     scalius read dashboard.resources.variants.lookup --input '{"body":{"skus":["TS-RED-M"]}}' (up to 90 codes)
+                     a run in which every item is refused (an unknown SKU is not_found) exits 5 with the reasons, never ok:true
                      any kind: [--input '{"body":{...}}'] sends the raw body instead of the flags
 scalius export <orders|customers|products|inventory|report> --out <file> [--since YYYY-MM-DD] [--until YYYY-MM-DD]
 scalius media upload <files...> --yes
