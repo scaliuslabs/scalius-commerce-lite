@@ -15760,6 +15760,11 @@
                   "nullable": true,
                   "maxLength": 4000
                 },
+                "sku": {
+                  "type": "string",
+                  "nullable": true,
+                  "maxLength": 4000
+                },
                 "quantity": {
                   "type": "integer"
                 },
@@ -15791,6 +15796,7 @@
                 "variantId",
                 "title",
                 "variantLabel",
+                "sku",
                 "quantity",
                 "fulfilledQuantity",
                 "unitPriceMinor",
@@ -16782,6 +16788,13 @@
             "minLength": 1,
             "maxLength": 40,
             "format": "date-time"
+          },
+          "erasedAt": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time"
           }
         },
         "required": [
@@ -16797,7 +16810,8 @@
           "consents",
           "createdAt",
           "updatedAt",
-          "deletedAt"
+          "deletedAt",
+          "erasedAt"
         ]
       },
       "PriceListResource": {
@@ -19195,6 +19209,37 @@
           "conditions"
         ],
         "additionalProperties": false
+      },
+      "CustomerErasureResult": {
+        "type": "object",
+        "properties": {
+          "customerId": {
+            "type": "string"
+          },
+          "erased": {
+            "type": "boolean",
+            "description": "False when the customer was already erased: nothing changed."
+          },
+          "mergedRecords": {
+            "type": "integer",
+            "description": "Guest records merged into this customer, erased with it."
+          },
+          "orders": {
+            "type": "integer",
+            "description": "Orders whose contact and addresses were scrubbed. Their money, lines and region stay."
+          },
+          "files": {
+            "type": "integer",
+            "description": "The buyer's conversation images deleted from storage."
+          }
+        },
+        "required": [
+          "customerId",
+          "erased",
+          "mergedRecords",
+          "orders",
+          "files"
+        ]
       },
       "StaffSavedPaymentMethod": {
         "allOf": [
@@ -107335,12 +107380,13 @@
                         "object.updated",
                         "object.deleted",
                         "customer.redact_requested",
-                        "customer.data_requested"
+                        "customer.data_requested",
+                        "customer.erased"
                       ],
                       "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*`; the app's grant must cover it (its manifest `events`)."
                     },
                     "minItems": 1,
-                    "maxItems": 56
+                    "maxItems": 57
                   },
                   "description": {
                     "type": "string",
@@ -107626,12 +107672,13 @@
                         "object.updated",
                         "object.deleted",
                         "customer.redact_requested",
-                        "customer.data_requested"
+                        "customer.data_requested",
+                        "customer.erased"
                       ],
                       "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*`; the app's grant must cover it (its manifest `events`)."
                     },
                     "minItems": 1,
-                    "maxItems": 56
+                    "maxItems": 57
                   },
                   "description": {
                     "type": "string",
@@ -125767,6 +125814,9 @@
                         "deletedAt": {
                           "$ref": "#/components/schemas/NullableTimestamp"
                         },
+                        "erasedAt": {
+                          "$ref": "#/components/schemas/NullableTimestamp"
+                        },
                         "mergedInto": {
                           "type": "object",
                           "nullable": true,
@@ -126409,7 +126459,7 @@
           "maxRequestBytes": 1048576,
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
-          "when": "Use when one trashed customer must be erased for good (privacy request).",
+          "when": "Use when a trashed customer who never ordered must be deleted for good.",
           "dryRun": "none",
           "confirmation": "required"
         },
@@ -126473,6 +126523,148 @@
         "x-scalius-rbac": {
           "type": "permission",
           "permission": "customers.edit"
+        }
+      }
+    },
+    "/api/v1/admin/customers/{id}/erase": {
+      "post": {
+        "operationId": "dashboard.customers.erase",
+        "tags": [
+          "Admin - Customers"
+        ],
+        "summary": "Erase a customer's personal data",
+        "description": "The right to erasure for a customer who ordered. Scrubs the customer's contact and every guest record merged into it; deletes their addresses, sign-in identities, sessions, saved payment methods (detached at their provider first), marketing consents, push subscriptions and app roles; scrubs the contact, recipient, street lines, phones and notes on their orders (money, lines and region stay for the books); gives their reviews the fallback name; and erases their words and images in conversations. The record is retired and cannot be restored. Emits `customer.erased` so apps erase their copies. Refused while an order is still in progress. Only a Super Admin may erase (an agent only for a Super Admin owner); it cannot be undone.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erased",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/CustomerErasureResult"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "destructive",
+          "openWorld": true,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when a customer asks to have their personal data erased (right to erasure): scrubs their contact, addresses and words while orders and money records stay.",
+          "dryRun": "none",
+          "confirmation": "required"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "customers.delete"
         }
       }
     },
@@ -128588,6 +128780,9 @@
                             "deletedAt": {
                               "$ref": "#/components/schemas/NullableTimestamp"
                             },
+                            "erasedAt": {
+                              "$ref": "#/components/schemas/NullableTimestamp"
+                            },
                             "mergedInto": {
                               "type": "object",
                               "nullable": true,
@@ -128680,7 +128875,7 @@
                               },
                               "changeType": {
                                 "type": "string",
-                                "description": "created, updated, deleted, signed_up, order_linked, or order_moved_in / order_moved_out (see `order`, `relatedCustomer` and `verifiedContact`)"
+                                "description": "created, updated, deleted, restored, signed_up, order_linked, order_moved_in / order_moved_out, or erased (see `order`, `relatedCustomer` and `verifiedContact`)"
                               },
                               "verifiedContact": {
                                 "type": "string",
@@ -246861,12 +247056,13 @@
                         "object.updated",
                         "object.deleted",
                         "customer.redact_requested",
-                        "customer.data_requested"
+                        "customer.data_requested",
+                        "customer.erased"
                       ],
                       "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*` for every topic."
                     },
                     "minItems": 1,
-                    "maxItems": 56
+                    "maxItems": 57
                   },
                   "description": {
                     "type": "string",
@@ -247244,12 +247440,13 @@
                         "object.updated",
                         "object.deleted",
                         "customer.redact_requested",
-                        "customer.data_requested"
+                        "customer.data_requested",
+                        "customer.erased"
                       ],
                       "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*` for every topic."
                     },
                     "minItems": 1,
-                    "maxItems": 56
+                    "maxItems": 57
                   },
                   "description": {
                     "type": "string",
@@ -248270,7 +248467,8 @@
                 "object.updated",
                 "object.deleted",
                 "customer.redact_requested",
-                "customer.data_requested"
+                "customer.data_requested",
+                "customer.erased"
               ]
             },
             "required": false,
@@ -281282,6 +281480,14 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.customers.delete_permanently"
+          ]
+        },
+        {
+          "operationId": "dashboard.customers.erase",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.customers.erase"
           ]
         },
         {
