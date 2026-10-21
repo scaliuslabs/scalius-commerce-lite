@@ -168,6 +168,14 @@ export interface CatalogCopy {
     similar: string;
     top: string;
     deliveryFacts: string;
+    /** An option value's name for screen readers: "{option}: {value}". */
+    optionValue: string;
+    /** A sold-out option value (still choosable, like Dawn's). */
+    optionSoldOut: string;
+    /** A value with no SKU beside the other choices. */
+    optionUnavailable: string;
+    /** Announced when a value is chosen. */
+    optionSelected: string;
   };
   delivery: {
     free: string;
@@ -337,6 +345,10 @@ const EN: CatalogCopy = {
     imageZoom: "Product image zoom",
     closeZoom: "Close image zoom",
     zoomHint: "Double tap to zoom • Drag to pan",
+    optionValue: "{option}: {value}",
+    optionSoldOut: "{option}: {value}. Sold out.",
+    optionUnavailable: "{option}: {value}. Not available with the current selection.",
+    optionSelected: "{value} selected.",
     sections: "Product sections",
     description: "Description",
     details: "Details",
@@ -513,6 +525,10 @@ const BN: CatalogCopy = {
     zoomedImage: "বড় করা পণ্যের ছবি",
     imageZoom: "পণ্যের ছবি বড় করে দেখা",
     closeZoom: "বড় ছবি বন্ধ করুন",
+    optionValue: "{option}: {value}",
+    optionSoldOut: "{option}: {value}। স্টক শেষ।",
+    optionUnavailable: "{option}: {value}। এই বাছাইয়ের সাথে পাওয়া যাচ্ছে না।",
+    optionSelected: "{value} বাছাই করা হয়েছে।",
     zoomHint: "বড় করতে দুবার ট্যাপ করুন • সরাতে টানুন",
     sections: "পণ্যের অংশ",
     description: "বিবরণ",

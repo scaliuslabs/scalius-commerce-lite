@@ -271,7 +271,10 @@ function bindOptions() {
         );
       }
       if (cache.status)
-        cache.status.textContent = `${button.dataset.optionValue || "Option"} selected.`;
+        cache.status.textContent = formatCheckoutLanguageText(
+          cache.actions?.dataset.optionSelectedText || "{value}",
+          { value: button.dataset.optionValue || "" },
+        );
       refresh(true);
       replaceVariantUrl();
     };
@@ -413,7 +416,7 @@ function updateOptionButtons() {
       }
       button.classList.remove(...OPTION_CLASSES);
       button.classList.add("bg-background", "text-foreground", "border-input");
-      if (selected && status !== "sold_out") {
+      if (selected) {
         button.classList.remove(
           "bg-background",
           "text-foreground",
@@ -429,12 +432,11 @@ function updateOptionButtons() {
         );
       } else if (status === "sold_out") {
         button.classList.remove("text-foreground");
-        button.classList.add("text-muted-foreground", "line-through", "cursor-not-allowed");
-        if (selected) button.classList.add("ring-2", "ring-destructive");
+        button.classList.add("text-muted-foreground");
       }
-      // Sold-out values stay focusable and choosable, so a buyer sees why.
-      if (status === "sold_out") button.setAttribute("aria-disabled", "true");
-      else button.removeAttribute("aria-disabled");
+      // Dawn: sold-out values stay choosable, crossed out, so a buyer sees
+      // the photo and the "Sold out" state.
+      button.classList.toggle("line-through", status === "sold_out");
       button.dataset.optionAvailability = status;
       button.setAttribute("aria-pressed", String(selected));
       button.setAttribute(
@@ -457,10 +459,14 @@ function optionButtonLabel(
   selected: boolean,
 ) {
   void selected;
-  if (status === "sold_out") return `${name}: ${value}. Out of stock.`;
-  if (status === "incompatible")
-    return `${name}: ${value}. Not available with the current selection.`;
-  return `${name}: ${value}`;
+  // The page's words (ProductSummary.astro), so a Bangla page reads Bangla.
+  const words = cache.actions?.dataset;
+  const template = status === "sold_out"
+    ? words?.optionSoldOutText || "{option}: {value}. Sold out."
+    : status === "incompatible"
+      ? words?.optionUnavailableText || "{option}: {value}. Not available with the current selection."
+      : words?.optionValueText || "{option}: {value}";
+  return formatCheckoutLanguageText(template, { option: name, value });
 }
 
 function exactVariant() {
