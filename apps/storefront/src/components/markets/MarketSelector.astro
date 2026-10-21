@@ -42,7 +42,8 @@ const selected = selectedMarketCountry(matrix, presence);
     align-items: center;
     gap: 0.5rem;
     font-size: 0.875rem;
-    color: var(--muted-foreground);
+    /* The footer's own words colour, on whichever footer surface draws it. */
+    color: inherit;
   }
   .market-selector select,
   .market-selector button {

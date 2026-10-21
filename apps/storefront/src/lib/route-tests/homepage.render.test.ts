@@ -230,6 +230,8 @@ describe("the homepage under markets", () => {
     expect(html).toContain('<link rel="alternate" hreflang="en-IN" href="https://shop.test/en-in">');
     expect(html).toContain('<link rel="alternate" hreflang="x-default" href="https://shop.test/">');
     expect(html).toMatch(/<form method="post" action="\/localization"[^>]*data-market-selector/);
+    // The forms sit inside the footer, above its bottom row, not in a strip under it.
+    expect(html).toMatch(/<footer[^>]*>(?:(?!<\/footer>)[\s\S])*data-footer-localization(?:(?!<\/footer>)[\s\S])*data-market-selector(?:(?!<\/footer>)[\s\S])*<\/footer>/);
     // The root page speaks the store default language (the root presence's, which hreflang names).
     expect(html).toMatch(/<html lang="bn"/);
     expect(html).toMatch(/<option value="BD" selected[^>]*>বাংলাদেশ \(BDT\)<\/option><option value="IN"[^>]*>ভারত \(BDT\)<\/option>/);

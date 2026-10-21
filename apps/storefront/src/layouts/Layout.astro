@@ -67,10 +67,8 @@ import { partytownLoaderPath } from "virtual:scalius/partytown";
 import { getRuntimePresence } from "@/lib/api/runtime";
 import { hreflangAlternates, marketOfPresence, presenceCountry, stripPresencePath } from "@scalius/shared/markets";
 import { hasSeveralMarkets, hasSeveralPresences, languageOptions, pageMarket, presencePageLanguage, selectedMarketCountry } from "@/lib/market-selector";
-import LanguageSelector from "../components/markets/LanguageSelector.astro";
-import MarketSelector from "../components/markets/MarketSelector.astro";
+import type { FooterLocalizationModel } from "../components/footer/footer-localization";
 import MarketSuggestion from "../components/markets/MarketSuggestion.astro";
-import Container from "../components/ui/Container.astro";
 import type { LocalizedPaths } from "@/lib/localized-paths";
 import type { HomepageHeaderLead } from "@/lib/homepage-sections";
 
@@ -261,8 +259,6 @@ const hreflangLinks = severalPresences && canonicalLocation && storefrontUrl && 
   )
   : [];
 const marketReturnTo = `${stripPresencePath(Astro.url.pathname, marketPresence)}${Astro.url.search}`;
-// The footer's localization forms (Dawn): country/region with more than one
-// market, language when the page's market has two languages (`/bn`).
 const currentMarket = severalPresences ? pageMarket(marketMatrix, marketPresence) : null;
 const languageMarket = currentMarket && languageOptions(currentMarket).length > 1 ? currentMarket : null;
 const languageCountry = languageMarket ? selectedMarketCountry(marketMatrix, marketPresence) : null;
@@ -326,6 +322,19 @@ const absoluteOgImageUrl = toAbsoluteStorefrontSeoUrl(
 
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 const currencyCode = layoutData?.currency?.code ?? DEFAULT_CURRENCY.code;
+// The footer's localization forms (Dawn): country/region with more than one
+// market, language when the page's market has two languages (`/bn-bd`).
+const footerLocalization: FooterLocalizationModel | null = hasSeveralMarkets(marketMatrix) || (languageMarket && languageCountry)
+  ? {
+    matrix: marketMatrix,
+    markets: hasSeveralMarkets(marketMatrix),
+    language: languageMarket && languageCountry ? { market: languageMarket, country: languageCountry } : null,
+    presence: marketPresence,
+    currencyCode: layoutData?.currency?.shopCode ?? currencyCode,
+    pageLanguage,
+    returnTo: marketReturnTo,
+  }
+  : null;
 const currencyDecimalPlaces =
   layoutData?.currency?.decimalPlaces ?? DEFAULT_CURRENCY.decimalPlaces;
 // The store's price increment: client pricing rounds percentage prices to it as checkout does.
@@ -590,31 +599,8 @@ const pageStoreTimeZone = storeTimeZone();
             variant={themeLayout.footer}
             business={businessInfo}
             languageCode={layoutData?.storefrontCopy?.languageCode}
+            localization={footerLocalization}
           />
-          {(hasSeveralMarkets(marketMatrix) || (languageMarket && languageCountry)) && (
-            <div class="footer-locale">
-              <Container class="footer-locale-row">
-                {hasSeveralMarkets(marketMatrix) && (
-                  <MarketSelector
-                    matrix={marketMatrix}
-                    presence={marketPresence}
-                    currencyCode={layoutData?.currency?.shopCode ?? currencyCode}
-                    language={pageLanguage}
-                    returnTo={marketReturnTo}
-                  />
-                )}
-                {languageMarket && languageCountry && (
-                  <LanguageSelector
-                    market={languageMarket}
-                    presence={marketPresence}
-                    country={languageCountry}
-                    language={pageLanguage}
-                    returnTo={marketReturnTo}
-                  />
-                )}
-              </Container>
-            </div>
-          )}
         </div>
       )
     }

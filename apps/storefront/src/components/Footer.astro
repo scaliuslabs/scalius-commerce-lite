@@ -2,15 +2,22 @@
 // The store footer: the app footer skin the theme names
 // (`apps.skins.footer`), else the theme's own footer (CoreFooter.astro). An
 // app footer that is inactive, draws nothing, fails or is late gives way to
-// the core footer.
+// the core footer. The store's localization forms sit inside either: a skin
+// gets them where it places its `footer.columns` slot.
 import Skin from "@/components/apps/Skin.astro";
 import { footerData } from "@/lib/extensions/data";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import type { EmbedRenderers } from "@/lib/extensions/embeds";
 import CoreFooter from "./CoreFooter.astro";
+import FooterLocalization from "./footer/FooterLocalization.astro";
+import FooterSlot from "./footer/FooterSlot.astro";
 
 type Props = import("astro/types").ComponentProps<typeof CoreFooter>;
 
 const props = Astro.props;
+const embeds: EmbedRenderers = {
+  slot: ({ data: slot }) => ({ component: FooterSlot as never, props: { name: slot.name, localization: props.localization } }),
+};
 const data = async () => footerData({
   theme: await currentRequestTheme(Astro.locals),
   storeName: props.storeName,
@@ -22,6 +29,8 @@ const data = async () => footerData({
 });
 ---
 
-<Skin target="footer" data={data}>
+<Skin target="footer" data={data} embeds={embeds}>
   <CoreFooter {...props} />
+  {/* A skin that places no slot still offers the forms, right after it. */}
+  <FooterLocalization slot="slotless" localization={props.localization} />
 </Skin>

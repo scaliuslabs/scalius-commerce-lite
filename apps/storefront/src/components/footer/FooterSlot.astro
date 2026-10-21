@@ -1,0 +1,19 @@
+---
+// A footer skin's `<Slot name="footer.columns" />`: the apps' columns, as the
+// core footer draws them, then the store's localization forms, so they sit
+// inside whichever footer the theme draws.
+import type { StorefrontComponentSlot } from "@scalius/shared/plugins/storefront-protocol";
+import AppSlot from "@/components/apps/AppSlot.astro";
+import FooterLocalization from "./FooterLocalization.astro";
+import type { FooterLocalizationModel } from "./footer-localization";
+
+interface Props {
+  name: StorefrontComponentSlot;
+  localization?: FooterLocalizationModel | null;
+}
+
+const { name, localization } = Astro.props;
+---
+
+<AppSlot name={name} />
+{name === "footer.columns" && <FooterLocalization localization={localization} />}

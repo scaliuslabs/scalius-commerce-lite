@@ -437,7 +437,8 @@ function renderSupport(detail: AccountOrderDetail): void {
   const canRequest = detail.supportRequestActions.length > 0;
   const intro = byId("orderSupportIntro");
   if (intro) {
-    intro.textContent = canRequest ? detail.supportRequestIntro : "";
+    // The store's own words, else the page language's.
+    intro.textContent = canRequest ? detail.supportRequestIntro ?? accountCopy().order.helpIntro : "";
     intro.hidden = !canRequest;
   }
   const requests = byId("orderSupportRequests");

@@ -63,16 +63,50 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(checkoutLanguage
   <meta slot="head" name="robots" content="noindex,nofollow" />
   <CheckoutHeader layoutData={layoutData} copy={copy} />
 
-  {/* data-checkout-state: "missing" (set before first paint below) when the
-      browser holds no checkout session, so the page paints its "return to
-      your cart" state at once instead of moving it in when the script loads. */}
-  <div id="checkoutPageRoot" data-checkout-state="loading" class="group mx-auto w-full max-w-6xl px-4 py-5 sm:px-6 sm:py-7">
-    <CheckoutProgress current="payment" copy={copy} />
+  {/* data-checkout-state: the HTML says "missing", the empty cart (true
+      without JavaScript: the cart lives in the browser). Before anything
+      below is parsed, the script makes a checkout in progress (or an order
+      just placed, whose link the page script builds) "loading", and sends a
+      buyer with neither to the cart, the step they skipped. */}
+  <div id="checkoutPageRoot" data-checkout-state="missing" class="group mx-auto w-full max-w-6xl px-4 py-5 sm:px-6 sm:py-7">
+    <script is:inline>
+      (function () {
+        var root = document.getElementById("checkoutPageRoot");
+        try {
+          if (sessionStorage.getItem("scalius_checkout_data") || sessionStorage.getItem("scalius_last_order")) {
+            root.dataset.checkoutState = "loading";
+            return;
+          }
+        } catch (error) {
+          // Unreadable storage: the page script names it.
+          root.dataset.checkoutState = "loading";
+          return;
+        }
+        root.dataset.checkoutState = "redirect";
+        location.replace(location.pathname.replace(/checkout\/?$/, "cart"));
+      })();
+    </script>
+    <div class="group-data-[checkout-state=missing]:hidden group-data-[checkout-state=redirect]:hidden">
+      <CheckoutProgress current="payment" copy={copy} />
+    </div>
 
-    <div class="grid items-start gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)] lg:gap-10">
+    {/* No checkout to pay for: the cart's own empty state, with the way back to the shop. */}
+    <section class="hidden group-data-[checkout-state=missing]:block mx-auto max-w-lg rounded-xl border border-border bg-card px-4 py-10 text-center" aria-labelledby="checkoutEmptyHeading">
+      <svg class="mx-auto h-12 w-12 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+      </svg>
+      <h1 id="checkoutEmptyHeading" class="mt-3 text-lg font-semibold text-foreground">{copy.emptyCartText}</h1>
+      <p class="mt-1 text-sm text-muted-foreground">{copy.emptyCartDescriptionText}</p>
+      <a
+        href="/"
+        class="mt-6 inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      >{copy.continueShoppingText}</a>
+    </section>
+
+    <div class="grid items-start gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)] lg:gap-10 group-data-[checkout-state=missing]:hidden group-data-[checkout-state=redirect]:hidden">
       <aside
         id="orderSummary"
-        class="order-1 overflow-hidden rounded-xl border border-border bg-card lg:order-2 lg:sticky lg:top-6 group-data-[checkout-state=missing]:hidden"
+        class="order-1 overflow-hidden rounded-xl border border-border bg-card lg:order-2 lg:sticky lg:top-6"
         aria-label={copy.orderSummaryText}
         aria-busy="true"
       >
@@ -111,10 +145,10 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(checkoutLanguage
 
         <div
           id="errorMsg"
-          class="mb-4 hidden rounded-lg border border-destructive bg-destructive px-4 py-3 text-sm text-destructive-foreground group-data-[checkout-state=missing]:block"
+          class="mb-4 hidden rounded-lg border border-destructive bg-destructive px-4 py-3 text-sm text-destructive-foreground"
           role="alert"
           aria-live="assertive"
-        >{copy.checkoutDetailsMissingText}</div>
+        ></div>
 
         <a
           id="checkoutRecoveryAction"
@@ -124,21 +158,10 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(checkoutLanguage
         >
           {copy.returnToCartText}
         </a>
-        <script is:inline>
-          (function () {
-            try {
-              // No checkout session (and no order just placed, whose link the
-              // page script builds): the page script would show this state.
-              if (sessionStorage.getItem("scalius_checkout_data") || sessionStorage.getItem("scalius_last_order")) return;
-              document.getElementById("checkoutPageRoot").dataset.checkoutState = "missing";
-              document.getElementById("checkoutRecoveryAction").hidden = false;
-            } catch (error) {}
-          })();
-        </script>
 
         {/* Gift card: a POST form, so the code never enters a URL even before
             the script runs; the script applies it in place (apply handle only). */}
-        <section id="giftCardSection" class="mb-5 rounded-xl border border-border bg-card p-4 group-data-[checkout-state=missing]:hidden" aria-labelledby="giftCardHeading">
+        <section id="giftCardSection" class="mb-5 rounded-xl border border-border bg-card p-4" aria-labelledby="giftCardHeading">
           <h2 id="giftCardHeading" class="text-sm font-semibold text-foreground">{giftCopy.giftCardTitleText}</h2>
           <form id="giftCardForm" method="post" action="/api/gift-cards/apply" class="mt-3 flex gap-2" novalidate>
             <label for="giftCardCode" class="sr-only">{giftCopy.giftCardCodeLabelText}</label>
@@ -167,7 +190,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(checkoutLanguage
 
         <div
           id="paymentMethods"
-          class="space-y-2 group-data-[checkout-state=missing]:hidden"
+          class="space-y-2"
           role="radiogroup"
           aria-label={copy.paymentMethodsText}
           aria-busy="true"

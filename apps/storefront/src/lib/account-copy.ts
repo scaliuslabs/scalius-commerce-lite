@@ -78,6 +78,8 @@ export interface AccountCopy {
     payment: string;
     paymentMethod: string;
     help: string;
+    /** Over the order's requests, unless the store wrote its own (Settings → Customer requests). */
+    helpIntro: string;
     reason: string;
     note: string;
     cancel: string;
@@ -289,6 +291,7 @@ const EN: AccountCopy = {
     payment: "Payment",
     paymentMethod: "Payment method",
     help: "Order help",
+    helpIntro: "Send a request and the store will review it before changing payment, shipment, or inventory.",
     reason: "Reason",
     note: "Note (required for Other)",
     cancel: "Cancel",
@@ -501,6 +504,7 @@ const BN: AccountCopy = {
     payment: "পেমেন্ট",
     paymentMethod: "পেমেন্টের মাধ্যম",
     help: "অর্ডার নিয়ে সাহায্য",
+    helpIntro: "অনুরোধ পাঠান, পেমেন্ট, শিপমেন্ট বা স্টকে কোনো পরিবর্তনের আগে স্টোর তা দেখে নেবে।",
     reason: "কারণ",
     note: "নোট (অন্য কারণ হলে লিখতে হবে)",
     cancel: "বাতিল",

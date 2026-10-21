@@ -720,7 +720,8 @@ export interface CustomerOrderDetail {
   activeRefundOperation: CustomerActiveRefundOperation | null;
   supportRequests: CustomerOrderSupportRequest[];
   supportRequestActions: CustomerOrderSupportRequestAction[];
-  supportRequestIntro: string;
+  /** The store's own words over the requests; null: the storefront's, in the page language. */
+  supportRequestIntro: string | null;
   paymentPlan: CustomerOrderDetailPaymentPlan | null;
   cod: CustomerOrderDetailCod | null;
   progress: CustomerOrderProgress;

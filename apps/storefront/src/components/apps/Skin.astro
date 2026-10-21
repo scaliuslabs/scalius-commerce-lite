@@ -6,7 +6,8 @@
 // active, or the skin draws nothing, fails, is late or misses a required
 // embed. The projection is built only when a skin will draw (`data` is
 // called lazily), and the core unit renders only when it is needed. Slot
-// `drawn` renders after the skin only when it drew (what core adds to it).
+// `drawn` renders after the skin only when it drew (what core adds to it),
+// and slot `slotless` only when it drew without placing its unit's slot.
 // A skin's `<Slot name="…" />` (its unit's slots only) renders the slot
 // as the core unit would.
 import type { StorefrontSkinRef } from "@scalius/shared/storefront-theme";
@@ -39,4 +40,4 @@ const markup = skin
   : null;
 ---
 
-{markup ? <Fragment><AppComponent markup={markup} embeds={embeds} editorMark={editorMark} /><slot name="drawn" /></Fragment> : <slot />}
+{markup ? <Fragment><AppComponent markup={markup} embeds={embeds} editorMark={editorMark} /><slot name="drawn" />{!markup.embeds.has("slot") && <slot name="slotless" />}</Fragment> : <slot />}
