@@ -215,9 +215,9 @@ export function CustomerContactCard() {
         disabled={!canEdit}
         onCheckedChange={(on) => setValue("requireFullBillingAddress", on)}
       />
-      <p className="text-body">
+      <div className="text-body">
         <Link to="/admin/settings/customer-accounts" className="text-link hover:underline">{t("contactFieldsPointer")}</Link>
-      </p>
+      </div>
       <div className="flex flex-col gap-4 border-t border-border pt-4">
         <FormFields
           key={language?.id ?? "none"}
