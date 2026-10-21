@@ -96,6 +96,12 @@ export function ActivateAppDialog({ app, open, onOpenChange }: DialogProps) {
           <DialogTitle>{t(update ? "approveTitle" : "activateTitle", { name: app.name })}</DialogTitle>
           <DialogDescription>{t(update ? "approveIntro" : "activateIntro", { name: app.name })}</DialogDescription>
         </DialogHeader>
+        {/* A bundled app that isn't first-party runs in the store's own Workers, with no sandbox. */}
+        {app.runtime === "bundled" && app.thirdParty ? (
+          <Alert variant="info">
+            <AlertDescription>{t("trustedCode")}</AlertDescription>
+          </Alert>
+        ) : null}
         <AppAccess app={app} consent={<p className="text-body">{t("consentWarning", { name: app.name })}</p>} />
         {missing.length > 0 ? (
           <Alert variant="warning">

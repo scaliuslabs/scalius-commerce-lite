@@ -80,6 +80,7 @@ export const installedAppsMessages = defineMessages({
     themeProblem_template: "Template {name}",
     "themeProblem_page-preset": "Page preset {name}",
     superAdminActivates: "Only a Super Admin can activate apps.",
+    trustedCode: "This app runs as trusted code in your store (like a plugin), not in a sandbox.",
 
     aboutTitle: "About",
     developer: "Developer",
@@ -354,6 +355,7 @@ export const installedAppsMessages = defineMessages({
     themeProblem_template: "টেমপ্লেট {name}",
     "themeProblem_page-preset": "পেজ প্রিসেট {name}",
     superAdminActivates: "শুধু একজন সুপার অ্যাডমিন অ্যাপ চালু করতে পারেন।",
+    trustedCode: "এই অ্যাপটি স্যান্ডবক্সে নয়, আপনার স্টোরে বিশ্বস্ত কোড হিসেবে (প্লাগইনের মতো) চলে।",
 
     aboutTitle: "পরিচিতি",
     developer: "ডেভেলপার",
