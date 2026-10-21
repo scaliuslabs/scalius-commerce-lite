@@ -697,7 +697,7 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   paidWithGiftCardText: "Paid with gift card",
   paidWithGiftCardDescriptionText: "Your gift cards cover the whole order.",
   giftCardPayOnDeliveryText: "Pay {amount} when you receive your order",
-  giftCardCheckoutStepText: "Have a gift card? Use it on the payment step",
+  giftCardCheckoutStepText: "Have a gift card? Pay with it on the next step",
   // Warranty (Wave B §5.3): the product page trust row and terms, the spec row, each order line's warranty, the claim form and Account › Warranties.
   warrantyBrandText: "{duration} brand warranty",
   warrantyStoreText: "{duration} store warranty",

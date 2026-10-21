@@ -196,6 +196,40 @@ describe("checkout summary with gift cards", () => {
 });
 
 describe("checkout payment with gift cards", () => {
+  // Buyer QA M4: Apply pressed while the payment step still loaded posted the
+  // form, and the card was silently dropped (the order paid the full amount).
+  it("applies a code pressed before the page script or the total was ready", async () => {
+    let releaseQuote!: () => void;
+    const firstQuote = new Promise<void>((resolve) => { releaseQuote = resolve; });
+    const { calls } = stubApi({
+      "/api/checkout/tax-quote": [
+        async () => { await firstQuote; return json({ success: true, data: quote() }); },
+        () => json({ success: true, data: quote(partialTender) }),
+      ] as unknown as Route[],
+      "/api/gift-cards/apply": () => json({
+        success: true,
+        data: {
+          handle: handle("a"), handleExpiresAt: new Date(Date.now() + 7_200_000).toISOString(),
+          last4: "7K2Q", balance: 400, balanceMinor: 40_000, currencyCode: "BDT", expiresAt: null,
+        },
+      }),
+    });
+    const input = document.getElementById("giftCardCode") as HTMLInputElement;
+    input.value = "abcd-efgh-jkmn-7k2q";
+    // Before the page script: the page's inline guard keeps the press.
+    const form = document.getElementById("giftCardForm") as HTMLFormElement;
+    form.dataset.pending = "true";
+    const started = initCheckoutPage();
+    // And again while the total is loading.
+    form.dispatchEvent(new Event("submit", { cancelable: true }));
+    expect(calls.some(({ url }) => url === "/api/gift-cards/apply")).toBe(false);
+    releaseQuote();
+    await started;
+    await vi.waitFor(() => expect(document.getElementById("giftCardChips")?.textContent).toContain("•••• 7K2Q −৳400"));
+    expect(calls.filter(({ url }) => url === "/api/gift-cards/apply")).toHaveLength(1);
+    expect(form.dataset.pending).toBeUndefined();
+  });
+
   it("applies a code through the proxy, keeps only the handle, and re-prices the order", async () => {
     const { calls } = stubApi({
       "/api/checkout/tax-quote": [
