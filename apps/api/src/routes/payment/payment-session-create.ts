@@ -7,12 +7,14 @@ import {
   type Database,
 } from "@scalius/database/client";
 import {
+  orderItems,
   orderPayments,
   orders,
   paymentSessionAttempts,
   PaymentRecordStatus,
   PaymentStatus,
 } from "@scalius/database/schema";
+import { readLinePurchaseOption } from "@scalius/shared/line-properties";
 import { currencyDocument } from "@scalius/core/modules/settings";
 import {
   getPaymentMethodPreferences,
@@ -24,6 +26,7 @@ import {
   markPaymentSessionAttemptFailed,
   type PaymentSessionAttemptProcessingResult,
   buildPaymentCorrelationId,
+  gatewayHasCapability,
   PaymentProviderError,
   type PaymentGateway,
   type PaymentProviders,
@@ -300,6 +303,7 @@ async function createPaymentSessionForOrder(
     replaceExistingAttempt: input.replaceExistingAttempt,
   });
 
+  const savePaymentMethod = await savePaymentMethodRequest(db, gateway, order, input.proof);
   const attemptIdentity = await buildPaymentSessionAttemptIdentity({
     orderId: input.orderId,
     gateway: gateway.id,
@@ -337,6 +341,7 @@ async function createPaymentSessionForOrder(
         },
         urls,
         requestTimeoutMs,
+        ...(savePaymentMethod ? { savePaymentMethod } : {}),
       }, { settings, signal })
     );
   } catch (error: unknown) {
@@ -614,7 +619,7 @@ async function ensureOrderCanUseGateway(
       .all();
     const hasUnsafePaymentEvidence = paymentRows.some((payment) =>
       payment.status === PaymentRecordStatus.PENDING ||
-      payment.status === PaymentRecordStatus.CONFIRMED ||
+      payment.status === PaymentRecordStatus.CONFIRMED || payment.status === PaymentRecordStatus.AUTHORIZED ||
       payment.status === PaymentRecordStatus.SUCCEEDED
     );
     const hasTerminalPaymentEvidence = paymentRows.some((payment) =>
@@ -661,7 +666,7 @@ async function ensureOrderCanUseGateway(
         AND NOT EXISTS (
           SELECT 1 FROM ${orderPayments}
           WHERE ${orderPayments.orderId} = ${order.id}
-            AND ${orderPayments.status} IN (${PaymentRecordStatus.PENDING}, ${PaymentRecordStatus.CONFIRMED}, ${PaymentRecordStatus.SUCCEEDED})
+            AND ${orderPayments.status} IN (${PaymentRecordStatus.PENDING}, ${PaymentRecordStatus.CONFIRMED}, ${PaymentRecordStatus.AUTHORIZED}, ${PaymentRecordStatus.SUCCEEDED})
         )
         AND (
           EXISTS (
@@ -738,7 +743,7 @@ async function ensureOrderCanUseGateway(
   );
   const hasUnsafePaymentEvidence = paymentRows.some((payment) =>
     payment.status === PaymentRecordStatus.PENDING ||
-    payment.status === PaymentRecordStatus.CONFIRMED ||
+    payment.status === PaymentRecordStatus.CONFIRMED || payment.status === PaymentRecordStatus.AUTHORIZED ||
     payment.status === PaymentRecordStatus.SUCCEEDED
   );
 
@@ -762,7 +767,7 @@ async function ensureOrderCanUseGateway(
       sql`NOT EXISTS (
         SELECT 1 FROM ${orderPayments}
         WHERE ${orderPayments.orderId} = ${order.id}
-          AND ${orderPayments.status} IN (${PaymentRecordStatus.PENDING}, ${PaymentRecordStatus.CONFIRMED}, ${PaymentRecordStatus.SUCCEEDED})
+          AND ${orderPayments.status} IN (${PaymentRecordStatus.PENDING}, ${PaymentRecordStatus.CONFIRMED}, ${PaymentRecordStatus.AUTHORIZED}, ${PaymentRecordStatus.SUCCEEDED})
       )`,
       sql`EXISTS (
         SELECT 1 FROM ${orderPayments}
@@ -782,6 +787,26 @@ async function ensureOrderCanUseGateway(
     paymentMethod: expectedGateway,
     version: order.version + 1,
   };
+}
+
+/**
+ * Whether this session asks the provider to keep the buyer's method for
+ * later off-session charges: the gateway keeps methods (`vault`), the buyer
+ * is the order's account customer (a signed-in placement, or their account),
+ * and a line carries an app's purchase option (`_purchase_option`: a
+ * subscription). Guests and agent sessions never keep a method.
+ */
+async function savePaymentMethodRequest(
+  db: Database,
+  gateway: PaymentGateway,
+  order: Pick<PaymentSessionOrderRow, "id" | "accountOwnerCustomerId">,
+  proof: PaymentSessionProof,
+): Promise<{ customerId: string; usage: "off_session" } | null> {
+  const customerId = order.accountOwnerCustomerId;
+  if (!customerId || !gatewayHasCapability(gateway, "vault")) return null;
+  if (proof.kind === "agent_context" || (proof.kind === "customer_account" && proof.customerId !== customerId)) return null;
+  const lines = await db.select({ properties: orderItems.properties }).from(orderItems).where(eq(orderItems.orderId, order.id)).all();
+  return lines.some((line) => readLinePurchaseOption(line.properties) !== null) ? { customerId, usage: "off_session" } : null;
 }
 
 /** The order's online gateway id (built-in or app), whatever is installed now. */

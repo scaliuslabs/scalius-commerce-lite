@@ -58,8 +58,11 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
         && registration.installation.grant?.functions.includes(registration.name as PluginFunctionPoint));
   const attributeApps = new Map(registrations.map(({ installation }) => [installation.pluginId, { appId: installation.pluginId, fields: installation.manifest.checkout?.attributes ?? [] }]));
   const attributes = [...attributeApps.values()];
+  // Purchase options (manifest `checkout.purchaseOptions`): what a cart line may name; core prices nothing for them.
+  const purchaseOptions = [...new Map(registrations.map(({ installation }) => [installation.pluginId, { appId: installation.pluginId, options: installation.manifest.checkout?.purchaseOptions ?? [] }])).values()]
+    .filter((app) => app.options.length > 0);
   const points = new Set(registrations.map((registration) => registration.name as PluginRunPoint));
-  if (points.size === 0) return { points, attributes, buyerUi: async () => [], run: async () => [], report: () => undefined };
+  if (points.size === 0) return { points, attributes, purchaseOptions, buyerUi: async () => [], run: async () => [], report: () => undefined };
 
   const ctx = contextOf(options.ctx);
   const memo = new Map<string, Promise<unknown[]>>();
@@ -91,6 +94,7 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
   const runtime: CheckoutAppFunctions = {
     points,
     attributes,
+    purchaseOptions,
     reads,
     readRequests(wanted) {
       return wanted.flatMap((point) => functionReadRequests(registrations.filter((registration) => registration.name === point), point));

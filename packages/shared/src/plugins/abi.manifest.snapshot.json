@@ -153,7 +153,7 @@
    },
    "scopes": {
     "default": [],
-    "maxItems": 31,
+    "maxItems": 32,
     "type": "array",
     "items": {
      "type": "string",
@@ -165,6 +165,7 @@
       "read_orders",
       "write_orders",
       "write_payments",
+      "write_refunds",
       "write_fulfillments",
       "read_customers",
       "write_customers",
@@ -371,6 +372,7 @@
     "type": "object",
     "properties": {
      "attributes": {
+      "default": [],
       "maxItems": 10,
       "type": "array",
       "items": {
@@ -447,11 +449,37 @@
        ],
        "additionalProperties": false
       }
+     },
+     "purchaseOptions": {
+      "default": [],
+      "maxItems": 10,
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string",
+         "pattern": "^[a-z][a-z0-9_]{0,47}$"
+        },
+        "title": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 80
+        },
+        "description": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 300
+        }
+       },
+       "required": [
+        "key",
+        "title"
+       ],
+       "additionalProperties": false
+      }
      }
     },
-    "required": [
-     "attributes"
-    ],
     "additionalProperties": false
    },
    "providers": {
@@ -476,7 +504,7 @@
           },
           "operations": {
            "default": [],
-           "maxItems": 6,
+           "maxItems": 10,
            "type": "array",
            "items": {
             "type": "string"
@@ -603,6 +631,17 @@
           "returnCorrelationField": {
            "type": "string",
            "pattern": "^[a-z][a-z0-9_]{0,31}$"
+          },
+          "capabilities": {
+           "maxItems": 2,
+           "type": "array",
+           "items": {
+            "type": "string",
+            "enum": [
+             "vault",
+             "manualCapture"
+            ]
+           }
           }
          },
          "required": [
@@ -1554,6 +1593,7 @@
           "read_orders",
           "write_orders",
           "write_payments",
+          "write_refunds",
           "write_fulfillments",
           "read_customers",
           "write_customers",
@@ -3253,7 +3293,7 @@
       },
       "scopes": {
        "default": [],
-       "maxItems": 31,
+       "maxItems": 32,
        "type": "array",
        "items": {
         "type": "string",
@@ -3265,6 +3305,7 @@
          "read_orders",
          "write_orders",
          "write_payments",
+         "write_refunds",
          "write_fulfillments",
          "read_customers",
          "write_customers",

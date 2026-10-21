@@ -3776,6 +3776,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_refunds",
     "write_fulfillments"
    ],
    "input": {
@@ -10022,6 +10023,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_refunds",
     "write_fulfillments"
    ],
    "input": {
@@ -10341,6 +10343,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_refunds",
     "write_fulfillments"
    ],
    "input": {
@@ -10655,6 +10658,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_refunds",
     "write_fulfillments"
    ],
    "input": {
@@ -12164,6 +12168,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_refunds",
     "write_fulfillments"
    ],
    "input": {
@@ -13093,6 +13098,13 @@
               ]
              },
              "maxItems": 20
+            },
+            "purchaseOption": {
+             "type": "string",
+             "nullable": true,
+             "maxLength": 160,
+             "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$",
+             "description": "An installed app's purchase option for the line (`<app id>.<key>`, e.g. a subscription); absent or null: a one-time purchase. Part of the line's identity: the same SKU with another option is another line. An option no active app offers is refused (`purchase_option_unavailable`)."
             }
            },
            "required": [
@@ -13389,6 +13401,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_refunds",
     "write_fulfillments"
    ],
    "input": {
@@ -13435,6 +13448,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_refunds",
     "write_fulfillments"
    ],
    "input": {
@@ -13612,6 +13626,277 @@
     ]
    }
   },
+  "payment_methods.delete": {
+   "operationId": "dashboard.resources.payment_methods.delete",
+   "method": "DELETE",
+   "path": "/api/v1/admin/resources/payment-methods/{id}",
+   "risk": "destructive",
+   "idempotency": "required",
+   "revision": "none",
+   "scopes": [
+    "write_payments"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "paymentMethod": {
+        "$ref": "#/components/schemas/PaymentMethodResource"
+       }
+      },
+      "required": [
+       "paymentMethod"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "payment_methods.list": {
+   "operationId": "dashboard.resources.payment_methods.list",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/payment-methods",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "write_payments"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "customerId",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "paymentMethods": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/PaymentMethodResource"
+        }
+       }
+      },
+      "required": [
+       "paymentMethods"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "payments.capture": {
+   "operationId": "dashboard.resources.payments.capture",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/payments/{id}/capture",
+   "risk": "financial",
+   "idempotency": "required",
+   "revision": "none",
+   "scopes": [
+    "write_payments"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128,
+       "description": "The authorized payment's id (payments.list)."
+      },
+      "required": true,
+      "description": "The authorized payment's id (payments.list).",
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "$ref": "#/components/schemas/PaymentOutcomeResource"
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "payments.charge": {
+   "operationId": "dashboard.resources.payments.charge",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/orders/{id}/payments/charge",
+   "risk": "financial",
+   "idempotency": "required",
+   "revision": "optional",
+   "scopes": [
+    "write_payments"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "paymentMethodId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "A saved method of the order's customer (payment_methods.list)."
+         },
+         "amountMinor": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "What to charge, in minor units of the order's `currency`. Default: its `balanceDueMinor`; another amount must be one the order takes (a deposit)."
+         },
+         "capture": {
+          "type": "string",
+          "enum": [
+           "automatic",
+           "manual"
+          ],
+          "default": "automatic",
+          "description": "`manual` only authorizes (money held): capture it with payments.capture or release it with payments.void. Needs a provider that authorizes."
+         },
+         "expectedVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The order `version` you read; a different one is refused with 409 before the provider is called."
+         }
+        },
+        "required": [
+         "paymentMethodId"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "$ref": "#/components/schemas/PaymentOutcomeResource"
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
   "payments.create": {
    "operationId": "dashboard.resources.payments.create",
    "method": "POST",
@@ -13737,6 +14022,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_refunds",
     "write_fulfillments"
    ],
    "input": {
@@ -13775,6 +14061,63 @@
       "required": [
        "payments"
       ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "payments.void": {
+   "operationId": "dashboard.resources.payments.void",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/payments/{id}/void",
+   "risk": "financial",
+   "idempotency": "required",
+   "revision": "none",
+   "scopes": [
+    "write_payments"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128,
+       "description": "The authorized payment's id (payments.list)."
+      },
+      "required": true,
+      "description": "The authorized payment's id (payments.list).",
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "$ref": "#/components/schemas/PaymentOutcomeResource"
      }
     },
     "required": [
@@ -15665,6 +16008,201 @@
     ]
    }
   },
+  "refunds.create": {
+   "operationId": "dashboard.resources.refunds.create",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/orders/{id}/refunds",
+   "risk": "financial",
+   "idempotency": "required",
+   "revision": "none",
+   "scopes": [
+    "write_refunds"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "amountMinor": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "What goes back, in minor units of the order's `currency`; at most what was paid less what was refunded."
+         },
+         "lines": {
+          "type": "array",
+          "items": {
+           "type": "object",
+           "properties": {
+            "orderItemId": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 180
+            },
+            "quantity": {
+             "type": "integer",
+             "minimum": 1,
+             "maximum": 1000000
+            }
+           },
+           "required": [
+            "orderItemId",
+            "quantity"
+           ],
+           "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 99,
+          "description": "Which order lines (and how many units of each) the refund is for; each at most its quantity less what earlier refunds named. Omit for an amount-only refund."
+         },
+         "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300,
+          "description": "Why, for the order timeline (staff read it)."
+         },
+         "settlement": {
+          "type": "string",
+          "enum": [
+           "original",
+           "store_credit"
+          ],
+          "default": "original",
+          "description": "`original`: back to the payments it came from. `store_credit`: one new gift card for the whole amount, sent to the order contact."
+         },
+         "gateway": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "description": "Refund only payments taken by this method (`cod`, a gateway id or an app provider's `<plugin id>:<provider id>`)."
+         },
+         "manualSettlementConfirmed": {
+          "type": "boolean",
+          "description": "Required true when part of it goes back to a cash-on-delivery or recorded payment: the buyer already got that money by hand."
+         }
+        },
+        "required": [
+         "amountMinor",
+         "reason"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "refund": {
+        "$ref": "#/components/schemas/RefundResource"
+       }
+      },
+      "required": [
+       "refund"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "refunds.list": {
+   "operationId": "dashboard.resources.refunds.list",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/orders/{id}/refunds",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_orders",
+    "write_orders",
+    "write_payments",
+    "write_refunds",
+    "write_fulfillments"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "refunds": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/RefundResource"
+        }
+       }
+      },
+      "required": [
+       "refunds"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
   "shipments.create": {
    "operationId": "dashboard.resources.shipments.create",
    "method": "POST",
@@ -15786,6 +16324,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_refunds",
     "write_fulfillments"
    ],
    "input": {
@@ -15832,6 +16371,7 @@
     "read_orders",
     "write_orders",
     "write_payments",
+    "write_refunds",
     "write_fulfillments"
    ],
    "input": {
@@ -16680,6 +17220,7 @@
             "inventory_transfer.*",
             "customer.*",
             "fulfillment.*",
+            "refund.*",
             "shipment.*",
             "payment.*",
             "checkout.*",
@@ -16707,6 +17248,8 @@
             "customer.consent_changed",
             "fulfillment.created",
             "fulfillment.voided",
+            "refund.created",
+            "refund.updated",
             "shipment.updated",
             "payment.updated",
             "checkout.abandoned",
@@ -16728,7 +17271,7 @@
            "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*`; the app's grant must cover it (its manifest `events`)."
           },
           "minItems": 1,
-          "maxItems": 53
+          "maxItems": 56
          },
          "description": {
           "type": "string",
@@ -16990,6 +17533,7 @@
             "inventory_transfer.*",
             "customer.*",
             "fulfillment.*",
+            "refund.*",
             "shipment.*",
             "payment.*",
             "checkout.*",
@@ -17017,6 +17561,8 @@
             "customer.consent_changed",
             "fulfillment.created",
             "fulfillment.voided",
+            "refund.created",
+            "refund.updated",
             "shipment.updated",
             "payment.updated",
             "checkout.abandoned",
@@ -17038,7 +17584,7 @@
            "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*`; the app's grant must cover it (its manifest `events`)."
           },
           "minItems": 1,
-          "maxItems": 53
+          "maxItems": 56
          },
          "description": {
           "type": "string",
@@ -20106,6 +20652,12 @@
        },
        "taxMinor": {
         "type": "integer"
+       },
+       "purchaseOption": {
+        "type": "string",
+        "nullable": true,
+        "minLength": 1,
+        "maxLength": 160
        }
       },
       "required": [
@@ -20119,7 +20671,8 @@
        "unitPriceMinor",
        "subtotalMinor",
        "discountMinor",
-       "taxMinor"
+       "taxMinor",
+       "purchaseOption"
       ]
      }
     },
@@ -20176,6 +20729,132 @@
     "createdAt",
     "updatedAt",
     "deletedAt"
+   ]
+  },
+  "PaymentMethodResource": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string",
+     "description": "The saved method (`cpm_…`): pass it as `paymentMethodId` to charge it."
+    },
+    "customerId": {
+     "type": "string"
+    },
+    "providerId": {
+     "type": "string",
+     "description": "The payment provider that keeps it (`<app id>:<provider id>`)."
+    },
+    "brand": {
+     "type": "string",
+     "nullable": true,
+     "description": "The card network or wallet, lower case (`visa`)."
+    },
+    "last4": {
+     "type": "string",
+     "nullable": true,
+     "description": "The last four digits; the full number never reaches the store."
+    },
+    "expiryMonth": {
+     "type": "integer",
+     "nullable": true
+    },
+    "expiryYear": {
+     "type": "integer",
+     "nullable": true
+    },
+    "label": {
+     "type": "string",
+     "nullable": true
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "active",
+      "removed"
+     ]
+    },
+    "sourceOrderId": {
+     "type": "string",
+     "nullable": true,
+     "description": "The order whose payment kept it."
+    },
+    "createdAt": {
+     "type": "string",
+     "format": "date-time"
+    },
+    "updatedAt": {
+     "type": "string",
+     "format": "date-time"
+    }
+   },
+   "required": [
+    "id",
+    "customerId",
+    "providerId",
+    "brand",
+    "last4",
+    "expiryMonth",
+    "expiryYear",
+    "label",
+    "status",
+    "sourceOrderId",
+    "createdAt",
+    "updatedAt"
+   ]
+  },
+  "PaymentOutcomeResource": {
+   "type": "object",
+   "properties": {
+    "outcome": {
+     "type": "string",
+     "enum": [
+      "succeeded",
+      "authorized",
+      "pending",
+      "voided"
+     ],
+     "description": "`succeeded`: captured and credited to the order. `authorized`: held, capture it with payments.capture. `pending`: the provider answers later by webhook; read the order. `voided`: the hold was released."
+    },
+    "orderId": {
+     "type": "string"
+    },
+    "providerId": {
+     "type": "string"
+    },
+    "amountMinor": {
+     "type": "integer",
+     "description": "In minor units of `currency`."
+    },
+    "currency": {
+     "type": "string",
+     "minLength": 3,
+     "maxLength": 3
+    },
+    "payment": {
+     "allOf": [
+      {
+       "$ref": "#/components/schemas/PaymentResource"
+      },
+      {
+       "nullable": true,
+       "description": "The order payment, once the provider's answer landed."
+      }
+     ]
+    },
+    "replayed": {
+     "type": "boolean",
+     "description": "True when this answers a request already handled (the same Idempotency-Key, or an authorization already settled)."
+    }
+   },
+   "required": [
+    "outcome",
+    "orderId",
+    "providerId",
+    "amountMinor",
+    "currency",
+    "payment",
+    "replayed"
    ]
   },
   "PaymentResource": {
@@ -20562,6 +21241,98 @@
     "createdAt",
     "updatedAt",
     "deletedAt"
+   ]
+  },
+  "RefundResource": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "orderId": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "status": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 64
+    },
+    "currency": {
+     "type": "string",
+     "minLength": 3,
+     "maxLength": 3
+    },
+    "amountMinor": {
+     "type": "integer"
+    },
+    "settlement": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 64
+    },
+    "lines": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "orderItemId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+       },
+       "variantId": {
+        "type": "string",
+        "nullable": true,
+        "minLength": 1,
+        "maxLength": 128
+       },
+       "quantity": {
+        "type": "integer"
+       }
+      },
+      "required": [
+       "orderItemId",
+       "variantId",
+       "quantity"
+      ]
+     }
+    },
+    "paymentIds": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+     }
+    },
+    "createdAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "updatedAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    }
+   },
+   "required": [
+    "id",
+    "orderId",
+    "status",
+    "currency",
+    "amountMinor",
+    "settlement",
+    "lines",
+    "paymentIds",
+    "createdAt",
+    "updatedAt"
    ]
   },
   "ShipmentResource": {

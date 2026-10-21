@@ -113,6 +113,7 @@ export function createCartTransformer(
             cart = buildAppFunctionCart({
                 currency: { code: preliminary.money.currencyCode, decimalPlaces: preliminary.money.decimalPlaces },
                 channel: context.channel,
+                segmentIds: preliminary.pricingSegmentIds,
                 lines: valid.map((item, position) => ({
                     lineId: lineIds[position]!,
                     productId: item.productId,
@@ -122,6 +123,7 @@ export function createCartTransformer(
                     unitPriceMinor: item.unitPriceMinor,
                     discountMinor: 0,
                     properties: item.properties,
+                    purchaseOption: item.purchaseOption?.id ?? null,
                 })),
                 facts,
                 destination: context.destination ?? null,
@@ -243,6 +245,8 @@ export function applyCartTransform(
                 quantity: component.perUnit * item.quantity,
                 bundle,
                 sourceIndex,
+                // The bundle is bought the buyer's way: each component keeps the line's purchase option.
+                ...(item.purchaseOption ? { purchaseOption: item.purchaseOption } : {}),
             });
         }
         expansions.push({ sourceIndex, title: expansion.title, components });

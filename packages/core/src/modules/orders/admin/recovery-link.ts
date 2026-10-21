@@ -159,7 +159,7 @@ async function resolveOrderPaymentRecoveryPreview(
 
     const hasUnsafePaymentEvidence = paymentRows.some((payment) =>
         payment.status === PaymentRecordStatus.PENDING ||
-        payment.status === PaymentRecordStatus.CONFIRMED ||
+        payment.status === PaymentRecordStatus.CONFIRMED || payment.status === PaymentRecordStatus.AUTHORIZED ||
         payment.status === PaymentRecordStatus.SUCCEEDED
     );
     if (hasUnsafePaymentEvidence) {

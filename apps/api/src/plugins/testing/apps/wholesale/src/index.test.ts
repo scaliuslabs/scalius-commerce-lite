@@ -6,7 +6,7 @@ import { createPluginTestHarness, fixtures } from "@scalius/plugin-sdk/testing";
 import wholesale from "./index";
 
 const company = (data: Record<string, unknown>, revision = 3) => ({ revision, data: { name: "Acme Ltd", terms: "prepaid", prices: {}, approved_quotes: {}, ...data } });
-const signedIn = { id: "cust_1", tags: [], orderCount: 0, totalSpentMinor: 0, roles: [] };
+const signedIn = { id: "cust_1", tags: [], segmentIds: [], orderCount: 0, totalSpentMinor: 0, roles: [] };
 const cart = (lines: Array<{ variantId: string; productId: string; quantity: number }>, discountCodes: string[] = []) => fixtures.cart({
   customer: signedIn,
   discountCodes,

@@ -7,6 +7,7 @@ import { InventoryPool } from "@scalius/database/schema";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { getActivePaymentMethods } from "@scalius/core/modules/payments";
 import {
+  checkoutPurchaseOptions,
   checkStorefrontCartRules,
   validateCheckoutAttributes,
   createAppLinePricer,
@@ -37,6 +38,8 @@ import {
   fulfillmentKindSchema,
   fulfillmentTypeSchema,
   linePropertiesInputSchema,
+  linePurchaseOptionInputSchema,
+  linePurchaseOptionSchema,
   orderLinePropertySchema,
 } from "../../schemas/order-lines";
 import {
@@ -86,6 +89,7 @@ const cartIssueSchema = z.object({
     "properties_required",
     "properties_invalid",
     "fulfilment_unavailable",
+    "purchase_option_unavailable",
   ]),
   action: z.enum(["remove", "select_variant", "reduce_quantity", "refresh_item", "edit_properties"]),
   message: z.string(),
@@ -117,6 +121,7 @@ const cartValidationItemSchema = z.object({
   productName: z.string().optional().nullable(),
   variantLabel: z.string().optional().nullable(),
   properties: linePropertiesInputSchema,
+  purchaseOption: linePurchaseOptionInputSchema,
 });
 
 const cartValidationRoute = createRoute({
@@ -187,7 +192,8 @@ const cartValidationRoute = createRoute({
                * buyer inputs: the cart does not send them back.
                */
               adjustments: z.array(orderLinePropertySchema),
-              /** Canonical inputs hash for the cart line key (`line:v3:…:p:<hash>`); "none" without inputs. */
+              purchaseOption: linePurchaseOptionSchema.optional(),
+              /** Canonical inputs hash for the cart line key (`line:v3:…:p:<hash>`), the purchase option included; "none" without either. */
               propertiesHash: z.string(),
               fulfillmentKind: fulfillmentKindSchema,
               /** Null for a physical line until a delivery or pickup method is chosen. */
@@ -323,6 +329,8 @@ app.openapi(cartValidationRoute, async (c) => {
     // The apps' lines and line prices: the cart shows what checkout will charge.
     linePricer: createAppLinePricer(db, apps, appContext),
     transformer: createCartTransformer(db, apps, appContext),
+    // A line's purchase option must be one an active app offers.
+    purchaseOptions: checkoutPurchaseOptions(apps),
   });
   // Apps that rewrote the lines (`cart.transform`): the buyer sees their own
   // lines (a bundle priced as its components), checkout the rewritten ones.

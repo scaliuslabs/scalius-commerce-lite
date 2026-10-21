@@ -9,6 +9,7 @@
 import type { Database } from "@scalius/database/client";
 import { runWithReadObserver } from "@scalius/database/read-observer";
 import {
+  processPaymentAuthorized,
   processPaymentConfirmed,
   processPaymentFailed,
   type PaymentEvent,
@@ -121,6 +122,8 @@ async function applyPaymentEvent(
         metadata: { currency, ...event.details },
         // A provider that reports settlement (D2) has it recorded with the payment.
         settlement: event.settlement,
+        // A kept method is saved for the order's account customer with the payment.
+        savedPaymentMethod: event.savedPaymentMethod ?? null,
       });
       if (!result.success) {
         if (result.retryable === false) {
@@ -173,6 +176,37 @@ async function applyPaymentEvent(
       }
       console.log(`[payments] ${provider} payment confirmed for order ${event.orderId}`);
       return { status: "processed", result: { ...refs, outcome: "confirmed" } };
+    }
+    case "authorized": {
+      // Money held, not captured: recorded as an authorization, counted as
+      // nothing paid. An open checkout it holds is placed (its buyer hears of
+      // the order); nothing is fulfilled until a capture confirms it.
+      const currency = event.currency ?? "";
+      const result = await processPaymentAuthorized(db, {
+        orderId: event.orderId,
+        provider,
+        amountMinor: event.amountMinor ?? 0,
+        currency,
+        paymentType: event.paymentType,
+        providerRef: event.providerRef,
+        secondaryRef: event.secondaryRef,
+        metadata: { ...event.details },
+        savedPaymentMethod: event.savedPaymentMethod ?? null,
+      });
+      if (!result.success) {
+        if (result.retryable === false) {
+          console.warn(`[payments] ${provider} authorization for order ${event.orderId} requires manual reconciliation: ${result.error ?? "unknown error"}`);
+          return { status: "manual_reconciliation", result: { ...refs, outcome: "manual_reconciliation", error: result.error ?? null } };
+        }
+        throw new Error(`${provider} authorization failed for order ${event.orderId}: ${result.error ?? "unknown error"}`);
+      }
+      if (result.placed) {
+        await sendOrderCreatedNotification({ db, send, orderId: event.orderId, source: `payment-${provider}-authorized` });
+      }
+      if (result.inventoryShortfall) {
+        return { status: "manual_reconciliation", result: { ...refs, outcome: "authorized_stock_unavailable" } };
+      }
+      return { status: "processed", result: { ...refs, outcome: result.alreadyProcessed ? "authorized_duplicate" : "authorized" } };
     }
     case "failed":
     case "cancelled": {

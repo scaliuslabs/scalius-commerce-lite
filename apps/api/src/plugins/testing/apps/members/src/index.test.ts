@@ -31,7 +31,7 @@ describe("acme.members", () => {
 
   it("keeps checkout for members: the cart carries the app's own roles", async () => {
     const harness = createPluginTestHarness(members, { customers: ["c1", "c2", "c3"] });
-    const member = fixtures.cart({ customer: { id: "c1", tags: [], orderCount: 0, totalSpentMinor: 0, roles: [] } });
+    const member = fixtures.cart({ customer: { id: "c1", tags: [], segmentIds: [], orderCount: 0, totalSpentMinor: 0, roles: [] } });
     expect((await harness.fn("cart.validate", { cart: { ...member, customer: { ...member.customer!, roles: undefined } }, reads: {} })).value?.errors).toHaveLength(1);
     await harness.runJob("import_members", { input: { customers: ["c1"] } });
     // Left out, `roles` is what the app granted in the harness (the platform fills them per app).

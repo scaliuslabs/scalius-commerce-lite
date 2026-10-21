@@ -318,6 +318,31 @@ describe("checkout app functions on the agent and admin channels", () => {
     expect(detail?.discountAmount).toBe(210);
   });
 
+  it("a staff order line takes an app's purchase option: apps see it with the order's channels, the line freezes it, an unknown one is refused", async () => {
+    await installTestApp("acme.subscribe", ["cart.validate"], { checkout: { purchaseOptions: [{ key: "monthly", title: "Subscribe and save" }] } });
+    const seen: unknown[] = [];
+    answers["acme.subscribe"] = (_point, input) => {
+      const cart = input.cart as { channel: string; salesChannelId: string; lines: Array<{ variantId: string; purchaseOption: string | null; requiresShipping: boolean }> };
+      seen.push({ channel: cart.channel, salesChannelId: cart.salesChannelId, lines: cart.lines.map((line) => [line.variantId, line.purchaseOption, line.requiresShipping]) });
+      return ok({ errors: [] });
+    };
+    const items = [
+      { productId: "p_tea", variantId: "v_tea", quantity: 1, purchaseOption: "acme.subscribe.monthly" },
+      { productId: "p_mug", variantId: "v_mug", quantity: 1 },
+    ];
+    const created = await adminCreate("33333333-3333-4333-8333-333333333333", { items });
+    expect(created.status).toBe(201);
+    expect(seen.at(-1)).toEqual({ channel: "admin", salesChannelId: "sc_online_store", lines: [["v_tea", "acme.subscribe.monthly", true], ["v_mug", null, true]] });
+    const rows = sqlite.prepare("SELECT product_id AS productId, properties FROM order_items WHERE order_id = ? ORDER BY product_id DESC").all(created.body.data!.id as string) as Array<{ productId: string; properties: string | null }>;
+    expect(rows.map((row) => [row.productId, row.properties && JSON.parse(row.properties)])).toEqual([
+      ["p_tea", [{ key: "_purchase_option", type: "text", label: "Purchase option", value: "acme.subscribe.monthly", displayValue: "Subscribe and save", priceMinor: 0 }]],
+      ["p_mug", null],
+    ]);
+    const refused = await adminQuote({ items: [{ productId: "p_tea", variantId: "v_tea", quantity: 1, purchaseOption: "acme.gone.monthly" }] });
+    expect(refused.status).toBe(400);
+    expect(JSON.stringify(refused.body)).toContain("purchase_option_unavailable");
+  });
+
   it("an app rule refuses the agent quote and submit and the staff quote and order, with checkout's refusal shape", async () => {
     await installTestApp("acme.rules", ["cart.validate"]);
     answers["acme.rules"] = () => ok({ errors: [{ code: "too_much_tea", message: "At most 3 teas per order.", lineId: "cart:0:v_tea" }] });

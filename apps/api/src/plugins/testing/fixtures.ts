@@ -63,9 +63,11 @@ export function testCart(subtotalMinor: number) {
     currency: "BDT",
     decimalPlaces: 2,
     channel: "online_store" as const,
+    salesChannelId: "sc_online_store",
     lines: [{
       lineId: "l1", productId: "p1", variantId: "v1", sku: null, title: "Panjabi", quantity: 1,
       unitPriceMinor: subtotalMinor, lineTotalMinor: subtotalMinor, categoryIds: [], collectionIds: [], brandId: null, properties: {},
+      requiresShipping: true, weightGrams: null, purchaseOption: null,
     }],
     subtotalMinor,
     customer: null,

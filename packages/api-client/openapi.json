@@ -15653,6 +15653,12 @@
                 },
                 "taxMinor": {
                   "type": "integer"
+                },
+                "purchaseOption": {
+                  "type": "string",
+                  "nullable": true,
+                  "minLength": 1,
+                  "maxLength": 160
                 }
               },
               "required": [
@@ -15666,7 +15672,8 @@
                 "unitPriceMinor",
                 "subtotalMinor",
                 "discountMinor",
-                "taxMinor"
+                "taxMinor",
+                "purchaseOption"
               ]
             }
           },
@@ -16890,6 +16897,224 @@
           "actorType",
           "reason",
           "createdAt"
+        ]
+      },
+      "RefundResource": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "orderId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "status": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3
+          },
+          "amountMinor": {
+            "type": "integer"
+          },
+          "settlement": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "orderItemId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "variantId": {
+                  "type": "string",
+                  "nullable": true,
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "quantity": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "orderItemId",
+                "variantId",
+                "quantity"
+              ]
+            }
+          },
+          "paymentIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "orderId",
+          "status",
+          "currency",
+          "amountMinor",
+          "settlement",
+          "lines",
+          "paymentIds",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "PaymentMethodResource": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The saved method (`cpm_…`): pass it as `paymentMethodId` to charge it."
+          },
+          "customerId": {
+            "type": "string"
+          },
+          "providerId": {
+            "type": "string",
+            "description": "The payment provider that keeps it (`<app id>:<provider id>`)."
+          },
+          "brand": {
+            "type": "string",
+            "nullable": true,
+            "description": "The card network or wallet, lower case (`visa`)."
+          },
+          "last4": {
+            "type": "string",
+            "nullable": true,
+            "description": "The last four digits; the full number never reaches the store."
+          },
+          "expiryMonth": {
+            "type": "integer",
+            "nullable": true
+          },
+          "expiryYear": {
+            "type": "integer",
+            "nullable": true
+          },
+          "label": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "removed"
+            ]
+          },
+          "sourceOrderId": {
+            "type": "string",
+            "nullable": true,
+            "description": "The order whose payment kept it."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "customerId",
+          "providerId",
+          "brand",
+          "last4",
+          "expiryMonth",
+          "expiryYear",
+          "label",
+          "status",
+          "sourceOrderId",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "PaymentOutcomeResource": {
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "succeeded",
+              "authorized",
+              "pending",
+              "voided"
+            ],
+            "description": "`succeeded`: captured and credited to the order. `authorized`: held, capture it with payments.capture. `pending`: the provider answers later by webhook; read the order. `voided`: the hold was released."
+          },
+          "orderId": {
+            "type": "string"
+          },
+          "providerId": {
+            "type": "string"
+          },
+          "amountMinor": {
+            "type": "integer",
+            "description": "In minor units of `currency`."
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3
+          },
+          "payment": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PaymentResource"
+              },
+              {
+                "nullable": true,
+                "description": "The order payment, once the provider's answer landed."
+              }
+            ]
+          },
+          "replayed": {
+            "type": "boolean",
+            "description": "True when this answers a request already handled (the same Idempotency-Key, or an authorization already settled)."
+          }
+        },
+        "required": [
+          "outcome",
+          "orderId",
+          "providerId",
+          "amountMinor",
+          "currency",
+          "payment",
+          "replayed"
         ]
       },
       "AppWebhookSubscription": {
@@ -22526,6 +22751,7 @@
                         "read_orders",
                         "write_orders",
                         "write_payments",
+                        "write_refunds",
                         "write_fulfillments",
                         "read_customers",
                         "write_customers",
@@ -23398,6 +23624,7 @@
                 "read_orders",
                 "write_orders",
                 "write_payments",
+                "write_refunds",
                 "write_fulfillments",
                 "read_customers",
                 "write_customers",
@@ -23564,6 +23791,7 @@
                         "read_orders",
                         "write_orders",
                         "write_payments",
+                        "write_refunds",
                         "write_fulfillments",
                         "read_customers",
                         "write_customers",
@@ -79151,6 +79379,13 @@
                           },
                           "maxItems": 10,
                           "description": "Buyer inputs the product asks for (engraving text, gift wrap, a fit choice). A ticked checkbox sends \"true\"; empty optional fields are omitted. Same SKU with different inputs is a different line."
+                        },
+                        "purchaseOption": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 160,
+                          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$",
+                          "description": "An installed app's purchase option for the line (`<app id>.<key>`, e.g. a subscription); absent or null: a one-time purchase. Part of the line's identity: the same SKU with another option is another line. An option no active app offers is refused (`purchase_option_unavailable`)."
                         }
                       },
                       "required": [
@@ -82609,7 +82844,8 @@
                                   "price_changed",
                                   "properties_required",
                                   "properties_invalid",
-                                  "fulfilment_unavailable"
+                                  "fulfilment_unavailable",
+                                  "purchase_option_unavailable"
                                 ]
                               },
                               "action": {
@@ -82817,6 +83053,22 @@
                                     "priceMinor"
                                   ]
                                 }
+                              },
+                              "purchaseOption": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "title"
+                                ],
+                                "description": "The line's purchase option (absent: a one-time purchase). The app that offers it prices it."
                               },
                               "propertiesHash": {
                                 "type": "string"
@@ -83219,6 +83471,13 @@
                           },
                           "maxItems": 10,
                           "description": "Buyer inputs the product asks for (engraving text, gift wrap, a fit choice). A ticked checkbox sends \"true\"; empty optional fields are omitted. Same SKU with different inputs is a different line."
+                        },
+                        "purchaseOption": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 160,
+                          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$",
+                          "description": "An installed app's purchase option for the line (`<app id>.<key>`, e.g. a subscription); absent or null: a one-time purchase. Part of the line's identity: the same SKU with another option is another line. An option no active app offers is refused (`purchase_option_unavailable`)."
                         }
                       },
                       "required": [
@@ -87410,6 +87669,22 @@
                                   ]
                                 }
                               },
+                              "purchaseOption": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "title"
+                                ],
+                                "description": "The line's purchase option (absent: a one-time purchase). The app that offers it prices it."
+                              },
                               "propertiesHash": {
                                 "type": "string"
                               }
@@ -87751,6 +88026,13 @@
                           },
                           "maxItems": 10,
                           "description": "Buyer inputs the product asks for (engraving text, gift wrap, a fit choice). A ticked checkbox sends \"true\"; empty optional fields are omitted. Same SKU with different inputs is a different line."
+                        },
+                        "purchaseOption": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 160,
+                          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$",
+                          "description": "An installed app's purchase option for the line (`<app id>.<key>`, e.g. a subscription); absent or null: a one-time purchase. Part of the line's identity: the same SKU with another option is another line. An option no active app offers is refused (`purchase_option_unavailable`)."
                         }
                       },
                       "required": [
@@ -94211,6 +94493,13 @@
                             ]
                           },
                           "maxItems": 20
+                        },
+                        "purchaseOption": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 160,
+                          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$",
+                          "description": "An installed app's purchase option for the line (`<app id>.<key>`, e.g. a subscription); absent or null: a one-time purchase. Part of the line's identity: the same SKU with another option is another line. An option no active app offers is refused (`purchase_option_unavailable`)."
                         }
                       },
                       "required": [
@@ -102602,6 +102891,1356 @@
         }
       }
     },
+    "/api/v1/admin/resources/orders/{id}/refunds": {
+      "post": {
+        "operationId": "dashboard.resources.refunds.create",
+        "tags": [
+          "App API - Orders"
+        ],
+        "summary": "Refund an order",
+        "description": "Gives money back on an order, through the payments it came from (or as one store-credit gift card), and records the order lines it is for. The refund is claimed before any provider is called: a repeat with the same Idempotency-Key returns the first refund, and a provider whose answer is unknown leaves it pending for reconciliation instead of refunding twice. `refund.created` and `refund.updated` carry its lines; `order.refunded` reports each payment it settles.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "amountMinor": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991,
+                    "description": "What goes back, in minor units of the order's `currency`; at most what was paid less what was refunded."
+                  },
+                  "lines": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "orderItemId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 180
+                        },
+                        "quantity": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 1000000
+                        }
+                      },
+                      "required": [
+                        "orderItemId",
+                        "quantity"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 99,
+                    "description": "Which order lines (and how many units of each) the refund is for; each at most its quantity less what earlier refunds named. Omit for an amount-only refund."
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300,
+                    "description": "Why, for the order timeline (staff read it)."
+                  },
+                  "settlement": {
+                    "type": "string",
+                    "enum": [
+                      "original",
+                      "store_credit"
+                    ],
+                    "default": "original",
+                    "description": "`original`: back to the payments it came from. `store_credit`: one new gift card for the whole amount, sent to the order contact."
+                  },
+                  "gateway": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160,
+                    "description": "Refund only payments taken by this method (`cod`, a gateway id or an app provider's `<plugin id>:<provider id>`)."
+                  },
+                  "manualSettlementConfirmed": {
+                    "type": "boolean",
+                    "description": "Required true when part of it goes back to a cash-on-delivery or recorded payment: the buyer already got that money by hand."
+                  }
+                },
+                "required": [
+                  "amountMinor",
+                  "reason"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The refund",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "refund": {
+                          "$ref": "#/components/schemas/RefundResource"
+                        }
+                      },
+                      "required": [
+                        "refund"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "financial",
+          "openWorld": true,
+          "idempotency": "required",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app gives money back on an order, in minor units, naming the order lines it is for.",
+          "dryRun": "none",
+          "confirmation": "required"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.refund"
+        }
+      },
+      "get": {
+        "operationId": "dashboard.resources.refunds.list",
+        "tags": [
+          "App API - Orders"
+        ],
+        "summary": "List an order's refunds",
+        "description": "Every refund made on the order with a refund command, oldest first: its money in integer minor units of `currency`, its status, the order lines it is for and the refund payments it became.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The refunds",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "refunds": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/RefundResource"
+                          }
+                        }
+                      },
+                      "required": [
+                        "refunds"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when reading an order's refunds with their lines and status in minor units.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.view"
+        }
+      }
+    },
+    "/api/v1/admin/resources/payment-methods": {
+      "get": {
+        "operationId": "dashboard.resources.payment_methods.list",
+        "tags": [
+          "App API - Payments"
+        ],
+        "summary": "List a customer's saved payment methods",
+        "description": "The customer's active payment methods kept by their providers (a card or wallet saved with a subscription's first payment), oldest first, at most 50. The provider's own reference never leaves the store.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "customerId",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The saved methods",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "paymentMethods": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/PaymentMethodResource"
+                          }
+                        }
+                      },
+                      "required": [
+                        "paymentMethods"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when listing the cards or wallets a customer saved for later charges (brand and last four digits only).",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.record_payment"
+        }
+      }
+    },
+    "/api/v1/admin/resources/payment-methods/{id}": {
+      "delete": {
+        "operationId": "dashboard.resources.payment_methods.delete",
+        "tags": [
+          "App API - Payments"
+        ],
+        "summary": "Remove a saved payment method",
+        "description": "Detaches the method at its provider, then removes it: it can no longer be charged. A repeat returns the removed method. Send an Idempotency-Key.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The removed method",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "paymentMethod": {
+                          "$ref": "#/components/schemas/PaymentMethodResource"
+                        }
+                      },
+                      "required": [
+                        "paymentMethod"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Declined by the provider (`payment_declined`), or a key reused for another request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "destructive",
+          "openWorld": true,
+          "idempotency": "required",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when removing a customer's saved card or wallet so it is never charged again.",
+          "dryRun": "none",
+          "confirmation": "required"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.record_payment"
+        }
+      }
+    },
+    "/api/v1/admin/resources/orders/{id}/payments/charge": {
+      "post": {
+        "operationId": "dashboard.resources.payments.charge",
+        "tags": [
+          "App API - Payments"
+        ],
+        "summary": "Charge a customer's saved payment method for an order",
+        "description": "Charges the order's customer's saved payment method without the buyer (a subscription renewal): the order must have money due, not be cancelled, and take a provider payment (its own provider, or an invoice with nothing paid yet, which the payment switches to the provider). The payment lands through the same kernel as a webhook: `payment.updated`, and `order.paid` once nothing is due. A decline is 422 `payment_declined`. When the provider gave no answer, 503 `payment_outcome_unknown`: send the same request again with the same Idempotency-Key; until then the order takes no other charge. Amounts are minor units of the order's currency.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "paymentMethodId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "description": "A saved method of the order's customer (payment_methods.list)."
+                  },
+                  "amountMinor": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991,
+                    "description": "What to charge, in minor units of the order's `currency`. Default: its `balanceDueMinor`; another amount must be one the order takes (a deposit)."
+                  },
+                  "capture": {
+                    "type": "string",
+                    "enum": [
+                      "automatic",
+                      "manual"
+                    ],
+                    "default": "automatic",
+                    "description": "`manual` only authorizes (money held): capture it with payments.capture or release it with payments.void. Needs a provider that authorizes."
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The order `version` you read; a different one is refused with 409 before the provider is called."
+                  }
+                },
+                "required": [
+                  "paymentMethodId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The outcome",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PaymentOutcomeResource"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Declined by the provider (`payment_declined`), or a key reused for another request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "financial",
+          "openWorld": true,
+          "idempotency": "required",
+          "revision": "optional",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when charging a customer's saved card or wallet for an order without the buyer (a subscription renewal), in minor units.",
+          "dryRun": "none",
+          "confirmation": "required"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.record_payment"
+        }
+      }
+    },
+    "/api/v1/admin/resources/payments/{id}/capture": {
+      "post": {
+        "operationId": "dashboard.resources.payments.capture",
+        "tags": [
+          "App API - Payments"
+        ],
+        "summary": "Capture an authorized payment",
+        "description": "Captures an authorization in full: the payment becomes `succeeded` and is credited to its order (`payment.updated`, `order.paid` once nothing is due). One capture per authorization whatever the key: a repeat answers the first outcome. Send an Idempotency-Key.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "description": "The authorized payment's id (payments.list)."
+            },
+            "required": true,
+            "description": "The authorized payment's id (payments.list).",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The outcome",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PaymentOutcomeResource"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Declined by the provider (`payment_declined`), or a key reused for another request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "financial",
+          "openWorld": true,
+          "idempotency": "required",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when capturing a payment that was only authorized (authorize at order, capture at shipping).",
+          "dryRun": "none",
+          "confirmation": "required"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.record_payment"
+        }
+      }
+    },
+    "/api/v1/admin/resources/payments/{id}/void": {
+      "post": {
+        "operationId": "dashboard.resources.payments.void",
+        "tags": [
+          "App API - Payments"
+        ],
+        "summary": "Void an authorized payment",
+        "description": "Releases an authorization at its provider: the payment becomes `cancelled` (`payment.updated`) and the order stays unpaid. A captured payment is refunded instead. Send an Idempotency-Key.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "description": "The authorized payment's id (payments.list)."
+            },
+            "required": true,
+            "description": "The authorized payment's id (payments.list).",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The outcome",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PaymentOutcomeResource"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Declined by the provider (`payment_declined`), or a key reused for another request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "financial",
+          "openWorld": true,
+          "idempotency": "required",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when releasing a payment that was only authorized, without charging it.",
+          "dryRun": "none",
+          "confirmation": "required"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.record_payment"
+        }
+      }
+    },
     "/api/v1/admin/resources/webhook-subscriptions": {
       "get": {
         "operationId": "dashboard.resources.webhook_subscriptions.list",
@@ -102800,6 +104439,7 @@
                         "inventory_transfer.*",
                         "customer.*",
                         "fulfillment.*",
+                        "refund.*",
                         "shipment.*",
                         "payment.*",
                         "checkout.*",
@@ -102827,6 +104467,8 @@
                         "customer.consent_changed",
                         "fulfillment.created",
                         "fulfillment.voided",
+                        "refund.created",
+                        "refund.updated",
                         "shipment.updated",
                         "payment.updated",
                         "checkout.abandoned",
@@ -102848,7 +104490,7 @@
                       "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*`; the app's grant must cover it (its manifest `events`)."
                     },
                     "minItems": 1,
-                    "maxItems": 53
+                    "maxItems": 56
                   },
                   "description": {
                     "type": "string",
@@ -103088,6 +104730,7 @@
                         "inventory_transfer.*",
                         "customer.*",
                         "fulfillment.*",
+                        "refund.*",
                         "shipment.*",
                         "payment.*",
                         "checkout.*",
@@ -103115,6 +104758,8 @@
                         "customer.consent_changed",
                         "fulfillment.created",
                         "fulfillment.voided",
+                        "refund.created",
+                        "refund.updated",
                         "shipment.updated",
                         "payment.updated",
                         "checkout.abandoned",
@@ -103136,7 +104781,7 @@
                       "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*`; the app's grant must cover it (its manifest `events`)."
                     },
                     "minItems": 1,
-                    "maxItems": 53
+                    "maxItems": 56
                   },
                   "description": {
                     "type": "string",
@@ -190570,6 +192215,32 @@
                     "maxLength": 128,
                     "pattern": "^[A-Za-z0-9_-]+$",
                     "description": "One key per refund (per dialog opening). Repeating it returns the first refund."
+                  },
+                  "lines": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "orderItemId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 180
+                        },
+                        "quantity": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 1000000
+                        }
+                      },
+                      "required": [
+                        "orderItemId",
+                        "quantity"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 99,
+                    "description": "Which order lines (and how many units of each) the refund is for; each at most its quantity less what earlier refunds named. Omit for an amount-only refund."
                   }
                 }
               }
@@ -190599,6 +192270,10 @@
                         },
                         "gateway": {
                           "type": "string"
+                        },
+                        "orderRefundId": {
+                          "type": "string",
+                          "description": "The refund record (dashboard.resources.refunds.list)."
                         },
                         "refundId": {
                           "type": "string"
@@ -196718,6 +198393,12 @@
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9000000000000
+                        },
+                        "purchaseOption": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 160,
+                          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
                         }
                       },
                       "required": [
@@ -198529,6 +200210,12 @@
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9000000000000
+                        },
+                        "purchaseOption": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 160,
+                          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
                         }
                       },
                       "required": [
@@ -199051,6 +200738,12 @@
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9000000000000
+                        },
+                        "purchaseOption": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 160,
+                          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
                         },
                         "orderItemId": {
                           "type": "string",
@@ -199585,6 +201278,12 @@
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9000000000000
+                        },
+                        "purchaseOption": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 160,
+                          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
                         },
                         "orderItemId": {
                           "type": "string",
@@ -241645,6 +243344,7 @@
                         "inventory_transfer.*",
                         "customer.*",
                         "fulfillment.*",
+                        "refund.*",
                         "shipment.*",
                         "payment.*",
                         "checkout.*",
@@ -241672,6 +243372,8 @@
                         "customer.consent_changed",
                         "fulfillment.created",
                         "fulfillment.voided",
+                        "refund.created",
+                        "refund.updated",
                         "shipment.updated",
                         "payment.updated",
                         "checkout.abandoned",
@@ -241693,7 +243395,7 @@
                       "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*` for every topic."
                     },
                     "minItems": 1,
-                    "maxItems": 53
+                    "maxItems": 56
                   },
                   "description": {
                     "type": "string",
@@ -242025,6 +243727,7 @@
                         "inventory_transfer.*",
                         "customer.*",
                         "fulfillment.*",
+                        "refund.*",
                         "shipment.*",
                         "payment.*",
                         "checkout.*",
@@ -242052,6 +243755,8 @@
                         "customer.consent_changed",
                         "fulfillment.created",
                         "fulfillment.voided",
+                        "refund.created",
+                        "refund.updated",
                         "shipment.updated",
                         "payment.updated",
                         "checkout.abandoned",
@@ -242073,7 +243778,7 @@
                       "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*` for every topic."
                     },
                     "minItems": 1,
-                    "maxItems": 53
+                    "maxItems": 56
                   },
                   "description": {
                     "type": "string",
@@ -243076,6 +244781,8 @@
                 "customer.consent_changed",
                 "fulfillment.created",
                 "fulfillment.voided",
+                "refund.created",
+                "refund.updated",
                 "shipment.updated",
                 "payment.updated",
                 "checkout.abandoned",
@@ -243111,6 +244818,7 @@
                 "purchase_order",
                 "inventory_transfer",
                 "fulfillment",
+                "refund",
                 "shipment",
                 "payment",
                 "checkout",
@@ -278254,6 +279962,38 @@
           ]
         },
         {
+          "operationId": "dashboard.resources.payment_methods.delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.payment_methods.delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.payment_methods.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.payment_methods.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.payments.capture",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.payments.capture"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.payments.charge",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.payments.charge"
+          ]
+        },
+        {
           "operationId": "dashboard.resources.payments.create",
           "surface": "dashboard",
           "mode": "operation-fallback",
@@ -278267,6 +280007,14 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.resources.payments.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.payments.void",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.payments.void"
           ]
         },
         {
@@ -278379,6 +280127,22 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.resources.products.update"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.refunds.create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.refunds.create"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.refunds.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.refunds.list"
           ]
         },
         {

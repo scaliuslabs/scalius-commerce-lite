@@ -161,7 +161,13 @@ export async function createManualOrder(
             deliveryMethodKind,
             deliveryMethod: shippingMethod,
             appDiscounts,
-        } = await prepareManualOrderQuote(db, data, undefined, undefined, { apps: options.apps, appProviders: options.appProviders });
+        } = await prepareManualOrderQuote(db, data, undefined, undefined, {
+            apps: options.apps,
+            appProviders: options.appProviders,
+            // Apps see who places it and the channel it sells from, as the order records them.
+            channel: data.channel ?? "admin",
+            salesChannelId,
+        });
         if (requiresShipping && !data.shippingAddress?.trim()) {
             throw new ValidationError("Enter the delivery address, or choose a pickup method.");
         }

@@ -22,6 +22,7 @@ import {
 import {
   assertStorefrontAppPaymentMethod,
   buildCheckoutAttemptIdentity,
+  checkoutPurchaseOptions,
   commitStorefrontOrderPayload,
   createAtomicCheckoutAttempt,
   createStorefrontOrder,
@@ -120,10 +121,10 @@ describe("checkout app functions (real schema, bundled and test apps)", () => {
     await activatePlugin(db, "acme.bulk-discount", { actorUserId: "owner", expectedRevision: configured.revision });
   }
 
-  async function installTestApp(id: string, points: Array<{ point: string; priority?: number }>, limits = { cpuMs: 50, wallMs: 100 }) {
+  async function installTestApp(id: string, points: Array<{ point: string; priority?: number }>, limits = { cpuMs: 50, wallMs: 100 }, extra: Partial<PluginManifestInput> = {}) {
     const manifest: PluginManifestInput = {
       id, name: `${id} app`, version: "1.0.0", apiVersion: PLUGIN_API_VERSION, description: "A checkout test app.",
-      author: { name: "Test" }, functions: points as PluginManifestInput["functions"], limits,
+      author: { name: "Test" }, functions: points as PluginManifestInput["functions"], limits, ...extra,
     };
     await installPlugin(db, { manifest, source: "upload", bundleSha256: "3".repeat(64), actorUserId: "owner" });
     await activatePlugin(db, id, { actorUserId: "owner", expectedRevision: 1 });
@@ -154,16 +155,18 @@ describe("checkout app functions (real schema, bundled and test apps)", () => {
     };
   }
 
-  async function authority(data: CreateStorefrontOrderInput) {
+  async function authority(data: CreateStorefrontOrderInput, appFunctions?: CheckoutAppFunctions) {
     return loadStorefrontCheckoutAuthority(db, {
       items: data.items, inventoryPool: data.inventoryPool, city: data.city, zone: data.zone, area: data.area,
       shippingMethodId: data.shippingMethodId, customerPhone: data.customerPhone,
+      // As the checkout read binds it: the apps' purchase options.
+      purchaseOptions: () => checkoutPurchaseOptions(appFunctions),
     });
   }
 
   /** The quote the buyer reviews (what the tax-quote route prices). */
   async function quote(data: CreateStorefrontOrderInput, appFunctions?: CheckoutAppFunctions) {
-    const read = await authority(data);
+    const read = await authority(data, appFunctions);
     return priceStorefrontCheckout(db, {
       cartValidation: read.cartValidation,
       delivery: read.deliveryPreflight,
@@ -179,7 +182,7 @@ describe("checkout app functions (real schema, bundled and test apps)", () => {
 
   /** The order placement path: prepare with the apps, then the one commit batch. */
   async function place(data: CreateStorefrontOrderInput, appFunctions?: CheckoutAppFunctions) {
-    const read = await authority(data);
+    const read = await authority(data, appFunctions);
     const attempt = createAtomicCheckoutAttempt(await buildCheckoutAttemptIdentity(data));
     const result = await createStorefrontOrder(
       db, data, "https://shop.test/api/v1/orders",
@@ -259,6 +262,51 @@ describe("checkout app functions (real schema, bundled and test apps)", () => {
       details: { reason: "cart_rules", ruleErrors: [expect.objectContaining({ index: 1, code: "max_quantity" })] },
     });
     expect(one("SELECT count(*) AS n FROM orders")).toEqual({ n: 0 });
+  });
+
+  it("an app discount that does not combine with the class already applied is skipped predictably, claiming no code", async () => {
+    // acme.bulk-discount (priority 100) counts the cart: an order discount, 10% at 2 units.
+    await installBulk({ count_by: "cart", tier1_quantity: 2, tier1_percent: 10 });
+    await installTestApp("acme.picky", [{ point: "checkout.discounts", priority: 200 }]);
+    let combinesWith: Record<string, boolean> | undefined = { orderDiscounts: false };
+    answers["acme.picky"] = () => ok({ discounts: [{
+      title: "Mug deal", code: "MUG", target: { kind: "lines", lineIds: ["cart:1:v_mug"] },
+      value: { type: "fixed_amount", amountMinor: 5_000 }, ...(combinesWith ? { combinesWith } : {}),
+    }] });
+    const data = input([line("p_tea", "v_tea", 1, 500), line("p_mug", "v_mug", 1, 300)], { discountCodes: ["mug"] });
+    const skipped = await quote(data, await apps());
+    expect(skipped.appDiscounts.map((entry) => [entry.pluginId, entry.target])).toEqual([["acme.bulk-discount", "order"]]);
+    // The skipped discount claimed no code: MUG is still not found.
+    expect(skipped.discount.rejectedCodes.map((rejection) => [rejection.code, rejection.reason])).toEqual([["MUG", "not_found"]]);
+    await expect(place(data, await apps())).rejects.toThrow("This discount code is not valid.");
+    // Saying nothing stacks it, as before.
+    combinesWith = undefined;
+    const stacked = await quote(data, await apps());
+    expect(stacked.appDiscounts.map((entry) => [entry.pluginId, entry.target])).toEqual([["acme.bulk-discount", "order"], ["acme.picky", "lines"]]);
+    expect(stacked.discount.rejectedCodes).toEqual([]);
+  });
+
+  it("a line's purchase option reaches the apps, is frozen as _purchase_option, and one no app offers is refused", async () => {
+    await installTestApp("acme.subscribe", [{ point: "cart.validate" }], undefined, {
+      checkout: { purchaseOptions: [{ key: "monthly", title: "Subscribe and save" }] },
+    });
+    let seen: unknown = null;
+    answers["acme.subscribe"] = (_point, payload) => {
+      seen = (payload.cart as { lines: Array<Record<string, unknown>> }).lines.map((entry) => [entry.variantId, entry.purchaseOption, entry.requiresShipping]);
+      return ok({ errors: [] });
+    };
+    const runner = await apps();
+    const data = input([{ ...line("p_tea", "v_tea", 1, 500), purchaseOption: "acme.subscribe.monthly" }, line("p_tea", "v_tea", 1, 500)]);
+    const { result } = await place(data, runner);
+    expect(seen).toEqual([["v_tea", "acme.subscribe.monthly", true], ["v_tea", null, true]]);
+    const rows = sqlite.prepare("SELECT properties FROM order_items WHERE order_id = ? ORDER BY properties IS NULL, id").all(result.orderId) as Array<{ properties: string | null }>;
+    expect(rows.map((row) => row.properties && JSON.parse(row.properties))).toEqual([
+      [{ key: "_purchase_option", type: "text", label: "Purchase option", value: "acme.subscribe.monthly", displayValue: "Subscribe and save", priceMinor: 0 }],
+      null,
+    ]);
+    // An option no active app declares is refused on its line, never dropped.
+    await expect(authority(input([{ ...line("p_tea", "v_tea", 1, 500), purchaseOption: "acme.gone.monthly" }]), runner))
+      .rejects.toMatchObject({ details: { itemIssues: [expect.objectContaining({ index: 0, code: "purchase_option_unavailable", action: "remove" })] } });
   });
 
   it("a code only an app answers to is accepted at placement; a typo still fails closed", async () => {

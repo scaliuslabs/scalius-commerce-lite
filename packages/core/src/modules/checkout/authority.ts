@@ -112,6 +112,8 @@ export interface StorefrontCheckoutAuthorityInput {
      * cart is priced: after the read, which also says which apps are active.
      */
     linePricer?: () => AppLinePricer | undefined;
+    /** The purchase options the active apps declare (`checkoutPurchaseOptions`), known once the read has answered. */
+    purchaseOptions?: () => ReadonlyMap<string, string> | undefined;
     /**
      * True while `cart.transform` is still to rewrite the lines: the
      * buyer's prices are checked after it (reads.ts), not here.
@@ -430,6 +432,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                             currencyCode: currency.currencyCode,
                             priceIncrementMinor: currency.priceIncrementMinor,
                             priceScope,
+                            purchaseOptions: input.purchaseOptions?.(),
                             ...pass,
                             deferSubmittedPriceCheck: input.deferSubmittedPriceCheck?.() || pass.deferSubmittedPriceCheck,
                         },

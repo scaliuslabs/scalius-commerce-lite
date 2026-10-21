@@ -180,7 +180,7 @@ export function paymentRecoveryLifecycleCondition() {
         WHEN EXISTS (
             SELECT 1 FROM ${orderPayments}
             WHERE ${orderPayments.orderId} = ${orderIdSql}
-              AND ${inArray(orderPayments.status, [PaymentRecordStatus.PENDING, PaymentRecordStatus.CONFIRMED])}
+              AND ${inArray(orderPayments.status, [PaymentRecordStatus.PENDING, PaymentRecordStatus.CONFIRMED, PaymentRecordStatus.AUTHORIZED])}
         ) THEN 1
         WHEN NOT (${noActiveRefundAttemptForOrderColumnCondition(orderIdSql)}) THEN 1
         WHEN EXISTS (

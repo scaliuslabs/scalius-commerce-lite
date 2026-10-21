@@ -450,6 +450,12 @@
         "type": "integer",
         "minimum": -9007199254740991,
         "maximum": 9007199254740991
+       },
+       "purchaseOption": {
+        "nullable": true,
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 160
        }
       },
       "required": [
@@ -463,7 +469,8 @@
        "unitPriceMinor",
        "subtotalMinor",
        "discountMinor",
-       "taxMinor"
+       "taxMinor",
+       "purchaseOption"
       ]
      }
     },
@@ -1427,6 +1434,102 @@
     "voidedAt"
    ]
   },
+  "refund": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "orderId": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "status": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 64
+    },
+    "currency": {
+     "type": "string",
+     "minLength": 3,
+     "maxLength": 3
+    },
+    "amountMinor": {
+     "type": "integer",
+     "minimum": -9007199254740991,
+     "maximum": 9007199254740991
+    },
+    "settlement": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 64
+    },
+    "lines": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "orderItemId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+       },
+       "variantId": {
+        "nullable": true,
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+       },
+       "quantity": {
+        "type": "integer",
+        "minimum": -9007199254740991,
+        "maximum": 9007199254740991
+       }
+      },
+      "required": [
+       "orderItemId",
+       "variantId",
+       "quantity"
+      ]
+     }
+    },
+    "paymentIds": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+     }
+    },
+    "createdAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "updatedAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    }
+   },
+   "required": [
+    "id",
+    "orderId",
+    "status",
+    "currency",
+    "amountMinor",
+    "settlement",
+    "lines",
+    "paymentIds",
+    "createdAt",
+    "updatedAt"
+   ]
+  },
   "shipment": {
    "type": "object",
    "properties": {
@@ -2189,6 +2292,7 @@
   "purchase_order": [],
   "inventory_transfer": [],
   "fulfillment": [],
+  "refund": [],
   "shipment": [],
   "payment": [],
   "checkout": [

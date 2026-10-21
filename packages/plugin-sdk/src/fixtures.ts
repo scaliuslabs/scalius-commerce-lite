@@ -42,6 +42,9 @@ function cartLine(overrides: Partial<FunctionCart["lines"][number]> = {}): Funct
     collectionIds: [],
     brandId: null,
     properties: {},
+    requiresShipping: true,
+    weightGrams: null,
+    purchaseOption: null,
     ...overrides,
   };
 }
@@ -53,6 +56,7 @@ function cart(overrides: Partial<FunctionCart> = {}): FunctionCart {
     currency: "BDT",
     decimalPlaces: 2,
     channel: "online_store",
+    salesChannelId: "sc_online_store",
     lines,
     subtotalMinor: lines.reduce((sum, line) => sum + line.lineTotalMinor, 0),
     customer: null,

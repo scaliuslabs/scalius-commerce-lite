@@ -60,6 +60,25 @@ export {
   computeOrderPaymentState,
   computePaymentStateAfterPayment,
 } from "./payment-state";
+
+// --- Saved payment methods, off-session charges, authorizations ---
+export { processPaymentAuthorized, releaseAuthorization } from "./process-payment";
+export {
+  buildSavedPaymentMethodUpsert,
+  CUSTOMER_PAYMENT_METHODS_LIST_LIMIT,
+  listCustomerPaymentMethods,
+  removeCustomerPaymentMethod,
+  type CustomerPaymentMethodView,
+} from "./saved-payment-methods";
+export {
+  captureAuthorizedPayment,
+  chargeSavedPaymentMethod,
+  voidAuthorizedPayment,
+  type AppliedPaymentEventStatus,
+  type ApplyProviderPaymentEvent,
+  type ChargeSavedPaymentMethodInput,
+  type SavedMethodPaymentOutcome,
+} from "./saved-method-charges";
 export type {
   ComputedOrderPaymentState,
   ComputePaymentStateInput,
@@ -69,6 +88,7 @@ export type {
 export { finalizeAcceptedRefundAttemptIds, processRefund } from "./refund-service";
 export type {
   FinalizeAcceptedRefundAttemptsResult,
+  RefundLineInput,
   RefundNotificationFact,
   RefundRequest,
   RefundResult as RefundServiceResult,

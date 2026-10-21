@@ -28,6 +28,7 @@ import { withPaymentProviderDeadline } from "./payment-provider-deadline";
 /** webhook_events.event_type per normalized event kind. */
 export const PAYMENT_EVENT_TYPES: Record<PaymentEvent["kind"], string> = {
   confirmed: "payment.confirmed",
+  authorized: "payment.authorized",
   failed: "payment.failed",
   cancelled: "payment.cancelled",
   refund_observed: REFUND_OBSERVED_EVENT_TYPE,
@@ -65,6 +66,37 @@ export async function claimAndApplyPaymentEvent(input: {
     await applyClaimedPaymentEvent(db, env, executionContextOf(input.caller), { id: eventId, attempts: 1, payload });
   });
   return { status: "accepted" };
+}
+
+/**
+ * The same claim, applied before returning: a command that called the
+ * provider itself (an off-session charge, a capture) answers with what the
+ * payment became. A duplicate (a webhook claimed the same fact first) is
+ * applied by whoever claimed it.
+ */
+export async function claimAndApplyPaymentEventNow(input: {
+  db: Database;
+  env: Env;
+  ctx: ExecutionContext;
+  provider: string;
+  event: PaymentEvent;
+  source: string;
+}): Promise<"processed" | "manual_reconciliation" | "retrying" | "failed" | "duplicate"> {
+  const { db, event } = input;
+  const eventId = buildWebhookEventId(input.provider, event.eventType, event.eventId);
+  const payload = { provider: input.provider, event };
+  const claim = await claimWebhookEvent(db, {
+    id: eventId,
+    provider: input.provider,
+    eventType: PAYMENT_EVENT_TYPES[event.kind],
+    orderId: event.orderId,
+    status: "processing",
+    result: { source: input.source, sourceEventId: event.eventId },
+    payload,
+  });
+  if (!claim.claimed) return "duplicate";
+  const { applyClaimedPaymentEvent } = await import("../../background/payment-events");
+  return applyClaimedPaymentEvent(db, input.env, input.ctx, { id: eventId, attempts: 1, payload });
 }
 
 /** The request as gateways read it: the exact body text, header names lowercased. */

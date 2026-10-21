@@ -20,7 +20,7 @@ import { PLUGIN_SCOPE_NAMES, type PluginScope } from "./scopes";
 import { storefrontComponentsManifestSchema } from "./storefront-components";
 import { PLUGIN_SETTING_KEY, PLUGIN_STOREFRONT_SETTING_TYPES, pluginAppSettingsSchemaSchema, pluginSettingsSchemaSchema, type PluginSettingsSchema } from "./settings-schema";
 import { pluginProvidersSchema } from "./providers/descriptors";
-import { checkoutAttributeSchema } from "./buyer-ui";
+import { checkoutAttributeSchema, PURCHASE_OPTIONS_MAX, purchaseOptionDeclarationSchema } from "./buyer-ui";
 import { STOREFRONT_COMPONENT_LIMITS, STOREFRONT_SECTION_SKIN_PREFIX, STOREFRONT_UI_SLOTS, type StorefrontUiSlot } from "./storefront-protocol";
 import { objectTypeDeclarationSchema, OBJECT_TYPE_PATTERN, type ObjectTypeDeclaration } from "./objects";
 import { FUNCTION_READS_MAX, functionReadDeclarationSchema, functionReadIssues } from "./function-reads";
@@ -579,7 +579,17 @@ export const pluginManifestSchema = z.object({
    * Ids are unique within the app; merchants and orders name a provider
    * `<plugin id>:<id>`.
    */
-  checkout: z.object({ attributes: z.array(checkoutAttributeSchema).max(10).refine((fields) => new Set(fields.map((field) => field.key)).size === fields.length, "Attribute keys must be unique.") }).strict().optional(),
+  checkout: z.object({
+    attributes: z.array(checkoutAttributeSchema).max(10).refine((fields) => new Set(fields.map((field) => field.key)).size === fields.length, "Attribute keys must be unique.").default([]),
+    /**
+     * Ways to buy a line the app offers (`<app id>.<key>` on a cart line's
+     * `purchaseOption`): a subscription, a rental. Core applies no pricing or
+     * logic for them; the app prices them with `cart.line_prices` or
+     * `checkout.discounts` and checks eligibility with `cart.validate`. A line
+     * naming an option no active app declares is refused.
+     */
+    purchaseOptions: z.array(purchaseOptionDeclarationSchema).max(PURCHASE_OPTIONS_MAX).refine((options) => new Set(options.map((option) => option.key)).size === options.length, "Purchase option keys must be unique.").default([]),
+  }).strict().optional(),
   providers: pluginProvidersSchema,
 
   routes: z.object({

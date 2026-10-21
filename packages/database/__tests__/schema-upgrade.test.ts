@@ -903,6 +903,18 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 10,
         postgresStatements: 6,
       },
+      {
+        version: 172,
+        name: "0172_line_level_facts",
+        sqliteStatements: 24,
+        postgresStatements: 24,
+      },
+      {
+        version: 173,
+        name: "0173_saved_payment_methods",
+        sqliteStatements: 5,
+        postgresStatements: 5,
+      },
     ]);
   });
 
@@ -1165,6 +1177,8 @@ describe("provider-neutral schema upgrades", () => {
           { version: 169, name: "0169_fk_indexes_and_trigger_guards" },
           { version: 170, name: "0170_collection_slugs_and_theme_permission" },
           { version: 171, name: "0171_app_customer_roles_and_jobs" },
+          { version: 172, name: "0172_line_level_facts" },
+          { version: 173, name: "0173_saved_payment_methods" },
         ],
       });
     } finally {

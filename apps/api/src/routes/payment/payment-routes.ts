@@ -246,7 +246,7 @@ async function handleSuccessReturn(c: ReturnContext): Promise<Response> {
           gateway.label,
           (signal) => gateway.verifyReturn!(request, { settings: loaded.settings, signal }),
         );
-        if (verification.status === "event" && verification.event.kind === "confirmed") {
+        if (verification.status === "event" && (verification.event.kind === "confirmed" || verification.event.kind === "authorized")) {
           await claimAndApplyPaymentEvent({
             db,
             caller: c,

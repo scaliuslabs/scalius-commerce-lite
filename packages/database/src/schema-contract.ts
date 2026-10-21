@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 171,
-  name: "0171_app_customer_roles_and_jobs",
+  version: 173,
+  name: "0173_saved_payment_methods",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -636,6 +636,16 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 171,
     name: "0171_app_customer_roles_and_jobs",
     sourceSha256: "a2736d0c89081497f17bd00e6ad36d38f5c181b97754a4870ad6ac119776b3f6",
+  },
+  {
+    version: 172,
+    name: "0172_line_level_facts",
+    sourceSha256: "13db61f89364d479edb68cf5d86a6bc954f4100e201fb254ddf99c6d6cb641a3",
+  },
+  {
+    version: 173,
+    name: "0173_saved_payment_methods",
+    sourceSha256: "9e743d00fc29a72692ae558bdc25990d4ebc5ea6866fa82985c714a62088b315",
   },
 ] as const;
 

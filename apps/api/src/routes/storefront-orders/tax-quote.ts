@@ -22,6 +22,7 @@ import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { buildStorefrontCheckoutQuoteFingerprint } from "@scalius/core/modules/checkout/browser";
 import {
     assertNoCheckoutRuleErrors,
+    checkoutPurchaseOptions,
     validateCheckoutAttributes,
     createAppLinePricer,
     createCartTransformer,
@@ -53,6 +54,8 @@ import {
     deliveryMethodKindSchema,
     fulfillmentTypeSchema,
     linePropertiesInputSchema,
+    linePurchaseOptionInputSchema,
+    linePurchaseOptionSchema,
     orderLinePropertySchema,
 } from "../../schemas/order-lines";
 import { buildStorefrontTaxAllocationLineId } from "@scalius/core/modules/tax";
@@ -86,6 +89,7 @@ const taxQuoteItemSchema = z.object({
   productName: z.string().max(200).optional().nullable(),
   variantLabel: z.string().max(200).optional().nullable(),
   properties: linePropertiesInputSchema,
+  purchaseOption: linePurchaseOptionInputSchema,
 });
 
 const taxQuoteResponseSchema = z.object({
@@ -178,6 +182,7 @@ const taxQuoteResponseSchema = z.object({
     propertiesPriceMinor: z.number().int(),
     /** Apps' add-ons to each unit (in `unitPrice`), shown as line components; never buyer inputs. */
     adjustments: z.array(orderLinePropertySchema),
+    purchaseOption: linePurchaseOptionSchema.optional(),
     propertiesHash: z.string(),
   })),
 });
@@ -292,6 +297,8 @@ app.openapi(taxQuoteRoute, async (c) => {
     // The apps' lines and line prices (bundles, B2B contracts), as the order sees them.
     linePricer: createAppLinePricer(db, apps, appContext),
     transformer: createCartTransformer(db, apps, appContext),
+    // A line's purchase option must be one an active app offers.
+    purchaseOptions: checkoutPurchaseOptions(apps),
   });
   // Apps that rewrote the lines (`cart.transform`): issues and the listed
   // lines are the buyer's; tax and discounts are the rewritten lines'.
@@ -455,6 +462,7 @@ app.openapi(taxQuoteRoute, async (c) => {
         ...adjustment,
         price: toAmount(adjustment.priceMinor),
       })),
+      ...(item.purchaseOption ? { purchaseOption: item.purchaseOption } : {}),
       propertiesHash: linePropertiesHashes[position]!,
       };
     }),

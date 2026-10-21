@@ -56,6 +56,16 @@ const SAMPLES: Array<[string, string, unknown, unknown]> = [
     providerRef: "TR001", secondaryRef: null, amountMinor: 500, currency: "BDT", wireAmount: wire(500, "5.00"),
     reason: "requested_by_customer", idempotencyKey: "refund-1", reference: "RF1", metadata: {},
   }, { refundId: "RF-PROVIDER-1" }],
+  ["payment", "chargeSavedMethod", {
+    attemptKey: "pcharge_1", correlationId: "ORD1_full_ABCDEF12", orderId: "ORD1", paymentType: "full",
+    amountMinor: 12_550, currency: "BDT", wireAmount: wire(12_550, "125.50"), methodRef: "pm_1", capture: "automatic",
+    requestTimeoutMs: 10_000,
+  }, { status: "declined", reason: "Insufficient funds", code: "insufficient_funds" }],
+  ["payment", "capture", {
+    providerRef: "pi_1", orderId: "ORD1", amountMinor: 12_550, currency: "BDT", wireAmount: wire(12_550, "125.50"), idempotencyKey: "capture:pay_1",
+  }, { status: "pending", providerRef: "pi_1" }],
+  ["payment", "void", { providerRef: "pi_1", orderId: "ORD1", idempotencyKey: "void:pay_1" }, { status: "voided" }],
+  ["payment", "deleteSavedMethod", { ref: "pm_1", idempotencyKey: "delete:cpm_1" }, { status: "not_found" }],
   ["courier", "createShipment", {
     idempotencyKey: "shp_1", orderId: "ORD1", recipient, codAmountMinor: 12_550, currency: "BDT", decimalPlaces: 2,
     note: null, itemCount: 1, itemDescription: null, parcel: { weightGrams: 500, dimensionsCm: null }, options: {},
@@ -102,6 +112,32 @@ describe("provider port contracts", () => {
     expect(output.safeParse({ status: "event", event: { ...event, kind: "cancelled", correlationId: "o1_full_ABCDEF12" } }).success).toBe(true);
     expect(output.safeParse({ status: "invalid", reason: "Bad signature" }).success).toBe(true);
     expect(output.safeParse({ status: "approved" }).success).toBe(false);
+  });
+
+  it("keeps saved methods to a reference and display facts, and authorizations to money held", () => {
+    const authorized = { kind: "authorized", eventType: "payment.authorized", eventId: "e1", orderId: "o1", providerRef: "pi_1", amountMinor: 100, currency: "BDT" };
+    const charge = PROVIDER_PORTS.payment.chargeSavedMethod.output;
+    const method = { ref: "pm_1", brand: "visa", last4: "4242", expiryMonth: 12, expiryYear: 2030, label: "Work card" };
+    expect(charge.safeParse({ status: "event", event: { ...authorized, savedPaymentMethod: method } }).success).toBe(true);
+    // An authorization carries its amount; a charge never answers a refund or a cancel.
+    expect(charge.safeParse({ status: "event", event: { ...authorized, amountMinor: undefined } }).success).toBe(false);
+    expect(charge.safeParse({ status: "event", event: { ...authorized, kind: "cancelled" } }).success).toBe(false);
+    // Never a card number, a CVC or anything but four digits.
+    for (const leak of [{ ...method, last4: "4242424242424242" }, { ...method, last4: "42a2" }, { ...method, cvc: "123" }, { ...method, number: "4242424242424242" }]) {
+      expect(charge.safeParse({ status: "event", event: { ...authorized, savedPaymentMethod: leak } }).success).toBe(false);
+    }
+    // Only money held or captured names a kept method.
+    expect(PROVIDER_PORTS.payment.verifyWebhook.output.safeParse({
+      status: "event", event: { kind: "failed", eventType: "x", eventId: "e2", orderId: "o1", providerRef: "pi_1", savedPaymentMethod: method },
+    }).success).toBe(false);
+    // A capture answers a confirmed payment only.
+    expect(PROVIDER_PORTS.payment.capture.output.safeParse({ status: "event", event: authorized }).success).toBe(false);
+    expect(PROVIDER_PORTS.payment.capture.output.safeParse({ status: "event", event: { ...authorized, kind: "confirmed" } }).success).toBe(true);
+    // A session asks to keep the method only for a customer, off-session.
+    const session = SAMPLES[0]![2] as Record<string, unknown>;
+    const input = PROVIDER_PORTS.payment.createSession.input;
+    expect(input.safeParse({ ...session, savePaymentMethod: { customerId: "cust_1", usage: "off_session" } }).success).toBe(true);
+    expect(input.safeParse({ ...session, savePaymentMethod: { customerId: "cust_1", usage: "on_session" } }).success).toBe(false);
   });
 
   it("keeps a courier's flat audit facts and push ids, within the booking form's bounds", () => {
@@ -356,6 +392,14 @@ describe("provider declarations", () => {
     expect(parses({ ...wallet, flow: "hosted", operations: HOSTED_REFUNDS })).toBe(true);
     expect(parses({ ...wallet, flow: "instructions" })).toBe(false);
     expect(parses({ ...wallet, operations: ["capture"] })).toBe(false);
+    // A capability and its operations come together, both ways.
+    const vaulting = [...HOSTED_REFUNDS, "chargeSavedMethod", "deleteSavedMethod"];
+    expect(parses({ ...wallet, operations: vaulting, capabilities: ["vault"] })).toBe(true);
+    expect(parses({ ...wallet, operations: vaulting })).toBe(false);
+    expect(parses({ ...wallet, operations: [...HOSTED_REFUNDS, "chargeSavedMethod"], capabilities: ["vault"] })).toBe(false);
+    expect(parses({ ...wallet, operations: [...vaulting, "capture", "void"], capabilities: ["vault", "manualCapture"] })).toBe(true);
+    expect(parses({ ...wallet, operations: [...HOSTED_REFUNDS, "capture"], capabilities: ["manualCapture"] })).toBe(false);
+    expect(parses({ ...wallet, operations: vaulting, capabilities: ["vault", "vault"] })).toBe(false);
     expect(parsePluginManifest({ ...manifest, providers: { sms: [{ id: "a", name: "A" }], email: [{ id: "a", name: "B" }] } }).ok).toBe(false);
   });
 
@@ -389,7 +433,9 @@ describe("provider declarations", () => {
     expect(checkPluginHandlers(inventory, { manifest, providers: { wallet: { ...complete, kind: "courier" } } }))
       .toContain('Provider "wallet" is declared as a payment provider but defined for another port.');
     expect(checkPluginHandlers(inventory, { manifest, providers: { wallet: { ...complete, capture() {} } } }))
-      .toContain('Provider "wallet" has "capture", which the payment port does not define.');
+      .toContain('Provider "wallet" implements capture; declare it in the provider\'s operations.');
+    expect(checkPluginHandlers(inventory, { manifest, providers: { wallet: { ...complete, settle() {} } } }))
+      .toContain('Provider "wallet" has "settle", which the payment port does not define.');
     expect(checkPluginHandlers(inventory, { manifest, providers: {} }))
       .toContain('Provider "wallet" is declared in the manifest but has no handler.');
   });

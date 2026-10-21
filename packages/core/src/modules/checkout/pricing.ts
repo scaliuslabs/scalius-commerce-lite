@@ -37,6 +37,7 @@ import {
   collectCheckoutRuleErrors,
   combineDiscountAllocations,
   loadAppFunctionCartFacts,
+  platformDiscountClasses,
   resolveAppDiscounts,
   wantsAppCart,
   type AppDiscountResolution,
@@ -71,7 +72,7 @@ export interface CheckoutPricingDelivery {
 }
 
 export interface StorefrontCheckoutPricingInput {
-  cartValidation: Pick<StorefrontCartValidationResult, "items" | "subtotalMinor" | "hasFreeDeliveryProduct"> & {
+  cartValidation: Pick<StorefrontCartValidationResult, "items" | "subtotalMinor" | "hasFreeDeliveryProduct" | "pricingSegmentIds"> & {
     /** The cart's currency (its market's): every amount is priced in it (MARKETS-DESIGN step 6). */
     money?: PresentmentMoney;
   };
@@ -282,6 +283,7 @@ export async function priceStorefrontCheckout(
     appCart = safeAppCart(() => buildAppFunctionCart({
       currency,
       channel: input.channel,
+      segmentIds: cartValidation.pricingSegmentIds,
       lines: cartValidation.items.map((item, position) => ({
         lineId: lineIds[position]!,
         productId: item.productId,
@@ -291,6 +293,7 @@ export async function priceStorefrontCheckout(
         unitPriceMinor: item.unitPriceMinor,
         discountMinor: platformLine.get(lineIds[position]!) ?? 0,
         properties: item.properties,
+        purchaseOption: item.purchaseOption?.id ?? null,
       })),
       facts,
       destination: appDestination,
@@ -357,6 +360,7 @@ export async function priceStorefrontCheckout(
         platformShippingDiscountMinor: platform.allocation?.shippingMinor ?? 0,
         submittedCodes: input.discountCodes,
         results: discounts,
+        platformClasses: platformDiscountClasses(platform),
         apps,
       });
       appDiscounts = resolution.applied;
@@ -457,7 +461,7 @@ export function assertNoCheckoutRuleErrors(ruleErrors: readonly CheckoutRuleErro
 export async function checkStorefrontCartRules(
   db: Database,
   input: {
-    cartValidation: Pick<StorefrontCartValidationResult, "items">;
+    cartValidation: Pick<StorefrontCartValidationResult, "items" | "pricingSegmentIds">;
     /** The chosen delivery, when the cart has one: apps see its region. */
     delivery: (Pick<CheckoutPricingDelivery, "cityName" | "zoneName" | "fulfilment"> & {
       address?: Pick<NonNullable<CheckoutPricingDelivery["address"]>, "countryCode"> | null;
@@ -488,6 +492,7 @@ export async function checkStorefrontCartRules(
   const cart = safeAppCart(() => buildAppFunctionCart({
     currency: input.currency,
     channel: input.channel,
+    segmentIds: cartValidation.pricingSegmentIds,
     lines: cartValidation.items.map((item, position) => ({
       lineId: lineIds[position]!,
       productId: item.productId,
@@ -497,6 +502,7 @@ export async function checkStorefrontCartRules(
       unitPriceMinor: item.unitPriceMinor,
       discountMinor: 0,
       properties: item.properties,
+      purchaseOption: item.purchaseOption?.id ?? null,
     })),
     facts,
     destination,
@@ -526,6 +532,8 @@ export async function previewStorefrontAppDiscounts(
     currency: PricingCurrency;
     lines: ReadonlyArray<{ lineId: string; productId: string; variantId: string; unitPriceMinor: number; quantity: number; giftCard?: boolean }>;
     platformAllocation: TaxDiscountAllocationInput | undefined;
+    /** The classes the platform's discounts applied in (`platformDiscountClasses`); absent: read from the allocation. */
+    platformClasses?: ReturnType<typeof platformDiscountClasses>;
     shippingMinor: number;
     discountCodes: readonly string[];
     /** The channel apps see (a buyer agent's cart previews as "agent"). */
@@ -574,6 +582,7 @@ export async function previewStorefrontAppDiscounts(
     platformShippingDiscountMinor: input.platformAllocation?.shippingMinor ?? 0,
     submittedCodes: input.discountCodes,
     results: await apps.run("checkout.discounts", { cart }),
+    ...(input.platformClasses ? { platformClasses: input.platformClasses } : {}),
     apps,
   });
 }

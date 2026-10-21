@@ -40,7 +40,11 @@ export function currentProviderKind(name: string): string {
 export const PROVIDER_OPERATIONS = {
   payment: {
     required: ["createSession", "verifyWebhook"],
-    optional: ["verifyReturn", "queryPayment", "refund", "refundStatus", "listRefunds", "testConnection"],
+    optional: [
+      "verifyReturn", "queryPayment", "refund", "refundStatus", "listRefunds", "testConnection",
+      // Saved methods and authorizations (the descriptor's `vault` and `manualCapture`).
+      "chargeSavedMethod", "capture", "void", "deleteSavedMethod",
+    ],
   },
   courier: {
     required: ["createShipment", "trackShipment"],

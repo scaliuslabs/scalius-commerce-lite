@@ -137,6 +137,69 @@ automatic fulfilment).
 COD is not a gateway: collection is recorded in `cod.ts` and COD refunds are
 confirmed manual settlements.
 
+## Saved methods, off-session charges, authorizations
+
+Core runs no subscription logic; it gives apps the primitives (the stable
+app API's `payment_methods.*` and `payments.charge|capture|void`,
+`apps/api/src/routes/admin/resources-payment-methods.ts`). A provider opts in
+with descriptor capabilities: `vault` (`chargeSavedMethod`,
+`deleteSavedMethod`) and `manualCapture` (`capture`, `void`);
+`gatewayHasCapability()` checks both. Built-in Stripe declares neither yet.
+
+- **Saved methods** (`customer_payment_methods`, migration 0173,
+  `saved-payment-methods.ts`): the provider's opaque reference plus brand,
+  last four digits, expiry and a label; never a card number or CVC, and the
+  reference never leaves the store. A session asks the provider to keep the
+  method (`savePaymentMethod`) when the gateway vaults, the buyer is the
+  order's account customer and a line carries `_purchase_option`. The
+  confirmed or authorized event's `savedPaymentMethod` is upserted in the
+  batch that applies the payment, for the account customer only, never moved
+  to another customer. Removing detaches at the provider first.
+- **Authorizations**: an `authorized` event records an `order_payments` row
+  `authorized` (`processPaymentAuthorized`): money held, nothing paid (the
+  ledger counts `succeeded` only); an open checkout it holds is placed. Like
+  `pending`, it is money in flight: the order cannot be cancelled, switch
+  gateway, or take another charge. A capture's confirmed event (same provider
+  reference) promotes the row through `processPaymentConfirmed`; a void, or a
+  verified `failed`/`cancelled` event naming the reference, marks it
+  `cancelled` (`releaseAuthorization`).
+- **Commands** (`saved-method-charges.ts`): `chargeSavedPaymentMethod`,
+  `captureAuthorizedPayment`, `voidAuthorizedPayment` claim a
+  `payment_session_attempts` row before the provider call (its per-order
+  single-flight index and lease are the hosted-payment lock). The charge key
+  derives from the caller's Idempotency-Key and is the provider's
+  idempotency key; capture and void keys are the authorization's own
+  (`capture:<payment id>`), so one hold is captured once whoever asks. Outcomes
+  are recorded and replayed: `succeeded`, `authorized`, `pending` (a webhook
+  follows), `declined` (422 `payment_declined`). No answer leaves the attempt
+  `uncertain` (503 `payment_outcome_unknown`): the same request asks the
+  provider again under the same key; meanwhile (and while `pending`) the
+  order takes no other charge. Events go through the one `webhook_events`
+  claim and the kernel, as webhooks do.
+- **Invoices**: a provider payment lands on a `net_terms` order while nothing
+  is paid on it (`acceptsProviderPayment`); the landed payment switches the
+  order to the provider in its own batch, a decline changes nothing. An
+  invoice partly paid by recorded payments keeps taking recorded payments;
+  cash on delivery never switches.
+
+## Refund records and lines (0172)
+
+Every refund command is an `order_refunds` row (its id is the attempts'
+`refund_group_id`), written first in the claim batch with the order lines it
+is for (`order_refund_lines`, `RefundRequest.lines`: quantities only, the
+amount stays the money). The claim batch writes the record, its lines, then
+the attempts; `refund.created` fires on the first attempt with every line
+already written. The record's `status` is maintained from its attempts by
+triggers: `pending` until each settles, then `refunded`, `failed` or
+`partial`, each change a `refund.updated` carrying the lines. A line is
+refused before the claim (and by `order_refund_lines_bounds_insert` under a
+race) when it is not the order's or exceeds its quantity less what refunds
+that did not fail already named. A request key replayed with other lines is
+a conflict. Staff and agents send `lines` to `dashboard.orders.refund`; apps
+use the stable `refunds.create` (minor units, Sensitive `write_refunds`) and
+`refunds.list`. Refunds a provider reports from outside Scalius have no
+record (no command, no lines); `order.refunded` still reports their payments.
+
 ## Deferred payment (net terms)
 
 `@scalius/shared/payment-terms` is the vocabulary; migration 0161 adds

@@ -60,10 +60,30 @@ language with the merchant's edits).
 
 - **The cart apps see** (`functionCartSchema`): lines keyed by the tax
   allocation line id, unit price and the line total after the platform's
-  discounts, SKU, category with ancestors, collections, brand, buyer inputs;
-  the signed-in customer's order count and spend (no tags exist yet: always
-  empty); the delivery region (city and thana names) when something ships;
-  the typed codes. One extra read batch, only when an app implements a point.
+  discounts, SKU, category with ancestors, collections, brand, buyer inputs,
+  `requiresShipping` (a physical SKU that is not a gift card, whatever
+  delivery is picked), `weightGrams` and the line's `purchaseOption`; the
+  order `channel` and `salesChannelId` (`defaultOrderSalesChannelId` of the
+  channel, as the commit derives it; a manual order's resolved channel); the
+  signed-in customer's tags, order count, spend and `segmentIds` (the
+  segments of the market's live segment price lists on the cart's SKUs that
+  the buyer is in: the price scope cart validation already resolved, so no
+  read; not every segment the buyer is in, and empty for a staff order); the
+  delivery region (city and thana names) when something ships; the typed
+  codes. One extra read batch, only when an app implements a point; the new
+  facts ride its existing product and SKU statements.
+- **Purchase options** (manifest `checkout.purchaseOptions`, at most 10 per
+  app; id `<app id>.<key>`): a cart line, the tax quote, the order and a
+  staff or app order line may name one (`purchaseOption`). One no active app
+  declares is refused on its line (`purchase_option_unavailable`), never
+  dropped. It is part of the line's identity (`lineIdentityProperties`: the
+  hash, the cart key and the quote fingerprint) and of the checkout attempt
+  hash. Core prices nothing for it: the owning app prices it
+  (`cart.line_prices`, `checkout.discounts`) and checks it (`cart.validate`).
+  The order line freezes it as its `_purchase_option` property
+  (`LINE_PURCHASE_OPTION_PROPERTY_KEY`, after the add-ons), so every
+  line-property surface shows it, and the order representation's line
+  carries it as `purchaseOption`. An expanded bundle's components keep it.
 - **Buyer UI and checkout attributes** (`attributes.ts`, shared `plugins/buyer-ui.ts`): private cart/quote/receipt/account responses carry declarative storefront-extension blocks (manifest `storefront.extensions`). Active declarations validate values; unknown keys are dropped, invalid values return `attribute_invalid`, and required fields are checked only on placement so the initial quote can draw them. The accepted map (at most 8 KiB) joins quote/replay identity and the existing order insert. Attributes never enter events or URLs. Buyer UI sees only its app's attributes; object snapshots are shared within the request.
 - **`cart.validate`**: on the cart page (catalog totals, no codes), the quote
   and the order. Errors land on their line (`index`, `cartKey`) or the whole
@@ -81,6 +101,16 @@ language with the merchant's edits).
   code-driven discount needs its code typed and claims it (no longer
   `not_found`); a discount naming a line not in the cart is skipped. Tax is
   quoted after every discount (the platform and app allocations together).
+  Classes and `combinesWith` (rule 10): `lines` is a product discount,
+  `order` an order discount, `shipping` a shipping discount; each key of
+  `combinesWith` defaults to true, so answers that say nothing stack as
+  before. A candidate applies only when it and every discount already applied
+  each combine with the other's class; the platform's own count as the
+  classes they applied (promotions by their class, bundles as product, a
+  staff discount as order) and combine with everything. A skipped candidate
+  claims no code and spends no commit. Unlike promotions (one per class,
+  either side's tick suffices), two app discounts of one class stack unless
+  one says otherwise.
 - **Snapshot commits** (`checkout.discounts` with `snapshot`): the API reads
   the signed-in buyer's record in the declared collection and passes it in
   with its revision; an answer's `commit` becomes an `AppObjectCommit`

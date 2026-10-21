@@ -19,6 +19,35 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
     batch: "forbidden",
     uncurated: true,
   },
+  // Payments without the buyer (routes/admin/resources-payment-methods.ts):
+  // a saved method charged off-session, an authorization captured or voided.
+  // Each claims locally before the provider call under a key derived from
+  // the required Idempotency-Key, so a repeat answers the first outcome.
+  "dashboard.resources.payments.charge": { ...paymentCommand(), revision: "optional" },
+  "dashboard.resources.payments.capture": paymentCommand(),
+  "dashboard.resources.payments.void": paymentCommand(),
+  // A customer's saved methods; the provider's reference never leaves the store.
+  "dashboard.resources.payment_methods.list": { stability: "stable", uncurated: true },
+  "dashboard.resources.payment_methods.delete": {
+    stability: "stable",
+    risk: "destructive",
+    openWorld: true,
+    idempotency: "required",
+    batch: "forbidden",
+    uncurated: true,
+  },
+  // Refunds (routes/admin/resources-refunds.ts): the dashboard refund command
+  // in minor units with the order lines it is for; claimed before any
+  // provider call, one refund per required Idempotency-Key.
+  "dashboard.resources.refunds.list": { stability: "stable", uncurated: true },
+  "dashboard.resources.refunds.create": {
+    stability: "stable",
+    risk: "financial",
+    openWorld: true,
+    idempotency: "required",
+    batch: "forbidden",
+    uncurated: true,
+  },
   "dashboard.resources.fulfillments.list": { stability: "stable", uncurated: true },
   // The fulfilment ledger's own request key carries the Idempotency-Key.
   "dashboard.resources.fulfillments.create": {
@@ -150,6 +179,17 @@ function bulkRun(overrides: Partial<OperationRegistryEntry> = {}): OperationRegi
     batch: "forbidden",
     limits: { request: 524_288 },
     ...overrides,
+  };
+}
+
+function paymentCommand(): OperationRegistryEntry {
+  return {
+    stability: "stable",
+    risk: "financial",
+    openWorld: true,
+    idempotency: "required",
+    batch: "forbidden",
+    uncurated: true,
   };
 }
 

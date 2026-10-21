@@ -422,6 +422,13 @@ A hosted provider must declare `verifyReturn` and `queryPayment`. A provider tha
 3. **`queryPayment`** answers "did it go through?" for a buyer or a staff reconcile: `{ providerStatus, event? }`.
 4. **`refund`** runs at most once per `input.idempotencyKey`. Store what you sent. If the answer is lost, raise `retryable` with `uncertain`: the platform then asks `refundStatus` instead of refunding twice.
 
+Saved methods and authorizations (subscriptions, "authorize at order, capture at ship") are two optional capabilities, each declared with its operations: `capabilities: ["vault"]` with `chargeSavedMethod` and `deleteSavedMethod`, `capabilities: ["manualCapture"]` with `capture` and `void`. The store keeps only your reference to a saved method and its display facts; never send a card number or CVC.
+
+5. **Keeping a method.** A session for a signed-in account customer may carry `input.savePaymentMethod: { customerId, usage: "off_session" }`. Your confirmed (or authorized) event then names the kept method: `savedPaymentMethod: { ref, brand?, last4?, expiryMonth?, expiryYear?, label? }`. The store saves it for that customer with the payment.
+6. **`chargeSavedMethod({ attemptKey, correlationId, orderId, paymentType, amountMinor, currency, wireAmount, methodRef, capture, requestTimeoutMs })`** charges a kept method without the buyer. `attemptKey` is your provider idempotency key: a retry after a lost answer sends the same key and must get the first outcome. Answer `{ status: "event", event }` (`confirmed`, or `authorized` when `capture` is `"manual"`), `{ status: "pending" }` (a verified webhook follows) or `{ status: "declined", reason, code? }`. No answer is `retryable` with `uncertain`.
+7. **`capture({ providerRef, amountMinor, … })`** answers the `confirmed` event under the authorization's `providerRef`; **`void({ providerRef, … })`** answers `{ status: "voided" }`. Both take an `idempotencyKey`. A provider-side expiry of a hold is a verified `cancelled` event naming its `providerRef`.
+8. **`deleteSavedMethod({ ref, idempotencyKey })`** detaches the method at the provider: `{ status: "deleted" }` or `"not_found"`.
+
 ### Build a courier
 
 Declare `{ id, name, countries?, trackingUrl?, locations?, icon?, settings?, operations }` under `providers.courier`. The Bangladesh pack's Pathao and Steadfast (`plugins/bangladesh/src/couriers.ts`) are complete examples.

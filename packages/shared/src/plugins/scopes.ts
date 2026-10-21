@@ -91,9 +91,19 @@ export const PLUGIN_SCOPES = {
    * Record money received against an invoice (pay-later) order: a bank
    * transfer, cheque or cash. Sensitive: a recorded payment settles the order
    * with no money passing through the store. Gift cards and downloads on an
-   * order an app marked paid wait for staff to release a review hold.
+   * order an app marked paid wait for staff to release a review hold. Also
+   * charge a customer's saved payment method for an order with money due
+   * (off-session, through its provider), capture or void an authorized
+   * payment, and list and remove a customer's saved methods (brand, last
+   * four digits and expiry; never the provider's reference).
    */
   write_payments: { rbac: ["orders.view", "orders.record_payment"], staff: "orders.record_payment", sensitive: true },
+  /**
+   * Give money back on an order (`refunds.create`): through the payments it
+   * came from or as store credit, never to a destination the app names, with
+   * the order lines it is for. Sensitive: it moves money out of the store.
+   */
+  write_refunds: { rbac: ["orders.view", "orders.refund"], staff: "orders.refund", sensitive: true },
   /** Hand over order lines, create and void fulfilments and courier shipments. */
   write_fulfillments: { rbac: ["orders.view", "orders.manage_shipments"], staff: "orders.manage_shipments" },
   /** Customers, their tags and marketing consent; email, text or push a customer by id (`ctx.messaging`). Contact fields need the protected data scopes. */

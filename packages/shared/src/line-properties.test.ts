@@ -5,8 +5,12 @@ import {
   CUSTOMIZATION_LIMITS,
   hasRequiredCustomization,
   lineCartKey,
+  lineIdentityProperties,
   linePropertiesHash,
+  linePurchaseOptionProperty,
+  LINE_PURCHASE_OPTION_PROPERTY_KEY,
   ORDER_LINE_PROPERTIES_MAX_LENGTH,
+  readLinePurchaseOption,
   parseCustomizationSchema,
   parseStoredCustomizationSchema,
   resolveLineProperties,
@@ -262,5 +266,29 @@ describe("cart line identity (P2)", () => {
     expect(strict.ok).toBe(true);
     if (!strict.ok) return;
     expect(strict.canonical).toEqual(canonicalizeLineProperties(schema, input));
+  });
+});
+
+describe("a line's purchase option", () => {
+  it("is part of the line identity only when the line has one", async () => {
+    const canonical = [{ key: "engraving", value: "Anika" }];
+    expect(await linePropertiesHash(lineIdentityProperties([], null))).toBe("none");
+    expect(await linePropertiesHash(lineIdentityProperties(canonical, undefined))).toBe(await linePropertiesHash(canonical));
+    const subscribed = await linePropertiesHash(lineIdentityProperties([], "acme.subscribe.monthly"));
+    expect(subscribed).not.toBe("none");
+    expect(subscribed).not.toBe(await linePropertiesHash(lineIdentityProperties([], "acme.subscribe.weekly")));
+    expect(await linePropertiesHash(lineIdentityProperties(canonical, "acme.subscribe.monthly"))).not.toBe(await linePropertiesHash(canonical));
+  });
+
+  it("is frozen under the contract key and read back from the stored snapshot", () => {
+    expect(LINE_PURCHASE_OPTION_PROPERTY_KEY).toBe("_purchase_option");
+    const property = linePurchaseOptionProperty("acme.subscribe.monthly", " Subscribe and save ");
+    expect(property).toEqual({ key: "_purchase_option", type: "text", label: "Purchase option", value: "acme.subscribe.monthly", displayValue: "Subscribe and save", priceMinor: 0 });
+    const stored = serializeOrderLineProperties([{ key: "engraving", type: "text", label: "Engraving", value: "A", displayValue: "A", priceMinor: 0 }, property]);
+    expect(readLinePurchaseOption(stored)).toBe("acme.subscribe.monthly");
+    expect(readLinePurchaseOption(JSON.parse(stored!))).toBe("acme.subscribe.monthly");
+    expect(readLinePurchaseOption(null)).toBeNull();
+    expect(readLinePurchaseOption("not json")).toBeNull();
+    expect(readLinePurchaseOption(serializeOrderLineProperties([{ key: "engraving", type: "text", label: "Engraving", value: "A", displayValue: "A", priceMinor: 0 }]))).toBeNull();
   });
 });

@@ -6,6 +6,9 @@
 export const EVENT_SOURCE_TABLES: ReadonlySet<string> = new Set([
   "orders",
   "order_fulfillments",
+  "order_fulfillment_lines",
+  "order_refunds",
+  "refund_attempts",
   "order_payments",
   "order_returns",
   "products",

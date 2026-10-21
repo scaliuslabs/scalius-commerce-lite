@@ -22,6 +22,8 @@ import {
   orderFulfillments,
   orderItems,
   orderPayments,
+  orderRefundLines,
+  orderRefunds,
   orderReturnLines,
   orderReturns,
   orders,
@@ -33,6 +35,7 @@ import {
   promotions,
   purchaseOrderLines,
   purchaseOrders,
+  refundAttempts,
 } from "@scalius/database/schema";
 import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getObjectEventRepresentation } from "@scalius/core/modules/objects";
@@ -46,6 +49,7 @@ import {
   type EventRepresentationType,
 } from "@scalius/shared/events";
 import { allProtectedData } from "@scalius/shared/plugins/protected-data";
+import { readLinePurchaseOption } from "@scalius/shared/line-properties";
 
 /** The most lines a representation lists (an order's, a return's, a purchase order's): a bigger one is truncated as a whole. */
 const MAX_LINES = 500;
@@ -138,6 +142,8 @@ export async function readOrderRepresentations(db: Database, ids: readonly strin
       subtotalMinor: orderItems.lineSubtotalMinor,
       discountMinor: orderItems.discountAmountMinor,
       taxMinor: orderItems.taxAmountMinor,
+      // The line's frozen inputs, in the same read: its purchase option rides there.
+      properties: orderItems.properties,
     }).from(orderItems).where(inArray(orderItems.orderId, [...ids]))
       .orderBy(asc(orderItems.orderId), asc(orderItems.createdAt), asc(orderItems.id)).all(),
   ]);
@@ -162,6 +168,7 @@ type OrderLineRow = {
   subtotalMinor: number | null;
   discountMinor: number | null;
   taxMinor: number | null;
+  properties: string | null;
 };
 
 function orderFrom(order: OrderRow, lines: readonly OrderLineRow[]) {
@@ -196,8 +203,9 @@ function orderFrom(order: OrderRow, lines: readonly OrderLineRow[]) {
     billingAddress: billingAddress(order),
     fulfillmentLocationId: order.fulfillmentLocationId ?? null,
     version: order.version,
-    lines: lines.map(({ orderId: _orderId, ...line }) => ({
+    lines: lines.map(({ orderId: _orderId, properties, ...line }) => ({
       ...line,
+      purchaseOption: readLinePurchaseOption(properties),
       unitPriceMinor: line.unitPriceMinor ?? 0,
       subtotalMinor: line.subtotalMinor ?? 0,
       discountMinor: line.discountMinor ?? 0,
@@ -582,6 +590,53 @@ async function paymentRepresentation(db: Database, paymentId: string) {
 
 /** One payment as webhooks carry it (PaymentResource), or null. */
 export const readPaymentRepresentation = paymentRepresentation;
+
+/** Refunds (one by id, or an order's, oldest first) with their lines and payments: three reads in one batch. */
+async function readRefundRepresentations(db: Database, where: { id: string } | { orderId: string }) {
+  const scope = "id" in where ? eq(orderRefunds.id, where.id) : eq(orderRefunds.orderId, where.orderId);
+  const [rows, lineRows, paymentRows] = await db.batch([
+    db.select().from(orderRefunds).where(scope).orderBy(asc(orderRefunds.createdAt), asc(orderRefunds.id)).limit(MAX_LINES),
+    db.select({
+      refundId: orderRefundLines.refundId,
+      orderItemId: orderRefundLines.orderItemId,
+      variantId: orderItems.variantId,
+      quantity: orderRefundLines.quantity,
+    }).from(orderRefundLines)
+      .innerJoin(orderRefunds, eq(orderRefunds.id, orderRefundLines.refundId))
+      .leftJoin(orderItems, eq(orderItems.id, orderRefundLines.orderItemId))
+      .where(scope)
+      .orderBy(asc(orderRefundLines.refundId), asc(orderRefundLines.orderItemId)),
+    db.select({ refundId: refundAttempts.refundGroupId, paymentId: refundAttempts.refundPaymentId })
+      .from(refundAttempts)
+      .innerJoin(orderRefunds, eq(orderRefunds.id, refundAttempts.refundGroupId))
+      .where(scope)
+      .orderBy(asc(refundAttempts.refundGroupId), asc(refundAttempts.allocationIndex)),
+  ]);
+  const lines = groupBy(lineRows, (line) => line.refundId);
+  const payments = groupBy(paymentRows, (payment) => payment.refundId);
+  return rows.map((row) => sealed("refund", {
+    id: row.id,
+    orderId: row.orderId,
+    status: row.status,
+    currency: row.currency,
+    amountMinor: row.amountMinor,
+    settlement: row.settlement,
+    lines: (lines.get(row.id) ?? []).slice(0, MAX_LINES).map(({ refundId: _refundId, ...line }) => ({ ...line, variantId: line.variantId ?? null })),
+    paymentIds: (payments.get(row.id) ?? []).map((payment) => payment.paymentId),
+    createdAt: isoRequired(row.createdAt),
+    updatedAt: isoRequired(row.updatedAt),
+  }));
+}
+
+/** An order's refunds, oldest first (the API's per-order list). */
+export function readOrderRefundRepresentations(db: Database, orderId: string) {
+  return readRefundRepresentations(db, { orderId });
+}
+
+/** One refund as webhooks carry it (RefundResource), or null. */
+export async function readRefundRepresentation(db: Database, refundId: string) {
+  return (await readRefundRepresentations(db, { id: refundId }))[0] ?? null;
+}
 async function checkoutRepresentation(db: Database, abandonedCheckoutId: string) {
   const row = await db.select({
     id: abandonedCheckouts.id,
@@ -727,6 +782,8 @@ export function createWebhookRepresentationResolver(db: Database): WebhookRepres
         return transferRepresentation(db, event.resourceId);
       case "fulfillment":
         return fulfillmentRepresentation(db, event.resourceId);
+      case "refund":
+        return readRefundRepresentation(db, event.resourceId);
       case "shipment":
         return readShipmentRepresentation(db, event.resourceId);
       case "payment":

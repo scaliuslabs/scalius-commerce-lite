@@ -8,7 +8,10 @@ import { readStoreCurrency } from "../markets";
 import { eq, sql, desc, and, inArray } from "drizzle-orm";
 import {
     orders,
+    orderItems,
     orderPayments,
+    orderRefundLines,
+    orderRefunds,
     refundAttempts,
     giftCards,
     PaymentStatus,
@@ -61,8 +64,10 @@ import { sha256Hex } from "@scalius/shared/hash";
 
 export interface RefundRequest {
     orderId: string;
-    /** Decimal amount from the HTTP request. If omitted, the full paid amount is refunded. */
+    /** Decimal amount from the HTTP request. If omitted (and no `amountMinor`), the full paid amount is refunded. */
     amount?: number;
+    /** The amount in integer minor units of the order currency (the app API); wins over `amount`. */
+    amountMinor?: number;
     reason: string;
     /** Refund only payments captured by this payment method (useful for multi-gateway orders). */
     gateway?: string;
@@ -82,6 +87,20 @@ export interface RefundRequest {
     settlement?: RefundSettlement;
     /** The staff member recording the refund (gift-card ledger actor). */
     actorUserId?: string | null;
+    /**
+     * The order lines this refund is for (0172): recorded with the refund in
+     * its claim batch and carried by its `refund.*` events, so an app can
+     * tell which lines (a seller's, a subscription's) the money was for.
+     * Quantities only: `amount` stays the money. Each line at most its
+     * quantity less what refunds that did not fail already named.
+     */
+    lines?: readonly RefundLineInput[];
+}
+
+/** One order line a refund is for. */
+export interface RefundLineInput {
+    orderItemId: string;
+    quantity: number;
 }
 
 export const REFUND_SETTLEMENTS = ["original", "store_credit"] as const;
@@ -101,6 +120,9 @@ export interface RefundStoreCredit {
 export interface RefundResult {
     success: boolean;
     gateway: string;
+    /** The refund record (`order_refunds`, the `refund` resource); absent when nothing was refunded. */
+    orderRefundId?: string;
+    /** The provider refund reference(s), comma-separated. */
     refundId?: string;
     amount: number;
     isFullRefund: boolean;
@@ -283,6 +305,7 @@ async function findRefundRequestReplay(
     const prefix = refundRequestAttemptKeyPrefix(params.orderId, params.requestKey);
     const rows = await db.select({
         id: refundAttempts.id,
+        refundGroupId: refundAttempts.refundGroupId,
         gateway: refundAttempts.gateway,
         amountMinor: refundAttempts.amountMinor,
         status: refundAttempts.status,
@@ -295,13 +318,20 @@ async function findRefundRequestReplay(
     )).all();
     if (rows.length === 0) return null;
     const amountMinor = rows.reduce((sum, row) => sum + row.amountMinor, 0);
-    if (params.amount !== undefined && toMinor(params.amount, currency.decimalPlaces) !== amountMinor) {
+    const requestedMinor = params.amountMinor ?? (params.amount === undefined ? undefined : toMinor(params.amount, currency.decimalPlaces));
+    if (requestedMinor !== undefined && requestedMinor !== amountMinor) {
         throw new ConflictError("This refund request was already used for a different amount. Reload and try again.");
     }
     const settlement: RefundSettlement = rows.some((row) =>
         parseRefundMetadata(row.metadata).settlementMode === "store_credit") ? "store_credit" : "original";
     if ((params.settlement ?? "original") !== settlement) {
         throw new ConflictError("This refund request was already used for a different refund. Reload and try again.");
+    }
+    const orderRefundId = rows[0]!.refundGroupId;
+    const recordedLines = await db.select({ orderItemId: orderRefundLines.orderItemId, quantity: orderRefundLines.quantity })
+        .from(orderRefundLines).where(eq(orderRefundLines.refundId, orderRefundId)).all();
+    if (!sameRefundLines(normalizeRefundLines(params.lines), normalizeRefundLines(recordedLines))) {
+        throw new ConflictError("This refund request was already used for different order lines. Reload and try again.");
     }
     if (rows.some((row) => ACTIVE_REFUND_ATTEMPT_STATUSES.includes(row.status as never))) {
         throw new ConflictError(REFUND_IN_PROGRESS_MESSAGE);
@@ -320,6 +350,7 @@ async function findRefundRequestReplay(
         success: !failed,
         ...(failed ? { error: failed.lastError ?? "Refund processing failed" } : {}),
         gateway: rows[0]!.gateway,
+        orderRefundId,
         refundId: rows.map((row) => row.providerRefundId).filter(Boolean).join(",") || undefined,
         amount: fromMinor(amountMinor, currency.decimalPlaces),
         isFullRefund: order.paymentStatus === PaymentStatus.REFUNDED,
@@ -337,6 +368,61 @@ async function findRefundRequestReplay(
         } : {}),
     };
 }
+
+/** The most order lines one refund names (an order has at most this many lines). */
+const MAX_REFUND_LINES = 250;
+
+/** A refund's lines in canonical order (by order line), shape-checked; empty when none were given. */
+function normalizeRefundLines(lines: RefundRequest["lines"]): RefundLineInput[] {
+    if (!lines || lines.length === 0) return [];
+    if (lines.length > MAX_REFUND_LINES) throw new ValidationError(`A refund names at most ${MAX_REFUND_LINES} order lines.`);
+    const seen = new Set<string>();
+    const normalized = lines.map((line) => {
+        const orderItemId = typeof line.orderItemId === "string" ? line.orderItemId.trim() : "";
+        if (!orderItemId) throw new ValidationError("Each refund line names an order line.");
+        if (!Number.isSafeInteger(line.quantity) || line.quantity < 1) {
+            throw new ValidationError("Each refund line's quantity is a whole number of at least 1.");
+        }
+        if (seen.has(orderItemId)) throw new ValidationError(`Order line ${orderItemId} is named twice in the refund.`);
+        seen.add(orderItemId);
+        return { orderItemId, quantity: line.quantity };
+    });
+    return normalized.sort((left, right) => (left.orderItemId < right.orderItemId ? -1 : left.orderItemId > right.orderItemId ? 1 : 0));
+}
+
+/**
+ * Each line is one of the order's and within what is left of it: its
+ * quantity less what refunds that did not fail already named (the
+ * `order_refund_lines_bounds_insert` trigger keeps it so under races).
+ */
+async function assertRefundableLines(db: Database, orderId: string, lines: readonly RefundLineInput[]): Promise<void> {
+    if (lines.length === 0) return;
+    const ids = lines.map((line) => line.orderItemId);
+    const [items, refunded] = await db.batch([
+        db.select({ id: orderItems.id, quantity: orderItems.quantity })
+            .from(orderItems)
+            .where(and(eq(orderItems.orderId, orderId), inArray(orderItems.id, ids))),
+        db.select({ orderItemId: orderRefundLines.orderItemId, quantity: sql<number>`sum(${orderRefundLines.quantity})` })
+            .from(orderRefundLines)
+            .innerJoin(orderRefunds, eq(orderRefunds.id, orderRefundLines.refundId))
+            .where(and(eq(orderRefundLines.orderId, orderId), inArray(orderRefundLines.orderItemId, ids), sql`${orderRefunds.status} <> 'failed'`))
+            .groupBy(orderRefundLines.orderItemId),
+    ]);
+    const quantities = new Map(items.map((item) => [item.id, item.quantity]));
+    const already = new Map(refunded.map((row) => [row.orderItemId, Number(row.quantity) || 0]));
+    for (const line of lines) {
+        const quantity = quantities.get(line.orderItemId);
+        if (quantity === undefined) throw new ValidationError(`Order line ${line.orderItemId} is not a line of this order.`);
+        const left = quantity - (already.get(line.orderItemId) ?? 0);
+        if (line.quantity > left) {
+            throw new ValidationError(`Order line ${line.orderItemId} has ${Math.max(0, left)} of ${quantity} left to refund.`);
+        }
+    }
+}
+
+const sameRefundLines = (left: readonly RefundLineInput[], right: readonly RefundLineInput[]) =>
+    left.length === right.length && left.every((line, index) =>
+        line.orderItemId === right[index]!.orderItemId && line.quantity === right[index]!.quantity);
 
 function normalizePaymentGateway(value: string): string {
     // A gift-card tender is an internal payment: refundable, never dispatched;
@@ -521,6 +607,8 @@ async function buildRefundRequestHash(params: {
         manualSettlementConfirmed: params.request.manualSettlementConfirmed === true,
         // Omitted for "original" so the hash of an ordinary refund is unchanged.
         settlement: params.request.settlement === "store_credit" ? "store_credit" : undefined,
+        // Omitted without lines, for the same reason.
+        lines: params.request.lines?.length ? normalizeRefundLines(params.request.lines) : undefined,
         currency: params.currency,
         allocations: params.allocations.map((allocation) => ({
             sourcePaymentId: allocation.sourcePayment.id,
@@ -1407,6 +1495,7 @@ export async function processRefund(
         throw new ValidationError(`Unsupported refund settlement: ${String(settlement)}`);
     }
     const currency = resolveOrderCurrencySnapshot(order);
+    const refundLines = normalizeRefundLines(params.lines);
     const requestKey = params.requestKey?.trim();
     if (requestKey) {
         const replay = await findRefundRequestReplay(db, { ...params, requestKey }, order, currency);
@@ -1468,7 +1557,12 @@ export async function processRefund(
     if (params.amount !== undefined && (!Number.isFinite(params.amount) || params.amount <= 0)) {
         throw new ValidationError("Refund amount must be greater than zero");
     }
-    const refundAmount = params.amount === undefined
+    if (params.amountMinor !== undefined && (!Number.isSafeInteger(params.amountMinor) || params.amountMinor <= 0)) {
+        throw new ValidationError("Refund amount must be a whole number of minor units greater than zero");
+    }
+    const refundAmount = params.amountMinor !== undefined
+        ? params.amountMinor
+        : params.amount === undefined
         ? paidAmount
         // A merchant-entered refund is on the store's price increment (in the order's currency).
         : toStoreMinor(params.amount, orderPricePolicy(currency, await readStoreCurrency(db)));
@@ -1483,6 +1577,7 @@ export async function processRefund(
             `Refund amount (${display(refundAmount)}) exceeds paid amount (${display(paidAmount)})`
         );
     }
+    await assertRefundableLines(db, params.orderId, refundLines);
 
     // A partly paid invoice still owes the rest after its payments go back.
     const isFullRefund = refundAmount >= paidAmount
@@ -1575,6 +1670,25 @@ export async function processRefund(
                 version: claimVersion,
                 updatedAt: sql`unixepoch()`,
             }).where(claimCondition),
+            // The refund record and its lines come before its attempts:
+            // `refund.created` fires on the first attempt with every line written.
+            db.insert(orderRefunds).values({
+                id: refundGroupId,
+                orderId: params.orderId,
+                currency: currency.code,
+                amountMinor: refundAmount,
+                settlement,
+                createdAt: sql`unixepoch()`,
+                updatedAt: sql`unixepoch()`,
+            }),
+            ...refundLines.map((line, index) => db.insert(orderRefundLines).values({
+                id: `${refundGroupId}_line_${index + 1}`,
+                refundId: refundGroupId,
+                orderId: params.orderId,
+                orderItemId: line.orderItemId,
+                quantity: line.quantity,
+                createdAt: sql`unixepoch()`,
+            })),
             ...allocations.flatMap((allocation) => {
                 const mode = allocationSettlementMode(allocation);
                 const internal = isInternalSettlement(mode);
@@ -1818,6 +1932,7 @@ export async function processRefund(
     return {
         success: true,
         gateway: resultGateway,
+        orderRefundId: refundGroupId,
         refundId: getCompletedRefundIds(completedAllocations),
         amount: fromMinor(refundAmount, currency.decimalPlaces),
         isFullRefund,

@@ -55,6 +55,12 @@ const orderLineSchema = z.object({
   subtotalMinor: minor,
   discountMinor: minor,
   taxMinor: minor,
+  /**
+   * The app purchase option the line was bought with (`<app id>.<key>`, a
+   * subscription), frozen at checkout as its `_purchase_option` property;
+   * null for a one-time purchase.
+   */
+  purchaseOption: z.string().min(1).max(160).nullable(),
 });
 
 export const orderRepresentationSchema = z.object({
@@ -259,6 +265,26 @@ export const fulfillmentRepresentationSchema = z.object({
   voidedAt: iso.nullable(),
 });
 
+/**
+ * A refund command (0172): the money it gives back, where (`settlement`),
+ * the order lines it is for, and the refund payments it became (one per
+ * payment the money goes back to, `payments.list`).
+ */
+export const refundRepresentationSchema = z.object({
+  id,
+  orderId: id,
+  /** `pending` until each of its payments settles; then `refunded`, `failed` or `partial`. */
+  status: state,
+  currency,
+  amountMinor: minor,
+  /** `original` (back to the payments) or `store_credit` (one new gift card). */
+  settlement: state,
+  lines: z.array(z.object({ orderItemId: id, variantId: id.nullable(), quantity: z.number().int() })),
+  paymentIds: z.array(id),
+  createdAt: iso,
+  updatedAt: iso,
+});
+
 export const shipmentRepresentationSchema = z.object({
   id,
   orderId: id,
@@ -398,6 +424,7 @@ export const EVENT_REPRESENTATION_SCHEMAS = {
   purchase_order: purchaseOrderRepresentationSchema,
   inventory_transfer: inventoryTransferRepresentationSchema,
   fulfillment: fulfillmentRepresentationSchema,
+  refund: refundRepresentationSchema,
   shipment: shipmentRepresentationSchema,
   payment: paymentRepresentationSchema,
   checkout: checkoutRepresentationSchema,
@@ -446,6 +473,7 @@ const FETCH_HINTS: Record<EventRepresentationType, (resourceId: string, facts: R
   purchase_order: (resource) => ({ operationId: "dashboard.purchase_orders.get", path: `/api/v1/admin/inventory/purchase-orders/${segment(resource)}` }),
   inventory_transfer: (resource) => ({ operationId: "dashboard.inventory_transfers.get", path: `/api/v1/admin/inventory/transfers/${segment(resource)}` }),
   fulfillment: (_resource, facts) => ({ operationId: "dashboard.resources.fulfillments.list", path: `/api/v1/admin/resources/orders/${segment(facts.orderId)}/fulfillments` }),
+  refund: (_resource, facts) => ({ operationId: "dashboard.resources.refunds.list", path: `/api/v1/admin/resources/orders/${segment(facts.orderId)}/refunds` }),
   shipment: (resource) => ({ operationId: "dashboard.resources.shipments.get", path: `/api/v1/admin/resources/shipments/${segment(resource)}` }),
   payment: (_resource, facts) => ({ operationId: "dashboard.resources.payments.list", path: `/api/v1/admin/resources/orders/${segment(facts.orderId)}/payments` }),
   checkout: () => ({ operationId: "dashboard.abandoned_checkouts.summaries_list", path: "/api/v1/admin/abandoned-checkouts/summaries" }),

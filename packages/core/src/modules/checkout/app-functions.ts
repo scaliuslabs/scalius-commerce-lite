@@ -26,6 +26,19 @@
 //    for the merchant; nothing is guessed.
 // 9. Tax is calculated after every discount: the tax quote takes the
 //    platform and app allocations together.
+// 10. Classes and combinations (Shopify's discount classes): a discount's
+//    class comes from its target (`lines`: product, `order`: order,
+//    `shipping`: shipping). A discount may say which classes it
+//    `combinesWith`; every key defaults to true, so an answer that says
+//    nothing stacks exactly as rules 1-9 say. Two discounts are compatible
+//    when each combines with the other's class. Candidates are taken in the
+//    order of rule 2; one is applied only when it is compatible with every
+//    discount already applied, the platform's included: promotions count as
+//    the classes they applied (product, order, shipping), quantity bundles
+//    as product, a staff discount on a manual order as order, and platform
+//    discounts combine with everything. A skipped candidate claims no code
+//    and spends no `commit`, and constrains nothing after it; neither does
+//    a discount that takes nothing (nothing was left to take).
 
 import { DELIVERY_HIERARCHY_COUNTRY, MARKET_COUNTRY_PATTERN } from "@scalius/shared/markets";
 import type { Database } from "@scalius/database/client";
@@ -33,6 +46,8 @@ import { BACKUP_MARKET_ID, categoryClosure, collections, customerTagLinks, custo
 import {
   PLUGIN_EXTENSION_RUN,
   functionCartSchema,
+  functionDiscountClass,
+  type FunctionDiscountClass,
   type FunctionCart,
   type CheckoutAttribute,
   type BuyerUiBlock,
@@ -41,9 +56,12 @@ import {
   type PluginFunctionInput,
   type PluginFunctionOutput,
   type PluginRunPoint,
+  type PurchaseOptionDeclaration,
 } from "@scalius/shared/plugins";
+import { purchaseOptionId } from "@scalius/shared/plugins/ids";
 import { parseQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { floorToIncrementMinor, percentOfMinor, roundToIncrementMinor } from "@scalius/shared/money";
+import { defaultOrderSalesChannelId } from "@scalius/shared/sales-channels";
 import { and, eq, isNull, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import { collectionMembershipForConfig } from "../collections";
 import { orderMarketIdSql } from "../markets";
@@ -78,6 +96,8 @@ export interface CheckoutAppFunctionResult<P extends PluginRunPoint> {
 export interface CheckoutAppFunctions {
   readonly points: ReadonlySet<PluginRunPoint>;
   readonly attributes?: ReadonlyArray<{ appId: string; fields: CheckoutAttribute[] }>;
+  /** The purchase options each active app declares (manifest `checkout.purchaseOptions`). */
+  readonly purchaseOptions?: ReadonlyArray<{ appId: string; options: ReadonlyArray<PurchaseOptionDeclaration> }>;
   buyerUi?(input: Partial<Omit<BuyerUiInput, "target">> & { targets: readonly StorefrontUiSlot[]; currency: string }): Promise<BuyerUiBlock[]>;
   /** `reads` is the platform's: each app gets its own declared reads. */
   run<P extends PluginRunPoint>(point: P, input: Omit<PluginFunctionInput<P>, "reads">): Promise<Array<CheckoutAppFunctionResult<P>>>;
@@ -104,6 +124,19 @@ const CART_POINTS: readonly PluginRunPoint[] = [
   PLUGIN_EXTENSION_RUN,
 ];
 
+/**
+ * The purchase options a cart line may name, `<app id>.<key>` → title: the
+ * declarations of the request's active apps (no read: they came with the
+ * registrations). Empty without apps, so a line naming one is refused.
+ */
+export function checkoutPurchaseOptions(apps: Pick<CheckoutAppFunctions, "purchaseOptions"> | undefined): ReadonlyMap<string, string> {
+  const options = new Map<string, string>();
+  for (const app of apps?.purchaseOptions ?? []) {
+    for (const option of app.options) options.set(purchaseOptionId(app.appId, option.key), option.title);
+  }
+  return options;
+}
+
 export function wantsAppCart(apps: CheckoutAppFunctions | undefined, points: readonly PluginRunPoint[] = CART_POINTS): boolean {
   return Boolean(apps && points.some((point) => apps.points.has(point)));
 }
@@ -111,9 +144,12 @@ export function wantsAppCart(apps: CheckoutAppFunctions | undefined, points: rea
 // ── The cart an app sees ────────────────────────────────────────────────────
 
 export interface AppFunctionCartFacts {
-  products: Map<string, { categoryIds: string[]; collectionIds: string[]; brandId: string | null }>;
+  products: Map<string, { categoryIds: string[]; collectionIds: string[]; brandId: string | null; isGiftCard?: boolean }>;
   skus: Map<string, string | null>;
-  customer: FunctionCart["customer"];
+  /** Per SKU: its weight in grams and whether it is a physical good (absent: unknown, read as physical). */
+  variants?: Map<string, { weightGrams: number | null; physical: boolean }>;
+  /** The signed-in buyer's facts; the cart adds `segmentIds` from the checkout's own price scope. */
+  customer: Omit<NonNullable<FunctionCart["customer"]>, "segmentIds"> | null;
   market: FunctionCart["market"];
 }
 
@@ -150,9 +186,10 @@ function idList(column: AnyColumn, ids: readonly string[]): SQL {
 
 /**
  * The catalog and customer facts an app cart needs, in one read batch: each
- * product's category (with its ancestors), collections and brand, each SKU,
- * and the signed-in customer's tags, order count and spend, and the market
- * of the order's country. Called only when an active app implements a point.
+ * product's category (with its ancestors), collections, brand and gift-card
+ * flag, each SKU with its weight and fulfilment kind, the signed-in
+ * customer's tags, order count and spend, and the market of the order's
+ * country. Called only when an active app implements a point.
  *
  * With `apps` and `points`, the same batch carries the declared reads of the
  * apps at those points (app-reads.ts): more statements, never another wave.
@@ -177,7 +214,7 @@ export async function loadAppFunctionCartFacts(
   const variantIds = [...new Set(input.variantIds)];
   const customerId = input.customerId?.trim() || null;
   const statements = [
-    db.select({ id: products.id, categoryId: products.categoryId, brandId: products.brandId })
+    db.select({ id: products.id, categoryId: products.categoryId, brandId: products.brandId, isGiftCard: products.isGiftCard })
       .from(products).where(idList(products.id, productIds)),
     db.select({ productId: products.id, ancestorId: categoryClosure.ancestorId, depth: categoryClosure.depth })
       .from(products)
@@ -186,7 +223,7 @@ export async function loadAppFunctionCartFacts(
     db.select({ id: collections.id, config: collections.config })
       .from(collections)
       .where(and(eq(collections.isActive, true), isNull(collections.deletedAt))),
-    db.select({ id: productVariants.id, sku: productVariants.sku })
+    db.select({ id: productVariants.id, sku: productVariants.sku, weight: productVariants.weight, fulfillmentKind: productVariants.fulfillmentKind })
       .from(productVariants).where(idList(productVariants.id, variantIds)),
     // Orders that never became sales (cancelled, incomplete) count toward neither.
     db.select({
@@ -212,10 +249,10 @@ export async function loadAppFunctionCartFacts(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle batch tuple typing
   const batched = await db.batch([...statements, ...readStatements] as any) as unknown[][];
   const [productRows, ancestorRows, collectionRows, variantRows, customerRows, marketRows] = batched as [
-    Array<{ id: string; categoryId: string | null; brandId: string | null }>,
+    Array<{ id: string; categoryId: string | null; brandId: string | null; isGiftCard: boolean | number | null }>,
     Array<{ productId: string; ancestorId: string; depth: number }>,
     Array<{ id: string; config: unknown }>,
-    Array<{ id: string; sku: string | null }>,
+    Array<{ id: string; sku: string | null; weight: number | null; fulfillmentKind: string | null }>,
     Array<{ id: string; orderCount: number; totalSpentMinor: number; tags: string | null }>,
     Array<{ id: string }>,
   ];
@@ -230,6 +267,7 @@ export async function loadAppFunctionCartFacts(
   const facts: AppFunctionCartFacts = {
     products: new Map(),
     skus: new Map(),
+    variants: new Map(),
     customer: null,
     market: { id: marketRows[0]?.id ?? BACKUP_MARKET_ID, country: input.marketCountry },
   };
@@ -244,9 +282,16 @@ export async function loadAppFunctionCartFacts(
         || (row.categoryId !== null && collection.categoryIds.includes(row.categoryId)))
       .map((collection) => collection.id)
       .sort();
-    facts.products.set(row.id, { categoryIds: categoryIds.slice(0, 20), collectionIds: collectionIds.slice(0, 50), brandId: row.brandId });
+    facts.products.set(row.id, { categoryIds: categoryIds.slice(0, 20), collectionIds: collectionIds.slice(0, 50), brandId: row.brandId, isGiftCard: Boolean(row.isGiftCard) });
   }
-  for (const row of variantRows) facts.skus.set(row.id, row.sku?.trim() ? row.sku.trim().slice(0, 128) : null);
+  for (const row of variantRows) {
+    facts.skus.set(row.id, row.sku?.trim() ? row.sku.trim().slice(0, 128) : null);
+    const weight = row.weight === null || row.weight === undefined ? null : Number(row.weight);
+    facts.variants!.set(row.id, {
+      weightGrams: weight !== null && Number.isFinite(weight) && weight >= 0 ? weight : null,
+      physical: (row.fulfillmentKind ?? "physical") === "physical",
+    });
+  }
   const customer = customerRows[0];
   if (customer) {
     facts.customer = {
@@ -274,12 +319,18 @@ export interface AppCartLineSource {
   /** The platform's discount on the line (promotions or bundles). */
   discountMinor: number;
   properties: ReadonlyArray<{ key: string; value: string }>;
+  /** The line's purchase option (`<app id>.<key>`), already checked against the active apps' declarations. */
+  purchaseOption?: string | null;
 }
 
 /** The app cart (`functionCartSchema`) from the authoritative checkout state. */
 export function buildAppFunctionCart(input: {
   currency: { code: string; decimalPlaces: number };
   channel: FunctionCart["channel"];
+  /** The order's sales channel; absent: the channel's default (`defaultOrderSalesChannelId`), as the order commit derives it. */
+  salesChannelId?: string | null;
+  /** The signed-in buyer's segments that price this cart (the checkout price scope's); absent: none. */
+  segmentIds?: readonly string[];
   lines: readonly AppCartLineSource[];
   facts: AppFunctionCartFacts;
   /**
@@ -292,6 +343,7 @@ export function buildAppFunctionCart(input: {
 }): FunctionCart {
   const lines = input.lines.map((line) => {
     const product = input.facts.products.get(line.productId);
+    const variant = input.facts.variants?.get(line.variantId);
     const grossMinor = line.unitPriceMinor * line.quantity;
     const properties: Record<string, string> = {};
     for (const property of line.properties) {
@@ -311,15 +363,23 @@ export function buildAppFunctionCart(input: {
       collectionIds: product?.collectionIds ?? [],
       brandId: product?.brandId ?? null,
       properties,
+      // A physical SKU that is not a gift card (the rule `summarizeStorefrontCartFulfilment` reads).
+      requiresShipping: (variant?.physical ?? true) && product?.isGiftCard !== true,
+      weightGrams: variant?.weightGrams ?? null,
+      purchaseOption: line.purchaseOption ?? null,
     };
   });
+  const customer = input.facts.customer
+    ? { ...input.facts.customer, segmentIds: [...new Set(input.segmentIds ?? [])].sort().slice(0, 50) }
+    : null;
   const cart: FunctionCart = {
     currency: input.currency.code.toUpperCase(),
     decimalPlaces: input.currency.decimalPlaces,
     channel: input.channel,
+    salesChannelId: input.salesChannelId || defaultOrderSalesChannelId(input.channel),
     lines,
     subtotalMinor: lines.reduce((total, line) => total + line.lineTotalMinor, 0),
-    customer: input.facts.customer,
+    customer,
     // Regions only, never an address: the country, its city and, in
     // Bangladesh's delivery hierarchy, the thana.
     destination: appCartDestination(input.destination),
@@ -404,6 +464,20 @@ function normalizeCode(code: string): string {
   return code.trim().toUpperCase();
 }
 
+type DiscountCombinations = Readonly<Record<FunctionDiscountClass, boolean>>;
+const COMBINES_WITH_EVERYTHING: DiscountCombinations = { product: true, order: true, shipping: true };
+
+/** A discount's `combinesWith` with its defaults (every class: true). */
+function discountCombinations(
+  value: PluginFunctionOutput<"checkout.discounts">["discounts"][number]["combinesWith"],
+): DiscountCombinations {
+  return {
+    product: value?.productDiscounts ?? true,
+    order: value?.orderDiscounts ?? true,
+    shipping: value?.shippingDiscounts ?? true,
+  };
+}
+
 /** The discount's total on `baseMinor`, by the rounding and cap rules above. */
 function discountAmount(
   value: PluginFunctionOutput<"checkout.discounts">["discounts"][number]["value"],
@@ -435,9 +509,22 @@ export function resolveAppDiscounts(input: {
   /** The codes the buyer entered. */
   submittedCodes: readonly string[];
   results: ReadonlyArray<CheckoutAppFunctionResult<"checkout.discounts">>;
+  /**
+   * The classes the platform's own discounts applied in (rule 10). Absent:
+   * product when it took something off a line, shipping when it took
+   * something off delivery.
+   */
+  platformClasses?: readonly FunctionDiscountClass[];
   apps?: Pick<CheckoutAppFunctions, "report">;
 }): AppDiscountResolution {
   const submitted = new Set(input.submittedCodes.map(normalizeCode).filter(Boolean));
+  // Rule 10: what is applied so far, as classes and what each combines with.
+  const taken: Array<{ discountClass: FunctionDiscountClass; combinesWith: DiscountCombinations }> = [
+    ...new Set(input.platformClasses ?? [
+      ...(input.lines.some((line) => line.platformDiscountMinor > 0) ? ["product" as const] : []),
+      ...(input.platformShippingDiscountMinor > 0 ? ["shipping" as const] : []),
+    ]),
+  ].map((discountClass) => ({ discountClass, combinesWith: COMBINES_WITH_EVERYTHING }));
   const remaining = new Map<string, number>();
   const eligible: string[] = [];
   for (const line of input.lines) {
@@ -453,6 +540,10 @@ export function resolveAppDiscounts(input: {
     for (const discount of result.output.discounts) {
       const code = discount.code?.trim() ? normalizeCode(discount.code) : null;
       if (code && !submitted.has(code)) continue;
+      const discountClass = functionDiscountClass(discount.target.kind);
+      const combinesWith = discountCombinations(discount.combinesWith);
+      if (!taken.every((other) => combinesWith[other.discountClass] && other.combinesWith[discountClass])) continue;
+      const take = () => taken.push({ discountClass, combinesWith });
       const base = {
         pluginId: result.pluginId,
         appName: result.appName,
@@ -466,6 +557,7 @@ export function resolveAppDiscounts(input: {
         if (amount <= 0) continue;
         shippingLeft -= amount;
         applied.push({ ...base, amountMinor: 0, shippingAmountMinor: amount, lines: [] });
+        take();
         continue;
       }
       let targets: string[];
@@ -494,6 +586,7 @@ export function resolveAppDiscounts(input: {
       const total = lines.reduce((sum, line) => sum + line.amountMinor, 0);
       if (total <= 0) continue;
       applied.push({ ...base, amountMinor: total, shippingAmountMinor: 0, lines });
+      take();
     }
   }
   // An app's write follows its discounts: none applied, nothing is spent.
@@ -505,6 +598,25 @@ export function resolveAppDiscounts(input: {
     merchandiseMinor: applied.reduce((total, discount) => total + discount.amountMinor, 0),
     shippingMinor: applied.reduce((total, discount) => total + discount.shippingAmountMinor, 0),
   };
+}
+
+/**
+ * The classes the platform's discounts applied in (rule 10): each applied
+ * promotion's class, product for quantity bundles, and shipping when any of
+ * it came off delivery (free shipping bundled with an item discount).
+ */
+export function platformDiscountClasses(platform: {
+  discount: { applied: { discounts: ReadonlyArray<{ discountClass: FunctionDiscountClass; totalDiscountMinor: number }> } | null };
+  bundleLines: ReadonlyArray<unknown>;
+  allocation: TaxDiscountAllocationInput | undefined;
+}): FunctionDiscountClass[] {
+  const classes = new Set<FunctionDiscountClass>();
+  for (const discount of platform.discount.applied?.discounts ?? []) {
+    if (discount.totalDiscountMinor > 0) classes.add(discount.discountClass);
+  }
+  if (platform.bundleLines.length > 0) classes.add("product");
+  if ((platform.allocation?.shippingMinor ?? 0) > 0) classes.add("shipping");
+  return [...classes];
 }
 
 /** The platform allocation plus the app discounts, for the tax quote. */

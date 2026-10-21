@@ -1021,6 +1021,58 @@ export const refundAttempts = sqliteTable("refund_attempts", {
     // refund_attempts_live_source_payment_singleflight ON (source_payment_id) WHERE status IN ('pending','processing','provider_unknown','reconcile_required')
 ]);
 
+export const ORDER_REFUND_STATUSES = ["pending", "refunded", "failed", "partial"] as const;
+export type OrderRefundStatus = (typeof ORDER_REFUND_STATUSES)[number];
+
+/**
+ * One refund command (0172): its id is the attempts' `refund_group_id`, its
+ * lines say which order lines it is for. Written in the refund's claim
+ * batch; `status` is trigger-maintained from its attempts (pending until
+ * each settles, then refunded, failed or partial). Refunds a provider
+ * reports from outside Scalius have no row (no command, no lines).
+ */
+export const orderRefunds = sqliteTable("order_refunds", {
+    id: text("id").primaryKey(),
+    orderId: text("order_id")
+        .notNull()
+        .references(() => orders.id, { onDelete: "cascade" }),
+    status: text("status", { enum: ORDER_REFUND_STATUSES }).notNull().default("pending"),
+    currency: text("currency").notNull(),
+    amountMinor: integer("amount_minor").notNull(),
+    settlement: text("settlement", { enum: ["original", "store_credit"] }).notNull().default("original"),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    index("order_refunds_order_created_idx").on(table.orderId, table.createdAt),
+    check("order_refunds_status_check", sql`${table.status} IN ('pending', 'refunded', 'failed', 'partial')`),
+    check("order_refunds_settlement_check", sql`${table.settlement} IN ('original', 'store_credit')`),
+    check("order_refunds_amount_nonnegative", sql`${table.amountMinor} >= 0`),
+    // Triggers: order_refunds_settled_refunded / _failed / _partial (status
+    // from the attempts), order_refund_lines_match_insert,
+    // order_refund_lines_bounds_insert, order_refund_lines_update_blocked.
+]);
+
+/** The order lines a refund is for: append-only, at most each line's quantity across live refunds. */
+export const orderRefundLines = sqliteTable("order_refund_lines", {
+    id: text("id").primaryKey(),
+    refundId: text("refund_id")
+        .notNull()
+        .references(() => orderRefunds.id, { onDelete: "cascade" }),
+    orderId: text("order_id")
+        .notNull()
+        .references(() => orders.id, { onDelete: "cascade" }),
+    orderItemId: text("order_item_id")
+        .notNull()
+        .references(() => orderItems.id, { onDelete: "restrict" }),
+    quantity: integer("quantity").notNull(),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("order_refund_lines_refund_item_unique").on(table.refundId, table.orderItemId),
+    index("order_refund_lines_order_item_idx").on(table.orderItemId),
+    index("order_refund_lines_order_idx").on(table.orderId),
+    check("order_refund_lines_quantity_positive", sql`${table.quantity} > 0`),
+]);
+
 export const orderSupportRequests = sqliteTable("order_support_requests", {
     id: text("id").primaryKey(),
     orderId: text("order_id")
@@ -1244,6 +1296,8 @@ export type TaxDocumentCommand = InferSelectModel<typeof taxDocumentCommands>;
 export type OrderItemTaxSnapshot = InferSelectModel<typeof orderItemTaxSnapshots>;
 export type OrderPayment = InferSelectModel<typeof orderPayments>;
 export type RefundAttempt = InferSelectModel<typeof refundAttempts>;
+export type OrderRefund = InferSelectModel<typeof orderRefunds>;
+export type OrderRefundLine = InferSelectModel<typeof orderRefundLines>;
 export type OrderSupportRequest = InferSelectModel<typeof orderSupportRequests>;
 export type OrderEvent = InferSelectModel<typeof orderEvents>;
 export type PaymentSessionAttempt = InferSelectModel<typeof paymentSessionAttempts>;

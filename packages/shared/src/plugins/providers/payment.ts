@@ -20,6 +20,13 @@
 // - A call that may have reached the provider but gave no answer raises
 //   `ProviderError("retryable", …, { uncertain: true })`: the platform keeps
 //   the operation for reconciliation and never repeats it blindly.
+// - Saved payment methods are vaulted by the provider. The platform keeps
+//   only the provider's opaque reference and display facts (brand, last four
+//   digits, expiry, a label): never a card number, a CVC or a raw payload.
+//   An off-session charge, a capture and a void each take a key that is
+//   stable across retries of the same operation (pass it to the provider as
+//   its idempotency key): a retry after a lost answer asks again, and the
+//   provider answers the first outcome instead of charging twice.
 
 import { z } from "zod";
 import { providerWireAmountSchema } from "./amount";
@@ -91,6 +98,18 @@ export const paymentSessionInputSchema = z.object({
   urls: z.object({ success: httpUrl, fail: httpUrl, cancel: httpUrl, webhook: httpUrl }).strict(),
   /** The time this call may take; the platform aborts it after that. */
   requestTimeoutMs: z.number().int().min(1).max(30_000),
+  /**
+   * Present when the platform asks the provider to keep the buyer's payment
+   * method for later charges without the buyer (a subscription's renewals):
+   * only for a signed-in account customer, and only when the provider
+   * declares the `vault` capability. The provider's confirmed or authorized
+   * event then names the kept method (`savedPaymentMethod`).
+   */
+  savePaymentMethod: z.object({
+    /** The account customer the method is kept for (the platform's id). */
+    customerId: providerRefSchema,
+    usage: z.literal("off_session"),
+  }).strict().optional(),
 }).strict();
 export type PaymentSessionInput = z.infer<typeof paymentSessionInputSchema>;
 
@@ -120,8 +139,35 @@ export const paymentSettlementSchema = z.object({
 }).strict();
 export type PaymentSettlement = z.infer<typeof paymentSettlementSchema>;
 
+/**
+ * A payment method the provider kept for later off-session charges: its
+ * opaque reference at the provider and what a buyer or staff member may see
+ * of it. Never a card number, a CVC or a provider payload.
+ */
+export const savedPaymentMethodSchema = z.object({
+  /** The provider's reference to the kept method (Stripe: a PaymentMethod id). */
+  ref: providerRefSchema,
+  /** The card network or wallet (`visa`, `bkash`), lower case. */
+  brand: z.string().regex(/^[a-z0-9_-]{1,40}$/).optional(),
+  last4: z.string().regex(/^\d{4}$/).optional(),
+  expiryMonth: z.number().int().min(1).max(12).optional(),
+  expiryYear: z.number().int().min(2000).max(2200).optional(),
+  /** What the buyer calls it, or a wallet account's masked name. */
+  label: z.string().trim().min(1).max(80).optional(),
+}).strict();
+export type SavedPaymentMethod = z.infer<typeof savedPaymentMethodSchema>;
+
+/**
+ * `confirmed`: money captured. `authorized`: money held at the provider and
+ * not captured (manual capture); it counts as nothing paid until a capture
+ * confirms it under the same `providerRef`. `failed` / `cancelled` end one
+ * attempt, or, naming an authorization's `providerRef`, release that hold.
+ */
+export const PAYMENT_EVENT_KINDS = ["confirmed", "authorized", "failed", "cancelled", "refund_observed"] as const;
+export type PaymentEventKind = (typeof PAYMENT_EVENT_KINDS)[number];
+
 export const paymentEventSchema = z.object({
-  kind: z.enum(["confirmed", "failed", "cancelled", "refund_observed"]),
+  kind: z.enum(PAYMENT_EVENT_KINDS),
   eventType: z.string().min(1).max(128),
   eventId: providerRefSchema,
   orderId: providerRefSchema,
@@ -140,10 +186,16 @@ export const paymentEventSchema = z.object({
    */
   correlationId: z.string().min(1).max(30).optional(),
   settlement: paymentSettlementSchema.optional(),
+  /** Confirmed and authorized events of a session that asked to keep the method (`savePaymentMethod`). */
+  savedPaymentMethod: savedPaymentMethodSchema.optional(),
   details: providerDetailsSchema.optional(),
 }).strict().superRefine((event, context) => {
-  if (event.kind === "confirmed" && (event.amountMinor === undefined || event.currency === undefined)) {
-    context.addIssue({ code: "custom", message: "A confirmed payment carries its authenticated amount and currency." });
+  const holdsMoney = event.kind === "confirmed" || event.kind === "authorized";
+  if (holdsMoney && (event.amountMinor === undefined || event.currency === undefined)) {
+    context.addIssue({ code: "custom", message: `A ${event.kind} payment carries its authenticated amount and currency.` });
+  }
+  if (!holdsMoney && event.savedPaymentMethod !== undefined) {
+    context.addIssue({ code: "custom", path: ["savedPaymentMethod"], message: "Only a confirmed or authorized payment names a saved payment method." });
   }
 });
 export type PaymentEvent = z.infer<typeof paymentEventSchema>;
@@ -252,6 +304,122 @@ export const providerRefundsSchema = z.array(z.object({
 }).strict()).max(100);
 export type ProviderRefunds = z.infer<typeof providerRefundsSchema>;
 
+// ── Saved methods: off-session charge, capture, void, delete ────────────────
+
+/**
+ * What a provider declares it can do beyond sessions, so the platform knows
+ * before it calls: `vault` (it keeps payment methods and charges them
+ * off-session: `chargeSavedMethod`, `deleteSavedMethod`) and `manualCapture`
+ * (it authorizes now and captures or voids later: `capture`, `void`).
+ */
+export const PAYMENT_CAPABILITIES = ["vault", "manualCapture"] as const;
+export type PaymentCapability = (typeof PAYMENT_CAPABILITIES)[number];
+
+/** The optional operations each capability brings (the descriptor declares both or neither). */
+export const PAYMENT_CAPABILITY_OPERATIONS = {
+  vault: ["chargeSavedMethod", "deleteSavedMethod"],
+  manualCapture: ["capture", "void"],
+} as const satisfies Record<PaymentCapability, readonly string[]>;
+
+const declinedOutcome = z.object({
+  status: z.literal("declined"),
+  reason,
+  /** A short stable code (`card_declined`, `insufficient_funds`); never a raw provider body. */
+  code: z.string().regex(/^[a-z][a-z0-9_.-]{0,63}$/).optional(),
+}).strict();
+/** The provider accepted the request; its answer arrives later as a verified webhook. */
+const pendingOutcome = z.object({
+  status: z.literal("pending"),
+  /** The provider's payment reference, when it already has one. */
+  providerRef: providerRefSchema.optional(),
+}).strict();
+
+export const paymentChargeInputSchema = z.object({
+  /** The locally claimed charge: the provider idempotency key, stable across retries. */
+  attemptKey: providerIdempotencyKeySchema,
+  /** The merchant reference to send the provider (at most 30 characters). */
+  correlationId: z.string().min(1).max(30),
+  orderId: providerRefSchema,
+  paymentType: paymentTypeSchema,
+  amountMinor: providerPositiveMinorSchema,
+  currency: providerCurrencySchema,
+  wireAmount: providerWireAmountSchema,
+  /** The saved method's provider reference (`savedPaymentMethod.ref`). */
+  methodRef: providerRefSchema,
+  /** `automatic` captures now (`confirmed`); `manual` only authorizes (`authorized`) for a later `capture`. */
+  capture: z.enum(["automatic", "manual"]),
+  requestTimeoutMs: z.number().int().min(1).max(30_000),
+}).strict();
+export type PaymentChargeInput = z.infer<typeof paymentChargeInputSchema>;
+
+/**
+ * A provider-authenticated outcome of an off-session charge: the payment
+ * event (`confirmed`, or `authorized` for a manual capture), `pending` (a
+ * verified webhook follows), or `declined`. No answer at all is a
+ * `ProviderError("retryable", …, { uncertain: true })`.
+ */
+export const paymentChargeSchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("event"), event: paymentEventSchema }).strict(),
+  pendingOutcome,
+  declinedOutcome,
+]).superRefine((outcome, context) => {
+  if (outcome.status === "event" && outcome.event.kind !== "confirmed" && outcome.event.kind !== "authorized") {
+    context.addIssue({ code: "custom", path: ["event", "kind"], message: "A charge answers a confirmed or authorized payment." });
+  }
+});
+export type PaymentCharge = z.infer<typeof paymentChargeSchema>;
+
+export const paymentCaptureInputSchema = z.object({
+  /** The authorization's provider reference (its `authorized` event's `providerRef`). */
+  providerRef: providerRefSchema,
+  orderId: providerRefSchema,
+  /** What to capture: at most what was authorized. */
+  amountMinor: providerPositiveMinorSchema,
+  currency: providerCurrencySchema,
+  wireAmount: providerWireAmountSchema,
+  idempotencyKey: providerIdempotencyKeySchema,
+}).strict();
+export type PaymentCaptureInput = z.infer<typeof paymentCaptureInputSchema>;
+
+/** A capture's provider-authenticated outcome: the `confirmed` event under the authorization's `providerRef`. */
+export const paymentCaptureSchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("event"), event: paymentEventSchema }).strict(),
+  pendingOutcome,
+  declinedOutcome,
+]).superRefine((outcome, context) => {
+  if (outcome.status === "event" && outcome.event.kind !== "confirmed") {
+    context.addIssue({ code: "custom", path: ["event", "kind"], message: "A capture answers a confirmed payment." });
+  }
+});
+export type PaymentCapture = z.infer<typeof paymentCaptureSchema>;
+
+export const paymentVoidInputSchema = z.object({
+  providerRef: providerRefSchema,
+  orderId: providerRefSchema,
+  idempotencyKey: providerIdempotencyKeySchema,
+}).strict();
+export type PaymentVoidInput = z.infer<typeof paymentVoidInputSchema>;
+
+/** A void's provider-authenticated outcome: the hold is released (`voided`), will be (`pending`), or cannot be (`declined`: captured already). */
+export const paymentVoidSchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("voided") }).strict(),
+  pendingOutcome,
+  declinedOutcome,
+]);
+export type PaymentVoid = z.infer<typeof paymentVoidSchema>;
+
+export const paymentDeleteSavedMethodInputSchema = z.object({
+  ref: providerRefSchema,
+  idempotencyKey: providerIdempotencyKeySchema,
+}).strict();
+export type PaymentDeleteSavedMethodInput = z.infer<typeof paymentDeleteSavedMethodInputSchema>;
+
+/** `deleted`, or `not_found` (the provider no longer knows it: nothing is left to detach). */
+export const paymentDeleteSavedMethodSchema = z.object({
+  status: z.enum(["deleted", "not_found"]),
+}).strict();
+export type PaymentDeleteSavedMethod = z.infer<typeof paymentDeleteSavedMethodSchema>;
+
 /** The schemas of every payment operation: the host validates both sides of each call. */
 export const PAYMENT_PORT = {
   createSession: { input: paymentSessionInputSchema, output: paymentSessionSchema },
@@ -261,4 +429,8 @@ export const PAYMENT_PORT = {
   refund: { input: paymentRefundInputSchema, output: paymentRefundSchema },
   refundStatus: { input: paymentRefundProbeInputSchema, output: paymentRefundProbeSchema },
   listRefunds: { input: paymentListRefundsInputSchema, output: providerRefundsSchema },
+  chargeSavedMethod: { input: paymentChargeInputSchema, output: paymentChargeSchema },
+  capture: { input: paymentCaptureInputSchema, output: paymentCaptureSchema },
+  void: { input: paymentVoidInputSchema, output: paymentVoidSchema },
+  deleteSavedMethod: { input: paymentDeleteSavedMethodInputSchema, output: paymentDeleteSavedMethodSchema },
 } as const;

@@ -135,7 +135,7 @@ describe("app customer roles", () => {
     const bridge = bridgeOf(members);
     const cartOf = (customerId: string | null) => ({
       ...testCart(100_000),
-      customer: customerId ? { id: customerId, tags: [], orderCount: 0, totalSpentMinor: 0, roles: [] } : null,
+      customer: customerId ? { id: customerId, tags: [], segmentIds: [], orderCount: 0, totalSpentMinor: 0, roles: [] } : null,
     });
     const validate = (customerId: string | null) => runPluginFunctions("cart.validate", { cart: cartOf(customerId) }, pluginTestEnv(binding), pluginTestCtx(), { db });
     // Another app's member role is not this app's.

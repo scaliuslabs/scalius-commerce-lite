@@ -21,6 +21,18 @@ export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   // Recording money received against an invoice settles it (a paid order hands
   // over its gift cards and downloads): its own sensitive permission.
   "/api/v1/admin/resources/orders/*/payments": { GET: orders, POST: { permission: PERMISSIONS.ORDERS_RECORD_PAYMENT } },
+  // Payments without the buyer (a saved method charged, an authorization
+  // captured or voided) move money like a recorded payment: the same
+  // sensitive permission (an app: write_payments). Reading a customer's saved
+  // methods belongs to the same permission: whoever may charge them lists them,
+  // and no other scope sees them.
+  "/api/v1/admin/resources/orders/*/payments/charge": { POST: { permission: PERMISSIONS.ORDERS_RECORD_PAYMENT } },
+  "/api/v1/admin/resources/payments/*/capture": { POST: { permission: PERMISSIONS.ORDERS_RECORD_PAYMENT } },
+  "/api/v1/admin/resources/payments/*/void": { POST: { permission: PERMISSIONS.ORDERS_RECORD_PAYMENT } },
+  "/api/v1/admin/resources/payment-methods": { GET: { permission: PERMISSIONS.ORDERS_RECORD_PAYMENT } },
+  "/api/v1/admin/resources/payment-methods/*": { DELETE: { permission: PERMISSIONS.ORDERS_RECORD_PAYMENT } },
+  // A refund gives money back: the dashboard refund permission (an app: Sensitive write_refunds).
+  "/api/v1/admin/resources/orders/*/refunds": { GET: orders, POST: { permission: PERMISSIONS.ORDERS_REFUND } },
   "/api/v1/admin/resources/orders/*/fulfillments": { GET: orders, POST: shipments },
   "/api/v1/admin/resources/orders/*/shipments": { GET: orders, POST: shipments },
   "/api/v1/admin/resources/shipments/*": { GET: orders },
