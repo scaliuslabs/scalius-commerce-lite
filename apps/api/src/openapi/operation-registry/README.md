@@ -120,8 +120,20 @@ mirror a dashboard screen, an editor section or a summary card.
   running with 409 `idempotency_in_progress`. The replay rows live in
   `system_kv` (`routes/admin/idempotency.ts`); a 5xx is not stored, so a retry
   runs again. No stable request body carries a key: an operation with a
-  durable retry key of its own (the stock ledger, fulfilments, timeline
-  notes) derives it from the header. Stock moves require the header.
+  durable retry key of its own (the stock ledger, orders, payments, refunds,
+  fulfilments, gift cards, bulk runs, timeline notes) derives it from the
+  header. Stock moves require the header.
+- **A lost response is recovered, never acted twice.** A running request
+  holds its key for a 120-second lease. If its Worker dies after the write
+  commits and before the response is kept, a repeat after the lease runs the
+  operation again when it cannot act twice (its own durable key answers the
+  first result, a PUT/DELETE or a required revision sets a target state); a
+  create without such a key (`products.create`, `customers.create`, ...)
+  answers 409 `idempotency_outcome_unknown`: read to check, and repeat with a
+  new key only if it is missing. `retryAfterLostResponse` in
+  `routes/admin/idempotency.ts` is the rule; its test holds every stable
+  write to it. The batch creates key each item, so an importer that must
+  never lose a create uses them.
 - **Writes take a precondition.** Every stable write that is not a create
   takes the revision it was based on (`expectedRevision`, `expectedVersion`,
   `expectedAggregateRevision` or `expectedStockVersion`, required or
