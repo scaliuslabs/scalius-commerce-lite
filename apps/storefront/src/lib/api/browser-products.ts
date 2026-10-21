@@ -33,7 +33,7 @@ function apiOrigin(): string {
   const base = window.__API_BASE_URL__;
   if (!base) {
     throw new Error(
-      "PUBLIC_API_URL is not configured. Set the API URL in the dashboard under Settings -> System -> Platform.",
+      "PUBLIC_API_URL is not configured. Set the Payment return address in the dashboard under Settings > Store details > Web addresses > Advanced.",
     );
   }
   return base.replace(/\/api\/v1\/?$/, "") || base;

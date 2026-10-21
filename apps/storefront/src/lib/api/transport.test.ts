@@ -208,7 +208,7 @@ describe("storefront API service-binding boundary", () => {
   it("fails closed without a binding when the public API URL is not saved yet", () => {
     const runtime: StorefrontRuntime = {};
     expect(() => requestRuntime.run(runtime, () => createApiUrl("/products"))).toThrow(
-      "Settings -> System -> Platform",
+      "Settings > Store details > Web addresses",
     );
   });
 

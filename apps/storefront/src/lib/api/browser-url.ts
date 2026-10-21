@@ -10,7 +10,7 @@ export function browserApiUrl(path: string): string {
   const base = window.__API_BASE_URL__;
   if (!base) {
     throw new Error(
-      "PUBLIC_API_URL is not configured. Set the API URL in the dashboard under Settings -> System -> Platform.",
+      "PUBLIC_API_URL is not configured. Set the Payment return address in the dashboard under Settings > Store details > Web addresses > Advanced.",
     );
   }
   // An empty path is the base itself (callers append their own `/route`).

@@ -124,7 +124,7 @@ describe("deploy API readiness sampling", () => {
     expect(result.readyCount).toBe(4);
     expect(result.setupPending).toEqual(["platform_config"]);
     expect(console.warn).toHaveBeenCalledWith(
-      expect.stringContaining("Settings -> System -> Platform"),
+      expect.stringContaining("Settings > Store details > Web addresses"),
     );
   });
 

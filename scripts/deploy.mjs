@@ -619,7 +619,7 @@ function warnSetupPending(samples) {
   if (setupPending.length > 0) {
     console.warn(
       `⚠ API infrastructure is healthy but merchant setup is incomplete (${setupPending.join(", ")}). ` +
-      "Sign in to the dashboard and complete Settings -> System -> Platform; " +
+      "Sign in to the dashboard and complete Settings > Store details > Web addresses; " +
       "storefront browser features stay disabled until then.",
     );
   }
@@ -1005,7 +1005,7 @@ export async function resolveStorefrontVerificationUrl(deploymentUrls, {
     if (!platform.storefrontUrl) {
       throw new Error(
         "Could not verify live storefront: the dashboard Platform setting storefrontUrl is empty. "
-        + `Set it in Settings -> System -> Platform or ${STOREFRONT_URL_HINT}.`,
+        + `Set it in Settings > Store details > Web addresses or ${STOREFRONT_URL_HINT}.`,
       );
     }
     console.log(`✓ Using storefront origin ${platform.storefrontUrl} from dashboard Platform settings.`);
@@ -1015,11 +1015,11 @@ export async function resolveStorefrontVerificationUrl(deploymentUrls, {
   if (platform.storefrontUrl && platform.storefrontUrl !== storefrontUrl) {
     console.warn(
       `⚠ Dashboard Platform storefrontUrl (${platform.storefrontUrl}) differs from the deploy target `
-      + `(${storefrontUrl}). Update Settings -> System -> Platform so canonical and sitemap URLs match.`,
+      + `(${storefrontUrl}). Update Settings > Store details > Web addresses so canonical and sitemap URLs match.`,
     );
   } else if (!platform.storefrontUrl) {
     console.warn(
-      "⚠ Dashboard Platform storefrontUrl is empty; set it in Settings -> System -> Platform "
+      "⚠ Dashboard Platform storefrontUrl is empty; set it in Settings > Store details > Web addresses "
       + "so discovery XML and canonical links resolve.",
     );
   }

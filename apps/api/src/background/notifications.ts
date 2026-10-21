@@ -102,7 +102,7 @@ async function dispatchOrderNotification(
           orderId: input.orderId,
           notificationType: input.notificationType,
           outboxId: input.outboxId,
-          reason: "platform apiUrl is not configured (Settings -> System -> Platform)",
+          reason: "platform apiUrl is not configured (Settings > Store details > Web addresses > Advanced > Payment return address)",
         });
       } else {
         const adminPushResult = await sendOrderNotification(db, {
