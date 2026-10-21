@@ -6,6 +6,7 @@
 // order and stop early before a page passes the response budget, so a sync
 // walks every change once without offsets or counts.
 import { linePurchaseOptionInputSchema } from "../../schemas/order-lines";
+import { postalAddressLinesInputSchema } from "../../schemas/postal-address";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 import type { Context, MiddlewareHandler } from "hono";
@@ -215,22 +216,8 @@ app.openapi(createRoute({
 
 const optionalText = (max: number) => z.string().trim().max(max).nullable().optional();
 
-/** A postal address in the canonical fields (AGENTS.md address rules); Bangladesh may add its delivery place ids. */
-const addressInputSchema = z.object({
-  countryCode: z.string().trim().length(2).openapi({ description: "ISO 3166-1 alpha-2." }),
-  company: optionalText(100),
-  line1: z.string().trim().min(1).max(500),
-  line2: optionalText(200),
-  dependentLocality: optionalText(120),
-  locality: optionalText(120),
-  adminArea: optionalText(120),
-  postalCode: optionalText(20),
-  placeIds: z.object({
-    city: z.string().trim().min(1).max(180).nullable().optional(),
-    zone: z.string().trim().min(1).max(180).nullable().optional(),
-    area: z.string().trim().min(1).max(180).nullable().optional(),
-  }).strict().optional().openapi({ description: "The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them." }),
-}).strict();
+/** The order's addresses: the one stable address shape; the recipient comes from the contact (shipping) or `name` (billing). */
+const addressInputSchema = postalAddressLinesInputSchema;
 
 const orderCreateBody = z.object({
   customerId: z.string().trim().min(1).max(128).optional().openapi({
