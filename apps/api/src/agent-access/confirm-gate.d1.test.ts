@@ -164,6 +164,58 @@ describe("the confirmation gate on the direct REST lane", () => {
     expect(attempts()).toBe(1);
   }, 60_000);
 
+  // Security audit N2: a `+json` body used to bind nothing, so the owner
+  // approved "Refund an order: id=..." and the retry ran any body.
+  async function callRaw(path: string, body: string, contentType: string, headers: Record<string, string> = {}) {
+    const response = await fetchRuntimeApiApp(new Request(`https://api.example.test/api/v1/admin${path}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": contentType, ...headers },
+      body,
+    }), env, ctx());
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- assertions inspect the wire envelope.
+    return { status: response.status, body: await response.json() as any };
+  }
+
+  it("binds a vnd+json body: the owner sees it, and a retry with another body runs nothing", async () => {
+    const vnd = "application/vnd.x+json";
+    const approved = JSON.stringify(refundBody);
+    const refused = await callRaw(`/orders/${orderId}/refund`, approved, vnd);
+    expect(refused.status, JSON.stringify(refused.body)).toBe(428);
+    expect(refused.body.error.details.confirmation.summary).toContain("amount=500");
+    const approvalId = refused.body.error.details.confirmation.approvalId as string;
+    expect(await decideAgentApproval(db, approvalId, OWNER, "approve")).toBe(true);
+
+    const header = { [APPROVAL_HEADER]: approvalId };
+    for (const [body, type] of [
+      [JSON.stringify({ ...refundBody, amount: 1680 }), vnd],
+      // The same JSON in other bytes, another content type, or a new query string is another request.
+      [JSON.stringify({ reason: refundBody.reason, amount: 500, manualSettlementConfirmed: true, requestKey: refundBody.requestKey }), vnd],
+      [approved, "application/json"],
+    ] as const) {
+      const other = await callRaw(`/orders/${orderId}/refund`, body, type, header);
+      expect(other.status, JSON.stringify(other.body)).toBe(400);
+      expect(other.body.error.code).toBe("approval_invalid");
+    }
+    const withQuery = await callRaw(`/orders/${orderId}/refund?dryRun=true`, approved, vnd, header);
+    expect(withQuery.body.error.code).toBe("approval_invalid");
+    expect(attempts()).toBe(0);
+
+    const confirmed = await callRaw(`/orders/${orderId}/refund`, approved, vnd, header);
+    expect(confirmed.status, JSON.stringify(confirmed.body)).toBe(200);
+    expect(attempts()).toBe(1);
+  }, 60_000);
+
+  it("binds a body it cannot parse, and says so to the owner", async () => {
+    const refused = await callRaw(`/orders/${orderId}/refund`, "amount=500", "text/plain");
+    expect(refused.status, JSON.stringify(refused.body)).toBe(428);
+    expect(refused.body.error.details.confirmation.summary).toContain("10-byte text/plain body");
+    const approvalId = refused.body.error.details.confirmation.approvalId as string;
+    expect(await decideAgentApproval(db, approvalId, OWNER, "approve")).toBe(true);
+    const other = await callRaw(`/orders/${orderId}/refund`, "amount=999", "text/plain", { [APPROVAL_HEADER]: approvalId });
+    expect(other.body.error.code).toBe("approval_invalid");
+    expect(attempts()).toBe(0);
+  }, 60_000);
+
   it("never runs a change its owner declined", async () => {
     const refused = await call("POST", `/orders/${orderId}/refund`, refundBody);
     const approvalId = refused.body.error.details.confirmation.approvalId as string;
