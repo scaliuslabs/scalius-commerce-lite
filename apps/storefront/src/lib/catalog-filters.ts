@@ -1,5 +1,5 @@
 import type { BuyerPriceRange, ProductFacet, RatingFacetValue } from "@/lib/api";
-import { createApiUrl } from "@/lib/api/transport";
+import { browserApiUrl } from "@/lib/api/browser-url";
 import { navigateToCatalogFilterSearch } from "./catalog-filter-dialog";
 import { catalogSwatchPaint } from "./catalog-swatch";
 import {
@@ -343,7 +343,7 @@ function readListingFacets(endpoint: string): Promise<ProductFacet[] | null> {
   if (listingFacetsRequest?.key !== key) {
     listingFacetsRequest = {
       key,
-      facets: fetch(createApiUrl(key))
+      facets: fetch(browserApiUrl(key))
         .then((response) => (response.ok ? response.json() : null))
         .then((body: { data?: { facets?: unknown } } | null) => {
           const facets = body?.data?.facets;
@@ -602,7 +602,7 @@ export function setupCatalogFilters(): void {
       countRequest = request;
       try {
         const response = await fetch(
-          createApiUrl(`${endpoint}?${catalogCountQuery(catalogFilterSearchParams(form))}`),
+          browserApiUrl(`${endpoint}?${catalogCountQuery(catalogFilterSearchParams(form))}`),
           { signal: request.signal },
         );
         const body = (await response.json()) as {

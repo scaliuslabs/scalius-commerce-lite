@@ -17,7 +17,7 @@ import {
 import { signOutCustomer } from "@/lib/customer-sign-out";
 import { focusMainHeading } from "@/lib/focus-main-heading";
 import type { CheckoutConfig } from "@/lib/api/checkout";
-import { createApiUrl } from "@/lib/api/transport";
+import { browserApiUrl } from "@/lib/api/browser-url";
 import type { CustomerAuthOtpChannel, CustomerIdentitySettings } from "@scalius/shared/customer-auth-policy";
 import { formatBdMobile } from "@scalius/shared/phone-input";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
@@ -71,7 +71,7 @@ function settingsFromConfig(config: CheckoutConfig | null | undefined): AuthSett
 
 async function fetchCheckoutConfig(): Promise<CheckoutConfig | null> {
   try {
-    const res = await fetch(createApiUrl("/checkout/config"));
+    const res = await fetch(browserApiUrl("/checkout/config"));
     if (!res.ok) return null;
     const json = await res.json() as { success: boolean; data: CheckoutConfig };
     return json.data ?? null;
