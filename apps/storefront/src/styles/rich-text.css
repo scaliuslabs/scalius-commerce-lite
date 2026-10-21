@@ -16,7 +16,7 @@
 @reference "tailwindcss/theme.css";
 @reference "./theme-foundation.css";
 @import "tailwindcss/utilities.css" layer(utilities.prose) source(none);
-@source inline("prose prose-sm prose-base prose-lg sm:prose-base dark:prose-invert prose-a:text-primary hover:prose-a:text-primary/80 prose-a:underline prose-blockquote:border-primary/40 prose-blockquote:text-foreground prose-headings:scroll-mt-24 prose-headings:text-foreground prose-img:rounded-xl prose-li:text-foreground/85 prose-p:leading-relaxed prose-p:my-1 prose-p:text-foreground/85 prose-pre:bg-transparent");
+@source inline("prose prose-sm prose-base sm:prose-lg sm:prose-base dark:prose-invert prose-a:text-primary hover:prose-a:text-primary/80 prose-a:underline prose-blockquote:border-primary/40 prose-blockquote:text-foreground prose-h2:text-2xl prose-h3:text-xl prose-headings:scroll-mt-24 prose-headings:text-foreground prose-img:rounded-xl prose-li:text-foreground/85 prose-p:leading-relaxed prose-p:my-1 prose-p:text-foreground/85 prose-pre:bg-transparent");
 
 @plugin '@tailwindcss/typography';
 

@@ -157,8 +157,10 @@ const templateProps = {
   preview: pageRequestTheme.preview !== null,
   languageCode: layoutData?.storefrontCopy?.languageCode,
 };
+// Body text steps up from phones; headings follow the theme's fluid type
+// scale, so a section heading never outgrows the page title on a phone.
 const richContentClasses =
-  "prose prose-lg w-full max-w-none dark:prose-invert prose-headings:scroll-mt-24 prose-headings:text-foreground prose-p:text-foreground/85 prose-li:text-foreground/85 prose-a:text-primary hover:prose-a:text-primary/80 prose-img:rounded-xl prose-blockquote:border-primary/40 prose-blockquote:text-foreground";
+  "prose sm:prose-lg w-full max-w-none dark:prose-invert prose-h2:text-2xl prose-h3:text-xl prose-headings:scroll-mt-24 prose-headings:text-foreground prose-p:text-foreground/85 prose-li:text-foreground/85 prose-a:text-primary hover:prose-a:text-primary/80 prose-img:rounded-xl prose-blockquote:border-primary/40 prose-blockquote:text-foreground";
 ---
 
 <Layout
