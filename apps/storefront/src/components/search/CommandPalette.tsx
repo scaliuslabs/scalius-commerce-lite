@@ -129,9 +129,13 @@ export default function CommandPalette() {
       }
     };
 
-    const handleCustomEvent = () => {
+    const handleCustomEvent = (event?: Event) => {
       delete window.__scaliusSearchPaletteOpenPending;
       rememberOpener();
+      // Typing in the header's field carries the text in (predictive search).
+      const typed = (event as CustomEvent<{ query?: unknown }> | undefined)?.detail?.query ?? window.__scaliusSearchPaletteQuery;
+      delete window.__scaliusSearchPaletteQuery;
+      if (typeof typed === "string" && typed.trim()) setQuery(typed.slice(0, 120));
       setIsOpen(true);
     };
 
