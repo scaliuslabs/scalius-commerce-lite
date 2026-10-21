@@ -15419,7 +15419,8 @@
    "object.updated": "object",
    "object.deleted": "object",
    "customer.redact_requested": "customer",
-   "customer.data_requested": "customer"
+   "customer.data_requested": "customer",
+   "customer.erased": "customer"
   },
   "facts": {
    "order.created": {
@@ -16869,6 +16870,21 @@
     "additionalProperties": false
    },
    "customer.data_requested": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+     "customerId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+     }
+    },
+    "required": [
+     "customerId"
+    ],
+    "additionalProperties": false
+   },
+   "customer.erased": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "properties": {

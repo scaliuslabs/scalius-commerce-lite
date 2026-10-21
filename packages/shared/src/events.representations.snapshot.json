@@ -445,6 +445,11 @@
         "type": "string",
         "maxLength": 4000
        },
+       "sku": {
+        "nullable": true,
+        "type": "string",
+        "maxLength": 4000
+       },
        "quantity": {
         "type": "integer",
         "minimum": -9007199254740991,
@@ -488,6 +493,7 @@
        "variantId",
        "title",
        "variantLabel",
+       "sku",
        "quantity",
        "fulfilledQuantity",
        "unitPriceMinor",
@@ -1207,6 +1213,13 @@
      "minLength": 1,
      "maxLength": 40,
      "format": "date-time"
+    },
+    "erasedAt": {
+     "nullable": true,
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
     }
    },
    "required": [
@@ -1224,7 +1237,8 @@
     "taxExemptionId",
     "createdAt",
     "updatedAt",
-    "deletedAt"
+    "deletedAt",
+    "erasedAt"
    ]
   },
   "purchase_order": {

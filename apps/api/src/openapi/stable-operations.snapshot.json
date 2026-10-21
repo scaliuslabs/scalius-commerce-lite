@@ -5067,6 +5067,14 @@
           "type": "string",
           "minLength": 7,
           "maxLength": 16
+         },
+         "taxExempt": {
+          "type": "boolean"
+         },
+         "taxExemptionId": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 64
          }
         }
        }
@@ -11830,6 +11838,94 @@
     ]
    }
   },
+  "orders.release_hold": {
+   "operationId": "dashboard.resources.orders.release_hold",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/orders/{id}/release-hold",
+   "risk": "write",
+   "idempotency": "supported",
+   "revision": "required",
+   "scopes": [
+    "write_orders"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "expectedRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The order `revision` you read; a change since is refused with 409 and the hold stays. Releasing a released hold answers it again whatever the revision."
+         }
+        },
+        "required": [
+         "expectedRevision"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "order": {
+        "$ref": "#/components/schemas/OrderResource"
+       },
+       "replayed": {
+        "type": "boolean"
+       }
+      },
+      "required": [
+       "order",
+       "replayed"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
   "pages.list": {
    "operationId": "dashboard.resources.pages.list",
    "method": "GET",
@@ -16446,12 +16542,13 @@
             "object.updated",
             "object.deleted",
             "customer.redact_requested",
-            "customer.data_requested"
+            "customer.data_requested",
+            "customer.erased"
            ],
            "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*`; the app's grant must cover it (its manifest `events`)."
           },
           "minItems": 1,
-          "maxItems": 56
+          "maxItems": 57
          },
          "description": {
           "type": "string",
@@ -16783,12 +16880,13 @@
             "object.updated",
             "object.deleted",
             "customer.redact_requested",
-            "customer.data_requested"
+            "customer.data_requested",
+            "customer.erased"
            ],
            "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*`; the app's grant must cover it (its manifest `events`)."
           },
           "minItems": 1,
-          "maxItems": 56
+          "maxItems": 57
          },
          "description": {
           "type": "string",
@@ -18709,6 +18807,14 @@
       ]
      }
     },
+    "taxExempt": {
+     "type": "boolean"
+    },
+    "taxExemptionId": {
+     "type": "string",
+     "nullable": true,
+     "maxLength": 64
+    },
     "createdAt": {
      "type": "string",
      "minLength": 1,
@@ -18727,6 +18833,13 @@
      "minLength": 1,
      "maxLength": 40,
      "format": "date-time"
+    },
+    "erasedAt": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
     }
    },
    "required": [
@@ -18740,9 +18853,12 @@
     "mergedIntoCustomerId",
     "tags",
     "consents",
+    "taxExempt",
+    "taxExemptionId",
     "createdAt",
     "updatedAt",
-    "deletedAt"
+    "deletedAt",
+    "erasedAt"
    ]
   },
   "DiscountResource": {
@@ -20612,6 +20728,11 @@
         "nullable": true,
         "maxLength": 4000
        },
+       "sku": {
+        "type": "string",
+        "nullable": true,
+        "maxLength": 4000
+       },
        "quantity": {
         "type": "integer"
        },
@@ -20643,6 +20764,7 @@
        "variantId",
        "title",
        "variantLabel",
+       "sku",
        "quantity",
        "fulfilledQuantity",
        "unitPriceMinor",
