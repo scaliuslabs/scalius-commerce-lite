@@ -42,8 +42,9 @@
  */
 
 import { execSync } from "child_process";
-import { readFileSync, writeFileSync } from "fs";
-import { delimiter, resolve, dirname } from "path";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { delimiter, dirname, join, resolve } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import { getArgValue, resolvePnpmExecutable, shellQuote } from "./dev-local-utils.mjs";
 import { readLockfile } from "./plugin-build.mjs";
@@ -356,6 +357,30 @@ function deployTarget(target, apiWranglerConfigPath = null, plan = "free", plugi
   if (target === "storefront") applyStorefrontPlan(plan, pluginSandbox);
   const { cmd, label, cwd } = getDeployCommandForTarget(target, apiWranglerConfigPath);
   runWithRetry(cmd, label, cwd);
+}
+
+/**
+ * The deploy command with Wrangler's `--dry-run`: it reads the plan's config
+ * and bundles the Worker exactly as a deploy would, and uploads nothing.
+ */
+export function getDeployDryRunCommandForTarget(target, apiWranglerConfigPath, outdir) {
+  const { cmd, cwd } = getDeployCommandForTarget(target, apiWranglerConfigPath);
+  return { cmd: `${cmd} --dry-run --outdir ${shellQuote(outdir)}`, label: `Bundle the ${target} Worker as deployed, without uploading`, cwd };
+}
+
+/** A dry run proves what a deploy would send: the Worker env and bindings check, then each plan config bundled. */
+function validateDeployBundles(targets, apiWranglerConfigPath, plan, pluginSandbox) {
+  run("node scripts/check-worker-env.mjs", "Verify Worker bindings and env declarations");
+  const outdir = mkdtempSync(join(tmpdir(), "scalius-deploy-dry-run-"));
+  try {
+    for (const target of targets) {
+      if (target === "storefront") applyStorefrontPlan(plan, pluginSandbox);
+      const { cmd, label, cwd } = getDeployDryRunCommandForTarget(target, target === "api" ? apiWranglerConfigPath : null, join(outdir, target));
+      run(cmd, label, cwd);
+    }
+  } finally {
+    rmSync(outdir, { recursive: true, force: true });
+  }
 }
 
 export function getLatestDeployment(deployments) {
@@ -1393,6 +1418,7 @@ export async function main() {
       checkDistSecrets([requestedTarget]);
 
       if (dryRun) {
+        validateDeployBundles([requestedTarget], apiDeployConfigPath, plan, pluginSandbox);
         console.log("\nDRY RUN: skipping database migrations and Worker deploy.");
         console.log(`\n✓ Deploy dry run complete (${requestedTarget}).`);
         return;
@@ -1419,6 +1445,7 @@ export async function main() {
     checkDistSecrets(deployTargets);
 
     if (dryRun) {
+      validateDeployBundles(deployTargets, apiDeployConfigPath, plan, pluginSandbox);
       console.log("\nDRY RUN: skipping database migrations and Worker deploys.");
       console.log(`\n✓ Deploy dry run complete (${deployTargets.join(" + ")}).`);
       return;

@@ -8,6 +8,7 @@ import {
   getExternalSchemaPreflightCommand,
   getBuildCommandForTarget,
   getDeployCommandForTarget,
+  getDeployDryRunCommandForTarget,
   getDistSecretCommands,
   getSequentialWorkspaceCommand,
   getStorefrontCustomDomainUrl,
@@ -319,6 +320,14 @@ describe("deploy target wiring", () => {
     expect(command.cmd).toContain("exec wrangler deploy --config");
     expect(command.cmd).toContain("wrangler.turso.jsonc");
     expect(command.cwd).toMatch(/apps\/api$/);
+  });
+
+  it("bundles each Worker with its plan config in a dry run and uploads nothing", () => {
+    const api = getDeployDryRunCommandForTarget("api", "/repo/apps/api/wrangler.deploy.gen.json", "/tmp/out/api");
+    expect(api.cmd).toMatch(/exec wrangler deploy --config .*wrangler\.deploy\.gen\.json.* --dry-run --outdir .*\/tmp\/out\/api/);
+    const storefront = getDeployDryRunCommandForTarget("storefront", null, "/tmp/out/storefront");
+    expect(storefront.cmd).toContain("wrangler deploy --config dist/server/wrangler.json --dry-run --outdir");
+    expect(storefront.cwd).toMatch(/apps\/storefront$/);
   });
 
   it("keeps typechecking and deployment commands on supported workspaces", () => {
