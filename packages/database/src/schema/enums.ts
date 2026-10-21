@@ -66,6 +66,13 @@ export const PaymentRecordStatus = {
     FAILED: "failed",
     REFUNDED: "refunded",
     CANCELLED: "cancelled",
+    /**
+     * Money held at the provider and not captured (manual capture). It counts
+     * as nothing paid; a capture promotes the row to `succeeded`, a void (or
+     * the provider's expiry) marks it `cancelled`. Like `pending`, it is money
+     * in flight: an order holding one cannot be cancelled or switch gateway.
+     */
+    AUTHORIZED: "authorized",
 } as const;
 
 export type PaymentRecordStatusType = (typeof PaymentRecordStatus)[keyof typeof PaymentRecordStatus];

@@ -14,6 +14,7 @@
 import type { Database } from "@scalius/database/client";
 import type {
   PaymentAmountLimits,
+  PaymentCapability,
   PaymentEvent as PortPaymentEvent,
   PaymentFlow,
   PaymentRefundProbe,
@@ -101,6 +102,13 @@ export interface PaymentGateway<S extends GatewaySettings = GatewaySettings> ext
   /** Per-currency wire forms (`encodeProviderAmount`); absent: ISO minor units as they are. */
   readonly amountCodecs?: ProviderAmountCodecs;
   readonly supportsRefund: boolean;
+  /**
+   * `vault` (keeps methods, charges them off-session: `chargeSavedMethod`,
+   * `deleteSavedMethod`) and `manualCapture` (`capture`, `void`). Absent:
+   * neither. The kernel asks a session to keep a method, charges, captures
+   * and voids only through a gateway that declares the capability.
+   */
+  readonly capabilities?: readonly PaymentCapability[];
 
   /** Saved settings, decrypted strictly; null when nothing was ever saved. */
   loadSettings(db: Database, encryptionKey: string | undefined): Promise<S | null>;
@@ -118,6 +126,14 @@ export interface PaymentGateway<S extends GatewaySettings = GatewaySettings> ext
    * every return through `verifyReturn`, authenticated with the provider.
    */
   returnCorrelationId?(request: GatewayRequest): string;
+}
+
+/** Whether a gateway declares a capability and has the operations it brings. */
+export function gatewayHasCapability(gateway: PaymentGateway, capability: PaymentCapability): boolean {
+  if (!gateway.capabilities?.includes(capability)) return false;
+  return capability === "vault"
+    ? typeof gateway.chargeSavedMethod === "function"
+    : typeof gateway.capture === "function" && typeof gateway.void === "function";
 }
 
 export function hasText(value: unknown): value is string {

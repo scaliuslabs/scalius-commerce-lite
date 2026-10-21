@@ -19,6 +19,9 @@
 // - acme.order-tagger: an order card and actions through `ctx.api`.
 // - acme.notes: checkout and customer-account blocks.
 // - acme.marketplace: a multi-seller split kept from fulfilment and refund line facts.
+// - acme.subscriptions: a purchase option, contracts from order.created, a
+//   renewal cron (orders.create + payments.charge of the saved method) and a
+//   test payment provider that vaults, charges off-session, captures and voids.
 //
 // Each fingerprint is a fixed test value: an installation made from an entry
 // matches the "deployed" code, and a test that changes it sees an update.
@@ -32,6 +35,7 @@ import { manifest as wishlistManifest } from "./apps/wishlist/src/index";
 import { manifest as wholesaleManifest } from "./apps/wholesale/src/index";
 import { manifest as riskGuardManifest } from "./apps/risk-guard/src/index";
 import { manifest as marketplaceManifest } from "./apps/marketplace/src/index";
+import { manifest as subscriptionsManifest } from "./apps/subscriptions/src/index";
 import type { BundledPluginEntry } from "../loaders/bundled";
 
 /** Directories of the fixture apps, for `packPlugin` (sandbox tests). */
@@ -45,6 +49,7 @@ export const FIXTURE_APP_SOURCES = {
   "acme.wholesale": "./apps/api/src/plugins/testing/apps/wholesale",
   "acme.risk-guard": "./apps/api/src/plugins/testing/apps/risk-guard",
   "acme.marketplace": "./apps/api/src/plugins/testing/apps/marketplace",
+  "acme.subscriptions": "./apps/api/src/plugins/testing/apps/subscriptions",
 } as const;
 
 export const HELLO_BUNDLED: BundledPluginEntry = {
@@ -63,6 +68,7 @@ export const FIXTURE_APPS: Readonly<Record<string, BundledPluginEntry>> = {
   "acme.wholesale": { version: wholesaleManifest.version, sha256: "b2b0".repeat(16), load: () => import("./apps/wholesale/src/index") },
   "acme.risk-guard": { version: riskGuardManifest.version, sha256: "715c".repeat(16), load: () => import("./apps/risk-guard/src/index") },
   "acme.marketplace": { version: marketplaceManifest.version, sha256: "5e11".repeat(16), load: () => import("./apps/marketplace/src/index") },
+  "acme.subscriptions": { version: subscriptionsManifest.version, sha256: "50b5".repeat(16), load: () => import("./apps/subscriptions/src/index") },
 };
 
 /** The bundled registry with every fixture app added. */

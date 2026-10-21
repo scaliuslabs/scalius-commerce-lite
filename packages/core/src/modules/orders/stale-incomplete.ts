@@ -46,7 +46,7 @@ const STALE_INCOMPLETE_PAYMENT_STATUSES: RecoverableStalePaymentStatus[] = [
 const noActivePaymentClaimCondition = sql`NOT EXISTS (
     SELECT 1 FROM ${orderPayments}
     WHERE ${orderPayments.orderId} = ${orders.id}
-      AND ${orderPayments.status} IN (${PaymentRecordStatus.PENDING}, ${PaymentRecordStatus.SUCCEEDED})
+      AND ${orderPayments.status} IN (${PaymentRecordStatus.PENDING}, ${PaymentRecordStatus.AUTHORIZED}, ${PaymentRecordStatus.SUCCEEDED})
       AND ${orderPayments.paymentMethod} <> ${GIFT_CARD_PAYMENT_METHOD}
 )`;
 

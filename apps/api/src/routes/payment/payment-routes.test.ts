@@ -143,6 +143,34 @@ describe("POST /payment/{provider}/session", () => {
     expect(sqlite.prepare("SELECT payment_intent_id FROM orders").get()).toEqual({ payment_intent_id: expected.data.sessionKey });
   });
 
+  it("asks a vaulting provider to keep the method only for an account customer's subscribed line", async () => {
+    const vaulting = { ...fake.gateway, capabilities: ["vault"] as const, chargeSavedMethod: async () => ({ status: "pending" as const }) };
+    const { createPaymentProviders } = await import("@scalius/core/modules/payments");
+    requestProviders.current = createPaymentProviders([vaulting]);
+    await seed({ paymentMethod: FAKE_GATEWAY_ID, enabledMethods: [FAKE_GATEWAY_ID] });
+    const app = createApp();
+    const path = `/payment/${FAKE_GATEWAY_ID}/session`;
+    sqlite.exec(`
+      INSERT INTO customers (id, name, phone) VALUES ('cust_1', 'Buyer', '+8801711111111');
+      INSERT INTO products (id, name, slug, price_minor, is_active) VALUES ('p1', 'Coffee', 'coffee', 150000, 1);
+      INSERT INTO order_items (id, order_id, product_id, quantity, product_name, unit_price_minor, line_subtotal_minor, discount_amount_minor, taxable_amount_minor, tax_amount_minor, properties)
+      VALUES ('item_1', 'order_1', 'p1', 1, 'Coffee', 150000, 150000, 0, 0, 0, '[{"key":"_purchase_option","type":"text","label":"Purchase option","value":"acme.subs.subscribe","displayValue":"Subscribe","priceMinor":0}]');
+    `);
+    // A guest order keeps nothing.
+    await post(app, path, { orderId: "order_1" }, { "X-Receipt-Token": RECEIPT });
+    expect(fake.state.sessions.at(-1)!.savePaymentMethod).toBeUndefined();
+
+    sqlite.exec("UPDATE orders SET account_owner_customer_id = 'cust_1', customer_id = 'cust_1'; DELETE FROM payment_session_attempts;");
+    await post(app, path, { orderId: "order_1" }, { "X-Receipt-Token": RECEIPT });
+    expect(fake.state.sessions.at(-1)!.savePaymentMethod).toEqual({ customerId: "cust_1", usage: "off_session" });
+
+    // A provider that cannot keep methods is never asked to.
+    requestProviders.current = fake.providers;
+    sqlite.exec("DELETE FROM payment_session_attempts;");
+    await post(app, path, { orderId: "order_1" }, { "X-Receipt-Token": RECEIPT });
+    expect(fake.state.sessions.at(-1)!.savePaymentMethod).toBeUndefined();
+  });
+
   it("fails closed without calling the provider when the gateway is not selected or not configured", async () => {
     await seed({ paymentMethod: FAKE_GATEWAY_ID, enabledMethods: ["cod"] });
     const app = createApp();

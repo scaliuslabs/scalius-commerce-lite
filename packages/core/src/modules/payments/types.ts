@@ -3,6 +3,7 @@
 export type { PaymentType } from "./gateways/port";
 import type { PaymentType } from "./gateways/port";
 import type { ReportedSettlement } from "@scalius/shared/money-chain";
+import type { SavedPaymentMethod } from "@scalius/shared/plugins/providers/payment";
 
 export type PaymentResult = "succeeded" | "failed" | "pending" | "cancelled";
 
@@ -46,4 +47,10 @@ export interface ProcessPaymentParams {
   metadata?: Record<string, unknown>;
   /** What the provider reported reached the merchant (the payment port's `settlement`); absent: settled as presented. */
   settlement?: ReportedSettlement | null;
+  /**
+   * The payment method the provider kept with this payment (a session that
+   * asked to keep it). Saved for the order's account customer in the batch
+   * that applies the payment; ignored for a guest order.
+   */
+  savedPaymentMethod?: SavedPaymentMethod | null;
 }

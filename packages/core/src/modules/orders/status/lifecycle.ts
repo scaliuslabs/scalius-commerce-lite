@@ -59,7 +59,7 @@ export async function reconcileInventoryForStatus(
 
 const CANCELLATION_UNSAFE_PAYMENT_RECORD_STATUSES = [
     PaymentRecordStatus.PENDING,
-    PaymentRecordStatus.CONFIRMED,
+    PaymentRecordStatus.CONFIRMED, PaymentRecordStatus.AUTHORIZED,
     PaymentRecordStatus.SUCCEEDED,
 ] as const;
 
@@ -77,7 +77,7 @@ function noUnsafeCancellationPaymentCondition(orderId: string): SQL {
             WHERE ${orderPayments.orderId} = ${orderId}
               AND ${orderPayments.status} IN (
                   ${PaymentRecordStatus.PENDING},
-                  ${PaymentRecordStatus.CONFIRMED},
+                  ${PaymentRecordStatus.CONFIRMED}, ${PaymentRecordStatus.AUTHORIZED},
                   ${PaymentRecordStatus.SUCCEEDED}
               )
         )
@@ -142,7 +142,7 @@ export async function giftCardOnlyTenders(
                 WHEN ${orderPayments.paymentMethod} <> ${GIFT_CARD_PAYMENT_METHOD}
                  AND ${orderPayments.status} IN (
                      ${PaymentRecordStatus.PENDING},
-                     ${PaymentRecordStatus.CONFIRMED},
+                     ${PaymentRecordStatus.CONFIRMED}, ${PaymentRecordStatus.AUTHORIZED},
                      ${PaymentRecordStatus.SUCCEEDED}
                  )
                 THEN 1 ELSE 0 END), 0)`,
@@ -167,7 +167,7 @@ function giftCardOnlyCancellationPaymentCondition(orderId: string, paidAmountMin
               AND ${orderPayments.paymentMethod} <> ${GIFT_CARD_PAYMENT_METHOD}
               AND ${orderPayments.status} IN (
                   ${PaymentRecordStatus.PENDING},
-                  ${PaymentRecordStatus.CONFIRMED},
+                  ${PaymentRecordStatus.CONFIRMED}, ${PaymentRecordStatus.AUTHORIZED},
                   ${PaymentRecordStatus.SUCCEEDED}
               )
         )

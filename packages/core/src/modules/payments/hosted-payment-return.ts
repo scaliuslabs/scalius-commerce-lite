@@ -48,7 +48,7 @@ export interface ReconcileHostedPaymentReturnInput {
 const HOSTED_PAYMENT_RETURN_GUARD = "hosted_payment_return_conflict";
 const UNSAFE_PAYMENT_STATUSES = [
   PaymentRecordStatus.PENDING,
-  PaymentRecordStatus.CONFIRMED,
+  PaymentRecordStatus.CONFIRMED, PaymentRecordStatus.AUTHORIZED,
   PaymentRecordStatus.SUCCEEDED,
 ] as const;
 const RETRYABLE_ATTEMPT_STATUSES = new Set(["failed"]);
@@ -138,7 +138,7 @@ export async function reconcileHostedPaymentReturn(
           AND ${orderPayments.paymentType} = ${input.paymentType}
           AND ${orderPayments.status} IN (
             ${PaymentRecordStatus.PENDING},
-            ${PaymentRecordStatus.CONFIRMED},
+            ${PaymentRecordStatus.CONFIRMED}, ${PaymentRecordStatus.AUTHORIZED},
             ${PaymentRecordStatus.SUCCEEDED}
           )
       )

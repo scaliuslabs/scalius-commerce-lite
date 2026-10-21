@@ -21,7 +21,7 @@ import { z } from "zod";
 import { providerAmountCodecsSchema } from "./amount";
 import { providerCountriesSchema, providerCurrencySchema } from "./common";
 import { PROVIDER_KINDS, PROVIDER_OPERATIONS, RENAMED_PROVIDER_KINDS, currentProviderKind, type ProviderKind } from "./kinds";
-import { paymentAmountLimitsSchema } from "./payment";
+import { PAYMENT_CAPABILITIES, PAYMENT_CAPABILITY_OPERATIONS, paymentAmountLimitsSchema, type PaymentCapability } from "./payment";
 import { courierBookingOptionKeySchema, type CourierBookingOptionValue } from "./courier";
 import { MESSAGING_CHANNELS } from "./channels";
 import { pluginKeySchema, pluginUrlNameSchema } from "../manifest-patterns";
@@ -115,8 +115,32 @@ export const paymentProviderDescriptorSchema = z.object({
    * is authenticated by `verifyReturn`.
    */
   returnCorrelationField: z.string().regex(/^[a-z][a-z0-9_]{0,31}$/).optional(),
+  /**
+   * What it can do beyond sessions (PAYMENT_CAPABILITIES): `vault` keeps
+   * buyers' payment methods and charges them off-session
+   * (`chargeSavedMethod`, `deleteSavedMethod`); `manualCapture` authorizes
+   * now and captures or voids later (`capture`, `void`). The platform asks a
+   * session to keep the method, charges, captures and voids only through a
+   * provider that declares the capability with its operations.
+   */
+  capabilities: z.array(z.enum(PAYMENT_CAPABILITIES)).max(PAYMENT_CAPABILITIES.length)
+    .refine((capabilities) => new Set(capabilities).size === capabilities.length, "List each capability once.")
+    .optional(),
 }).strict().superRefine((descriptor, context) => {
   const has = (operation: string) => descriptor.operations.includes(operation);
+  // A capability and its operations come together, both ways.
+  const capabilities = new Set(descriptor.capabilities ?? []);
+  for (const [capability, operations] of Object.entries(PAYMENT_CAPABILITY_OPERATIONS)) {
+    const declared = capabilities.has(capability as PaymentCapability);
+    for (const operation of operations) {
+      if (declared && !has(operation)) {
+        context.addIssue({ code: "custom", path: ["operations"], message: `A payment provider with ${capability} implements ${operation}.` });
+      }
+      if (!declared && has(operation)) {
+        context.addIssue({ code: "custom", path: ["capabilities"], message: `${operation} belongs to the ${capability} capability; declare it.` });
+      }
+    }
+  }
   // A hosted page returns the buyer, and a buyer may ask whether it went through.
   if (descriptor.flow === "hosted" && (!has("verifyReturn") || !has("queryPayment"))) {
     context.addIssue({ code: "custom", path: ["operations"], message: "A hosted payment provider implements verifyReturn and queryPayment." });

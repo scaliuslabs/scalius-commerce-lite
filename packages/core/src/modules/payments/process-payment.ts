@@ -1,7 +1,7 @@
 // src/modules/payments/process-payment.ts
 // Applies provider-authenticated payment events to orders, for every gateway.
 
-import { and, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
 import {
   orders,
   orderPayments,
@@ -27,7 +27,8 @@ import {
   prepareOrderReReservation,
 } from "../inventory";
 import type { PaymentType, ProcessPaymentParams } from "./types";
-import { GIFT_CARD_TENDER_METHOD, isOnlinePaymentMethod } from "./gateways/registry";
+import { GIFT_CARD_TENDER_METHOD, isOnlinePaymentMethod, NET_TERMS_PAYMENT_METHOD } from "./gateways/registry";
+import { buildSavedPaymentMethodUpsert } from "./saved-payment-methods";
 import {
   assertNoActiveShipmentClaim,
   hasActiveShipmentClaim,
@@ -82,12 +83,25 @@ function inferFailedPaymentType(input: {
   return "full";
 }
 
+/**
+ * Whether a confirmed payment may land on the row its provider reference
+ * already has: a failed attempt, the same amount, or the capture of an
+ * authorization (at most what was held; the rest is released at the provider).
+ */
 function failedAttemptCanBePromoted(
   record: { amountMinor: number; status: string },
   incomingAmountMinor: number,
 ): boolean {
+  if (record.status === PaymentRecordStatus.AUTHORIZED) return incomingAmountMinor <= record.amountMinor;
   return record.status === PaymentRecordStatus.FAILED || record.amountMinor === incomingAmountMinor;
 }
+
+/** The row states a confirmed payment may promote to `succeeded`. */
+const PROMOTABLE_PAYMENT_STATUSES = [
+  PaymentRecordStatus.PENDING,
+  PaymentRecordStatus.FAILED,
+  PaymentRecordStatus.AUTHORIZED,
+] as const;
 
 function isMetaPurchaseEligibleAfterPayment(input: {
   status: string;
@@ -141,7 +155,7 @@ function buildSuccessfulPaymentMetaOutboxCondition(input: {
   `;
 }
 
-interface PayableOrderMoney {
+export interface PayableOrderMoney {
   id: string;
   totalAmountMinor: number;
   paidAmountMinor: number;
@@ -295,7 +309,7 @@ async function validateBalancePaymentState(
   return null;
 }
 
-async function validateIncomingPaymentState(
+export async function validateIncomingPaymentState(
   db: Database,
   order: PayableOrderMoney,
   paymentType: string,
@@ -313,7 +327,7 @@ async function validateIncomingPaymentState(
   return "Unsupported payment type";
 }
 
-async function inferPaymentType(
+export async function inferPaymentType(
   db: Database,
   order: PayableOrderMoney,
   amountMinor: number,
@@ -330,12 +344,24 @@ async function inferPaymentType(
   return null;
 }
 
-/** A provider success may land on an order whose failed checkout switched to another online gateway. */
-function acceptsProviderPayment(
+/**
+ * Whether a provider's payment may land on the order: its own gateway; an
+ * order whose failed checkout switched to another online gateway; or an
+ * invoice (`net_terms`) with nothing paid on it yet, which the buyer (or an
+ * app, charging a saved method) pays through a provider instead. The payment
+ * that lands switches the order to the provider in its own batch; a decline
+ * leaves the invoice as it was. An invoice partly paid by recorded payments
+ * keeps taking recorded payments only. Cash on delivery never switches.
+ */
+export function acceptsProviderPayment(
   order: { paymentMethod: string; paymentStatus: string; paidAmountMinor: number },
   provider: string,
 ): boolean {
   if (order.paymentMethod === provider) return true;
+  if (order.paymentMethod === NET_TERMS_PAYMENT_METHOD) {
+    return order.paidAmountMinor <= 0 &&
+      (order.paymentStatus === PaymentStatus.UNPAID || order.paymentStatus === PaymentStatus.FAILED);
+  }
   return isOnlinePaymentMethod(order.paymentMethod) &&
     order.paymentStatus === PaymentStatus.FAILED &&
     order.paidAmountMinor <= 0;
@@ -626,7 +652,7 @@ export async function processPaymentConfirmed(
             SELECT 1 FROM order_payments
             WHERE id = ${paymentId}
               AND order_id = ${params.orderId}
-              AND status IN ('pending', 'failed')
+              AND status IN (${sql.join(PROMOTABLE_PAYMENT_STATUSES.map((status) => sql`${status}`), sql`, `)})
           )`,
         )).returning({ id: orders.id }),
         db.update(orderPayments).set({
@@ -642,7 +668,7 @@ export async function processPaymentConfirmed(
         }).where(and(
           eq(orderPayments.id, paymentId),
           eq(orderPayments.orderId, params.orderId),
-          inArray(orderPayments.status, [PaymentRecordStatus.PENDING, PaymentRecordStatus.FAILED]),
+          inArray(orderPayments.status, [...PROMOTABLE_PAYMENT_STATUSES]),
           sql`EXISTS (
             SELECT 1 FROM orders
             WHERE id = ${params.orderId}
@@ -720,6 +746,25 @@ export async function processPaymentConfirmed(
             newBalanceDueMinor,
             newPaymentStatus,
           }),
+        }));
+      }
+
+      // The method the provider kept with this payment, for the order's
+      // account customer, only once the payment landed.
+      if (params.savedPaymentMethod) {
+        batchStatements.push(buildSavedPaymentMethodUpsert(db, {
+          orderId: params.orderId,
+          providerId: params.provider,
+          method: params.savedPaymentMethod,
+          landed: sql`EXISTS (
+            SELECT 1 FROM order_payments
+            WHERE id = ${paymentId}
+              AND order_id = ${params.orderId}
+              AND status = ${PaymentRecordStatus.SUCCEEDED}
+          ) AND EXISTS (
+            SELECT 1 FROM orders AS landed_order
+            WHERE landed_order.id = ${params.orderId} AND landed_order.version = ${nextVersion}
+          )`,
         }));
       }
 
@@ -853,6 +898,13 @@ export async function processPaymentFailed(
 ): Promise<{ applied: boolean }> {
   const { orderId, provider, providerRef } = event;
   try {
+    // A failed or cancelled event naming an authorization's own reference
+    // (the hold expired or was voided at the provider) releases that hold,
+    // whatever attempt is newest.
+    if (providerRef) {
+      const released = await releaseAuthorization(db, { orderId, provider, providerRef });
+      if (released !== null) return { applied: released };
+    }
     const attempt = await currentPaymentAttempt(db, event);
     if (!attempt) return { applied: false };
 
@@ -974,6 +1026,23 @@ export async function processPaymentFailed(
         .returning({ id: orders.id }),
     ];
 
+    // An off-session charge that was waiting for this answer is over: the
+    // order may take another charge (saved-method-charges.ts).
+    const namedAttempt = [
+      ...(event.correlationId ? [eq(paymentSessionAttempts.providerCorrelationId, event.correlationId)] : []),
+      ...(providerRef ? [eq(paymentSessionAttempts.providerSessionId, providerRef)] : []),
+    ];
+    if (namedAttempt.length > 0) {
+      batchStatements.push(db.update(paymentSessionAttempts)
+        .set({ status: "failed", lastError: "The provider reported the payment failed.", updatedAt: sql`unixepoch()` })
+        .where(and(
+          eq(paymentSessionAttempts.orderId, orderId),
+          eq(paymentSessionAttempts.gateway, provider),
+          eq(paymentSessionAttempts.status, "pending"),
+          or(...namedAttempt),
+        )));
+    }
+
     if (existing?.status === PaymentRecordStatus.PENDING) {
       batchStatements.push(
         db
@@ -1019,5 +1088,224 @@ export async function processPaymentFailed(
   } catch (err: unknown) {
     console.error(`[process-payment] Failed payment recording error:`, err);
     throw err;
+  }
+}
+
+// ── Authorizations (manual capture) ─────────────────────────────────────────
+
+const AUTHORIZATION_GUARD = "payment_authorization_conflict";
+
+/**
+ * Release an authorization a provider-authenticated failed or cancelled
+ * event (or a void) names by its own reference: the row becomes `cancelled`
+ * and the order's version advances. Null when the reference names no
+ * authorization.
+ */
+export async function releaseAuthorization(
+  db: Database,
+  input: { orderId: string; provider: string; providerRef: string },
+): Promise<boolean | null> {
+  const row = await db
+    .select({ id: orderPayments.id, orderId: orderPayments.orderId, status: orderPayments.status })
+    .from(orderPayments)
+    .where(and(eq(orderPayments.paymentMethod, input.provider), eq(orderPayments.providerRef, input.providerRef)))
+    .get();
+  if (!row || row.status !== PaymentRecordStatus.AUTHORIZED) return null;
+  if (row.orderId !== input.orderId) return false;
+  const [released] = await safeBatch(db, [
+    db.update(orderPayments)
+      .set({ status: PaymentRecordStatus.CANCELLED, updatedAt: sql`unixepoch()` })
+      .where(and(eq(orderPayments.id, row.id), eq(orderPayments.status, PaymentRecordStatus.AUTHORIZED)))
+      .returning({ id: orderPayments.id }),
+    db.update(orders)
+      .set({ version: sql`${orders.version} + 1`, updatedAt: sql`unixepoch()` })
+      .where(and(
+        eq(orders.id, input.orderId),
+        sql`EXISTS (SELECT 1 FROM order_payments WHERE id = ${row.id} AND status = ${PaymentRecordStatus.CANCELLED})`,
+      )),
+  ]) as unknown as [Array<{ id: string }>, unknown];
+  return released.length > 0;
+}
+
+/**
+ * Apply a provider-authorized payment: money held at the provider, not
+ * captured. The row is recorded `authorized` (it counts as nothing paid; the
+ * ledger counts `succeeded` only), the order switches to the provider and,
+ * when it was an open checkout (`incomplete`), is placed (`pending`), in one
+ * batch under the order's version. One authorization per order at a time.
+ * A capture later applies the provider's confirmed event through
+ * `processPaymentConfirmed`, which promotes this row (same provider
+ * reference); a void or the provider's expiry marks it `cancelled`.
+ *
+ * Idempotent on UNIQUE(provider, provider_ref). An open checkout whose
+ * released stock is gone keeps the authorization recorded but is not placed
+ * (`inventoryShortfall`: staff resolve it).
+ */
+export async function processPaymentAuthorized(
+  db: Database,
+  params: ProcessPaymentParams,
+): Promise<{
+  success: boolean;
+  error?: string;
+  retryable?: boolean;
+  alreadyProcessed?: boolean;
+  paymentType?: PaymentType;
+  /** The authorization placed an open checkout (incomplete → pending). */
+  placed?: boolean;
+  inventoryShortfall?: true;
+}> {
+  try {
+    const order = await db
+      .select({
+        id: orders.id,
+        totalAmountMinor: orders.totalAmountMinor,
+        paidAmountMinor: orders.paidAmountMinor,
+        balanceDueMinor: orders.balanceDueMinor,
+        paymentMethod: orders.paymentMethod,
+        paymentStatus: orders.paymentStatus,
+        status: orders.status,
+        inventoryAction: orders.inventoryAction,
+        version: orders.version,
+        deletedAt: orders.deletedAt,
+        shipmentClaimId: orders.shipmentClaimId,
+        shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+        currencyCode: orders.currencyCode,
+        currencyDecimalPlaces: orders.currencyDecimalPlaces,
+      })
+      .from(orders)
+      .where(eq(orders.id, params.orderId))
+      .get();
+    if (!order) return { success: false, error: `Order ${params.orderId} not found` };
+    if (hasActiveShipmentClaim(order)) return { success: false, error: SHIPMENT_CLAIM_CONFLICT_MESSAGE };
+    const currency = resolveOrderCurrencySnapshot(order);
+    try {
+      assertOrderPaymentCurrency(params.currency, currency, `${params.provider} provider authorization`);
+    } catch (error) {
+      return { success: false, retryable: false, error: error instanceof Error ? error.message : String(error) };
+    }
+    const amountMinor = params.amountMinor;
+    if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) {
+      return { success: false, retryable: false, error: "Provider authorization amount is invalid" };
+    }
+
+    const existing = await db
+      .select({ id: orderPayments.id, orderId: orderPayments.orderId, status: orderPayments.status })
+      .from(orderPayments)
+      .where(and(eq(orderPayments.paymentMethod, params.provider), eq(orderPayments.providerRef, params.providerRef)))
+      .get();
+    if (existing) {
+      if (existing.orderId !== params.orderId) {
+        return { success: false, retryable: false, error: "Provider payment reference already belongs to another order" };
+      }
+      // Held, captured, released or refunded already: a late or replayed authorization changes nothing.
+      if (existing.status !== PaymentRecordStatus.PENDING && existing.status !== PaymentRecordStatus.FAILED) {
+        return { success: true, alreadyProcessed: true };
+      }
+    }
+
+    const unpayableReason = getUnpayableOrderReason(order);
+    if (unpayableReason) return { success: false, retryable: false, error: unpayableReason };
+    if (!acceptsProviderPayment(order, params.provider)) {
+      return { success: false, retryable: false, error: `Authorized ${params.provider} payment conflicts with the current order payment method` };
+    }
+    const paymentType = params.paymentType ?? await inferPaymentType(db, order, amountMinor);
+    if (!paymentType) {
+      return { success: false, retryable: false, error: "Authorized amount does not match any payable amount on the order" };
+    }
+    const stateError = await validateIncomingPaymentState(db, order, paymentType, amountMinor);
+    if (stateError) return { success: false, retryable: false, error: stateError };
+
+    const paymentId = existing?.id ?? crypto.randomUUID();
+    const inventoryShortfall = order.status === OrderStatus.INCOMPLETE && order.inventoryAction === "restored";
+    const placed = order.status === OrderStatus.INCOMPLETE && !inventoryShortfall;
+    const newStatus = placed ? OrderStatus.PENDING : order.status;
+    validateTransition("order", order.status, newStatus);
+    const nextVersion = order.version + 1;
+    const metadata = JSON.stringify({ currency: currency.code, ...(params.metadata ?? {}) });
+
+    const statements: SQLiteBatchItem[] = [
+      db.update(orders).set({
+        status: newStatus,
+        paymentMethod: params.provider,
+        version: nextVersion,
+        updatedAt: sql`unixepoch()`,
+      }).where(and(
+        eq(orders.id, params.orderId),
+        eq(orders.version, order.version),
+        isNull(orders.deletedAt),
+        notInArray(orders.status, [...PAYMENT_BLOCKED_ORDER_STATUSES]),
+        notInArray(orders.paymentStatus, [...PAYMENT_BLOCKED_PAYMENT_STATUSES]),
+        noActiveShipmentClaimCondition(),
+        // One authorization in flight per order, and nothing captured meanwhile for this payment type.
+        sql`NOT EXISTS (
+          SELECT 1 FROM order_payments
+          WHERE order_id = ${params.orderId}
+            AND id <> ${paymentId}
+            AND (status = ${PaymentRecordStatus.AUTHORIZED}
+              OR (status = ${PaymentRecordStatus.SUCCEEDED} AND payment_type = ${paymentType}))
+        )`,
+      )),
+      buildBatchGuard(db, sql`EXISTS (
+        SELECT 1 FROM orders WHERE id = ${params.orderId} AND version = ${nextVersion}
+      )`, AUTHORIZATION_GUARD),
+      existing
+        ? db.update(orderPayments).set({
+          amountMinor,
+          currency: currency.code,
+          ...presentedSettlement(amountMinor, currency.code),
+          paymentType,
+          status: PaymentRecordStatus.AUTHORIZED,
+          providerSecondaryRef: params.secondaryRef ?? null,
+          metadata,
+          updatedAt: sql`unixepoch()`,
+        }).where(and(eq(orderPayments.id, existing.id), inArray(orderPayments.status, [PaymentRecordStatus.PENDING, PaymentRecordStatus.FAILED])))
+        : db.insert(orderPayments).values({
+          id: paymentId,
+          orderId: params.orderId,
+          amountMinor,
+          currency: currency.code,
+          ...presentedSettlement(amountMinor, currency.code),
+          paymentMethod: params.provider,
+          paymentType,
+          status: PaymentRecordStatus.AUTHORIZED,
+          providerRef: params.providerRef,
+          providerSecondaryRef: params.secondaryRef ?? null,
+          metadata,
+          createdAt: sql`unixepoch()`,
+          updatedAt: sql`unixepoch()`,
+        }),
+      buildBatchGuard(db, sql`EXISTS (
+        SELECT 1 FROM order_payments WHERE id = ${paymentId} AND status = ${PaymentRecordStatus.AUTHORIZED}
+      )`, AUTHORIZATION_GUARD),
+    ];
+    if (params.savedPaymentMethod) {
+      statements.push(buildSavedPaymentMethodUpsert(db, {
+        orderId: params.orderId,
+        providerId: params.provider,
+        method: params.savedPaymentMethod,
+        landed: sql`EXISTS (
+          SELECT 1 FROM order_payments
+          WHERE id = ${paymentId} AND order_id = ${params.orderId} AND status = ${PaymentRecordStatus.AUTHORIZED}
+        )`,
+      }));
+    }
+    try {
+      await safeBatch(db, statements);
+    } catch (error) {
+      if (isBatchGuardError(error, AUTHORIZATION_GUARD)) {
+        return { success: false, error: "Order changed while applying the authorization; retry required" };
+      }
+      if (isConstraintError(error)) return { success: false, error: "Payment is already being processed. Please retry shortly." };
+      throw error;
+    }
+    return {
+      success: true,
+      paymentType,
+      placed,
+      ...(inventoryShortfall ? { inventoryShortfall: true as const } : {}),
+    };
+  } catch (err: unknown) {
+    console.error(`[process-payment] Authorization error for order ${params.orderId}:`, err instanceof Error ? err.message : "error");
+    return { success: false, error: err instanceof Error ? err.message : "Payment processing error" };
   }
 }

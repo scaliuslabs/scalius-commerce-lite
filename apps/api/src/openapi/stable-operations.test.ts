@@ -441,6 +441,13 @@ describe("the stable app API", () => {
       // it created qualify, and a gone item reads not_found, so a repeat is
       // harmless; a restore in between makes the item not_in_trash.
       "dashboard.resources.app_content.delete",
+      // An authorization's capture and void, and a saved method's removal:
+      // the precondition is the record's own state (an `authorized` payment,
+      // an `active` method), and one key per authorization or method makes a
+      // repeat answer the first outcome.
+      "dashboard.resources.payments.capture",
+      "dashboard.resources.payments.void",
+      "dashboard.resources.payment_methods.delete",
     ]);
     const creates = /\.(create|import_url)$/u;
     const unguarded = stable

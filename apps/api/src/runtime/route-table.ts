@@ -144,6 +144,7 @@ export const ROUTE_TABLE = [
   { mount: "/admin/resources", router: "adminResourceGiftCardRoutes", group: "admin-sales" },
   { mount: "/admin/resources", router: "adminResourceProductRoutes", group: "admin-sales" },
   { mount: "/admin/resources", router: "adminResourceRefundRoutes", group: "admin-sales" },
+  { mount: "/admin/resources", router: "adminResourcePaymentMethodRoutes", group: "admin-sales" },
   { mount: "/admin/resources", router: "adminResourceWebhookRoutes", group: "admin-sales" },
   { mount: "/admin/categories", router: "adminCategoryRoutes", group: "admin-catalog" },
   { mount: "/admin/brands", router: "adminBrandRoutes", group: "admin-catalog" },

@@ -897,6 +897,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 24,
         postgresStatements: 24,
       },
+      {
+        version: 173,
+        name: "0173_saved_payment_methods",
+        sqliteStatements: 5,
+        postgresStatements: 5,
+      },
     ]);
   });
 
@@ -1158,6 +1164,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 168, name: "0168_tax_document_commands" },
           { version: 169, name: "0169_fk_indexes_and_trigger_guards" },
           { version: 172, name: "0172_line_level_facts" },
+          { version: 173, name: "0173_saved_payment_methods" },
         ],
       });
     } finally {

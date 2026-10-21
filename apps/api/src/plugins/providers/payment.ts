@@ -7,9 +7,9 @@
 // Failures keep the kernel's vocabulary: a session or status query that
 // fails is a `PaymentProviderError` (timeouts retryable), a webhook or
 // return that cannot be authenticated is `retry` (the provider or the buyer
-// comes back) or `invalid`, refunds raise the port's `ProviderError`, which
-// the refund kernel reads (uncertain: kept for reconciliation, never sent
-// twice).
+// comes back) or `invalid`, refunds, off-session charges, captures, voids and
+// method deletes raise the port's `ProviderError`, which the kernel reads
+// (uncertain: kept for reconciliation, never sent twice).
 
 import type { Database } from "@scalius/database/client";
 import {
@@ -97,6 +97,7 @@ export function appPaymentGateway(
     ...(declaration.amountLimits ? { amountLimits: declaration.amountLimits } : {}),
     ...(declaration.amountCodecs ? { amountCodecs: declaration.amountCodecs } : {}),
     supportsRefund: operations.has("refund"),
+    ...(declaration.capabilities?.length ? { capabilities: declaration.capabilities } : {}),
 
     // Read once per request: readiness, checkout config and every call share it.
     loadSettings(_db: Database, encryptionKey: string | undefined) {
@@ -152,6 +153,15 @@ export function appPaymentGateway(
   if (operations.has("refund")) gateway.refund = (input, { signal }) => invoke("refund", input, { signal });
   if (operations.has("refundStatus")) gateway.refundStatus = (input, { signal }) => invoke("refundStatus", input, { signal });
   if (operations.has("listRefunds")) gateway.listRefunds = (input, { signal }) => invoke("listRefunds", input, { signal });
+  // Saved methods and authorizations raise the port's ProviderError, which the
+  // charge kernel reads as refunds do: an uncertain one is kept, never resent
+  // under another key.
+  if (operations.has("chargeSavedMethod")) {
+    gateway.chargeSavedMethod = (input, { signal }) => invoke("chargeSavedMethod", input, { signal, wallMs: input.requestTimeoutMs });
+  }
+  if (operations.has("capture")) gateway.capture = (input, { signal }) => invoke("capture", input, { signal });
+  if (operations.has("void")) gateway.void = (input, { signal }) => invoke("void", input, { signal });
+  if (operations.has("deleteSavedMethod")) gateway.deleteSavedMethod = (input, { signal }) => invoke("deleteSavedMethod", input, { signal });
   // The unsigned merchant reference of a failed or cancelled return, read
   // here from the provider's form post: context that selects an attempt the
   // platform created, never payment authority (no app call).

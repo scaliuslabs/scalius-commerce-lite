@@ -17,7 +17,9 @@ describe("canonical schema hygiene", () => {
         RETIRED_PRE_CONSOLIDATION_TABLES.has(table));
 
       expect(d1Tables).toEqual(tursoTables);
-      expect(d1Tables).toHaveLength(214);
+      expect(d1Tables).toHaveLength(215);
+      // 0173: payment methods a provider vaulted for later charges.
+      expect(d1Tables).toContain("customer_payment_methods");
       // 0172: refund commands and the order lines they are for.
       expect(d1Tables).toContain("order_refunds");
       expect(d1Tables).toContain("order_refund_lines");
