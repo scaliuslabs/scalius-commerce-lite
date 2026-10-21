@@ -52,7 +52,9 @@ const inline = layout === "inline";
     data-newsletter-fields
     class:list={[
       "grid gap-3",
-      inline && (emailShown ? "sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end" : "sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"),
+      // The channels and the consent line come before the button, so a buyer
+      // reads what they agree to first (no visual reordering).
+      inline && emailShown && "sm:grid-cols-2 sm:items-end",
     ]}
   >
     <div>
@@ -85,14 +87,6 @@ const inline = layout === "inline";
         />
       </div>
     )}
-    <button
-      type="submit"
-      class="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-wait disabled:opacity-60 sm:w-auto"
-      aria-describedby={ids.consent}
-      data-newsletter-submit
-    >
-      {model.buttonLabel}
-    </button>
     {(["sms", ...(emailShown ? ["email"] : []), ...(model.whatsapp ? ["whatsapp"] : [])] as const).map((channel) => (
       <label class:list={["flex min-h-11 cursor-pointer items-center gap-2 text-sm", inline && "sm:col-span-full"]}>
         <input name="channel" type="checkbox" value={channel} class="size-4 shrink-0 accent-primary" />
@@ -100,6 +94,14 @@ const inline = layout === "inline";
       </label>
     ))}
     <p id={ids.consent} class:list={["text-xs", inline && "sm:col-span-full"]}>{model.consentLine}</p>
+    <button
+      type="submit"
+      class:list={["inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-wait disabled:opacity-60 sm:w-auto sm:justify-self-start", inline && "sm:col-span-full"]}
+      aria-describedby={ids.consent}
+      data-newsletter-submit
+    >
+      {model.buttonLabel}
+    </button>
   </div>
   {/* Off-screen, never focusable: only a bot fills it. */}
   <div class="newsletter-hp" aria-hidden="true">
