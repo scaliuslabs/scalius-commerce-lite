@@ -55,7 +55,7 @@ const ORDER_REPRESENTATION = buildEventRepresentation("order", {
     name: "Rahim", phone: "+8801711111111", company: null, line1: "House 1", line2: null, dependentLocality: null,
     locality: "Dhaka", adminArea: null, postalCode: null, countryCode: "BD", placeIds: { city: "city", zone: "zone", area: null },
   },
-  billingAddress: null, fulfillmentLocationId: null, version: 1, lines: [],
+  billingAddress: null, fulfillmentLocationId: null, revision: 1, lines: [],
   createdAt: "2026-10-19T00:00:00.000Z", updatedAt: "2026-10-19T00:00:00.000Z", deletedAt: null,
 }, allProtectedData());
 const representation = vi.fn(async () => ORDER_REPRESENTATION);
