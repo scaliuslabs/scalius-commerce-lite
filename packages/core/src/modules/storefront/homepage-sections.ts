@@ -11,8 +11,10 @@ import type { safeBatch } from "@scalius/database/client";
 import { and, eq, inArray, isNotNull, isNull, notInArray, sql } from "drizzle-orm";
 import {
   EMPTY_STOREFRONT_BRAND_ASSETS,
+
   storefrontBrandAssets,
   storefrontThemeBrandMediaIds,
+  storefrontThemeSkinMediaCandidates,
   storefrontThemeMediaIds,
   type StorefrontBrandAssets,
   type StorefrontThemeBrand,
@@ -91,42 +93,70 @@ const BRAND_MEDIA_PATHS = ["$.brand.logo", "$.brand.footerLogo", "$.brand.favico
 /** Media ids are generated (`media_...`); this one names no row. */
 const NO_BRAND_MEDIA_ID = "none";
 
-/** The brand media ids a stored theme row names, read leniently for the read's dependencies. */
-function storedBrandMediaIds(value: string | null | undefined): string[] {
+/**
+ * The media ids a stored theme row names, read leniently for the read's
+ * dependencies: its brand images, and the values its unit skins' settings
+ * hold that could name an image (`storefrontThemeSkinMediaCandidates`).
+ */
+function storedThemeMediaIds(value: string | null | undefined): { brand: string[]; skins: string[] } {
     try {
-        const brand = (JSON.parse(value ?? "null") as { brand?: Record<string, unknown> } | null)?.brand ?? {};
-        return [...new Set(["logo", "footerLogo", "favicon"].map((key) => brand[key]).filter((id): id is string => typeof id === "string" && id !== ""))];
+        const stored = JSON.parse(value ?? "null") as { brand?: Record<string, unknown>; apps?: { skins?: unknown } } | null;
+        const brand = stored?.brand ?? {};
+        return {
+            brand: [...new Set(["logo", "footerLogo", "favicon"].map((key) => brand[key]).filter((id): id is string => typeof id === "string" && id !== ""))],
+            skins: storefrontThemeSkinMediaCandidates(stored?.apps?.skins),
+        };
     } catch {
-        return [];
+        return { brand: [], skins: [] };
     }
 }
 
 /**
  * One statement for the published theme's brand images (logo, footer logo,
- * tab icon), joined in the layout batch through the stored theme row, so the
- * layout needs no second round trip. `resolve` takes the stored row and the
- * document the layout renders (the default when the row is unreadable).
+ * tab icon) and the images its unit skins' settings name (`apps.skins.*`
+ * `image` settings), joined in the layout batch through the stored theme
+ * row, so the layout needs no second round trip. `resolve` takes the stored
+ * row and the document the layout renders (the default when the row is
+ * unreadable); `skinMedia` the images among the skins' values (each app's
+ * schema says which of them it shows).
  */
 export function planPublishedThemeBrandMedia(db: Database) {
-    const brandIds = sql.join(BRAND_MEDIA_PATHS.map((path) => sql`
-        SELECT json_extract(${themeSettings.colors}, ${path}) FROM ${themeSettings} WHERE ${themeSettings.id} = 'default'`), sql` UNION ALL `);
+    const brandIds = BRAND_MEDIA_PATHS.map((path) => sql`
+        SELECT json_extract(${themeSettings.colors}, ${path}) FROM ${themeSettings} WHERE ${themeSettings.id} = 'default'`);
+    // The unit skins' top-level values (each bounded by its schema), one
+    // compound term (D1 caps compound SELECTs at 5): only real media ids match.
+    const skinIds = sql`
+        SELECT CAST(skin_value.value AS TEXT)
+        FROM ${themeSettings}, json_each(${themeSettings.colors}, '$.apps.skins') AS skin_unit, json_each(skin_unit.value, '$.values') AS skin_value
+        WHERE ${themeSettings.id} = 'default' AND skin_value.type = 'text'`;
     const statement = db.select(homeMediaColumns).from(media).where(and(
-        sql`${media.id} IN (${brandIds})`,
+        sql`${media.id} IN (${sql.join([...brandIds, skinIds], sql` UNION ALL `)})`,
         notInArray(media.status, ["deleting", "deleted"]),
     ));
     return {
         statement,
-        resolve(rows: unknown, storedTheme: string | null | undefined, brand: StorefrontThemeBrand): StorefrontBrandAssets {
+        resolve(rows: unknown, storedTheme: string | null | undefined, brand: StorefrontThemeBrand): { brand: StorefrontBrandAssets; skinMedia: HomeMediaAsset[] } {
             // Every id the stored row names: its m:<id> advances when the image
             // changes, so the layout follows a new rendition or a deletion. A
             // row that names none matched no media row, and the theme key
             // already covers that: `m:none` (no media row has that id, so it
             // never advances) records the read as covered, not coarse.
-            const ids = storedBrandMediaIds(storedTheme);
-            deps.mediaItems(ids.length > 0 ? ids : [NO_BRAND_MEDIA_ID]);
-            return storefrontBrandAssets(brand, homeMediaAssets(rows as HomeMediaRow[]));
+            const ids = storedThemeMediaIds(storedTheme);
+            const named = [...new Set([...ids.brand, ...ids.skins])];
+            deps.mediaItems(named.length > 0 ? named : [NO_BRAND_MEDIA_ID]);
+            const assets = homeMediaAssets(rows as HomeMediaRow[]);
+            const skins = new Set(ids.skins);
+            return { brand: storefrontBrandAssets(brand, assets), skinMedia: assets.filter((asset) => skins.has(asset.id)) };
         },
     };
+}
+
+/** The images a theme's unit skins may name (a preview's draft), in one read. */
+export async function readThemeSkinMedia(db: Database, theme: StorefrontThemeDocument): Promise<HomeMediaAsset[]> {
+    const ids = storefrontThemeSkinMediaCandidates(theme.apps?.skins);
+    if (ids.length === 0) return [];
+    const plan = planHomeMedia(db, ids);
+    return plan.resolve([await plan.statements[0]!], 0);
 }
 
 /** A theme's brand images (a preview's draft), in one read. */

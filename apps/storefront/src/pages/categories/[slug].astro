@@ -274,6 +274,7 @@ await resolveRequestTheme(Astro, layoutData, resourceBindingContext(category, `/
       listingTemplate: category.listingTemplate ?? null,
     }}
     content={!hasListingQuery && categoryContent ? { html: categoryContent, label: copy.listing.guide(category.name) } : null}
+    childCategories={category.children ?? []}
   >
     <CatalogEmptyState
       slot="empty"

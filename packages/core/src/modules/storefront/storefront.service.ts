@@ -795,7 +795,7 @@ export async function getLayoutData(
     console.warn("[Storefront] Published theme is unreadable; rendering the default theme.");
   }
   const storefrontTheme = publishedTheme ?? DEFAULT_STOREFRONT_THEME;
-  const brand = brandMedia.resolve(brandMediaRows, themeRow?.value, storefrontTheme.brand);
+  const { brand, skinMedia } = brandMedia.resolve(brandMediaRows, themeRow?.value, storefrontTheme.brand);
   // Apps with storefront components (sections, slots, islands, stylesheet).
   const appExtensions = activePluginStorefrontExtensions(activeApps.values());
   // The theme in the page's words: its sections', skins' and bars' text in a
@@ -839,6 +839,8 @@ export async function getLayoutData(
     theme: translateStorefrontTheme(storefrontTheme, themeText, storefrontExtensionSettingSchemas(appExtensions)),
     /** The published theme's brand images; a preview resolves its draft's own. */
     brand,
+    /** Images the published theme's unit skins name (their apps' `image` settings); a preview resolves its draft's own. */
+    skinMedia,
     storeShape,
     media: media.value,
     metaCapi,

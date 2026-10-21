@@ -66,9 +66,11 @@ interface Props {
   template?: boolean;
   /** The listing's storefront-visible custom fields (`<namespace>.<key>`), for a listing skin. */
   fields?: StorefrontFieldValues;
+  /** A category's published child categories (the category read's `children`), for a listing skin. */
+  childCategories?: ReadonlyArray<{ name: string; slug: string; canonicalPath?: string | null; imageUrl?: string | null }>;
 }
 
-const { kind, listing, hero, content, data = {}, template, fields = {} } = Astro.props;
+const { kind, listing, hero, content, data = {}, template, fields = {}, childCategories = [] } = Astro.props;
 const requestTheme = await currentRequestTheme(Astro.locals);
 const templateData = template ? await templateSectionData("collection", requestTheme) : null;
 const { resolved, preview } = requestTheme;
@@ -97,6 +99,7 @@ const projection: StorefrontListingPage = listingPageData({
   pagination: listing.pagination,
   breadcrumbs: breadcrumb ?? [],
   fields,
+  children: childCategories,
 });
 const listingSkin = await appSkin(Astro.locals, Astro.url, "listing_main");
 const listingMarkup = listingSkin

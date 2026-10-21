@@ -21,6 +21,7 @@ import { catalogCopy } from "@/lib/catalog-copy";
 import { pageLanguage } from "@/lib/store-time-zone";
 import { catalogCountText } from "@/lib/catalog-paging";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
+import { searchScopeRedirect } from "@/lib/search-query";
 import {
   buildProductListHref,
   countActiveProductListFilters,
@@ -32,6 +33,12 @@ import {
 import { buildAbsoluteStorefrontSeoUrl } from "@/lib/seo-base-url";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+
+// Search within a category (a header's department select, `searchScopes`):
+// the category's own listing answers, with its filters and search; an empty
+// scope is the whole store.
+const scopeRedirect = searchScopeRedirect(Astro.url);
+if (scopeRedirect) return Astro.redirect(scopeRedirect);
 
 const initialQueryState = resolveProductListQueryState({
   url: Astro.url,

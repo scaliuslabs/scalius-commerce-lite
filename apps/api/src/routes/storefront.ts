@@ -17,6 +17,7 @@ import {
   getPageRenderData,
   readAppComponentData,
   readThemeBrandAssets,
+  readThemeSkinMedia,
   type AppComponentPlacement,
   type HomepageAppSection,
 } from "@scalius/core/modules/storefront";
@@ -38,6 +39,7 @@ import {
   HOME_MAX_PROMOTIONS,
   HOME_PRODUCT_LIST_LIMIT,
   STOREFRONT_PAGE_TEMPLATES,
+  STOREFRONT_SKIN_IMAGES_MAX,
   homeSectionRequests,
   type HomeAppSectionRequest,
   type StorefrontThemeText,
@@ -261,6 +263,8 @@ const brandAssetSchema = z.object({
   width: z.number().int().nullable(),
   height: z.number().int().nullable(),
 }).nullable();
+/** Images a theme's unit skins name (their apps' `image` settings), resolved like the brand images. */
+const skinMediaSchema = z.array(brandAssetSchema.unwrap()).max(STOREFRONT_SKIN_IMAGES_MAX);
 /** A theme's brand images resolved (ready or trashed images; null when unset or gone). */
 const brandAssetsSchema = z.object({
   logo: brandAssetSchema,
@@ -329,6 +333,8 @@ const layoutDataSchema = z.object({
   theme: storefrontThemeDocumentApiSchema,
   /** The published theme's brand images (logo, footer logo, tab icon). A preview carries its draft's own. */
   brand: brandAssetsSchema,
+  /** Images the published theme's unit skins name (app `image` skin settings). A preview carries its draft's own. */
+  skinMedia: skinMediaSchema,
   storeShape: storeShapeApiSchema,
   media: z.object({
     canonicalCdnUrl: z.string(),
@@ -857,6 +863,7 @@ const resolveThemePreviewRoute = createRoute({
       content: { "application/json": { schema: successEnvelope(z.object({
         theme: storefrontThemeDocumentApiSchema,
         brand: brandAssetsSchema,
+        skinMedia: skinMediaSchema,
         draftRevision: z.number().int().positive(),
         basePublishedRevision: z.number().int().nonnegative(),
         expiresAt: z.any(),
@@ -873,7 +880,8 @@ app.openapi(resolveThemePreviewRoute, async (c) => {
   const db = c.get("db");
   const preview = await resolveThemePreviewSession(db, c.req.valid("json").token);
   if (!preview) throw new NotFoundError("Theme preview is unavailable or expired");
-  return ok(c, { ...preview, brand: await readThemeBrandAssets(db, preview.theme.brand) });
+  const [brand, skinMedia] = await Promise.all([readThemeBrandAssets(db, preview.theme.brand), readThemeSkinMedia(db, preview.theme)]);
+  return ok(c, { ...preview, brand, skinMedia });
 });
 
 // POST /storefront/theme-preview/homepage — the draft's homepage section data

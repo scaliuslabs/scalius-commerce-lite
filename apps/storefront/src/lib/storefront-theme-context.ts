@@ -10,6 +10,8 @@ import {
   DEFAULT_STOREFRONT_THEME,
   EMPTY_STORE_SHAPE,
   EMPTY_STOREFRONT_BRAND_ASSETS,
+  STOREFRONT_SKIN_IMAGES_MAX,
+  storefrontThemeSkinMediaCandidates,
   resolveStorefrontTheme,
   resolveDocumentBindings,
   hasSettingBindings,
@@ -36,6 +38,8 @@ export interface RequestTheme {
   layout: ResolvedStorefrontThemeLayout;
   /** The document's brand images (logo, footer logo, favicon); null where it names none. */
   brand: StorefrontBrandAssets;
+  /** Images the document's unit skins name, by media id (`readSkinMedia`). */
+  skinMedia: ReadonlyMap<string, StorefrontBrandAsset>;
   /** The cookie's token, when the request carries one (valid or not). */
   previewToken: string | null;
   preview: ThemePreviewData | null;
@@ -140,11 +144,29 @@ export function readStorefrontBrandAssets(value: unknown, brand: StorefrontTheme
   };
 }
 
+/**
+ * The images the API resolved for a document's unit skins, by media id,
+ * kept only where the document's skins name them (so a default theme drawn
+ * after a failed validation shows none). Each app's schema says which of
+ * a skin's values are images (lib/extensions `appSkin`).
+ */
+export function readSkinMedia(value: unknown, theme: StorefrontThemeDocument): ReadonlyMap<string, StorefrontBrandAsset> {
+  if (!Array.isArray(value) || value.length === 0) return new Map();
+  const named = new Set(storefrontThemeSkinMediaCandidates(theme.apps?.skins));
+  const assets = new Map<string, StorefrontBrandAsset>();
+  for (const entry of value.slice(0, STOREFRONT_SKIN_IMAGES_MAX)) {
+    const id = entry && typeof entry === "object" ? (entry as { id?: unknown }).id : undefined;
+    const asset = typeof id === "string" && named.has(id) ? readBrandAsset(entry, id) : null;
+    if (asset) assets.set(asset.id, asset);
+  }
+  return assets;
+}
+
 /** The request theme for a theme document and store shape (also used by render tests). */
 export function requestThemeFor(
   theme: StorefrontThemeDocument,
   shape: StoreShape = EMPTY_STORE_SHAPE,
-  options: { previewToken?: string | null; preview?: ThemePreviewData | null; brand?: unknown; languageCode?: unknown; bindings?: SettingBindingContext; degraded?: boolean } = {},
+  options: { previewToken?: string | null; preview?: ThemePreviewData | null; brand?: unknown; skinMedia?: unknown; languageCode?: unknown; bindings?: SettingBindingContext; degraded?: boolean } = {},
 ): RequestTheme {
   const bindingContext = { language: storefrontLanguage(options.languageCode), ...options.bindings };
   theme = boundTheme(theme, bindingContext);
@@ -154,6 +176,7 @@ export function requestThemeFor(
     resolved,
     layout: resolved.layout,
     brand: readStorefrontBrandAssets(options.brand, theme.brand),
+    skinMedia: readSkinMedia(options.skinMedia, theme),
     previewToken: options.previewToken ?? null,
     preview: options.preview ?? null,
     language: storefrontLanguage(options.languageCode),
@@ -165,7 +188,7 @@ export function requestThemeFor(
 
 export function resolveRequestTheme(
   astro: { request: Request; locals: object },
-  layoutData: { theme?: unknown; storeShape?: unknown; brand?: unknown; storefrontCopy?: { languageCode?: unknown } | null } | null | undefined,
+  layoutData: { theme?: unknown; storeShape?: unknown; brand?: unknown; skinMedia?: unknown; storefrontCopy?: { languageCode?: unknown } | null } | null | undefined,
   bindings?: SettingBindingContext,
 ): Promise<RequestTheme> {
   const locals = astro.locals as ThemeLocals;
@@ -184,6 +207,7 @@ export function resolveRequestTheme(
         previewToken,
         preview,
         brand: preview ? preview.brand : layoutData?.brand,
+        skinMedia: preview ? preview.skinMedia : layoutData?.skinMedia,
         languageCode: layoutData?.storefrontCopy?.languageCode,
         bindings,
       },
