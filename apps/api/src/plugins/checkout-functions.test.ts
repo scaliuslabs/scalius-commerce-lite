@@ -48,7 +48,8 @@ import { BUNDLED_PLUGINS } from "./bundled.gen";
 import { BundledLoader } from "./loaders/bundled";
 import type { PluginLoader } from "./loaders/types";
 import { createCheckoutAppFunctions } from "./checkout-functions";
-import { PLUGIN_TEST_CREDENTIAL_KEY, pluginTestCtx, pluginTestEnv } from "./testing/fixtures";
+import { PLUGIN_TEST_CREDENTIAL_KEY, pluginTestCtx, pluginTestEnv, settleBackground } from "./testing/fixtures";
+import { FUNCTION_CIRCUIT } from "@scalius/core/modules/plugins";
 import { manifest as bulkManifest } from "./testing/apps/bulk-discount/src/index";
 
 const ok = (value: unknown): PluginInvocationResult => ({ ok: true, value, error: null, logs: [], droppedLogs: 0 });
@@ -431,6 +432,76 @@ describe("checkout app functions (real schema, bundled and test apps)", () => {
     await expect(assertStorefrontAppPaymentMethod(runner, reviewed.appCart, "stripe", ["cod", "stripe"])).resolves.toBeUndefined();
     // Gift cards are tender: never hidden.
     await expect(assertStorefrontAppPaymentMethod(runner, reviewed.appCart, "gift_card", ["cod", "stripe"])).resolves.toBeUndefined();
+  });
+
+  describe("circuit breaker (final audit I11)", () => {
+    const circuit = (pluginId: string, point: string) => one<{ failures: number; open: number }>(
+      "SELECT circuit_failures AS failures, circuit_open_until IS NOT NULL AND circuit_open_until > unixepoch() AS open FROM plugin_registrations WHERE kind = 'function' AND name = ? AND plugin_id = ?",
+      point, pluginId,
+    );
+    const calls = (pluginId: string) => fakeCalls.filter((call) => call.pluginId === pluginId).length;
+    const logs = async (pluginId: string) => (await listPluginLogs(db, pluginId)).map((entry) => entry.message).join(" | ");
+    const data = () => input([line("p_tea", "v_tea", 1, 500)]);
+
+    it("a blocking function that keeps failing opens its circuit: checkout refuses at once without calling it, then a good answer closes it", async () => {
+      await installTestApp("acme.gate", [{ point: "cart.validate", onError: "block" } as { point: string }]);
+      answers["acme.gate"] = () => ({ ok: false, value: null, error: { code: null, message: "Error: down" }, logs: [], droppedLogs: 0 });
+      for (let attempt = 1; attempt <= FUNCTION_CIRCUIT.failures; attempt += 1) {
+        await expect(quote(data(), await apps())).rejects.toMatchObject({ details: { reason: "checkout_app_unavailable" } });
+        await settleBackground();
+        expect(circuit("acme.gate", "cart.validate")).toEqual({ failures: attempt, open: attempt === FUNCTION_CIRCUIT.failures ? 1 : 0 });
+      }
+      expect(calls("acme.gate")).toBe(FUNCTION_CIRCUIT.failures);
+      expect(await logs("acme.gate")).toContain("checkout stops calling it");
+
+      // Open: fail-closed at once (the store approved it as blocking), and the app is not called.
+      await expect(quote(data(), await apps())).rejects.toMatchObject({ details: { reason: "checkout_app_unavailable" } });
+      await settleBackground();
+      expect(calls("acme.gate")).toBe(FUNCTION_CIRCUIT.failures);
+
+      // The cooldown passes: the next checkout tries the app once; a good answer closes the circuit.
+      sqlite.exec("UPDATE plugin_registrations SET circuit_open_until = unixepoch() - 1 WHERE plugin_id = 'acme.gate'");
+      answers["acme.gate"] = () => ok({ errors: [] });
+      await expect(quote(data(), await apps())).resolves.toMatchObject({ ruleErrors: [] });
+      await settleBackground();
+      expect(calls("acme.gate")).toBe(FUNCTION_CIRCUIT.failures + 1);
+      expect(one("SELECT circuit_failures AS failures, circuit_open_until AS until FROM plugin_registrations WHERE plugin_id = 'acme.gate'"))
+        .toEqual({ failures: 0, until: null });
+    });
+
+    it("a half-open circuit reopens at its first failure", async () => {
+      await installTestApp("acme.gate", [{ point: "cart.validate", onError: "block" } as { point: string }]);
+      answers["acme.gate"] = () => ({ ok: false, value: null, error: { code: null, message: "Error: down" }, logs: [], droppedLogs: 0 });
+      sqlite.exec(`UPDATE plugin_registrations SET circuit_failures = ${FUNCTION_CIRCUIT.failures}, circuit_window_at = unixepoch() - 1000, circuit_open_until = unixepoch() - 1 WHERE plugin_id = 'acme.gate'`);
+      await expect(quote(data(), await apps())).rejects.toMatchObject({ details: { reason: "checkout_app_unavailable" } });
+      await settleBackground();
+      expect(calls("acme.gate")).toBe(1);
+      expect(circuit("acme.gate", "cart.validate")).toEqual({ failures: 1, open: 1 });
+    });
+
+    it("a fail-open function's open circuit leaves the app out without calling it; checkout goes on", async () => {
+      await installTestApp("acme.flaky", [{ point: "checkout.discounts" }]);
+      answers["acme.flaky"] = () => ({ ok: false, value: null, error: { code: null, message: "Error: flaky" }, logs: [], droppedLogs: 0 });
+      for (let attempt = 1; attempt <= FUNCTION_CIRCUIT.failures; attempt += 1) {
+        await expect(quote(data(), await apps())).resolves.toMatchObject({ appDiscounts: [] });
+        await settleBackground();
+      }
+      expect(circuit("acme.flaky", "checkout.discounts")).toEqual({ failures: FUNCTION_CIRCUIT.failures, open: 1 });
+      const before = calls("acme.flaky");
+      const { result } = await place(data(), await apps());
+      expect(result.taxQuote.totalMinor).toBe(56_000);
+      await settleBackground();
+      expect(calls("acme.flaky")).toBe(before);
+    });
+
+    it("failures outside the window start a new count", async () => {
+      await installTestApp("acme.flaky", [{ point: "checkout.discounts" }]);
+      answers["acme.flaky"] = () => ({ ok: false, value: null, error: { code: null, message: "Error: flaky" }, logs: [], droppedLogs: 0 });
+      sqlite.exec(`UPDATE plugin_registrations SET circuit_failures = ${FUNCTION_CIRCUIT.failures - 1}, circuit_window_at = unixepoch() - ${FUNCTION_CIRCUIT.windowSeconds + 1} WHERE plugin_id = 'acme.flaky'`);
+      await quote(data(), await apps());
+      await settleBackground();
+      expect(circuit("acme.flaky", "checkout.discounts")).toEqual({ failures: 1, open: 0 });
+    });
   });
 
   it("an app whose approved grant lacks the point never runs there", async () => {

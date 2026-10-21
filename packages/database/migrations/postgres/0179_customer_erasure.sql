@@ -2,6 +2,12 @@ ALTER TABLE "customers" ADD COLUMN "erased_at" bigint;
 --> statement-breakpoint
 ALTER TABLE "order_items" ADD COLUMN "sku" text COLLATE "C";
 --> statement-breakpoint
+ALTER TABLE "plugin_registrations" ADD COLUMN "circuit_failures" bigint DEFAULT 0 NOT NULL;
+--> statement-breakpoint
+ALTER TABLE "plugin_registrations" ADD COLUMN "circuit_window_at" bigint;
+--> statement-breakpoint
+ALTER TABLE "plugin_registrations" ADD COLUMN "circuit_open_until" bigint;
+--> statement-breakpoint
 DROP TRIGGER IF EXISTS "order_items_unit_cost_snapshot" ON "order_items";
 --> statement-breakpoint
 DROP FUNCTION IF EXISTS scalius_compat."order_items_unit_cost_snapshot_fn"();
@@ -103,4 +109,4 @@ AFTER DELETE ON "customer_addresses"
 FOR EACH ROW
 EXECUTE FUNCTION scalius_compat."evt_customer_addresses_deleted_fn"();
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (179, '0179_customer_erasure', 'e4bad1b922596049cf0e329b26140a7fb5f62c4173aa02ee73f6e3e87e645552');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (179, '0179_customer_erasure', 'ebc0400f10a2ec89a52a5622fae0e47520c4c7e7ed90b80e50e9f8ab8863ed38');

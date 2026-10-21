@@ -9,6 +9,14 @@ import type { PluginRunPoint } from "@scalius/shared/plugins";
 import type { ProviderKind } from "@scalius/shared/plugins/providers/kinds";
 import { and, asc, eq, inArray, isNotNull, or } from "drizzle-orm";
 import { toPluginInstallation, type PluginInstallation } from "./installations";
+import type { FunctionCircuitState } from "./function-circuit";
+
+/** The registration's circuit columns, selected beside it (no extra read). */
+const circuitColumns = { circuitFailures: pluginRegistrations.circuitFailures, circuitOpenUntil: pluginRegistrations.circuitOpenUntil };
+const circuitOf = (row: { circuitFailures?: number | null; circuitOpenUntil?: number | null }): FunctionCircuitState => ({
+  failures: Number(row.circuitFailures ?? 0),
+  openUntil: row.circuitOpenUntil === null || row.circuitOpenUntil === undefined ? null : Number(row.circuitOpenUntil),
+});
 
 export interface RegisteredPlugin {
   installation: PluginInstallation;
@@ -17,11 +25,13 @@ export interface RegisteredPlugin {
   name: string;
   /** Set when the read selected several kinds (`selectActiveCheckoutRegistrations`). */
   kind?: "event" | "function" | "cron" | "provider";
+  /** A function registration's circuit (function-circuit.ts), read with it. */
+  circuit?: FunctionCircuitState;
 }
 
 async function activeRegistrations(db: Database, kind: "event" | "function" | "cron" | "provider", names: readonly string[]): Promise<RegisteredPlugin[]> {
   if (names.length === 0) return [];
-  const rows = await db.select({ priority: pluginRegistrations.priority, name: pluginRegistrations.name, installation: pluginInstallations })
+  const rows = await db.select({ priority: pluginRegistrations.priority, name: pluginRegistrations.name, ...circuitColumns, installation: pluginInstallations })
     .from(pluginRegistrations)
     .innerJoin(pluginInstallations, eq(pluginInstallations.pluginId, pluginRegistrations.pluginId))
     .where(and(
@@ -34,7 +44,7 @@ async function activeRegistrations(db: Database, kind: "event" | "function" | "c
   const result: RegisteredPlugin[] = [];
   for (const row of rows) {
     const installation = toPluginInstallation(row.installation);
-    if (installation) result.push({ installation, priority: row.priority, name: row.name });
+    if (installation) result.push({ installation, priority: row.priority, name: row.name, circuit: circuitOf(row) });
   }
   return result;
 }
@@ -50,7 +60,7 @@ export function listActiveFunctionPlugins(db: Database, point: PluginRunPoint): 
  * active implementation: no rows, and checkout does no plugin work at all.
  */
 export function selectActiveFunctionRegistrations(db: Database) {
-  return db.select({ priority: pluginRegistrations.priority, name: pluginRegistrations.name, installation: pluginInstallations })
+  return db.select({ priority: pluginRegistrations.priority, name: pluginRegistrations.name, ...circuitColumns, installation: pluginInstallations })
     .from(pluginRegistrations)
     .innerJoin(pluginInstallations, eq(pluginInstallations.pluginId, pluginRegistrations.pluginId))
     .where(and(eq(pluginRegistrations.kind, "function"), eq(pluginInstallations.status, "active")))
@@ -61,6 +71,8 @@ export interface ActiveFunctionRegistrationRow {
   priority: number;
   name: string;
   kind?: RegisteredPlugin["kind"];
+  circuitFailures?: number | null;
+  circuitOpenUntil?: number | null;
   installation: typeof pluginInstallations.$inferSelect;
 }
 
@@ -69,7 +81,7 @@ export function resolveActiveFunctionRegistrations(rows: readonly ActiveFunction
   const result: RegisteredPlugin[] = [];
   for (const row of rows) {
     const installation = toPluginInstallation(row.installation);
-    if (installation) result.push({ installation, priority: row.priority, name: row.name, ...(row.kind ? { kind: row.kind } : {}) });
+    if (installation) result.push({ installation, priority: row.priority, name: row.name, ...(row.kind ? { kind: row.kind } : {}), circuit: circuitOf(row) });
   }
   return result;
 }
@@ -84,6 +96,7 @@ export function selectActiveCheckoutRegistrations(db: Database) {
     kind: pluginRegistrations.kind,
     priority: pluginRegistrations.priority,
     name: pluginRegistrations.name,
+    ...circuitColumns,
     installation: pluginInstallations,
   })
     .from(pluginRegistrations)

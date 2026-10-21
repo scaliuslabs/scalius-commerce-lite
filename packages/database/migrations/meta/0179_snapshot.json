@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "0ab06db2-7a50-4451-a28d-15f39fcb2371",
+  "id": "9a25babc-1376-4a42-a572-f94f047fbcdb",
   "prevId": "0585c2b8-2373-44cb-a802-d1be01cf9a3f",
   "tables": {
     "account": {
@@ -30595,6 +30595,28 @@
           "notNull": true,
           "autoincrement": false,
           "default": 100
+        },
+        "circuit_failures": {
+          "name": "circuit_failures",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "circuit_window_at": {
+          "name": "circuit_window_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "circuit_open_until": {
+          "name": "circuit_open_until",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {

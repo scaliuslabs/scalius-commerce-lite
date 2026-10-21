@@ -942,8 +942,8 @@ describe("provider-neutral schema upgrades", () => {
       {
         version: 179,
         name: "0179_customer_erasure",
-        sqliteStatements: 12,
-        postgresStatements: 12,
+        sqliteStatements: 15,
+        postgresStatements: 15,
       },
     ]);
   });

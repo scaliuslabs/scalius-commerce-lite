@@ -868,7 +868,8 @@ const CACHE_DEP_TABLE_RULES = {
   },
   plugin_registrations: {
     kinds: ["plg"],
-    noise: [],
+    // 0179: a function's circuit is checkout bookkeeping, re-read with every checkout; no cached page shows it.
+    noise: ["circuit_failures", "circuit_window_at", "circuit_open_until"],
     note: "Derived from the manifest in the batch of every installation write; read with the installation (which providers and functions an active app has).",
     rules: everyChange(own("plg", "plugin_id")),
   },

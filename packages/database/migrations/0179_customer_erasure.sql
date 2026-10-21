@@ -13,9 +13,19 @@
 --     trigger now snapshots the unit cost (0109) and the SKU on every insert
 --     path; lines from before 0179 keep NULL and readers fall back to the
 --     SKU's current code. No backfill and no CASE in any trigger body.
+--   plugin_registrations circuit (final audit I11): a function's failed
+--     answers in a window, and until when its circuit is open. Bookkeeping
+--     only: its columns are noise to the cache dependencies, and a
+--     re-registration starts closed.
 ALTER TABLE `customers` ADD `erased_at` integer;
 --> statement-breakpoint
 ALTER TABLE `order_items` ADD `sku` text;
+--> statement-breakpoint
+ALTER TABLE `plugin_registrations` ADD `circuit_failures` integer DEFAULT 0 NOT NULL;
+--> statement-breakpoint
+ALTER TABLE `plugin_registrations` ADD `circuit_window_at` integer;
+--> statement-breakpoint
+ALTER TABLE `plugin_registrations` ADD `circuit_open_until` integer;
 --> statement-breakpoint
 DROP TRIGGER IF EXISTS `order_items_unit_cost_snapshot`;
 --> statement-breakpoint
@@ -65,4 +75,4 @@ BEGIN
   INSERT INTO `event_outbox` (`id`, `topic`, `resource_type`, `resource_id`, `data`) VALUES ('evt_' || CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) || lower(hex(randomblob(6))), 'customer.updated', 'customer', OLD.`customer_id`, json_object('customerId', OLD.`customer_id`));
 END;
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (179, '0179_customer_erasure', 'e4bad1b922596049cf0e329b26140a7fb5f62c4173aa02ee73f6e3e87e645552');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (179, '0179_customer_erasure', 'ebc0400f10a2ec89a52a5622fae0e47520c4c7e7ed90b80e50e9f8ab8863ed38');

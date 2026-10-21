@@ -10,6 +10,7 @@ export * from "./app-jobs";
 export * from "./cron-runs";
 export * from "./errors";
 export * from "./event-deliveries";
+export * from "./function-circuit";
 export * from "./grants";
 export * from "./held-deliveries";
 
