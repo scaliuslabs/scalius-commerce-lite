@@ -359,6 +359,16 @@ const insOrder = insert(`INSERT INTO orders (id, order_number, customer_name, cu
 const insShipFulfillment = insert(`INSERT INTO order_fulfillments (id, order_id, kind, status, request_key, actor_type, actor_id, created_at, location_id) VALUES (?, ?, 'ship', 'active', 'seed-0', 'system', NULL, ?, 'loc_default')`);
 const insShipFulfillmentLine = insert(`INSERT INTO order_fulfillment_lines (id, fulfillment_id, order_id, order_item_id, quantity, created_at) VALUES (?, ?, ?, ?, ?, ?)`);
 const insOrderItem = insert(`INSERT INTO order_items (id, order_id, product_id, variant_id, quantity, product_name, variant_label, inventory_tracked, unit_price_minor, line_subtotal_minor, taxable_amount_minor, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`);
+// Checkout snapshots the tax it applied with every order (commit-order.ts); the default
+// profile's single market has no tax region, so each order and line snapshots "no tax".
+const insOrderTaxSnapshot = insert(`INSERT INTO order_tax_snapshots (order_id, currency_code, decimal_places, display_label, prices_include_tax, shipping_taxed, settings_version, calculation_version, destination_snapshot, rate_snapshot, provider_id, address_source, created_at) VALUES (?, 'BDT', 2, 'VAT', 0, 0, 1, 'tax-v1', ?, ?, 'system', 'shipping', ?)`);
+const insOrderItemTaxSnapshot = insert(`INSERT INTO order_item_tax_snapshots (order_item_id, order_id, tax_class_id, tax_class_name, prices_include_tax, rate_snapshot, country_code, tax_region_id, provider_id, created_at) VALUES (?, ?, NULL, NULL, 0, '[]', 'BD', NULL, 'system', ?)`);
+function seedUntaxedSnapshot(orderId, itemIds, shippingMinor, destination, createdAt) {
+  const shipping = { taxClassId: null, taxClassName: null, grossAmountMinor: shippingMinor, discountMinor: 0, taxableAmountMinor: shippingMinor, taxMinor: 0, totalMinor: shippingMinor, components: [] };
+  insOrderTaxSnapshot.run(orderId, JSON.stringify(destination),
+    JSON.stringify({ lines: itemIds.map((lineId) => ({ lineId, taxClassId: null, taxClassName: null, components: [] })), shipping }), createdAt);
+  for (const itemId of itemIds) insOrderItemTaxSnapshot.run(itemId, orderId, createdAt);
+}
 // A COD order and its collection lifecycle are one durable fact (commit-order.ts writes the
 // row with the order), so every seeded COD order carries its cod_tracking row.
 const insCodTracking = insert(`INSERT INTO cod_tracking (id, order_id, delivery_attempts, last_attempt_at, cod_status, collected_by, collected_amount_minor, collected_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
@@ -1318,6 +1328,8 @@ for (let start = 0; start < ORDERS; start += 5000) {
           line.product_name, line.label, line.price_minor, line.price_minor * quantities[lineIndex], line.price_minor * quantities[lineIndex], createdAt);
         orderItems += 1;
       });
+      seedUntaxedSnapshot(id, lines.map((_line, lineIndex) => `oi_scale_${pad(index, 6)}_${lineIndex}`), shipping,
+        { city: customer.city, zone: "zone", area: null, cityName: customer.city, zoneName: "Zone", areaName: null }, createdAt);
       const shippedAt = fulfilment === "none" ? null : createdAt + int(1, 3) * DAY;
       if (method === "cod") {
         seedCodTracking(id, { status, paidMinor: paid, shippedAt, collectedAt: shippedAt === null ? null : shippedAt + DAY,
