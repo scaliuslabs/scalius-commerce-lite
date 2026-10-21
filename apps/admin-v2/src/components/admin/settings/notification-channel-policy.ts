@@ -3,6 +3,7 @@ import type {
   putApiV1AdminSettingsNotificationChannels,
   putApiV1AdminSettingsNotificationChannelsAdminChannels,
 } from "@scalius/api-client/sdk";
+import { isReady } from "@scalius/shared/readiness";
 import type { ApiBody, ApiResult } from "~/lib/api";
 import {
   CUSTOMER_NOTIFICATION_TYPES,
@@ -163,6 +164,17 @@ export function buildAdminNotificationConfig(
  * readiness, `pushProvider` is "" for built-in Web Push or an app push provider id.
  */
 export type CustomerRules = ApiResult<typeof getApiV1AdminSettingsNotificationChannels>;
+
+/**
+ * Web Push signs with the store's https address. Without it, buyers' built-in
+ * browser notifications and staff push are both off: one page notice
+ * (`WebPushAddressNotice`) says so, and the cards do not repeat it. Staff push
+ * is not ready only when Web Push cannot sign and no Firebase project is set up.
+ */
+export function webPushNeedsAddress(values: Pick<CustomerRules, "push" | "customerPush">): boolean {
+  return (values.push !== undefined && !isReady(values.push))
+    || values.customerPush?.issues[0]?.code === "web_push_unavailable";
+}
 
 /** The saved shapes: every order event, plus the other events each audience may use. */
 export type CustomerRulesBody = ApiBody<typeof putApiV1AdminSettingsNotificationChannels>["channels"];
