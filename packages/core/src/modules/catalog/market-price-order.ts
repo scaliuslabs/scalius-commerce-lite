@@ -90,33 +90,46 @@ async function readBaseStream(db: Database, input: MarketPriceOrderInput, rows: 
  * The list stream: the market's live public list prices (its currency, at
  * quantity 1) of the listing's products, by amount. Each list gives its own
  * first rows through `price_list_prices_amount_idx` (a correlated subquery
- * per list), so no walk crosses lists.
+ * per list, its SKU ids as one JSON list expanded by `json_each`, the same
+ * form as the subtree page in listing.ts), so no walk crosses lists.
  */
 async function readListStream(db: Database, context: MarketPriceContext, input: MarketPriceOrderInput, rows: number) {
+    return (await db.all<{ productId: string; amount: number } | [string, number]>(listStreamSql(context, input, rows))).map(row);
+}
+
+/** The list stream's statement (exported for the PostgreSQL plan guard). */
+export function listStreamSql(context: MarketPriceContext, input: MarketPriceOrderInput, rows: number): SQL {
     const direction = sql.raw(input.direction === "asc" ? "ASC" : "DESC");
     const limit = sql.raw(String(rows));
-    return (await db.all<{ productId: string; amount: number } | [string, number]>(sql`
+    return sql`
         SELECT stream_sku.product_id AS "productId", stream_price.amount_minor AS "amount"
-        FROM price_lists AS stream_list
-        INNER JOIN price_list_prices AS stream_price ON (stream_price.price_list_id, stream_price.variant_id) IN (
-            SELECT list_price.price_list_id, list_price.variant_id
-            FROM price_list_prices AS list_price
-            INNER JOIN product_variants AS list_sku ON list_sku.id = list_price.variant_id AND list_sku.deleted_at IS NULL
-            INNER JOIN ${buyerState} ON ${buyerState.productId} = list_sku.product_id
-            ${input.needsProducts ? sql`INNER JOIN "products" ON "products"."id" = ${buyerState.productId}` : sql``}
-            WHERE list_price.price_list_id = stream_list.id
-              AND list_price.currency_code = ${context.currencyCode} AND list_price.min_quantity = 1
-              AND ${and(...input.conditions)}
-            ORDER BY list_price.amount_minor ${direction}, list_sku.product_id
-            LIMIT ${limit}
-        )
+        FROM (
+            SELECT stream_list.id AS list_id, (
+                SELECT json_group_array(list_top.variant_id) FROM (
+                    SELECT list_price.variant_id AS variant_id
+                    FROM price_list_prices AS list_price
+                    INNER JOIN product_variants AS list_sku ON list_sku.id = list_price.variant_id AND list_sku.deleted_at IS NULL
+                    INNER JOIN ${buyerState} ON ${buyerState.productId} = list_sku.product_id
+                    ${input.needsProducts ? sql`INNER JOIN "products" ON "products"."id" = ${buyerState.productId}` : sql``}
+                    WHERE list_price.price_list_id = stream_list.id
+                      AND list_price.currency_code = ${context.currencyCode} AND list_price.min_quantity = 1
+                      AND ${and(...input.conditions)}
+                    ORDER BY list_price.amount_minor ${direction}, list_sku.product_id
+                    LIMIT ${limit}
+                ) AS list_top
+            ) AS top_ids
+            FROM price_lists AS stream_list
+            WHERE stream_list.market_id = ${context.marketId} AND stream_list.status = 'active' AND stream_list.kind <> 'segment'
+              AND (stream_list.starts_at IS NULL OR stream_list.starts_at <= ${context.atSeconds})
+              AND (stream_list.ends_at IS NULL OR stream_list.ends_at > ${context.atSeconds})
+        ) AS stream_top
+        CROSS JOIN json_each(stream_top.top_ids) AS top_id
+        INNER JOIN price_list_prices AS stream_price ON stream_price.price_list_id = stream_top.list_id
+            AND stream_price.variant_id = top_id.value
+            AND stream_price.currency_code = ${context.currencyCode} AND stream_price.min_quantity = 1
         INNER JOIN product_variants AS stream_sku ON stream_sku.id = stream_price.variant_id
-        WHERE stream_list.market_id = ${context.marketId} AND stream_list.status = 'active' AND stream_list.kind <> 'segment'
-          AND (stream_list.starts_at IS NULL OR stream_list.starts_at <= ${context.atSeconds})
-          AND (stream_list.ends_at IS NULL OR stream_list.ends_at > ${context.atSeconds})
-          AND stream_price.currency_code = ${context.currencyCode} AND stream_price.min_quantity = 1
         ORDER BY stream_price.amount_minor ${direction}, stream_sku.product_id
-        LIMIT ${limit}`)).map(row);
+        LIMIT ${limit}`;
 }
 
 const row = (value: { productId: string; amount: number } | [string, number]) => Array.isArray(value)

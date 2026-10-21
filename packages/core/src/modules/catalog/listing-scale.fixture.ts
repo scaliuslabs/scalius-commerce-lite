@@ -50,6 +50,9 @@ export function listingScaleSeed(): string {
 
 export type ListingScaleRow = { id: string; category: string; brand: string | null; createdAt: number; price: number; color: string };
 
+/** In a PostgreSQL plan, a correlated subquery tested as a filter: it runs once per row walked. */
+export const CORRELATED_SUBQUERY_FILTER = /Filter: .*SubPlan/;
+
 /** Every public product with its order keys and colour, to compare listings with. */
 export const LISTING_SCALE_ROWS = `SELECT p.id AS "id", p.category_id AS "category", p.brand_id AS "brand", p.created_at AS "createdAt",
     b.from_minor AS "price", v.value_key AS "color" FROM products p JOIN product_buyer_state b ON b.product_id = p.id AND b.is_public = 1

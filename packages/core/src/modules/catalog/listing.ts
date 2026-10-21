@@ -226,8 +226,14 @@ async function readStorefrontCatalogPage(
  * its categories times `perCategory` index rows, whatever the subtree's size
  * and however its products spread over the newest and price orders.
  * `conditions` read the unaliased buyer state (the per-category rows).
+ *
+ * Each category's ids travel as one JSON list expanded by `json_each`, a
+ * table function of the category row on both engines. PostgreSQL cannot turn
+ * a correlated `IN (… LIMIT n)` into a join: it walked every buyer-state row
+ * of the store and ran the subquery once per category and row. Exported for
+ * the PostgreSQL plan guard.
  */
-function subtreePageIds(input: {
+export function subtreePageIds(input: {
     categoryIds: SQL;
     conditions: SQL[];
     cursor: SQL | undefined;
@@ -244,16 +250,22 @@ function subtreePageIds(input: {
     };
     return sql`
             SELECT page_row.product_id AS page_product_id
-            FROM categories AS subtree_category
-            INNER JOIN ${buyerState} AS page_row ON page_row.product_id IN (
-                SELECT ${buyerState.productId} FROM ${buyerState}
-                ${input.needsProducts ? sql`INNER JOIN ${products} ON ${products.id} = ${buyerState.productId}` : sql``}
-                WHERE ${buyerState.categoryId} = subtree_category.id
-                  AND ${and(...input.conditions, input.cursor)}
-                ORDER BY ${order(`"product_buyer_state"`)}
-                LIMIT ${sql.raw(String(Math.max(1, Math.trunc(input.perCategory))))}
-            )
-            WHERE subtree_category.id IN ${input.categoryIds}
+            FROM (
+                SELECT (
+                    SELECT json_group_array(category_top.product_id) FROM (
+                        SELECT ${buyerState.productId} AS product_id FROM ${buyerState}
+                        ${input.needsProducts ? sql`INNER JOIN ${products} ON ${products.id} = ${buyerState.productId}` : sql``}
+                        WHERE ${buyerState.categoryId} = subtree_category.id
+                          AND ${and(...input.conditions, input.cursor)}
+                        ORDER BY ${order(`"product_buyer_state"`)}
+                        LIMIT ${sql.raw(String(Math.max(1, Math.trunc(input.perCategory))))}
+                    ) AS category_top
+                ) AS top_ids
+                FROM categories AS subtree_category
+                WHERE subtree_category.id IN ${input.categoryIds}
+            ) AS subtree_top
+            CROSS JOIN json_each(subtree_top.top_ids) AS top_id
+            INNER JOIN ${buyerState} AS page_row ON page_row.product_id = top_id.value
             ORDER BY ${order("page_row")}
             LIMIT ${sql.raw(String(input.limit))} OFFSET ${sql.raw(String(input.offset))}`;
 }
