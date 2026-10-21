@@ -46,6 +46,39 @@ export const PRODUCT_PAGE_SCRIPTS = [
   ["src/pages/products/[slug].astro", 1],
 ];
 
+const CHROME_SCRIPTS = [
+  "src/layouts/Layout.astro",
+  "src/components/header/CoreHeader.astro",
+  "src/components/header/HeaderLayout.astro",
+  "src/components/header/MobileTabBar.astro",
+  "src/components/footer/DirectoryFooter.astro",
+  "src/components/markets/MarketSuggestion.astro",
+  "src/components/newsletter/NewsletterForm.astro",
+  "src/components/cards/CoreProductCard.astro",
+  "src/components/cards/parts/CardMedia.astro",
+];
+
+/** Every buyer page whose scripts the budget checks: the product page, the home page sections, the listings. */
+export const BUYER_PAGE_SCRIPTS = {
+  product: PRODUCT_PAGE_SCRIPTS,
+  home: [
+    ...CHROME_SCRIPTS,
+    "src/components/sliders/CustomCarousel.astro",
+    "src/components/homepage/ProductRail.astro",
+    "src/components/homepage/DealBlock.astro",
+    "src/components/homepage/EndlessGrid.astro",
+    "src/components/homepage/RecentlyViewed.astro",
+  ],
+  listing: [
+    ...CHROME_SCRIPTS,
+    "src/components/catalog/CatalogListing.astro",
+    "src/components/catalog/CatalogDescription.astro",
+    "src/components/catalog/CatalogEmbed.astro",
+    "src/pages/categories/[slug].astro",
+    "src/pages/search/index.astro",
+  ],
+};
+
 /**
  * The lazy loads the first add to cart starts: the drawer (lazy-global-ui.ts),
  * the add's analytics (product-analytics.ts), and a card's quick add reading
@@ -190,8 +223,12 @@ export function loadClientGraph(storefrontDir) {
   return { chunk, script, closure, lazyLoads, withLazy };
 }
 
+export function pageEntries(graph, scripts) {
+  return scripts.map((entry) => (Array.isArray(entry) ? graph.script(entry[0], entry[1]) : graph.script(entry)));
+}
+
 export function productPageEntries(graph) {
-  return PRODUCT_PAGE_SCRIPTS.map((entry) => (Array.isArray(entry) ? graph.script(entry[0], entry[1]) : graph.script(entry)));
+  return pageEntries(graph, PRODUCT_PAGE_SCRIPTS);
 }
 
 /** The forbidden runtimes found in `ids`, as "name: chunk" lines. */
