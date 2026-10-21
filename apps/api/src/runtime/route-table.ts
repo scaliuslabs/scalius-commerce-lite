@@ -160,6 +160,10 @@ export const ROUTE_TABLE = [
   { mount: "/admin/inventory/transfers", router: "adminTransferRoutes", group: "admin-catalog" },
   { mount: "/admin/inventory", router: "adminInventoryRoutes", group: "admin-catalog" },
   { mount: "/admin/navigation", router: "adminNavigationRoutes", group: "admin-content" },
+  // The stable app API's theme and menu writes (write_themes, write_navigation):
+  // longer prefixes than /admin/resources, served with the theme and navigation.
+  { mount: "/admin/resources", router: "adminResourceThemeRoutes", group: "admin-content", prefixes: ["/admin/resources/theme"] },
+  { mount: "/admin/resources", router: "adminResourceMenuRoutes", group: "admin-content", prefixes: ["/admin/resources/menus"] },
   { mount: "/admin/translations", router: "adminTranslationRoutes", group: "admin-content" },
   { mount: "/admin/search", router: "adminSearchRoutes", group: "admin-dashboard" },
   { mount: "/admin/analytics", router: "adminAnalyticsRoutes", group: "admin-dashboard" },

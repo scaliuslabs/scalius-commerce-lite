@@ -592,6 +592,27 @@ export async function saveThemeDraft(
   return { ...saved, basePublishedRevision };
 }
 
+/**
+ * Replaces the shared draft with `theme` (an app's template applied over
+ * it), keeping the draft it replaces as a restore point (`app`). The same
+ * guards and checks as a save: both revisions must still hold, and the
+ * document is validated whole. Never touches the live theme.
+ */
+export async function replaceThemeDraft(
+  db: Database,
+  theme: StorefrontThemeDocument,
+  previous: StorefrontThemeDocument,
+  expectedDraftRevision: number,
+  basePublishedRevision: number,
+  actorId: string | null = null,
+): Promise<ThemeDraftDocument> {
+  const saved = await writeThemeDraft(db, theme, expectedDraftRevision, basePublishedRevision, basePublishedRevision, actorId, {
+    previous,
+    reason: "app",
+  });
+  return { ...saved, basePublishedRevision };
+}
+
 /** The page an agent edits on its own: the homepage sections, or one landing page (null removes it). */
 export type ThemePageEdit =
   | { page: "home"; value: StorefrontThemeDocument["pages"]["home"] }
@@ -793,7 +814,8 @@ export async function getThemeVersion(db: Database, revision: number): Promise<T
 
 /** Restore points kept, newest first (pruned in the batch that writes one). */
 export const THEME_RESTORE_POINT_LIMIT = 10;
-export type ThemeRestorePointReason = "restore" | "discard";
+/** What replaced the draft a point keeps: a restore, a discard or an app's template (`app`). */
+export type ThemeRestorePointReason = "restore" | "discard" | "app";
 
 export interface ThemeRestorePointSummary {
   id: string;

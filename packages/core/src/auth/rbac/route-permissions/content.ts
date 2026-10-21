@@ -134,6 +134,14 @@ export const CONTENT_ROUTE_PERMISSIONS: RoutePermissionMap = {
     PUT: { permission: PERMISSIONS.MEDIA_MANAGE_FOLDERS },
     DELETE: { permission: PERMISSIONS.MEDIA_MANAGE_FOLDERS },
   },
+  // The stable app API's whole-menu writes (write_navigation).
+  "/api/v1/admin/resources/menus": {
+    POST: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
+  },
+  "/api/v1/admin/resources/menus/*": {
+    GET: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
+    PATCH: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
+  },
   // =============================================
   // Navigation API
   // =============================================

@@ -125,7 +125,7 @@ function ThemeOverview({ workspace, refetch }: {
   const queryClient = useQueryClient();
   const openPreview = useOpenThemePreview();
   // Staff who may view settings but not edit them see the theme, preview it and open the editor read-only.
-  const canEdit = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT);
+  const canEdit = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_THEME_EDIT);
   const storeShape = workspace.storeShape as StoreShape;
   const draft = workspace.draft.theme as Theme;
   /** A built-in template's id, or an app template's key (`<app id>/<template id>`). */

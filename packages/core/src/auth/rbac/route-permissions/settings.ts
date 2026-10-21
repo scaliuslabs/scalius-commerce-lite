@@ -102,6 +102,14 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/taxes/preview": {
     POST: { permission: PERMISSIONS.TAXES_VIEW },
   },
+  // The stable app API's theme draft writes (write_themes): reading needs the
+  // theme editor's permission or the settings read; every write the theme edit.
+  "/api/v1/admin/resources/theme": {
+    GET: { anyOf: [PERMISSIONS.SETTINGS_THEME_EDIT, PERMISSIONS.SETTINGS_GENERAL_VIEW] },
+  },
+  "/api/v1/admin/resources/theme/*": {
+    POST: { permission: PERMISSIONS.SETTINGS_THEME_EDIT },
+  },
   "/api/v1/admin/settings/theme/editor": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   },
@@ -112,19 +120,19 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   },
   "/api/v1/admin/settings/theme/draft": {
-    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+    POST: { permission: PERMISSIONS.SETTINGS_THEME_EDIT },
   },
   "/api/v1/admin/settings/theme/restore": {
-    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+    POST: { permission: PERMISSIONS.SETTINGS_THEME_EDIT },
   },
   "/api/v1/admin/settings/theme/discard": {
-    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+    POST: { permission: PERMISSIONS.SETTINGS_THEME_EDIT },
   },
   "/api/v1/admin/settings/theme/page-draft": {
-    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+    POST: { permission: PERMISSIONS.SETTINGS_THEME_EDIT },
   },
   "/api/v1/admin/settings/theme/publish": {
-    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+    POST: { permission: PERMISSIONS.SETTINGS_THEME_EDIT },
   },
   "/api/v1/admin/settings/theme/versions": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
@@ -136,17 +144,17 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   },
   "/api/v1/admin/settings/theme/restore-point": {
-    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+    POST: { permission: PERMISSIONS.SETTINGS_THEME_EDIT },
   },
   // Drafting changes nothing until the editor saves, but only an editor may ask (it calls the merchant's AI app).
   "/api/v1/admin/settings/theme/ai-draft": {
-    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+    POST: { permission: PERMISSIONS.SETTINGS_THEME_EDIT },
   },
   "/api/v1/admin/settings/theme/ai-providers": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   },
   "/api/v1/admin/settings/theme/draft-sections": {
-    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+    POST: { permission: PERMISSIONS.SETTINGS_THEME_EDIT },
   },
   "/api/v1/admin/settings/media": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },

@@ -2,6 +2,8 @@ import { ADMIN_MIDDLEWARE } from "./admin-base-app";
 import { buildRouteGroupApp, type RouteGroupParts } from "./route-groups";
 import { checkoutLanguageRoutes } from "../routes/checkout-languages";
 import { adminNavigationRoutes } from "../routes/admin/navigation";
+import { adminResourceMenuRoutes } from "../routes/admin/resources-menus";
+import { adminResourceThemeRoutes } from "../routes/admin/resources-theme";
 import { adminPageRoutes } from "../routes/admin/pages";
 import { adminTranslationRoutes } from "../routes/admin/translations";
 import { customFieldDefinitionRoutes, customFieldValueRoutes } from "../routes/admin/custom-fields";
@@ -14,6 +16,8 @@ export const adminContentParts: RouteGroupParts<"admin-content"> = {
     adminObjectRoutes,
     adminPageRoutes,
     adminNavigationRoutes,
+    adminResourceThemeRoutes,
+    adminResourceMenuRoutes,
     adminTranslationRoutes,
     adminSettingsRoutes,
     customFieldDefinitionRoutes,

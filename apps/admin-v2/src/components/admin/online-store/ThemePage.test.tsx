@@ -76,7 +76,7 @@ function workspaceOf(draft: StorefrontThemeDocument, options: { published?: Stor
   } as unknown as ThemeWorkspaceDocument;
 }
 
-function render(workspace: ThemeWorkspaceDocument, permissions = ["settings.general.view", "settings.general.edit"]) {
+function render(workspace: ThemeWorkspaceDocument, permissions = ["settings.general.view", "settings.general.edit", "settings.theme.edit"]) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   queryClient.setQueryData(themeWorkspaceQueryOptions().queryKey, workspace);
   // A refetch after a save reads the same workspace unless a test says otherwise.

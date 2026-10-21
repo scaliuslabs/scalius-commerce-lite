@@ -18,7 +18,7 @@ export const HANDLE_MIN_LENGTH = 3;
 export const HANDLE_MAX_LENGTH = 100;
 export const HANDLE_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-export type HandleResource = "product" | "category" | "page" | "post" | "attribute";
+export type HandleResource = "product" | "category" | "collection" | "page" | "post" | "attribute";
 
 const INDEPENDENT_VOWELS: Record<string, string> = {
   "অ": "o", "আ": "a", "ই": "i", "ঈ": "i", "উ": "u", "ঊ": "u", "ঋ": "ri",

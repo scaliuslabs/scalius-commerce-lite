@@ -9,6 +9,7 @@ export * from "./storefront-theme/brand";
 export * from "./storefront-theme/apps";
 export * from "./storefront-theme/bindings";
 export * from "./storefront-theme/app-templates";
+export * from "./storefront-theme/handles";
 export * from "./storefront-theme/blocks";
 export * from "./storefront-theme/sections";
 export * from "./storefront-theme/skins";

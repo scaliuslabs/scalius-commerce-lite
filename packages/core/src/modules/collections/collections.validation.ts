@@ -6,6 +6,7 @@ import {
 } from "@scalius/shared/seo-canonical";
 import { templateAssignmentSchema } from "@scalius/shared/catalog-tree";
 import { COLLECTION_CONFIG_ID_LIMIT } from "./collection-config";
+import { HANDLE_MAX_LENGTH, HANDLE_MIN_LENGTH, HANDLE_PATTERN } from "@scalius/shared/handle";
 
 const nullableText = (max: number) =>
     z.string().trim().max(max).nullable().transform((value) => value || null).optional();
@@ -36,6 +37,14 @@ const canonicalPathUpdateSchema = z
                 "Canonical path must be a collection route such as /collections/col_1.",
         },
     );
+
+/**
+ * A collection's handle (migration 0170): what templates and apps name it by
+ * (`@collection:<handle>`). Omitted on create: derived from the name.
+ */
+const collectionHandleSchema = z.string().trim().min(HANDLE_MIN_LENGTH).max(HANDLE_MAX_LENGTH)
+    .regex(HANDLE_PATTERN, "Use lower-case letters, digits and single dashes.")
+    .describe("The collection's handle: lower-case letters, digits and single dashes, unique in the store (trash included). Omit on create to derive it from the name.");
 
 /** Omitted keeps the current value (the theme's default listing on create). */
 const listingTemplateSchema = templateAssignmentSchema.optional()
@@ -86,6 +95,7 @@ function validatePublishReadiness(
 
 export const createCollectionSchema = z.object({
     name: z.string().min(3).max(100),
+    slug: collectionHandleSchema.optional(),
     description: nullableText(100_000),
     content: nullableText(100_000),
     presentation: z.enum(["grid", "carousel"]),
@@ -102,6 +112,7 @@ export const createCollectionSchema = z.object({
 export const updateCollectionSchema = z.object({
     expectedVersion: z.number().int().min(1),
     name: z.string().min(3).max(100).optional(),
+    slug: collectionHandleSchema.optional(),
     description: optionalNullableText(100_000),
     content: optionalNullableText(100_000),
     presentation: z.enum(["grid", "carousel"]).optional(),

@@ -689,6 +689,18 @@ export const PERMISSION_METADATA: Record<
     category: "Settings",
     isSensitive: true,
   },
+  // Its own permission (migration 0170) so a theme editor, or an app with the
+  // Sensitive write_themes scope, does not also change business, country and
+  // media settings.
+  [PERMISSIONS.SETTINGS_THEME_EDIT]: {
+    name: PERMISSIONS.SETTINGS_THEME_EDIT,
+    displayName: "Edit Theme",
+    description: "Edit, restore and publish the storefront theme",
+    resource: "settings",
+    action: "theme.edit",
+    category: "Settings",
+    isSensitive: true,
+  },
 
   // Settings - Header/Footer/SEO
   [PERMISSIONS.SETTINGS_HEADER_EDIT]: {

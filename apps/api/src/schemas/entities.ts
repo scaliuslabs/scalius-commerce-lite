@@ -817,6 +817,8 @@ export const collectionSummarySchema = z.object({
 
 /** Collection detail — returned by getCollectionById and mutations. */
 export const collectionSchema = collectionSummarySchema.extend({
+  /** The collection's handle (templates and apps name it `@collection:<handle>`); null only on a row written outside the dashboard. */
+  slug: z.string().nullable(),
   description: z.string().nullable(),
   content: z.string().nullable(),
   metaTitle: z.string().nullable(),

@@ -205,7 +205,7 @@ export function ThemeEditor({ workspace, refetch }: {
 }) {
   const t = useMessages(themeEditorMessages);
   const settingText = useMessages(themeSettingMessages);
-  const canEdit = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT);
+  const canEdit = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_THEME_EDIT);
   const canConnectAgent = useHasPermission(ADMIN_PERMISSIONS.AGENT_ACCESS_MANAGE);
   const media = useMediaPreviews(workspace.media);
   const appSections = useMemo(() => appSectionsByKey(workspace.apps), [workspace.apps]);

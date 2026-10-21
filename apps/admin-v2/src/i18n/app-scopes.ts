@@ -65,6 +65,10 @@ const en = {
   scope_write_files_help: "Add files from a web address, rename, move and trash them.",
   scope_read_settings: "View store settings",
   scope_read_settings_help: "Business details, web addresses, markets, languages and custom field definitions.",
+  scope_write_themes: "Change the theme draft",
+  scope_write_themes_help: "Apply the app's own template and change section settings in your theme draft, keeping a restore point. It can't publish: buyers see the change only when you publish the draft.",
+  scope_write_navigation: "Manage menus",
+  scope_write_navigation_help: "Create menus, replace their links and publish them. Where a menu shows stays your choice; a published menu that sits in your header or footer changes what buyers see at once.",
   scope_write_places: "Load delivery places",
   scope_write_places_help: "Add and update the cities, areas and postal codes buyers pick for delivery. It can't delete one.",
 } satisfies ScopeCopy;
@@ -126,6 +130,10 @@ const bn = {
   scope_write_files_help: "ওয়েব ঠিকানা থেকে ফাইল যোগ করা, নাম বদলানো, সরানো ও ট্র্যাশ করা।",
   scope_read_settings: "স্টোরের সেটিংস দেখা",
   scope_read_settings_help: "ব্যবসার তথ্য, ওয়েব ঠিকানা, মার্কেট, ভাষা ও কাস্টম ফিল্ডের সংজ্ঞা।",
+  scope_write_themes: "থিমের খসড়া বদলানো",
+  scope_write_themes_help: "অ্যাপের নিজের টেমপ্লেট প্রয়োগ এবং আপনার থিমের খসড়ায় সেকশনের সেটিংস বদলানো, একটি রিস্টোর পয়েন্ট রেখে। পাবলিশ করতে পারে না: আপনি খসড়া পাবলিশ করলেই ক্রেতারা পরিবর্তন দেখেন।",
+  scope_write_navigation: "মেনু ম্যানেজ করা",
+  scope_write_navigation_help: "মেনু তৈরি, তার লিংক বদলানো ও পাবলিশ করা। মেনু কোথায় দেখাবে তা আপনিই ঠিক করেন; হেডার বা ফুটারে থাকা মেনু পাবলিশ হলে ক্রেতারা সঙ্গে সঙ্গে পরিবর্তন দেখেন।",
   scope_write_places: "ডেলিভারির জায়গা লোড করা",
   scope_write_places_help: "ডেলিভারির জন্য ক্রেতারা যে শহর, এলাকা ও পোস্টাল কোড বেছে নেন সেগুলো যোগ ও আপডেট করা। কোনোটি ডিলিট করতে পারে না।",
 } satisfies ScopeCopy;

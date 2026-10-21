@@ -155,6 +155,22 @@ export const PLUGIN_SCOPES = {
   write_webhooks: { rbac: ["webhooks.view", "webhooks.manage"], staff: "webhooks.manage", sensitive: true },
   /** Store settings: business details, web addresses, markets, languages and custom field definitions. */
   read_settings: { rbac: ["settings.general.view"], staff: "settings.general.view" },
+  /**
+   * Read the theme and change its shared draft: apply the app's own
+   * template (its look and homepage) and set section settings, each under
+   * the draft revision it read, with a restore point. Never publishes: what
+   * buyers see changes only when staff publish the draft. Sensitive: the
+   * draft is the next storefront. Confers `settings.theme.edit` only, never
+   * the store's business, country or media settings.
+   */
+  write_themes: { rbac: ["settings.theme.edit"], staff: "settings.theme.edit", sensitive: true },
+  /**
+   * Read menus, create them, replace their links (up to three levels) and
+   * publish them. Never chooses where a menu shows (header, footer).
+   * Sensitive: a published menu placed in the header or footer changes what
+   * buyers see at once.
+   */
+  write_navigation: { rbac: ["settings.header.edit"], staff: "settings.header.edit", sensitive: true },
   /** Add and update delivery places (a place dataset) through the place import; never delete them. */
   write_places: {
     rbac: ["settings.delivery_locations.view", "settings.delivery_locations.import"],

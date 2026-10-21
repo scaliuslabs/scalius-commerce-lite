@@ -1,7 +1,13 @@
 import { CATALOG_CHANNEL_IDS } from "@scalius/shared/sales-channels";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 
-import { STOREFRONT_DECLARATION_THEME_VERSION, readStorefrontAppTemplateTheme, readStorefrontPagePresetSections, type StorefrontThemeDocument } from "@scalius/shared/storefront-theme";
+import {
+  STOREFRONT_DECLARATION_THEME_VERSION,
+  resolveStorefrontAppTemplateTheme,
+  resolveStorefrontPagePresetSections,
+  type StorefrontHandleLookup,
+  type StorefrontThemeDocument,
+} from "@scalius/shared/storefront-theme";
 import {
   THEME_VERSION_CHANGES_MAX,
   storefrontLandingSlugSchema,
@@ -82,7 +88,7 @@ import {
   themeIso,
   themeStatusSchema,
 } from "./theme-contract";
-import { readStoreShape, readThemeMedia } from "@scalius/core/modules/storefront";
+import { readStoreShape, readThemeHandleLookup, readThemeMedia } from "@scalius/core/modules/storefront";
 import { listPluginInstallations } from "@scalius/core/modules/plugins";
 import { STOREFRONT_COMPONENT_TARGETS, pluginSurfaceKey, storefrontSettingNeeds, type PluginSettingsSchema } from "@scalius/shared/plugins";
 import { isPublicMediaUrl } from "@scalius/shared/platform-config";
@@ -269,8 +275,18 @@ const themeAppSurfacesSchema = z.object({
 
 type PluginInstallations = Awaited<ReturnType<typeof listPluginInstallations>>;
 
+/** The templates and page presets the theme editor may list: what their catalogue handles are read from. */
+function themeAppDeclarations(installations: PluginInstallations): unknown[] {
+  return installations
+    .filter((installation) => installation.status === "active" && installation.grant?.storefrontSurfaces === true && installation.grant.storefrontCode === true)
+    .flatMap((installation) => [
+      ...installation.manifest.storefront.templates.map((template) => template.theme),
+      ...installation.manifest.storefront.pagePresets.map((preset) => preset.sections),
+    ]);
+}
+
 /** Active apps whose approved grant covers storefront surfaces, with what they offer the theme. */
-function themeAppSurfaces(installations: PluginInstallations) {
+function themeAppSurfaces(installations: PluginInstallations, lookup: StorefrontHandleLookup) {
   return installations
     .filter((installation) => installation.status === "active" && installation.grant?.storefrontSurfaces === true)
     .map((installation) => {
@@ -296,7 +312,9 @@ function themeAppSurfaces(installations: PluginInstallations) {
           settings: skin.settings.map(appSettingField),
         })) : [],
         templates: code ? storefront.templates.flatMap((template) => {
-          const theme = readStorefrontAppTemplateTheme(template.theme, template.themeVersion ?? STOREFRONT_DECLARATION_THEME_VERSION);
+          // Catalogue handles resolve against this store; a section naming one it lacks is left out.
+          const read = resolveStorefrontAppTemplateTheme(template.theme, template.themeVersion ?? STOREFRONT_DECLARATION_THEME_VERSION, lookup);
+          const theme = read.ok ? read.value : null;
           return theme ? [{
             key: pluginSurfaceKey(installation.pluginId, template.id),
             id: template.id,
@@ -306,7 +324,8 @@ function themeAppSurfaces(installations: PluginInstallations) {
           }] : [];
         }) : [],
         pagePresets: code ? storefront.pagePresets.flatMap((preset) => {
-          const sections = readStorefrontPagePresetSections(preset.sections, preset.themeVersion ?? STOREFRONT_DECLARATION_THEME_VERSION);
+          const read = resolveStorefrontPagePresetSections(preset.sections, preset.themeVersion ?? STOREFRONT_DECLARATION_THEME_VERSION, lookup);
+          const sections = read.ok ? read.value : null;
           return sections ? [{
             key: pluginSurfaceKey(installation.pluginId, preset.id),
             id: preset.id,
@@ -393,7 +412,7 @@ app.openapi(getThemeEditorRoute, async (c) => {
     Promise.all([getThemeWorkspace(db), installations]).then(async ([workspace, installed]) =>
       [workspace, await readThemeMedia(db, workspace.draft.theme, themeAppMediaIds(workspace.draft.theme, installed))] as const),
     readStoreShape(db),
-    installations.then(themeAppSurfaces),
+    installations.then(async (installed) => themeAppSurfaces(installed, await readThemeHandleLookup(db, themeAppDeclarations(installed)))),
   ]);
   const { lastPublished } = boundedStatus(themeStatus(workspace));
   const { updatedBy: _updatedBy, updatedByName, ...draft } = workspace.draft;

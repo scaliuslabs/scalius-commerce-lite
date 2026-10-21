@@ -304,6 +304,7 @@ export const permissionMessages = defineMessages<PermissionName>({
 
     "settings.general.view": "View store settings",
     "settings.general.edit": "Edit store settings",
+    "settings.theme.edit": "Edit and publish the theme",
     "settings.header.edit": "Edit the store header",
     "settings.footer.edit": "Edit the store footer",
     "settings.seo.edit": "Edit search engine settings",
@@ -415,6 +416,7 @@ export const permissionMessages = defineMessages<PermissionName>({
 
     "settings.general.view": "স্টোর সেটিংস দেখা",
     "settings.general.edit": "স্টোর সেটিংস এডিট করা",
+    "settings.theme.edit": "থিম এডিট ও পাবলিশ করা",
     "settings.header.edit": "স্টোরের হেডার এডিট করা",
     "settings.footer.edit": "স্টোরের ফুটার এডিট করা",
     "settings.seo.edit": "সার্চ ইঞ্জিন সেটিংস এডিট করা",

@@ -701,7 +701,7 @@ export const MERCHANT_TASKS: readonly MerchantTask[] = [
     prompt: () => "Change the homepage hero headline and publish the theme",
     ops: ["dashboard.theme.publish"],
     grant: "full",
-    needs: "theme.page_draft_update/publish need settings.general.edit, which the Operator preset excludes as a sensitive permission.",
+    needs: "theme.page_draft_update/publish need settings.theme.edit, which the Operator preset excludes as a sensitive permission.",
     writes: ["settings", "theme_*", "storefront_*", "system_kv"],
     async run(ctx) {
       await ctx.agent.search(this.prompt(ctx.fx), this.ops);

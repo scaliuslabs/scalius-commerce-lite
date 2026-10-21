@@ -1883,3 +1883,148 @@ export class NavigationAuthorityUnavailableError extends AppError {
         this.name = "NavigationAuthorityUnavailableError";
     }
 }
+
+// ─────────────────────────────────────────
+// Whole-menu writes (the stable app API's menus.create and menus.update)
+// ─────────────────────────────────────────
+
+/** Links one whole-menu write holds: the most any storefront placement draws. */
+export const NAVIGATION_MENU_WRITE_ITEM_LIMIT = 150;
+/** Item rows one insert statement carries (12 bound values each, within D1's 100). */
+const MENU_ITEM_INSERT_ROWS = 8;
+
+/** One link of a menu written whole: its parent named by the caller's key, siblings in list order. */
+export interface NavigationMenuTreeItem extends NavigationMenuItemInput {
+    key: string;
+    parentKey?: string | null;
+}
+
+/**
+ * The rows a whole-menu write stores: every key unique, a parent listed
+ * before its children, at most three levels and the write's item limit.
+ */
+function planMenuTree(menuId: string, items: readonly NavigationMenuTreeItem[]) {
+    if (items.length > NAVIGATION_MENU_WRITE_ITEM_LIMIT) {
+        throw new ValidationError(`A menu written whole holds at most ${NAVIGATION_MENU_WRITE_ITEM_LIMIT} links.`, { field: "items" });
+    }
+    const placed = new Map<string, { id: string; depth: number; children: number }>();
+    let roots = 0;
+    return items.map((item, index) => {
+        if (placed.has(item.key)) {
+            throw new ValidationError(`items.${index}: the key ${item.key} is used twice.`, { field: `items.${index}.key` });
+        }
+        const parent = item.parentKey ? placed.get(item.parentKey) : null;
+        if (item.parentKey && !parent) {
+            throw new ValidationError(`items.${index}: list the parent ${item.parentKey} before its links.`, { field: `items.${index}.parentKey` });
+        }
+        const depth = parent ? parent.depth + 1 : 1;
+        if (depth > NAVIGATION_MENU_MAX_DEPTH) {
+            throw new ValidationError(`items.${index}: a menu has at most ${NAVIGATION_MENU_MAX_DEPTH} levels.`, { field: `items.${index}.parentKey` });
+        }
+        let normalized: NavigationMenuItemStorage;
+        try {
+            normalized = normalizeNavigationMenuItemInput(item);
+        } catch (error) {
+            if (error instanceof ValidationError) throw new ValidationError(`items.${index}: ${error.message}`, { field: `items.${index}` });
+            throw error;
+        }
+        const id = `navitem_${nanoid()}`;
+        const sibling = parent ? (parent.children += 1) : (roots += 1);
+        placed.set(item.key, { id, depth, children: 0 });
+        return { id, menuId, parentId: parent?.id ?? null, position: sibling * NAVIGATION_POSITION_GAP, ...normalized };
+    });
+}
+
+function menuItemInserts(db: Database, rows: ReturnType<typeof planMenuTree>): BatchItem<"sqlite">[] {
+    const statements: BatchItem<"sqlite">[] = [];
+    for (let index = 0; index < rows.length; index += MENU_ITEM_INSERT_ROWS) {
+        statements.push(db.insert(navigationMenuItems).values(rows.slice(index, index + MENU_ITEM_INSERT_ROWS)) as never);
+    }
+    return statements;
+}
+
+/** Creates a menu with all its links in one batch (unpublished: publishing is its own step). */
+export async function createNavigationMenuWithItems(
+    db: Database,
+    input: { name: string; handle?: string; items: readonly NavigationMenuTreeItem[] },
+) {
+    const name = normalizeNavigationMenuName(input.name);
+    const handle = normalizeNavigationMenuHandle(input.handle ?? name);
+    const menuId = `menu_${nanoid()}`;
+    const rows = planMenuTree(menuId, input.items);
+    try {
+        await safeBatch(db, [
+            db.insert(navigationMenus).values({ id: menuId, name, handle }),
+            ...menuItemInserts(db, rows),
+        ] as never);
+    } catch (error) {
+        if (/navigation_menus_active_handle_unique|UNIQUE constraint failed.*navigation_menus/i.test(errorText(error))) {
+            throw new ConflictError("Another menu already has this handle. Use a different one.");
+        }
+        throw error;
+    }
+    return getNavigationMenuAuthority(db, menuId);
+}
+
+/**
+ * Changes a menu under its revision in one guarded batch: its name and handle
+ * when given, and all its links when `items` is given (they replace the old
+ * ones). The revision advances once; the published menu is unchanged until
+ * the menu is published.
+ */
+export async function replaceNavigationMenu(
+    db: Database,
+    menuId: string,
+    input: { expectedRevision: number; name?: string; handle?: string; items?: readonly NavigationMenuTreeItem[] },
+): Promise<{ revision: number }> {
+    const statements: BatchItem<"sqlite">[] = [];
+    if (input.name !== undefined || input.handle !== undefined) {
+        statements.push(db.update(navigationMenus).set({
+            ...(input.name !== undefined ? { name: normalizeNavigationMenuName(input.name) } : {}),
+            ...(input.handle !== undefined ? { handle: normalizeNavigationMenuHandle(input.handle) } : {}),
+            updatedAt: sql`unixepoch()`,
+        }).where(eq(navigationMenus.id, menuId)) as never);
+    }
+    if (input.items !== undefined) {
+        const rows = planMenuTree(menuId, input.items);
+        await assertPlacedMenuFits(db, menuId, rows.length);
+        statements.push(db.delete(navigationMenuItems).where(eq(navigationMenuItems.menuId, menuId)) as never);
+        statements.push(...menuItemInserts(db, rows));
+    }
+    const mutation = await executeMenuMutation(db, menuId, input.expectedRevision, statements);
+    return { revision: mutation.revision };
+}
+
+/** A menu's links in tree order (depth first), or null when it holds more than a whole-menu write may. */
+export async function readNavigationMenuTree(db: Database, menuId: string) {
+    const rows = await db.select().from(navigationMenuItems)
+        .where(eq(navigationMenuItems.menuId, menuId))
+        .orderBy(asc(navigationMenuItems.position), asc(navigationMenuItems.id))
+        .limit(NAVIGATION_MENU_WRITE_ITEM_LIMIT + 1)
+        .all();
+    if (rows.length > NAVIGATION_MENU_WRITE_ITEM_LIMIT) return null;
+    const children = new Map<string | null, typeof rows>();
+    for (const row of rows) {
+        const siblings = children.get(row.parentId) ?? [];
+        siblings.push(row);
+        children.set(row.parentId, siblings);
+    }
+    const ordered: typeof rows = [];
+    const visit = (parentId: string | null) => {
+        for (const row of children.get(parentId) ?? []) {
+            ordered.push(row);
+            visit(row.id);
+        }
+    };
+    visit(null);
+    return ordered;
+}
+
+/** A menu by its id or its handle (live or trashed), or null. */
+export async function findNavigationMenu(db: Database, idOrHandle: string) {
+    return await db.select().from(navigationMenus)
+        .where(or(eq(navigationMenus.id, idOrHandle), and(eq(navigationMenus.handle, idOrHandle), isNull(navigationMenus.deletedAt))))
+        .orderBy(desc(sql`${navigationMenus.id} = ${idOrHandle}`))
+        .limit(1)
+        .get() ?? null;
+}
