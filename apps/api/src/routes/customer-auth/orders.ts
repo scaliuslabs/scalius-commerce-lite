@@ -291,7 +291,7 @@ const customerOrderDetailSchema = z.object({
   activeRefundOperation: customerActiveRefundOperationSchema.nullable(),
   supportRequests: z.array(customerOrderSupportRequestSchema),
   supportRequestActions: z.array(customerOrderSupportRequestActionSchema),
-  supportRequestIntro: z.string(),
+  supportRequestIntro: z.string().nullable().openapi({ description: "The store's own words over the order's requests; null: the storefront shows its default in the page language." }),
   paymentPlan: z.object({
     totalAmount: z.number(),
     depositAmount: z.number(),

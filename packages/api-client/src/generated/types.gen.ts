@@ -13194,7 +13194,10 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 eligible: boolean;
                 disabledReason: string | null;
             }>;
-            supportRequestIntro: string;
+            /**
+             * The store's own words over the order's requests; null: the storefront shows its default in the page language.
+             */
+            supportRequestIntro: string | null;
             paymentPlan: {
                 totalAmount: number;
                 depositAmount: number;

@@ -31,7 +31,7 @@ import { customerAddressFromRow, paidSpendAmount, paidSpendProjection } from "..
 import { orderShippingAddressSelection } from "./shipping-address";
 import type { OrderShippingAddressFields } from "./types";
 import { listOrderRefundAttempts, summarizeActiveRefundOperation } from "../payments";
-import { CUSTOMER_REQUEST_ACTION_COPY, getCustomerRequestIntro, getCustomerRequestPolicy } from "../settings";
+import { CUSTOMER_REQUEST_ACTION_COPY, getCustomerRequestPolicy } from "../settings";
 import { orderMoneyAmounts, orderMoneySelection } from "./money";
 import {
     presentOrderLineFulfilment,
@@ -1212,7 +1212,8 @@ export async function getCustomerOrderDetailForOrder(
         activeRefundOperation,
         supportRequests,
         supportRequestActions,
-        supportRequestIntro: getCustomerRequestIntro(customerRequestPolicy),
+        // The store's own words; null leaves the default to the storefront's page language.
+        supportRequestIntro: customerRequestPolicy.introText,
         paymentPlan,
         cod,
         progress,

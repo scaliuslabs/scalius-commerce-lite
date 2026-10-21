@@ -51941,7 +51941,9 @@
                           }
                         },
                         "supportRequestIntro": {
-                          "type": "string"
+                          "type": "string",
+                          "nullable": true,
+                          "description": "The store's own words over the order's requests; null: the storefront shows its default in the page language."
                         },
                         "paymentPlan": {
                           "type": "object",

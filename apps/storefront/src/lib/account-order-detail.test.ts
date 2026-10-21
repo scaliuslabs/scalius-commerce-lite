@@ -364,8 +364,12 @@ describe("account order detail", () => {
     expect(document.getElementById("orderSupportActions")?.hidden).toBe(true);
     renderOrderDetail(detail(), null);
     expect(document.getElementById("orderSupportIntro")?.hidden).toBe(false);
+    // The store's own intro wins.
     expect(text("orderSupportIntro")).toBe("Need help with this order?");
     expect(document.getElementById("orderSupportActions")?.hidden).toBe(false);
+    // Without one, the storefront's words in the page language.
+    renderOrderDetail(detail({}, { supportRequestIntro: null }), null);
+    expect(text("orderSupportIntro")).toBe("Send a request and the store will review it before changing payment, shipment, or inventory.");
   });
 
   it("never offers payment for a refunded or partly refunded order", () => {
@@ -489,13 +493,14 @@ describe("account order detail", () => {
     try {
       api.getCustomerSession.mockResolvedValue({ authenticated: true });
       // Merchant data is Bangla; the API's English step and update labels are worded here by key.
-      // The support action and intro are the API's own sentences (composed in core), Bangla here.
+      // The support action is the API's own sentence (composed in core), Bangla here; the store
+      // wrote no intro of its own (null), so the page's language words it.
       api.getCustomerOrderDetail.mockResolvedValueOnce({ success: true, detail: detail(
         { status: "shipped", statusLabel: "On its way", shippingMethodName: "ঢাকার ভেতরে", expectedDelivery: "১-২ দিন", customerName: "রহিম", shippingAddress: "বাড়ি ১, রোড ২", cityName: "ঢাকা", zoneName: "মিরপুর", taxLabel: "ভ্যাট", taxAmountMinor: 5_000, pricesIncludeTax: true },
         {
           items: [{ ...detail().items[0]!, productName: "সুতির পাঞ্জাবি", variantLabel: "মাঝারি" }],
           supportRequestActions: [{ type: "cancel_pre_shipment", label: "বাতিলের অনুরোধ", description: "পাঠানোর আগে স্টোরকে অর্ডারটি দেখতে বলুন।", eligible: true, disabledReason: null }],
-          supportRequestIntro: "এই অর্ডার নিয়ে সাহায্য দরকার?",
+          supportRequestIntro: null,
           shipments: [{ id: "shp_1", status: "in_transit", statusLabel: "On its way", providerName: "পাঠাও", courierName: null, trackingId: "PX123", trackingUrl: null, lastChecked: null, updatedAt: "2026-09-25T02:00:00.000Z", createdAt: null } as never],
           progress: { ...detail().progress!, steps: detail().progress!.steps.map((step, index) => ({ ...step, done: index <= 2 })) },
           timeline: [
@@ -513,6 +518,7 @@ describe("account order detail", () => {
       expect(text("orderTimeline")).toContain("পাঠাও-এর কাছে আছে।");
       expect(text("orderTimeline")).toContain("পেমেন্ট হয়নি");
       expect(text("orderShipments")).toContain("পথে আছে");
+      expect(text("orderSupportIntro")).toBe("অনুরোধ পাঠান, পেমেন্ট, শিপমেন্ট বা স্টকে কোনো পরিবর্তনের আগে স্টোর তা দেখে নেবে।");
       document.querySelector<HTMLButtonElement>("[data-support-request-type]")!.click();
       expect(text("orderSupportReasons")).toContain("ভুল করে অর্ডার দিয়েছি");
       document.getElementById("orderSupportSubmit")!.click();
