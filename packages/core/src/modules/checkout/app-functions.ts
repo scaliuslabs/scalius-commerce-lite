@@ -472,9 +472,9 @@ function discountCombinations(
   value: PluginFunctionOutput<"checkout.discounts">["discounts"][number]["combinesWith"],
 ): DiscountCombinations {
   return {
-    product: value?.productDiscounts ?? true,
-    order: value?.orderDiscounts ?? true,
-    shipping: value?.shippingDiscounts ?? true,
+    product: value?.product ?? true,
+    order: value?.order ?? true,
+    shipping: value?.shipping ?? true,
   };
 }
 

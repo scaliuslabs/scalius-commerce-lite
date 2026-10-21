@@ -2159,13 +2159,13 @@
         "combinesWith": {
          "type": "object",
          "properties": {
-          "productDiscounts": {
+          "product": {
            "type": "boolean"
           },
-          "orderDiscounts": {
+          "order": {
            "type": "boolean"
           },
-          "shippingDiscounts": {
+          "shipping": {
            "type": "boolean"
           }
          },
