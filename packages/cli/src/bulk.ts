@@ -9,7 +9,7 @@ import type { IndexedOperation, Runtime, StructuredInput } from "./types.js";
 // status, publish; apps/api bulk-runs/inputs.ts). Friendly flags build the
 // operation's exact body; --input sends a raw body instead. A run of up to
 // 250 items finishes in its request (the run is `done`); a larger one answers
-// `running`, and --wait follows `bulk_runs.get` by the run's `data.id`.
+// `running`, and --wait follows `bulk_runs.get` by the run's `data.run.id`.
 
 export const BULK_KINDS = {
   prices: "variants.bulk_set_prices",
@@ -241,6 +241,11 @@ function pricePreview(input: StructuredInput, money: StoreMoney | undefined): { 
   };
 }
 
+/** The run in a bulk answer (`data: { run }`). */
+function runOf(data: unknown): Record<string, unknown> {
+  return isRecord(data) && isRecord(data.run) ? data.run : {};
+}
+
 function runIdOf(data: unknown): string | undefined {
   return isRecord(data) && typeof data.id === "string" ? data.id : undefined;
 }
@@ -268,7 +273,7 @@ export async function bulk(runtime: Runtime, output: OutputOptions, kind: BulkKi
   });
   if (options.dryRun) return outcome.code;
 
-  const run = isRecord(outcome.envelope.data) ? outcome.envelope.data : {};
+  const run = runOf(outcome.envelope.data);
   const runId = runIdOf(run);
   const running = run.status === "running";
   if (!options.wait || !runId || !running) {
@@ -283,11 +288,11 @@ export async function bulk(runtime: Runtime, output: OutputOptions, kind: BulkKi
   while (runtime.now() - started < WAIT_LIMIT_MS) {
     await runtime.sleep(POLL_MS);
     const result = await readPage(runtime, profile, "dashboard", { operationId: runRead.id, input: { path: { id: runId } } });
-    const current = isRecord(result.value.data) ? result.value.data : {};
+    const current = runOf(result.value.data);
     const status = typeof current.status === "string" ? current.status : "";
     if (runtime.stderr.isTTY) writeDiagnostic(runtime, `Bulk run ${runId}: ${status || "running"}${typeof current.processed === "number" ? ` (${current.processed} of ${String(current.total ?? "?")} done)` : ""}`);
     if (status === "done" || status === "failed") {
-      emit(runtime, output, { ok: status !== "failed", data: current, meta: { operationId: runRead.id, runId } });
+      emit(runtime, output, { ok: status !== "failed", data: { run: current }, meta: { operationId: runRead.id, runId } });
       return status === "failed" ? 8 : 0;
     }
   }

@@ -372,7 +372,7 @@ function planCustomers(rows: readonly CustomerRow[]): ChunkPlan {
 }
 
 function planStatus(rows: readonly ProductRow[], input: BulkSetProductStatusInput) {
-  const expected = new Map((input.products ?? []).map((product) => [product.id, product.expectedAggregateRevision]));
+  const expected = new Map((input.products ?? []).map((product) => [product.id, product.expectedRevision]));
   const active = input.status === "active";
   const plan: ChunkPlan = { ids: rows.map((row) => row.id), sample: [], failures: [], changed: 0, unchanged: 0 };
   const claims: Array<{ id: string; expectedAggregateRevision: number }> = [];

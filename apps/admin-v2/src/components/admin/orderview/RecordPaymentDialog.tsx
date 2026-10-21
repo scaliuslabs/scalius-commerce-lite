@@ -78,7 +78,7 @@ export function RecordPaymentDialog({
       via,
       ...(reference.trim() ? { reference: reference.trim() } : {}),
       ...(note.trim() ? { note: note.trim() } : {}),
-      expectedVersion: orderVersion,
+      expectedRevision: orderVersion,
     }, {
       onSuccess: onClose,
       // Changed in another tab: close; the page banner shows the latest.

@@ -12,7 +12,7 @@ function api(totalMinor = 150_000) {
     calls,
     answer: async (operationId: string, input: PluginApiCallInput | undefined) => {
       calls.push({ operationId, input });
-      if (operationId === "orders.get") return { ok: true, status: 200, data: { id: input?.path?.id, currency: "BDT", totalMinor }, error: null };
+      if (operationId === "orders.get") return { ok: true, status: 200, data: { order: { id: input?.path?.id, currency: "BDT", totalMinor } }, error: null };
       return { ok: false, status: 404, data: null, error: { code: "api_unknown_operation", message: operationId } };
     },
   };

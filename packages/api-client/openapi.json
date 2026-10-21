@@ -15602,7 +15602,7 @@
             "minLength": 1,
             "maxLength": 128
           },
-          "version": {
+          "revision": {
             "type": "integer"
           },
           "lines": {
@@ -15725,7 +15725,7 @@
           "shippingAddress",
           "billingAddress",
           "fulfillmentLocationId",
-          "version",
+          "revision",
           "lines",
           "createdAt",
           "updatedAt",
@@ -16010,6 +16010,298 @@
           "createdAt",
           "updatedAt"
         ]
+      },
+      "ReturnResource": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "orderId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "status": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "requestedAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time"
+          },
+          "approvedAt": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time"
+          },
+          "rejectedAt": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time"
+          },
+          "cancelledAt": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "orderItemId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "variantId": {
+                  "type": "string",
+                  "nullable": true,
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "requestedQuantity": {
+                  "type": "integer"
+                },
+                "approvedQuantity": {
+                  "type": "integer"
+                },
+                "receivedQuantity": {
+                  "type": "integer"
+                },
+                "restockQuantity": {
+                  "type": "integer"
+                },
+                "damagedQuantity": {
+                  "type": "integer"
+                },
+                "rejectedQuantity": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "orderItemId",
+                "variantId",
+                "requestedQuantity",
+                "approvedQuantity",
+                "receivedQuantity",
+                "restockQuantity",
+                "damagedQuantity",
+                "rejectedQuantity"
+              ]
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "orderId",
+          "status",
+          "reason",
+          "source",
+          "revision",
+          "requestedAt",
+          "approvedAt",
+          "completedAt",
+          "rejectedAt",
+          "cancelledAt",
+          "lines",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "InventoryLocationResource": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "warehouse",
+              "store",
+              "other"
+            ]
+          },
+          "isDefault": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "archived"
+            ]
+          },
+          "position": {
+            "type": "integer"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "address": {
+            "$ref": "#/components/schemas/InventoryLocationAddress"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "code",
+          "kind",
+          "isDefault",
+          "status",
+          "position",
+          "revision",
+          "address",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "InventoryLocationAddress": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "company": {
+            "type": "string",
+            "nullable": true
+          },
+          "line1": {
+            "type": "string",
+            "nullable": true
+          },
+          "line2": {
+            "type": "string",
+            "nullable": true
+          },
+          "dependentLocality": {
+            "type": "string",
+            "nullable": true
+          },
+          "locality": {
+            "type": "string",
+            "nullable": true
+          },
+          "adminArea": {
+            "type": "string",
+            "nullable": true
+          },
+          "postalCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "countryCode": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 2
+          },
+          "placeIds": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string",
+                "nullable": true
+              },
+              "zone": {
+                "type": "string",
+                "nullable": true
+              },
+              "area": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "city",
+              "zone",
+              "area"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "phone",
+          "company",
+          "line1",
+          "line2",
+          "dependentLocality",
+          "locality",
+          "adminArea",
+          "postalCode",
+          "countryCode",
+          "placeIds"
+        ],
+        "description": "The store's address there; the street, city, postal code and phone read null without inventory.view or settings.general.view."
       },
       "ProductResource": {
         "type": "object",
@@ -16696,11 +16988,11 @@
             "nullable": true,
             "x-scalius-protected": "name"
           },
-          "version": {
+          "revision": {
             "type": "integer",
             "minimum": 0,
             "exclusiveMinimum": true,
-            "description": "Send it as `expectedVersion` to change the card; every balance movement advances it."
+            "description": "Send it as `expectedRevision` to change the card; every balance movement advances it."
           },
           "createdAt": {
             "type": "string",
@@ -16719,7 +17011,7 @@
           "source",
           "customerId",
           "recipientName",
-          "version",
+          "revision",
           "createdAt"
         ]
       },
@@ -16779,11 +17071,11 @@
             "nullable": true,
             "x-scalius-protected": "name"
           },
-          "version": {
+          "revision": {
             "type": "integer",
             "minimum": 0,
             "exclusiveMinimum": true,
-            "description": "Send it as `expectedVersion` to change the card; every balance movement advances it."
+            "description": "Send it as `expectedRevision` to change the card; every balance movement advances it."
           },
           "createdAt": {
             "type": "string",
@@ -16834,7 +17126,7 @@
           "source",
           "customerId",
           "recipientName",
-          "version",
+          "revision",
           "createdAt",
           "recipientEmail",
           "recipientPhone",
@@ -17191,11 +17483,11 @@
             "type": "string",
             "description": "The signing secret's last four characters."
           },
-          "version": {
+          "revision": {
             "type": "integer",
             "minimum": 0,
             "exclusiveMinimum": true,
-            "description": "Send it as `expectedVersion` to change or delete it."
+            "description": "Send it as `expectedRevision` to change or delete it."
           },
           "createdAt": {
             "type": "string",
@@ -17220,7 +17512,7 @@
           "lastSuccessAt",
           "lastFailureAt",
           "secretHint",
-          "version",
+          "revision",
           "createdAt",
           "updatedAt"
         ]
@@ -19017,6 +19309,85 @@
           "createdBy",
           "lines",
           "activity"
+        ]
+      },
+      "ThemeResource": {
+        "type": "object",
+        "properties": {
+          "documentVersion": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "description": "The theme document version section settings follow."
+          },
+          "publishedRevision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "draft": {
+            "$ref": "#/components/schemas/ThemeDraftReceipt"
+          },
+          "draftDiffersFromLive": {
+            "type": "boolean"
+          },
+          "template": {
+            "type": "string",
+            "nullable": true,
+            "description": "The template the draft came from (`<app id>/<template id>`), if any."
+          },
+          "page": {
+            "type": "string",
+            "enum": [
+              "home",
+              "landing"
+            ]
+          },
+          "slug": {
+            "type": "string",
+            "nullable": true
+          },
+          "sections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ThemeSection"
+            },
+            "maxItems": 24
+          },
+          "landingPages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "slug": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "slug",
+                "title"
+              ]
+            },
+            "maxItems": 20
+          },
+          "readAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "documentVersion",
+          "publishedRevision",
+          "draft",
+          "draftDiffersFromLive",
+          "template",
+          "page",
+          "slug",
+          "sections",
+          "landingPages",
+          "readAt"
         ]
       },
       "ThemeDraftReceipt": {
@@ -95017,7 +95388,15 @@
                       ]
                     },
                     "data": {
-                      "$ref": "#/components/schemas/OrderResource"
+                      "type": "object",
+                      "properties": {
+                        "order": {
+                          "$ref": "#/components/schemas/OrderResource"
+                        }
+                      },
+                      "required": [
+                        "order"
+                      ]
                     }
                   },
                   "required": [
@@ -95192,10 +95571,10 @@
                     "nullable": true,
                     "maxLength": 500
                   },
-                  "expectedVersion": {
+                  "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order `version` you read; a different one is refused with 409."
+                    "description": "The order `revision` you read; a different one is refused with 409."
                   }
                 },
                 "required": [
@@ -95363,6 +95742,30 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "The `nextCursor` of the page before; leave it out for the first page."
+            },
+            "required": false,
+            "description": "The `nextCursor` of the page before; leave it out for the first page.",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100,
+              "description": "At most this many items (default and maximum 100)."
+            },
+            "required": false,
+            "description": "At most this many items (default and maximum 100).",
+            "name": "limit",
+            "in": "query"
           }
         ],
         "responses": {
@@ -95387,10 +95790,16 @@
                           "items": {
                             "$ref": "#/components/schemas/PaymentResource"
                           }
+                        },
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Pass it as `cursor` for the next page; null on the last page."
                         }
                       },
                       "required": [
-                        "payments"
+                        "payments",
+                        "nextCursor"
                       ]
                     }
                   },
@@ -95516,6 +95925,30 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "The `nextCursor` of the page before; leave it out for the first page."
+            },
+            "required": false,
+            "description": "The `nextCursor` of the page before; leave it out for the first page.",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100,
+              "description": "At most this many items (default and maximum 100)."
+            },
+            "required": false,
+            "description": "At most this many items (default and maximum 100).",
+            "name": "limit",
+            "in": "query"
           }
         ],
         "responses": {
@@ -95540,10 +95973,16 @@
                           "items": {
                             "$ref": "#/components/schemas/FulfillmentResource"
                           }
+                        },
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Pass it as `cursor` for the next page; null on the last page."
                         }
                       },
                       "required": [
-                        "fulfillments"
+                        "fulfillments",
+                        "nextCursor"
                       ]
                     }
                   },
@@ -95938,6 +96377,30 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "The `nextCursor` of the page before; leave it out for the first page."
+            },
+            "required": false,
+            "description": "The `nextCursor` of the page before; leave it out for the first page.",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100,
+              "description": "At most this many items (default and maximum 100)."
+            },
+            "required": false,
+            "description": "At most this many items (default and maximum 100).",
+            "name": "limit",
+            "in": "query"
           }
         ],
         "responses": {
@@ -95962,10 +96425,16 @@
                           "items": {
                             "$ref": "#/components/schemas/ShipmentResource"
                           }
+                        },
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Pass it as `cursor` for the next page; null on the last page."
                         }
                       },
                       "required": [
-                        "shipments"
+                        "shipments",
+                        "nextCursor"
                       ]
                     }
                   },
@@ -96334,7 +96803,15 @@
                       ]
                     },
                     "data": {
-                      "$ref": "#/components/schemas/ShipmentResource"
+                      "type": "object",
+                      "properties": {
+                        "shipment": {
+                          "$ref": "#/components/schemas/ShipmentResource"
+                        }
+                      },
+                      "required": [
+                        "shipment"
+                      ]
                     }
                   },
                   "required": [
@@ -96438,6 +96915,530 @@
         "x-scalius-rbac": {
           "type": "permission",
           "permission": "orders.view"
+        }
+      }
+    },
+    "/api/v1/admin/resources/orders/{id}/returns": {
+      "get": {
+        "operationId": "dashboard.resources.returns.list",
+        "tags": [
+          "App API - Orders"
+        ],
+        "summary": "List an order's item returns",
+        "description": "Every return of the order (requested, approved, received, rejected or cancelled), oldest first, with its lines and quantities.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "The `nextCursor` of the page before; leave it out for the first page."
+            },
+            "required": false,
+            "description": "The `nextCursor` of the page before; leave it out for the first page.",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100,
+              "description": "At most this many items (default and maximum 100)."
+            },
+            "required": false,
+            "description": "At most this many items (default and maximum 100).",
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The returns",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "returns": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ReturnResource"
+                          }
+                        },
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Pass it as `cursor` for the next page; null on the last page."
+                        }
+                      },
+                      "required": [
+                        "returns",
+                        "nextCursor"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when listing an order's item returns with each line's requested, received and restocked quantities.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.view"
+        }
+      }
+    },
+    "/api/v1/admin/resources/returns/{id}": {
+      "get": {
+        "operationId": "dashboard.resources.returns.get",
+        "tags": [
+          "App API - Orders"
+        ],
+        "summary": "Get an item return",
+        "description": "The return as webhooks carry it, with its lines and quantities.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The return",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "return": {
+                          "$ref": "#/components/schemas/ReturnResource"
+                        }
+                      },
+                      "required": [
+                        "return"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when reading one item return with its line quantities.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.view"
+        }
+      }
+    },
+    "/api/v1/admin/resources/inventory-locations": {
+      "get": {
+        "operationId": "dashboard.resources.inventory_locations.list",
+        "tags": [
+          "App API - Products"
+        ],
+        "summary": "List the store's inventory locations",
+        "description": "Where stock is held, active and archived, in the merchant's order (`position`, then `id`). `variants.get` reads a SKU's units per location by these ids.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "The `nextCursor` of the page before; leave it out for the first page."
+            },
+            "required": false,
+            "description": "The `nextCursor` of the page before; leave it out for the first page.",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100,
+              "description": "At most this many items (default and maximum 100)."
+            },
+            "required": false,
+            "description": "At most this many items (default and maximum 100).",
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "active",
+                "archived"
+              ],
+              "description": "Only locations in this status."
+            },
+            "required": false,
+            "description": "Only locations in this status.",
+            "name": "status",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The locations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "locations": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/InventoryLocationResource"
+                          }
+                        },
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Pass it as `cursor` for the next page; null on the last page."
+                        }
+                      },
+                      "required": [
+                        "locations",
+                        "nextCursor"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when listing the store's stock locations with their addresses, for stock per location or courier pickups.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "anyOf",
+          "permissions": [
+            "inventory.view",
+            "products.view",
+            "settings.general.view"
+          ]
         }
       }
     },
@@ -97086,7 +98087,15 @@
                       ]
                     },
                     "data": {
-                      "$ref": "#/components/schemas/ProductResource"
+                      "type": "object",
+                      "properties": {
+                        "product": {
+                          "$ref": "#/components/schemas/ProductResource"
+                        }
+                      },
+                      "required": [
+                        "product"
+                      ]
                     }
                   },
                   "required": [
@@ -97482,7 +98491,15 @@
                       ]
                     },
                     "data": {
-                      "$ref": "#/components/schemas/VariantResource"
+                      "type": "object",
+                      "properties": {
+                        "variant": {
+                          "$ref": "#/components/schemas/VariantResource"
+                        }
+                      },
+                      "required": [
+                        "variant"
+                      ]
                     }
                   },
                   "required": [
@@ -98030,7 +99047,15 @@
                       ]
                     },
                     "data": {
-                      "$ref": "#/components/schemas/CustomerResource"
+                      "type": "object",
+                      "properties": {
+                        "customer": {
+                          "$ref": "#/components/schemas/CustomerResource"
+                        }
+                      },
+                      "required": [
+                        "customer"
+                      ]
                     }
                   },
                   "required": [
@@ -98149,6 +99174,30 @@
           {
             "schema": {
               "type": "string",
+              "maxLength": 1024,
+              "description": "The `nextCursor` of the page before; leave it out for the first page."
+            },
+            "required": false,
+            "description": "The `nextCursor` of the page before; leave it out for the first page.",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100,
+              "description": "At most this many items (default and maximum 100)."
+            },
+            "required": false,
+            "description": "At most this many items (default and maximum 100).",
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
               "minLength": 1,
               "maxLength": 64
             },
@@ -98179,10 +99228,16 @@
                           "items": {
                             "$ref": "#/components/schemas/PriceListResource"
                           }
+                        },
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Pass it as `cursor` for the next page; null on the last page."
                         }
                       },
                       "required": [
-                        "priceLists"
+                        "priceLists",
+                        "nextCursor"
                       ]
                     }
                   },
@@ -98977,10 +100032,17 @@
                       "properties": {
                         "id": {
                           "type": "string"
+                        },
+                        "deleted": {
+                          "type": "boolean",
+                          "enum": [
+                            true
+                          ]
                         }
                       },
                       "required": [
-                        "id"
+                        "id",
+                        "deleted"
                       ]
                     }
                   },
@@ -99725,7 +100787,15 @@
                       ]
                     },
                     "data": {
-                      "$ref": "#/components/schemas/BulkRun"
+                      "type": "object",
+                      "properties": {
+                        "run": {
+                          "$ref": "#/components/schemas/BulkRun"
+                        }
+                      },
+                      "required": [
+                        "run"
+                      ]
                     }
                   },
                   "required": [
@@ -99750,7 +100820,15 @@
                       ]
                     },
                     "data": {
-                      "$ref": "#/components/schemas/BulkRun"
+                      "type": "object",
+                      "properties": {
+                        "run": {
+                          "$ref": "#/components/schemas/BulkRun"
+                        }
+                      },
+                      "required": [
+                        "run"
+                      ]
                     }
                   },
                   "required": [
@@ -99975,7 +101053,15 @@
                       ]
                     },
                     "data": {
-                      "$ref": "#/components/schemas/BulkRun"
+                      "type": "object",
+                      "properties": {
+                        "run": {
+                          "$ref": "#/components/schemas/BulkRun"
+                        }
+                      },
+                      "required": [
+                        "run"
+                      ]
                     }
                   },
                   "required": [
@@ -100000,7 +101086,15 @@
                       ]
                     },
                     "data": {
-                      "$ref": "#/components/schemas/BulkRun"
+                      "type": "object",
+                      "properties": {
+                        "run": {
+                          "$ref": "#/components/schemas/BulkRun"
+                        }
+                      },
+                      "required": [
+                        "run"
+                      ]
                     }
                   },
                   "required": [
@@ -100236,7 +101330,15 @@
                       ]
                     },
                     "data": {
-                      "$ref": "#/components/schemas/BulkRun"
+                      "type": "object",
+                      "properties": {
+                        "run": {
+                          "$ref": "#/components/schemas/BulkRun"
+                        }
+                      },
+                      "required": [
+                        "run"
+                      ]
                     }
                   },
                   "required": [
@@ -100261,7 +101363,15 @@
                       ]
                     },
                     "data": {
-                      "$ref": "#/components/schemas/BulkRun"
+                      "type": "object",
+                      "properties": {
+                        "run": {
+                          "$ref": "#/components/schemas/BulkRun"
+                        }
+                      },
+                      "required": [
+                        "run"
+                      ]
                     }
                   },
                   "required": [
@@ -100395,7 +101505,7 @@
           "Admin - Resources"
         ],
         "summary": "Activate or draft many products",
-        "description": "Sets up to 5,000 products active (sold) or draft (hidden), by id or by a product list filter. Activating skips a product without a price above 0 (failure needs_price); a product changed since `expectedAggregateRevision` is left alone. dryRun previews every product.",
+        "description": "Sets up to 5,000 products active (sold) or draft (hidden), by id or by a product list filter. Activating skips a product without a price above 0 (failure needs_price); a product changed since `expectedRevision` is left alone. dryRun previews every product.",
         "parameters": [
           {
             "schema": {
@@ -100427,7 +101537,7 @@
                           "minLength": 1,
                           "maxLength": 180
                         },
-                        "expectedAggregateRevision": {
+                        "expectedRevision": {
                           "type": "integer",
                           "minimum": 1,
                           "description": "The product revision you read; a product changed since is left alone (a failure)."
@@ -100507,7 +101617,15 @@
                       ]
                     },
                     "data": {
-                      "$ref": "#/components/schemas/BulkRun"
+                      "type": "object",
+                      "properties": {
+                        "run": {
+                          "$ref": "#/components/schemas/BulkRun"
+                        }
+                      },
+                      "required": [
+                        "run"
+                      ]
                     }
                   },
                   "required": [
@@ -100532,7 +101650,15 @@
                       ]
                     },
                     "data": {
-                      "$ref": "#/components/schemas/BulkRun"
+                      "type": "object",
+                      "properties": {
+                        "run": {
+                          "$ref": "#/components/schemas/BulkRun"
+                        }
+                      },
+                      "required": [
+                        "run"
+                      ]
                     }
                   },
                   "required": [
@@ -100776,7 +101902,15 @@
                       ]
                     },
                     "data": {
-                      "$ref": "#/components/schemas/BulkRun"
+                      "type": "object",
+                      "properties": {
+                        "run": {
+                          "$ref": "#/components/schemas/BulkRun"
+                        }
+                      },
+                      "required": [
+                        "run"
+                      ]
                     }
                   },
                   "required": [
@@ -100801,7 +101935,15 @@
                       ]
                     },
                     "data": {
-                      "$ref": "#/components/schemas/BulkRun"
+                      "type": "object",
+                      "properties": {
+                        "run": {
+                          "$ref": "#/components/schemas/BulkRun"
+                        }
+                      },
+                      "required": [
+                        "run"
+                      ]
                     }
                   },
                   "required": [
@@ -100963,7 +102105,15 @@
                       ]
                     },
                     "data": {
-                      "$ref": "#/components/schemas/BulkRun"
+                      "type": "object",
+                      "properties": {
+                        "run": {
+                          "$ref": "#/components/schemas/BulkRun"
+                        }
+                      },
+                      "required": [
+                        "run"
+                      ]
                     }
                   },
                   "required": [
@@ -101874,11 +103024,11 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "expectedVersion": {
+                  "expectedRevision": {
                     "type": "integer",
                     "minimum": 0,
                     "exclusiveMinimum": true,
-                    "description": "The card's `version` you read; a card changed since is refused with 409."
+                    "description": "The card's `revision` you read; a card changed since is refused with 409."
                   },
                   "status": {
                     "type": "string",
@@ -101906,7 +103056,7 @@
                   }
                 },
                 "required": [
-                  "expectedVersion"
+                  "expectedRevision"
                 ],
                 "additionalProperties": false
               }
@@ -102092,11 +103242,11 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "expectedVersion": {
+                  "expectedRevision": {
                     "type": "integer",
                     "minimum": 0,
                     "exclusiveMinimum": true,
-                    "description": "The card's `version` you read; a card changed since is refused with 409."
+                    "description": "The card's `revision` you read; a card changed since is refused with 409."
                   },
                   "amountMinor": {
                     "type": "integer",
@@ -102110,7 +103260,7 @@
                   }
                 },
                 "required": [
-                  "expectedVersion",
+                  "expectedRevision",
                   "amountMinor",
                   "reason"
                 ],
@@ -104323,7 +105473,33 @@
           "App API - Webhooks"
         ],
         "summary": "List the app's own webhook subscriptions",
-        "description": "Only the calling app's subscriptions, with their health. The store's other webhooks are never visible.",
+        "description": "Only the calling app's subscriptions (at most 5), oldest first, with their health. The store's other webhooks are never visible.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "The `nextCursor` of the page before; leave it out for the first page."
+            },
+            "required": false,
+            "description": "The `nextCursor` of the page before; leave it out for the first page.",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5,
+              "default": 5,
+              "description": "At most this many items (default and maximum 5)."
+            },
+            "required": false,
+            "description": "At most this many items (default and maximum 5).",
+            "name": "limit",
+            "in": "query"
+          }
+        ],
         "responses": {
           "200": {
             "description": "The app's subscriptions",
@@ -104348,18 +105524,15 @@
                           },
                           "maxItems": 5
                         },
-                        "maxSubscriptions": {
-                          "type": "integer",
-                          "description": "How many one app may keep."
-                        },
-                        "apiVersion": {
-                          "type": "string"
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Pass it as `cursor` for the next page; null on the last page."
                         }
                       },
                       "required": [
                         "subscriptions",
-                        "maxSubscriptions",
-                        "apiVersion"
+                        "nextCursor"
                       ]
                     }
                   },
@@ -104779,11 +105952,11 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "expectedVersion": {
+                  "expectedRevision": {
                     "type": "integer",
                     "minimum": 0,
                     "exclusiveMinimum": true,
-                    "description": "The subscription's `version` you read; a stale one is refused with 409."
+                    "description": "The subscription's `revision` you read; a stale one is refused with 409."
                   },
                   "url": {
                     "type": "string",
@@ -104886,7 +106059,7 @@
                   }
                 },
                 "required": [
-                  "expectedVersion"
+                  "expectedRevision"
                 ],
                 "additionalProperties": false
               }
@@ -105056,7 +106229,7 @@
               "exclusiveMinimum": true
             },
             "required": true,
-            "name": "expectedVersion",
+            "name": "expectedRevision",
             "in": "query"
           },
           {
@@ -142984,13 +144157,17 @@
                         "locationNewStock": {
                           "type": "integer",
                           "description": "That location's on-hand after"
+                        },
+                        "variant": {
+                          "$ref": "#/components/schemas/VariantResource"
                         }
                       },
                       "required": [
                         "variantId",
                         "previousStock",
                         "newStock",
-                        "delta"
+                        "delta",
+                        "variant"
                       ],
                       "additionalProperties": {}
                     }
@@ -143796,13 +144973,17 @@
                         "locationNewStock": {
                           "type": "integer",
                           "description": "That location's on-hand after"
+                        },
+                        "variant": {
+                          "$ref": "#/components/schemas/VariantResource"
                         }
                       },
                       "required": [
                         "variantId",
                         "previousStock",
                         "newStock",
-                        "delta"
+                        "delta",
+                        "variant"
                       ]
                     }
                   },
@@ -144341,7 +145522,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -144489,7 +145670,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -144680,7 +145861,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -150608,83 +151789,7 @@
                       "type": "object",
                       "properties": {
                         "theme": {
-                          "type": "object",
-                          "properties": {
-                            "documentVersion": {
-                              "type": "integer",
-                              "minimum": 0,
-                              "exclusiveMinimum": true,
-                              "description": "The theme document version section settings follow."
-                            },
-                            "publishedRevision": {
-                              "type": "integer",
-                              "minimum": 0
-                            },
-                            "draft": {
-                              "$ref": "#/components/schemas/ThemeDraftReceipt"
-                            },
-                            "draftDiffersFromLive": {
-                              "type": "boolean"
-                            },
-                            "template": {
-                              "type": "string",
-                              "nullable": true,
-                              "description": "The template the draft came from (`<app id>/<template id>`), if any."
-                            },
-                            "page": {
-                              "type": "string",
-                              "enum": [
-                                "home",
-                                "landing"
-                              ]
-                            },
-                            "slug": {
-                              "type": "string",
-                              "nullable": true
-                            },
-                            "sections": {
-                              "type": "array",
-                              "items": {
-                                "$ref": "#/components/schemas/ThemeSection"
-                              },
-                              "maxItems": 24
-                            },
-                            "landingPages": {
-                              "type": "array",
-                              "items": {
-                                "type": "object",
-                                "properties": {
-                                  "slug": {
-                                    "type": "string"
-                                  },
-                                  "title": {
-                                    "type": "string"
-                                  }
-                                },
-                                "required": [
-                                  "slug",
-                                  "title"
-                                ]
-                              },
-                              "maxItems": 20
-                            },
-                            "readAt": {
-                              "type": "string",
-                              "format": "date-time"
-                            }
-                          },
-                          "required": [
-                            "documentVersion",
-                            "publishedRevision",
-                            "draft",
-                            "draftDiffersFromLive",
-                            "template",
-                            "page",
-                            "slug",
-                            "sections",
-                            "landingPages",
-                            "readAt"
-                          ]
+                          "$ref": "#/components/schemas/ThemeResource"
                         }
                       },
                       "required": [
@@ -150834,10 +151939,10 @@
                     "maxLength": 160,
                     "description": "The template: its id in the calling app's manifest (`storefront.templates[].id`), or `<app id>/<template id>`. An app applies only its own templates."
                   },
-                  "expectedDraftRevision": {
+                  "expectedRevision": {
                     "type": "integer",
                     "minimum": 0,
-                    "description": "The draft `revision` you read (`theme.get`); 0 when no draft was ever saved. A draft changed since is refused with 409 and nothing is saved."
+                    "description": "The draft `revision` you read (`theme.draft.revision`); 0 when no draft was ever saved. A draft changed since is refused with 409 and nothing is saved."
                   },
                   "basePublishedRevision": {
                     "type": "integer",
@@ -150847,7 +151952,7 @@
                 },
                 "required": [
                   "template",
-                  "expectedDraftRevision",
+                  "expectedRevision",
                   "basePublishedRevision"
                 ],
                 "additionalProperties": false
@@ -150857,7 +151962,7 @@
         },
         "responses": {
           "200": {
-            "description": "The draft with the template applied",
+            "description": "The theme with the template applied (its homepage), the template and the handles left out",
             "content": {
               "application/json": {
                 "schema": {
@@ -150872,8 +151977,8 @@
                     "data": {
                       "type": "object",
                       "properties": {
-                        "draft": {
-                          "$ref": "#/components/schemas/ThemeDraftReceipt"
+                        "theme": {
+                          "$ref": "#/components/schemas/ThemeResource"
                         },
                         "template": {
                           "type": "string"
@@ -150887,7 +151992,7 @@
                         }
                       },
                       "required": [
-                        "draft",
+                        "theme",
                         "template",
                         "unresolved"
                       ]
@@ -151060,10 +152165,10 @@
                     "additionalProperties": {},
                     "description": "Settings to merge at the top level (an app section: into its values). Catalogue handles resolve as in apply_template."
                   },
-                  "expectedDraftRevision": {
+                  "expectedRevision": {
                     "type": "integer",
                     "minimum": 0,
-                    "description": "The draft `revision` you read (`theme.get`); 0 when no draft was ever saved. A draft changed since is refused with 409 and nothing is saved."
+                    "description": "The draft `revision` you read (`theme.draft.revision`); 0 when no draft was ever saved. A draft changed since is refused with 409 and nothing is saved."
                   },
                   "basePublishedRevision": {
                     "type": "integer",
@@ -151074,7 +152179,7 @@
                 "required": [
                   "sectionId",
                   "settings",
-                  "expectedDraftRevision",
+                  "expectedRevision",
                   "basePublishedRevision"
                 ],
                 "additionalProperties": false
@@ -151084,7 +152189,7 @@
         },
         "responses": {
           "200": {
-            "description": "The saved draft and the section as it now reads",
+            "description": "The theme as it now reads (the section's page) and the section",
             "content": {
               "application/json": {
                 "schema": {
@@ -151099,15 +152204,15 @@
                     "data": {
                       "type": "object",
                       "properties": {
-                        "draft": {
-                          "$ref": "#/components/schemas/ThemeDraftReceipt"
+                        "theme": {
+                          "$ref": "#/components/schemas/ThemeResource"
                         },
                         "section": {
                           "$ref": "#/components/schemas/ThemeSection"
                         }
                       },
                       "required": [
-                        "draft",
+                        "theme",
                         "section"
                       ]
                     }
@@ -189668,10 +190773,10 @@
                       "other"
                     ]
                   },
-                  "expectedVersion": {
+                  "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order version you read (`version` on the order). A change since is refused with 409 and nothing changes. Omit to change it whatever happened since."
+                    "description": "The order `revision` you read. A change since is refused with 409 and nothing changes. Omit to change it whatever happened since."
                   }
                 },
                 "required": [
@@ -189684,7 +190789,7 @@
         },
         "responses": {
           "200": {
-            "description": "Status updated",
+            "description": "The order after the change",
             "content": {
               "application/json": {
                 "schema": {
@@ -189699,12 +190804,12 @@
                     "data": {
                       "type": "object",
                       "properties": {
-                        "message": {
-                          "type": "string"
+                        "order": {
+                          "$ref": "#/components/schemas/OrderResource"
                         }
                       },
                       "required": [
-                        "message"
+                        "order"
                       ]
                     }
                   },
@@ -189821,17 +190926,6 @@
           },
           {
             "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "description": "The order version you read; a change since is refused with 409. Omit to mark it whatever happened since."
-            },
-            "required": false,
-            "description": "The order version you read; a change since is refused with 409. Omit to mark it whatever happened since.",
-            "name": "expectedVersion",
-            "in": "query"
-          },
-          {
-            "schema": {
               "type": "string",
               "pattern": "^[\\x20-\\x7E]{8,200}$",
               "minLength": 8,
@@ -189843,9 +190937,27 @@
             "in": "header"
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The order `revision` you read; a change since is refused with 409. Omit to mark it whatever happened since."
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Order delivered",
+            "description": "The delivered order",
             "content": {
               "application/json": {
                 "schema": {
@@ -189860,12 +190972,12 @@
                     "data": {
                       "type": "object",
                       "properties": {
-                        "message": {
-                          "type": "string"
+                        "order": {
+                          "$ref": "#/components/schemas/OrderResource"
                         }
                       },
                       "required": [
-                        "message"
+                        "order"
                       ]
                     }
                   },
@@ -195076,7 +196188,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -195744,7 +196856,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -208619,10 +209731,10 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "expectedVersion": {
+                  "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order version you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
+                    "description": "The order `revision` you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
                   }
                 },
                 "additionalProperties": false
@@ -208632,7 +209744,7 @@
         },
         "responses": {
           "200": {
-            "description": "Fulfilment voided",
+            "description": "The voided fulfilment and the order after it",
             "content": {
               "application/json": {
                 "schema": {
@@ -208647,6 +209759,12 @@
                     "data": {
                       "type": "object",
                       "properties": {
+                        "order": {
+                          "$ref": "#/components/schemas/OrderResource"
+                        },
+                        "fulfillment": {
+                          "$ref": "#/components/schemas/FulfillmentResource"
+                        },
                         "orderId": {
                           "type": "string"
                         },
@@ -208661,6 +209779,8 @@
                         }
                       },
                       "required": [
+                        "order",
+                        "fulfillment",
                         "orderId",
                         "fulfillmentId",
                         "quantity",
@@ -208808,10 +209928,10 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "expectedVersion": {
+                  "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order version you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
+                    "description": "The order `revision` you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
                   }
                 },
                 "additionalProperties": false
@@ -208821,7 +209941,7 @@
         },
         "responses": {
           "200": {
-            "description": "Order marked ready for pickup",
+            "description": "The order, marked ready for pickup",
             "content": {
               "application/json": {
                 "schema": {
@@ -208836,6 +209956,9 @@
                     "data": {
                       "type": "object",
                       "properties": {
+                        "order": {
+                          "$ref": "#/components/schemas/OrderResource"
+                        },
                         "orderId": {
                           "type": "string"
                         },
@@ -208848,6 +209971,7 @@
                         }
                       },
                       "required": [
+                        "order",
                         "orderId",
                         "pickupReadyAt",
                         "replayed"
@@ -218678,7 +219802,7 @@
         },
         "responses": {
           "200": {
-            "description": "The channels the product is published to",
+            "description": "The product and the channels it is published to",
             "content": {
               "application/json": {
                 "schema": {
@@ -218693,6 +219817,9 @@
                     "data": {
                       "type": "object",
                       "properties": {
+                        "product": {
+                          "$ref": "#/components/schemas/ProductResource"
+                        },
                         "salesChannelIds": {
                           "type": "array",
                           "items": {
@@ -218701,6 +219828,7 @@
                         }
                       },
                       "required": [
+                        "product",
                         "salesChannelIds"
                       ]
                     }
@@ -222800,10 +223928,12 @@
           {
             "schema": {
               "type": "integer",
-              "minimum": 1
+              "minimum": 1,
+              "description": "The product `revision` you read; a change since is refused with 409 and nothing changes."
             },
             "required": true,
-            "name": "expectedAggregateRevision",
+            "description": "The product `revision` you read; a change since is refused with 409 and nothing changes.",
+            "name": "expectedRevision",
             "in": "query"
           },
           {
@@ -222821,7 +223951,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Product moved to trash",
+            "description": "The product, in the trash",
             "content": {
               "application/json": {
                 "schema": {
@@ -222836,13 +223966,12 @@
                     "data": {
                       "type": "object",
                       "properties": {
-                        "aggregateRevision": {
-                          "type": "integer",
-                          "minimum": 1
+                        "product": {
+                          "$ref": "#/components/schemas/ProductResource"
                         }
                       },
                       "required": [
-                        "aggregateRevision"
+                        "product"
                       ]
                     }
                   },
@@ -222978,15 +224107,6 @@
           },
           {
             "schema": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "required": true,
-            "name": "expectedAggregateRevision",
-            "in": "query"
-          },
-          {
-            "schema": {
               "type": "string",
               "pattern": "^[\\x20-\\x7E]{8,200}$",
               "minLength": 8,
@@ -222998,9 +224118,30 @@
             "in": "header"
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The product `revision` you read; a change since is refused with 409 and nothing changes."
+                  }
+                },
+                "required": [
+                  "expectedRevision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Product restored",
+            "description": "The restored product",
             "content": {
               "application/json": {
                 "schema": {
@@ -223015,13 +224156,12 @@
                     "data": {
                       "type": "object",
                       "properties": {
-                        "aggregateRevision": {
-                          "type": "integer",
-                          "minimum": 1
+                        "product": {
+                          "$ref": "#/components/schemas/ProductResource"
                         }
                       },
                       "required": [
-                        "aggregateRevision"
+                        "product"
                       ]
                     }
                   },
@@ -223158,10 +224298,12 @@
           {
             "schema": {
               "type": "integer",
-              "minimum": 1
+              "minimum": 1,
+              "description": "The product `revision` you read; a change since is refused with 409 and nothing changes."
             },
             "required": true,
-            "name": "expectedAggregateRevision",
+            "description": "The product `revision` you read; a change since is refused with 409 and nothing changes.",
+            "name": "expectedRevision",
             "in": "query"
           }
         ],
@@ -224538,10 +225680,12 @@
           {
             "schema": {
               "type": "integer",
-              "minimum": 1
+              "minimum": 1,
+              "description": "The product `revision` you read; a change since is refused with 409 and nothing changes."
             },
             "required": true,
-            "name": "expectedAggregateRevision",
+            "description": "The product `revision` you read; a change since is refused with 409 and nothing changes.",
+            "name": "expectedRevision",
             "in": "query"
           },
           {
@@ -224559,7 +225703,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Variant deleted",
+            "description": "The product without the retired SKU",
             "content": {
               "application/json": {
                 "schema": {
@@ -224574,13 +225718,12 @@
                     "data": {
                       "type": "object",
                       "properties": {
-                        "aggregateRevision": {
-                          "type": "integer",
-                          "minimum": 1
+                        "product": {
+                          "$ref": "#/components/schemas/ProductResource"
                         }
                       },
                       "required": [
-                        "aggregateRevision"
+                        "product"
                       ]
                     }
                   },
@@ -280288,6 +281431,14 @@
           ]
         },
         {
+          "operationId": "dashboard.resources.inventory_locations.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.inventory_locations.list"
+          ]
+        },
+        {
           "operationId": "dashboard.resources.menus.create",
           "surface": "dashboard",
           "mode": "operation-fallback",
@@ -280517,6 +281668,22 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.resources.refunds.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.returns.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.returns.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.returns.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.returns.list"
           ]
         },
         {

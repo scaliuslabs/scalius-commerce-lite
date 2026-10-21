@@ -54,6 +54,9 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   },
   "dashboard.resources.shipments.list": { uncurated: true },
   "dashboard.resources.shipments.get": { uncurated: true },
+  "dashboard.resources.returns.list": { uncurated: true },
+  "dashboard.resources.returns.get": { uncurated: true },
+  "dashboard.resources.inventory_locations.list": { uncurated: true },
   "dashboard.resources.shipments.create": {
     openWorld: true,
     batch: "forbidden",

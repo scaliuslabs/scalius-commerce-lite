@@ -26,7 +26,7 @@ describe("acme.hello", () => {
   it("greets a paid order once and counts it", async () => {
     const harness = createPluginTestHarness(hello, {
       settings: { greeting: "Salam" },
-      api: async () => ({ ok: true, status: 200, data: { status: "confirmed" }, error: null }),
+      api: async () => ({ ok: true, status: 200, data: { order: { status: "confirmed" } }, error: null }),
     });
     expect(await harness.event("order.paid", { type: "order", id: "o1" })).toMatchObject({ ok: true });
     expect(harness.records.get("greetings")?.get("o1")).toMatchObject({ order_id: "o1", greeting: "Salam", order_status: "confirmed" });
@@ -67,7 +67,7 @@ describe("acme.hello", () => {
 
   it("answers its page, order card and home widget with valid UI documents", async () => {
     const harness = createPluginTestHarness(hello, {
-      api: async () => ({ ok: true, status: 200, data: { status: "paid" }, error: null }),
+      api: async () => ({ ok: true, status: 200, data: { order: { status: "paid" } }, error: null }),
     });
     await harness.event("order.paid", { type: "order", id: "o1" }, {}, { occurredAt: "2026-10-01T10:00:00.000Z" });
     const page = parsePluginUiDocument(((await harness.route("admin", "dashboard")).value as { body: unknown }).body);

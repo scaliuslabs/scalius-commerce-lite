@@ -35,7 +35,6 @@ describe("admin product aggregate revision OpenAPI contract", () => {
             ["/api/v1/admin/products/{id}", "put"],
             ["/api/v1/admin/products/{id}/variants", "post"],
             ["/api/v1/admin/products/{id}/variants/{variantId}", "put"],
-            ["/api/v1/admin/products/{id}/variants/{variantId}", "delete"],
             ["/api/v1/admin/products/{id}/options/matrix", "put"],
         ] as const;
 
@@ -51,6 +50,22 @@ describe("admin product aggregate revision OpenAPI contract", () => {
             expect(json, `${method.toUpperCase()} ${path}`).toContain(
                 "product_revision_conflict",
             );
+        }
+    });
+
+    it("takes expectedRevision on the stable product writes and answers the product", () => {
+        const spec = buildSpec();
+        const stable = [
+            ["/api/v1/admin/products/{id}", "delete"],
+            ["/api/v1/admin/products/{id}/restore", "post"],
+            ["/api/v1/admin/products/{id}/variants/{variantId}", "delete"],
+        ] as const;
+        for (const [path, method] of stable) {
+            const json = operationJson(spec, path, method);
+            expect(json, `${method.toUpperCase()} ${path}`).toContain('"expectedRevision"');
+            expect(json, `${method.toUpperCase()} ${path}`).not.toContain('"expectedAggregateRevision"');
+            expect(json, `${method.toUpperCase()} ${path}`).toContain('"product"');
+            expect(json, `${method.toUpperCase()} ${path}`).toContain("product_revision_conflict");
         }
     });
 

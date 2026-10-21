@@ -175,11 +175,11 @@ function fieldOf(request: PluginRouteRequest, name: string): string {
 
 /** The product as the stable app API returns it (`products.get`), reduced to what the app shows. */
 async function readProduct(ctx: PluginContext, productId: string): Promise<ProductFacts | null> {
-  const result = await ctx.api.call<{ name?: string; slug?: string; status?: string; imageUrl?: string | null }>(
+  const result = await ctx.api.call<{ product?: { name?: string; slug?: string; status?: string; imageUrl?: string | null } }>(
     "products.get",
     { path: { id: productId } },
   );
-  const product = result.ok ? result.data : null;
+  const product = result.ok ? result.data?.product ?? null : null;
   if (!product) return null;
   return {
     product_id: productId,

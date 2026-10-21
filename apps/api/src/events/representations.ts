@@ -218,10 +218,33 @@ function orderFrom(order: OrderRow, lines: readonly OrderLineRow[]) {
   });
 }
 
-async function returnRepresentation(db: Database, returnId: string) {
-  const row = await db.select().from(orderReturns).where(eq(orderReturns.id, returnId)).get();
-  if (!row) return null;
-  const lines = await db.select().from(orderReturnLines).where(eq(orderReturnLines.returnId, returnId)).limit(MAX_LINES).all();
+/**
+ * Returns (one by id, or an order's, oldest first) with their lines: two
+ * reads, whichever the count (the API's per-order list and its single read).
+ */
+async function readReturnRepresentations(db: Database, where: { id: string } | { orderId: string }) {
+  const rows = await db.select().from(orderReturns)
+    .where("id" in where ? eq(orderReturns.id, where.id) : eq(orderReturns.orderId, where.orderId))
+    .orderBy(asc(orderReturns.createdAt), asc(orderReturns.id)).limit(MAX_LINES).all();
+  if (rows.length === 0) return [];
+  const lineRows = await db.select().from(orderReturnLines)
+    .where(inArray(orderReturnLines.returnId, rows.map((row) => row.id)))
+    .orderBy(asc(orderReturnLines.returnId), asc(orderReturnLines.createdAt), asc(orderReturnLines.id)).all();
+  const linesByReturn = groupBy(lineRows, (line) => line.returnId);
+  return rows.map((row) => returnFrom(row, linesByReturn.get(row.id) ?? []));
+}
+
+/** An order's returns, oldest first (the API's per-order list). */
+export function readOrderReturnRepresentations(db: Database, orderId: string) {
+  return readReturnRepresentations(db, { orderId });
+}
+
+/** One return as webhooks carry it (ReturnResource), or null. */
+export async function readReturnRepresentation(db: Database, returnId: string) {
+  return (await readReturnRepresentations(db, { id: returnId }))[0] ?? null;
+}
+
+function returnFrom(row: typeof orderReturns.$inferSelect, lines: readonly (typeof orderReturnLines.$inferSelect)[]) {
   return sealed("return", {
     id: row.id,
     orderId: row.orderId,
@@ -506,7 +529,8 @@ export function readOrderFulfillmentRepresentations(db: Database, orderId: strin
   return readFulfillmentRepresentations(db, { orderId });
 }
 
-async function fulfillmentRepresentation(db: Database, fulfillmentId: string) {
+/** One fulfilment as webhooks carry it (FulfillmentResource), or null. */
+export async function readFulfillmentRepresentation(db: Database, fulfillmentId: string) {
   return (await readFulfillmentRepresentations(db, { id: fulfillmentId }))[0] ?? null;
 }
 
@@ -769,7 +793,7 @@ export function createWebhookRepresentationResolver(db: Database): WebhookRepres
       case "order":
         return orderRepresentation(db, event.resourceId);
       case "return":
-        return returnRepresentation(db, event.resourceId);
+        return readReturnRepresentation(db, event.resourceId);
       case "product":
         return productRepresentation(db, event.resourceId);
       case "variant":
@@ -781,7 +805,7 @@ export function createWebhookRepresentationResolver(db: Database): WebhookRepres
       case "inventory_transfer":
         return transferRepresentation(db, event.resourceId);
       case "fulfillment":
-        return fulfillmentRepresentation(db, event.resourceId);
+        return readFulfillmentRepresentation(db, event.resourceId);
       case "refund":
         return readRefundRepresentation(db, event.resourceId);
       case "shipment":

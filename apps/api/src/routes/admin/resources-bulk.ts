@@ -74,9 +74,12 @@ const BulkRunResource = namedSharedSchema(z.object({
   finishedAt: nullableIsoTimestampSchema,
 }), "BulkRun");
 
+/** A bulk operation's and `bulk_runs.get`'s answer: the run. */
+const runEnvelope = successEnvelope(z.object({ run: BulkRunResource }));
+
 const runResponses = {
-  200: { description: "The dry run's preview, or the finished run", content: { "application/json": { schema: successEnvelope(BulkRunResource) } } },
-  202: { description: "The run started; read bulk_runs.get until it is done", content: { "application/json": { schema: successEnvelope(BulkRunResource) } } },
+  200: { description: "The dry run's preview, or the finished run", content: { "application/json": { schema: runEnvelope } } },
+  202: { description: "The run started; read bulk_runs.get until it is done", content: { "application/json": { schema: runEnvelope } } },
   400: errorResponses[400], 401: errorResponses[401], 403: errorResponses[403], 404: errorResponses[404],
   409: conflictResponse, 422: errorResponses[400], 429: errorResponses[429], 500: errorResponses[500],
 };
@@ -84,7 +87,7 @@ const runResponses = {
 /** Starts (or previews) a run; small runs finish here, large ones after the response. */
 async function startRun(c: Context<{ Bindings: Env }>, operationId: string, run: BulkRunInput, idempotencyKey: string | undefined, dryRun: boolean | undefined) {
   const db = c.get("db");
-  if (dryRun) return ok(c, await previewBulkRun(db, run));
+  if (dryRun) return ok(c, { run: await previewBulkRun(db, run) });
   const operationKey = await scopedRequestKey(c, operationId, idempotencyKey);
   const createdBy = (c.get("user") as { id?: string } | undefined)?.id ?? null;
   const { row, created } = await createBulkRun(db, run, { operationKey, createdBy, lease: true });
@@ -102,7 +105,7 @@ async function startRun(c: Context<{ Bindings: Env }>, operationId: string, run:
   const latest = current && isStaffBulkRun(current) ? current : row;
   if (!isStaffBulkRun(latest)) throw new NotFoundError("Bulk run not found");
   const view = presentBulkRun(latest, currency);
-  return c.json({ success: true as const, data: view }, view.status === "running" ? 202 : 200);
+  return c.json({ success: true as const, data: { run: view } }, view.status === "running" ? 202 : 200);
 }
 
 app.openapi(createRoute({
@@ -169,7 +172,7 @@ app.openapi(createRoute({
   path: "/products/bulk-set-status",
   tags: ["Admin - Resources"],
   summary: "Activate or draft many products",
-  description: "Sets up to 5,000 products active (sold) or draft (hidden), by id or by a product list filter. Activating skips a product without a price above 0 (failure needs_price); a product changed since `expectedAggregateRevision` is left alone. dryRun previews every product.",
+  description: "Sets up to 5,000 products active (sold) or draft (hidden), by id or by a product list filter. Activating skips a product without a price above 0 (failure needs_price); a product changed since `expectedRevision` is left alone. dryRun previews every product.",
   request: {
     headers: idempotencyKeyHeaderSchema,
     body: { required: true, content: { "application/json": { schema: bulkSetProductStatusSchema } } },
@@ -213,14 +216,14 @@ app.openapi(createRoute({
   description: "The run's status and counts, the before/after of its first 50 changes and its first 50 refusals. A running run continues on its own; read again until it is done or failed.",
   request: { params: z.object({ id: z.string().min(1).max(64) }) },
   responses: {
-    200: { description: "The run", content: { "application/json": { schema: successEnvelope(BulkRunResource) } } },
+    200: { description: "The run", content: { "application/json": { schema: runEnvelope } } },
     ...readResponses,
   },
 }), async (c) => {
   const row = await readBulkRun(c.get("db"), c.req.valid("param").id);
   // An app's background job is the app's, never a staff bulk run.
   if (!row || !isStaffBulkRun(row)) throw new NotFoundError("Bulk run not found");
-  return ok(c, await viewOf(c, row));
+  return ok(c, { run: await viewOf(c, row) });
 });
 
 const LIST_PAGE = 20;

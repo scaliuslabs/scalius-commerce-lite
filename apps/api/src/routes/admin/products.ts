@@ -45,6 +45,7 @@ import {
     keysetQuerySchema,
     errorResponses,
     noContentResponse,
+    namedSharedSchema,
 } from "../../schemas/responses";
 import {
     buyerPriceRangeSchema,
@@ -68,6 +69,8 @@ import { planLimits } from "@scalius/shared/plan-limits";
 import type { Database } from "@scalius/database/client";
 import { relatedObjectsProjection, withRelatedObjects } from "./related-objects";
 import { relatedObjectRecordSchema } from "../../schemas/related-objects";
+import { EVENT_REPRESENTATION_SCHEMAS } from "@scalius/shared/events";
+import { readProductRepresentations } from "../../events/representations";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -266,13 +269,27 @@ app.openapi(statsRoute, async (c) => {
     return ok(c, stats);
 });
 
-const expectedAggregateRevisionSchema = z.coerce.number().int().min(1);
 const aggregateRevisionResponseSchema = z.object({
     aggregateRevision: z.number().int().min(1),
 });
-const expectedAggregateRevisionQuerySchema = z.object({
-    expectedAggregateRevision: expectedAggregateRevisionSchema,
+const expectedRevisionDescription = "The product `revision` you read; a change since is refused with 409 and nothing changes.";
+/** The stable product writes' precondition (audit L2): `expectedRevision`, the query parameter of a DELETE. */
+const expectedRevisionQuerySchema = z.object({
+    expectedRevision: z.coerce.number().int().min(1).openapi({ description: expectedRevisionDescription }),
 });
+const expectedRevisionBodySchema = z.object({
+    expectedRevision: z.number().int().min(1).openapi({ description: expectedRevisionDescription }),
+}).strict();
+
+const ProductResource = namedSharedSchema(EVENT_REPRESENTATION_SCHEMAS.product, "ProductResource");
+/** The stable product writes answer the product as `products.get` reads it (audit L1). */
+const productResourceEnvelope = successEnvelope(z.object({ product: ProductResource }));
+
+async function readProductResource(db: Database, productId: string) {
+    const [product] = await readProductRepresentations(db, [productId]);
+    if (!product) throw new NotFoundError("Product not found");
+    return product;
+}
 
 const productClaimsSchema = z.array(z.object({
     id: z.string(),
@@ -806,8 +823,8 @@ app.openapi(createRoute({
     },
     responses: {
         200: {
-            description: "The channels the product is published to",
-            content: { "application/json": { schema: successEnvelope(z.object({ salesChannelIds: z.array(z.string()) })) } },
+            description: "The product and the channels it is published to",
+            content: { "application/json": { schema: successEnvelope(z.object({ product: ProductResource, salesChannelIds: z.array(z.string()) })) } },
         },
         ...errorResponses,
     },
@@ -816,7 +833,7 @@ app.openapi(createRoute({
     const { id } = c.req.valid("param");
     const salesChannelIds = await setProductChannels(db, id, c.req.valid("json").channelIds);
     await refreshRecommendationsAfterWrite(c, db, [id]);
-    return ok(c, { salesChannelIds });
+    return ok(c, { product: await readProductResource(db, id), salesChannelIds });
 });
 
 // ── Duplicate Product ──
@@ -1043,12 +1060,12 @@ const deleteProductRoute = createRoute({
     summary: "Soft-delete a product",
     request: {
         params: z.object({ id: z.string() }),
-        query: expectedAggregateRevisionQuerySchema,
+        query: expectedRevisionQuerySchema,
     },
     responses: {
         200: {
-            description: "Product moved to trash",
-            content: { "application/json": { schema: successEnvelope(aggregateRevisionResponseSchema) } },
+            description: "The product, in the trash",
+            content: { "application/json": { schema: productResourceEnvelope } },
         },
         ...conflictMutationErrorResponses,
     }
@@ -1057,10 +1074,9 @@ const deleteProductRoute = createRoute({
 app.openapi(deleteProductRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const { expectedAggregateRevision } = c.req.valid("query");
-    const result = await deleteProduct(db, id, expectedAggregateRevision);
+    await deleteProduct(db, id, c.req.valid("query").expectedRevision);
 
-    return ok(c, result);
+    return ok(c, { product: await readProductResource(db, id) });
 });
 
 // ── Restore Product ──
@@ -1073,12 +1089,12 @@ const restoreProductRoute = createRoute({
     summary: "Restore a soft-deleted product",
     request: {
         params: z.object({ id: z.string() }),
-        query: expectedAggregateRevisionQuerySchema,
+        body: { required: true, content: { "application/json": { schema: expectedRevisionBodySchema } } },
     },
     responses: {
         200: {
-            description: "Product restored",
-            content: { "application/json": { schema: successEnvelope(aggregateRevisionResponseSchema) } },
+            description: "The restored product",
+            content: { "application/json": { schema: productResourceEnvelope } },
         },
         ...conflictMutationErrorResponses,
     }
@@ -1087,11 +1103,10 @@ const restoreProductRoute = createRoute({
 app.openapi(restoreProductRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const { expectedAggregateRevision } = c.req.valid("query");
-    const result = await restoreProduct(db, id, expectedAggregateRevision);
+    await restoreProduct(db, id, c.req.valid("json").expectedRevision);
 
     await refreshRecommendationsAfterWrite(c, db, [id]);
-    return ok(c, result);
+    return ok(c, { product: await readProductResource(db, id) });
 });
 
 // ── Permanent Delete Product ──
@@ -1104,7 +1119,7 @@ const permanentDeleteRoute = createRoute({
     summary: "Permanently delete a product",
     request: {
         params: z.object({ id: z.string() }),
-        query: expectedAggregateRevisionQuerySchema,
+        query: expectedRevisionQuerySchema,
     },
     responses: {
         204: noContentResponse,
@@ -1115,8 +1130,7 @@ const permanentDeleteRoute = createRoute({
 app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const { expectedAggregateRevision } = c.req.valid("query");
-    await permanentlyDeleteProduct(db, id, expectedAggregateRevision);
+    await permanentlyDeleteProduct(db, id, c.req.valid("query").expectedRevision);
 
     return noContent(c);
 });
@@ -1238,12 +1252,12 @@ const deleteVariantRoute = createRoute({
     summary: "Delete a product variant",
     request: {
         params: z.object({ id: z.string(), variantId: z.string() }),
-        query: expectedAggregateRevisionQuerySchema,
+        query: expectedRevisionQuerySchema,
     },
     responses: {
         200: {
-            description: "Variant deleted",
-            content: { "application/json": { schema: successEnvelope(aggregateRevisionResponseSchema) } },
+            description: "The product without the retired SKU",
+            content: { "application/json": { schema: productResourceEnvelope } },
         },
         ...conflictMutationErrorResponses,
     }
@@ -1252,16 +1266,10 @@ const deleteVariantRoute = createRoute({
 app.openapi(deleteVariantRoute, async (c) => {
     const db = c.get("db");
     const { id, variantId } = c.req.valid("param");
-    const { expectedAggregateRevision } = c.req.valid("query");
     try {
-        const result = await deleteVariant(
-            db,
-            id,
-            variantId,
-            expectedAggregateRevision,
-        );
+        await deleteVariant(db, id, variantId, c.req.valid("query").expectedRevision);
 
-        return ok(c, result);
+        return ok(c, { product: await readProductResource(db, id) });
     } catch (error: unknown) {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
         throw error;

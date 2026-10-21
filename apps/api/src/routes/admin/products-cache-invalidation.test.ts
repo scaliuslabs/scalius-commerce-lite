@@ -19,8 +19,11 @@ const mocks = vi.hoisted(() => ({
   deleteVariant: vi.fn(),
   getProductVariants: vi.fn(),
   saveProductOptionMatrix: vi.fn(),
-
+  readProductRepresentations: vi.fn(async (_db: unknown, ids: string[]) => ids.map((id) => ({ id, status: "draft", revision: 2 }))),
 }));
+
+// The stable product writes answer the product as products.get reads it.
+vi.mock("../../events/representations", () => ({ readProductRepresentations: mocks.readProductRepresentations }));
 
 vi.mock("@scalius/core/modules/product-admin", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/product-admin")>()),
@@ -202,9 +205,9 @@ describe("admin product write behavior", () => {
 
   it.each([
     { label: "bulk delete", path: "/bulk-delete", method: "POST", body: { products: [{ id: "prod_1", expectedAggregateRevision: 1 }], permanent: false } },
-    { label: "soft delete", path: "/prod_1?expectedAggregateRevision=1", method: "DELETE" },
-    { label: "restore", path: "/prod_1/restore?expectedAggregateRevision=1", method: "POST" },
-    { label: "permanent delete", path: "/prod_1/permanent?expectedAggregateRevision=1", method: "DELETE" },
+    { label: "soft delete", path: "/prod_1?expectedRevision=1", method: "DELETE" },
+    { label: "restore", path: "/prod_1/restore", method: "POST", body: { expectedRevision: 1 } },
+    { label: "permanent delete", path: "/prod_1/permanent?expectedRevision=1", method: "DELETE" },
   ])("returns success after $label", async ({ path, method, body }) => {
     const { app, env } = createTestApp();
 
@@ -276,7 +279,7 @@ describe("admin product write behavior", () => {
   it.each([
     { label: "create variant", path: "/prod_1/variants", method: "POST", body: createVariantBody(), status: 201 },
     { label: "update variant", path: "/prod_1/variants/var_1", method: "PUT", body: { ...createVariantBody(), expectedStockVersion: 1 }, status: 200 },
-    { label: "delete variant", path: "/prod_1/variants/var_1?expectedAggregateRevision=1", method: "DELETE", status: 200 },
+    { label: "delete variant", path: "/prod_1/variants/var_1?expectedRevision=1", method: "DELETE", status: 200 },
     {
       label: "save normalized option matrix",
       path: "/prod_1/options/matrix",

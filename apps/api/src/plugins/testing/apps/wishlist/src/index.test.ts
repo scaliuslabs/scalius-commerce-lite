@@ -17,7 +17,7 @@ const productApi = async (operationId: string, input: unknown) => {
       status: "active",
       imageUrl: "https://cdn.example.com/linen.jpg",
     };
-    return { ok: true, status: 200, data: product, error: null };
+    return { ok: true, status: 200, data: { product }, error: null };
   }
   return { ok: false, status: 404, data: null, error: { code: "x", message: "unknown" } };
 };
@@ -86,7 +86,8 @@ describe("acme.wishlist", () => {
       api: async (operationId, input) => {
         const result = await productApi(operationId, input);
         if (!result.ok || operationId !== "products.get") return result;
-        return { ...result, data: { ...(result.data as Record<string, unknown>), name } };
+        const read = result.data as { product: Record<string, unknown> };
+        return { ...result, data: { product: { ...read.product, name } } };
       },
     });
     await harness.route("public", "toggle", { method: "POST", headers: json, body: { productId: "p_linen" }, customer: { id: "cust_1" } });

@@ -400,7 +400,7 @@ describe("scalius bulk", () => {
     expect(writes[0]!.arguments).toMatchObject({ approvalId, idempotencyKey: expect.stringMatching(/^sck_[0-9a-f-]{36}$/) });
     expect(api.state.bulkWrites).toHaveLength(1);
     expect(api.state.bulkWrites[0]).toMatchObject({ approvalId });
-    expect(JSON.parse(approved.stdoutText())).toMatchObject({ ok: true, data: { id: "bulk_bbbb", status: "done" }, meta: { status: 200 } });
+    expect(JSON.parse(approved.stdoutText())).toMatchObject({ ok: true, data: { run: { id: "bulk_bbbb", status: "done" } }, meta: { status: 200 } });
 
     // An approval works once.
     const again = await pairedRuntime();
@@ -421,7 +421,7 @@ describe("scalius bulk", () => {
   it("a 202 run without --wait prints the running run and where to follow it; --wait polls bulk_runs.get by data.id", async () => {
     const quick = await pairedRuntime();
     expect(await runProgram(quick, ["bulk", "prices", "--filter", "category=Shoes", "--percent", "5", "--yes"])).toBe(0);
-    expect(JSON.parse(quick.stdoutText())).toMatchObject({ data: { id: "bulk_aaaa", status: "running" }, meta: { status: 202 } });
+    expect(JSON.parse(quick.stdoutText())).toMatchObject({ data: { run: { id: "bulk_aaaa", status: "running" } }, meta: { status: 202 } });
     expect(quick.stderrText()).toContain('"id":"bulk_aaaa"');
     expect(api.state.bulkRunReads).toBe(0);
 
@@ -432,13 +432,13 @@ describe("scalius bulk", () => {
     expect(reads[0]!.arguments).toMatchObject({ operationId: "dashboard.resources.bulk_runs.get", input: { path: { id: "bulk_aaaa" } } });
     expect(waited.sleeps).toEqual([2_000, 2_000]);
     // Only the finished run is printed.
-    expect(JSON.parse(waited.stdoutText())).toMatchObject({ ok: true, data: { id: "bulk_aaaa", status: "done", processed: 300, failed: 2 } });
+    expect(JSON.parse(waited.stdoutText())).toMatchObject({ ok: true, data: { run: { id: "bulk_aaaa", status: "done", processed: 300, failed: 2 } } });
   });
 
   it("--wait on a run that finished in its request prints it without polling", async () => {
     const runtime = await pairedRuntime();
     expect(await runProgram(runtime, ["bulk", "tags", "--ids", "cus_1", "--add", "VIP", "--wait"])).toBe(0);
-    expect(JSON.parse(runtime.stdoutText())).toMatchObject({ data: { id: "bulk_bbbb", status: "done" } });
+    expect(JSON.parse(runtime.stdoutText())).toMatchObject({ data: { run: { id: "bulk_bbbb", status: "done" } } });
     expect(api.state.bulkRunReads).toBe(0);
   });
 });
