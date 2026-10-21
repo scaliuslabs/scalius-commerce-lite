@@ -12,7 +12,7 @@ Requires Node.js 22.12 or newer. The CLI never accepts arbitrary routes, methods
 
 ## What init does
 
-1. **Pairs once.** It opens `/connect` on the store, the merchant approves the shown code, and the credential is saved in the Scalius config directory (`0700` directory, `0600` file; `SCALIUS_CONFIG_HOME` overrides the location). This is the only login.
+1. **Pairs once.** It opens `/connect` on the store, the merchant approves the shown code, and the credential is saved in the Scalius config directory (`0700` directory, `0600` file; `SCALIUS_CONFIG_HOME` overrides the location). This is the only login. Only the store owner (Super Admin) can approve, with two-step verification turned on and used at sign-in (My account); otherwise the dashboard says what is missing.
 2. **Connects each agent** (`--harness auto` by default):
 
    | Agent | Installed as |
