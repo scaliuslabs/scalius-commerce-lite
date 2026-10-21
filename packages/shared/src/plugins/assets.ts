@@ -1,5 +1,5 @@
 // The checks on a plugin's listing images (icon, screenshots;
-// docs/platform/PLUGINS.md, "Listing"). The packer runs them before it
+// packages/plugin-sdk/docs/apps.md, "Listing"). The packer runs them before it
 // bundles an image, and the API runs them again before it serves one, so an
 // image that reaches the dashboard is always a real PNG, JPEG or WebP, or an
 // SVG that cannot run code or load anything:

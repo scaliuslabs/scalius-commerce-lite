@@ -1,5 +1,5 @@
 // Apps' columns and filter on the products, orders and customers lists
-// (docs/platform/PLUGINS.md, "Admin data"). The surfaces read already names
+// (packages/plugin-sdk/docs/apps.md, "Admin data"). The surfaces read already names
 // each active app's columns; a list asks for them (`appColumns`) and for one
 // filter (`appFilter`) in its own request, and gets the values back in the
 // same response. With no app column the list sends neither, so a store

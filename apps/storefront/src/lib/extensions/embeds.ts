@@ -1,4 +1,4 @@
-// Core embeds in app markup (docs/STOREFRONT-COMPONENTS.md "Core embeds"):
+// Core embeds in app markup (packages/plugin-sdk/docs/storefront.md "Core embeds"):
 // `<scalius-embed kind="…">` where a component hands a spot back to the
 // store. The host cuts the checked markup at its embeds under the unit's
 // rule (`splitStorefrontEmbeds`); the page that drew the component says how

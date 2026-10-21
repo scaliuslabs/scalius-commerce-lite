@@ -1,4 +1,4 @@
-// The plugin host facade (docs/platform/PLUGINS.md): picks the loader for an
+// The plugin host facade (packages/plugin-sdk/docs/apps.md): picks the loader for an
 // installation (bundled in-process, or a sandboxed Dynamic Worker), seeds the
 // invocation (identity, store facts, opened settings), races it against the
 // manifest's wall time, validates what comes back and writes the plugin's

@@ -11,27 +11,34 @@
 //     skins: { "clean-card": Card, "editorial-pdp": ProductMain },
 //   });
 
-export { defineStorefront, storefrontDefinitionOf } from "./define";
+export { componentFor, defineStorefront, storefrontDefinitionOf } from "./define";
 export type {
   AppComponent,
   ComponentProps,
+  ComponentPropsFor,
   FooterComponent,
   FooterProps,
   HeaderComponent,
   HeaderProps,
+  LayoutSlotComponentProps,
   ListingMainComponent,
   ListingMainProps,
+  PageComponentProps,
   ProductCardComponent,
   ProductCardProps,
+  ProductCardSlotComponentProps,
   ProductMainComponent,
   ProductMainProps,
+  ProductSlotComponentProps,
   SectionComponent,
   SectionProps,
   SectionSkinComponent,
   SectionSkinProps,
   SkinComponent,
   SkinProps,
+  StorefrontComponentTargetName,
   StorefrontDefinition,
+  StorefrontLayoutSlot,
   StorefrontModuleDefinition,
 } from "./define";
 export { EMPTY_HTML, escapeHtml, html, isHtml, raw, toHtml, type Html, type Renderable } from "./html";

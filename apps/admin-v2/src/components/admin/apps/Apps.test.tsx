@@ -21,6 +21,7 @@ const sdk = vi.hoisted(() => ({
   postApiV1AdminAppsRegistryInstall: vi.fn(),
   postApiV1AdminAppsByIdUpdate: vi.fn(),
   postApiV1AdminAppsUpload: vi.fn(),
+  postApiV1AdminAppsRemovedDataByIdHandOver: vi.fn(),
   postApiV1AdminAppsStopThirdParty: vi.fn(),
   postApiV1AdminAppsByIdStop: vi.fn(),
   postApiV1AdminAppsByIdFeaturesByFeatureIdEnable: vi.fn(),
@@ -1237,7 +1238,7 @@ const registryApp = (overrides: Record<string, unknown> = {}) => ({
   tagline: "Box every order",
   description: "Boxes for your orders.",
   author: "Acme",
-  signer: { keyId: "key_acme", name: "Acme Ltd", trusted: true, official: false },
+  signer: { keyId: "1a2b3c4d5e6f7a8b", name: "Acme Ltd", trusted: true, official: false },
   compatible: true,
   incompatibleReason: null,
   installed: null,
@@ -1265,7 +1266,7 @@ const settingsView = (overrides: Record<string, unknown> = {}) => ({
   registries: [{ id: "partner", name: "Partner apps", indexUrl: "https://partner.example/index.json" }],
   trustedKeys: [
     { id: "key_official", name: "Scalius", publicKey: "OFFICIALKEYOFFICIALKEYOFFICIALKEYOFFICIALKEY1=", official: true },
-    { id: "key_acme", name: "Acme Ltd", publicKey: "ACMEKEYACMEKEYACMEKEYACMEKEYACMEKEYACMEKEY12=", official: false },
+    { id: "1a2b3c4d5e6f7a8b", name: "Acme Ltd", publicKey: "ACMEKEYACMEKEYACMEKEYACMEKEYACMEKEYACMEKEY12=", official: false },
   ],
   ...overrides,
 });
@@ -1319,7 +1320,7 @@ describe("Registry apps in the Apps list", () => {
     sdk.getApiV1AdminAppsRegistry.mockImplementation(() => ok(registryList({
       apps: [
         registryApp(),
-        registryApp({ id: "stranger.tool", name: "Mystery tool", signer: { keyId: "key_x", name: null, trusted: false, official: false } }),
+        registryApp({ id: "stranger.tool", name: "Mystery tool", signer: { keyId: "ffff0000ffff0000", name: null, trusted: false, official: false } }),
         registryApp({ id: "acme.loyalty", name: "Loyalty points", installed: { version: "1.2.0", source: "registry" } }),
       ],
     })));
@@ -1330,7 +1331,7 @@ describe("Registry apps in the Apps list", () => {
 
     const list = rows();
     expect(list[0]).toContain("Gift wrap");
-    expect(list.find((row) => row.includes("Gift box"))).toContain("Verified developer");
+    expect(list.find((row) => row.includes("Gift box"))).toContain("Trusted by you");
     expect(list.find((row) => row.includes("Gift box"))).toContain("by Acme · Scalius");
     expect(list.find((row) => row.includes("Mystery tool"))).toContain("Unknown developer");
     // An installed app is not offered again.
@@ -1366,7 +1367,8 @@ describe("Registry apps in the Apps list", () => {
     await click(registryRowButton("Gift box"));
     await vi.waitFor(() => expect(dialog()?.textContent).toContain("Install Gift box"));
 
-    expect(dialog().textContent).toContain("Verified developer: Acme Ltd");
+    expect(dialog().textContent).toContain("Trusted by you: Acme Ltd");
+    expect(dialog().textContent).toContain("Key fingerprint 1a2b 3c4d 5e6f 7a8b");
     await click(button("Install", dialog()));
     await vi.waitFor(() => expect(sdk.postApiV1AdminAppsRegistryInstall).toHaveBeenCalledTimes(1));
     expect(sdk.postApiV1AdminAppsRegistryInstall.mock.calls[0]![0]).toEqual({ body: { registryId: "official", id: "acme.wrap", version: "1.1.0" } });
@@ -1376,7 +1378,7 @@ describe("Registry apps in the Apps list", () => {
   it("warns about an unknown developer and does not offer the install", async () => {
     sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST()));
     sdk.getApiV1AdminAppsRegistry.mockImplementation(() => ok(registryList({
-      apps: [registryApp({ signer: { keyId: "key_x", name: null, trusted: false, official: false } })],
+      apps: [registryApp({ signer: { keyId: "ffff0000ffff0000", name: null, trusted: false, official: false } })],
     })));
     await render(<AppsList />, MANAGER);
     await vi.waitFor(() => expect(text()).toContain("Loyalty points"));
@@ -1386,7 +1388,7 @@ describe("Registry apps in the Apps list", () => {
     await vi.waitFor(() => expect(dialog()?.textContent).toContain("Install Gift box"));
 
     expect(dialog().textContent).toContain("Unknown developer");
-    expect(dialog().textContent).toContain("This store doesn't know who made this app.");
+    expect(dialog().textContent).toContain("This app is signed with a key this store doesn't trust yet.");
     expect(button("Install", dialog()).disabled).toBe(true);
   });
 
@@ -1462,7 +1464,7 @@ describe("Upload and emergency stop on the Apps list", () => {
   it("stops at a warning for a developer the store does not trust; a Super Admin can trust and install", async () => {
     sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST()));
     sdk.postApiV1AdminAppsUpload
-      .mockImplementationOnce(() => refused(422, { code: "signature_untrusted", keyId: "key_new", developer: "Newcomer Ltd" }))
+      .mockImplementationOnce(() => refused(422, { code: "signature_untrusted", keyId: "0123456789abcdef", developer: "Newcomer Ltd" }))
       .mockImplementationOnce(() => ok({ app: detail({ id: "acme.wrap" }), updated: false, rolledBack: false, error: null }));
     await render(<AppsList />, MANAGER, true);
     await vi.waitFor(() => expect(hasButton("Upload app")).toBe(true));
@@ -1470,25 +1472,45 @@ describe("Upload and emergency stop on the Apps list", () => {
     await vi.waitFor(() => expect(dialog()?.textContent).toContain("Upload an app"));
     await chooseFile();
     await click(button("Upload", dialog()));
-    await vi.waitFor(() => expect(dialog().textContent).toContain("Signed by Newcomer Ltd, who this store does not trust yet. Only trust developers you know."));
+    await vi.waitFor(() => expect(dialog().textContent).toContain("The package says it was signed by “Newcomer Ltd”. Scalius doesn't check that name: the key is what identifies the signer, and its fingerprint is 0123 4567 89ab cdef."));
 
-    await click(button("Trust developer and install", dialog()));
+    await click(button("Trust this key and install", dialog()));
     await vi.waitFor(() => expect(sdk.postApiV1AdminAppsUpload).toHaveBeenCalledTimes(2));
     expect((sdk.postApiV1AdminAppsUpload.mock.calls[1]![0] as { query: unknown }).query).toEqual({ trustDeveloper: "true" });
     await vi.waitFor(() => expect(navigate).toHaveBeenCalled());
   });
 
+  it("holds an upload over data another key kept; a Super Admin hands it over and installs", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST()));
+    sdk.postApiV1AdminAppsRemovedDataByIdHandOver.mockImplementation(() => ok({ id: "acme.wrap", revision: 4, installed: false }));
+    sdk.postApiV1AdminAppsUpload
+      .mockImplementationOnce(() => refused(409, { code: "retained_data_other_developer", pluginId: "acme.wrap", retainedSigner: "1a2b3c4d5e6f7a8b", releaseSigner: "0123456789abcdef", retainedRevision: 3 }))
+      .mockImplementationOnce(() => ok({ app: detail({ id: "acme.wrap" }), updated: false, rolledBack: false, error: null }));
+    await render(<AppsList />, MANAGER, true);
+    await vi.waitFor(() => expect(hasButton("Upload app")).toBe(true));
+    await click(button("Upload app"));
+    await vi.waitFor(() => expect(dialog()?.textContent).toContain("Upload an app"));
+    await chooseFile();
+    await click(button("Upload", dialog()));
+    await vi.waitFor(() => expect(dialog().textContent).toContain("This file is signed with key 0123 4567 89ab cdef."));
+
+    await click(button("Hand over data and install", dialog()));
+    await vi.waitFor(() => expect(sdk.postApiV1AdminAppsUpload).toHaveBeenCalledTimes(2));
+    expect(sdk.postApiV1AdminAppsRemovedDataByIdHandOver).toHaveBeenCalledWith({ path: { id: "acme.wrap" }, body: { expectedRevision: 3, signerKeyId: "0123456789abcdef" } });
+    await vi.waitFor(() => expect(navigate).toHaveBeenCalled());
+  });
+
   it("tells anyone else to ask a Super Admin instead of offering the choice", async () => {
     sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST()));
-    sdk.postApiV1AdminAppsUpload.mockImplementation(() => refused(422, { code: "signature_untrusted", keyId: "key_new", developer: "Newcomer Ltd" }));
+    sdk.postApiV1AdminAppsUpload.mockImplementation(() => refused(422, { code: "signature_untrusted", keyId: "0123456789abcdef", developer: "Newcomer Ltd" }));
     await render(<AppsList />, MANAGER);
     await vi.waitFor(() => expect(hasButton("Upload app")).toBe(true));
     await click(button("Upload app"));
     await vi.waitFor(() => expect(dialog()?.textContent).toContain("Upload an app"));
     await chooseFile();
     await click(button("Upload", dialog()));
-    await vi.waitFor(() => expect(dialog().textContent).toContain("Ask a Super Admin to trust this developer and install the app."));
-    expect(hasButton("Trust developer and install")).toBe(false);
+    await vi.waitFor(() => expect(dialog().textContent).toContain("Ask a Super Admin to check the fingerprint, trust this key and install the app."));
+    expect(hasButton("Trust this key and install")).toBe(false);
     expect(hasButton("Upload")).toBe(false);
   });
 
@@ -1559,7 +1581,7 @@ describe("Registries and trusted developers", () => {
     await openAppsMenuItem("Registries and trusted developers");
     await vi.waitFor(() => expect(dialog()?.textContent).toContain("Scalius official registry"));
     expect([...dialog().querySelectorAll<HTMLInputElement>("input")].map((field) => field.value)).toContain("Partner apps");
-    expect(dialog().textContent).toContain("Key id: key_acme");
+    expect(dialog().textContent).toContain("Key fingerprint: 1a2b 3c4d 5e6f 7a8b");
     // The official key is shown, never editable.
     expect(dialog().textContent).toContain("Scalius (official)");
 
@@ -1696,12 +1718,14 @@ describe("App page lifecycle", () => {
     await renderApp(detail({
       source: "registry",
       runtime: "sandbox",
-      signer: { keyId: "key_acme", name: "Acme Ltd", official: false },
+      signer: { keyId: "1a2b3c4d5e6f7a8b", name: "Acme Ltd", official: false },
       storageUsage: { bytes: 2 * 1024 * 1024, measuredAt: "2026-10-07T00:00:00.000Z" },
       limits: { cpuMs: 50, wallMs: 1500, subrequests: 20, invocationsPerMinute: 60, storageBytes: 10 * 1024 * 1024 },
       migrations: { declared: [{ version: 1, description: "Add tiers" }, { version: 2, description: "Backfill" }], applied: 1 },
     }), VIEWER);
-    await vi.waitFor(() => expect(text()).toContain("Verified developer: Acme Ltd"));
+    await vi.waitFor(() => expect(text()).toContain("Trusted by you: Acme Ltd"));
+    expect(text()).toContain("Key fingerprint 1a2b 3c4d 5e6f 7a8b");
+    expect(text()).not.toContain("Verified");
 
     expect(text()).toContain("2 MB of 10 MB");
     expect(text()).toContain("Up to 50 ms of work and 1.5 s in total, 20 calls, 60 runs a minute");
@@ -1715,7 +1739,7 @@ describe("App page lifecycle", () => {
     restart();
     await renderApp(detail({ source: "bundled" }), VIEWER);
     expect(text()).not.toContain("Unsigned upload");
-    expect(text()).not.toContain("Verified developer");
+    expect(text()).not.toContain("Trusted by you");
     expect(text()).not.toContain("Storage used");
   });
 });

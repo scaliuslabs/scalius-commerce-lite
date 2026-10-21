@@ -23,6 +23,7 @@ const sdk = vi.hoisted(() => ({
   getApiV1AdminApps: vi.fn(),
   getApiV1AdminAppsRemovedData: vi.fn(),
   postApiV1AdminAppsRemovedDataByIdDelete: vi.fn(),
+  postApiV1AdminAppsRemovedDataByIdHandOver: vi.fn(),
   getApiV1AdminSettingsCurrency: vi.fn(),
 }));
 const router = vi.hoisted(() => ({ navigate: vi.fn() }));
@@ -236,7 +237,9 @@ describe("objects", () => {
       id: "scalius.bazaar", name: "Bazaar demo", removedAt: "2026-10-20T08:00:00.000Z", revision: 2,
       objectTypes: 1, records: 3, objectTypeHandles: ["scalius.bazaar.demo_items"], customFields: 0, keyValues: 0,
       customerRoles: 0, jobs: 0, catalogItems: 0, settings: true,
+      signerKeyId: "1a2b3c4d5e6f7a8b", waitingRelease: { source: "bundled", version: "2.0.0", signerKeyId: null },
     }] }));
+    sdk.postApiV1AdminAppsRemovedDataByIdHandOver.mockImplementation(() => envelope({ id: "scalius.bazaar", revision: 3, installed: true }));
     sdk.postApiV1AdminAppsRemovedDataByIdDelete.mockImplementation(() => envelope({ id: "scalius.bazaar", deleted: true, catalogDeleted: 0, catalogKept: 0 }));
 
     await render(<ObjectTypesList />, { permissions: ["objects.view", "apps.view"] });
@@ -246,7 +249,11 @@ describe("objects", () => {
     expect(container.textContent).toContain("Data from removed apps");
     expect(container.textContent).toContain("1 object type, 3 entries, and its settings");
     expect(button("Delete data")).toBeUndefined();
-    expect(container.textContent).toContain("Only a Super Admin can delete it.");
+    expect(button("Hand over data")).toBeUndefined();
+    expect(container.textContent).toContain("Only a Super Admin can delete it or hand it over.");
+    // Whose data it is, and the release it holds back.
+    expect(container.textContent).toContain("Belongs to key 1a2b 3c4d 5e6f 7a8b");
+    expect(container.textContent).toContain("Version 2.0.0 in your store's code is waiting to install.");
 
     act(() => root.unmount());
     root = createRoot(container);
@@ -261,6 +268,19 @@ describe("objects", () => {
     await vi.waitFor(() => expect(sdk.postApiV1AdminAppsRemovedDataByIdDelete).toHaveBeenCalledWith({
       path: { id: "scalius.bazaar" },
       body: { expectedRevision: 2 },
+    }));
+
+    // Or hand it to the waiting release, after saying what that release can then do.
+    await vi.waitFor(() => expect(button("Hand over data")).toBeDefined());
+    await act(async () => button("Hand over data")!.click());
+    const handDialog = [...document.querySelectorAll<HTMLElement>('[role="alertdialog"]')].find((each) => each.textContent?.includes("Hand data from"))!;
+    expect(handDialog.textContent).toContain("Hand data from \u201cBazaar demo\u201d to version 2.0.0?");
+    expect(handDialog.textContent).toContain("can then read and change 1 object type, 3 entries, and its settings");
+    const handConfirm = [...handDialog.querySelectorAll<HTMLButtonElement>("button")].find((each) => each.textContent?.trim() === "Hand over data")!;
+    await act(async () => handConfirm.click());
+    await vi.waitFor(() => expect(sdk.postApiV1AdminAppsRemovedDataByIdHandOver).toHaveBeenCalledWith({
+      path: { id: "scalius.bazaar" },
+      body: { expectedRevision: 2, signerKeyId: null },
     }));
   });
 

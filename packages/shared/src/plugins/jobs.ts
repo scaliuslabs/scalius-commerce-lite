@@ -1,4 +1,4 @@
-// App background jobs (docs/platform/PLUGINS.md, "Background jobs"): long
+// App background jobs (packages/plugin-sdk/docs/apps.md, "Background jobs"): long
 // admin actions an app starts with `ctx.jobs.start(name, { input, key })`.
 // The platform keeps the job as a durable row and runs it one step at a
 // time, right after the request that started it and on the every-minute

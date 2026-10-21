@@ -11,12 +11,12 @@ export { serializeJsonLd } from "./html";
  * cap): component sections draw at the edge from the page's own data.
  */
 export const PLUGIN_HOME_SECTIONS_MAX = 24;
-/** At most this many app blocks render on one product page. */
+/** At most this many app components render on one product page (its product-slot placements). */
 export const PLUGIN_PRODUCT_BLOCKS_MAX = 10;
 /** A failed render is retried after this long (the page stays cacheable meanwhile). */
 export const PLUGIN_RENDER_RETRY_SECONDS = 60;
 
-/** `<plugin id>/<type or id>`: how a theme names an app's section, block, skin or template (a snake_case key). */
+/** `<plugin id>/<type or id>`: how a theme names an app's section, component, skin or template (a snake_case key). */
 export const PLUGIN_SURFACE_KEY_PATTERN = /^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\/([a-z][a-z0-9_]{0,47})$/;
 
 export function pluginSurfaceKey(pluginId: string, type: string): string {

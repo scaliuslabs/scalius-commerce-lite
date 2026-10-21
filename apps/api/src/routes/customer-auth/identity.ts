@@ -1,5 +1,5 @@
 // "Continue with <app>": buyer sign-in through an app's identity provider
-// (OAuth 2.0 authorization code with PKCE; docs/platform/PLUGINS.md,
+// (OAuth 2.0 authorization code with PKCE; packages/plugin-sdk/docs/apps.md,
 // "Identity"). Both routes are browser navigations, safe without JavaScript.
 //
 // The platform owns the flow: it makes the state, nonce and PKCE verifier,

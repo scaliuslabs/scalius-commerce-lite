@@ -1,4 +1,4 @@
-// The search, address autocomplete and FX rate ports (docs/platform/PLUGINS.md,
+// The search, address autocomplete and FX rate ports (packages/plugin-sdk/docs/apps.md,
 // "Providers"). Each answers a narrow question; core keeps the authority:
 //
 // - search: product ids in rank order for a buyer's words. Core reads the

@@ -1,4 +1,4 @@
-// Bundled plugins in the database (docs/platform/PLUGINS.md, "Lifecycle"):
+// Bundled plugins in the database (packages/plugin-sdk/docs/apps.md, "Lifecycle"):
 // every plugin compiled into this Worker (bundled.gen.ts) has an installation
 // row, kept in step with the deployed code. Idempotent and stateless: it runs
 // when the Apps page or API lists plugins, on the scheduled tick, and when the
@@ -104,7 +104,10 @@ async function syncOne(
   } catch (error) {
     if (error instanceof PluginError && error.pluginCode === "installation_revision_conflict") return; // another sync won
     const reason = error instanceof Error ? error.message.slice(0, 300) : "unknown error";
-    console.warn(`[plugins] Bundled plugin ${pluginId} could not be synced: ${reason}`);
+    // Held by data another key's release kept: the dashboard lists it under
+    // Data from removed apps with this release waiting, so it is not a fault.
+    const held = error instanceof PluginError && error.pluginCode === "retained_data_other_developer";
+    if (!held) console.warn(`[plugins] Bundled plugin ${pluginId} could not be synced: ${reason}`);
     result.failed.push({ pluginId, reason });
     // A running app whose release this deployment cannot install: it cannot
     // run the old one either (its code is gone), so say so where the merchant

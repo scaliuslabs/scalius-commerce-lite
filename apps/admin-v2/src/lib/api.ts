@@ -18,15 +18,21 @@ import { noticeAdminUnauthorized } from "./admin-session-lost";
 import { withDashboardBasePath } from "./dashboard-base-path";
 import { noteStoreCommitSeq } from "./store-commit-seq";
 
-async function fetchAdminApi(request: Request): Promise<Response> {
+/**
+ * Re-sends the SDK's built Request on the dashboard path. The body is copied
+ * as bytes, never as text: a ZIP or any other binary body (`apps.upload`)
+ * must arrive byte-identical, and a UTF-8 round trip rewrites every invalid
+ * sequence as U+FFFD.
+ */
+export async function fetchAdminApi(request: Request): Promise<Response> {
   const url = new URL(request.url);
-  const body = request.method === "GET" || request.method === "HEAD"
-    ? ""
-    : await request.text();
+  const bytes = request.method === "GET" || request.method === "HEAD"
+    ? null
+    : await request.arrayBuffer();
   const response = await fetch(withDashboardBasePath(url.pathname) + url.search, {
     method: request.method,
     headers: request.headers,
-    body: body || undefined,
+    body: bytes && bytes.byteLength > 0 ? bytes : undefined,
     credentials: "same-origin",
     cache: "no-store",
     signal: adminApiReadSignal(request.method, request.signal),

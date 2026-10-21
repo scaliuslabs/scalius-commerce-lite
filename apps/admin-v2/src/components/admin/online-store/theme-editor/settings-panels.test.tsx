@@ -466,7 +466,7 @@ describe("product page app blocks", () => {
   const card = () => container.querySelector<HTMLElement>("[data-product-app-blocks]");
   const items = () => [...container.querySelectorAll<HTMLElement>("[data-app-block]")].map((item) => item.dataset.appBlock);
   const addBlock = async (label: string) => {
-    await act(async () => card()!.querySelector<HTMLButtonElement>("button[aria-label='Add app block']")!.click());
+    await act(async () => card()!.querySelector<HTMLButtonElement>("button[aria-label='Add app component']")!.click());
     click([...document.querySelectorAll<HTMLButtonElement>("[role=option]")].find((each) => each.textContent?.startsWith(label))!);
   };
   const named = (name: string) => container.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`)!;
@@ -477,7 +477,7 @@ describe("product page app blocks", () => {
 
   it("adds, edits, orders and removes app blocks in the theme document", async () => {
     renderPart(DEFAULT_STOREFRONT_THEME, EDITOR_PARTS.productApps, { kind: "product" }, APPS);
-    await act(async () => card()!.querySelector<HTMLButtonElement>("button[aria-label='Add app block']")!.click());
+    await act(async () => card()!.querySelector<HTMLButtonElement>("button[aria-label='Add app component']")!.click());
     expect([...document.querySelectorAll("[role=option]")].map((each) => each.textContent)).toEqual([
       "Star rating · Acme Reviews · In the buy box",
       "Review list · Acme Reviews · Below the product",
@@ -513,7 +513,7 @@ describe("product page app blocks", () => {
     const badge = container.querySelector("[data-app-block='badge']")!;
     expect(badge.textContent).toContain("acme.gone/badge");
     expect(badge.textContent).toContain("App not active. Hidden on your store.");
-    expect(card()!.querySelector("button[aria-label='Add app block']")).toBeNull();
+    expect(card()!.querySelector("button[aria-label='Add app component']")).toBeNull();
     click(named("Remove acme.gone/badge"));
     expect("apps" in latest.blocks.product).toBe(false);
     expect(storefrontThemeDocumentSchema.safeParse(latest).success).toBe(true);
@@ -522,8 +522,8 @@ describe("product page app blocks", () => {
   it("stops adding at the product page's block limit", () => {
     const ten = Array.from({ length: 10 }, (_, index) => ({ id: `stars-${index}`, app: "acme.reviews/stars", values: {} }));
     renderPart(withBlocks(ten), EDITOR_PARTS.productApps, { kind: "product" }, APPS);
-    expect(card()!.querySelector<HTMLButtonElement>("button[aria-label='Add app block']")!.disabled).toBe(true);
-    expect(card()!.textContent).toContain("A product page shows up to 10 app blocks.");
+    expect(card()!.querySelector<HTMLButtonElement>("button[aria-label='Add app component']")!.disabled).toBe(true);
+    expect(card()!.textContent).toContain("A product page shows up to 10 app components.");
   });
 });
 

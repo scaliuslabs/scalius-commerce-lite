@@ -1,4 +1,4 @@
-// Where an app's settings show in the dashboard (docs/platform/PLUGINS.md,
+// Where an app's settings show in the dashboard (packages/plugin-sdk/docs/apps.md,
 // "App surfaces"). A provider's fields show with the provider where the
 // merchant sets it up (Settings → Notifications for an SMS gateway, Shipping
 // for a courier), never on one flat page; the app's page shows only its

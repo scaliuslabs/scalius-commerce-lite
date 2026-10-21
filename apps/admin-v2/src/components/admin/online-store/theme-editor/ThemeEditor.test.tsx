@@ -768,7 +768,7 @@ describe("theme editor: AI drafts and publishing", () => {
       "Noor theme is not active. Activate it from its page, or remove its parts from the theme:Header (skin 'Noor header')Home page: section 3 'Studio hero'Open Noor theme",
     );
     expect(alert.querySelector("[data-theme-app='acme.gone']")!.textContent).toContain("acme.gone is not installed. Add it from Apps");
-    expect(alert.querySelector("[data-theme-app='acme.gone']")!.textContent).toContain("Product page app block");
+    expect(alert.querySelector("[data-theme-app='acme.gone']")!.textContent).toContain("Product page app component");
     expect([...alert.querySelectorAll("a")].map((link) => [link.textContent, link.getAttribute("href")])).toEqual([
       ["Open Noor theme", "/admin/apps/$pluginId"],
       ["Open Apps", "/admin/apps"],

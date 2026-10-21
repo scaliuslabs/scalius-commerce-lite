@@ -1,4 +1,4 @@
-// An installed app's storefront files in R2 (docs/STOREFRONT-COMPONENTS.md):
+// An installed app's storefront files in R2 (packages/plugin-sdk/docs/storefront.md):
 // its storefront module, stylesheet, islands and public files, stored by the
 // upload or registry install after `verifyStorefrontFiles`, beside an index
 // of their digests. The storefront reads them through the public file route

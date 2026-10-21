@@ -1,4 +1,4 @@
-// Function points (docs/platform/PLUGINS.md, "Extension points" 2): checkout
+// Function points (packages/plugin-sdk/docs/apps.md, "Extension points" 2): checkout
 // asks every active plugin that implements a point, in priority order, and
 // merges what comes back (core checkout/app-functions.ts). This is the runner
 // it calls. With no active implementation the cost is one indexed read that
@@ -104,6 +104,24 @@ function withCustomerRoles(input: Record<string, unknown>, roles: readonly Plugi
   const cart = input.cart as { customer?: Record<string, unknown> | null } | null | undefined;
   if (!cart?.customer) return input;
   return { ...input, cart: { ...cart, customer: { ...cart.customer, roles: roles.map((entry) => ({ role: entry.role, ref: entry.ref })) } } };
+}
+
+/** One app's accepted checkout attributes (`<app id>.<key>`), out of every active app's. */
+function ownAttributes(attributes: Readonly<Record<string, string>>, pluginId: string): Record<string, string> {
+  const prefix = `${pluginId}.`;
+  return Object.fromEntries(Object.entries(attributes).filter(([key]) => key.startsWith(prefix)));
+}
+
+/**
+ * The input with `cart.attributes` narrowed to one app's own answers. Buyer
+ * answers are free text the buyer gave one app (a gift message), so another
+ * app's function never reads them: reading them would be a declared,
+ * consented read, which the platform does not offer. Core cart facts stay.
+ */
+function withOwnCartAttributes(input: Record<string, unknown>, pluginId: string): Record<string, unknown> {
+  const cart = input.cart as { attributes?: Record<string, string> } | null | undefined;
+  if (!cart?.attributes) return input;
+  return { ...input, cart: { ...cart, attributes: ownAttributes(cart.attributes, pluginId) } };
 }
 
 /** Plugins asked at once; each is CPU-bound and wall-limited, so a few in flight bound latency. */
@@ -218,7 +236,9 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
         fail();
         count();
       };
-      let scopedInput = checked.data as Record<string, unknown>;
+      // An app sees only its own buyer answers: `cart.attributes` keeps the
+      // `<app id>.<key>` entries of this app, never another app's.
+      let scopedInput = withOwnCartAttributes(checked.data as Record<string, unknown>, installation.pluginId);
       // An extension sees only the reads its own slot declares.
       let readNames: ReadonlySet<string> | null = null;
       if (point === PLUGIN_EXTENSION_RUN) {
@@ -227,8 +247,8 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
         if (!extension || !installation.grant?.extensions.includes(buyer.target)) continue;
         readNames = new Set(extension.reads.map((read) => read.as));
         const prefix = `${installation.pluginId}.`;
-        const own = Object.fromEntries(Object.entries(buyer.attributes).filter(([key]) => key.startsWith(prefix)));
-        scopedInput = { ...buyer, attributes: Object.fromEntries(Object.entries(own).map(([key, value]) => [key.slice(prefix.length), value])), cart: buyer.cart ? { ...buyer.cart, attributes: own } : null };
+        const own = ownAttributes(buyer.attributes, installation.pluginId);
+        scopedInput = { ...scopedInput, attributes: Object.fromEntries(Object.entries(own).map(([key, value]) => [key.slice(prefix.length), value])) };
       }
       // A run that never returned (it held its thread): stop the app rather than freeze the store again.
       // A stopped app neither answers nor blocks, so it is left out here too.

@@ -27,7 +27,7 @@
  *   increment, then up to the market's rounding step and its ending
  *   (WooPayments' rounding and charm pricing). The compare-at is the base
  *   price converted the same way (Shopify adjusts compare-at too).
- * - App price (`cart.line_prices`, docs/platform/PLUGINS.md): a checkout
+ * - App price (`cart.line_prices`, packages/plugin-sdk/docs/apps.md): a checkout
  *   function's unit price for one cart line, rounded half-up to the price
  *   increment. It sits below every list, so market and price-list rules stay
  *   authoritative, and above the FX-derived and base price, so B2B contract,

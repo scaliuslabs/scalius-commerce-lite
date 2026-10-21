@@ -1,4 +1,4 @@
-// The app lifecycle beyond the installed list (docs/platform/PLUGINS.md,
+// The app lifecycle beyond the installed list (packages/plugin-sdk/docs/apps.md,
 // "Registry", "Quotas and kill switch"): browse the registries, install or
 // update from one, upload a package, the emergency stop, and the registries
 // and developer keys the store trusts. Loaded on demand with the screens that
@@ -78,10 +78,19 @@ export function saveRegistrySettings(
 }
 
 /** The refusal's own details (`signature_untrusted` names the developer and key). */
-export function appErrorDetails(error: unknown): { code: string | null; keyId: string | null; developer: string | null } {
+export function appErrorDetails(error: unknown): {
+  code: string | null; keyId: string | null; developer: string | null;
+  /** retained_data_other_developer: the release's key (null: unsigned) and the kept group's revision. */
+  releaseSigner: string | null; retainedRevision: number | null; pluginId: string | null;
+} {
   const details = error instanceof AdminApiResponseError ? (error.details as Record<string, unknown> | null | undefined) : null;
   const text = (value: unknown) => (typeof value === "string" ? value : null);
-  return { code: text(details?.code), keyId: text(details?.keyId), developer: text(details?.developer) };
+  return {
+    code: text(details?.code), keyId: text(details?.keyId), developer: text(details?.developer),
+    releaseSigner: text(details?.releaseSigner),
+    retainedRevision: typeof details?.retainedRevision === "number" ? details.retainedRevision : null,
+    pluginId: text(details?.pluginId),
+  };
 }
 
 /** The API's own sentence for a refusal (plain English; shown beside the dashboard's own wording). */

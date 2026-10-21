@@ -1,4 +1,4 @@
-// The declarative UI tree of an app (docs/platform/PLUGINS.md, "UI trees"):
+// The declarative UI tree of an app (packages/plugin-sdk/docs/apps.md, "UI trees"):
 // one versioned node vocabulary that the store draws with its own
 // components, on two surfaces:
 //

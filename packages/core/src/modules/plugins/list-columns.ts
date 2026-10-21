@@ -1,4 +1,4 @@
-// App list columns and filters (docs/platform/PLUGINS.md, "Admin data
+// App list columns and filters (packages/plugin-sdk/docs/apps.md, "Admin data
 // seams"): what an active app declares in `admin.listColumns` for the
 // products, orders and customers lists, the indexed filter a column adds, and
 // the one bounded statement that reads the page's values.

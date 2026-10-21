@@ -1,4 +1,4 @@
-// App-defined customer roles (docs/platform/PLUGINS.md, "Customer roles"):
+// App-defined customer roles (packages/plugin-sdk/docs/apps.md, "Customer roles"):
 // an app grants a role it names (`seller`, `wholesale`) to a customer, with
 // an optional reference to its own record (`ref`). Each app reads and writes
 // only its own roles (`ctx.customers.roles`); proxied app pages see them as

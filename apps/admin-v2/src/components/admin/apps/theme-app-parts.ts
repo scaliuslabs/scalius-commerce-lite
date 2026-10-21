@@ -74,7 +74,7 @@ function pageText(place: ThemeAppPart["place"], t: Translate): string {
   return t("page_home");
 }
 
-/** A part in plain words: "Header (skin)", "Home page: section 3 'Studio hero'", "Product page app block". */
+/** A part in plain words: "Header (skin)", "Home page: section 3 'Studio hero'", "Product page app component". */
 export function themeAppPartText(part: ThemeAppPart, t: Translate): string {
   const named = part.name ? { name: part.name } : null;
   if (part.kind === "skin") {

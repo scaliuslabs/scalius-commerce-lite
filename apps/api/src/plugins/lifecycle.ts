@@ -1,4 +1,4 @@
-// Installation lifecycle with the plugin's hooks (docs/platform/PLUGINS.md,
+// Installation lifecycle with the plugin's hooks (packages/plugin-sdk/docs/apps.md,
 // "Lifecycle"). Plugin code runs only under an approved grant, so:
 //
 //   activate    approve the grant (Super Admin; core records the approver and

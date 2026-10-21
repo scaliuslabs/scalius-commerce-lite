@@ -614,10 +614,19 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
   };
 
   /** A function input's signed-in buyer gets the roles the app granted, as the platform fills them per app. */
+  // As the host sends it: the cart's customer carries this app's roles, and
+  // `cart.attributes` only this app's own answers (`<app id>.<key>`).
   const withRoles = <T,>(input: T): T => {
-    const cart = (input as { cart?: { customer?: { id?: unknown; roles?: unknown } | null } | null } | null)?.cart;
-    if (!cart?.customer || cart.customer.roles !== undefined || typeof cart.customer.id !== "string") return input;
-    return { ...input, cart: { ...cart, customer: { ...cart.customer, roles: rolesOf(cart.customer.id) } } } as T;
+    const cart = (input as { cart?: { customer?: { id?: unknown; roles?: unknown } | null; attributes?: unknown } | null } | null)?.cart;
+    if (!cart) return input;
+    const prefix = `${manifest.id}.`;
+    const attributes = cart.attributes && typeof cart.attributes === "object"
+      ? Object.fromEntries(Object.entries(cart.attributes as Record<string, unknown>).filter(([key]) => key.startsWith(prefix)))
+      : cart.attributes;
+    const customer = cart.customer && cart.customer.roles === undefined && typeof cart.customer.id === "string"
+      ? { ...cart.customer, roles: rolesOf(cart.customer.id) }
+      : cart.customer;
+    return { ...input, cart: { ...cart, ...(attributes !== undefined ? { attributes } : {}), ...(customer !== undefined ? { customer } : {}) } } as T;
   };
 
   /** Runs one step of a running job, as the platform's drain does (attempts, validation, done). */

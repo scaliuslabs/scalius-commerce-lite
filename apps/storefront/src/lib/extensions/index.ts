@@ -1,4 +1,4 @@
-// App storefront components in a page (docs/STOREFRONT-COMPONENTS.md): which
+// App storefront components in a page (packages/plugin-sdk/docs/storefront.md): which
 // active apps ship components (the layout read's `appExtensions`), which
 // units the theme gives to an app's skin, which components fill a slot,
 // and the request's render host. Everything here is read from what

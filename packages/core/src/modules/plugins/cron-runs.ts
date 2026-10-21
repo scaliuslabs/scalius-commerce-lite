@@ -1,4 +1,4 @@
-// Plugin cron claims (docs/platform/PLUGINS.md, "Extension points" 5). A run
+// Plugin cron claims (packages/plugin-sdk/docs/apps.md, "Extension points" 5). A run
 // is one `plugin_cron_runs` row for (plugin, job, slot), inserted with
 // ON CONFLICT DO NOTHING: whichever scheduled tick inserts it runs the slot,
 // every other tick sees no row come back and skips. The partial unique index

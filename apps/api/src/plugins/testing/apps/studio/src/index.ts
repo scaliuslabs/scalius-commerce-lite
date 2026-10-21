@@ -3,7 +3,7 @@
 // four component sections; one island adds carousel buttons; one stylesheet
 // styles it all with the store's own colour and type tokens. The template
 // applies the whole look in one click and keeps the merchant's content.
-// The reference for docs/STOREFRONT-COMPONENTS.md.
+// The reference for packages/plugin-sdk/docs/storefront.md.
 
 import { definePlugin, PLUGIN_API_VERSION, type PluginManifestInput } from "@scalius/plugin-sdk";
 

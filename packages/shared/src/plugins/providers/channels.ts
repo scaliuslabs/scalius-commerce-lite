@@ -1,4 +1,4 @@
-// The messaging and push ports (docs/platform/PLUGINS.md, "Providers").
+// The messaging and push ports (packages/plugin-sdk/docs/apps.md, "Providers").
 //
 // Messaging: chat channels (WhatsApp, Messenger, Instagram, Telegram,
 // Viber). A provider declares the channels it carries (`channels`). Core

@@ -1,4 +1,4 @@
-// Plugin installations (docs/platform/PLUGINS.md, P1): install, approve and
+// Plugin installations (packages/plugin-sdk/docs/apps.md, P1): install, approve and
 // activate, turn features on and off, deactivate, update, uninstall, and the
 // merchant's settings. Every write is a compare-and-set on `revision`; the
 // extension-point registrations are rewritten in the same batch as the
@@ -56,6 +56,7 @@ import {
   appDataDeleteStatements,
   forgetRetainedAppStatement,
   readRetainedApp,
+  removedAppDataOf,
   retainAppStatement,
   type RetainedApp,
 } from "./app-data";
@@ -555,14 +556,17 @@ export async function installPlugin(db: Database, input: InstallPluginInput): Pr
     throw new PluginError("installation_exists", `Plugin ${manifest.id} is already installed.`);
   }
   // Data kept by an earlier uninstall comes back with it, settings included,
-  // but only to code from the developer who wrote it (security audit N4).
-  const retained = (await readRetainedApp(db, manifest.id))?.app ?? null;
-  if (retained) requireRetainedDataSigner(retained, input.signerKeyId ?? null);
+  // but only to code signed with the key it belongs to (security audit N4).
+  const kept = (await readRetainedApp(db, manifest.id))?.app ?? null;
+  const retained = kept && await retainedDataFor(db, manifest.id, kept, input.signerKeyId ?? null);
   const settings = retained
     ? migrateStoredSettings(retained.settings, manifest.settings)
     : pluginSettingDefaults(manifest.settings);
   try {
     await safeBatch(db, [
+      // Another key's release over a record that keeps nothing: the old
+      // release's history (logs, data updates run) goes, so this one starts clean.
+      ...(kept && !retained ? appDataDeleteStatements(db, manifest.id) : []),
       db.insert(pluginInstallations).values({
         pluginId: manifest.id,
         version: manifest.version,
@@ -799,21 +803,28 @@ async function syncInstallationObjects(db: Database, pluginId: string, manifest:
 }
 
 /**
- * Data kept by a keep-data uninstall belongs to the developer whose code
- * wrote it (security audit N4). Everything an app owns is keyed by its
- * plugin id (its key/value data, records, custom fields, customer roles and
- * catalogue ownership), so a release under the same id from another signer
- * would read all of it. Such a release is refused while the data is kept:
- * the data stays listed under removed apps, where a Super Admin can delete
- * it, and the release then installs clean. The same signer (or the same
- * unsigned source) reclaims everything, settings included.
+ * Data kept by a keep-data uninstall belongs to the key that signed the
+ * release that wrote it (security audit N4; null for unsigned or bundled
+ * code). Everything an app owns is keyed by its plugin id (its key/value
+ * data, records, custom fields, customer roles and catalogue ownership), so
+ * a release under the same id with another key, or a move between a signed
+ * upload and unsigned or bundled code, would read all of it. The release
+ * with the same key reclaims everything, settings included (the retained
+ * record is returned). Another release is held while data is kept: the
+ * group stays listed under Data from removed apps with its owner key, where
+ * a Super Admin deletes it (the release then installs clean) or hands it
+ * over to the release's key (`handOverRemovedAppData`). When nothing is
+ * kept that the release could read (default settings, no records), it
+ * installs clean now (null) and the empty record goes with the install.
  */
-function requireRetainedDataSigner(retained: RetainedApp, signerKeyId: string | null): void {
-  if (retained.signerKeyId === signerKeyId) return;
+async function retainedDataFor(db: Database, pluginId: string, retained: RetainedApp, signerKeyId: string | null): Promise<RetainedApp | null> {
+  if (retained.signerKeyId === signerKeyId) return retained;
+  const kept = await removedAppDataOf(db, pluginId);
+  if (!kept) return null;
   throw new PluginError(
     "retained_data_other_developer",
-    `${retained.name} left data in this store that belongs to the developer who made it, and this release comes from another developer. Delete that data first (Apps, Data from removed apps); this release then starts clean.`,
-    { retainedSigner: retained.signerKeyId, releaseSigner: signerKeyId },
+    `${retained.name} left data in this store that belongs to the key that signed the version that wrote it, and this release is ${signerKeyId ? "signed with another key" : "unsigned or part of the store's own code"}. It installs once a Super Admin decides under Apps, Data from removed apps: hand the data over to this release, or delete it.`,
+    { pluginId, retainedSigner: retained.signerKeyId, releaseSigner: signerKeyId, retainedRevision: retained.revision },
   );
 }
 

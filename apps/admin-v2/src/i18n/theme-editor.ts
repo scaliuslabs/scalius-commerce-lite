@@ -110,7 +110,7 @@ export const themeEditorMessages = defineMessages({
     moduleHelp_policies: "Links to your published policy pages.",
     moduleHelp_related: "Recommended products.",
     "moduleHelp_recently-viewed": "Products this shopper viewed before (on their phone or computer only).",
-    appBlocks: "App blocks",
+    appBlocks: "App components",
 
     // Collection, category and search pages
     listingToolbar: "Title and toolbar",
@@ -484,7 +484,7 @@ export const themeEditorMessages = defineMessages({
     moduleHelp_policies: "আপনার পাবলিশ করা নীতিমালা পেজের লিংক।",
     moduleHelp_related: "সুপারিশ করা পণ্য।",
     "moduleHelp_recently-viewed": "এই ক্রেতা আগে যে পণ্যগুলো দেখেছেন (শুধু তাঁর ফোন বা কম্পিউটারে)।",
-    appBlocks: "অ্যাপ ব্লক",
+    appBlocks: "অ্যাপ কম্পোনেন্ট",
 
     listingToolbar: "শিরোনাম ও টুলবার",
     listingFilters: "ফিল্টার",

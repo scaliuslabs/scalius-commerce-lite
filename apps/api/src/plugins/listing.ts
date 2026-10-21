@@ -1,4 +1,4 @@
-// What the Apps page lists an app by (docs/platform/PLUGINS.md, "Listing"):
+// What the Apps page lists an app by (packages/plugin-sdk/docs/apps.md, "Listing"):
 // its tagline, categories, countries, links and images, from the manifest of
 // an installed app or from the catalog of first-party plugins this
 // deployment does not bundle (catalog.gen.ts).

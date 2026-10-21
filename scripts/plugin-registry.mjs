@@ -1,4 +1,4 @@
-// Registry authoring and installs for `pnpm plugin` (docs/platform/PLUGINS.md,
+// Registry authoring and installs for `pnpm plugin` (packages/plugin-sdk/docs/apps.md,
 // "Registry"). The signed format lives in packages/shared/src/plugins/registry.ts;
 // this file only calls it, it never re-implements signing or verifying.
 //

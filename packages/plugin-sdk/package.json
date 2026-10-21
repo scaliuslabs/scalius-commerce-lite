@@ -36,6 +36,7 @@
   "files": [
     "dist",
     "README.md",
+    "docs",
     "LICENSE",
     "PLUGIN-EXCEPTION"
   ],

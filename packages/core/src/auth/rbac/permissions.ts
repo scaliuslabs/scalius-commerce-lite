@@ -221,7 +221,7 @@ export const PERMISSIONS = {
   WEBHOOKS_MANAGE: "webhooks.manage",
 
   // =============================================
-  // Apps (3 permissions): installed plugins (docs/platform/PLUGINS.md).
+  // Apps (3 permissions): installed plugins (packages/plugin-sdk/docs/apps.md).
   // View: see installed apps and open their pages (an app's pages show what
   // the app reads under its own grant). Use: take actions inside an app
   // (its pages' mutating calls). Manage: activate, approve access, change

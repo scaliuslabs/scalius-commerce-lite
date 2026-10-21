@@ -1,4 +1,4 @@
-// Registry and upload releases (docs/platform/PLUGINS.md, "Registry"):
+// Registry and upload releases (packages/plugin-sdk/docs/apps.md, "Registry"):
 // verification against the trusted keys, download from a registry, upload
 // trust choices, and updates that load the new code and run its data updates,
 // rolling back when either fails. The test registry signs with its own

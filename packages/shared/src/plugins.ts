@@ -1,4 +1,4 @@
-// The plugin contract (docs/platform/PLUGINS.md): manifest, settings schema
+// The plugin contract (packages/plugin-sdk/docs/apps.md): manifest, settings schema
 // and function points. The pieces live in ./plugins/*; this barrel keeps
 // `@scalius/shared/plugins` the one import path. Versioned by
 // `PLUGIN_API_VERSION`; changes within a version are additive only.

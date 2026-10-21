@@ -2,7 +2,7 @@
 // schema so the storefront-components contract can use them without a cycle.
 // Part of the versioned plugin API.
 //
-// One identifier rule (docs/platform/PLUGINS.md, "Names"):
+// One identifier rule (packages/plugin-sdk/docs/apps.md, "Names"):
 //   - every manifest name and data key is snake_case (`PLUGIN_KEY_PATTERN`):
 //     object types and fields, settings, custom fields, timeline kinds,
 //     checkout attributes, skin, section and block types, cron jobs, cards,

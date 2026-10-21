@@ -1,4 +1,4 @@
-// Route permissions for installed apps (plugins, docs/platform/PLUGINS.md):
+// Route permissions for installed apps (plugins, packages/plugin-sdk/docs/apps.md):
 // the management API under /api/v1/admin/apps and each app's own dashboard
 // routes under /api/v1/plugins/<id>/admin/<route>/<sub path>.
 //

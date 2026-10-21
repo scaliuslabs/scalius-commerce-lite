@@ -1,5 +1,5 @@
 // An app FX provider as the markets' `FxRateSource` (MARKETS-DESIGN D5;
-// docs/platform/PLUGINS.md, "Providers", fx): the dashboard asks it once when
+// packages/plugin-sdk/docs/apps.md, "Providers", fx): the dashboard asks it once when
 // the merchant chooses it, and the scheduled tick asks it for every market
 // that uses it (`refreshMarketFxRates`). Pages and checkouts read the stored
 // rate only.

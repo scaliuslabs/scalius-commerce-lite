@@ -855,7 +855,7 @@ const CACHE_DEP_TABLE_RULES = {
       })),
     ],
   },
-  // --- Apps (docs/platform/PLUGINS.md) -------------------------------------------
+  // --- Apps (packages/plugin-sdk/docs/apps.md) -------------------------------------------
   plugin_installations: {
     kinds: ["plg"],
     noise: [

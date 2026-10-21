@@ -24,8 +24,8 @@ export const themeAppPartsMessages = defineMessages({
     partSectionNamed: "{page}: section {position} '{name}'",
     partSectionSkin: "{page}: section {position} (skin)",
     partSectionSkinNamed: "{page}: section {position} (skin '{name}')",
-    partProductBlock: "Product page app block",
-    partProductBlockNamed: "Product page app block '{name}'",
+    partProductBlock: "Product page app component",
+    partProductBlockNamed: "Product page app component '{name}'",
     partsMore: "And {count, plural, one {# more part} other {# more parts}}",
 
     fallbackTitle: "Your live theme uses {name}",
@@ -60,8 +60,8 @@ export const themeAppPartsMessages = defineMessages({
     partSectionNamed: "{page}: সেকশন {position} '{name}'",
     partSectionSkin: "{page}: সেকশন {position} (স্কিন)",
     partSectionSkinNamed: "{page}: সেকশন {position} (স্কিন '{name}')",
-    partProductBlock: "প্রোডাক্ট পেজের অ্যাপ ব্লক",
-    partProductBlockNamed: "প্রোডাক্ট পেজের অ্যাপ ব্লক '{name}'",
+    partProductBlock: "প্রোডাক্ট পেজের অ্যাপ কম্পোনেন্ট",
+    partProductBlockNamed: "প্রোডাক্ট পেজের অ্যাপ কম্পোনেন্ট '{name}'",
     partsMore: "আরও {count}টি অংশ",
 
     fallbackTitle: "আপনার লাইভ থিম {name} ব্যবহার করে",

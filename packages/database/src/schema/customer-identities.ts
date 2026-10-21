@@ -1,4 +1,4 @@
-// Buyer sign-in through an app identity provider (docs/platform/PLUGINS.md,
+// Buyer sign-in through an app identity provider (packages/plugin-sdk/docs/apps.md,
 // "Identity"): the provider's stable subject for a customer, so a returning
 // buyer signs in to the same account. A first sign-in links by the
 // provider-verified email; later ones by the subject alone. Private.

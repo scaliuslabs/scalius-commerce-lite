@@ -1,4 +1,4 @@
-// Build steps of the plugin platform (docs/platform/PLUGINS.md), shared by
+// Build steps of the plugin platform (packages/plugin-sdk/docs/apps.md), shared by
 // `pnpm plugin` (scripts/plugins.mjs) and the tests that prove generated
 // files are fresh:
 //
@@ -44,6 +44,8 @@ export function componentJobs(contract, components, instanceId) {
     id: `component:${component.type}@${target}`, kind: "component", type: component.type, target,
     settings: smokeSettings(contract, component.settings),
     ...(target.startsWith("product.") ? { instanceId, data: contract.fixtureProductPage() } : {}),
+    // A card slot draws over the card it sits on.
+    ...(target.startsWith("product_card.") ? { data: contract.fixtureSkinData("product_card") } : {}),
   })));
 }
 

@@ -1,4 +1,4 @@
-// The context every plugin handler receives (docs/platform/PLUGINS.md). It is
+// The context every plugin handler receives (packages/plugin-sdk/docs/apps.md). It is
 // the whole surface a plugin can reach: each call crosses the host bridge,
 // which checks the plugin's granted manifest before doing anything. The same
 // context is built for a sandboxed plugin (Dynamic Worker, Workers Paid) and a
@@ -481,7 +481,7 @@ export interface PluginRouteResponse {
   /**
    * JSON for API routes; a UI document (`ui.page(...)`) for admin pages,
    * cards and widgets; an action result (`ui.result(...)`) for buttons and
-   * forms; `{ html, head? }` for sections and product blocks; `{ page }` or
+   * forms; `{ html, head? }` for sections and product-slot components; `{ page }` or
    * `{ redirect }` for a proxied page navigation.
    */
   body?: unknown;

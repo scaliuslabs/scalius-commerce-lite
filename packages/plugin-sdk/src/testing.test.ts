@@ -1,6 +1,6 @@
 // The test harness's migration runner and the fixtures, over a small plugin.
 import { describe, expect, it } from "vitest";
-import { definePlugin, PLUGIN_API_VERSION, type PluginManifestInput } from "./index";
+import { definePlugin, PLUGIN_API_VERSION, ui, type PluginManifestInput } from "./index";
 import { createPluginTestHarness, fixtures } from "./testing";
 import * as fixturesModule from "./fixtures";
 
@@ -227,6 +227,53 @@ describe("fixtures", () => {
     const harness = createPluginTestHarness({ default: plugin() });
     expect((await harness.route("admin", "overview", fixtures.adminRouteRequest({ query: { cursor: "c1" } }))).value)
       .toEqual({ body: { cursor: "c1", staff: "staff_test" } });
+  });
+});
+
+describe("checkout answers and storefront extension inputs", () => {
+  const giftManifest = {
+    id: "acme.gift",
+    name: "Gift",
+    version: "1.0.0",
+    apiVersion: PLUGIN_API_VERSION,
+    description: "Asks for a gift message.",
+    author: { name: "Acme" },
+    functions: [{ point: "checkout.discounts" }],
+    checkout: { attributes: [{ key: "gift_message", label: "Gift message", type: "text", maxLength: 120 }] },
+    storefront: { extensions: [{ target: "checkout.contact.after" }, { target: "order.confirmation" }] },
+  } satisfies PluginManifestInput;
+  const gift = definePlugin({
+    manifest: giftManifest,
+    functions: {
+      // Echoes what it can see, so the test can assert the host's scoping.
+      "checkout.discounts": (input) => ({
+        discounts: [{ title: JSON.stringify(input.cart.attributes).slice(0, 80), target: { kind: "order" }, value: { type: "percentage", percent: 1 } }],
+      }),
+    },
+    extensions: {
+      "checkout.contact.after": (input) => ({ ui: ui.view([ui.text(`${input.attributes.gift_message ?? ""}|${input.cart?.lines.length ?? 0}`), ui.field("gift_message")]) }),
+      "order.confirmation": (input) => ({ ui: input.order ? ui.view([ui.text(input.order.orderId)]) : null }),
+    },
+  });
+
+  it("hands a function only its own app's answers, as the host does", async () => {
+    const harness = createPluginTestHarness({ default: gift });
+    const input = fixtures.checkoutDiscountsInput({ cart: { attributes: { "acme.gift.gift_message": "Hi", "acme.other.secret": "private" } } });
+    const result = await harness.fn("checkout.discounts", input);
+    expect(result.value?.discounts[0]?.title).toBe(JSON.stringify({ "acme.gift.gift_message": "Hi" }));
+  });
+
+  it("builds a valid extension input for each slot's page", async () => {
+    const harness = createPluginTestHarness({ default: gift });
+    const contact = fixtures.storefrontExtensionInput("checkout.contact.after", { attributes: { gift_message: "Hi" } });
+    expect(contact).toMatchObject({ target: "checkout.contact.after", currency: "BDT", order: null, customer: null, cart: { lines: [expect.any(Object)] } });
+    expect(await harness.extension(contact)).toMatchObject({ ok: true, value: { ui: expect.anything() } });
+    expect(JSON.stringify((await harness.extension(contact)).value)).toContain("Hi|1");
+    const confirmation = fixtures.storefrontExtensionInput("order.confirmation");
+    expect(confirmation).toMatchObject({ cart: null, customer: null, order: { orderId: "order_test_1" } });
+    expect(JSON.stringify((await harness.extension(confirmation)).value)).toContain("order_test_1");
+    expect(fixtures.storefrontExtensionInput("account.overview")).toMatchObject({ customer: { id: "cust_test_1" }, cart: null, order: null });
+    expect(fixtures.storefrontExtensionInput("cart_drawer.footer", { cart: null }).cart).toBeNull();
   });
 });
 

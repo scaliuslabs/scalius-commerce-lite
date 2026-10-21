@@ -1,4 +1,4 @@
-// App releases from a registry or an uploaded package (docs/platform/PLUGINS.md,
+// App releases from a registry or an uploaded package (packages/plugin-sdk/docs/apps.md,
 // "Registry"): download, verify, store, then install or update. Every release
 // goes through the same checks before anything is stored:
 //

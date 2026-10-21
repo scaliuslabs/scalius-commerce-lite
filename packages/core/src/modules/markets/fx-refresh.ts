@@ -1,4 +1,4 @@
-// Exchange rates from an app (MARKETS-DESIGN D5; docs/platform/PLUGINS.md,
+// Exchange rates from an app (MARKETS-DESIGN D5; packages/plugin-sdk/docs/apps.md,
 // "Providers", fx). A market in its own currency whose `fx_rate_source` names
 // an app FX provider gets its rate from the scheduled tick: one call per
 // source and currency, the answer stored on the market with its time. Pages,
