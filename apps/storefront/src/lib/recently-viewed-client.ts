@@ -23,8 +23,8 @@ export type PublicIdsReader = (ids: readonly string[]) => Promise<Set<string> | 
 
 async function readPublicIds(ids: readonly string[]): Promise<Set<string> | null> {
   try {
-    const { getAllProducts } = await import("@/lib/api/products");
-    const response = await getAllProducts({ ids: ids.join(","), limit: RECENTLY_VIEWED_LIMIT });
+    const { fetchProductsByIds } = await import("@/lib/api/browser-products");
+    const response = await fetchProductsByIds(ids.join(","), RECENTLY_VIEWED_LIMIT);
     return response ? new Set(response.data.map((product) => product.id)) : null;
   } catch {
     return null;
