@@ -244,7 +244,7 @@ export function RegistrySettingsDialog({ open, onOpenChange }: { open: boolean; 
   const { data, isError, isRefetching, refetch } = useQuery({ ...appRegistrySettingsQueryOptions(), enabled: open });
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-160">
         <DialogHeader>
           <DialogTitle>{t("registrySettings")}</DialogTitle>
           <DialogDescription>{t("registriesIntro")}</DialogDescription>

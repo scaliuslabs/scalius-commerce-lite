@@ -11,8 +11,8 @@ import { toast } from "~/lib/toast";
 import { StatusBadge } from "~/components/admin/resource/StatusBadge";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
+import { ChoiceField } from "~/components/ui/field";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
-import { Switch } from "~/components/ui/switch";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { formatNumber, translate, useMessages } from "~/i18n";
 import { salesChannelsMessages, type SalesChannelsMessageKey } from "~/i18n/sales-channels";
@@ -166,17 +166,20 @@ function ManageChannelDialog({ channel, locations, choosesLocations, onClose }: 
         <div className="space-y-5">
           <section className="space-y-2">
             <h3 className="text-body font-medium">{t("status")}</h3>
-            <label className="flex items-start gap-3 text-body">
-              <Switch
-                checked={active}
-                disabled={statusLocked !== null || update.isPending}
-                onCheckedChange={setActive}
-              />
-              <span>
-                {t("statusOn")}
-                <span className="block text-muted-foreground">{statusLocked ?? t("statusOnHelp")}</span>
-              </span>
-            </label>
+            <ChoiceField
+              id="sales-channel-active"
+              label={t("statusOn")}
+              help={statusLocked ?? t("statusOnHelp")}
+              control={
+                <Checkbox
+                  id="sales-channel-active"
+                  checked={active}
+                  disabled={statusLocked !== null || update.isPending}
+                  aria-describedby="sales-channel-active-help"
+                  onCheckedChange={(checked) => setActive(checked === true)}
+                />
+              }
+            />
           </section>
           {choosesLocations ? (
           <section className="space-y-2">

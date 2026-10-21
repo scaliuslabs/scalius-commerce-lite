@@ -23,7 +23,6 @@ import {
 } from "@scalius/shared/security-csp";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { Switch } from "~/components/ui/switch";
 import { Textarea } from "~/components/ui/textarea";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
@@ -41,6 +40,7 @@ import { advancedSettingsMessages } from "~/i18n/settings-advanced";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
+import { SettingsCheckbox } from "./SettingsCheckbox";
 import { queryKeys } from "~/lib/query-keys";
 
 type Platform = Omit<ApiResult<typeof getApiV1AdminSettingsPlatform>, "revision">;
@@ -305,10 +305,7 @@ function SingleSignOnFields() {
     setValues((draft) => ({ ...draft, identityHandoff: { ...draft.identityHandoff, [key]: value } }));
   return (
     <>
-      <label className="flex min-h-11 items-center justify-between gap-4 text-body font-medium">
-        {t("ssoEnabled")}
-        <Switch checked={handoff.enabled} onCheckedChange={(enabled) => set("enabled", enabled)} />
-      </label>
+      <SettingsCheckbox id="sso-enabled" label={t("ssoEnabled")} checked={handoff.enabled} onCheckedChange={(enabled) => set("enabled", enabled)} />
       {(["issuer", "audience", "jwksUrl"] as const).map((key) => {
         const label = key === "issuer" ? t("ssoIssuer") : key === "audience" ? t("ssoAudience") : t("ssoKeysUrl");
         const error = errors[key];
@@ -333,17 +330,14 @@ function SingleSignOnFields() {
           </SettingsField>
         );
       })}
-      <label className="flex min-h-11 items-center justify-between gap-4 text-body">
-        <span>
-          <span className="block font-medium">{t("ssoPasswordOff")}</span>
-          <span className="block text-muted-foreground">{t("ssoPasswordOffHelp")}</span>
-        </span>
-        <Switch
-          checked={handoff.enabled && handoff.localLoginDisabled}
-          disabled={!handoff.enabled}
-          onCheckedChange={(value) => set("localLoginDisabled", value)}
-        />
-      </label>
+      <SettingsCheckbox
+        id="sso-password-off"
+        label={t("ssoPasswordOff")}
+        help={t("ssoPasswordOffHelp")}
+        checked={handoff.enabled && handoff.localLoginDisabled}
+        disabled={!handoff.enabled}
+        onCheckedChange={(value) => set("localLoginDisabled", value)}
+      />
     </>
   );
 }
@@ -392,23 +386,22 @@ function ConnectedSitesFields() {
   );
 }
 
-function SetupTokenSwitch() {
+function SetupTokenCheckbox() {
   const t = useMessages(advancedSettingsMessages);
   const canEdit = useCanEdit();
-  // Inline switch: the page save bar saves it.
+  // The page save bar saves it, so it is a checkbox (DESIGN F9).
   const { values, setValue } = usePlatformForm((draft) => ({ setupTokenRequired: draft.setupTokenRequired }));
   return (
-    <label className="flex min-h-14 items-center justify-between gap-4 border-t border-border px-4 py-3 text-body">
-      <span>
-        <span className="block font-medium">{t("setupTokenLabel")}</span>
-        <span className="block text-muted-foreground">{t("setupTokenHelp")}</span>
-      </span>
-      <Switch
+    <div className="border-t border-border px-4 py-3">
+      <SettingsCheckbox
+        id="setup-token-required"
+        label={t("setupTokenLabel")}
+        help={t("setupTokenHelp")}
         checked={Boolean(values.setupTokenRequired)}
         disabled={!canEdit}
         onCheckedChange={(value) => setValue("setupTokenRequired", value)}
       />
-    </label>
+    </div>
   );
 }
 
@@ -449,7 +442,7 @@ export function SignInAccessCard() {
           >
             <ConnectedSitesFields />
           </SettingsDialog>
-          <SetupTokenSwitch />
+          <SetupTokenCheckbox />
         </>
       }
     />

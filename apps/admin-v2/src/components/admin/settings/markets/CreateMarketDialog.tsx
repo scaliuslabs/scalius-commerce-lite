@@ -68,7 +68,7 @@ export function CreateMarketDialog({ open, onOpenChange, taken }: {
   return (
     <>
       <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : requestClose())}>
-        <DialogContent className="sm:max-w-xl">
+        <DialogContent className="sm:max-w-160">
           <DialogHeader>
             <DialogTitle>{t("addTitle")}</DialogTitle>
             <DialogDescription>{t("newMarketDraft")}</DialogDescription>

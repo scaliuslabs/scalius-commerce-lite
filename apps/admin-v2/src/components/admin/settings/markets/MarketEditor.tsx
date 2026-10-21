@@ -30,7 +30,6 @@ import { Input } from "~/components/ui/input";
 import { NumberInput, PercentInput } from "~/components/ui/number-input";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { SearchableSelect } from "~/components/ui/searchable-select";
-import { Switch } from "~/components/ui/switch";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
 import { formatDateTime, formatNumber, getLocale, useLocale, useMessages } from "~/i18n";
@@ -43,6 +42,7 @@ import { storeLanguagesQueryOptions } from "~/lib/api-query-options/translations
 import { languageName } from "../../translations/translation-form";
 import { marketCurrenciesQueryOptions, marketWriteInvalidations, marketsQueryOptions, saveMarket, useDeleteMarket } from "~/lib/api-query-options/markets";
 import { SettingsCard, SettingsCardLoading, SettingsField, SettingsPage } from "../SettingsPage";
+import { SettingsCheckbox } from "../SettingsCheckbox";
 import { SettingsAdvanced } from "../SettingsAdvanced";
 import { SettingsLoadFailure } from "../SettingsLoadFailure";
 import { ExchangeRateSource } from "./ExchangeRateSource";
@@ -124,11 +124,11 @@ export function MarketEditor({ marketId }: { marketId: string }) {
       back={back}
       title={saved.data.name}
       readOnly={!canEdit}
-      actions={
-        <span className="flex items-center gap-2">
+      status={
+        <>
           {saved.data.isBackup ? <Badge variant="info">{t("primary")}</Badge> : null}
           <StatusBadge status={savedStatus}>{t(savedStatus)}</StatusBadge>
-        </span>
+        </>
       }
     >
       <SettingsCard title={t("detailsTitle")}>
@@ -179,14 +179,15 @@ export function MarketEditor({ marketId }: { marketId: string }) {
       )}
 
       <SettingsCard title={t("taxesTitle")}>
-        <label className="flex min-h-11 items-center justify-between gap-4 text-body">
-          <span>
-            <span className="block font-medium">{t("pricesIncludeTax")}</span>
-            <span className="block text-muted-foreground">{t("pricesIncludeTaxHelp")}</span>
-          </span>
-          <Switch checked={values.pricesIncludeTax} disabled={!canEdit} onCheckedChange={(on) => setValue("pricesIncludeTax", on)} />
-        </label>
-        <Link to="/admin/settings/taxes" className="text-body text-foreground underline">{t("taxRegionsLink")}</Link>
+        <SettingsCheckbox
+          id="market-prices-include-tax"
+          label={t("pricesIncludeTax")}
+          help={t("pricesIncludeTaxHelp")}
+          checked={values.pricesIncludeTax}
+          disabled={!canEdit}
+          onCheckedChange={(on) => setValue("pricesIncludeTax", on)}
+        />
+        <Link to="/admin/settings/taxes" className="self-start text-body text-link hover:underline">{t("taxRegionsLink")}</Link>
       </SettingsCard>
 
       <SettingsAdvanced label={t("advancedTitle")} forceOpen={Boolean(problems.handle || problems.suffix)}>
@@ -234,7 +235,7 @@ function CurrencyCard({ values, savedCurrency, canEdit, rateError, lockError, se
         <p className="text-body">{displayName(values.currencyCode, "currency")} ({values.currencyCode})</p>
         <p className="text-body text-muted-foreground">
           {t("currencyLocked")}{" "}
-          <Link to="/admin/settings/store" hash="storeDefaults" className="text-foreground underline">{t("storeDetails")}</Link>.
+          <Link to="/admin/settings/store" hash="storeDefaults" className="text-link hover:underline">{t("storeDetails")}</Link>.
         </p>
       </SettingsCard>
     );
@@ -253,7 +254,7 @@ function CurrencyCard({ values, savedCurrency, canEdit, rateError, lockError, se
         <p className="text-body">{displayName(shop, "currency")} ({shop})</p>
         <p className="text-body text-muted-foreground">
           {t("noOtherCurrency", { currency: shop })}{" "}
-          <Link to="/admin/settings/payments" className="text-foreground underline">{t("paymentsLink")}</Link>.
+          <Link to="/admin/settings/payments" className="text-link hover:underline">{t("paymentsLink")}</Link>.
         </p>
       </SettingsCard>
     );
@@ -352,13 +353,14 @@ function WebAddressCard({ values, canEdit, suffixError, setValues }: {
   const path = presencePath(values);
   return (
     <SettingsCard title={t("addressTitle")}>
-      <label className="flex min-h-11 items-center justify-between gap-4 text-body">
-        <span>
-          <span className="block font-medium">{t("useAddress")}</span>
-          <span className="block text-muted-foreground">{t(values.subfolder ? "addressHelp" : "noAddressHelp")}</span>
-        </span>
-        <Switch checked={values.subfolder} disabled={!canEdit} onCheckedChange={(on) => setValues((draft) => withSubfolder(draft, on))} />
-      </label>
+      <SettingsCheckbox
+        id="market-subfolder"
+        label={t("useAddress")}
+        help={t(values.subfolder ? "addressHelp" : "noAddressHelp")}
+        checked={values.subfolder}
+        disabled={!canEdit}
+        onCheckedChange={(on) => setValues((draft) => withSubfolder(draft, on))}
+      />
       {values.subfolder ? (
         <>
           {codes.length > 1 ? (
@@ -415,18 +417,14 @@ function PriceFormatCard({ values, canEdit, onChange }: {
   const takaCash = cashOnDeliveryIncrementMinor(code) > 1 && !whole;
   return (
     <SettingsCard title={t("formatTitle")}>
-      <label className="flex min-h-11 items-center justify-between gap-4 text-body">
-        <span>
-          <span className="block font-medium">{t("wholePricesLabel")}</span>
-          <span className="block text-muted-foreground">{t("wholePricesHelp")}</span>
-          {takaCash ? <span className="block text-muted-foreground">{t("wholePricesCod")}</span> : null}
-        </span>
-        <Switch
-          checked={whole}
-          disabled={!canEdit}
-          onCheckedChange={(on) => onChange(on ? choices[choices.length - 1]! : choices[0]!)}
-        />
-      </label>
+      <SettingsCheckbox
+        id="market-whole-prices"
+        label={t("wholePricesLabel")}
+        help={takaCash ? <>{t("wholePricesHelp")} {t("wholePricesCod")}</> : t("wholePricesHelp")}
+        checked={whole}
+        disabled={!canEdit}
+        onCheckedChange={(on) => onChange(on ? choices[choices.length - 1]! : choices[0]!)}
+      />
     </SettingsCard>
   );
 }

@@ -7,8 +7,7 @@ import { postApiV1AdminSettingsSeo } from "@scalius/api-client/sdk";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
-import { Switch } from "~/components/ui/switch";
+import { ChoiceField } from "~/components/ui/field";
 import { Textarea } from "~/components/ui/textarea";
 import { SaveBarProvider } from "~/components/admin/shared/SaveBar";
 import {
@@ -217,29 +216,32 @@ function PreferencesCards() {
         />
       </SectionCard>
 
-      <SectionCard
-        title={t("productFeed")}
-        description={t("productFeedHelp")}
-        action={
-          <Switch
-            checked={draft.productCatalogEnabled}
-            aria-label={t("productFeed")}
-            onCheckedChange={(productCatalogEnabled) => set({ productCatalogEnabled })}
-          />
-        }
-      >
+      {/* Both choices are saved with the page's save bar: checkboxes (DESIGN F9). */}
+      <SectionCard title={t("productFeed")} description={t("productFeedHelp")}>
+        <ChoiceField
+          id="preferences-product-feed"
+          label={t("productFeedOn")}
+          control={
+            <Checkbox
+              id="preferences-product-feed"
+              checked={draft.productCatalogEnabled}
+              onCheckedChange={(checked) => set({ productCatalogEnabled: checked === true })}
+            />
+          }
+        />
         {draft.productCatalogEnabled ? (
           <>
-            <div className="flex items-start gap-3">
-              <span className="flex h-lh items-center text-body">
+            <ChoiceField
+              id="preferences-sold-out"
+              label={t("includeSoldOut")}
+              control={
                 <Checkbox
                   id="preferences-sold-out"
                   checked={draft.includeUnavailableProducts}
                   onCheckedChange={(checked) => set({ includeUnavailableProducts: checked === true })}
                 />
-              </span>
-              <Label htmlFor="preferences-sold-out">{t("includeSoldOut")}</Label>
-            </div>
+              }
+            />
             {origin ? (
               <div className="space-y-3">
                 <FeedLeftOut />

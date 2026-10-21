@@ -23,7 +23,7 @@ export function DynamicSourcePicker({ id, path, type, label }: { id: string; pat
   return (
     <div className="space-y-2" data-setting-source={path}>
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" variant="ghost" size="sm" aria-label={t("connectSetting", { name: label })} aria-expanded={open} aria-controls={`${id}-sources`} disabled={full} onClick={() => setOpen((value) => !value)}>
+        <Button type="button" variant="ghost" size="sm" className="-ms-3 sm:-ms-2.5" aria-label={t("connectSetting", { name: label })} aria-expanded={open} aria-controls={`${id}-sources`} disabled={full} onClick={() => setOpen((value) => !value)}>
           {t(open ? "close" : source ? "connected" : "connect")}
         </Button>
         {source ? <Button type="button" variant="ghost" size="sm" onClick={() => scope.onChange(withSettingBinding(scope.bindings, path, null))}>{t("disconnect")}</Button> : null}

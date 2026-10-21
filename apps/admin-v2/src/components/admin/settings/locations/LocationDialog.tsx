@@ -153,7 +153,7 @@ export function LocationDialog({ location, open, onOpenChange }: {
   return (
     <>
       <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : requestClose())}>
-        <DialogContent className="sm:max-w-xl">
+        <DialogContent className="sm:max-w-160">
           <DialogHeader>
             <DialogTitle>{t(location ? "editTitle" : "addTitle")}</DialogTitle>
           </DialogHeader>

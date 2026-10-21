@@ -1,5 +1,6 @@
 ---
 import Icon from "@/components/icons/Icon.astro";
+import Container from "@/components/ui/Container.astro";
 import type { Product } from "@/lib/api";
 import { catalogCopy } from "@/lib/catalog-copy";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
@@ -13,8 +14,9 @@ const { product, category } = Astro.props;
 const copy = catalogCopy((await currentRequestTheme(Astro.locals)).language).breadcrumb;
 ---
 
-<nav
-  class="mx-auto max-w-7xl px-3 py-1 sm:px-6 sm:py-1.5 lg:px-8 lg:py-2"
+<Container
+  as="nav"
+  class="py-1 sm:py-1.5 lg:py-2"
   aria-label={copy.label}
 >
   <ol
@@ -49,4 +51,4 @@ const copy = catalogCopy((await currentRequestTheme(Astro.locals)).language).bre
     }
     <li class="text-foreground font-semibold truncate">{product.name}</li>
   </ol>
-</nav>
+</Container>

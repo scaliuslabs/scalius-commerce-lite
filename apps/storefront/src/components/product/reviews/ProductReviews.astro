@@ -19,6 +19,7 @@
 // Sign in to review, the inline form, Edit your review, or "verified buyers
 // only".
 import "./product-reviews.css";
+import Container from "@/components/ui/Container.astro";
 import type { Product } from "@/lib/api";
 import ReviewsOverview from "./ReviewsOverview.astro";
 import type { ReviewFormCopy } from "@/lib/account-reviews";
@@ -72,9 +73,10 @@ const scriptCopy = JSON.stringify({
 ---
 
 {summary && (
+  <Container>
   <section
     id="reviews"
-    class="product-reviews mx-auto max-w-7xl px-3 py-6 sm:px-6 lg:px-8 lg:py-10"
+    class="product-reviews py-6 lg:py-10"
     aria-labelledby="reviews-heading"
     data-product-reviews={hasReviews ? "" : undefined}
     data-product-id={product.id}
@@ -144,6 +146,7 @@ const scriptCopy = JSON.stringify({
       </div>
     )}
   </section>
+  </Container>
 )}
 
 <script>

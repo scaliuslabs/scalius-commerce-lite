@@ -65,7 +65,7 @@ export function RegistryAppDialog({ app, installMode, open, onOpenChange }: Regi
   const trusted = app?.signer.trusted ?? false;
   return (
     <Dialog open={open} onOpenChange={(next) => (install.isPending ? undefined : onOpenChange(next))}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-160">
         {app ? (
           <>
             <DialogHeader>

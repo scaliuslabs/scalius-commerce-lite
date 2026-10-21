@@ -20,9 +20,7 @@ import {
 import { StatusBadge } from "~/components/admin/resource/StatusBadge";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
-import { Switch } from "~/components/ui/switch";
 import { Textarea } from "~/components/ui/textarea";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
@@ -42,6 +40,7 @@ import { useDocumentDraft } from "../online-store/shared";
 import { useCheckoutFlowForm } from "./PaymentsSettings";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
+import { SettingsCheckbox } from "./SettingsCheckbox";
 import { FieldRow } from "~/components/ui/field";
 
 type Language = ApiResult<typeof getApiV1AdminSettingsCheckoutLanguages>["languages"][number];
@@ -170,16 +169,14 @@ function FormFields({ language, disabled }: { language: Language | undefined; di
     },
   });
   return FORM_FIELDS.map(([key, label]) => (
-    <label key={key} className="flex min-h-11 items-start gap-3 py-3 text-body">
-      <span className="flex h-lh items-center">
-      <Checkbox
-        checked={draft[key]}
-        disabled={disabled}
-        onCheckedChange={(checked) => setDraft((current) => ({ ...current, [key]: checked === true }))}
-      />
-      </span>
-      {t(label)}
-    </label>
+    <SettingsCheckbox
+      key={key}
+      id={`checkout-field-${key}`}
+      label={t(label)}
+      checked={draft[key]}
+      disabled={disabled}
+      onCheckedChange={(checked) => setDraft((current) => ({ ...current, [key]: checked }))}
+    />
   ));
 }
 
@@ -199,35 +196,29 @@ export function CustomerContactCard() {
   const language = checkoutLanguage(languages.data?.languages);
   return (
     <SettingsCard id="customerContact" title={t("contactTitle")}>
-      <label className="flex min-h-11 items-center justify-between gap-4 text-body">
-        <span>
-          <span className="block font-medium">{t("guest")}</span>
-          <span className="block text-muted-foreground">{t("guestHelp")}</span>
-        </span>
-        <Switch
-          checked={values.guestCheckoutEnabled}
-          disabled={!canEdit}
-          onCheckedChange={(on) => setValue("guestCheckoutEnabled", on)}
-        />
-      </label>
+      <SettingsCheckbox
+        id="checkout-guest"
+        label={t("guest")}
+        help={t("guestHelp")}
+        checked={values.guestCheckoutEnabled}
+        disabled={!canEdit}
+        onCheckedChange={(on) => setValue("guestCheckoutEnabled", on)}
+      />
       {!values.guestCheckoutEnabled && !signInReady ? (
         <p role="alert" className="text-body text-destructive">{t("signInNotReady")}</p>
       ) : null}
-      <label className="flex min-h-11 items-center justify-between gap-4 text-body">
-        <span>
-          <span className="block font-medium">{t("fullBillingAddress")}</span>
-          <span className="block text-muted-foreground">{t("fullBillingAddressHelp")}</span>
-        </span>
-        <Switch
-          checked={values.requireFullBillingAddress === true}
-          disabled={!canEdit}
-          onCheckedChange={(on) => setValue("requireFullBillingAddress", on)}
-        />
-      </label>
-      <p className="text-body text-muted-foreground">
-        <Link to="/admin/settings/customer-accounts" className="underline underline-offset-2">{t("contactFieldsPointer")}</Link>
+      <SettingsCheckbox
+        id="checkout-full-billing"
+        label={t("fullBillingAddress")}
+        help={t("fullBillingAddressHelp")}
+        checked={values.requireFullBillingAddress === true}
+        disabled={!canEdit}
+        onCheckedChange={(on) => setValue("requireFullBillingAddress", on)}
+      />
+      <p className="text-body">
+        <Link to="/admin/settings/customer-accounts" className="text-link hover:underline">{t("contactFieldsPointer")}</Link>
       </p>
-      <div className="border-t border-border pt-2">
+      <div className="flex flex-col gap-4 border-t border-border pt-4">
         <FormFields
           key={language?.id ?? "none"}
           language={language}
@@ -314,10 +305,13 @@ function LanguageForm({ language }: { language: Language | null }) {
         </SettingsField>
       </FieldRow>
       {(["isActive", "isDefault"] as const).map((key) => (
-        <label key={key} className="flex min-h-11 items-center justify-between gap-4 text-body font-medium">
-          {key === "isActive" ? t("useAtCheckout") : t("useAsFallback")}
-          <Switch checked={draft[key]} onCheckedChange={(on) => setDraft({ ...draft, [key]: on })} />
-        </label>
+        <SettingsCheckbox
+          key={key}
+          id={`language-${key}`}
+          label={key === "isActive" ? t("useAtCheckout") : t("useAsFallback")}
+          checked={draft[key]}
+          onCheckedChange={(on) => setDraft({ ...draft, [key]: on })}
+        />
       ))}
       <div className="grid gap-4 border-t border-border pt-4 sm:grid-cols-2">
         {TEXT_FIELDS.map((key) => (
@@ -463,32 +457,33 @@ export function CustomerRequestsCard() {
   });
   if (isLoadError) return <SettingsLoadFailure title={t("loadRequests")} onRetry={refetch} />;
   if (values.visibility === undefined) return <SettingsCardLoading />;
-  const switches = [
+  const requests = [
     ["cancellationEnabled", "cancellationHelp"],
     ["returnEnabled", "returnHelp"],
     ["refundEnabled", "refundHelp"],
   ] as const;
   return (
     <SettingsCard id="customerRequests" title={t("requestsTitle")} description={t("requestsDescription")}>
-      {switches.map(([key, help]) => (
-        <label key={key} className="flex min-h-11 items-center justify-between gap-4 text-body">
-          <span>
-            <span className="block font-medium">{t(key)}</span>
-            <span className="block text-muted-foreground">{t(help)}</span>
-          </span>
-          <Switch checked={values[key]} disabled={!canEdit} onCheckedChange={(on) => setValue(key, on)} />
-        </label>
+      {requests.map(([key, help]) => (
+        <SettingsCheckbox
+          key={key}
+          id={`request-${key}`}
+          label={t(key)}
+          help={t(help)}
+          checked={values[key]}
+          disabled={!canEdit}
+          onCheckedChange={(on) => setValue(key, on)}
+        />
       ))}
-      <label className="flex min-h-11 items-start gap-3 border-t border-border pt-4 py-3 text-body">
-        <span className="flex h-lh items-center">
-        <Checkbox
+      <div className="border-t border-border pt-4">
+        <SettingsCheckbox
+          id="request-show-unavailable"
+          label={t("showUnavailable")}
           checked={values.visibility === "show_unavailable"}
           disabled={!canEdit}
-          onCheckedChange={(checked) => setValue("visibility", checked === true ? "show_unavailable" : "eligible_only")}
+          onCheckedChange={(checked) => setValue("visibility", checked ? "show_unavailable" : "eligible_only")}
         />
-        </span>
-        {t("showUnavailable")}
-      </label>
+      </div>
       <SettingsField id="request-intro" label={t("intro")}>
         <Textarea
           id="request-intro"

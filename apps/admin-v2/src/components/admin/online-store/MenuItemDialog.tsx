@@ -19,9 +19,9 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { SearchableSelect } from "~/components/ui/searchable-select";
-import { Switch } from "~/components/ui/switch";
+import { Checkbox } from "~/components/ui/checkbox";
+import { ChoiceField } from "~/components/ui/field";
 import { apiData } from "~/lib/api";
 import type {
   NavigationItemDraft,
@@ -245,26 +245,31 @@ function ItemForm({
           />
         </Field>
       ) : null}
-      <div className="rounded-lg border">
-        <div className="flex items-center justify-between gap-3 px-3 py-2">
-          <Label htmlFor="menu-item-visible">{t("showInMenu")}</Label>
-          <Switch
+      {/* Saved with the dialog's Save: checkboxes (DESIGN F9). */}
+      <ChoiceField
+        id="menu-item-visible"
+        label={t("showInMenu")}
+        control={
+          <Checkbox
             id="menu-item-visible"
             checked={draft.isEnabled !== false}
-            onCheckedChange={(isEnabled) => setDraft((current) => ({ ...current, isEnabled }))}
+            onCheckedChange={(isEnabled) => setDraft((current) => ({ ...current, isEnabled: isEnabled === true }))}
           />
-        </div>
-        {target.type !== "label" ? (
-          <div className="flex items-center justify-between gap-3 border-t border-border px-3 py-2">
-            <Label htmlFor="menu-item-new-tab">{t("openInNewTab")}</Label>
-            <Switch
+        }
+      />
+      {target.type !== "label" ? (
+        <ChoiceField
+          id="menu-item-new-tab"
+          label={t("openInNewTab")}
+          control={
+            <Checkbox
               id="menu-item-new-tab"
               checked={draft.openInNewTab === true}
-              onCheckedChange={(openInNewTab) => setDraft((current) => ({ ...current, openInNewTab }))}
+              onCheckedChange={(openInNewTab) => setDraft((current) => ({ ...current, openInNewTab: openInNewTab === true }))}
             />
-          </div>
-        ) : null}
-      </div>
+          }
+        />
+      ) : null}
       <DialogFooter>
         <Button type="button" variant="outline" disabled={busy} onClick={onClose}>{t("cancel")}</Button>
         <Button type="submit" loading={busy} disabled={!valid}>{t(editing ? "save" : "add")}</Button>

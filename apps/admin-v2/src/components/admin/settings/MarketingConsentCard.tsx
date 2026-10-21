@@ -4,9 +4,7 @@ import {
   MARKETING_CONSENT_LABEL_MAX,
   type MarketingConsentSettings,
 } from "@scalius/shared/customer-marketing";
-import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
-import { Switch } from "~/components/ui/switch";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
@@ -18,6 +16,7 @@ import { customersMessages } from "~/i18n/customers";
 import { settingsMessages } from "~/i18n/settings";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsCardLoading, SettingsField } from "./SettingsPage";
+import { SettingsCheckbox } from "./SettingsCheckbox";
 
 type MarketingChannel = MarketingConsentSettings["checkout"]["channels"][number];
 type Values = { settings: MarketingConsentSettings };
@@ -88,34 +87,30 @@ export function MarketingConsentCard() {
 
   return (
     <SettingsCard id="marketingConsent" title={t("marketingSettingsTitle")} description={t("marketingSettingsDescription")}>
-      <label className="flex min-h-11 items-start justify-between gap-4 text-body">
-        <span className="space-y-1">
-          <span className="block font-medium">{t("checkoutCheckbox")}</span>
-          <span className="block text-muted-foreground">{t("checkoutCheckboxHelp")}</span>
-        </span>
-        <Switch
-          className="mt-0.5"
-          checked={checkout.enabled}
-          disabled={!canEdit}
-          onCheckedChange={(enabled) => set({ ...settings, checkout: { ...checkout, enabled } })}
-        />
-      </label>
+      <SettingsCheckbox
+        id="marketing-checkout"
+        label={t("checkoutCheckbox")}
+        help={t("checkoutCheckboxHelp")}
+        checked={checkout.enabled}
+        disabled={!canEdit}
+        onCheckedChange={(enabled) => set({ ...settings, checkout: { ...checkout, enabled } })}
+      />
 
       <div className="space-y-4 border-t border-border pt-4">
-        <fieldset id="marketing-channels" className="space-y-1" aria-describedby="marketing-channels-note">
+        <fieldset id="marketing-channels" className="flex flex-col gap-4" aria-describedby="marketing-channels-note">
           <legend className="text-body font-medium">{t("checkboxChannels")}</legend>
           {MARKETING_CONTACT_CHANNELS.map((channel) => {
             const on = checkout.channels.includes(channel);
             return (
-              <label key={channel} className="flex min-h-11 items-center gap-3 text-body md:min-h-9">
-                <Checkbox
-                  checked={on}
-                  // The last channel stays: the checkbox has to subscribe to something.
-                  disabled={!canEdit || (on && checkout.channels.length === 1)}
-                  onCheckedChange={() => set({ ...settings, checkout: { ...checkout, channels: toggleChannel(checkout.channels, channel) } })}
-                />
-                {c(`channel.${channel}`)}
-              </label>
+              <SettingsCheckbox
+                key={channel}
+                id={`marketing-channel-${channel}`}
+                label={c(`channel.${channel}`)}
+                checked={on}
+                // The last channel stays: the checkbox has to subscribe to something.
+                disabled={!canEdit || (on && checkout.channels.length === 1)}
+                onCheckedChange={() => set({ ...settings, checkout: { ...checkout, channels: toggleChannel(checkout.channels, channel) } })}
+              />
             );
           })}
           <p id="marketing-channels-note" className={checkout.channels.length ? "text-body text-muted-foreground" : "text-body text-destructive"}>
@@ -148,18 +143,16 @@ export function MarketingConsentCard() {
         </fieldset>
       </div>
 
-      <label className="flex min-h-11 items-start justify-between gap-4 border-t border-border pt-4 text-body">
-        <span className="space-y-1">
-          <span className="block font-medium">{t("doubleOptIn")}</span>
-          <span className="block text-muted-foreground">{t("doubleOptInHelp")}</span>
-        </span>
-        <Switch
-          className="mt-0.5"
+      <div className="border-t border-border pt-4">
+        <SettingsCheckbox
+          id="marketing-double-opt-in"
+          label={t("doubleOptIn")}
+          help={t("doubleOptInHelp")}
           checked={settings.emailDoubleOptIn}
           disabled={!canEdit}
           onCheckedChange={(emailDoubleOptIn) => set({ ...settings, emailDoubleOptIn })}
         />
-      </label>
+      </div>
     </SettingsCard>
   );
 }

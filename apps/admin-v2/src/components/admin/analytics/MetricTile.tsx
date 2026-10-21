@@ -51,10 +51,10 @@ export function MetricTile({ label, value, current, previous, comparedTo, change
         <p className="text-body text-muted-foreground" title={help}>{label}</p>
         <p className="text-heading-lg font-semibold wrap-anywhere sm:text-heading-xl">{value}</p>
         {comparedTo && words !== null ? (
-          <p className="flex items-center gap-1 text-body">
+          <p className="flex flex-wrap items-center gap-x-1 text-body">
             <span
               className={cn(
-                "flex items-center gap-0.5",
+                "flex shrink-0 items-center gap-0.5",
                 flat ? "text-muted-foreground" : good ? "text-success" : "text-critical",
               )}
             >

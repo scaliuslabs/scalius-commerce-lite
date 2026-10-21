@@ -8,6 +8,7 @@
 // public read of product ids drops products that are no longer public
 // (lib/recently-viewed-client.ts).
 import { recentlyViewedRenderScript } from "@/lib/recently-viewed";
+import Container from "@/components/ui/Container.astro";
 
 interface Props {
   title: string;
@@ -20,9 +21,10 @@ const rootId = "recently-viewed";
 const headingId = `${rootId}-heading`;
 ---
 
+<Container>
 <section
   id={rootId}
-  class="product-module mx-auto max-w-7xl border-t border-border px-3 py-6 sm:px-6 lg:px-8 lg:py-10"
+  class="product-module border-t border-border py-6 lg:py-10"
   data-product-module={rootId}
   data-recently-viewed
   aria-labelledby={headingId}
@@ -31,6 +33,7 @@ const headingId = `${rootId}-heading`;
   <h2 id={headingId} class="mb-4 text-xl font-bold leading-tight text-foreground lg:text-2xl">{title}</h2>
   <ul data-h-rail class="-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 py-1 [scrollbar-width:none] md:gap-4 [&::-webkit-scrollbar]:hidden" data-recently-viewed-list></ul>
 </section>
+</Container>
 <script is:inline set:html={recentlyViewedRenderScript(rootId, slug)} />
 
 <script>

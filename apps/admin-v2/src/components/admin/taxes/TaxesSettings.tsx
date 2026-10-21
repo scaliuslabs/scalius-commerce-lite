@@ -56,7 +56,7 @@ import { SettingsCard, SettingsCardLoading, SettingsDialog, SettingsField, Setti
 import { basisPointsToPercent, taxSettingsIssue } from "./tax-form";
 import {
   NONE,
-  SwitchRow,
+  CheckRow,
   money,
   useCanManageTaxes,
   useGroupName,
@@ -193,7 +193,7 @@ export function TaxCollectionCard() {
   const settled = canEdit && values.enabled;
   return (
     <SettingsCard id="taxCollection" title={t("collectionTitle")}>
-      <SwitchRow
+      <CheckRow
         label={t("collect")}
         help={t("collectHelp")}
         checked={values.enabled}
@@ -232,7 +232,7 @@ export function TaxCollectionCard() {
           triggerClassName="w-full"
         />
       </SettingsField>
-      <SwitchRow
+      <CheckRow
         label={t("taxDelivery")}
         checked={values.taxShipping}
         disabled={!settled}
@@ -332,7 +332,7 @@ function GroupForm({ group, config }: { group: TaxClassRecord | null; config: Ta
           onChange={(event) => setDraft({ ...draft, name: event.target.value })}
         />
       </SettingsField>
-      <SwitchRow
+      <CheckRow
         label={t("taxFree")}
         help={t("taxFreeHelp")}
         checked={draft.isExempt}
@@ -490,7 +490,7 @@ function TryItRow({ config }: { config: TaxConfigurationPayload }) {
       <DialogTrigger asChild>
         <SettingsRow label={t("tryIt")} value={t("tryItValue")} />
       </DialogTrigger>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="sm:max-w-160">
         <DialogHeader>
           <DialogTitle>{t("tryIt")}</DialogTitle>
         </DialogHeader>

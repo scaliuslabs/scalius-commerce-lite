@@ -223,22 +223,25 @@ function ThemeOverview({ workspace, refetch }: {
                   })}
                 </p>
               ) : null}
+              <p className="text-body text-muted-foreground">{editor("customizeHelp")}</p>
             </div>
             {appsProblem ? <ThemeAppsUnavailableAlert apps={appsProblem.apps} moreParts={appsProblem.moreParts} /> : null}
             <div className="flex flex-wrap gap-2">
               <Button asChild>
                 <Link to="/admin/online-store/theme/editor">{editor("customize")}</Link>
               </Button>
-              <Button type="button" variant="outline" disabled={workspace.draft.revision < 1 || busy !== null} loading={busy === "preview"} onClick={() => void preview()}>
-                {editor("preview")}
-              </Button>
+              {/* Nothing to preview until a draft exists: no disabled button without a reason (C5). */}
+              {workspace.draft.revision >= 1 ? (
+                <Button type="button" variant="outline" disabled={busy !== null} loading={busy === "preview"} onClick={() => void preview()}>
+                  {editor("preview")}
+                </Button>
+              ) : null}
               {changed && canEdit ? (
                 <Button type="button" variant="outline" disabled={busy !== null} loading={busy === "publish"} onClick={() => setConfirmPublish(true)}>
                   {t("themePublish")}
                 </Button>
               ) : null}
             </div>
-            <p className="text-body text-muted-foreground">{editor("customizeHelp")}</p>
           </div>
         </div>
       </SectionCard>
