@@ -1146,7 +1146,20 @@ export async function saveProductOptionMatrix(
         .get();
     if (!product) throw new NotFoundError("Product not found");
     const plan = await planProductOptionMatrix(db, productId, input, { isActive: product.isActive, adminUserId });
+    const { aggregateRevision } = await commitProductOptionMatrixPlan(db, productId, expectedAggregateRevision, plan);
+    return { aggregateRevision };
+}
 
+/**
+ * Writes a planned matrix save in one guarded aggregate batch (the revision
+ * advances once) and reconciles the low-stock alerts of the SKUs it touched.
+ */
+export async function commitProductOptionMatrixPlan(
+    db: Database,
+    productId: string,
+    expectedAggregateRevision: number,
+    plan: ProductOptionMatrixPlan,
+): Promise<{ aggregateRevision: number }> {
     let result;
     try {
         result = await executeProductAggregateMutationBatch(

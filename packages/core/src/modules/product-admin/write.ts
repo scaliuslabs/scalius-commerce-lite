@@ -283,14 +283,20 @@ function buildProductMediaInsertStatements(
     return statements;
 }
 
+/**
+ * The removed gallery images SKUs still show, after the caller confirmed
+ * them: the editor names each one (`acknowledgedAssociationIds`); "all" is a
+ * whole-gallery replacement that lets those SKUs fall back to the featured
+ * image without naming them.
+ */
 async function assertRemovedSkuImagesAcknowledged(
     db: Database,
     productId: string,
     removedAssociationIds: readonly string[],
-    acknowledgedAssociationIds: readonly string[],
+    acknowledgedAssociationIds: readonly string[] | "all",
 ): Promise<string[]> {
     if (removedAssociationIds.length === 0) {
-        if (acknowledgedAssociationIds.length > 0) {
+        if (acknowledgedAssociationIds !== "all" && acknowledgedAssociationIds.length > 0) {
             throw new ValidationError("SKU image fallback acknowledgement is stale. Reload the product and try again.");
         }
         return [];
@@ -313,6 +319,7 @@ async function assertRemovedSkuImagesAcknowledged(
     const affectedAssociationIds = [...new Set(
         affected.flatMap((row) => row.imageId ? [row.imageId] : []),
     )];
+    if (acknowledgedAssociationIds === "all") return affectedAssociationIds;
     const affectedIdSet = new Set(affectedAssociationIds);
     const acknowledged = new Set(acknowledgedAssociationIds);
     if (acknowledgedAssociationIds.some((id) => !affectedIdSet.has(id))) {
@@ -1316,13 +1323,17 @@ export async function updateProduct(
  * API clients; it deliberately does not load or rewrite unrelated product
  * text, attributes, rich content, options, or SKUs.
  */
-export async function updateProductMediaSection(
+/**
+ * A gallery save's writes, without the revision guard, so a caller can put
+ * them in one guarded batch with other sections. Null when the product does
+ * not exist.
+ */
+export async function planProductMediaSection(
     db: Database,
     productId: string,
-    expectedAggregateRevision: number,
     submitted: UpdateProductInput["media"],
-    acknowledgedSkuImageRemovalIds: readonly string[] = [],
-): Promise<ProductAggregateRevisionResult | null> {
+    acknowledgedSkuImageRemovalIds: readonly string[] | "all" = [],
+): Promise<SQLiteBatchItem[] | null> {
     const product = await db
         .select({ id: products.id })
         .from(products)
@@ -1341,13 +1352,41 @@ export async function updateProductMediaSection(
         removedAssociationIds,
         acknowledgedSkuImageRemovalIds,
     );
-    const result = await executeProductAggregateMutationBatch(
-        db,
-        productId,
-        expectedAggregateRevision,
-        buildProductMediaUpdateStatements(db, productId, mediaPlan, clearSkuImageIds),
-    );
+    return buildProductMediaUpdateStatements(db, productId, mediaPlan, clearSkuImageIds);
+}
+
+export async function updateProductMediaSection(
+    db: Database,
+    productId: string,
+    expectedAggregateRevision: number,
+    submitted: UpdateProductInput["media"],
+    acknowledgedSkuImageRemovalIds: readonly string[] = [],
+): Promise<ProductAggregateRevisionResult | null> {
+    const statements = await planProductMediaSection(db, productId, submitted, acknowledgedSkuImageRemovalIds);
+    if (!statements) return null;
+    const result = await executeProductAggregateMutationBatch(db, productId, expectedAggregateRevision, statements);
     return { aggregateRevision: result.aggregateRevision };
+}
+
+/**
+ * A gallery given as media file ids in order (the first featured), as the
+ * editor's media input: a file the product already shows keeps its use (id
+ * and alt text); a new one gets a new use.
+ */
+export async function productMediaFromMediaIds(
+    db: Database,
+    productId: string,
+    mediaIds: readonly string[],
+): Promise<UpdateProductInput["media"]> {
+    const existing = mediaIds.length === 0 ? [] : await db
+        .select({ id: productMedia.id, mediaId: productMedia.mediaId, altText: productMedia.altText })
+        .from(productMedia)
+        .where(eq(productMedia.productId, productId));
+    const byMediaId = new Map(existing.map((row) => [row.mediaId, row]));
+    return mediaIds.map((mediaId, index) => {
+        const kept = byMediaId.get(mediaId);
+        return { id: kept?.id ?? `pmed_${nanoid()}`, mediaId, altText: kept?.altText ?? null, isPrimary: index === 0 };
+    });
 }
 
 /** `${base}${suffix}` values that no SKU uses yet: BASE-COPY, then BASE-COPY-2 … */

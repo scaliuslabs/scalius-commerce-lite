@@ -19,6 +19,7 @@ import {
     products,
     productVariantOptionValues,
     productVariants,
+    salesChannels,
 } from "@scalius/database/schema";
 import { AppError, ValidationError } from "@scalius/core/errors";
 import {
@@ -45,9 +46,11 @@ import {
   readStoreDecimalPlaces,
   parsePublishedChannelIds,
   publishedChannelIdsSql,
+  setProductChannelsStatements,
 } from "../products";
+import { isSalesChannelId } from "@scalius/shared/sales-channels";
 import { executeProductAggregateMutationBatch } from "./aggregate-revision";
-import { updateProductMediaSection } from "./write";
+import { planProductMediaSection, productMediaFromMediaIds, updateProductMediaSection } from "./write";
 import {
     PRODUCT_NAME_MAX_LENGTH,
     productBrandIdSchema,
@@ -632,6 +635,21 @@ async function updateBaseSection(
     expectedAggregateRevision: number,
     patch: ProductBasePatch,
 ) {
+    const statements = await planProductBaseSection(db, productId, patch);
+    if (!statements) return null;
+    return commitSectionStatements(db, productId, expectedAggregateRevision, statements);
+}
+
+/**
+ * The base section's writes, without the revision guard, so a caller can put
+ * them in one guarded batch with other sections. Null when the product does
+ * not exist.
+ */
+export async function planProductBaseSection(
+    db: Database,
+    productId: string,
+    patch: ProductBasePatch,
+): Promise<SQLiteBatchItem[] | null> {
     const [current, currency] = await Promise.all([db.select({
         name: products.name,
         priceMinor: products.priceMinor,
@@ -732,8 +750,53 @@ async function updateBaseSection(
             )));
         }
     }
-    const result = await executeProductAggregateMutationBatch(db, productId, expectedAggregateRevision, mutationStatements);
-    return { aggregateRevision: result.aggregateRevision };
+    return mutationStatements;
+}
+
+/**
+ * The stable app API's product update (`products.update`): base fields, the
+ * whole gallery (media file ids in order, the first featured) and the sales
+ * channels it is published to, in one guarded batch that advances the
+ * revision once. SKUs that showed a removed gallery image fall back to the
+ * featured image. Null when the product does not exist.
+ */
+export async function updateProductResourceSections(
+    db: Database,
+    productId: string,
+    expectedAggregateRevision: number,
+    sections: {
+        base?: ProductBasePatch;
+        mediaIds?: readonly string[];
+        salesChannelIds?: readonly string[];
+    },
+): Promise<{ aggregateRevision: number } | null> {
+    const statements: SQLiteBatchItem[] = [];
+    if (sections.base && Object.values(sections.base).some((value) => value !== undefined)) {
+        const base = await planProductBaseSection(db, productId, sections.base);
+        if (!base) return null;
+        statements.push(...base);
+    }
+    if (sections.mediaIds) {
+        const media = await planProductMediaSection(db, productId, await productMediaFromMediaIds(db, productId, sections.mediaIds), "all");
+        if (!media) return null;
+        statements.push(...media);
+    }
+    if (sections.salesChannelIds) {
+        const channelIds = [...new Set(sections.salesChannelIds)];
+        if (!channelIds.every(isSalesChannelId)) {
+            throw new ValidationError("Use sales channel ids.", { field: "salesChannelIds" });
+        }
+        const known = channelIds.length === 0 ? [] : await db.select({ id: salesChannels.id }).from(salesChannels)
+            .where(inArray(salesChannels.id, channelIds));
+        if (known.length !== channelIds.length) {
+            throw new ValidationError("A sales channel was not found.", { field: "salesChannelIds" });
+        }
+        const product = await db.select({ id: products.id }).from(products).where(eq(products.id, productId)).get();
+        if (!product) return null;
+        statements.push(...setProductChannelsStatements(db, productId, channelIds));
+    }
+    if (statements.length === 0) throw new ValidationError("Send at least one field to change.");
+    return commitSectionStatements(db, productId, expectedAggregateRevision, statements);
 }
 
 async function updateTextSection(
