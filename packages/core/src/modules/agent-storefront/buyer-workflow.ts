@@ -343,9 +343,9 @@ function lazyValue<T>(compute: () => Promise<T>): PromiseLike<T> {
 async function liveContextCustomer(
   db: Database,
   row: ContextRow,
-): Promise<{ id: string; phone: string | null } | null> {
+): Promise<{ id: string; phone: string | null; taxExempt: boolean; taxExemptionId: string | null } | null> {
   if (!row.customerSessionTokenHash) return null;
-  const result = await db.select({ id: customers.id, phone: customers.phone })
+  const result = await db.select({ id: customers.id, phone: customers.phone, taxExempt: customers.taxExempt, taxExemptionId: customers.taxExemptionId })
     .from(customerSessions)
     .innerJoin(customers, eq(customerSessions.customerId, customers.id))
     .where(and(
@@ -526,7 +526,9 @@ export async function submitAgentStorefrontCheckout(
     { orderId: attempt.orderId, checkoutToken: attempt.checkoutToken },
     authority.cartValidation,
     authority.deliveryPreflight,
-    customer ? { customerId: customer.id, source: "authenticated" } : undefined,
+    customer
+      ? { customerId: customer.id, source: "authenticated", taxExemption: customer.taxExempt ? { exemptionId: customer.taxExemptionId ?? null } : null }
+      : undefined,
     {
       code: authority.currency.currencyCode,
       decimalPlaces: getDecimalPlaces(authority.currency.currencyCode),

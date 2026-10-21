@@ -16764,6 +16764,14 @@
               ]
             }
           },
+          "taxExempt": {
+            "type": "boolean"
+          },
+          "taxExemptionId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 64
+          },
           "createdAt": {
             "type": "string",
             "minLength": 1,
@@ -16795,6 +16803,8 @@
           "mergedIntoCustomerId",
           "tags",
           "consents",
+          "taxExempt",
+          "taxExemptionId",
           "createdAt",
           "updatedAt",
           "deletedAt"
@@ -126153,6 +126163,13 @@
                             ]
                           }
                         },
+                        "taxExempt": {
+                          "type": "boolean"
+                        },
+                        "taxExemptionId": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "relatedObjects": {
                           "type": "array",
                           "items": {
@@ -126202,6 +126219,8 @@
                         "tags",
                         "marketing",
                         "addresses",
+                        "taxExempt",
+                        "taxExemptionId",
                         "relatedObjects"
                       ]
                     }
@@ -126357,6 +126376,14 @@
                     "type": "string",
                     "minLength": 7,
                     "maxLength": 16
+                  },
+                  "taxExempt": {
+                    "type": "boolean"
+                  },
+                  "taxExemptionId": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 64
                   }
                 }
               }
@@ -196537,6 +196564,20 @@
                               ],
                               "description": "Net terms of an invoice paid later; null when the order is paid now, absent on invoices issued before terms were printed."
                             },
+                            "taxExemption": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "exemptionId": {
+                                  "type": "string",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "exemptionId"
+                              ],
+                              "description": "The buyer was tax-exempt when the order was priced (no tax charged), with their certificate or registration number; null when not, absent on invoices issued before exemptions were printed."
+                            },
                             "createdAt": {
                               "anyOf": [
                                 {
@@ -197299,6 +197340,20 @@
                                 "dueAt"
                               ],
                               "description": "Net terms of an invoice paid later; null when the order is paid now, absent on invoices issued before terms were printed."
+                            },
+                            "taxExemption": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "exemptionId": {
+                                  "type": "string",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "exemptionId"
+                              ],
+                              "description": "The buyer was tax-exempt when the order was priced (no tax charged), with their certificate or registration number; null when not, absent on invoices issued before exemptions were printed."
                             },
                             "createdAt": {
                               "anyOf": [
@@ -203897,6 +203952,12 @@
                       "cod",
                       "net_terms"
                     ]
+                  },
+                  "customerId": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 128
                   }
                 },
                 "required": [

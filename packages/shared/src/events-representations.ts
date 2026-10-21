@@ -221,6 +221,13 @@ export const customerRepresentationSchema = z.object({
     contact: pii(["email", "phone"], text.nullable()),
     updatedAt: iso,
   })),
+  /**
+   * The merchant (or an app) marked the buyer tax-exempt: their orders pay
+   * no tax. `taxExemptionId` is the certificate or registration number,
+   * null for none (and always null when not exempt).
+   */
+  taxExempt: z.boolean(),
+  taxExemptionId: z.string().max(64).nullable(),
   createdAt: iso,
   updatedAt: iso,
   deletedAt: iso.nullable(),

@@ -121,6 +121,8 @@ const invoiceOrderSchema = z.object({
     days: z.number().int().positive(),
     dueAt: z.string().openapi({ description: "ISO 8601 due date: placement plus the net days." }),
   }).nullable().optional().openapi({ description: "Net terms of an invoice paid later; null when the order is paid now, absent on invoices issued before terms were printed." }),
+  taxExemption: z.object({ exemptionId: z.string().nullable() }).nullable().optional()
+    .openapi({ description: "The buyer was tax-exempt when the order was priced (no tax charged), with their certificate or registration number; null when not, absent on invoices issued before exemptions were printed." }),
   createdAt: z.union([z.string(), z.number()]),
   updatedAt: z.union([z.string(), z.number()]),
   items: z.array(invoiceItemSchema),

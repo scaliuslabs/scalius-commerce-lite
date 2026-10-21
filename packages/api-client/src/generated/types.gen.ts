@@ -3239,6 +3239,8 @@ export type CustomerResource = {
         contact: string | null;
         updatedAt: string;
     }>;
+    taxExempt: boolean;
+    taxExemptionId: string | null;
     createdAt: string;
     updatedAt: string;
     deletedAt: string | null;
@@ -34781,6 +34783,8 @@ export type GetApiV1AdminCustomersByIdResponses = {
                 createdAt: string;
                 updatedAt: string;
             }>;
+            taxExempt: boolean;
+            taxExemptionId: string | null;
             relatedObjects: Array<{
                 typeId: string;
                 typeHandle: string;
@@ -34799,6 +34803,8 @@ export type PutApiV1AdminCustomersByIdData = {
         name?: string;
         email?: string | null;
         phone?: string;
+        taxExempt?: boolean;
+        taxExemptionId?: string | null;
     };
     headers?: {
         /**
@@ -55334,6 +55340,12 @@ export type GetApiV1AdminOrdersByIdInvoiceResponses = {
                      */
                     dueAt: string;
                 } | null;
+                /**
+                 * The buyer was tax-exempt when the order was priced (no tax charged), with their certificate or registration number; null when not, absent on invoices issued before exemptions were printed.
+                 */
+                taxExemption?: {
+                    exemptionId: string | null;
+                } | null;
                 createdAt: string | number;
                 updatedAt: string | number;
                 items: Array<{
@@ -55530,6 +55542,12 @@ export type PostApiV1AdminOrdersByIdInvoiceResponses = {
                      * ISO 8601 due date: placement plus the net days.
                      */
                     dueAt: string;
+                } | null;
+                /**
+                 * The buyer was tax-exempt when the order was priced (no tax charged), with their certificate or registration number; null when not, absent on invoices issued before exemptions were printed.
+                 */
+                taxExemption?: {
+                    exemptionId: string | null;
                 } | null;
                 createdAt: string | number;
                 updatedAt: string | number;
@@ -57358,6 +57376,7 @@ export type PostApiV1AdminOrdersQuoteData = {
         shippingCharge: number;
         shippingMethodId?: string | null;
         paymentMethod?: 'cod' | 'net_terms';
+        customerId?: string | null;
     };
     path?: never;
     query?: never;

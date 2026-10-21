@@ -84,6 +84,10 @@ export function renderPrintableInvoice(
     order.billingSameAsShipping || !order.billingCompany ? "" : `<p>${html(order.billingCompany)}</p>`,
     billingAddress ? `<p>${html(billingAddress)}</p>` : "",
     `<p>${html(order.customerPhone)}</p><p>${html(order.customerEmail)}</p>`,
+    // A tax-exempt buyer (0178): no tax was charged; the number they gave, when any.
+    order.taxExemption
+      ? `<p><strong>Tax exempt</strong>${order.taxExemption.exemptionId ? ` · ${html(order.taxExemption.exemptionId)}` : ""}</p>`
+      : "",
   ].join("");
   const issuedAt = document.issuedAt ?? order.createdAt;
   const date = commerceCalendarDateKey(

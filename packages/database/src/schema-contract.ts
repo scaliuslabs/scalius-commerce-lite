@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 177,
-  name: "0177_saved_method_owner",
+  version: 178,
+  name: "0178_tax_exempt_customers",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -666,6 +666,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 177,
     name: "0177_saved_method_owner",
     sourceSha256: "2ebd2d7e7f51054207bd4a8b15587dd625d0e744dabeae69823f340dfb479172",
+  },
+  {
+    version: 178,
+    name: "0178_tax_exempt_customers",
+    sourceSha256: "d88cec1c207953eb4c6a8ea9b11ede2cad0dd173481d66ed21d5aadd98e8175d",
   },
 ] as const;
 

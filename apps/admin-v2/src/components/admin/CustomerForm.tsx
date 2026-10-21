@@ -43,6 +43,7 @@ import type { RelatedObjectRecord } from "@scalius/shared/plugins/objects";
 import { CustomerMarketingCard } from "./customers/CustomerMarketingCard";
 import { CustomerPaymentMethodsCard } from "./customers/CustomerPaymentMethodsCard";
 import { CustomerTagsCard } from "./customers/CustomerTagsCard";
+import { CustomerTaxExemptionCard } from "./customers/CustomerTaxExemptionCard";
 import { Field, ReadOnlyValue } from "~/components/ui/field";
 import { Page } from "~/components/admin/resource/Page";
 
@@ -57,6 +58,8 @@ interface CustomerFormProps {
     relatedObjects?: RelatedObjectRecord[];
     deletedAt: unknown;
     tags?: readonly string[];
+    taxExempt?: boolean;
+    taxExemptionId?: string | null;
     addresses?: CustomerDto["addresses"];
   };
 }
@@ -266,6 +269,12 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
           <CustomerMarketingCard customerId={defaultValues.id} canEdit={canSave} />
           <CustomerPaymentMethodsCard customerId={defaultValues.id} canEdit={canSave} />
           <CustomerTagsCard customerId={defaultValues.id} tags={record?.tags ?? []} canEdit={canSave} />
+          <CustomerTaxExemptionCard
+            customerId={defaultValues.id}
+            taxExempt={record?.taxExempt ?? false}
+            taxExemptionId={record?.taxExemptionId ?? null}
+            canEdit={canSave}
+          />
           <CustomFieldsCard ownerType="customer" ownerId={defaultValues.id} canEdit={canSave} />
           <RelatedObjectsCard records={record?.relatedObjects} />
         </>

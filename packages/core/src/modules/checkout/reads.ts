@@ -158,9 +158,10 @@ export interface StorefrontCheckoutReads<TResponse> {
     /**
      * The customer the request's session signs in; null without a session or
      * when it no longer signs anyone in. Throws when the session could not be
-     * read (no session key).
+     * read (no session key). `taxExemption`: the account is tax-exempt
+     * (null: it pays tax).
      */
-    session(): { customerId: string } | null;
+    session(): { customerId: string; taxExemption: { exemptionId: string | null } | null } | null;
     /** Active checkout function registrations, every point. */
     functionRegistrations: RegisteredPlugin[];
     /** The request's gateways: built-in and the active app providers. */
@@ -195,6 +196,7 @@ async function readCheckoutOnce<TResponse>(
             .then((tokenHash) => ({ tokenHash }), (error: unknown) => ({ error }))
         : null;
     let signedInCustomerId: string | null = null;
+    let signedInTaxExemption: { exemptionId: string | null } | null = null;
     // The signed-in buyer, from this batch's session row: everything that
     // needs it awaits it only once the batch has answered.
     const customerId: PromiseLike<string | null> = options.session !== undefined
@@ -231,9 +233,10 @@ async function readCheckoutOnce<TResponse>(
         ContactCustomerCandidate[],
         ReservationVariantState[],
         ActiveFunctionRegistrationRow[] | undefined,
-        Array<{ customerId: string }> | undefined,
+        Array<{ customerId: string; taxExempt: boolean | number; taxExemptionId: string | null }> | undefined,
     ];
     signedInCustomerId = sessionRows?.[0]?.customerId ?? null;
+    signedInTaxExemption = sessionRows?.[0]?.taxExempt ? { exemptionId: sessionRows[0].taxExemptionId ?? null } : null;
     const existingAttempt = resolveCheckoutAttemptRow<TResponse>(
         attemptRows[0], identity,
         attemptRows[0]?.linkedOrderAccountOwnerCustomerId ? await customerId : undefined,
@@ -272,7 +275,7 @@ async function readCheckoutOnce<TResponse>(
         },
         session() {
             if (session && "error" in session) throw session.error;
-            return signedInCustomerId ? { customerId: signedInCustomerId } : null;
+            return signedInCustomerId ? { customerId: signedInCustomerId, taxExemption: signedInTaxExemption } : null;
         },
         functionRegistrations,
         paymentProviders,

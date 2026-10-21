@@ -52,7 +52,7 @@ import { NotFoundError, ValidationError, ConflictError, ServiceUnavailableError 
 import { recordOrderEvent } from "../timeline";
 import { resolveOrderCurrencySnapshot } from "../../payments";
 import { validateCustomerPhoneCountry } from "../../settings";
-import type { TaxQuote } from "../../tax/browser";
+import type { TaxQuote, TaxQuoteCustomer } from "../../tax/browser";
 import type { AppProviders } from "../../../integrations/provider-port";
 import { orderItemTaxSnapshotColumns, orderTaxSnapshotColumns } from "../../tax";
 import { sha256Hex } from "@scalius/shared/hash";
@@ -190,6 +190,17 @@ async function loadRetainedUnitPrices(db: Database, orderId: string) {
     return new Map(rows.map((row) => [row.id, row]));
 }
 
+/**
+ * An amendment keeps the tax exemption the order was priced with (its tax
+ * snapshot), whatever the customer's exemption is now.
+ */
+async function amendmentTaxCustomer(db: Database, orderId: string, customerId: string | null): Promise<TaxQuoteCustomer | null> {
+    if (!customerId) return null;
+    const snapshot = await db.select({ taxExempt: orderTaxSnapshots.taxExempt, taxExemptionId: orderTaxSnapshots.taxExemptionId })
+        .from(orderTaxSnapshots).where(eq(orderTaxSnapshots.orderId, orderId)).get();
+    return { id: customerId, exemption: snapshot?.taxExempt ? { exemptionId: snapshot.taxExemptionId ?? null } : null };
+}
+
 /** An amendment keeps the order's one delivery method (Wave A §2.7). */
 function amendmentDeliveryMethodKind(order: {
     shippingMethodKind: string | null;
@@ -257,7 +268,7 @@ export async function previewManualOrderAmendment(
         amended,
         resolveOrderCurrencySnapshot(order),
         await loadRetainedUnitPrices(db, orderId),
-        { fixedDeliveryMethodKind: amendmentDeliveryMethodKind(order), appProviders: options.appProviders },
+        { fixedDeliveryMethodKind: amendmentDeliveryMethodKind(order), appProviders: options.appProviders, taxCustomer: await amendmentTaxCustomer(db, orderId, order.customerId) },
     );
     requireAmendmentAddress(data, prepared);
     resolveStaffBillingAddress(amended, { ships: prepared.requiresShipping, skipValidation: data.skipAddressValidation === true });
@@ -367,7 +378,7 @@ export async function confirmManualOrderAmendment(
         amended,
         resolveOrderCurrencySnapshot(order),
         await loadRetainedUnitPrices(db, orderId),
-        { fixedDeliveryMethodKind: amendmentDeliveryMethodKind(order), appProviders: options.appProviders },
+        { fixedDeliveryMethodKind: amendmentDeliveryMethodKind(order), appProviders: options.appProviders, taxCustomer: await amendmentTaxCustomer(db, orderId, order.customerId) },
     );
     const shippingAddress = requireAmendmentAddress(data, prepared);
     const billing = resolveStaffBillingAddress(amended, {

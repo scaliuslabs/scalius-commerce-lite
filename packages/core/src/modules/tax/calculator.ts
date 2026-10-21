@@ -14,6 +14,7 @@ import {
     matchTaxRegions,
     ratesForTaxClass,
     taxCountryOf,
+    taxExemptionApplies,
     taxProviderIdFor,
 } from "./region-match";
 import {
@@ -132,7 +133,7 @@ export function calculateSystemTax(input: TaxCalculateInput, settings: SystemTax
     const taxesOf = (amountMinor: number, taxCode: string | null | undefined): TaxCalculationLine[] => {
         const taxClass = classes.get(taxCode ?? settings.defaultTaxClassId ?? "");
         if (!taxClass || taxClass.isExempt) return [];
-        const { rates } = ratesForTaxClass(chain, settings.rates, taxClass.id);
+        const { rates } = ratesForTaxClass(chain, settings.rates, taxClass.id, input.customer);
         return amountTax(amountMinor, rates, input.pricesIncludeTax, unitMinor).components.map(({ rate, amountMinor: taxMinor }) => ({
             taxMinor,
             rateBps: rate.rateBps,
@@ -338,7 +339,14 @@ export function prepareTaxQuote(input: CalculateTaxQuoteInput): PreparedTaxQuote
             : []),
         shippingMinor: shipping.taxed ? shipping.netMinor : 0,
         ...(shipping.taxed ? { shippingTaxCode: shipping.taxClass!.id } : {}),
-        customer: null,
+        // The buyer and their exemption (`taxExemptionApplies`); null: a guest.
+        customer: input.customer
+            ? {
+                id: input.customer.id,
+                exempt: input.customer.exemption !== null,
+                ...(input.customer.exemption?.exemptionId ? { exemptionId: input.customer.exemption.exemptionId } : {}),
+            }
+            : null,
     };
     if (request) request.idempotencyKey = input.idempotencyKey ?? cartKey({ ...request, idempotencyKey: undefined });
     return {
@@ -373,6 +381,7 @@ export function completeTaxQuote(prepared: PreparedTaxQuote, calculation: TaxCal
     const { input } = prepared;
     const unitMinor = input.priceIncrementMinor;
     const isSystem = prepared.providerId === SYSTEM_TAX_PROVIDER_ID;
+    const exempt = taxExemptionApplies(prepared.request?.customer);
     const ratesById = new Map(input.rates.map((rate) => [rate.id, rate]));
     const regionsById = new Map(input.regions.map((region) => [region.id, region]));
     const chainOrder = new Map(prepared.chain.map((region, index) => [region.id, index]));
@@ -421,6 +430,8 @@ export function completeTaxQuote(prepared: PreparedTaxQuote, calculation: TaxCal
     const partTax = (part: PreparedPart, taxes: readonly TaxCalculationLine[] | undefined) => {
         const { components, regionId } = part.taxed && taxes ? componentsOf(taxes) : { components: [], regionId: null };
         const taxMinor = componentTotal(components);
+        // A tax-exempt buyer pays none: a provider that still charges is not honoured.
+        if (exempt && taxMinor > 0) throw taxUnavailable("The tax provider charged tax to a tax-exempt buyer.");
         if (prepared.pricesIncludeTax && taxMinor > part.netMinor) {
             throw taxUnavailable("The tax provider returned more tax than the price includes.");
         }
@@ -462,7 +473,7 @@ export function completeTaxQuote(prepared: PreparedTaxQuote, calculation: TaxCal
     // component, yet the system provider's rates still apply there.
     const shippingRatesApply = shipping.components.length > 0 || (
         isSystem && prepared.shipping.taxed
-        && ratesForTaxClass(prepared.chain, input.rates, prepared.shipping.taxClass!.id).rates.length > 0
+        && ratesForTaxClass(prepared.chain, input.rates, prepared.shipping.taxClass!.id, prepared.request?.customer).rates.length > 0
     );
     const taxMinor = lines.reduce((sum, line) => sum + line.taxMinor, shipping.taxMinor);
     const taxableMinor = lines.reduce((sum, line) => sum + line.taxableAmountMinor, shipping.taxableAmountMinor);
@@ -504,6 +515,8 @@ export function completeTaxQuote(prepared: PreparedTaxQuote, calculation: TaxCal
                 ? input.addressSource ?? "shipping"
                 : "origin",
         },
+        // Kept whenever the buyer is exempt, also where no tax would apply.
+        exemption: input.customer?.exemption ? { exemptionId: input.customer.exemption.exemptionId ?? null } : null,
         lines,
         shipping,
     };

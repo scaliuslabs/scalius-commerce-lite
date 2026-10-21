@@ -611,13 +611,18 @@ export async function updateCustomer(
             .get();
         if (taken) throw new ValidationError("A customer without a phone already uses this email address.", { field: "email" });
     }
+    // The tax exemption (audit I9): its id is kept only while the buyer is exempt.
+    const taxExempt = data.taxExempt ?? existing.taxExempt === true;
+    const exemptionId = data.taxExemptionId !== undefined ? data.taxExemptionId?.trim() || null : existing.taxExemptionId ?? null;
+    const tax = { taxExempt, taxExemptionId: taxExempt ? exemptionId : null };
+    const taxUnchanged = tax.taxExempt === (existing.taxExempt === true) && tax.taxExemptionId === (existing.taxExemptionId ?? null);
     // A save that changes nothing writes nothing: no bumped timestamp, no empty "Updated" entry.
-    if ((Object.keys(next) as Array<keyof typeof next>).every((key) => (next[key] ?? null) === (existing[key] ?? null))) return;
+    if (taxUnchanged && (Object.keys(next) as Array<keyof typeof next>).every((key) => (next[key] ?? null) === (existing[key] ?? null))) return;
 
     // Naming a checkout guest record in the dashboard makes it the merchant's customer.
     const origin = !existing.accountClaimedAt && next.name !== existing.name ? { origin: "merchant" as const } : {};
     await db.batch([
-        db.update(customers).set({ ...next, phone: storedPhone(next.phone), ...origin, updatedAt: sql`unixepoch()` }).where(eq(customers.id, id)),
+        db.update(customers).set({ ...next, ...tax, phone: storedPhone(next.phone), ...origin, updatedAt: sql`unixepoch()` }).where(eq(customers.id, id)),
         db.insert(customerHistory).values({
             id: "hist_" + nanoid(),
             customerId: id,

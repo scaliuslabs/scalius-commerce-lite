@@ -5067,6 +5067,14 @@
           "type": "string",
           "minLength": 7,
           "maxLength": 16
+         },
+         "taxExempt": {
+          "type": "boolean"
+         },
+         "taxExemptionId": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 64
          }
         }
        }
@@ -18146,6 +18154,14 @@
       ]
      }
     },
+    "taxExempt": {
+     "type": "boolean"
+    },
+    "taxExemptionId": {
+     "type": "string",
+     "nullable": true,
+     "maxLength": 64
+    },
     "createdAt": {
      "type": "string",
      "minLength": 1,
@@ -18177,6 +18193,8 @@
     "mergedIntoCustomerId",
     "tags",
     "consents",
+    "taxExempt",
+    "taxExemptionId",
     "createdAt",
     "updatedAt",
     "deletedAt"
