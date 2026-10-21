@@ -306,7 +306,7 @@ const primaryImageUrl = productImageCandidates[0] ?? null;
 // preload names exactly the file the first paint shows, with the srcset and
 // sizes of its slot. A video first paints its poster (in the photo's slot),
 // never the video.
-const galleryItems = productGalleryItems(product, media);
+const galleryItems = productGalleryItems(product, media, buyerVariants);
 const initialGalleryMedia = featuredGalleryItem(galleryItems, initialVariantMediaId);
 // The photo box adapts to the photo the page paints first (its stored size,
 // within bounds), so a square photo never sits in a tall box with bands.
@@ -584,6 +584,7 @@ const productGalleryProps = {
   product,
   media,
   initialProductMediaId: initialVariantMediaId,
+  variants: buyerVariants,
   layout: galleryLayout,
   playVideoLabel: productPageCopy.productPlayVideoText,
   zoomLabel: shop.product.zoomPhoto,

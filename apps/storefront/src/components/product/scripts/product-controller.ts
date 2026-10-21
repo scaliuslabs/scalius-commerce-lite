@@ -224,7 +224,9 @@ function readQuantity(): number {
   const input = cache.quantity;
   const message = document.getElementById("quantity-message");
   if (!input) return 1;
-  const typed = Number.parseInt(toLatinDigits(input.value).replace(/\D/g, ""), 10);
+  const latin = toLatinDigits(input.value).trim();
+  // A minus sign is a quantity below one ("-2" becomes 1), never "2".
+  const typed = /^[-−]/u.test(latin) ? 0 : Number.parseInt(latin.replace(/\D/g, ""), 10);
   const quantity = clampQuantity(Number.isFinite(typed) ? typed : 1);
   input.value = String(quantity);
   const capped = Number.isFinite(typed) && typed > QUANTITY_CONSTRAINTS.MAX;

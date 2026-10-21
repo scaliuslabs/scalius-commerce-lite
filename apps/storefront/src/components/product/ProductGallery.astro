@@ -1,5 +1,5 @@
 ---
-import type { Product, ProductMedia } from "@/lib/api";
+import type { Product, ProductMedia, ProductVariant } from "@/lib/api";
 import { GALLERY_CONFIG } from "./config";
 import Icon from "@/components/icons/Icon.astro";
 import { productImageSources, resolveProductImageUrl } from "@/lib/product-media";
@@ -27,6 +27,8 @@ interface Props {
    * image), so the first paint shows the variant the buy box has selected.
    */
   initialProductMediaId?: string | null;
+  /** The buyer's SKUs: a SKU photo without its own words is named by its choice. */
+  variants?: ProductVariant[];
   /** Theme -> Layout -> Product page: gallery placement and thumbnails. */
   layout?: ProductGalleryLayout;
   /** "Play video: {title}" in the store's language. */
@@ -46,6 +48,7 @@ const {
   product,
   media,
   initialProductMediaId = null,
+  variants = [],
   layout = { gallery: "beside", thumbnails: "beside", stageRatio: 1, thumbnailSize: null },
   playVideoLabel = "Play video: {title}",
   zoomLabel = "Zoom photo",
@@ -62,7 +65,7 @@ const thumbnails = layout.thumbnails;
 const desktopThumb = GALLERY_CONFIG.thumbnails.desktop;
 const mobileThumb = GALLERY_CONFIG.thumbnails.mobile;
 
-const galleryMedia = productGalleryItems(product, media);
+const galleryMedia = productGalleryItems(product, media, variants);
 // One page per product: the first paint shows the opening choice's SKU photo
 // (else the primary); a `?variant=` link's SKU photo is selected in the
 // browser (product-controller.ts).

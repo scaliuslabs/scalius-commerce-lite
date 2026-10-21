@@ -800,7 +800,7 @@ export default function CartFlyout({ onReady }: Props) {
 
         {/* Savings and offers the cart already qualifies for */}
         {cart.totalItems > 0 && discounts && (discounts.discounts.length > 0 || discounts.offers.length > 0) && (
-          <div className="shrink-0 space-y-1 border-t border-border bg-card px-4 py-2 text-sm">
+          <div className="shrink-0 space-y-1 border-t border-border bg-card px-3 py-2 text-sm sm:px-5">
             {discounts.discounts.map((line, position) => ({ line, key: discountLineKey(line, position) })).filter(({ line }) => line.amount > 0).map(({ line, key }) => (
               <div key={key} className="flex justify-between gap-3 text-primary">
                 <span className="min-w-0">{formatDiscountLineLabel(copy.discount, line)}</span>
