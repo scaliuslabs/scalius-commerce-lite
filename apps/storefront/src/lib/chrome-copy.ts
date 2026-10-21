@@ -40,6 +40,8 @@ export interface ChromeCopy {
     /** The link that ends a fly-out column: "Show all Shoes". */
     showAll: (title: string) => string;
     featuredIn: (title: string) => string;
+    /** A mega panel's closing link to the whole department. */
+    viewAllOf: (title: string) => string;
     /** Names the button that opens a department's submenu. */
     submenu: (title: string) => string;
   };
@@ -114,6 +116,7 @@ export const CHROME_EN: ChromeCopy = {
     allOf: (title) => `All ${title}`,
     showAll: (title) => `Show all ${title}`,
     featuredIn: (title) => `Featured in ${title}`,
+    viewAllOf: (title) => `View all ${title}`,
     submenu: (title) => `${title} submenu`,
   },
   tabs: {
@@ -187,6 +190,7 @@ export const CHROME_BN: ChromeCopy = {
     allOf: (title) => `সব ${title}`,
     showAll: (title) => `সব ${title} দেখুন`,
     featuredIn: (title) => `${title}-এ বিশেষ`,
+    viewAllOf: (title) => `সব ${title} দেখুন`,
     submenu: (title) => `${title} সাবমেনু`,
   },
   tabs: {

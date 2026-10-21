@@ -61,8 +61,17 @@ const { shippingMethods, shippingMethodLabel, pickupLocationLabel, modeSwitch, .
     <p id="shippingMethodNotice" class="mb-2 hidden rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert" data-shipping-notice></p>
     {/* The same stand-in `enhanceShippingMethods` shows until an address is chosen. */}
     <div class="grid grid-cols-1 gap-2 sm:grid-cols-2" data-shipping-options>
-      <p class="flex min-h-[4.25rem] items-center rounded-lg border border-dashed border-border px-3 text-sm text-muted-foreground">{copy.chooseAddressText}</p>
+      <p class="flex min-h-[4.25rem] items-center rounded-lg border border-dashed border-border px-3 text-sm text-muted-foreground" data-choose-address>{copy.chooseAddressText}</p>
     </div>
   </fieldset>
   <p id="shippingMethodError" class="mt-1 hidden text-sm font-medium text-destructive" role="alert"></p>
 </div>
+
+<style is:global>
+  /* One message, not two: while the checkout shows its "choose a city and
+     thana" error under those fields, the delivery options (still only the
+     same request in their place) step aside until there is a choice to make. */
+  form:has(#shippingLocationError:not(.hidden):not(:empty)) [data-shipping-methods]:has([data-shipping-options] > [data-choose-address]) {
+    display: none;
+  }
+</style>

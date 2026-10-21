@@ -392,6 +392,9 @@ export function enhanceShippingMethods(
     const box = document.createElement("p");
     box.className = `${OPTION_HEIGHT} flex items-center rounded-lg border border-dashed border-border px-3 text-sm text-muted-foreground`;
     box.textContent = text;
+    // The "choose your city and thana" stand-in: hidden while the location
+    // message under the fields already says the same (CheckoutShippingMethods).
+    if (text === copy.chooseAddressText) box.dataset.chooseAddress = "";
     return box;
   };
   const showSkeleton = () => {

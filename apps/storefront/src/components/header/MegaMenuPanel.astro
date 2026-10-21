@@ -122,7 +122,7 @@ const columns = [...groups, ...plain].slice(0, columnCount);
     item.href && (
       <div class="mega-foot">
         <a class="mega-shop-all" {...link(item)}>
-          View all {item.title}
+          {copy.nav.viewAllOf(item.title)}
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10m-4-4 4 4-4 4" /></svg>
         </a>
       </div>

@@ -533,8 +533,12 @@ const productMainMarkup = productMainSkin
   ? await renderAppSkin(Astro.locals, Astro.url, productMainSkin, { data: productPageProjection() })
   : null;
 const skinEmbeds = productMainMarkup?.embeds ?? new Set<string>();
+// A skin owns the description: the details module keeps only what the skin
+// does not draw (key features placed there and the extra tabs), else it goes.
+const detailsBeyondDescription = (product.additionalInfo?.length ?? 0) > 0 || (featuresAt === "description" && (product.features?.length ?? 0) > 0);
 const shownModules = pageModules.filter((module) =>
-  !(module === "reviews" && skinEmbeds.has("reviews")) && !(module === "related" && skinEmbeds.has("recommendations")));
+  !(module === "reviews" && skinEmbeds.has("reviews")) && !(module === "related" && skinEmbeds.has("recommendations"))
+  && !(module === "description" && productMainMarkup && !detailsBeyondDescription));
 const appsBelow = (await appSlotComponents(Astro.locals, Astro.url, "product.below")).length > 0;
 const buyBox = {
   summary: {
@@ -845,7 +849,7 @@ const productCategoryAnalytics = productCategory
         case "description":
           return (
             <ProductModule id="description">
-              <ProductDetails product={product} features={featuresAt === "description"} />
+              <ProductDetails product={product} features={featuresAt === "description"} description={!productMainMarkup} />
             </ProductModule>
           );
         case "about-bullets":

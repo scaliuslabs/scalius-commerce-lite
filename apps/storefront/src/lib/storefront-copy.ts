@@ -93,7 +93,6 @@ export interface StorefrontCopy {
     storeServices: string;
     shopBy: string;
     loadMore: string;
-    viewAllOf: (title: string) => string;
   };
 }
 
@@ -170,7 +169,6 @@ const EN: StorefrontCopy = {
     storeServices: "Store services",
     shopBy: "Shop by",
     loadMore: "Load more",
-    viewAllOf: (title) => `View all ${title}`,
   },
 };
 
@@ -247,7 +245,6 @@ const BN: StorefrontCopy = {
     storeServices: "স্টোরের সেবা",
     shopBy: "ধরন অনুযায়ী কিনুন",
     loadMore: "আরও পণ্য দেখুন",
-    viewAllOf: (title) => `${title}: সব দেখুন`,
   },
 };
 

@@ -16,7 +16,8 @@ const allSteps = [
 ---
 
 <nav aria-label={copy.checkoutProgressLabel} class="mb-5">
-  <ol class="flex flex-wrap items-center gap-1.5 text-xs sm:text-sm" role="list">
+  {/* The steps' padding is their hit and focus area; the list pulls back by it so the first label's text lines up with the cards below. */}
+  <ol class="-ms-1.5 flex flex-wrap items-center gap-1.5 text-xs sm:text-sm" role="list">
     {
       allSteps.map((step, index) => {
         const isCurrent = step.id === current;

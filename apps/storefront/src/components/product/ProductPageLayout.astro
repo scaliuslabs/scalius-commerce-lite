@@ -26,6 +26,18 @@ const { gallery, factsColumn = false } = Astro.props;
 </div>
 
 <style>
+  /* The buy box takes its columns here, not on itself: an app skin places the
+     same buy box in its own layout (the product_main buy_form embed). */
+  @media (min-width: 64rem) {
+    .product-layout > :global([data-product-summary]) {
+      grid-column: span 5 / span 5;
+    }
+  }
+  @media (min-width: 80rem) {
+    .product-layout > :global([data-product-summary]) {
+      grid-column: span 6 / span 6;
+    }
+  }
   @media (min-width: 64rem) {
     .product-layout[data-gallery="stacked"],
     .product-layout[data-gallery="grid"] {

@@ -266,7 +266,9 @@ export function publicReviewMarkup(review: PublicProductReview, options: ReviewR
   const facts = [
     review.variantLabel ? `<span class="review-variant">${escapeHtml(review.variantLabel)}</span>` : "",
     `<span class="review-verified">${escapeHtml(copy.reviewsVerifiedText)}</span>`,
-  ].filter(Boolean).join('<span aria-hidden="true" class="review-sep">|</span>');
+  // No bar between them: when the variant wraps on a phone a bar strands at a
+  // line edge; the gap and the check mark before "Verified" separate them.
+  ].filter(Boolean).join("");
   const replyTitle = storeName
     ? formatCheckoutLanguageText(copy.reviewsReplyText, { store: storeName })
     : copy.reviewsReplyFallbackText;
