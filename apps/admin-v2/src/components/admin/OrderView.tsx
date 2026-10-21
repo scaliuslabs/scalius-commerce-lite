@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Archive, ChevronDown, ChevronLeft, ChevronRight, MessageCircle, Phone, XCircle } from "lucide-react";
+import { Archive, ChevronDown, ChevronLeft, ChevronRight, MessageCircle, Phone } from "lucide-react";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { Alert } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
@@ -228,7 +228,6 @@ export function OrderView({ order }: { order: Order }) {
                             disabled={cancelChoice.block !== null}
                             onSelect={() => setRequest({ action: "cancel", id: Date.now() })}
                           >
-                            <span className="flex h-lh items-center"><XCircle className="size-4" /></span>
                             {t("cancelOrder")}
                           </DropdownMenuItem>
                           {cancelChoice.block ? (
