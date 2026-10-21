@@ -138,6 +138,8 @@ export interface PlanLimits {
     readonly breachesBeforeStop: number;
     /** Emails, SMS, staff notices and buyer pushes one app sends a minute (`ctx.messaging`). */
     readonly messagesPerMinute: number;
+    /** Background jobs (`ctx.jobs.start`) one app may have running at once; a start beyond it is refused. */
+    readonly runningJobs: number;
   };
 }
 
@@ -180,6 +182,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       invocationsPerMinute: 600,
       breachesBeforeStop: 5,
       messagesPerMinute: 60,
+      runningJobs: 3,
     }),
   }),
   paid: Object.freeze({
@@ -220,6 +223,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       invocationsPerMinute: 6_000,
       breachesBeforeStop: 5,
       messagesPerMinute: 300,
+      runningJobs: 10,
     }),
   }),
 }) as Readonly<Record<WorkersPlan, PlanLimits>>;

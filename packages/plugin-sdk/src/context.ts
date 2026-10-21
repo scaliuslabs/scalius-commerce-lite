@@ -6,6 +6,11 @@
 
 import type { EventTopic, EventsApiVersion } from "@scalius/shared/events";
 import type { PluginSettingValue } from "@scalius/shared/plugins";
+import type { PluginCustomerRole, PluginCustomerRoleGrant } from "@scalius/shared/plugins/customer-roles";
+import type { PluginJob } from "@scalius/shared/plugins/jobs";
+
+export type { PluginCustomerRole, PluginCustomerRoleGrant } from "@scalius/shared/plugins/customer-roles";
+export type { PluginJob, PluginJobStatus, PluginJobStepInput, PluginJobStepResult } from "@scalius/shared/plugins/jobs";
 
 /** Store facts every handler may read. */
 export interface PluginStoreInfo {
@@ -259,6 +264,64 @@ export interface PluginOrders {
   riskHistory(orderId: string): Promise<{ orders: number; cancelled: number; returnedToSender: number }>;
 }
 
+/**
+ * Roles the app gives customers (needs `read_customers`): a name the app
+ * chooses (`seller`, `wholesale`: a lower-case letter, then up to 31
+ * lower-case letters, digits, `_` or `-`) and an optional `ref`, the app's
+ * own record id (`seller_42`). Each app reads and writes only its own roles,
+ * at most 10 per customer. The app's proxied pages see them as
+ * `request.customer.roles` and its checkout functions as
+ * `cart.customer.roles`, so a page or price rule gates on a role without a
+ * read of its own. Never put buyer contact data in a role or ref.
+ */
+export interface PluginCustomerRoles {
+  /**
+   * Gives the customer the role; granting it again only updates `ref`.
+   * Refuses a missing or deleted customer (`customers_not_found`) and an
+   * 11th role (`customer_roles_limit`).
+   */
+  grant(customerId: string, role: string, options?: { ref?: string | null }): Promise<void>;
+  /** Takes the role away; a role the customer does not hold is not an error. */
+  revoke(customerId: string, role: string): Promise<void>;
+  /** The app's roles on the customer, by role (`grantedAt` ISO 8601). */
+  list(customerId: string): Promise<PluginCustomerRoleGrant[]>;
+}
+
+export interface PluginCustomers {
+  roles: PluginCustomerRoles;
+}
+
+/**
+ * Background jobs (manifest `jobs`): a long admin action, such as an import
+ * of hundreds of products, that one run cannot finish within its platform
+ * calls and wall time. `start` keeps the job and returns at once; the
+ * platform then runs the job's handler (`jobs[name]`) one step at a time,
+ * right after the request and every minute after, each step a run of its
+ * own with its own limits. A step gets `{ id, name, input, state, step }` and
+ * answers `{ state?, progress?, message?, done? }`: `state` (64 KiB of JSON)
+ * goes to the next step, `done: true` finishes. A step that throws, times
+ * out or answers something invalid is tried again a minute later, three
+ * times in all, then the job fails (`job_step_failed`, `job_invalid_step`).
+ * A step may repeat after a crash (never more than that step), so make each
+ * one safe to run again: pass an idempotency key derived from the job id and
+ * step to writes. Show progress with `ui.progress(..., { live: true })`.
+ */
+export interface PluginJobs {
+  /**
+   * Starts a declared job with `input` (16 KiB of JSON). With `key` (8 to
+   * 200 printable characters) a second start under it answers the first
+   * job instead of starting another. At most the plan's running jobs per app
+   * (3 on Workers Free): another start is refused with `jobs_limit`.
+   */
+  start(name: string, options?: { input?: unknown; key?: string }): Promise<{ id: string; status: PluginJob["status"] }>;
+  /** One of the app's jobs, or null. */
+  get(id: string): Promise<PluginJob | null>;
+  /** The app's jobs (of one job with `name`), newest first, at most 20. */
+  list(options?: { name?: string; limit?: number }): Promise<PluginJob[]>;
+  /** Stops a running job: it fails with `cancelled` (a step in flight does not commit). */
+  cancel(id: string): Promise<PluginJob>;
+}
+
 export interface PluginLogger {
   debug(message: string, fields?: Record<string, unknown>): void;
   info(message: string, fields?: Record<string, unknown>): void;
@@ -285,6 +348,8 @@ export interface PluginContext {
   messaging: PluginMessaging;
   timeline: PluginTimeline;
   orders: PluginOrders;
+  customers: PluginCustomers;
+  jobs: PluginJobs;
   log: PluginLogger;
 }
 
@@ -356,8 +421,12 @@ export interface PluginRouteRequest {
    * `<form method="post">` on your proxy, so plain HTML forms work without
    * JavaScript and need nothing from you; the field is removed from `body`.
    * JSON requests need no token (a cross-site page cannot send them).
+   *
+   * `roles`: the roles this app gave the customer (`ctx.customers.roles`),
+   * by role, read with the session. Gate a seller portal on
+   * `request.customer?.roles.some((entry) => entry.role === "seller")`.
    */
-  customer?: { id: string } | null;
+  customer?: { id: string; roles: PluginCustomerRole[] } | null;
   /**
    * Public routes: the store's own pages to link and redirect to (never
    * hard-code `/account`). Root paths: on a market presence page the

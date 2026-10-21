@@ -49,6 +49,7 @@ import {
   type ProviderOperationOutput,
 } from "@scalius/shared/plugins/providers";
 import { PROVIDER_PROTECTED_DATA, grantedProtectedData, projectProviderInput } from "@scalius/shared/plugins/protected-data";
+import { checkPluginJobStep, type PluginJobStepInput } from "@scalius/shared/plugins/jobs";
 import type { PluginEvent, PluginRouteRequest, PluginRouteResponse, PluginStoreInfo } from "@scalius/plugin-sdk";
 import type { PluginBridgeAuthority, PluginBridgeEnvironment, PluginBridgeProps } from "./bridge";
 import { BundledLoader } from "./loaders/bundled";
@@ -120,6 +121,7 @@ export function pluginBridgeAuthority(installation: PluginInstallation): PluginB
       })),
     appName: manifest.name,
     timeline: manifest.admin.timeline.map((entry) => ({ kind: entry.kind, title: entry.title })),
+    jobs: (manifest.jobs ?? []).map((job) => job.name),
   };
 }
 
@@ -300,6 +302,26 @@ export class PluginHost {
     return outcome.ok ? { ok: true, value: null, error: null } : failed(outcome);
   }
 
+  /**
+   * One step of a background job (jobs.ts): the app's `jobs[name]` handler
+   * with the job and the state the step before returned. The answer is
+   * validated (`checkPluginJobStep`); an invalid one fails as `invalid`.
+   */
+  async invokeJob(
+    installation: PluginInstallation,
+    job: PluginJobStepInput,
+  ): Promise<PluginInvocationOutcome<Extract<ReturnType<typeof checkPluginJobStep>, { ok: true }>["value"]>> {
+    const source = `job:${job.name}`;
+    const outcome = await this.run(installation, { kind: "job", name: job.name, job }, source, installation.manifest.limits.wallMs);
+    if (!outcome.ok) return failed(outcome);
+    const checked = checkPluginJobStep(outcome.value);
+    if (!checked.ok) {
+      await this.incident(installation, source, `Invalid step result: ${checked.message}`);
+      return { ok: false, value: null, error: checked.message, failure: "invalid" };
+    }
+    return { ok: true, value: checked.value, error: null };
+  }
+
   async invokeLifecycle(
     installation: PluginInstallation,
     hook: PluginLifecycleHook,
@@ -456,7 +478,7 @@ export class PluginHost {
     const wallMs = Math.min(requestedWallMs, caps.wallMs);
     // Runs the app starts or that come from outside are paced per app; checkout
     // functions and provider operations are paced by the platform.
-    if (invocation.kind === "event" || invocation.kind === "cron" || invocation.kind === "route") {
+    if (invocation.kind === "event" || invocation.kind === "cron" || invocation.kind === "route" || invocation.kind === "job") {
       if (!(await pluginWithinInvocationRate(this.env, installation.pluginId, caps.invocationsPerMinute))) {
         const error = `${installation.manifest.name} is over its ${caps.invocationsPerMinute} runs a minute; try again shortly.`;
         await this.breach(installation, "invocations", `more than ${caps.invocationsPerMinute} runs a minute`);

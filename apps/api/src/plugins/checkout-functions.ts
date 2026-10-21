@@ -23,7 +23,8 @@ import { ValidationError } from "@scalius/core/errors";
 import { PLUGIN_EXTENSION_RUN, PLUGIN_FUNCTION_POINTS, type PluginFunctionInput, type PluginFunctionPoint, type PluginRunPoint } from "@scalius/shared/plugins";
 import type { PluginHost, PluginHostOptions } from "./host";
 import { prepareBuyerUiBlocks } from "./buyer-ui";
-import { functionReadRequests, PluginFunctionsBlockedError, runPluginFunctions } from "./functions";
+import { functionReadRequests, PluginFunctionsBlockedError, runPluginFunctions, type FunctionCustomerRoles } from "./functions";
+import type { PluginCustomerRole } from "@scalius/shared/plugins/customer-roles";
 
 export interface CheckoutAppFunctionsOptions {
   env: Env;
@@ -64,6 +65,18 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
   const memo = new Map<string, Promise<unknown[]>>();
   // Declared reads, one cache per request: facts batches fill it, calls read from it.
   const reads = createAppReadsCache(options.db);
+  // The signed-in buyer's roles for every app of the request: one read, at the first app run that needs it.
+  const roleApps = [...new Set(registrations.map((registration) => registration.installation.pluginId))];
+  let rolesRead: { customerId: string; roles: Promise<ReadonlyMap<string, PluginCustomerRole[]>> } | null = null;
+  const roles: FunctionCustomerRoles = (customerId) => {
+    if (rolesRead?.customerId !== customerId) {
+      rolesRead = {
+        customerId,
+        roles: import("./customer-roles").then(({ pluginCustomerRolesByApp }) => pluginCustomerRolesByApp(options.db, customerId, roleApps)),
+      };
+    }
+    return rolesRead.roles;
+  };
   let host: Promise<PluginHost> | null = null;
   const sharedHost = () => {
     host ??= import("./host").then(({ PluginHost }) => new PluginHost({
@@ -108,7 +121,7 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
         const blocking = forPoint.some((registration) => registration.installation.grant?.blockingFunctions.some((blockingPoint) => blockingPoint === point)
           && registration.installation.manifest.functions.some((fn) => fn.point === point && fn.onError === "block"));
         pending = sharedHost()
-          .then((shared) => runPluginFunctions(point, input, options.env, ctx, { db: options.db, registered: forPoint, host: shared, reads }))
+          .then((shared) => runPluginFunctions(point, input, options.env, ctx, { db: options.db, registered: forPoint, host: shared, reads, roles }))
           .then((results) => results.map((result) => ({ ...result, appName: names.get(result.pluginId) ?? result.pluginId })))
           .catch(async (error: unknown) => {
             // An app the store made blocking could not answer: checkout stops, with the store's words.

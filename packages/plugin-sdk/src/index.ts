@@ -8,6 +8,7 @@
 //     extensions: { "checkout.actions.before": (input, settings) => ({ ui: null }) },
 //     routes: { admin: { dashboard: async (request, ctx) => ({ body: … }) } },
 //     cron: { "expire-points": async (ctx) => { … } },
+//     jobs: { import_products: async (ctx, job) => ({ state: …, progress: { done, total }, done: false }) },
 //     providers: { wallet: definePaymentProvider({ createSession: async (input, ctx) => { … }, … }) },
 //     migrations: { "1": async (ctx) => { … } },
 //   });
@@ -28,7 +29,7 @@ import type {
   StorefrontUiSlot,
 } from "@scalius/shared/plugins";
 import type { ProviderImplementation, ProviderKind } from "@scalius/shared/plugins/providers";
-import type { PluginContext, PluginEvent, PluginRouteRequest, PluginRouteResponse } from "./context";
+import type { PluginContext, PluginEvent, PluginJobStepInput, PluginJobStepResult, PluginRouteRequest, PluginRouteResponse } from "./context";
 import type { PluginContextOf, PluginSettingsOf } from "./manifest-types";
 
 export type * from "./context";
@@ -152,6 +153,11 @@ export type PluginRouteHandler<Ctx = PluginContext> = (request: PluginRouteReque
  */
 export type PluginCronHandler<Ctx = PluginContext> = (ctx: Ctx, run: { name: string; scheduledAt: string }) => Promise<void> | void;
 export type PluginLifecycleHandler<Ctx = PluginContext> = (ctx: Ctx) => Promise<void> | void;
+/**
+ * One step of a background job (`ctx.jobs`): the job and the state the step
+ * before returned; answers the next state, progress and whether it is done.
+ */
+export type PluginJobHandler<Ctx = PluginContext> = (ctx: Ctx, job: PluginJobStepInput) => Promise<PluginJobStepResult | void> | PluginJobStepResult | void;
 
 /**
  * An app: its manifest and the handlers it declares. With a manifest from
@@ -173,6 +179,8 @@ export interface PluginDefinition<M extends PluginManifestInput = PluginManifest
     webhooks?: Record<string, PluginRouteHandler<Ctx>>;
   };
   cron?: Record<string, PluginCronHandler<Ctx>>;
+  /** Keyed like the manifest's `jobs[].name`: one step handler per background job. */
+  jobs?: Record<string, PluginJobHandler<Ctx>>;
   /** Provider implementations keyed by the manifest's provider id (`definePaymentProvider`, …). */
   providers?: Record<string, PluginProvider>;
   lifecycle?: {

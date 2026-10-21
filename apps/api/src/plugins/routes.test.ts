@@ -271,7 +271,7 @@ describe("plugin routes", () => {
     const signedIn = await call("/api/v1/plugins/acme.who/public/who", { headers: { "x-scalius-app-proxy": "1", Cookie: "cs_tok=cs-session-token-buyer; other=1" } });
     // The store's core pages come with it, as root paths (the gateway keeps a presence).
     expect(signedIn.json).toEqual({
-      customer: { id: "cust_buyer" },
+      customer: { id: "cust_buyer", roles: [] },
       cookie: null,
       routes: { home: "/", search: "/search", cart: "/cart", account: "/account", signIn: "/account", orders: "/account", trackOrder: "/track-order" },
     });
@@ -282,6 +282,12 @@ describe("plugin routes", () => {
     // A plugin without the proxy never learns anyone, even with the header.
     const echo = await call("/api/v1/plugins/acme.echo/public/inspect", { headers: { Cookie: "cs_tok=cs-session-token-buyer" } });
     expect(echo.json.customer).toBeNull();
+
+    // The buyer's roles come with the session: this app's own, by role, never another app's.
+    sqlite.exec(`INSERT INTO plugin_customer_roles (plugin_id, customer_id, role, ref) VALUES
+      ('acme.who', 'cust_buyer', 'seller', 'seller_7'), ('acme.who', 'cust_buyer', 'beta', NULL), ('acme.echo', 'cust_buyer', 'admin', NULL)`);
+    const withRoles = await call("/api/v1/plugins/acme.who/public/who", { headers: { "x-scalius-app-proxy": "1", Cookie: "cs_tok=cs-session-token-buyer" } });
+    expect(withRoles.json.customer).toEqual({ id: "cust_buyer", roles: [{ role: "beta", ref: null }, { role: "seller", ref: "seller_7" }] });
   });
 
   it("guards admin routes with the dashboard session: apps.view to read, apps.use to change", async () => {

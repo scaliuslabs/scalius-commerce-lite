@@ -74,6 +74,30 @@ describe("invokePluginDefinition", () => {
     expect(result.droppedLogs).toBe(5);
   });
 
+  it("runs a declared job's step with the job and answers its result; customer roles and jobs cross the bridge", async () => {
+    const jobSeed = { ...seed, inventory: { ...seed.inventory, jobs: ["import_products"] } };
+    const step = vi.fn(async (ctx: PluginContext, job: { state: unknown; step: number }) => {
+      await ctx.customers.roles.grant("cust_1", "seller", { ref: "seller_1" });
+      const started = await ctx.jobs.start("import_products", { key: "import-once" });
+      return { state: { at: job.step }, progress: { done: 1, total: 2 }, done: started.status === "done" };
+    });
+    const grant = vi.fn(async () => undefined);
+    const start = vi.fn(async () => ({ id: "job_1", status: "running" }));
+    const module = definition({ jobs: { import_products: step } });
+    const job = { id: "job_1", name: "import_products", input: null, state: null, step: 1 };
+    expect(await invokePluginDefinition(module, { kind: "job", name: "import_products", job }, jobSeed, bridge({ customerRolesGrant: grant, jobsStart: start })))
+      .toMatchObject({ ok: true, value: { state: { at: 1 }, progress: { done: 1, total: 2 }, done: false } });
+    expect(grant).toHaveBeenCalledWith("cust_1", "seller", "seller_1");
+    expect(start).toHaveBeenCalledWith("import_products", { key: "import-once" });
+    // An undeclared job never runs.
+    expect(await invokePluginDefinition(module, { kind: "job", name: "other", job }, jobSeed, bridge())).toMatchObject({ ok: false, error: { code: "plugin_no_handler" } });
+    // An older host without them refuses with a clear code.
+    const older = definition({ jobs: { import_products: async (ctx: PluginContext) => { await ctx.jobs.list(); } } });
+    expect(await invokePluginDefinition(older, { kind: "job", name: "import_products", job }, jobSeed, bridge())).toMatchObject({ ok: false, error: { code: "jobs_unavailable" } });
+    const rolesOnOlder = definition({ jobs: { import_products: async (ctx: PluginContext) => { await ctx.customers.roles.list("cust_1"); } } });
+    expect(await invokePluginDefinition(rolesOnOlder, { kind: "job", name: "import_products", job }, jobSeed, bridge())).toMatchObject({ ok: false, error: { code: "customers_unavailable" } });
+  });
+
   it("turns a throw into a failed result and ignores events nobody subscribed", async () => {
     const throwing = definition({ routes: { public: { ping: () => { throw new RangeError("bad"); } } } });
     expect(await invokePluginDefinition(throwing, { kind: "route", surface: "public", name: "ping", request: {} as never }, seed, bridge()))

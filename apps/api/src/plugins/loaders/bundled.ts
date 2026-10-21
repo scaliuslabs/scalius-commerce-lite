@@ -49,6 +49,13 @@ const BRIDGE_METHODS = [
   "ordersHold",
   "ordersAssessRisk",
   "ordersRiskHistory",
+  "customerRolesGrant",
+  "customerRolesRevoke",
+  "customerRolesList",
+  "jobsStart",
+  "jobsGet",
+  "jobsList",
+  "jobsCancel",
 ] as const satisfies ReadonlyArray<keyof PluginBridgeApi>;
 
 /** The app whose code is running in this async context; null in host code. */

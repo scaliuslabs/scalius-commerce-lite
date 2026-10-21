@@ -61,6 +61,7 @@ describe("plan profile", () => {
       expect(paid.plugins.storageBytes).toBeGreaterThanOrEqual(PLAN_LIMITS.free.plugins.storageBytes);
       expect(paid.plugins.invocationsPerMinute).toBeGreaterThanOrEqual(PLAN_LIMITS.free.plugins.invocationsPerMinute);
       expect(paid.plugins.breachesBeforeStop).toBeGreaterThanOrEqual(PLAN_LIMITS.free.plugins.breachesBeforeStop);
+      expect(paid.plugins.runningJobs).toBeGreaterThanOrEqual(PLAN_LIMITS.free.plugins.runningJobs);
     });
 
     it("photos are served from the store's own origin on Paid only", () => {

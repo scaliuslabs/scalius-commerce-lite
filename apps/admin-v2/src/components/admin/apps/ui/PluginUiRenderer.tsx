@@ -37,6 +37,7 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Field } from "~/components/ui/field";
 import { NumberInput } from "~/components/ui/number-input";
+import { Progress } from "~/components/ui/progress";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Separator } from "~/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
@@ -651,6 +652,23 @@ function StatNode({ node }: { node: Extract<PluginUiNode, { type: "stat" }> }) {
   return inCard ? body : <Card className="p-4">{body}</Card>;
 }
 
+/** A long action's progress (a background job): the label, the bar and its percentage. */
+function ProgressNode({ node }: { node: Extract<PluginUiNode, { type: "progress" }> }) {
+  const labelId = useId();
+  const ratio = node.max > 0 ? Math.min(1, Math.max(0, node.value / node.max)) : 0;
+  const percent = formatNumber(ratio, { style: "percent", maximumFractionDigits: 0 });
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-baseline justify-between gap-3 text-body">
+        <p id={labelId} className="min-w-0 break-words">{node.label}</p>
+        <p className="shrink-0 tabular-nums text-muted-foreground" aria-hidden="true">{percent}</p>
+      </div>
+      <Progress value={ratio * 100} aria-labelledby={labelId} aria-valuetext={percent} />
+      {node.help ? <p className="text-body text-muted-foreground">{node.help}</p> : null}
+    </div>
+  );
+}
+
 function EmptyBlock({ title, text, action }: { title: string; text?: string; action?: PluginUiButton }) {
   return (
     <div className="flex flex-col items-center gap-1 px-4 py-6 text-center">
@@ -863,6 +881,8 @@ function Node({ node }: { node: PluginUiNode }) {
     case "field":
       // Buyer surface only; an admin document never passes it.
       return null;
+    case "progress":
+      return <ProgressNode node={node} />;
     default:
       return <InputNode node={node} />;
   }

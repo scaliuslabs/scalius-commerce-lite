@@ -22,6 +22,7 @@ import { buyerUiOutputSchema, checkoutAttributesSchema } from "./buyer-ui";
 import { FUNCTION_READ_AS_PATTERN, FUNCTION_READS_MAX, functionReadsSchema } from "./function-reads";
 import { STOREFRONT_UI_SLOTS } from "./storefront-protocol";
 import type { PluginFunctionPoint } from "./manifest";
+import { PLUGIN_CUSTOMER_ROLE_PATTERN, PLUGIN_CUSTOMER_ROLE_REF_PATTERN, PLUGIN_CUSTOMER_ROLES_MAX } from "./customer-roles";
 
 const id = z.string().min(1).max(128);
 const minor = z.number().int().safe();
@@ -61,6 +62,14 @@ export const functionCartSchema = z.object({
     tags: z.array(z.string().max(64)).max(50),
     orderCount: z.number().int().min(0),
     totalSpentMinor: nonNegativeMinor,
+    /**
+     * The roles this app granted the customer (`ctx.customers.roles`), sorted
+     * by role: each app sees only its own. Empty when it granted none.
+     */
+    roles: z.array(z.object({
+      role: z.string().regex(PLUGIN_CUSTOMER_ROLE_PATTERN),
+      ref: z.string().regex(PLUGIN_CUSTOMER_ROLE_REF_PATTERN).nullable(),
+    }).strict()).max(PLUGIN_CUSTOMER_ROLES_MAX).default([]),
   }).strict().nullable(),
   /** Region only, for rules like "Dhaka only". */
   destination: z.object({

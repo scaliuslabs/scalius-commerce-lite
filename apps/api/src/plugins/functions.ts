@@ -24,6 +24,13 @@
 // Storefront extensions (manifest `storefront.extensions`) render through
 // this runner under PLUGIN_EXTENSION_RUN: an app runs for a UI slot it
 // declares and the grant approved, with the reads that slot declares.
+//
+// Customer roles (customer-roles.ts): the cart is built once for every app,
+// so `cart.customer.roles` is filled in here per app, each app only its own.
+// They are read once (one indexed read for every app at the point, or once
+// per checkout request through `roles`) and only when a signed-in buyer
+// meets at least one app that runs: a guest or a store without app functions
+// reads nothing more.
 
 import type { Database } from "@scalius/database/client";
 import { getDb } from "@scalius/database/client";
@@ -51,6 +58,7 @@ import {
   type PluginFunctionOutput,
   type PluginRunPoint,
 } from "@scalius/shared/plugins";
+import type { PluginCustomerRole } from "@scalius/shared/plugins/customer-roles";
 import type { PluginHost, PluginHostOptions } from "./host";
 
 export interface PluginFunctionResult<P extends PluginRunPoint> {
@@ -67,6 +75,23 @@ export class PluginFunctionsBlockedError extends Error {
     super(`Checkout is paused: ${pluginIds.join(", ")} could not answer ${point}.`);
     this.name = "PluginFunctionsBlockedError";
   }
+}
+
+/** One signed-in buyer's roles by app: what a request reads once for its function runs. */
+export type FunctionCustomerRoles = (customerId: string, pluginIds: readonly string[]) => Promise<ReadonlyMap<string, PluginCustomerRole[]>>;
+
+/** The signed-in buyer of a function input's cart (null for guests and carts without one). */
+function cartCustomerId(input: unknown): string | null {
+  const cart = (input as { cart?: { customer?: { id?: unknown } | null } | null } | null)?.cart;
+  const id = cart?.customer?.id;
+  return typeof id === "string" ? id : null;
+}
+
+/** The input with `cart.customer.roles` set to one app's roles. */
+function withCustomerRoles(input: Record<string, unknown>, roles: readonly PluginCustomerRole[]): Record<string, unknown> {
+  const cart = input.cart as { customer?: Record<string, unknown> | null } | null | undefined;
+  if (!cart?.customer) return input;
+  return { ...input, cart: { ...cart, customer: { ...cart.customer, roles: roles.map((entry) => ({ role: entry.role, ref: entry.ref })) } } };
 }
 
 /** Plugins asked at once; each is CPU-bound and wall-limited, so a few in flight bound latency. */
@@ -121,6 +146,8 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
     host?: PluginHost;
     /** The request's resolved reads (absent: read here, in one batch). */
     reads?: AppReadsCache;
+    /** The request's customer-roles read (absent: read here, once, for the point's apps). */
+    roles?: FunctionCustomerRoles;
   } = {},
 ): Promise<Array<PluginFunctionResult<P>>> {
   const db = options.db ?? getDb(env);
@@ -139,6 +166,17 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
   const requests = functionReadRequests(registered, point);
   const readsCache = requests.length > 0 ? options.reads ?? createAppReadsCache(db) : null;
   const readContext = appReadContextOfInput(checked.data);
+  // A signed-in buyer's roles, by app: one read for every app at the point, when the first app runs.
+  const customerId = cartCustomerId(checked.data);
+  let rolesByApp: Promise<ReadonlyMap<string, PluginCustomerRole[]>> | null = null;
+  const rolesOf = async (pluginId: string): Promise<PluginCustomerRole[] | null> => {
+    if (!customerId) return null;
+    const apps = registered.map((registration) => registration.installation.pluginId);
+    rolesByApp ??= options.roles
+      ? options.roles(customerId, apps)
+      : import("./customer-roles").then(({ pluginCustomerRolesByApp }) => pluginCustomerRolesByApp(db, customerId, apps));
+    return (await rolesByApp).get(pluginId) ?? [];
+  };
   const results: Array<PluginFunctionResult<P> | null> = new Array(registered.length).fill(null);
   const blocked: string[] = [];
   let next = 0;
@@ -164,6 +202,9 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
         const own = Object.fromEntries(Object.entries(buyer.attributes).filter(([key]) => key.startsWith(prefix)));
         scopedInput = { ...buyer, attributes: Object.fromEntries(Object.entries(own).map(([key, value]) => [key.slice(prefix.length), value])), cart: buyer.cart ? { ...buyer.cart, attributes: own } : null };
       }
+      // Each app sees only the roles it granted.
+      const roles = await rolesOf(installation.pluginId);
+      if (roles) scopedInput = withCustomerRoles(scopedInput, roles);
       const wantsReads = readNames ? readNames.size > 0 : Boolean(declaration?.reads?.length);
       const read: AppFunctionReadResult = readsCache && wantsReads
         ? await readsCache.get(requests, readContext, installation.pluginId, point)

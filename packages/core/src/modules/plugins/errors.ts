@@ -63,6 +63,17 @@ export type PluginErrorCode =
   | "orders_not_allowed"
   | "orders_invalid"
   | "orders_not_found"
+  /** App customer roles (`ctx.customers.roles`). */
+  | "customers_not_allowed"
+  | "customers_invalid"
+  | "customers_not_found"
+  | "customer_roles_limit"
+  /** Background jobs (`ctx.jobs`). */
+  | "jobs_undeclared"
+  | "jobs_invalid"
+  | "jobs_limit"
+  | "jobs_not_found"
+  | "jobs_key_reused"
   /** Rendering storefront output: only the app's settings and the section's declared collections are readable. */
   | "rate_limited"
   /** Quotas (docs/platform/PLUGINS.md, "Quotas"): over the plan's storage size or calls per run. */
@@ -115,6 +126,15 @@ const STATUS: Partial<Record<PluginErrorCode, number>> = {
   "orders_not_allowed": 403,
   "orders_invalid": 422,
   "orders_not_found": 404,
+  "customers_not_allowed": 403,
+  "customers_invalid": 422,
+  "customers_not_found": 404,
+  "customer_roles_limit": 409,
+  "jobs_undeclared": 404,
+  "jobs_invalid": 422,
+  "jobs_limit": 429,
+  "jobs_not_found": 404,
+  "jobs_key_reused": 422,
   rate_limited: 429,
   "quota_storage": 507,
   "quota_subrequests": 429,

@@ -9,14 +9,14 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { nullableIsoTimestampSchema } from "../../schemas/timestamps";
 import type { Context, MiddlewareHandler } from "hono";
 import { and, desc, eq, lt, or } from "drizzle-orm";
-import { bulkRuns, BULK_RUN_KINDS } from "@scalius/database/schema";
+import { bulkRuns, BULK_RUN_KINDS, type BulkRunKind } from "@scalius/database/schema";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { planLimits } from "@scalius/shared/plan-limits";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
 import { conflictResponse, errorResponses, namedSharedSchema, successEnvelope } from "../../schemas/responses";
 import { idempotencyKeyHeaderSchema, scopedRequestKey } from "./idempotency";
-import { afterResponse } from "../../background/after-response";
+import { afterResponse, executionContextOf } from "../../background/after-response";
 import {
   BULK_CHUNK_ITEMS,
   BULK_SYNC_MAX_ITEMS,
@@ -31,9 +31,11 @@ import {
   advanceBulkRun,
   createBulkRun,
   drainBulkRuns,
+  isStaffBulkRun,
   presentBulkRun,
   previewBulkRun,
   readBulkRun,
+  staffBulkRunCondition,
   type BulkRunRow,
 } from "../../bulk-runs/engine";
 
@@ -93,10 +95,13 @@ async function startRun(c: Context<{ Bindings: Env }>, operationId: string, run:
     current = await advanceBulkRun(db, row.id, Math.ceil(row.total / BULK_CHUNK_ITEMS) + 1);
   } else if (created) {
     await db.update(bulkRuns).set({ leaseUntil: null }).where(eq(bulkRuns.id, row.id));
-    await afterResponse(c, "bulk run", () => drainBulkRuns(db, planLimits().background.bulkRunChunksPerDrain));
+    // The drain may reach app jobs too, so it carries the Worker runtime they run with.
+    await afterResponse(c, "bulk run", () => drainBulkRuns(db, planLimits().background.bulkRunChunksPerDrain, { env: c.env, ctx: executionContextOf(c) }));
     current = await readBulkRun(db, row.id);
   }
-  const view = presentBulkRun(current ?? row, currency);
+  const latest = current && isStaffBulkRun(current) ? current : row;
+  if (!isStaffBulkRun(latest)) throw new NotFoundError("Bulk run not found");
+  const view = presentBulkRun(latest, currency);
   return c.json({ success: true as const, data: view }, view.status === "running" ? 202 : 200);
 }
 
@@ -194,7 +199,7 @@ app.openapi(createRoute({
 
 const readResponses = { 400: errorResponses[400], 401: errorResponses[401], 403: errorResponses[403], 404: errorResponses[404], 429: errorResponses[429], 500: errorResponses[500] };
 
-async function viewOf(c: Context<{ Bindings: Env }>, row: BulkRunRow) {
+async function viewOf(c: Context<{ Bindings: Env }>, row: BulkRunRow & { kind: BulkRunKind }) {
   const currency = row.kind === "variants.set_prices" ? (await readStoreCurrency(c.get("db"))).code : null;
   return presentBulkRun(row, currency);
 }
@@ -213,7 +218,8 @@ app.openapi(createRoute({
   },
 }), async (c) => {
   const row = await readBulkRun(c.get("db"), c.req.valid("param").id);
-  if (!row) throw new NotFoundError("Bulk run not found");
+  // An app's background job is the app's, never a staff bulk run.
+  if (!row || !isStaffBulkRun(row)) throw new NotFoundError("Bulk run not found");
   return ok(c, await viewOf(c, row));
 });
 
@@ -246,14 +252,15 @@ app.openapi(createRoute({
   const db = c.get("db");
   const { status, cursor, limit } = c.req.valid("query");
   const anchor = cursor ? await readBulkRun(db, cursor) : undefined;
-  if (cursor && !anchor) throw new ValidationError("This page cursor is not valid.", { field: "cursor" });
-  const rows = await db.select().from(bulkRuns)
+  if (cursor && (!anchor || !isStaffBulkRun(anchor))) throw new ValidationError("This page cursor is not valid.", { field: "cursor" });
+  const rows = (await db.select().from(bulkRuns)
     .where(and(
+      staffBulkRunCondition(),
       status ? eq(bulkRuns.status, status) : undefined,
       anchor ? or(lt(bulkRuns.createdAt, anchor.createdAt), and(eq(bulkRuns.createdAt, anchor.createdAt), lt(bulkRuns.id, anchor.id))) : undefined,
     ))
     .orderBy(desc(bulkRuns.createdAt), desc(bulkRuns.id))
-    .limit(limit + 1);
+    .limit(limit + 1)).filter(isStaffBulkRun);
   const page = rows.slice(0, limit);
   const currency = page.some((row) => row.kind === "variants.set_prices") ? (await readStoreCurrency(db)).code : null;
   return ok(c, {

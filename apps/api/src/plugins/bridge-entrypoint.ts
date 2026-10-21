@@ -8,6 +8,8 @@
 import { WorkerEntrypoint } from "cloudflare:workers";
 import type { PluginApiResult, PluginObjectQuery } from "@scalius/plugin-sdk";
 import type { ObjectRecordVersion, ObjectOperation, ObjectQueryResult } from "@scalius/core/modules/objects";
+import type { PluginCustomerRoleGrant } from "@scalius/shared/plugins/customer-roles";
+import type { PluginJob } from "@scalius/shared/plugins/jobs";
 import type {
   PluginBridgeApi,
   PluginBridgeEnvironment,
@@ -152,5 +154,33 @@ export class PluginBridge extends WorkerEntrypoint<Env, PluginBridgeProps> imple
 
   async ordersRiskHistory(orderId: string): Promise<{ orders: number; cancelled: number; returnedToSender: number }> {
     return (await this.#host()).ordersRiskHistory(orderId);
+  }
+
+  async customerRolesGrant(customerId: string, role: string, ref?: string | null): Promise<void> {
+    return (await this.#host()).customerRolesGrant(customerId, role, ref);
+  }
+
+  async customerRolesRevoke(customerId: string, role: string): Promise<void> {
+    return (await this.#host()).customerRolesRevoke(customerId, role);
+  }
+
+  async customerRolesList(customerId: string): Promise<PluginCustomerRoleGrant[]> {
+    return (await this.#host()).customerRolesList(customerId);
+  }
+
+  async jobsStart(name: string, options?: { input?: unknown; key?: string }): Promise<{ id: string; status: PluginJob["status"] }> {
+    return (await this.#host()).jobsStart(name, options);
+  }
+
+  async jobsGet(id: string): Promise<PluginJob | null> {
+    return (await this.#host()).jobsGet(id);
+  }
+
+  async jobsList(options?: { name?: string; limit?: number }): Promise<PluginJob[]> {
+    return (await this.#host()).jobsList(options);
+  }
+
+  async jobsCancel(id: string): Promise<PluginJob> {
+    return (await this.#host()).jobsCancel(id);
   }
 }

@@ -254,6 +254,8 @@ export async function loadAppFunctionCartFacts(
       tags: (customer.tags ?? "").split(",").filter(Boolean).slice(0, 50),
       orderCount: Math.max(0, Number(customer.orderCount) || 0),
       totalSpentMinor: Math.max(0, Number(customer.totalSpentMinor) || 0),
+      // Each app's own roles are filled in per app by the function runner (apps/api plugins/functions.ts).
+      roles: [],
     };
   }
   // A buyer the batch did not find is a guest to the cart: those reads are not kept (a call reads them as a guest's).

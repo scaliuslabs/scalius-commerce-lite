@@ -52,12 +52,13 @@ export const PLUGIN_UI_INPUT_TYPES = ["text-field", "textarea", "number-field", 
 
 const NODE_TYPES = [
   "page", "section", "card", "stack", "columns", "heading", "text", "badge", "banner", "key-value", "stat", "table",
-  "empty-state", "image", "link", "divider", "button", "form", ...PLUGIN_UI_INPUT_TYPES, "field",
+  "empty-state", "image", "link", "divider", "button", "form", ...PLUGIN_UI_INPUT_TYPES, "field", "progress",
 ] as const;
 export type PluginUiNodeType = (typeof NODE_TYPES)[number];
 
 /**
- * What each surface allows. `admin`: every node but `field`, route and
+ * What each surface allows. `admin`: every node but `field` (`progress`
+ * only here), route and
  * navigate actions, links to app pages, resources and https sites, https
  * images. `buyer`: content nodes, buttons and checkout `field`s (no pages,
  * forms or tables), route, cart and navigate actions, links to store paths,
@@ -256,7 +257,14 @@ export type PluginUiNode =
   | { type: "form"; action: PluginUiRouteAction; submitLabel: string; confirm?: z.infer<typeof pluginUiConfirmSchema>; children: PluginUiNode[] }
   | PluginUiInput
   /** A checkout attribute the app declares (`checkout.attributes`), drawn as the store's own input (buyer). */
-  | { type: "field"; attribute: string };
+  | { type: "field"; attribute: string }
+  /**
+   * Progress of a long action, e.g. a background job (`ctx.jobs.get`): a bar
+   * at `value` of `max` (`0 <= value <= max`, `max > 0`) with its percentage
+   * (admin). `live: true` makes the dashboard read the surface again every
+   * few seconds while a live progress is shown (for at most 10 minutes).
+   */
+  | { type: "progress"; label: string; value: number; max: number; help?: string; live?: boolean };
 
 const buttonSchema = z.object({
   type: z.literal("button"),
@@ -407,6 +415,14 @@ export const pluginUiNodeSchema: z.ZodType<PluginUiNode> = z.lazy(() => z.discri
   }).strict(),
   ...inputSchemas,
   z.object({ type: z.literal("field"), attribute: attributeKey }).strict(),
+  z.object({
+    type: z.literal("progress"),
+    label,
+    value: z.number().finite().min(0),
+    max: z.number().finite().positive(),
+    help: optionalLabel.optional(),
+    live: z.boolean().optional(),
+  }).strict(),
 ])).meta({ id: "PluginUiNode" }) as z.ZodType<PluginUiNode>;
 
 /** What a UI route or function answers: the tree and its version. */
@@ -474,6 +490,11 @@ export function pluginUiRouteActions(root: PluginUiNode): PluginUiRouteAction[] 
   return pluginUiActions(root).filter((action): action is PluginUiRouteAction => action.kind === "route");
 }
 
+/** Whether the tree shows a `live` progress (the dashboard then reads the surface again every few seconds). */
+export function pluginUiHasLiveProgress(root: PluginUiNode): boolean {
+  return pluginUiNodes(root).some((node) => node.type === "progress" && node.live === true);
+}
+
 /** Every node of the tree, attached buttons included, depth first. */
 export function pluginUiNodes(root: PluginUiNode): PluginUiNode[] {
   const nodes: PluginUiNode[] = [];
@@ -531,6 +552,9 @@ function checkTree(root: PluginUiNode, surface: PluginUiSurface, context: z.Refi
     if (node.type === "form" && inForm) return report(path, "Forms do not nest.");
     if (node.type === "number-field" && node.min !== undefined && node.max !== undefined && node.min > node.max) {
       return report([...path, "min"], "min must not exceed max.");
+    }
+    if (node.type === "progress" && node.value > node.max) {
+      return report([...path, "value"], "value must not exceed max.");
     }
     if (node.type === "select" && node.value != null && !node.options.some((option) => option.value === node.value)) {
       return report([...path, "value"], "The value must be one of the options.");

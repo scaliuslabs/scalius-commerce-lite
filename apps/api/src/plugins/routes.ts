@@ -9,7 +9,7 @@
 // `x-scalius-app-proxy`), for plugins whose manifest asks for the proxy. A
 // proxied request may carry the store's own customer session cookie, which
 // the storefront forwards for this alone: the platform resolves it and the
-// plugin gets `request.customer = { id }`, never the cookie.
+// plugin gets `request.customer = { id, roles }` (its own roles), never the cookie.
 //
 // The platform owns the edges: only active plugins answer; only declared
 // routes and methods; bodies are capped; request headers are filtered (no
@@ -33,6 +33,7 @@ import {
 import { deriveRuntimeSecret, readMasterSecret } from "@scalius/shared/runtime-secrets";
 import { STOREFRONT_CORE_ROUTES } from "@scalius/shared/storefront-routes";
 import type { PluginRouteRequest } from "@scalius/plugin-sdk";
+import type { PluginCustomerRole } from "@scalius/shared/plugins/customer-roles";
 import { adminAuthMiddleware } from "../middleware/admin-auth";
 import { dashboardOriginGuardMiddleware } from "../middleware/cookie-origin-guard";
 import { privateNoStore } from "../middleware/private-no-store";
@@ -215,20 +216,26 @@ export function pluginResponseCacheControl(surface: PluginRouteSurface, requeste
 /**
  * The signed-in buyer of a request the storefront proxied, from the store's
  * own session cookie, which the storefront forwards for this purpose alone
- * (lib/app-proxy.ts). The app gets the customer id; it never sees the cookie
- * (every route's headers drop it). Null for guests and expired sessions.
+ * (lib/app-proxy.ts). The app gets the customer id and the roles it gave
+ * them; it never sees the cookie (every route's headers drop it). Null for
+ * guests and expired sessions.
  */
-async function proxiedCustomer(c: Context<{ Bindings: Env }>, db: Database): Promise<{ id: string } | null> {
+async function proxiedCustomer(c: Context<{ Bindings: Env }>, db: Database, pluginId: string): Promise<{ id: string; roles: PluginCustomerRole[] } | null> {
   const { getCustomerBySession, getSessionCookie } = await import("@scalius/core/modules/customers");
   const token = getSessionCookie(c.req.header("cookie") ?? null);
   if (!token) return null;
+  let customerId: string | null;
   try {
     const { getCustomerSessionHashKey } = await import("../utils/encryption-key");
     const session = await getCustomerBySession(db, token, getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>));
-    return session?.customerId ? { id: session.customerId } : null;
+    customerId = session?.customerId ?? null;
   } catch {
     return null;
   }
+  if (!customerId) return null;
+  // This app's roles only (customer-roles.ts): one primary-key prefix read.
+  const { pluginCustomerRolesOf } = await import("./customer-roles");
+  return { id: customerId, roles: await pluginCustomerRolesOf(db, pluginId, customerId) };
 }
 
 /**
@@ -335,7 +342,7 @@ export async function handlePluginRoute(c: Context<{ Bindings: Env }>, deps: Plu
     body: proxied ? withoutFormToken(parsed.body) : parsed.body,
     rawBody: target.surface === "webhooks" ? raw ?? "" : null,
     staffId: user?.id ?? null,
-    customer: proxied ? await proxiedCustomer(c, db) : null,
+    customer: proxied ? await proxiedCustomer(c, db, target.pluginId) : null,
     routes: target.surface === "public" ? STOREFRONT_CORE_ROUTES : null,
   };
 

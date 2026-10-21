@@ -722,12 +722,14 @@ export const BACKGROUND_DRAINS: ReadonlyArray<DueProbedDrain & { run(context: Sw
     },
   },
   {
-    // Bulk runs larger than one request (routes/admin/resources-bulk.ts).
+    // Bulk runs larger than one request (routes/admin/resources-bulk.ts) and
+    // app background jobs (plugins/jobs.ts): both are due bulk_runs rows, so
+    // one probe serves them.
     name: "bulk_run_drain",
     due: (db) => dueBulkRunProbes(db),
-    async run({ db }) {
+    async run({ db, env, executionCtx }) {
       const { drainBulkRuns } = await import("./bulk-runs/engine");
-      return drainBulkRuns(db, planLimits().background.bulkRunChunksPerDrain);
+      return drainBulkRuns(db, planLimits().background.bulkRunChunksPerDrain, { env, ctx: executionCtx });
     },
   },
   {

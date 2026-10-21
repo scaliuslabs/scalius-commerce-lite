@@ -229,3 +229,48 @@ describe("fixtures", () => {
       .toEqual({ body: { cursor: "c1", staff: "staff_test" } });
   });
 });
+
+describe("the harness's customer roles and jobs", () => {
+  const rolesManifest = {
+    id: "acme.portal",
+    name: "Portal",
+    version: "1.0.0",
+    apiVersion: PLUGIN_API_VERSION,
+    description: "A seller portal.",
+    author: { name: "Acme" },
+    scopes: ["read_customers"],
+    routes: { admin: [], public: [{ name: "portal", methods: ["GET", "POST"] }], webhooks: [] },
+    storefront: { proxy: true },
+    jobs: [{ name: "approve", title: "Approve sellers" }],
+  } satisfies PluginManifestInput;
+  const portal = definePlugin({
+    manifest: rolesManifest,
+    routes: {
+      public: {
+        portal: async (request, ctx) => {
+          if (request.method === "POST") await ctx.customers.roles.grant(request.customer!.id, "seller", { ref: "seller_1" });
+          return { body: { seller: request.customer?.roles.some((entry) => entry.role === "seller") ?? false, roles: request.customer?.roles ?? null } };
+        },
+      },
+    },
+    jobs: { approve: async (_ctx, job) => ({ state: { seen: job.step }, done: job.step >= 2 }) },
+  });
+
+  it("keeps the platform's role rules and hands a proxied buyer the app's roles", async () => {
+    const harness = createPluginTestHarness({ default: portal }, { customers: ["c1"] });
+    expect((await harness.route("public", "portal", { customer: { id: "c1" } })).value).toEqual({ body: { seller: false, roles: [] } });
+    await harness.route("public", "portal", { method: "POST", customer: { id: "c1" } });
+    expect((await harness.route("public", "portal", { customer: { id: "c1" } })).value).toEqual({ body: { seller: true, roles: [{ role: "seller", ref: "seller_1" }] } });
+    expect(harness.roles("c1")).toEqual([{ role: "seller", ref: "seller_1" }]);
+    expect(await harness.route("public", "portal", { method: "POST", customer: { id: "c_missing" } })).toMatchObject({ ok: false, error: { code: "customers_not_found" } });
+    const unscoped = createPluginTestHarness({ default: { ...portal, manifest: { ...rolesManifest, scopes: [] } } });
+    expect(await unscoped.route("public", "portal", { method: "POST", customer: { id: "c1" } })).toMatchObject({ ok: false, error: { code: "customers_not_allowed" } });
+  });
+
+  it("steps a job with the state each step returned", async () => {
+    const harness = createPluginTestHarness({ default: portal });
+    const { job, steps } = await harness.runJob("approve");
+    expect(job).toMatchObject({ status: "done", steps: 2 });
+    expect(steps.map((step) => step.result.value)).toEqual([{ state: { seen: 1 }, done: false }, { state: { seen: 2 }, done: true }]);
+  });
+});
