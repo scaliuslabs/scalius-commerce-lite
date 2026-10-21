@@ -1016,7 +1016,7 @@ export declare function storeTime(context: {
 export {};
 
 // packages/plugin-sdk/src/storefront/testing.d.ts
-import { type StorefrontComponentTarget, type StorefrontFooterData, type StorefrontHeaderData, type StorefrontListingPage, type StorefrontModule, type StorefrontProductCard, type StorefrontProductPage, type StorefrontRenderContext, type StorefrontResolvedSettings, type StorefrontSectionSkinData, type StorefrontSkinJob, type StorefrontSkinTarget, type StorefrontSkinUnit } from "@scalius/shared/plugins/storefront-protocol";
+import { type StorefrontComponentTarget, type StorefrontFooterData, type StorefrontHeaderData, type StorefrontListingPage, type StorefrontModule, type StorefrontProductCard, type StorefrontProductPage, type StorefrontRenderContext, type StorefrontResolvedSettings, type StorefrontSectionSkinData, type StorefrontSectionSkinSettings, type StorefrontSkinJob, type StorefrontSkinnableSection, type StorefrontSkinTarget, type StorefrontSkinUnit } from "@scalius/shared/plugins/storefront-protocol";
 import { type StorefrontHeaderCheckOptions } from "@scalius/shared/plugins/storefront-html-check";
 export { checkStorefrontHeaderHtml } from "@scalius/shared/plugins/storefront-html-check";
 export declare function storefrontShown(html: string, pluginId: string): {
@@ -1030,10 +1030,11 @@ export declare function fixtureHeaderData(overrides?: Partial<StorefrontHeaderDa
 export declare function fixtureFooterData(overrides?: Partial<StorefrontFooterData>): StorefrontFooterData;
 export declare function fixtureProductPage(overrides?: Partial<StorefrontProductPage["product"]>): StorefrontProductPage;
 export declare function fixtureListingPage(overrides?: Partial<StorefrontListingPage>): StorefrontListingPage;
-export declare function fixtureSectionSkinData(type: string, settings?: Record<string, unknown>): StorefrontSectionSkinData;
+type SectionSkinSettingsOf<Type extends StorefrontSkinnableSection> = StorefrontSectionSkinSettings[Type];
+export declare function fixtureSectionSkinData<Type extends StorefrontSkinnableSection>(type: Type, settings?: Partial<SectionSkinSettingsOf<Type>>): StorefrontSectionSkinData<SectionSkinSettingsOf<Type>>;
 export type SkinData<Target extends StorefrontSkinTarget> = Target extends StorefrontSkinUnit ? Extract<StorefrontSkinJob, {
     target: Target;
-}>["data"] : StorefrontSectionSkinData;
+}>["data"] : Target extends `section:${infer Type extends StorefrontSkinnableSection}` ? StorefrontSectionSkinData<SectionSkinSettingsOf<Type>> : StorefrontSectionSkinData;
 export declare function fixtureSkinData(target: StorefrontSkinTarget): StorefrontSkinJob["data"];
 export declare function checkSkinHtml(target: StorefrontSkinTarget, html: string): string[];
 export interface RenderOptions extends StorefrontHeaderCheckOptions {

@@ -10,6 +10,7 @@
 
 import {
   STOREFRONT_COMPONENT_ABI,
+  STOREFRONT_SECTION_SKIN_PROJECTIONS,
   storefrontEmbedRule,
   type StorefrontComponentJob,
   type StorefrontComponentTarget,
@@ -23,11 +24,15 @@ import {
   type StorefrontRenderJob,
   type StorefrontResolvedSettings,
   type StorefrontSectionSkinData,
+  type StorefrontSectionSkinSettings,
   type StorefrontSkinJob,
+  type StorefrontSkinnableSection,
   type StorefrontSkinTarget,
   type StorefrontSkinUnit,
 } from "@scalius/shared/plugins/storefront-protocol";
 import { splitStorefrontEmbeds } from "@scalius/shared/plugins/storefront-embeds";
+import { storefrontSectionDefault, storefrontVisibleSection } from "@scalius/shared/storefront-theme/sections";
+import { coreSectionSkinSettings, type CoreSectionResolver } from "@scalius/shared/storefront-theme/skins";
 import { checkStorefrontHeaderHtml, type StorefrontHeaderCheckOptions } from "@scalius/shared/plugins/storefront-html-check";
 import { sanitizePluginHtml } from "@scalius/shared/plugins/html";
 
@@ -154,15 +159,67 @@ export function fixtureListingPage(overrides: Partial<StorefrontListingPage> = {
   };
 }
 
-/** A core section's projection with empty settings (pass the settings your skin reads). */
-export function fixtureSectionSkinData(type: string, settings: Record<string, unknown> = {}): StorefrontSectionSkinData {
-  return { type, version: 1, settings, tiles: [], cards: [] };
+/** What the fixture store resolves a section's references to: the fixture card, photo and facts. */
+const fixtureSectionResolver: CoreSectionResolver = {
+  image: (mediaId) => ({ ...fixtureProductCard().image!, alt: `Photo ${mediaId}` }),
+  products: () => ({
+    title: "New arrivals",
+    url: "/collections/new",
+    cards: [fixtureProductCard(), fixtureProductCard({ id: "prod_2", title: "Oxford shirt", quickAdd: false, compareAt: null, percentOff: null })],
+  }),
+  tiles: (kind, ids) => ids.map((id, index) => ({
+    id,
+    title: `${kind === "category" ? "Category" : "Collection"} ${index + 1}`,
+    url: `/${kind === "category" ? "categories" : "collections"}/${id}`,
+    image: fixtureProductCard().image,
+    cards: kind === "collection" ? [fixtureProductCard()] : [],
+  })),
+  promotion: () => ({ endsAt: "2026-12-31T18:00:00.000Z" }),
+  deliveryFacts: () => [
+    { title: "Delivery in Dhaka", detail: "1-2 days" },
+    { title: "Cash on delivery", detail: "Pay when it arrives" },
+  ],
+  objectField: () => [],
+};
+
+/** The settings a section skin of `type` gets: the projection of a new section of that type. */
+type SectionSkinSettingsOf<Type extends StorefrontSkinnableSection> = StorefrontSectionSkinSettings[Type];
+
+/**
+ * A core section's projection as the store hands it to a `section:<type>`
+ * skin, at the projection's version: the settings of a new section of that
+ * type (core's own defaults) mapped by the host's own mapper
+ * (`coreSectionSkinSettings`), so every field the sealed type
+ * `StorefrontSectionSkinSettings[type]` declares is present. References
+ * resolve to fixture data (a product source to two cards, a delivery-facts
+ * source to two facts). `settings` replaces top-level fields of the
+ * projection; pass the values your test is about.
+ */
+export function fixtureSectionSkinData<Type extends StorefrontSkinnableSection>(
+  type: Type,
+  settings: Partial<SectionSkinSettingsOf<Type>> = {},
+): StorefrontSectionSkinData<SectionSkinSettingsOf<Type>> {
+  if (!Object.hasOwn(STOREFRONT_SECTION_SKIN_PROJECTIONS, type)) throw new Error(`${type} is not a core section a skin can draw.`);
+  const section = storefrontVisibleSection(storefrontSectionDefault(type, type));
+  const projection = coreSectionSkinSettings(section, fixtureSectionResolver);
+  return {
+    type,
+    version: STOREFRONT_SECTION_SKIN_PROJECTIONS[type],
+    settings: { ...projection, ...settings } as SectionSkinSettingsOf<Type>,
+    // A brand wall's brands, and a collections section's fallback products.
+    tiles: type === "brand_wall"
+      ? [{ id: "brand_1", title: "Acme", url: "/brands/acme", image: fixtureProductCard().image, cards: [] }]
+      : [],
+    cards: type === "collections" ? fixtureSectionResolver.products({} as never).cards : [],
+  };
 }
 
 /** The projection a skin target gets (a `section:<type>` target: the section's). */
 export type SkinData<Target extends StorefrontSkinTarget> = Target extends StorefrontSkinUnit
   ? Extract<StorefrontSkinJob, { target: Target }>["data"]
-  : StorefrontSectionSkinData;
+  : Target extends `section:${infer Type extends StorefrontSkinnableSection}`
+    ? StorefrontSectionSkinData<SectionSkinSettingsOf<Type>>
+    : StorefrontSectionSkinData;
 
 /** The fixture projection a skin target gets. */
 export function fixtureSkinData(target: StorefrontSkinTarget): StorefrontSkinJob["data"] {
@@ -172,7 +229,7 @@ export function fixtureSkinData(target: StorefrontSkinTarget): StorefrontSkinJob
     case "product_card": return { product: fixtureProductCard(), position: 0, aboveFold: true };
     case "product_main": return fixtureProductPage();
     case "listing_main": return fixtureListingPage();
-    default: return fixtureSectionSkinData(target.slice("section:".length));
+    default: return fixtureSectionSkinData(target.slice("section:".length) as StorefrontSkinnableSection);
   }
 }
 

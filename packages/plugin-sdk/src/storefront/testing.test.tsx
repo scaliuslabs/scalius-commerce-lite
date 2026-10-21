@@ -3,7 +3,32 @@ import { describe, expect, it } from "vitest";
 import { BuyForm, Reviews, Slot, Toolbar } from "./components";
 import { defineStorefront, type ComponentProps, type ListingMainProps, type ProductMainProps, type SectionSkinProps } from "./define";
 import { raw } from "./html";
-import { assertHeaderContract, checkSkinHtml, fixtureProductPage, fixtureSectionSkinData, renderComponent, renderHeader, renderSkin } from "./testing";
+import { STOREFRONT_SECTION_SKIN_PROJECTIONS, type StorefrontSkinnableSection } from "@scalius/shared/plugins/storefront-protocol";
+import { assertHeaderContract, checkSkinHtml, fixtureProductPage, fixtureSectionSkinData, fixtureSkinData, renderComponent, renderHeader, renderSkin } from "./testing";
+
+describe("section skin fixtures follow the sealed projection", () => {
+  it("lets a skin read a field its type says is always there", () => {
+    // A usp_strip projection always carries its source (a delivery-facts strip by default).
+    const strip = defineStorefront({ skins: {
+      bold: ({ data }: SectionSkinProps<"usp_strip">) => (
+        <ul data-kind={data.settings.source.kind}>{data.settings.source.items.map((item) => <li>{item.title}</li>)}</ul>
+      ),
+    } });
+    expect(renderSkin(strip, "bold", "section:usp_strip")).toBe('<ul data-kind="delivery-facts"><li>Delivery in Dhaka</li><li>Cash on delivery</li></ul>');
+  });
+
+  it("builds every skinnable section from core's defaults, at its projection version", () => {
+    for (const type of Object.keys(STOREFRONT_SECTION_SKIN_PROJECTIONS) as StorefrontSkinnableSection[]) {
+      const data = fixtureSectionSkinData(type);
+      expect(data).toMatchObject({ type, version: STOREFRONT_SECTION_SKIN_PROJECTIONS[type] });
+      expect(Object.keys(data.settings as object).length, type).toBeGreaterThan(0);
+      expect(fixtureSkinData(`section:${type}`)).toEqual(data);
+    }
+    expect(fixtureSectionSkinData("product_rail").settings.products.cards).toHaveLength(2);
+    expect(fixtureSectionSkinData("brand_wall").tiles).toHaveLength(1);
+    expect(() => fixtureSectionSkinData("recently_viewed" as StorefrontSkinnableSection)).toThrow(/not a core section a skin can draw/);
+  });
+});
 
 describe("header render assertions", () => {
   it("identifies the failing component and its markup error", () => {
@@ -53,7 +78,7 @@ describe("skins and blocks", () => {
 
   it("renders listing and section skins and component blocks", () => {
     expect(renderSkin(app, "grid", "listing_main")).toBe('<section><scalius-embed kind="toolbar"></scalius-embed><ul><li>Linen shirt</li><li>Oxford shirt</li></ul></section>');
-    expect(renderSkin(app, "hero", "section:hero", {}, fixtureSectionSkinData("hero", { slides: [{ alt: "Eid sale" }] }))).toBe('<section id="acme-hero"><p>Eid sale</p></section>');
+    expect(renderSkin(app, "hero", "section:hero", {}, fixtureSectionSkinData("hero", { slides: [{ image: null, focalPoint: { x: 50, y: 50 }, alt: "Eid sale", link: null }] }))).toBe('<section id="acme-hero"><p>Eid sale</p></section>');
     expect(renderComponent(app, "guide", "product.buy_box.after", {}, { data: fixtureProductPage() })).toBe('<aside data-target="product.buy_box.after">Size</aside>');
     expect(renderComponent(app, "guide", "header.actions")).toBe('<span data-target="header.actions">Guide</span>');
     expect(checkSkinHtml("header", '<scalius-embed kind="filters"></scalius-embed>')).toEqual(["1 embed(s) render nothing here: header allows slot."]);
