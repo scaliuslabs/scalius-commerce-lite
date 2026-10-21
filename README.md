@@ -219,7 +219,7 @@ The pipeline runs these steps in order:
 | `--only api` or `--only storefront` | Deploy one Worker (`pnpm run deploy:api`, `deploy:storefront`) |
 | `--plan paid` | Workers Paid profile: CPU limit and larger per-invocation batches. The default is Free ([docs/FREE-PLAN.md](docs/FREE-PLAN.md)) |
 | `--plugin-sandbox` | Bind the Worker Loader for sandboxed plugins (Workers Paid; implies `--plan paid`) |
-| `--dry-run` | Typecheck, build, and run the dist checks only |
+| `--dry-run` | Typecheck, build, run the dist checks and `check:env`, and bundle each Worker with the chosen plan's Wrangler config (`wrangler deploy --dry-run`); uploads nothing |
 
 The Wrangler configs carry no `vars`, so the script learns your origins from its arguments:
 
