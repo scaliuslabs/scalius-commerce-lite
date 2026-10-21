@@ -2,7 +2,7 @@
 
 An app can redesign the storefront: skins of the header, footer, product card, product page, listings and any core section; new sections and product blocks with their own logic; a single-page order landing; and ready-made templates that apply the whole look in one click. The merchant installs the app, activates it, picks its template in Online Store → Theme, and edits every section and skin in the theme editor like the built-in ones. Nobody forks the storefront.
 
-The reference app is `plugins/noor` (Noor: a complete theme with nine sections of its own, skins of the store's own header, footer, card, product page and fifteen core sections, one template, and a landing kit with a page preset for Bangladesh-style single-product campaign pages with a cash-on-delivery order form). Two more themes are reference apps: `plugins/volt` (an electronics store: category mega menu, specification-table product page, filter-sidebar listing) and `plugins/bazaar` (a marketplace: department search, deal rows, buy-box product page). Each ships a removable demo store. The small worked example is `apps/api/src/plugins/testing/apps/studio`.
+The reference app is `plugins/noor` (Noor: a complete theme with nine sections of its own, skins of the store's own header, footer, card, product page and fifteen core sections, one template, and a landing kit with a page preset for Bangladesh-style single-product campaign pages with a cash-on-delivery order form). The small worked example is `apps/api/src/plugins/testing/apps/studio`; `apps/api/src/plugins/testing/apps/compose` is a second app that composes into the store's and Studio's units (card slots, a header drawn from the header facts, a listing with child categories, the SKU code and EMI, deferred markup, the cart drawer and cart page), proved end to end in `apps/storefront/src/lib/route-tests/compose-app.render.test.ts`.
 
 Source of truth:
 
@@ -52,7 +52,7 @@ Component sections and components have no render route: they run at the edge wit
 
 ## Slots
 
-A slot is a named place where apps add their piece (`storefront-protocol.ts`). Component slots are on public pages: `header.actions`, `footer.columns` (every active app's component that targets them, with default values) and `product.buy_box.before`, `product.buy_box.after`, `product.below` (arranged by the merchant as the product page's app blocks). Core's header, footer and product page place them; a header or footer skin places its own with `<Slot name="header.actions" />` / `<Slot name="footer.columns" />`. A component gets `{ target, settings, context }`, plus `data` and `instanceId` in a product slot and `props` on `page`, and embeds nothing. UI slots are on the buyer's pages (`cart.page.summary`, `checkout.*`, `order.confirmation`, `account.*`): storefront extensions (`storefront.extensions`) fill them with a `ui` tree. An empty slot renders nothing and costs no read.
+A slot is a named place where apps add their piece (`storefront-protocol.ts`). Component slots are on public pages: `header.actions`, `footer.columns` (every active app's component that targets them, with default values) and `product.buy_box.before`, `product.buy_box.after`, `product.below` (arranged by the merchant as the product page's app blocks), and on every product card `product_card.badges` (over the photo) and `product_card.meta` (under the price). Core's header, footer, product page and card place them; a skin of a unit places that unit's slots with `<Slot name="header.actions" />`, `<Slot name="footer.columns" />`, `<Slot name="product_card.badges" />` and `<Slot name="product_card.meta" />` (Noor's and Studio's do). So a second app adds its badge to cards another app's skin draws, from the card's own projection, without reading that app's fields. A component gets `{ target, settings, context }`, plus `data` and `instanceId` in a product slot, `data` (the card) in a card slot and `props` on `page`, and embeds nothing. A listing's card components join its one batch per app and are memoized per card like card skins. UI slots are on the buyer's pages (`cart.page.summary`, `cart.page.below`, `checkout.*`, `cart_drawer.footer`, `order.confirmation`, `account.*`): storefront extensions (`storefront.extensions`) fill them with a `ui` tree, drawn by the store from the answer the page already reads (the cart check or checkout quote; the cart drawer's own check), so a slot adds no request. An empty slot renders nothing and costs no read.
 
 Islands on a product page get `context.product`: `state()` (`{ variantId, quantity, inputs }`) and `onChange(listener)`; `data.product.buyerInputs` lists the inputs.
 
@@ -68,8 +68,8 @@ A **skin** is app markup for a core-owned unit. It gets the unit's public projec
 
 | Target | `data` (protocol type) | Core embeds it may place | Fallback |
 | --- | --- | --- | --- |
-| `header`, `footer` | `StorefrontHeaderData`, `StorefrontFooterData` | none (search, cart and account are attributes) | empty → core |
-| `product_card` | `StorefrontProductCardData` (`{ product, position, aboveFold }`) | none (`quickAdd`) | empty → core |
+| `header`, `footer` | `StorefrontHeaderData`, `StorefrontFooterData` | their slot (search, cart and account are attributes) | empty → core |
+| `product_card` | `StorefrontProductCardData` (`{ product, position, aboveFold }`) | its two slots (`quickAdd`) | empty → core |
 | `product_main` | `StorefrontProductPage` | **`buy_form` (required, one)**, `gallery`, `reviews`, `recommendations` | no buy form → core |
 | `listing_main` | `StorefrontListingPage` | `filters`, `toolbar`, `pagination` (appended when left out) | empty → core |
 | `section:<type>` | `StorefrontSectionSkinData<StorefrontSectionSkinSettings[type]>` | none (`quickAdd`) | empty → the core section |
@@ -78,6 +78,8 @@ A **skin** is app markup for a core-owned unit. It gets the unit's public projec
 - A buy column that should stay in view beside the gallery marks itself `data-sticky-column` and writes its top as `calc(<offset> + var(--sticky-column-shift, 0px))`; the store's product script shifts a column taller than the window so it scrolls until its end is in view and back (`sticky-column.ts`). Core's stacked and grid galleries use the same.
 - `listing_main` draws the listing between the collection template's sections. The page links are numbered links on every listing, so crawlers reach every product.
 - A core section's projection is declared in the protocol, one interface per type (`StorefrontSectionSkinSettings`, `StorefrontHeroSkinSettings`, ...), each with its own version (`STOREFRONT_SECTION_SKIN_PROJECTIONS`, the `version` in `data`); core's stored settings never reach a skin directly. The host maps a section to it in one place (`coreSectionSkinSettings`): `image`, `phoneImage` and `mediaId` → `image`/`phoneImage` as `StorefrontImage | null`; a product `source` → `products` (`StorefrontProductList`: `{ title, url, cards }`, as many cards as the core section shows); `categoryIds`/`collectionIds` → `categories`/`collections` (`StorefrontTile[]`); `promotionId` → `promotion` (`{ endsAt } | null`); a Specifications custom field → `objectFields`; a delivery-facts source → the store's facts; hidden blocks and the editor's `hidden`/`bindings` keys left out. A projection only gains optional fields; when core changes a section, the host adapts it so a skin's input stays the same. A brand wall's brands arrive in `tiles`, a collections section's fallback products in `cards`. `aboveFold` is true for the homepage's lead section (the first section with photos): load its first row of photos eagerly, the likely largest at high priority, as the core section does. `recently_viewed`, `endless_grid` and `objects` have no skin.
+- The header gets what a header needs without a read of its own: menu items with their category's photo (`image`), `routes.orders` and `routes.trackOrder`, `searchScopes` (the top published categories) with `searchScopeParam`: a form that sends `category=<value>` to `routes.search` answers from that category's listing (`/categories/<handle>?q=…`, no JavaScript needed), and `market` (country, currency, language, and the country form's `selection` when the store sells at more than one URL). Signed-in state is not data, since one header serves every buyer: mark the two versions with `whenSignedIn()` / `whenSignedOut()` and the store shows the right one before first paint (`<html data-scalius-signed-in>`; islands read `context.signedIn()`).
+- The product page projection carries `sku` (a product without options) and each variant's `sku` (a "Product code"), and `installments` (`{ provider, months, monthly }`, the store's cheapest EMI plan) or null. A category listing carries `children` (published child categories with their photos).
 - JSON-LD stays core's on product and listing pages: the host strips app JSON-LD from `product_main`, `listing_main` and product blocks.
 - **Product slots**: a component targeting `product.buy_box.before`, `product.buy_box.after` or `product.below` draws as a `component` job there, from the same `StorefrontProductPage`.
 
@@ -93,7 +95,7 @@ Component sections, product blocks and skins use the app settings types (`text`,
 | `link` | a storefront path or an `https://` URL | the string |
 | `list` (`fields`, `max`, `itemLabel`) | items of the fields above (no products) | items with their images resolved |
 
-The editor shows a media picker, a product source or product picker, a link field and a repeatable item list. Values are resolved against the schema as it is now (`resolveStorefrontSettings`): a removed setting drops, a new one takes its default, a deleted image or product resolves to `null`. Skin and product block settings cannot use `image`, `products` or `product`: a skin draws from its unit's projection and must not add reads (ship images in the app's public files).
+The editor shows a media picker, a product source or product picker, a link field and a repeatable item list. Values are resolved against the schema as it is now (`resolveStorefrontSettings`): a removed setting drops, a new one takes its default, a deleted image or product resolves to `null`. Skin and product block settings cannot use `products` or `product`: a skin draws from its unit's projection and must not add reads. A unit skin (header, footer, card, product page, listing) may declare up to 8 top-level `image` settings (a mega menu's promo, payment logos): they resolve in the statement that already reads the theme's logo in the layout batch, so they add no read, and their media keys join the layout's dependencies. Section skins, product blocks and images inside a skin's `list` still ship images in the app's public files.
 
 The page reads every image, product list and picked product its component sections name in one batch (`readAppComponentData`), with the homepage limits (40 images, 8 product lists). That batch follows the apps' read, which names the settings schemas, so component sections add one wave to the page, and a `collection:` source one more (its rules are read first). `apps/api/src/storefront-render-budget.test.ts` measures both.
 
@@ -153,6 +155,8 @@ The SDK's primitives:
 - `Image`: responsive `<img>` with `srcset` and intrinsic size (no layout shift); lazy unless `loading="eager"`, which also sets `fetchpriority="high"` (`fetchpriority="auto"` keeps the rest of an eager first row at normal priority).
 - `Price`: the market's formatted price with an accessible compare-at (`from` for "From …").
 - `Island`: interactive markup (`hydrate`: `visible`, `idle`, `load`, `interaction`).
+- `Deferred` (`hydrate`: `visible`, `idle`, `interaction`; `minHeight`): markup laid out only at its moment (below).
+- `whenSignedIn()`, `whenSignedOut()`: the two versions of a signed-in part; the store shows the right one.
 - `quickAdd(product)`, `openCart()`, `CartCount`: the core cart behaviour, no app JavaScript.
 - `searchOpener()`, `accountLink()`: opt into the host's search and account actions; custom popovers remain valid.
 - `menuDrawer()`: marks a header's menu drawer (a `popover` or `<dialog>`), which the store's phone tab bar opens.
@@ -224,6 +228,10 @@ An empty or failed leading component emits `data-scalius-lead-empty` on an inert
 template. A header that overlays its lead must use this public marker to restore
 solid styling and normal spacing. Noor demonstrates this without inspecting
 private homepage wrappers or waiting for island hydration.
+
+### Deferred markup
+
+`<Deferred minHeight="28rem">…</Deferred>` renders `<scalius-deferred data-hydrate="visible" style="display:block;min-block-size:28rem"><template>…</template></scalius-deferred>`. The markup ships in the page and its cache, but the browser neither lays it out nor loads its images until its moment (`visible`: within 600px of the viewport; `idle`; `interaction`: the first hover, focus or tap in the element that holds it, such as a tab panel), when the store moves it into the page and mounts the islands inside. Use it for heavy parts below the fold (a review wall, a long rail, a map) so they never compete with the page's largest paint, and set `minHeight` to about their height so nothing shifts. Without JavaScript it never appears and crawlers read template content poorly: it is for enhancements, never for content crawlers or every buyer must see. Its content passes the same output check; core embeds and JSON-LD inside it render nothing (`renderSkin` and the packer report them). Deferreds may nest.
 
 ### Islands
 
@@ -325,9 +333,13 @@ Noor, a full theme, packs to a 40 KB module, 3.8 KB of islands and a 44 KB style
   layer portable ([DATABASE-PORTABILITY.md](DATABASE-PORTABILITY.md)). Changes to
   plugin rendering inputs must participate in memo keys and cache dependencies.
 - **Bounded fallback.** Caught render failures use the core block (a section renders
-  nothing), with a bounded warning naming the app and reason. This does not detect
+  nothing), with a bounded warning naming the app and reason. One failed job fails only
+  itself; a module that cannot load, throws or answers after the 250 ms wall falls back
+  for its whole batch, and the page is never stored (`compose-app.render.test.ts`,
+  `host.test.ts`). An isolate also stops at its 50 ms CPU limit. This does not detect
   broken layout or incorrect interaction. A wall timeout cannot interrupt
-  synchronous code blocking the bundled host's event loop.
+  synchronous code blocking the bundled host's event loop (bundled apps are trusted
+  deployment code).
 
 ## Security and transparency
 
@@ -344,7 +356,7 @@ The merchant owns their apps (private or uploaded). The platform makes what an a
   Activation approval, CSP and server authorization are boundaries; HTML
   sanitization does not sandbox an approved island. HttpOnly cookies prevent
   reading cookie values, not making otherwise-authorized same-origin requests.
-- Output passes `sanitizePluginHtml` (`component` profile), an allowlist. It keeps content, list, table and form elements, `h1`, `video`, an SVG drawing subset, islands and core embeds; classes; `id`s that start with the app name (`noor-…` for `scalius.noor`); inline style without loading functions (`url()`, `image-set()`, …), escapes or comments; forms that post to a store path; and schema.org JSON-LD (dropped on `noindex` pages). It drops everything else: `<script>`, `<style>` (CSS belongs in the stylesheet), `<iframe>`, `<noscript>`, `<template>`, `<math>`, SVG animation and `foreignObject`, event handlers, `data-sx-*` (host attributes), and every URL that is not a store path, `http(s)` (the store's media origin is http on a local stack), `mailto`, `tel` or a fragment. Test with `storefrontShown(html, pluginId)` (`/storefront/testing`): `dropped` counts what it left out.
+- Output passes `sanitizePluginHtml` (`component` profile), an allowlist. It keeps content, list, table and form elements, `h1`, `video`, an SVG drawing subset, islands, deferred markup and core embeds; classes; `id`s that start with the app name (`noor-…` for `scalius.noor`); inline style without loading functions (`url()`, `image-set()`, …), escapes or comments; forms that post to a store path; and schema.org JSON-LD (dropped on `noindex` pages). It drops everything else: `<script>`, `<style>` (CSS belongs in the stylesheet), `<iframe>`, `<noscript>`, `<template>` (except as deferred markup's content), `<math>`, SVG animation and `foreignObject`, event handlers, `data-sx-*` (host attributes), and every URL that is not a store path, `http(s)` (the store's media origin is http on a local stack), `mailto`, `tel` or a fragment. Test with `storefrontShown(html, pluginId)` (`/storefront/testing`): `dropped` counts what it left out.
 - App components, their islands, stylesheets and connect hosts never reach a buyer's page (cart, checkout, the receipt, account, payment recovery, order tracking; `appComponentsRenderOn` in `apps/storefront/src/lib/app-scripts.ts`): the core chrome renders there.
 - Island code is served from the store's origin under its release; CSP `script-src` gains nothing. Connect hosts join `connect-src` and `img-src` only, on pages whose theme uses the app.
 - A page drawn with a fallback (a component late, failed, refused, or a release the isolate cannot load) is never stored in the page cache.
