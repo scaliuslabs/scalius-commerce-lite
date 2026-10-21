@@ -32,7 +32,6 @@ import { usePermissions } from "~/contexts/PermissionContext";
 import { useMessages } from "~/i18n";
 import { customFieldMessages, type CustomFieldMessageKey } from "~/i18n/custom-fields";
 import { objectMessages, type ObjectMessageKey } from "~/i18n/objects";
-import { saveBarMessages } from "~/i18n/save-bar";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
   createObjectType,
@@ -83,7 +82,6 @@ const keyText = (value: string) => value.toLowerCase().replace(/\s+/g, "_");
 
 function TypeFormPage({ initial }: { initial: ObjectType | null }) {
   const t = useMessages(objectMessages);
-  const bar = useMessages(saveBarMessages);
   const types = useMessages(customFieldMessages);
   const queryClient = useQueryClient();
   const objectTypes = useQuery(objectTypesQueryOptions());
@@ -413,12 +411,10 @@ function TypeFormPage({ initial }: { initial: ObjectType | null }) {
             </div>
           </div>
         </fieldset>
-        {canEdit ? (
-          <div className="flex flex-wrap justify-between gap-2 border-t pt-4">
-            {saved ? <Button type="button" variant="destructive" onClick={() => setDeleting(true)}>{t("deleteType")}</Button> : <span />}
-            <Button type="button" loading={Boolean(scope?.busy)} disabled={!scope?.dirty} onClick={() => void scope?.saveAll()}>
-              {creating ? t("create") : bar("save")}
-            </Button>
+        {/* Save lives only in the save bar (P4); the page keeps the delete action. */}
+        {canEdit && saved ? (
+          <div className="flex flex-wrap gap-2 border-t pt-4">
+            <Button type="button" variant="destructive" onClick={() => setDeleting(true)}>{t("deleteType")}</Button>
           </div>
         ) : null}
       </div>

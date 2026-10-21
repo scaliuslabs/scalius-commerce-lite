@@ -127,6 +127,8 @@ describe("objects", () => {
     });
   }
 
+  // Save lives only in the save bar (P4); outside the shell it renders into the body.
+  const saveBarSave = () => [...document.querySelectorAll<HTMLButtonElement>("[data-save-bar] button")].find((each) => each.textContent?.trim() === "Save")!;
   const button = (label: string) => [...container.querySelectorAll<HTMLButtonElement>("button")].find((each) => each.textContent?.trim() === label);
   const field = <Element extends HTMLElement = HTMLInputElement>(id: string) => container.querySelector<Element>(`#${CSS.escape(id)}`)!;
   const typeInto = (element: HTMLInputElement | HTMLTextAreaElement, value: string) =>
@@ -179,7 +181,8 @@ describe("objects", () => {
     await choose(field<HTMLButtonElement>("object-display"), "Chest");
     await act(async () => field<HTMLButtonElement>("object-storefront").click());
 
-    await act(async () => button("Create object type")!.click());
+    // Save lives only in the save bar (P4).
+    await act(async () => saveBarSave().click());
     await vi.waitFor(() => expect(sdk.postApiV1AdminObjectsDefinitions).toHaveBeenCalled());
     expect(sdk.postApiV1AdminObjectsDefinitions.mock.calls[0]![0].body).toEqual({
       type: "size_chart",
@@ -202,7 +205,7 @@ describe("objects", () => {
     await render(<ObjectTypeForm definition={faq} />);
     expect(field<HTMLInputElement>("object-handle").disabled).toBe(true);
     await typeInto(field("object-name"), "Frequently asked questions");
-    await act(async () => button("Save")!.click());
+    await act(async () => saveBarSave().click());
     await vi.waitFor(() => expect(sdk.patchApiV1AdminObjectsDefinitionsById).toHaveBeenCalled());
     const call = sdk.patchApiV1AdminObjectsDefinitionsById.mock.calls[0]![0];
     expect(call.url).toBe("/api/v1/admin/objects/types/custom.faq");
@@ -311,7 +314,7 @@ describe("objects", () => {
     const tags = [...container.querySelectorAll<HTMLInputElement>('input[id^="object-entry-tags"]')];
     await typeInto(tags[1]!, "wifi");
     await act(async () => container.querySelector<HTMLElement>('button[role=radio][value=published]')!.click());
-    await act(async () => button("Add entry")!.click());
+    await act(async () => saveBarSave().click());
     await vi.waitFor(() => expect(sdk.postApiV1AdminObjectsDefinitionsByIdEntries).toHaveBeenCalled());
     const call = sdk.postApiV1AdminObjectsDefinitionsByIdEntries.mock.calls[0]![0];
     expect(call.url).toMatch(/^\/api\/v1\/admin\/objects\/custom.faq\/obj_/);
@@ -322,7 +325,7 @@ describe("objects", () => {
     await render(<ObjectRecordForm definition={faq} entry={null} />);
     await typeInto(field("object-entry-answer"), "Because.");
     await act(async () => container.querySelector<HTMLElement>('button[role=radio][value=published]')!.click());
-    await act(async () => button("Add entry")!.click());
+    await act(async () => saveBarSave().click());
     expect(sdk.postApiV1AdminObjectsDefinitionsByIdEntries).not.toHaveBeenCalled();
     expect(container.textContent).toContain("Fill in this required field.");
   });
@@ -330,7 +333,7 @@ describe("objects", () => {
   it("saves the complete record at the revision it loaded", async () => {
     await render(<ObjectRecordForm definition={faq} entry={shipping} />);
     await typeInto(field<HTMLTextAreaElement>("object-entry-answer"), "One to two days.");
-    await act(async () => button("Save")!.click());
+    await act(async () => saveBarSave().click());
     await vi.waitFor(() => expect(sdk.patchApiV1AdminObjectsDefinitionsByIdEntriesByEntryId).toHaveBeenCalled());
     const call = sdk.patchApiV1AdminObjectsDefinitionsByIdEntriesByEntryId.mock.calls[0]![0];
     expect(call.url).toBe("/api/v1/admin/objects/custom.faq/moe_ship");

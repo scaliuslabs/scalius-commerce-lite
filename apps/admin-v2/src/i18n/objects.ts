@@ -78,7 +78,7 @@ export const objectMessages = defineMessages({
     displayHelp: "Entries are listed by the value of this field.",
     storefrontTitle: "Online store",
     storefront: "Show on the online store",
-    storefrontHelp: "Lets the theme editor's Objects section show this type's published entries. Draft entries are never shown. Turn it off to keep the content private.",
+    storefrontHelp: "Lets the theme editor's Objects section show this type's published entries. Draft entries are never shown. Leave it unticked to keep the content private.",
     appManagedTitle: "Managed by {app}",
     appManagedHelp: "This object type belongs to an app, so only the app can change its fields. The app decides whether its entries can be edited here.",
     removedAppTitle: "From a removed app: {app}",
