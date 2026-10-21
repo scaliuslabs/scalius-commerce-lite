@@ -55255,6 +55255,17 @@ export type GetApiV1AdminOrdersByIdInvoiceResponses = {
                     amount: number;
                     shippingAmount?: number;
                 }>;
+                /**
+                 * Net terms of an invoice paid later; null when the order is paid now, absent on invoices issued before terms were printed.
+                 */
+                paymentTerms?: {
+                    kind: 'net';
+                    days: number;
+                    /**
+                     * ISO 8601 due date: placement plus the net days.
+                     */
+                    dueAt: string;
+                } | null;
                 createdAt: string | number;
                 updatedAt: string | number;
                 items: Array<{
@@ -55441,6 +55452,17 @@ export type PostApiV1AdminOrdersByIdInvoiceResponses = {
                     amount: number;
                     shippingAmount?: number;
                 }>;
+                /**
+                 * Net terms of an invoice paid later; null when the order is paid now, absent on invoices issued before terms were printed.
+                 */
+                paymentTerms?: {
+                    kind: 'net';
+                    days: number;
+                    /**
+                     * ISO 8601 due date: placement plus the net days.
+                     */
+                    dueAt: string;
+                } | null;
                 createdAt: string | number;
                 updatedAt: string | number;
                 items: Array<{
