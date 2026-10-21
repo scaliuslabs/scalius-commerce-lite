@@ -85,7 +85,6 @@ export function presenceRenderTarget(request: Request): { presence: string; rend
 /** The minimum of the Workers HTMLRewriter this module uses. */
 export interface PresenceElement {
   getAttribute(name: string): string | null;
-  hasAttribute(name: string): boolean;
   setAttribute(name: string, value: string): void;
 }
 export interface PresenceRewriter {
@@ -99,14 +98,26 @@ function workersRewriter(): PresenceRewriter {
   return new Rewriter();
 }
 
-/** Elements whose link attribute is a navigation the presence keeps. */
-const LINK_ATTRIBUTES: ReadonlyArray<readonly [selector: string, attribute: string]> = [
-  ["a[href]", "href"],
-  ["area[href]", "href"],
-  ["form[action]", "action"],
-  ["button[formaction]", "formaction"],
-  ["input[formaction]", "formaction"],
-];
+/**
+ * Elements whose link attribute `presenceHref` may change, one selector list
+ * per attribute. lol-html filters natively, so the rest never cross into JS:
+ * an alternate of another presence (`hreflang`) names it on purpose, and a
+ * fragment, `mailto:` or `tel:` link is never a page. Each element callback
+ * costs workerd about 5 µs, more than its JS; each value-prefix test costs an
+ * attribute scan on every element, so only these common prefixes are tested.
+ */
+const PRESENCE_LINK_SELECTORS: ReadonlyArray<readonly [attribute: string, selector: string]> = (
+  [
+    ["href", ["a", "area"]],
+    ["action", ["form"]],
+    ["formaction", ["button", "input"]],
+  ] as const
+).map(([attribute, tags]) => [
+  attribute,
+  tags
+    .map((tag) => `${tag}[${attribute}]:not([hreflang]):not([${attribute}^="#"]):not([${attribute}^="mailto:" i]):not([${attribute}^="tel:" i])`)
+    .join(", "),
+]);
 
 /**
  * The response with every same-origin page link, form action and redirect
@@ -129,11 +140,9 @@ export function localizePresenceResponse(
   const localized = new Response(response.body, { status: response.status, statusText: response.statusText, headers });
   if (!(headers.get("Content-Type") ?? "").toLowerCase().includes("text/html") || !response.body) return localized;
   let html = rewriter();
-  for (const [selector, attribute] of LINK_ATTRIBUTES) {
+  for (const [attribute, selector] of PRESENCE_LINK_SELECTORS) {
     html = html.on(selector, {
       element(element) {
-        // An alternate of another presence names it on purpose.
-        if (element.hasAttribute("hreflang")) return;
         const value = element.getAttribute(attribute);
         if (value === null) return;
         const next = presenceHref(presence, value, origin);

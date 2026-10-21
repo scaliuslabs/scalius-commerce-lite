@@ -322,7 +322,11 @@ and localizes the response.
   `area`, `form` and `formaction` of presence responses only; a root
   response is not touched. The cache stores the rewritten page, so a hit
   costs nothing. The gateway also localizes the `Location` and feed `Link`
-  headers.
+  headers. A miss pays about 5 µs of workerd per link callback, so the
+  selectors drop `hreflang`, fragment, `mailto:` and `tel:` links natively
+  and the path rule reads hrefs in place; nearly every remaining link is
+  rewritten, so the callbacks themselves are the floor (rendering
+  presence-correct links in templates would be the next step).
 - Code that builds a page URL in the browser or in inline script uses the
   same rule: `pagePath()` and `logicalPathname()` (`src/lib/presence-url.ts`)
   or `serverPagePath()`. `presence-links.test.ts` fails on a new
