@@ -450,7 +450,9 @@ export function DeliveryAreasManager() {
                       : t("noPlacesCountry", { country: countryName(country), name: names.word(1, 2) })}
                 </p>
                 {canEdit && bangladesh && noPlaces ? (
-                  <Link to="/admin/apps/$pluginId/pages/$pageId" params={{ pluginId: BANGLADESH_PACK_ID, pageId: "places" }} className="text-link hover:underline">{t("loadBangladeshPlaces")}</Link>
+                  // The pack's Places feature, not its places page: that page exists only once the
+                  // pack is active and the feature is on, and turning the feature on loads the list.
+                  <Link to="/admin/apps/$pluginId/$section" params={{ pluginId: BANGLADESH_PACK_ID, section: "places" }} className="text-link hover:underline">{t("loadBangladeshPlaces")}</Link>
                 ) : null}
               </div>
             ) : (
