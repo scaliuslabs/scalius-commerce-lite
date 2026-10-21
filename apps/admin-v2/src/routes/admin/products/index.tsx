@@ -285,7 +285,7 @@ function ProductsPage() {
           run: async (action, rows) => {
             if (action === "trash" && rows.length === 1) {
               const { id, expectedAggregateRevision } = claim(rows[0]!);
-              await apiData(deleteApiV1AdminProductsById({ path: { id }, query: { expectedAggregateRevision } }));
+              await apiData(deleteApiV1AdminProductsById({ path: { id }, query: { expectedRevision: expectedAggregateRevision } }));
               return;
             }
             if (action === "restore") {
@@ -296,7 +296,7 @@ function ProductsPage() {
             }
             if (action === "delete" && rows.length === 1) {
               const { id, expectedAggregateRevision } = claim(rows[0]!);
-              await apiData(deleteApiV1AdminProductsByIdPermanent({ path: { id }, query: { expectedAggregateRevision } }));
+              await apiData(deleteApiV1AdminProductsByIdPermanent({ path: { id }, query: { expectedRevision: expectedAggregateRevision } }));
               return;
             }
             const result = await apiData(postApiV1AdminProductsBulkDelete({

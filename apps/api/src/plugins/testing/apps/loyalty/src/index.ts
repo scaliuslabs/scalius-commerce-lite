@@ -137,13 +137,13 @@ interface PaidOrder {
  * the entry; a concurrent credit or spend is re-read and retried.
  */
 async function earn(orderId: string, ctx: PluginContext): Promise<void> {
-  const result = await ctx.api.call<PaidOrder>("orders.get", { path: { id: orderId } });
-  if (!result.ok || !result.data) {
+  const result = await ctx.api.call<{ order: PaidOrder }>("orders.get", { path: { id: orderId } });
+  if (!result.ok || !result.data?.order) {
     ctx.log.warn("Could not read the paid order", { orderId, status: result.status });
     if (result.status >= 500) throw new Error("The order could not be read; the event will be retried.");
     return;
   }
-  const order = result.data;
+  const order = result.data.order;
   // Points belong to accounts: a guest order earns nothing.
   if (!order.accountCustomerId) return;
   const customerId = order.accountCustomerId;

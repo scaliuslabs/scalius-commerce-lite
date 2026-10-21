@@ -16,16 +16,19 @@ import { errorResponseFromError } from "../../utils/api-response";
 import { adminCustomerRoutes } from "./customers";
 import { adminOrdersRoutes } from "./orders";
 import { adminInventoryRoutes } from "./inventory";
+import { adminProductsRoutes } from "./products";
 import { idempotentReplay } from "./idempotency";
 import { adminResourceRoutes } from "./resources";
 
 let sqlite: DatabaseSync;
 let db: Database;
 let principal: { pluginId: string; protectedData: ReadonlySet<ProtectedCustomerData> } | null;
+let permissions: Set<string> | null;
 
 beforeEach(() => {
   ({ sqlite, db } = createSqliteD1Database());
   principal = null;
+  permissions = null;
   sqlite.exec(`
     INSERT INTO user (id, name, email, email_verified, role, is_super_admin) VALUES ('owner', 'Owner', 'owner@shop.test', 1, 'admin', 1);
     INSERT INTO orders (id, order_number, customer_name, customer_phone, customer_email, shipping_address, city, zone, status, updated_at)
@@ -48,6 +51,7 @@ async function call(method: string, path: string, options: { body?: unknown; hea
     c.set("db", db as never);
     c.set("user", { id: "owner", name: "Owner", email: "owner@shop.test" } as never);
     if (principal) c.set("pluginPrincipal", principal as never);
+    if (permissions) c.set("adminPermissions", permissions);
     await next();
   });
   app.use("*", idempotentReplay);
@@ -55,6 +59,7 @@ async function call(method: string, path: string, options: { body?: unknown; hea
   app.route("/customers", adminCustomerRoutes);
   app.route("/orders", adminOrdersRoutes);
   app.route("/inventory", adminInventoryRoutes);
+  app.route("/products", adminProductsRoutes);
   app.onError((error, c) => { const { body, status } = errorResponseFromError(error); return c.json(body, status); });
   const response = await app.request(`/api/v1/admin${path}`, {
     method,
@@ -73,8 +78,8 @@ describe("the stable app API's resources", () => {
   it("reads an order as its webhooks carry it, money in minor units beside the currency", async () => {
     const order = await call("GET", "/resources/orders/ord_a");
     expect(order.status).toBe(200);
-    expect(EVENT_REPRESENTATION_SCHEMAS.order.parse(order.body.data)).toEqual(order.body.data);
-    expect(order.body.data).toMatchObject({ id: "ord_a", orderNumber: 1001, currency: "BDT", version: 1, accountCustomerId: null, contact: { email: "rahim@buyer.test" } });
+    expect(EVENT_REPRESENTATION_SCHEMAS.order.parse(order.body.data.order)).toEqual(order.body.data.order);
+    expect(order.body.data).toEqual({ order: expect.objectContaining({ id: "ord_a", orderNumber: 1001, currency: "BDT", revision: 1, accountCustomerId: null, contact: expect.objectContaining({ email: "rahim@buyer.test" }) }) });
     expect((await call("GET", "/resources/orders/ord_missing")).status).toBe(404);
   });
 
@@ -178,7 +183,7 @@ describe("the stable app API's resources", () => {
     expect((await record(70_000, "payment po-7781 #2")).status).toBe(400);
     expect((await record(60_000, "payment po-7781 #3")).status).toBe(201);
     const paid = await call("GET", `/resources/orders/${order.id}`);
-    expect(paid.body.data).toMatchObject({ paymentStatus: "paid", paidMinor: 100_000, balanceDueMinor: 0 });
+    expect(paid.body.data.order).toMatchObject({ paymentStatus: "paid", paidMinor: 100_000, balanceDueMinor: 0 });
     expect(await overdue()).toEqual([]);
     expect(sqlite.prepare("SELECT kind FROM order_events WHERE order_id = ? AND kind = 'payment_recorded'").all(order.id)).toHaveLength(2);
     // Tea ships: nothing automatic is owed, so the app's payment holds nothing.
@@ -232,15 +237,25 @@ describe("the stable app API's resources", () => {
     expect(openHolds("o_staff")).toEqual([]);
   });
 
-  it("refuses a status change made on a stale order version, changing nothing", async () => {
-    const stale = await call("PUT", "/orders/ord_a/status", { body: { status: "cancelled", expectedVersion: 7 } });
+  it("refuses a status change made on a stale order revision, changing nothing, and answers the order it changed", async () => {
+    const stale = await call("PUT", "/orders/ord_a/status", { body: { status: "cancelled", expectedRevision: 7 } });
     expect(stale.status).toBe(409);
     expect((sqlite.prepare("SELECT status, version FROM orders WHERE id = 'ord_a'").get() as { status: string; version: number }))
       .toEqual({ status: "pending", version: 1 });
+    const changed = await call("PUT", "/orders/ord_a/status", { body: { status: "confirmed", expectedRevision: 1 } });
+    expect(changed.status).toBe(200);
+    expect(changed.body.data).toEqual({ order: expect.objectContaining({ id: "ord_a", status: "confirmed", revision: 2 }) });
+    // Marking delivered takes the revision in the body too.
+    sqlite.exec("UPDATE orders SET status = 'shipped', payment_status = 'paid', payment_method = 'manual' WHERE id = 'ord_a'");
+    const { version } = sqlite.prepare("SELECT version FROM orders WHERE id = 'ord_a'").get() as { version: number };
+    expect((await call("POST", "/orders/ord_a/mark-delivered", { body: { expectedRevision: version + 5 } })).status).toBe(409);
+    const delivered = await call("POST", "/orders/ord_a/mark-delivered", { body: { expectedRevision: version } });
+    expect({ status: delivered.status, error: delivered.body.error }).toEqual({ status: 200, error: undefined });
+    expect(delivered.body.data).toEqual({ order: expect.objectContaining({ id: "ord_a", status: "delivered", revision: version + 1 }) });
   });
 
   it("sets stock under the stockVersion read and the Idempotency-Key, once", async () => {
-    const { stockVersion } = (await call("GET", "/resources/variants/v_tea")).body.data as { stockVersion: number };
+    const { stockVersion } = (await call("GET", "/resources/variants/v_tea")).body.data.variant as { stockVersion: number };
     const stale = await call("POST", "/inventory/stock-set", {
       body: { variantId: "v_tea", newStock: 80, expectedStockVersion: stockVersion + 5 },
       headers: { "Idempotency-Key": "stocktake 2026-10-19 aisle 4" },
@@ -249,18 +264,20 @@ describe("the stable app API's resources", () => {
     const body = { variantId: "v_tea", newStock: 80, expectedStockVersion: stockVersion };
     const set = await call("POST", "/inventory/stock-set", { body, headers: { "Idempotency-Key": "stocktake 2026-10-19 aisle 5" } });
     expect(set.status).toBe(200);
+    // The receipt carries the SKU as variants.get reads it.
+    expect(set.body.data).toMatchObject({ variantId: "v_tea", newStock: 80, variant: { id: "v_tea", onHand: 80, stockVersion: stockVersion + 1 } });
     const again = await call("POST", "/inventory/stock-set", { body, headers: { "Idempotency-Key": "stocktake 2026-10-19 aisle 5" } });
     expect(again).toMatchObject({ status: 200, replayed: "true" });
-    expect((await call("GET", "/resources/variants/v_tea")).body.data).toMatchObject({ onHand: 80, stockVersion: stockVersion + 1 });
+    expect((await call("GET", "/resources/variants/v_tea")).body.data.variant).toMatchObject({ onHand: 80, stockVersion: stockVersion + 1 });
     // No key, no stock move.
     expect((await call("POST", "/inventory/stock-set", { body: { variantId: "v_tea", newStock: 70 } })).status).toBe(400);
   });
 
   it("reads a product with its SKUs in minor units, and finds it by SKU", async () => {
     const product = await call("GET", "/resources/products/p_tea");
-    expect(product.body.data).toMatchObject({ id: "p_tea", status: "active", currency: "BDT", priceMinor: 50000, imageUrl: null, variants: [{ id: "v_tea", sku: "TEA-1", priceMinor: 50000 }] });
+    expect(product.body.data.product).toMatchObject({ id: "p_tea", status: "active", currency: "BDT", priceMinor: 50000, imageUrl: null, variants: [{ id: "v_tea", sku: "TEA-1", priceMinor: 50000 }] });
     expect((await call("GET", "/resources/products?sku=tea-1")).body.data.products.map((entry: { id: string }) => entry.id)).toEqual(["p_tea"]);
-    expect((await call("GET", "/resources/variants/v_tea")).body.data).toMatchObject({ id: "v_tea", productId: "p_tea", onHand: 100 });
+    expect((await call("GET", "/resources/variants/v_tea")).body.data).toEqual({ variant: expect.objectContaining({ id: "v_tea", productId: "p_tea", onHand: 100 }) });
     const lookup = await call("POST", "/resources/variants/lookup", { body: { skus: ["nope-1", " tea-1 "] } });
     expect(lookup.body.data.variants).toEqual([expect.objectContaining({ id: "v_tea", sku: "TEA-1", stockVersion: expect.any(Number) })]);
     expect((await call("POST", "/resources/variants/lookup", { body: { skus: Array.from({ length: 91 }, (_, index) => `SKU-${index}`) } })).status).toBe(400);
@@ -303,5 +320,110 @@ describe("the stable app API's resources", () => {
     principal = { pluginId: "acme.crm", protectedData: new Set() };
     expect((await call("POST", "/customers", { body, headers: { "Idempotency-Key": "create-nadia-0001" } })).replayed).toBeNull();
     expect((await call("POST", "/customers", { body, headers: { "Idempotency-Key": "short" } })).status).toBe(400);
+  });
+});
+
+// Audit L1/L2/L9: one answer shape, one precondition, one list shape.
+describe("the stable contract's shapes", () => {
+  const ids = (rows: Array<{ id: string }>) => rows.map((row) => row.id);
+
+  it("pages an order's fulfilments, shipments, payments and returns by cursor, oldest first", async () => {
+    sqlite.exec(`
+      INSERT INTO order_items (id, order_id, product_id, variant_id, quantity, fulfilled_quantity, fulfillment_type) VALUES ('oi_a1', 'ord_a', 'p_tea', 'v_tea', 3, 3, 'ship');
+      INSERT INTO order_fulfillments (id, order_id, kind, request_key, actor_type, created_at) VALUES
+        ('ful_2', 'ord_a', 'ship', 'key_2', 'admin', 200), ('ful_1', 'ord_a', 'ship', 'key_1', 'admin', 100), ('ful_3', 'ord_a', 'ship', 'key_3', 'admin', 200);
+      INSERT INTO order_returns (id, order_id, status, reason, actor_type, actor_id, created_at) VALUES
+        ('ret_2', 'ord_a', 'requested', 'Too big', 'admin', 'owner', 300), ('ret_1', 'ord_a', 'approved', 'Damaged', 'admin', 'owner', 100);
+      INSERT INTO order_return_lines (id, return_id, order_id, order_item_id, variant_id, requested_quantity, approved_quantity)
+        VALUES ('rl_1', 'ret_1', 'ord_a', 'oi_a1', 'v_tea', 2, 1);
+    `);
+    const first = await call("GET", "/resources/orders/ord_a/fulfillments?limit=2");
+    expect(first.status).toBe(200);
+    expect(Object.keys(first.body.data).sort()).toEqual(["fulfillments", "nextCursor"]);
+    expect(ids(first.body.data.fulfillments)).toEqual(["ful_1", "ful_2"]);
+    const second = await call("GET", `/resources/orders/ord_a/fulfillments?limit=2&cursor=${encodeURIComponent(first.body.data.nextCursor)}`);
+    expect(ids(second.body.data.fulfillments)).toEqual(["ful_3"]);
+    expect(second.body.data.nextCursor).toBeNull();
+    // Never paged: the whole bounded list.
+    expect(ids((await call("GET", "/resources/orders/ord_a/fulfillments")).body.data.fulfillments)).toEqual(["ful_1", "ful_2", "ful_3"]);
+    expect((await call("GET", "/resources/orders/ord_a/shipments")).body.data).toEqual({ shipments: [], nextCursor: null });
+    expect((await call("GET", "/resources/orders/ord_a/payments")).body.data).toEqual({ payments: [], nextCursor: null });
+    // A cursor of another list is refused.
+    expect((await call("GET", `/resources/orders/ord_a/returns?cursor=${encodeURIComponent(first.body.data.nextCursor)}`)).status).toBe(400);
+
+    const returns = await call("GET", "/resources/orders/ord_a/returns?limit=1");
+    expect(returns.status).toBe(200);
+    expect(ids(returns.body.data.returns)).toEqual(["ret_1"]);
+    const rest = await call("GET", `/resources/orders/ord_a/returns?limit=1&cursor=${encodeURIComponent(returns.body.data.nextCursor)}`);
+    expect(ids(rest.body.data.returns)).toEqual(["ret_2"]);
+    expect(rest.body.data.nextCursor).toBeNull();
+    expect((await call("GET", "/resources/orders/ord_missing/returns")).status).toBe(404);
+
+    const one = await call("GET", "/resources/returns/ret_1");
+    expect(one.status).toBe(200);
+    expect(EVENT_REPRESENTATION_SCHEMAS.return.parse(one.body.data.return)).toEqual(one.body.data.return);
+    expect(one.body.data).toEqual({
+      return: expect.objectContaining({
+        id: "ret_1", orderId: "ord_a", status: "approved", revision: 1,
+        lines: [expect.objectContaining({ id: "rl_1", orderItemId: "oi_a1", variantId: "v_tea", requestedQuantity: 2, approvedQuantity: 1 })],
+      }),
+    });
+    expect((await call("GET", "/resources/returns/ret_missing")).status).toBe(404);
+  });
+
+  it("lists inventory locations by position with the store's address, its details only for who may see them", async () => {
+    sqlite.exec(`
+      INSERT INTO inventory_locations (id, name, code, kind, is_default, status, position, address_line1, city, postal_code, country_code, phone)
+        VALUES ('loc_shop', 'Dhanmondi shop', 'DHK-1', 'store', 0, 'active', 900, 'Road 27', 'Dhaka', '1209', 'BD', '+8801700000000'),
+               ('loc_old', 'Old store', 'OLD-1', 'store', 0, 'archived', 901, NULL, NULL, NULL, 'BD', NULL);
+    `);
+    const all = await call("GET", "/resources/inventory-locations");
+    expect(all.status).toBe(200);
+    expect(Object.keys(all.body.data).sort()).toEqual(["locations", "nextCursor"]);
+    const locations = all.body.data.locations as Array<{ id: string; position: number }>;
+    expect(locations.slice(-2).map((location) => location.id)).toEqual(["loc_shop", "loc_old"]);
+    expect(locations.map((location) => location.position)).toEqual([...locations.map((location) => location.position)].sort((a, b) => a - b));
+    const shop = locations.find((location) => location.id === "loc_shop");
+    // Without location details the street and phone read null; the country stays.
+    expect(shop).toMatchObject({ code: "DHK-1", kind: "store", status: "active", revision: 1, address: { line1: null, phone: null, locality: null, countryCode: "BD" } });
+    permissions = new Set(["inventory.view"]);
+    const detailed = (await call("GET", "/resources/inventory-locations?status=active")).body.data.locations as Array<{ id: string; status: string; address: Record<string, unknown> }>;
+    expect(detailed.every((location) => location.status === "active")).toBe(true);
+    expect(detailed.find((location) => location.id === "loc_shop")?.address).toEqual({
+      name: null, phone: "+8801700000000", company: null, line1: "Road 27", line2: null, dependentLocality: null,
+      locality: "Dhaka", adminArea: null, postalCode: "1209", countryCode: "BD", placeIds: { city: null, zone: null, area: null },
+    });
+    const page = await call("GET", "/resources/inventory-locations?limit=1");
+    expect(page.body.data.locations).toHaveLength(1);
+    expect(page.body.data.nextCursor).toEqual(expect.any(String));
+  });
+
+  it("pages price lists by name and answers a delete with what it deleted, under the revision in the query", async () => {
+    const create = (name: string) => call("POST", "/resources/price-lists", { body: { name, kind: "market", marketId: "mkt_in" } });
+    const zeta = (await create("Zeta")).body.data.priceList;
+    const alpha = (await create("Alpha")).body.data.priceList;
+    const first = await call("GET", "/resources/price-lists?limit=1");
+    expect(first.body.data.priceLists.map((list: { name: string }) => list.name)).toEqual(["Alpha"]);
+    const second = await call("GET", `/resources/price-lists?limit=1&cursor=${encodeURIComponent(first.body.data.nextCursor)}`);
+    expect(second.body.data).toEqual({ priceLists: [expect.objectContaining({ id: zeta.id })], nextCursor: null });
+    expect((await call("DELETE", `/resources/price-lists/${alpha.id}?expectedRevision=${alpha.revision + 1}`)).status).toBe(409);
+    const deleted = await call("DELETE", `/resources/price-lists/${alpha.id}?expectedRevision=${alpha.revision}`);
+    expect(deleted.body.data).toEqual({ id: alpha.id, deleted: true });
+  });
+
+  it("trashes, restores and publishes a product under expectedRevision, answering the product", async () => {
+    const revision = () => (sqlite.prepare("SELECT aggregate_revision AS revision FROM products WHERE id = 'p_tea'").get() as { revision: number }).revision;
+    const start = revision();
+    expect((await call("DELETE", `/products/p_tea?expectedRevision=${start + 1}`)).status).toBe(409);
+    const trashed = await call("DELETE", `/products/p_tea?expectedRevision=${start}`);
+    expect(trashed.status).toBe(200);
+    expect(trashed.body.data).toEqual({ product: expect.objectContaining({ id: "p_tea", status: "trashed", revision: revision() }) });
+    expect((await call("POST", "/products/p_tea/restore", { body: { expectedRevision: start } })).status).toBe(409);
+    const restored = await call("POST", "/products/p_tea/restore", { body: { expectedRevision: revision() } });
+    expect(restored.status).toBe(200);
+    expect(restored.body.data).toEqual({ product: expect.objectContaining({ id: "p_tea", status: "active", deletedAt: null, revision: revision() }) });
+    const published = await call("PUT", "/products/p_tea/publications", { body: { channelIds: [] } });
+    expect(published.status).toBe(200);
+    expect(published.body.data).toEqual({ product: expect.objectContaining({ id: "p_tea" }), salesChannelIds: [] });
   });
 });

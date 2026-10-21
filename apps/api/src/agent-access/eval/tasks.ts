@@ -248,10 +248,11 @@ export const MERCHANT_TASKS: readonly MerchantTask[] = [
       await ctx.agent.describe(this.ops);
       const input = { body: { filter: { category: ctx.fx.categories.shoes }, change: { mode: "percent", percent: 5 } } };
       const { data, preview } = await ctx.agent.change("dashboard.resources.variants.bulk_set_prices", input);
-      ctx.facts.previewTotal = ((preview.preview as { data?: { total?: number } } | undefined)?.data)?.total;
-      ctx.facts.runId = data.id;
+      ctx.facts.previewTotal = ((preview.preview as { data?: { run?: { total?: number } } } | undefined)?.data)?.run?.total;
+      const run = data.run as { id: string };
+      ctx.facts.runId = run.id;
       await ctx.store.drainBulkRuns();
-      await ctx.agent.read("dashboard.resources.bulk_runs.get", { path: { id: String(data.id) } });
+      await ctx.agent.read("dashboard.resources.bulk_runs.get", { path: { id: run.id } });
     },
     verify(ctx) {
       const failures: string[] = [];
@@ -546,7 +547,7 @@ export const MERCHANT_TASKS: readonly MerchantTask[] = [
       await ctx.agent.describe(this.ops);
       const { data } = await ctx.agent.change("dashboard.resources.customers.bulk_tag", { body: { filter: { minOrders: 4 }, add: ["vip"] } });
       await ctx.store.drainBulkRuns();
-      await ctx.agent.read("dashboard.resources.bulk_runs.get", { path: { id: String(data.id) } });
+      await ctx.agent.read("dashboard.resources.bulk_runs.get", { path: { id: (data.run as { id: string }).id } });
     },
     verify(ctx) {
       const expected = all<{ id: string }>(ctx.sqlite, "SELECT id FROM customers WHERE deleted_at IS NULL AND total_orders > 3 ORDER BY id").map((row) => row.id);

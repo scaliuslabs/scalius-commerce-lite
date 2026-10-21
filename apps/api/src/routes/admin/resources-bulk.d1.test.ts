@@ -82,13 +82,13 @@ describe("bulk set prices", () => {
     const seq = clock();
     const preview = await call("POST", "/resources/variants/bulk-set-prices", { body: { ...raiseShoes, dryRun: true } });
     expect(preview.status).toBe(200);
-    expect(preview.body.data).toMatchObject({
+    expect(preview.body.data.run).toMatchObject({
       id: null, status: "preview", dryRun: true, kind: "variants.set_prices", currency: "BDT",
       total: 300, processed: 300, changed: 300, unchanged: 0, failed: 0,
     });
-    expect(preview.body.data.sample).toHaveLength(50);
+    expect(preview.body.data.run.sample).toHaveLength(50);
     // Half up to the whole-taka increment: 1,234.00 + 5% = 1,295.70 → 1,296.
-    expect(preview.body.data.sample).toContainEqual(expect.objectContaining({ variantId: "v_o00_0", beforeMinor: 200_000, afterMinor: 210_000 }));
+    expect(preview.body.data.run.sample).toContainEqual(expect.objectContaining({ variantId: "v_o00_0", beforeMinor: 200_000, afterMinor: 210_000 }));
     expect(prices()).toEqual(before);
     expect(count("bulk_runs")).toBe(0);
     expect(depsSince(seq).size).toBe(0);
@@ -100,18 +100,18 @@ describe("bulk set prices", () => {
     const headers = { "Idempotency-Key": "raise-shoes-5-percent" };
     const started = await call("POST", "/resources/variants/bulk-set-prices", { body: raiseShoes, headers });
     expect(started.status).toBe(202);
-    expect(started.body.data).toMatchObject({ status: "running", total: 300, dryRun: false });
-    const runId = started.body.data.id as string;
+    expect(started.body.data.run).toMatchObject({ status: "running", total: 300, dryRun: false });
+    const runId = started.body.data.run.id as string;
     expect(count("bulk_runs")).toBe(1);
 
     // The same key answers with the same run, never a second one.
     const again = await call("POST", "/resources/variants/bulk-set-prices", { body: raiseShoes, headers });
-    expect(again.body.data.id).toBe(runId);
+    expect(again.body.data.run.id).toBe(runId);
     expect(count("bulk_runs")).toBe(1);
 
     for (let tick = 0; tick < 5; tick += 1) await drainBulkRuns(db, 3);
     const run = await call("GET", `/resources/bulk-runs/${runId}`);
-    expect(run.body.data).toMatchObject({ status: "done", total: 300, processed: 300, changed: 300, failed: 0 });
+    expect(run.body.data.run).toMatchObject({ status: "done", total: 300, processed: 300, changed: 300, failed: 0 });
 
     const after = new Map(prices().map((row) => [row.id, row.price]));
     expect(after.get("v_s000")).toBe(129_600);
@@ -136,7 +136,7 @@ describe("bulk set prices", () => {
       body: { variants: [{ id: "v_s001", expectedPriceMinor: 100_000 }, { id: "v_s002", expectedPriceMinor: 99_000 }], change: { mode: "amount", amountMinor: -5_000 } },
     });
     expect(done.status).toBe(200);
-    expect(done.body.data).toMatchObject({ status: "done", changed: 1, failed: 1, failures: [{ id: "v_s002", code: "price_changed" }] });
+    expect(done.body.data.run).toMatchObject({ status: "done", changed: 1, failed: 1, failures: [{ id: "v_s002", code: "price_changed" }] });
     expect(new Map(prices().map((row) => [row.id, row.price])).get("v_s001")).toBe(95_000);
     // A set amount off the increment is refused before anything starts.
     expect((await call("POST", "/resources/variants/bulk-set-prices", { body: { variants: [{ id: "v_s001" }], change: { mode: "set", amountMinor: 99_950 } } })).status).toBe(400);
@@ -149,12 +149,12 @@ describe("bulk set stock", () => {
     const versions = new Map((sqlite.prepare("SELECT id, stock_version AS v FROM product_variants WHERE id IN ('v_s001','v_s002','v_s003')").all() as Array<{ id: string; v: number }>).map((row) => [row.id, row.v]));
     const items = [{ variantId: "v_s001", quantity: 25 }, { variantId: "v_s002", quantity: 2 }, { variantId: "v_s003", quantity: 10 }, { variantId: "v_missing", quantity: 1 }];
     const preview = await call("POST", "/resources/variants/bulk-set-stock", { body: { items, dryRun: true } });
-    expect(preview.body.data).toMatchObject({ changed: 1, unchanged: 1, failed: 2 });
+    expect(preview.body.data.run).toMatchObject({ changed: 1, unchanged: 1, failed: 2 });
     expect(count("inventory_movements")).toBe(0);
 
     const run = await call("POST", "/resources/variants/bulk-set-stock", { body: { items }, headers: { "Idempotency-Key": "stocktake-2026-10-19" } });
-    expect(run.body.data).toMatchObject({ status: "done", changed: 1, unchanged: 1, failed: 2 });
-    expect(run.body.data.failures).toEqual(expect.arrayContaining([{ id: "v_s002", code: "below_reserved" }, { id: "v_missing", code: "not_found" }]));
+    expect(run.body.data.run).toMatchObject({ status: "done", changed: 1, unchanged: 1, failed: 2 });
+    expect(run.body.data.run.failures).toEqual(expect.arrayContaining([{ id: "v_s002", code: "below_reserved" }, { id: "v_missing", code: "not_found" }]));
     expect(sqlite.prepare("SELECT stock, stock_version AS v FROM product_variants WHERE id = 'v_s001'").get()).toEqual({ stock: 25, v: versions.get("v_s001")! + 1 });
     const movement = sqlite.prepare("SELECT type, stock_delta AS delta, ledger_version AS ledger, location_id AS location FROM inventory_movements WHERE variant_id = 'v_s001'").get() as { type: string; delta: number; ledger: number; location: string | null };
     expect(movement).toMatchObject({ type: "adjusted", delta: 15, ledger: 2 });
@@ -171,21 +171,32 @@ describe("bulk tags, status and publishing", () => {
         ('cus_a', 'A', '+8801711111111', 5, 'merchant'), ('cus_b', 'B', '+8801722222222', 3, 'merchant'), ('cus_c', 'C', '+8801733333333', 4, 'merchant');
     `);
     const body = { filter: { minOrders: 4 }, add: ["VIP"] };
-    expect((await call("POST", "/resources/customers/bulk-tag", { body: { ...body, dryRun: true } })).body.data).toMatchObject({ total: 2, changed: 2 });
+    expect((await call("POST", "/resources/customers/bulk-tag", { body: { ...body, dryRun: true } })).body.data.run).toMatchObject({ total: 2, changed: 2 });
     expect(count("customer_tag_links")).toBe(0);
     const run = await call("POST", "/resources/customers/bulk-tag", { body });
-    expect(run.body.data).toMatchObject({ status: "done", changed: 2 });
+    expect(run.body.data.run).toMatchObject({ status: "done", changed: 2 });
     expect(sqlite.prepare("SELECT customer_id AS id, tag FROM customer_tag_links ORDER BY customer_id").all()).toEqual([{ id: "cus_a", tag: "vip" }, { id: "cus_c", tag: "vip" }]);
   });
 
   it("drafts products by filter and publishes them by id", async () => {
     const drafted = await call("POST", "/resources/products/bulk-set-status", { body: { filter: { category: "cat_bags" }, status: "draft" } });
-    expect(drafted.body.data).toMatchObject({ status: "done", changed: 1 });
+    expect(drafted.body.data.run).toMatchObject({ status: "done", changed: 1 });
     expect(sqlite.prepare("SELECT is_active AS active FROM products WHERE id = 'p_bag'").get()).toEqual({ active: 0 });
     const unpublished = await call("POST", "/resources/products/bulk-publish", { body: { productIds: ["p_bag"], channelIds: ["sc_google"], action: "unpublish" } });
-    expect(unpublished.body.data).toMatchObject({ status: "done", changed: 1 });
+    expect(unpublished.body.data.run).toMatchObject({ status: "done", changed: 1 });
     const runs = await call("GET", "/resources/bulk-runs");
     expect(runs.body.data.runs).toHaveLength(2);
     expect(runs.body.data.nextCursor).toBeNull();
+    const read = await call("GET", `/resources/bulk-runs/${drafted.body.data.run.id as string}`);
+    expect(read.body.data.run).toMatchObject({ id: drafted.body.data.run.id, kind: "products.set_status", status: "done" });
+  });
+
+  it("leaves a product changed since its expectedRevision alone", async () => {
+    const { revision } = sqlite.prepare("SELECT aggregate_revision AS revision FROM products WHERE id = 'p_bag'").get() as { revision: number };
+    const stale = await call("POST", "/resources/products/bulk-set-status", { body: { products: [{ id: "p_bag", expectedRevision: revision + 1 }], status: "draft" } });
+    expect(stale.body.data.run).toMatchObject({ status: "done", changed: 0, failed: 1, failures: [{ id: "p_bag", code: "revision_changed" }] });
+    expect(sqlite.prepare("SELECT is_active AS active FROM products WHERE id = 'p_bag'").get()).toEqual({ active: 1 });
+    const current = await call("POST", "/resources/products/bulk-set-status", { body: { products: [{ id: "p_bag", expectedRevision: revision }], status: "draft" } });
+    expect(current.body.data.run).toMatchObject({ status: "done", changed: 1, failed: 0 });
   });
 });

@@ -47,7 +47,10 @@ import { getCurrencyConfig } from "@scalius/core/modules/settings";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 
 import { ok } from "../../utils/api-response";
-import { successEnvelope, paginationSchema, errorResponses, conflictResponse } from "../../schemas/responses";
+import { successEnvelope, paginationSchema, errorResponses, conflictResponse, namedSharedSchema } from "../../schemas/responses";
+import { EVENT_REPRESENTATION_SCHEMAS } from "@scalius/shared/events";
+import { readVariantRepresentation } from "../../events/representations";
+import type { Database } from "@scalius/database/client";
 import { rebuildCatalogProjectionsAfterWrite } from "../../background/catalog";
 
 import { isoTimestampSchema, nullableTimestampSchema, timestampSchema } from "../../schemas/timestamps";
@@ -220,6 +223,15 @@ const stockAdjustResultSchema = z.object({
     delta: z.number(),
     ...locationResultShape,
 });
+
+const VariantResource = namedSharedSchema(EVENT_REPRESENTATION_SCHEMAS.variant, "VariantResource");
+
+/** The SKU after a stable stock write, as `variants.get` reads it (audit L1). */
+async function readVariantResource(db: Database, variantId: string) {
+    const variant = await readVariantRepresentation(db, variantId);
+    if (!variant) throw new NotFoundError("Variant not found");
+    return variant;
+}
 
 const optionalLocationIdSchema = z.string().trim().min(1).max(100).optional().openapi({
     description: "Active location counted or adjusted; the default location when omitted",
@@ -671,7 +683,7 @@ const adjustRoute = createRoute({
     responses: {
         200: {
             description: "Inventory adjusted",
-            content: { "application/json": { schema: successEnvelope(adjustResultSchema) } },
+            content: { "application/json": { schema: successEnvelope(adjustResultSchema.extend({ variant: VariantResource })) } },
         },
         404: errorResponses[404],
         409: conflictResponse,
@@ -687,7 +699,7 @@ app.openapi(adjustRoute, async (c) => {
     try {
         const result = await adjustInventory(db, variantId, { ...payload, operationKey }, user?.id);
 
-        return ok(c, result);
+        return ok(c, { ...result, variant: await readVariantResource(db, variantId) });
     } catch (error: unknown) {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
         throw error;
@@ -906,7 +918,7 @@ const stockSetRoute = createRoute({
     responses: {
         200: {
             description: "Stock set",
-            content: { "application/json": { schema: successEnvelope(stockAdjustResultSchema) } },
+            content: { "application/json": { schema: successEnvelope(stockAdjustResultSchema.extend({ variant: VariantResource })) } },
         },
         404: errorResponses[404],
         409: conflictResponse,
@@ -921,7 +933,7 @@ app.openapi(stockSetRoute, async (c) => {
     try {
         const result = await setStock(db, variantId, newStock, operationKey, reason, user?.id, locationId, { expectedStockVersion });
 
-        return ok(c, result);
+        return ok(c, { ...result, variant: await readVariantResource(db, variantId) });
     } catch (error: unknown) {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
         throw error;

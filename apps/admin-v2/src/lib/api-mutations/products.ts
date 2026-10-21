@@ -35,7 +35,7 @@ export function useTrashProduct() {
   const navigate = useNavigate();
   return useMutation({
     mutationFn: ({ id, expectedAggregateRevision }: ProductAggregateRevisionClaim) =>
-      apiData(deleteApiV1AdminProductsById({ path: { id }, query: { expectedAggregateRevision } })),
+      apiData(deleteApiV1AdminProductsById({ path: { id }, query: { expectedRevision: expectedAggregateRevision } })),
     onSuccess: (_data, variables) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
       invalidateProductLookupQueries(queryClient);

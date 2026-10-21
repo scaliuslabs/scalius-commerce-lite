@@ -437,7 +437,7 @@ describe("the stable app API", () => {
     ]);
     const PERSON_CONTAINERS = new Set(["customers", "customer", "customerRecord", "addresses", "address", "defaultAddress", "mergedInto", "relatedCustomer"]);
     // The store's own contact details, not a buyer's.
-    const STORE_OWNED = new Set(["dashboard.inventory_locations.list", "dashboard.settings.business_get"]);
+    const STORE_OWNED = new Set(["dashboard.resources.inventory_locations.list", "dashboard.settings.business_get"]);
     // The store's own details inside a buyer document (an invoice's seller block).
     const STORE_OWNED_PATHS = ["data.businessInfo"];
     const resolve = (node: unknown): Record<string, unknown> | null => {

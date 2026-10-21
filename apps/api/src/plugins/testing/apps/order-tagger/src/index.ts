@@ -118,13 +118,14 @@ export default definePlugin({
       const orderId = event.resource.id;
       if (await tagged(ctx).get(orderId)) return;
 
-      const order = await ctx.api.call<{ totalMinor?: number; orderNumber?: number | null }>("orders.get", { path: { id: orderId } });
-      if (!order.ok) throw new Error(`The order could not be read (${order.error?.code ?? order.status}).`);
+      const read = await ctx.api.call<{ order?: { totalMinor?: number; orderNumber?: number | null } }>("orders.get", { path: { id: orderId } });
+      if (!read.ok) throw new Error(`The order could not be read (${read.error?.code ?? read.status}).`);
+      const order = read.data?.order;
       const taggedAt = Date.parse(event.occurredAt) || 0;
-      const orderNumber = typeof order.data?.orderNumber === "number" ? order.data.orderNumber : null;
+      const orderNumber = typeof order?.orderNumber === "number" ? order.orderNumber : null;
       // The setting is in major units of the store currency; the order is in minor units.
       const minimumMinor = Math.round(Number(ctx.settings.min_total ?? 0) * 10 ** ctx.store.decimalPlaces);
-      if (Number(order.data?.totalMinor ?? 0) < minimumMinor) {
+      if (Number(order?.totalMinor ?? 0) < minimumMinor) {
         await tagged(ctx).put(orderId, { order_id: orderId, order_number: orderNumber, tag: null, tagged_at: taggedAt } satisfies TaggedRecord);
         ctx.log.info("Left an order below the minimum untagged", { orderId });
         return;

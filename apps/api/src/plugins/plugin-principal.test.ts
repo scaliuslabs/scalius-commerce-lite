@@ -97,7 +97,7 @@ describe("ctx.api.call as a plugin principal", () => {
 
   it("runs a granted read and a granted write, recording the write as the approving Super Admin", async () => {
     const read = await call("orders.get", { path: { id: "ord_rbac1" } });
-    expect(read).toMatchObject({ ok: true, status: 200, error: null, data: { id: "ord_rbac1", status: "pending" } });
+    expect(read).toMatchObject({ ok: true, status: 200, error: null, data: { order: { id: "ord_rbac1", status: "pending" } } });
 
     const write = await call("orders.set_status", { path: { id: "ord_rbac1" }, body: { status: "confirmed" }, idempotencyKey: "plugin-status-1" });
     expect(write.error).toBeNull();
@@ -134,9 +134,11 @@ describe("ctx.api.call as a plugin principal", () => {
     expect(hidden).toMatchObject({
       ok: true,
       data: {
-        id: "ord_rbac1",
-        contact: { name: null, phone: null, email: null },
-        shippingAddress: { name: null, phone: null, line1: null, placeIds: { city: "city_1", zone: "zone_1" } },
+        order: {
+          id: "ord_rbac1",
+          contact: { name: null, phone: null, email: null },
+          shippingAddress: { name: null, phone: null, line1: null, placeIds: { city: "city_1", zone: "zone_1" } },
+        },
       },
     });
     // Field by field: names and phones granted, emails and street addresses not.
@@ -151,8 +153,10 @@ describe("ctx.api.call as a plugin principal", () => {
     expect(partial).toMatchObject({
       ok: true,
       data: {
-        contact: { name: "Rahim", phone: "+8801711111111", email: null },
-        shippingAddress: { name: "Rahim", line1: null, placeIds: { city: "city_1" } },
+        order: {
+          contact: { name: "Rahim", phone: "+8801711111111", email: null },
+          shippingAddress: { name: "Rahim", line1: null, placeIds: { city: "city_1" } },
+        },
       },
     });
     const list = await callPluginOperation({
@@ -164,7 +168,7 @@ describe("ctx.api.call as a plugin principal", () => {
       kind: "plugin", pluginId: "acme.rbac", version: "1.0.0", pluginName: "Acme RBAC", actorUserId: "owner", firstParty: false,
       permissions: new Set(["orders.view"]), protectedData: new Set(), riskCeiling: "read",
     }), pluginTestCtx());
-    expect(((await route.json()) as { data: Record<string, unknown> }).data).toMatchObject({ contact: { email: "rahim@buyer.test" } });
+    expect(((await route.json()) as { data: Record<string, unknown> }).data).toMatchObject({ order: { contact: { email: "rahim@buyer.test" } } });
   });
 
   it("refuses looking a buyer up by contact data the grant does not reveal", async () => {
