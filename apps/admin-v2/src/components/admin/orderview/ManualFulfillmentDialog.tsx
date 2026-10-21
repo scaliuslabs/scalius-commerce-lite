@@ -2,14 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "~/components/ui/sheet";
 import { Input } from "~/components/ui/input";
 import { NumberInput } from "~/components/ui/number-input";
 import { MoneyInput } from "~/components/admin/shared/MoneyInput";
@@ -146,13 +139,14 @@ export function ManualFulfillmentDialog({ order, kind = "ship", open, onOpenChan
   const clearError = (field: keyof FieldErrors) => setErrors((current) => (current[field] ? { ...current, [field]: undefined } : current));
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !mutation.isPending && onOpenChange(next)}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{t(copy.title)}</DialogTitle>
-          <DialogDescription>{t(copy.help)}</DialogDescription>
-        </DialogHeader>
-        <form id="manual-fulfillment" method="post" className="space-y-4" onSubmit={handleSubmit} noValidate>
+    // A sheet: the items plus courier, tracking, link, cost and note are more than a dialog's five fields (DESIGN O2).
+    <Sheet open={open} onOpenChange={(next) => !mutation.isPending && onOpenChange(next)}>
+      <SheetContent className="flex flex-col">
+        <SheetHeader closeDisabled={mutation.isPending}>
+          <SheetTitle>{t(copy.title)}</SheetTitle>
+          <SheetDescription>{t(copy.help)}</SheetDescription>
+        </SheetHeader>
+        <form id="manual-fulfillment" method="post" className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4" onSubmit={handleSubmit} noValidate>
           {mutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(mutation.error)}</AlertDescription></Alert> : null}
           <div role="group" aria-labelledby="fulfill-items-label" className="space-y-2">
             <div className="flex items-center justify-between gap-2">
@@ -270,15 +264,15 @@ export function ManualFulfillmentDialog({ order, kind = "ship", open, onOpenChan
             </div>
           ) : null}
         </form>
-        <DialogFooter>
+        <SheetFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>
             {r("cancel")}
           </Button>
           <Button type="submit" form="manual-fulfillment" loading={mutation.isPending}>
             {t(copy.submit)}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }
