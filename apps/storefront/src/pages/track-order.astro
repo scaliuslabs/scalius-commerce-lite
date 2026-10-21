@@ -35,6 +35,7 @@ import {
   type OrderLookupStatus,
 } from "@/lib/order-lookup-api";
 import { formatOrderReceiptDate, formatOrderSuccessLabel } from "@/lib/order-success-localization";
+import { getOrderPaymentPresentation } from "@/lib/order-success-state";
 import {
   orderProgressMarkup,
   orderShipmentMarkup,
@@ -150,6 +151,19 @@ const channelName: Record<OrderCodeChannel, string> = {
   whatsapp: copy.trackOrderChannelWhatsappText,
 };
 const placedAt = status ? formatOrderReceiptDate(status.createdAt, languageCode) : null;
+// The receipt's own words for the payment ("Due on delivery" for cash on delivery, not "Unpaid").
+const paymentStatusLabel = status
+  ? getOrderPaymentPresentation({
+      status: status.status,
+      paymentMethod: status.paymentMethod ?? "",
+      paymentStatus: status.paymentStatus,
+      totalAmount: status.total,
+      paidAmount: status.paid,
+      balanceDue: status.balanceDue,
+      requiresShipping: status.requiresShipping,
+      shippingMethodKind: status.shippingMethodKind,
+    }, copy).statusLabel
+  : "";
 const deliveryLabel = status?.shippingMethodName
   ? formatCheckoutLanguageText(copy.orderReceiptDeliveryWithMethodText, { method: status.shippingMethodName })
   : copy.orderReceiptDeliveryText;
@@ -194,7 +208,7 @@ const invalid = (field: "reference" | "contact" | "code", errorId: string) => fi
             </div>
             <div>
               <dt class="text-muted-foreground">{copy.orderReceiptPaymentStatusText}</dt>
-              <dd class="font-medium text-foreground">{formatOrderSuccessLabel(status.paymentStatus, copy)}</dd>
+              <dd class="font-medium text-foreground">{paymentStatusLabel}</dd>
             </div>
             <div>
               <dt class="text-muted-foreground">{copy.orderReceiptDeliveryText}</dt>

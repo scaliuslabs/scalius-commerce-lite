@@ -75449,6 +75449,10 @@
                             "paymentStatus": {
                               "type": "string"
                             },
+                            "paymentMethod": {
+                              "type": "string",
+                              "nullable": true
+                            },
                             "createdAt": {
                               "type": "string",
                               "nullable": true
@@ -75693,6 +75697,7 @@
                             "firstName",
                             "status",
                             "paymentStatus",
+                            "paymentMethod",
                             "createdAt",
                             "requiresShipping",
                             "shippingMethodKind",

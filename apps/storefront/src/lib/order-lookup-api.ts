@@ -143,6 +143,8 @@ export interface OrderLookupStatus {
   firstName: string | null;
   status: string;
   paymentStatus: string;
+  /** Older APIs omit it; then the status reads as stored. */
+  paymentMethod?: string | null;
   createdAt: string | null;
   requiresShipping: boolean;
   shippingMethodKind: "delivery" | "pickup" | null;
