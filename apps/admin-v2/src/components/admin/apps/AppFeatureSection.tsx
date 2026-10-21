@@ -12,7 +12,7 @@ import { useMessages } from "~/i18n";
 import { appFeaturesMessages } from "~/i18n/app-features";
 import type { AppDetail, AppFeature } from "~/lib/api-query-options/apps";
 import { itemSettingKeys, type ServiceHealth, type ServiceItem } from "./app-services";
-import { DisableFeatureDialog, EnableFeatureDialog, FeatureAccess, HealthBadge, RunningDetail, useAccessLine } from "./AppFeatures";
+import { DisableFeatureDialog, EnableFeatureDialog, FeatureAccess, HealthBadge, RunningDetail } from "./AppFeatures";
 import { AppIcon } from "./AppIcon";
 import { settingFieldId, useAppSettingsDraft } from "./AppSettingsForm";
 
@@ -24,7 +24,6 @@ export function AppFeatureSection({ app, feature, health, canManage, isSuperAdmi
   isSuperAdmin: boolean;
 }) {
   const t = useMessages(appFeaturesMessages);
-  const access = useAccessLine(feature);
   const item: ServiceItem = { kind: "feature", id: `feature:${feature.id}`, feature };
   const keys = itemSettingKeys(app, item);
   // Only this feature's fields are this page's draft; the rest of the app's settings are sent as saved.
@@ -91,7 +90,7 @@ export function AppFeatureSection({ app, feature, health, canManage, isSuperAdmi
       <Card>
         <CardHeader>
           <CardTitle>{t("accessTitle")}</CardTitle>
-          <CardDescription>{access}</CardDescription>
+          <CardDescription>{t("accessHelp")}</CardDescription>
         </CardHeader>
         <CardContent>
           <FeatureAccess feature={feature} />
