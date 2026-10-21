@@ -5,7 +5,7 @@
 // `storefrontCopy.languageCode`), so a Bangla store never mixes English
 // chrome into its pages. Slices that move more strings here add keys to
 // both languages; the test fails when one language lacks a key.
-import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
+import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
 import { CHROME_BN, CHROME_EN, type ChromeCopy } from "./chrome-copy";
 
 export type StorefrontLanguage = "en" | "bn";

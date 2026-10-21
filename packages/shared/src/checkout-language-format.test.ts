@@ -1,5 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { discountDisplayName, formatDiscountLineLabel } from "./checkout-language-format";
+import { checkoutLanguageBaseCode, discountDisplayName, formatDiscountLineLabel } from "./checkout-language-format";
+import { checkoutLanguageBaseCode as catalogBaseCode } from "./checkout-language";
+
+describe("checkout language base code", () => {
+  it("is the code's base language, English when there is none, and the one checkout-language re-exports", () => {
+    expect(checkoutLanguageBaseCode("bn-BD")).toBe("bn");
+    expect(checkoutLanguageBaseCode(" BN_bd ")).toBe("bn");
+    expect(checkoutLanguageBaseCode("en")).toBe("en");
+    expect(checkoutLanguageBaseCode("")).toBe("en");
+    expect(checkoutLanguageBaseCode("-x")).toBe("en");
+    expect(checkoutLanguageBaseCode(undefined)).toBe("en");
+    expect(checkoutLanguageBaseCode(7)).toBe("en");
+    expect(catalogBaseCode).toBe(checkoutLanguageBaseCode);
+  });
+});
 
 describe("discount names", () => {
   it("adds the code in brackets only when it differs from the title, in any letter case", () => {

@@ -5,7 +5,7 @@
 // language's base code (the layout's `storefrontCopy.languageCode`, or the
 // checkout language read), so the newsletter speaks like the rest of the
 // store. A merchant's own heading, text or button label replaces the default.
-import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
+import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
 import { ACCOUNT_MARKETING_COPY, type MarketingChannel } from "@scalius/shared/customer-marketing";
 
 export type NewsletterLanguage = "en" | "bn";
