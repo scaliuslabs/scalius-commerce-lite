@@ -15,6 +15,18 @@ export function formatOrderTimestamp(value: OrderTimestamp | null | undefined): 
   return date ? formatDateTime(date, { dateStyle: "medium", timeStyle: "short" }) : null;
 }
 
+/** The store calendar day of an instant ("Feb 23, 2026"), for grouping a timeline. */
+export function formatOrderDay(value: OrderTimestamp | null | undefined): string | null {
+  const date = toDate(value);
+  return date ? formatDateTime(date, { dateStyle: "medium" }) : null;
+}
+
+/** The time of day in the store time zone ("9:21 PM"), under a day heading. */
+export function formatOrderTime(value: OrderTimestamp | null | undefined): string | null {
+  const date = toDate(value);
+  return date ? formatDateTime(date, { timeStyle: "short" }) : null;
+}
+
 /** The instant in ISO 8601, for a `<time dateTime>`. */
 export function orderTimestampIso(value: OrderTimestamp | null | undefined): string | undefined {
   return toDate(value)?.toISOString();
