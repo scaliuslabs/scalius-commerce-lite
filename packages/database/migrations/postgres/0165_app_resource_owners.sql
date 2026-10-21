@@ -11,7 +11,7 @@ CREATE TABLE "app_resource_owners" (
 	"created_at" bigint DEFAULT (cast(strftime('%s','now') as bigint)) NOT NULL,
 	PRIMARY KEY("resource_type", "resource_id"),
 	CONSTRAINT "app_resource_owners_type_check" CHECK("app_resource_owners"."resource_type" IN ('product', 'category', 'brand', 'collection', 'media')),
-	CONSTRAINT "app_resource_owners_plugin_shape" CHECK(length("app_resource_owners"."plugin_id") BETWEEN 3 AND 100 AND "app_resource_owners"."plugin_id" NOT GLOB '*[^a-z0-9.-]*' AND instr("app_resource_owners"."plugin_id", '.') > 1 AND instr("app_resource_owners"."plugin_id", '.') < length("app_resource_owners"."plugin_id"))
+	CONSTRAINT "app_resource_owners_plugin_shape" CHECK(length("app_resource_owners"."plugin_id") BETWEEN 3 AND 100 AND "app_resource_owners"."plugin_id" !~ '[^a-z0-9.-]' AND strpos("app_resource_owners"."plugin_id", '.') > 1 AND strpos("app_resource_owners"."plugin_id", '.') < length("app_resource_owners"."plugin_id"))
 );
 --> statement-breakpoint
 CREATE INDEX "app_resource_owners_plugin_idx" ON "app_resource_owners" ("plugin_id");

@@ -54,6 +54,9 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
+  IF NOT coalesce((NEW."payment_type" = 'refund' AND NEW."status" = 'refunded' AND EXISTS (SELECT 1 FROM "tracking_deliveries" WHERE "destination" = 'ga4' AND "dedup_key" = 'purchase:' || NEW."order_id" AND "status" = 'sent')), false) THEN
+    RETURN NEW;
+  END IF;
   INSERT INTO "tracking_deliveries" ("id", "destination", "event_name", "dedup_key", "order_id", "payment_id")
   VALUES ('trk_' || substr(md5(random()::text || clock_timestamp()::text), 1, 24), 'ga4', 'refund', 'refund:' || NEW."id", NEW."order_id", NEW."id")
   ON CONFLICT ("destination", "dedup_key") DO NOTHING;
@@ -63,7 +66,6 @@ $trigger_function$;
 CREATE TRIGGER "tracking_ga4_refund_insert"
 AFTER INSERT ON "order_payments"
 FOR EACH ROW
-WHEN (NEW."payment_type" = 'refund' AND NEW."status" = 'refunded' AND EXISTS (SELECT 1 FROM "tracking_deliveries" WHERE "destination" = 'ga4' AND "dedup_key" = 'purchase:' || NEW."order_id" AND "status" = 'sent'))
 EXECUTE FUNCTION scalius_compat."tracking_ga4_refund_insert_fn"();
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION scalius_compat."tracking_ga4_refund_update_fn"()
@@ -71,6 +73,9 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
+  IF NOT coalesce((NEW."payment_type" = 'refund' AND NEW."status" = 'refunded' AND OLD."status" IS DISTINCT FROM 'refunded' AND EXISTS (SELECT 1 FROM "tracking_deliveries" WHERE "destination" = 'ga4' AND "dedup_key" = 'purchase:' || NEW."order_id" AND "status" = 'sent')), false) THEN
+    RETURN NEW;
+  END IF;
   INSERT INTO "tracking_deliveries" ("id", "destination", "event_name", "dedup_key", "order_id", "payment_id")
   VALUES ('trk_' || substr(md5(random()::text || clock_timestamp()::text), 1, 24), 'ga4', 'refund', 'refund:' || NEW."id", NEW."order_id", NEW."id")
   ON CONFLICT ("destination", "dedup_key") DO NOTHING;
@@ -80,7 +85,6 @@ $trigger_function$;
 CREATE TRIGGER "tracking_ga4_refund_update"
 AFTER UPDATE ON "order_payments"
 FOR EACH ROW
-WHEN (NEW."payment_type" = 'refund' AND NEW."status" = 'refunded' AND OLD."status" IS DISTINCT FROM 'refunded' AND EXISTS (SELECT 1 FROM "tracking_deliveries" WHERE "destination" = 'ga4' AND "dedup_key" = 'purchase:' || NEW."order_id" AND "status" = 'sent'))
 EXECUTE FUNCTION scalius_compat."tracking_ga4_refund_update_fn"();
 --> statement-breakpoint
 INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (160, '0160_order_tracking_signals', '2288de59a047c4daea18883f65b105cf4b2be5fc9004f85311611b0dc9301382');
