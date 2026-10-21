@@ -331,7 +331,7 @@ export const MERCHANT_TASKS: readonly MerchantTask[] = [
       const main = rowsOf(reads.menus).find((menu) => menu.handle === "main") as { id: string; revision: number };
       await ctx.agent.changeSteps([
         { id: "picks", operationId: "dashboard.collections.create", input: { body: { name: "Eid Picks", presentation: "grid", isActive: true, config: { source: "manual", productIds } } } },
-        { id: "link", operationId: "dashboard.navigation.items_create", input: { path: { menuId: main.id }, body: { label: "Eid Picks", labelMode: "custom", target: { type: "resource", resourceType: "collection", resourceId: { $step: "picks", pointer: "/data/id" } }, expectedRevision: main.revision } } },
+        { id: "link", operationId: "dashboard.navigation.items_create", input: { path: { menuId: main.id }, body: { label: "Eid Picks", labelMode: "custom", target: { type: "resource", resourceType: "collection", resourceId: { $step: "picks", pointer: "/data/collection/id" } }, expectedRevision: main.revision } } },
         { id: "live", operationId: "dashboard.navigation.menus_publish", input: { path: { menuId: main.id }, body: { expectedRevision: { $step: "link", pointer: "/data/revision" } } } },
       ]);
       await ctx.agent.read("dashboard.navigation.items_list", { path: { menuId: main.id } });
@@ -363,13 +363,14 @@ export const MERCHANT_TASKS: readonly MerchantTask[] = [
         body: {
           name: "EID10", method: "code", codes: [{ code: "EID10" }],
           effects: [{ target: "order", allocation: "once", kind: "percentage_off", config: { basisPoints: 1000 } }],
-          conditions: [{ kind: "minimum_merchandise_subtotal", config: { amountMinor: 200_000, currencyCode: "BDT" } }],
-          startsAt: new Date(starts * 1_000).toISOString(), endsAt: new Date((starts + 3 * 86_400 - 1) * 1_000).toISOString(), timezone: "Asia/Dhaka",
+          conditions: [{ kind: "minimum_merchandise_subtotal", config: { amountMinor: 200_000, currency: "BDT" } }],
+          startsAt: new Date(starts * 1_000).toISOString(), endsAt: new Date((starts + 3 * 86_400 - 1) * 1_000).toISOString(), timeZone: "Asia/Dhaka",
         },
       });
-      await ctx.agent.change("dashboard.discounts.activate", { path: { id: String(data.id) }, body: { expectedRevision: Number(data.revision) } });
-      ctx.facts.discountId = data.id;
-      await ctx.agent.read("dashboard.discounts.get", { path: { id: String(data.id) } }, { select: ["/status", "/codes", "/startsAt", "/endsAt"] });
+      const discount = (data as { discount: { id: string; revision: number } }).discount;
+      await ctx.agent.change("dashboard.discounts.activate", { path: { id: discount.id }, body: { expectedRevision: discount.revision } });
+      ctx.facts.discountId = discount.id;
+      await ctx.agent.read("dashboard.discounts.get", { path: { id: discount.id } }, { select: ["/discount/status", "/discount/codes", "/discount/startsAt", "/discount/endsAt"] });
     },
     verify(ctx) {
       const code = one(ctx.sqlite, "SELECT 1 FROM promotion_codes WHERE upper(code) = 'EID10'");
@@ -737,7 +738,7 @@ export const MERCHANT_TASKS: readonly MerchantTask[] = [
       const footer = menus.find((menu) => menu.handle === "footer") as { id: string; revision: number };
       await ctx.agent.changeSteps([
         { id: "about", operationId: "dashboard.content.create", input: { body: { title: "About Us", slug: "about-us", content: "<p>We are a family tailoring house in Dhaka, making panjabis since 1998.</p>", metaTitle: "About Us", metaDescription: "Our story: a family tailoring house in Dhaka.", isPublished: true } } },
-        { id: "link", operationId: "dashboard.navigation.items_create", input: { path: { menuId: footer.id }, body: { label: "About Us", labelMode: "custom", target: { type: "resource", resourceType: "page", resourceId: { $step: "about", pointer: "/data/id" } }, expectedRevision: footer.revision } } },
+        { id: "link", operationId: "dashboard.navigation.items_create", input: { path: { menuId: footer.id }, body: { label: "About Us", labelMode: "custom", target: { type: "resource", resourceType: "page", resourceId: { $step: "about", pointer: "/data/page/id" } }, expectedRevision: footer.revision } } },
         { id: "live", operationId: "dashboard.navigation.menus_publish", input: { path: { menuId: footer.id }, body: { expectedRevision: { $step: "link", pointer: "/data/revision" } } } },
       ]);
       await ctx.agent.read("dashboard.navigation.items_list", { path: { menuId: footer.id } }, { select: ["/items/*/label"] });

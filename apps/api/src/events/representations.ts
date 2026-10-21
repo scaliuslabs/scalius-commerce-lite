@@ -350,23 +350,25 @@ async function productRepresentation(db: Database, productId: string) {
 export async function readVariantRepresentations(db: Database, where: { ids: readonly string[] } | { skus: readonly string[] }) {
   const keys = "ids" in where ? where.ids : where.skus.map((sku) => sku.trim().toLowerCase());
   if (keys.length === 0) return [];
-  const rows = await db.select({
-    id: productVariants.id,
-    productId: productVariants.productId,
-    sku: productVariants.sku,
-    trackInventory: productVariants.trackInventory,
-    stock: productVariants.stock,
-    stockVersion: productVariants.stockVersion,
-    updatedAt: productVariants.updatedAt,
-  }).from(productVariants)
-    .where("ids" in where
-      ? inArray(productVariants.id, [...keys])
-      : inArray(sql`lower(trim(${productVariants.sku}))`, [...keys]))
-    .all();
+  const matches = "ids" in where
+    ? inArray(productVariants.id, [...keys])
+    : inArray(sql`lower(trim(${productVariants.sku}))`, [...keys]);
+  // The SKUs and their levels in one batch (one D1 call): a stock write answers its SKU at no extra round trip.
+  const [rows, levelRows] = await db.batch([
+    db.select({
+      id: productVariants.id,
+      productId: productVariants.productId,
+      sku: productVariants.sku,
+      trackInventory: productVariants.trackInventory,
+      stock: productVariants.stock,
+      stockVersion: productVariants.stockVersion,
+      updatedAt: productVariants.updatedAt,
+    }).from(productVariants).where(matches),
+    db.select({ variantId: inventoryLevels.variantId, locationId: inventoryLevels.locationId, onHand: inventoryLevels.onHand })
+      .from(inventoryLevels).innerJoin(productVariants, eq(productVariants.id, inventoryLevels.variantId)).where(matches)
+      .orderBy(asc(inventoryLevels.variantId), asc(inventoryLevels.locationId)),
+  ]);
   if (rows.length === 0) return [];
-  const levelRows = await db.select({ variantId: inventoryLevels.variantId, locationId: inventoryLevels.locationId, onHand: inventoryLevels.onHand })
-    .from(inventoryLevels).where(inArray(inventoryLevels.variantId, rows.map((row) => row.id)))
-    .orderBy(asc(inventoryLevels.variantId), asc(inventoryLevels.locationId)).all();
   const levels = groupBy(levelRows, (level) => level.variantId);
   const byKey = new Map(rows.map((variant) => ["ids" in where ? variant.id : variant.sku.trim().toLowerCase(), sealed("variant", {
     id: variant.id,

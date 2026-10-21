@@ -19,10 +19,10 @@ describe("the SDK's contract copy", () => {
 describe("createContractApi", () => {
   const api = () => createContractApi({
     handlers: {
-      "brands.get": ({ path }) => ({ ...brand, id: String(path.id) }),
+      "brands.get": ({ path }) => ({ brand: { ...brand, id: String(path.id) } }),
       "products.list": () => ({ products: [], nextCursor: null }),
       "inventory.adjust": () => ({ ok: false, status: 409, data: null, error: { code: "conflict", message: "Stock changed." } }),
-      "brands.update": ({ body }) => ({ ...brand, name: (body as { name: string }).name, revision: 4 }),
+      "brands.update": ({ body }) => ({ brand: { ...brand, name: (body as { name: string }).name, revision: 4 } }),
     },
     checkOutput: true,
   });
@@ -68,7 +68,7 @@ describe("createContractApi", () => {
 
   it("replays a repeat with the same key and refuses the key for another request", async () => {
     let runs = 0;
-    const counted = createContractApi({ handlers: { "brands.update": () => ({ ...brand, revision: 3 + ++runs }) } });
+    const counted = createContractApi({ handlers: { "brands.update": () => ({ brand: { ...brand, revision: 3 + ++runs } }) } });
     const call = { path: { id: "brand_1" }, body: { name: "N", slug: "n", status: "draft", expectedRevision: 3 }, idempotencyKey: "update-brand-1" } as const;
     const first = await counted("brands.update", call);
     expect(await counted("brands.update", call)).toEqual(first);
@@ -82,8 +82,8 @@ describe("createContractApi", () => {
   });
 
   it("fails the test when a handler answers a shape the platform never returns", async () => {
-    const wrong = createContractApi({ handlers: { "brands.get": () => ({ ...brand, status: "live" }) } });
-    await expect(wrong("brands.get", { path: { id: "b" } })).rejects.toThrow(/data\.status must be one of/);
+    const wrong = createContractApi({ handlers: { "brands.get": () => ({ brand: { ...brand, status: "live" } }) } });
+    await expect(wrong("brands.get", { path: { id: "b" } })).rejects.toThrow(/data\.brand\.status must be one of/);
     await expect(api()("orders.list", undefined)).rejects.toThrow(/no handler answers it/);
   });
 });
@@ -111,10 +111,10 @@ describe("createContractApi in the harness", () => {
         },
       },
     });
-    const api = createContractApi({ handlers: { "brands.get": () => brand } });
+    const api = createContractApi({ handlers: { "brands.get": () => ({ brand }) } });
     const harness = createPluginTestHarness(plugin, { api });
     expect((await harness.event("order.created", { type: "order", id: "o1" })).ok).toBe(true);
-    expect(results[0]).toMatchObject({ ok: true, data: { id: "brand_1" } });
+    expect(results[0]).toMatchObject({ ok: true, data: { brand: { id: "brand_1" } } });
     expect(results[1]).toMatchObject({ ok: false, status: 403, error: { code: "api_operation_forbidden" } });
   });
 });
