@@ -110,7 +110,7 @@ export const themeEditorMessages = defineMessages({
     moduleHelp_policies: "Links to your published policy pages.",
     moduleHelp_related: "Recommended products.",
     "moduleHelp_recently-viewed": "Products this shopper viewed before (on their phone or computer only).",
-    appBlocks: "App components",
+    appBlocks: "Added by apps",
 
     // Collection, category and search pages
     listingToolbar: "Title and toolbar",
@@ -353,7 +353,7 @@ export const themeEditorMessages = defineMessages({
     widthFill: "Fit width",
     widthPx: "{width} px",
     allPages: "All pages",
-    hiddenModules: "Hidden ({count})",
+    hiddenModules: "Not shown on product pages ({count})",
     treeDragHelp: "To move a row, press Space, move it with the arrow keys, then press Space again.",
     treeSections: "Sections on {page}",
     status_noChanges: "No changes",
@@ -484,7 +484,7 @@ export const themeEditorMessages = defineMessages({
     moduleHelp_policies: "আপনার পাবলিশ করা নীতিমালা পেজের লিংক।",
     moduleHelp_related: "সুপারিশ করা পণ্য।",
     "moduleHelp_recently-viewed": "এই ক্রেতা আগে যে পণ্যগুলো দেখেছেন (শুধু তাঁর ফোন বা কম্পিউটারে)।",
-    appBlocks: "অ্যাপ কম্পোনেন্ট",
+    appBlocks: "অ্যাপের যোগ করা অংশ",
 
     listingToolbar: "শিরোনাম ও টুলবার",
     listingFilters: "ফিল্টার",
@@ -720,7 +720,7 @@ export const themeEditorMessages = defineMessages({
     widthFill: "প্রস্থে মানানসই",
     widthPx: "{width} পিক্সেল",
     allPages: "সব পেজ",
-    hiddenModules: "লুকানো ({count})",
+    hiddenModules: "প্রোডাক্ট পেজে দেখানো হয় না ({count})",
     treeDragHelp: "সারি সরাতে Space চাপুন, তীর-কী দিয়ে সরান, তারপর আবার Space চাপুন।",
     treeSections: "{page}-এর সেকশন",
     status_noChanges: "কোনো পরিবর্তন নেই",

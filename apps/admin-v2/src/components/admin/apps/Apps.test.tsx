@@ -354,6 +354,11 @@ const STORE = {
 const rows = () => [...document.querySelectorAll("li")].map((row) => row.textContent ?? "");
 const tab = (label: string) => [...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((element) => element.textContent?.startsWith(label))!;
 
+function typeInto(input: HTMLInputElement, value: string) {
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
 describe("Apps list", () => {
   it("shows every installed app with its icon, status, purpose and features on, and links to its page", async () => {
     sdk.getApiV1AdminApps.mockImplementation(() => ok({
@@ -544,7 +549,7 @@ describe("App page", () => {
       VIEWER,
     );
 
-    expect(text()).toContain("Redesigns your storefront with its own code");
+    expect(text()).toContain("Draws on your storefront with its own code: its own styles and scripts.");
     expect(text()).toContain("can act as the signed-in buyer on your store (see their orders, addresses, gift cards)");
     expect(text()).toContain("Its storefront code connects to cdn.acme.example from your buyers' browsers");
     const newRows = [...document.querySelectorAll("li")].filter((row) => row.textContent?.includes("New"));
@@ -631,7 +636,7 @@ describe("App page", () => {
     );
 
     expect(text()).toContain("Update needs approval");
-    expect(text()).toContain("paused until a Super Admin approves it");
+    expect(text()).toContain("paused until the store owner approves it");
     const newRows = [...document.querySelectorAll("li")].filter((row) => row.textContent?.includes("New"));
     expect(newRows.map((row) => row.textContent)).toEqual([expect.stringContaining("View customers")]);
     expect(hasButton("Review update")).toBe(false);
@@ -640,7 +645,7 @@ describe("App page", () => {
   it("offers activation only to a Super Admin and sends the revision and grant key it showed", async () => {
     await renderApp(detail(), MANAGER);
     expect(hasButton("Review and activate")).toBe(false);
-    expect(text()).toContain("Only a Super Admin can activate apps.");
+    expect(text()).toContain("Only the store owner can activate apps.");
 
     act(() => root.unmount());
     root = createRoot(host);
@@ -792,6 +797,9 @@ describe("App page", () => {
     expect(dialog().textContent).toContain("stays in your apps, ready to activate again");
     const deleteChoice = [...dialog().querySelectorAll("label")].find((label) => label.textContent?.includes("Delete this app's data"))!;
     await click(deleteChoice.querySelector<HTMLElement>('[role="radio"]')!);
+    // Deleting data for good asks for the app's name first.
+    expect(button("Uninstall", dialog()).disabled).toBe(true);
+    await act(async () => typeInto(dialog().querySelector("input")!, " loyalty POINTS "));
     await click(button("Uninstall", dialog()));
 
     expect(sdk.postApiV1AdminAppsByIdUninstall).toHaveBeenCalledWith({
@@ -1025,7 +1033,7 @@ describe("App page: sections", () => {
       ok({ app: detail({ status: "active", revision: 4, features: [feature(), placesFeature()] }), changed: true, hookError: null }));
     const app = detail({ status: "active", features: [feature({ enabled: true, grantKey: null }), placesFeature()] });
     await renderApp(app, MANAGER, false, "places");
-    expect(text()).toContain("Only a Super Admin can turn a feature on");
+    expect(text()).toContain("Only the store owner can turn a feature on");
     expect(document.querySelector<HTMLButtonElement>('button[role="switch"]')!.disabled).toBe(true);
 
     act(() => root.unmount());
@@ -1509,7 +1517,7 @@ describe("Upload and emergency stop on the Apps list", () => {
     await vi.waitFor(() => expect(dialog()?.textContent).toContain("Upload an app"));
     await chooseFile();
     await click(button("Upload", dialog()));
-    await vi.waitFor(() => expect(dialog().textContent).toContain("Ask a Super Admin to check the fingerprint, trust this key and install the app."));
+    await vi.waitFor(() => expect(dialog().textContent).toContain("Ask the store owner to check the fingerprint, trust this key and install the app."));
     expect(hasButton("Trust this key and install")).toBe(false);
     expect(hasButton("Upload")).toBe(false);
   });
@@ -1631,7 +1639,7 @@ describe("Registries and trusted developers", () => {
     await openAppsMenuItem("Registries and trusted developers");
     await vi.waitFor(() => expect(dialog()?.textContent).toContain("Partner apps"));
 
-    expect(dialog().textContent).toContain("Only a Super Admin can change these.");
+    expect(dialog().textContent).toContain("Only the store owner can change these.");
     expect(dialog().textContent).toContain("Acme Ltd");
     expect(dialog().querySelectorAll("input")).toHaveLength(0);
     expect(hasButton("Save")).toBe(false);
@@ -1646,7 +1654,7 @@ describe("App page lifecycle", () => {
     await vi.waitFor(() => expect(hasButton("Stop now")).toBe(true));
     await click(button("Stop now"));
     await vi.waitFor(() => expect(dialog()?.textContent).toContain("Stop Loyalty points now?"));
-    expect(dialog().textContent).toContain("Stops the app at once without running its code. Its data and settings stay. A Super Admin starts it again.");
+    expect(dialog().textContent).toContain("Stops the app at once without running its code. Its data and settings stay. The store owner starts it again.");
     expect(sdk.postApiV1AdminAppsByIdStop).not.toHaveBeenCalled();
 
     await click(button("Stop now", dialog()));
@@ -1666,7 +1674,7 @@ describe("App page lifecycle", () => {
     await renderApp(detail({ status: "disabled", source: "registry", failureReason: "Stopped automatically: it went over its limits 3 times within an hour." }), MANAGER, true);
     await vi.waitFor(() => expect(text()).toContain("This app is stopped"));
     expect(text()).toContain("Stopped automatically: it went over its limits 3 times within an hour.");
-    expect(text()).toContain("To start it again, a Super Admin reviews and activates it.");
+    expect(text()).toContain("To start it again, the store owner reviews and activates it.");
     expect(hasButton("Review and activate")).toBe(true);
     expect(hasButton("Stop now")).toBe(false);
   });
@@ -1728,7 +1736,7 @@ describe("App page lifecycle", () => {
     expect(text()).not.toContain("Verified");
 
     expect(text()).toContain("2 MB of 10 MB");
-    expect(text()).toContain("Up to 50 ms of work and 1.5 s in total, 20 calls, 60 runs a minute");
+    expect(text()).toContain("Each task gets at most 1.5 seconds and the app at most 60 tasks a minute, so a slow app can't slow your store down (50 ms of work, 20 outside calls per task)");
     expect(text()).toContain("1 of 2");
   });
 

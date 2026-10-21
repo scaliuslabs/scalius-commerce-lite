@@ -48,6 +48,7 @@ export const DASHBOARD_WHEN_A: Readonly<Record<string, string>> = {
   "dashboard.apps.settings_update": "Use when changing an installed app's settings (API keys, options); replaces its whole settings document.",
   "dashboard.apps.stop": "Use when one app misbehaves and must stop at once (emergency stop, no revision check).",
   "dashboard.apps.stop_third_party": "Use when every third-party app must stop at once (incident response).",
+  "dashboard.apps.storefront_problems_list": "Use when an app's section, block or design does not show on the storefront: which apps' parts the store drew without in the last day, and why.",
   "dashboard.apps.surfaces": "Use when asked what pages, cards, actions or widgets active apps add to the dashboard.",
   "dashboard.apps.uninstall": "Use when the merchant wants an app removed, keeping or deleting its stored data.",
   "dashboard.apps.update": "Use when updating an installed app to its newest registry release (Workers Paid).",

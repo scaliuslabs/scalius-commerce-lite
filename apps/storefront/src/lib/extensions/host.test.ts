@@ -136,6 +136,21 @@ describe("ExtensionHost", () => {
     expect(degraded).not.toHaveBeenCalled();
   });
 
+  it("reports each part drawn without, once per isolate, with why and never its data", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const report = vi.fn();
+    const failing = (batch: StorefrontRenderBatch): StorefrontRenderReply => ({ abi: 1, results: batch.jobs.map((job) => ({ id: job.id, error: "Error: heading was boom" })) });
+    const ext = { ...extension, release: "a".repeat(64) };
+    await host(failing, undefined, { report }).instance.render(ext, section("x1"));
+    await host(failing, undefined, { report }).instance.render(ext, section("x2"));
+    expect(report).toHaveBeenCalledTimes(1);
+    expect(report).toHaveBeenCalledWith({ pluginId: "acme.theme", release: "a".repeat(64), kind: "section", type: "hero", reason: "error", detail: "Error: heading was boom" });
+    const late = vi.fn();
+    await host(() => new Promise(() => {}), 20, { report: late }).instance.render({ ...extension, release: "b".repeat(64) }, section("y"));
+    expect(late).toHaveBeenCalledWith(expect.objectContaining({ reason: "late", kind: "section" }));
+    expect(late.mock.calls[0]![0]).not.toHaveProperty("detail");
+  });
+
   it("leaves component JSON-LD out of a noindex page, without sharing the memo with an indexed one", async () => {
     const jsonLd = '<script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage"}</script>';
     const run = (batch: StorefrontRenderBatch): StorefrontRenderReply => ({ abi: 1, results: batch.jobs.map((job) => ({ id: job.id, html: `<p>q</p>${jsonLd}` })) });

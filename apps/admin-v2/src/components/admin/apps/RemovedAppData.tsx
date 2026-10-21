@@ -169,6 +169,7 @@ export function RemovedAppDataCard({ show }: { show?: (group: RemovedAppData) =>
         title={t("deleteTitle", { app: confirming?.name ?? "" })}
         description={confirming ? t("deleteBody", { what: summary(confirming, t) }) : ""}
         confirmLabel={t("deleteData")}
+        confirmPhrase={confirming?.name ?? ""}
         loadingLabel={t("deleting")}
         isLoading={remove.isPending}
         onConfirm={() => {

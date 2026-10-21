@@ -320,6 +320,8 @@ export const queryKeys = {
         : (["apps", "deliveries", id] as const),
     /** Every active app's pages, cards, actions and widgets (the dashboard's app surfaces). */
     surfaces: () => ["apps", "surfaces"] as const,
+    /** Apps whose storefront parts the store recently drew without. */
+    storefrontProblems: () => ["apps", "storefront-problems"] as const,
     /** Data left by apps that are no longer installed, by app. */
     removedData: () => ["apps", "removed-data"] as const,
     /**

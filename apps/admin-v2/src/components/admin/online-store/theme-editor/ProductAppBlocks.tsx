@@ -18,6 +18,7 @@ import { appSettingDefaults, themeAppFields } from "../schema-form/app-settings"
 import { AppSettingFields } from "../schema-form/AppSettingFields";
 import type { MediaPreviews } from "../schema-form/media-previews";
 import type { SetTheme, Theme } from "../theme-fields";
+import { StorefrontProblemNotice } from "~/components/admin/apps/StorefrontProblemNotice";
 import {
   addProductAppBlock,
   appBlocksByKey,
@@ -66,6 +67,7 @@ function AppBlockItem({ block, entry, index, count, media, setDraft }: {
           <Trash2 aria-hidden="true" />
         </Button>
       </div>
+      {entry ? <StorefrontProblemNotice appId={block.app.split("/")[0] ?? ""} part={{ kind: "component", type: block.app.split("/")[1] ?? "" }} /> : null}
       {!entry ? (
         <p className="text-body text-muted-foreground">{t("appBlockInactiveHelp")}</p>
       ) : themeAppFields(entry.block.settings).length > 0 ? (

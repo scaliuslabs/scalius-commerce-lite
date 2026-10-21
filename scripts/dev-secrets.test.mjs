@@ -27,6 +27,9 @@ describe("dev secrets", () => {
         main: "./src/worker.ts",
         secrets: { required: ["SCALIUS_SECRET"] },
       });
+      // The plugin sandbox gives the dev storefront the Worker Loader that draws uploaded apps' parts.
+      writeDevWranglerConfig(pathToFileURL(source), ["SCALIUS_SECRET"], { workerLoader: true });
+      expect(JSON.parse(readFileSync(out, "utf8")).worker_loaders).toEqual([{ binding: "LOADER" }]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

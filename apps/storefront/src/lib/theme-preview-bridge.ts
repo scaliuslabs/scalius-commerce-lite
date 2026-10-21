@@ -238,6 +238,16 @@ export function themePreviewBridgeScript(dashboardOrigin: string): string {
     const template = document.createElement("template");
     template.innerHTML = await response.text();
     if (ticket !== latest[key] || !fresh(revision)) return "stale";
+    // An app section, skin or block the editor just added brings its app's
+    // stylesheet: link the ones the head lacks before the markup lands.
+    const linked = new Set(Array.from(document.head.querySelectorAll("link[data-app-stylesheet]"), (link) => link.getAttribute("href")));
+    for (const link of Array.from(template.content.querySelectorAll("link[data-app-stylesheet]"))) {
+      const href = link.getAttribute("href");
+      if (href && href.startsWith("/_x/") && !linked.has(href)) {
+        linked.add(href);
+        document.head.append(link);
+      } else link.remove();
+    }
     const regions = Array.from(template.content.querySelectorAll("[data-theme-region]"));
     if (regions.some((fresh) => !document.querySelector('[data-theme-region="' + fresh.getAttribute("data-theme-region") + '"]'))) return false;
     for (const fresh of regions) {

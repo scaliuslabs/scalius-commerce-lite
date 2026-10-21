@@ -104,7 +104,7 @@ describe("custom data settings", () => {
     await render();
     await vi.waitFor(() => expect(container.textContent).toContain("From a removed app: Sellers"));
     expect(container.textContent).toContain(t("managedBy", { namespace: "Acme Loyalty" }));
-    expect(container.textContent).toContain("Data from removed apps");
+    expect(container.textContent).toContain("Data left by uninstalled apps");
     expect([...container.querySelectorAll("button")].some((button) => button.textContent === "Delete data")).toBe(true);
   });
 

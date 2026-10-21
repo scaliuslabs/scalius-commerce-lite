@@ -422,6 +422,8 @@ export function enhanceShippingMethods(
       input.value = rate.id;
       input.checked = rate.id === selectedId;
       input.className = "mt-0.5 h-4 w-4 shrink-0 accent-primary";
+      // Named by the method, never by its id (the value), in every accessibility tree.
+      input.setAttribute("aria-label", rate.name);
       const body = document.createElement("span");
       body.className = "min-w-0 flex-1";
       const head = document.createElement("span");

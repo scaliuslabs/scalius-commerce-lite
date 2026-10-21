@@ -75,10 +75,10 @@ export function AccessFields({
         >
           {PRESETS.map((preset) => (
             <label key={preset} className="flex min-h-11 cursor-pointer items-start gap-3 py-2 text-body font-medium">
-              <span className="flex h-lh items-center"><RadioGroupItem value={preset}/></span>
+              <span className="flex h-lh items-center"><RadioGroupItem value={preset} aria-labelledby={`ai-access-${preset}-name`} aria-describedby={`ai-access-${preset}-help`}/></span>
               <span className="space-y-0.5">
-                <span className="block">{t(`preset_${preset}`)}</span>
-                <span className="block font-normal text-muted-foreground">{t(`preset_${preset}Help`)}</span>
+                <span id={`ai-access-${preset}-name`} className="block">{t(`preset_${preset}`)}</span>
+                <span id={`ai-access-${preset}-help`} className="block font-normal text-muted-foreground">{t(`preset_${preset}Help`)}</span>
               </span>
             </label>
           ))}
@@ -89,10 +89,10 @@ export function AccessFields({
           ) : null}
           {allowCustom && (moreOpen || value.preset === "custom") ? (
             <label id="ai-access-custom" className="flex min-h-11 cursor-pointer items-start gap-3 py-2 text-body font-medium">
-              <span className="flex h-lh items-center"><RadioGroupItem value="custom"/></span>
+              <span className="flex h-lh items-center"><RadioGroupItem value="custom" aria-labelledby="ai-access-custom-name" aria-describedby="ai-access-custom-help"/></span>
               <span className="space-y-0.5">
-                <span className="block">{t("preset_custom")}</span>
-                <span className="block font-normal text-muted-foreground">{t("preset_customHelp")}</span>
+                <span id="ai-access-custom-name" className="block">{t("preset_custom")}</span>
+                <span id="ai-access-custom-help" className="block font-normal text-muted-foreground">{t("preset_customHelp")}</span>
               </span>
             </label>
           ) : null}

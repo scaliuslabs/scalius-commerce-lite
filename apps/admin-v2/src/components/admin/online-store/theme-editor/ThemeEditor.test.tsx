@@ -579,6 +579,23 @@ describe("theme editor: live preview and saving", () => {
     expect(status()).not.toBe("conflict");
   });
 
+  it("opening on a stale first-draft revision takes the newer draft instead of naming a conflict", async () => {
+    // The route read a cached workspace from before this editor's own first draft.
+    const newer = workspaceOf(themeWith(HOME));
+    (newer.draft as { revision: number; updatedByName: string | null }).revision = 1;
+    (newer.draft as { updatedByName: string | null }).updatedByName = "Local Admin";
+    api.draft.mockRejectedValueOnce(new AdminApiResponseError("Theme draft changed", 409, "conflict"));
+    render(themeWith(HOME), { noDraft: true, refetch: async () => ({ data: newer }) });
+    await autosaved(1);
+    await settle();
+    expect(status()).not.toBe("conflict");
+    expect(container.textContent).not.toContain("saved this theme");
+    act(() => row("rail").focus());
+    key(row("rail"), { key: "ArrowDown", altKey: true });
+    await autosaved(2);
+    expect(lastSaved().expectedDraftRevision).toBe(1);
+  });
+
   it("saves now with Ctrl+S", async () => {
     render();
     act(() => row("rail").focus());

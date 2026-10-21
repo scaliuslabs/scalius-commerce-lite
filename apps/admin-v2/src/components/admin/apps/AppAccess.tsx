@@ -4,7 +4,8 @@
 import type { ReactNode } from "react";
 import { PROVIDER_PORT_TIERS, type ProviderKind } from "@scalius/shared/plugins/providers/kinds";
 import { Badge } from "~/components/ui/badge";
-import { useMessages } from "~/i18n";
+import { getLocale, useMessages } from "~/i18n";
+import { formatList } from "@scalius/shared/locale-words";
 import { appScopeMessages } from "~/i18n/app-scopes";
 import { installedAppsMessages } from "~/i18n/apps";
 import { customFieldMessages, type CustomFieldMessageKey } from "~/i18n/custom-fields";
@@ -36,6 +37,19 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
  * `consent` is the sentence that agrees to the list ("… can read and change what
  * is listed"): it shows under the list, and only when something is listed.
  */
+const SKIN_UNITS = ["header", "footer", "product_card", "product_main", "listing_main"] as const;
+
+/** What the app's own storefront code draws, in plain words (only what it declares). */
+function storefrontParts(app: Pick<AppDetail, "storefront">, t: (key: string) => string): string {
+  const { sections = [], components = [], skins = [] } = app.storefront ?? {};
+  const parts: string[] = [];
+  if (sections.length > 0) parts.push(t("storefrontPart_sections"));
+  if (components.length > 0) parts.push(t("storefrontPart_blocks"));
+  for (const unit of SKIN_UNITS) if (skins.some((skin) => skin.target === unit)) parts.push(t(`storefrontPart_${unit}`));
+  if (skins.some((skin) => skin.target.startsWith("section:"))) parts.push(t("storefrontPart_section"));
+  return formatList(parts.length > 0 ? parts : [t("storefrontPart_other")], getLocale());
+}
+
 export function AppAccess({ app, consent }: { app: AppDetail; consent?: ReactNode }) {
   const t = useMessages(installedAppsMessages);
   const scopeText = useMessages(appScopeMessages);
@@ -125,7 +139,7 @@ export function AppAccess({ app, consent }: { app: AppDetail; consent?: ReactNod
         {[...new Map((app.extensions ?? []).flatMap((extension) => extension.reads).map((read) => [read.as, read])).values()].map((read) => (read.object
           ? row(`extension-reads:${read.as}`, t("extensionReads", { collection: read.object }), false)
           : row(`extension-reads:${read.as}`, t("extensionReadsFields", { fields: read.customFields.join(", ") }), false)))}
-        {request.storefrontCode ? row("code", t("storefrontCode"), added?.storefrontCode === true) : null}
+        {request.storefrontCode ? row("code", t("storefrontCode", { parts: storefrontParts(app, t) }), added?.storefrontCode === true) : null}
         {request.publicRoutes ? row("public", t("publicRoutes"), added?.publicRoutes === true) : null}
         {request.storefrontScripts.map((host) => {
           // "Loads scripts from {host}", with the host as code wherever the language puts it.

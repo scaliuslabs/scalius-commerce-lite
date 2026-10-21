@@ -9,7 +9,7 @@ const { consent, selected = [], idPrefix = "checkout" } = Astro.props;
     <legend class="text-sm text-foreground" lang={consent.language}>{consent.label}</legend>
     {consent.channels.map((channel) => (
       <label for={`${idPrefix}-marketing-${channel}`} class="flex min-h-11 cursor-pointer items-center gap-3 py-1 text-sm text-foreground">
-        <input id={`${idPrefix}-marketing-${channel}`} type="checkbox" name={`${MARKETING_CONSENT_FIELD}_${channel}`} value={consent.language} checked={selected.includes(channel)} class="size-4 shrink-0 accent-primary" />
+        <input id={`${idPrefix}-marketing-${channel}`} type="checkbox" name={`${MARKETING_CONSENT_FIELD}_${channel}`} value={consent.language} checked={selected.includes(channel)} aria-label={ACCOUNT_MARKETING_COPY[consent.language].channelLabel[channel]} class="size-4 shrink-0 accent-primary" />
         <span lang={consent.language}>{ACCOUNT_MARKETING_COPY[consent.language].channelLabel[channel]}</span>
       </label>
     ))}

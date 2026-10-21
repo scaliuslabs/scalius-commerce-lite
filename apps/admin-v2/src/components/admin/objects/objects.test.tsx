@@ -85,6 +85,11 @@ const shipping: ObjectRecord = {
 const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
 const setArea = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
 
+function typeInto(input: HTMLInputElement, value: string) {
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
 describe("objects", () => {
   let root: Root;
   let container: HTMLDivElement;
@@ -246,11 +251,11 @@ describe("objects", () => {
     await vi.waitFor(() => expect(container.textContent).toContain("From a removed app: Bazaar demo"));
     // An installed app's type still reads as managed by it.
     expect(container.textContent).toContain("Managed by app");
-    expect(container.textContent).toContain("Data from removed apps");
+    expect(container.textContent).toContain("Data left by uninstalled apps");
     expect(container.textContent).toContain("1 object type, 3 entries, and its settings");
     expect(button("Delete data")).toBeUndefined();
     expect(button("Hand over data")).toBeUndefined();
-    expect(container.textContent).toContain("Only a Super Admin can delete it or hand it over.");
+    expect(container.textContent).toContain("Only the store owner can delete it or hand it over.");
     // Whose data it is, and the release it holds back.
     expect(container.textContent).toContain("Belongs to key 1a2b 3c4d 5e6f 7a8b");
     expect(container.textContent).toContain("Version 2.0.0 in your store's code is waiting to install.");
@@ -264,6 +269,9 @@ describe("objects", () => {
     expect(dialog.textContent).toContain("Delete data from “Bazaar demo”?");
     expect(dialog.textContent).toContain("can't be undone");
     const confirm = [...dialog.querySelectorAll<HTMLButtonElement>("button")].find((each) => each.textContent?.trim() === "Delete data")!;
+    expect(confirm.disabled).toBe(true);
+    await act(async () => typeInto(dialog.querySelector("input")!, "Bazaar demo"));
+    expect(confirm.disabled).toBe(false);
     await act(async () => confirm.click());
     await vi.waitFor(() => expect(sdk.postApiV1AdminAppsRemovedDataByIdDelete).toHaveBeenCalledWith({
       path: { id: "scalius.bazaar" },

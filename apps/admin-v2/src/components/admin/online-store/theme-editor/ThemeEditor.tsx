@@ -60,7 +60,7 @@ import { appSettingDefaults } from "../schema-form/app-settings";
 import { useMediaPreviews, type MediaPreviews } from "../schema-form/media-previews";
 import { settingErrors } from "../schema-form/errors";
 import { useFitReason } from "../use-fit-reason";
-import { appBlocksByKey, appSkinsByKey, resolveThemeForStore, toggleProductModule } from "../theme-settings";
+import { appBlocksByKey, appSkinsByKey, resolveThemeForStore, toggleProductModule, withSectionSkin } from "../theme-settings";
 import { themeProblemTarget, type ThemeRevealRequest } from "../theme-reveal";
 import { useOpenThemePreview } from "../theme-preview";
 import type { AiPage } from "./AiDraftDialog";
@@ -771,10 +771,12 @@ export function ThemeEditor({ workspace, refetch }: {
       <SectionPane
         section={selectedSection}
         media={media}
+        apps={workspace.apps}
         canEdit={editable}
         reveal={revealErrors}
         onSelectBlock={(id) => select(id, "tree")}
         onChange={(settings) => editSection(selectedSection.id, (section) => ({ ...section, settings } as Section))}
+        onSkinChange={(update) => editSection(selectedSection.id, (section) => withSectionSkin(section, update))}
       />
     );
     paneActions = {

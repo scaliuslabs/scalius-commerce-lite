@@ -57,6 +57,7 @@ import {
   pluginGrantAdditions,
   pluginGrantKey,
   pluginGrantRequest,
+  pluginHasStorefrontModule,
   appSettingsSections,
   providerOwnSettingKeys,
   providerSettingKeys,
@@ -67,6 +68,7 @@ import {
   type FunctionReadKey,
 } from "@scalius/shared/plugins";
 import { PROVIDER_KINDS, qualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
+import { STOREFRONT_INCIDENT_REASONS } from "@scalius/shared/plugins/storefront-incidents";
 import { appSettingField, appSettingFieldSchema, appSettingValueSchema, providerConnectionSchema } from "../../schemas/app-settings";
 import { ConflictError, ForbiddenError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
@@ -363,6 +365,8 @@ const appDetailSchema = appSummarySchema.extend({
     head: z.boolean(),
     sections: z.array(z.object({ type: z.string(), name: z.string() })),
     components: z.array(z.object({ type: z.string(), name: z.string(), targets: z.array(z.enum(STOREFRONT_COMPONENT_TARGETS)) })),
+    /** Designs (skins) of the store's own parts: a unit (`header`, `product_card`) or a core section (`section:<type>`). */
+    skins: z.array(z.object({ id: z.string(), name: z.string(), target: z.string() })),
     scripts: z.array(z.object({ src: z.string(), placement: z.string(), pages: z.array(z.string()) })),
     themeProblems: z.array(z.object({
       kind: z.enum(["template", "page-preset"]),
@@ -665,6 +669,7 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
       head: manifest.storefront.head,
       sections: manifest.storefront.sections.map((section) => ({ type: section.type, name: section.name })),
       components: manifest.storefront.components.map((component) => ({ type: component.type, name: component.name, targets: [...component.targets] })),
+      skins: manifest.storefront.skins.map((skin) => ({ id: skin.id, name: skin.name, target: skin.target })),
       scripts: manifest.storefront.scripts.map((script) => ({ src: script.src, placement: script.placement, pages: [...script.pages] })),
       themeProblems: storefrontAppThemeProblems(manifest.storefront),
     },
@@ -992,6 +997,61 @@ app.openapi(surfacesRoute, async (c) => {
       + surfaces.listColumns.length + surfaces.providers.length > 0)
     .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
   return ok(c, { apps });
+});
+
+// ── Storefront problems (before `/{id}`) ──
+
+const storefrontProblemSchema = z.object({
+  /** The app. */
+  id: z.string(),
+  /** What the store could not show, why, and what it showed instead (the app's log line). */
+  message: z.string(),
+  kind: z.enum(["section", "component", "skin"]).nullable(),
+  /** The section type, component type or skin id. */
+  type: z.string().nullable(),
+  /** A component's slot or a skin's target (`product_card`, `section:usp_strip`). */
+  target: z.string().nullable(),
+  /** Why: the store cannot run this version here, the app answered late, its code failed, what it drew broke the limits, or it left the part out. */
+  reason: z.enum(STOREFRONT_INCIDENT_REASONS).nullable(),
+  at: z.string(),
+}).openapi("AppStorefrontProblem");
+
+const storefrontProblemsRoute = createRoute({
+  method: "get",
+  path: "/storefront-problems",
+  operationId: "dashboard.apps.storefront_problems_list",
+  tags: ["Admin - Apps"],
+  summary: "List apps whose storefront parts the store recently drew without",
+  description: "The newest storefront render problem of each installed app with storefront parts in the last 24 hours: a section, block or skin a page was drawn without (unavailable, late, failed or refused), as written in the app's log. Pages never fail because of it; the store draws its own instead.",
+  responses: {
+    200: {
+      description: "Recent storefront problems, newest first",
+      content: { "application/json": { schema: successEnvelope(z.object({ problems: z.array(storefrontProblemSchema) })) } },
+    },
+    401: errorResponses[401],
+    403: errorResponses[403],
+  },
+});
+
+app.openapi(storefrontProblemsRoute, async (c) => {
+  noStore(c);
+  const db = c.get("db");
+  const installations = await listPluginInstallations(db);
+  const withStorefront = installations.filter((installation) => pluginHasStorefrontModule(installation.manifest.storefront));
+  const { recentStorefrontProblems } = await import("../../plugins/storefront-incidents");
+  const problems = await recentStorefrontProblems(db, withStorefront.map((installation) => installation.pluginId));
+  const kinds = new Set(["section", "component", "skin"]);
+  return ok(c, {
+    problems: problems.map((problem) => ({
+      id: problem.pluginId,
+      message: problem.message,
+      kind: problem.kind !== null && kinds.has(problem.kind) ? problem.kind as "section" | "component" | "skin" : null,
+      type: problem.type,
+      target: problem.target,
+      reason: problem.reason,
+      at: iso(problem.at),
+    })),
+  });
 });
 
 // ── Registry, upload, update and emergency stop (apps-lifecycle.ts; before `/{id}`) ──

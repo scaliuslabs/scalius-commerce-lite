@@ -71,6 +71,16 @@ export function readLockfile(path = LOCKFILE) {
   }
 }
 
+/**
+ * The sandbox (the Worker Loader that runs uploaded apps) is on when the
+ * lockfile says so or the operator asks for it for one run. `pnpm dev` then
+ * gives both local Workers the loader, as a Paid deploy does: the API for
+ * uploaded apps' server code, the storefront for their storefront parts.
+ */
+export function pluginSandboxEnabled(lockfile, env = process.env, args = []) {
+  return args.includes("--plugin-sandbox") || env.SCALIUS_PLUGIN_SANDBOX === "1" || lockfile.sandbox === true;
+}
+
 /** Developer keys the operator trusts for `pnpm plugin add --registry` (`{ id, name, publicKey }`); malformed entries are dropped. */
 function readTrustedKeys(value) {
   if (!Array.isArray(value)) return [];
