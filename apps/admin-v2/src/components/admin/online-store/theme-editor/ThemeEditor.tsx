@@ -1133,13 +1133,17 @@ export function ThemeEditor({ workspace, refetch }: {
         <Suspense fallback={null}>
           <PublishDialog
             open={publishOpen}
-            onOpenChange={setPublishOpen}
+            onOpenChange={(next) => {
+              setPublishOpen(next);
+              if (!next) draft.clearAppsProblem();
+            }}
             live={draft.published.theme}
             draft={draft.pending ?? draft.saved.theme}
             held={draft.held.length > 0 || draft.pending === null ? Math.max(1, draft.held.length) : 0}
             unopenedAi={unopened}
             sectionName={sectionName}
             publishing={draft.publishing}
+            appsProblem={draft.appsProblem}
             onOpenSection={(id) => {
               setPublishOpen(false);
               const at = (Object.entries(theme.pages.landing).find(([, landing]) => landing.sections.some((section) => section.id === id))?.[0]);

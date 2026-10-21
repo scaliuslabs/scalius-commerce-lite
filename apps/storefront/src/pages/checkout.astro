@@ -99,6 +99,8 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(checkoutLanguage
             <div class="h-4 animate-pulse rounded bg-muted/60" aria-hidden="true"></div>
             <div class="h-4 animate-pulse rounded bg-muted/60" aria-hidden="true"></div>
           </div>
+          {/* Store apps' blocks under the order summary (they fold with it on phones); hidden until one lands. */}
+          <div data-buyer-ui-target="checkout.summary.after" class="mt-4 space-y-3" hidden></div>
         </div>
       </aside>
 

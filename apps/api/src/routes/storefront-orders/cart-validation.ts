@@ -1,5 +1,6 @@
 import { buyerUiBlockSchema, checkoutAttributesSchema, PLUGIN_EXTENSION_RUN, type FunctionCart } from "@scalius/shared/plugins";
 import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
+import { storefrontUiSlotsOn } from "@scalius/shared/plugins/storefront-protocol";
 // Authoritative cart validation preflight.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { InventoryPool } from "@scalius/database/schema";
@@ -60,6 +61,13 @@ import type { StorefrontGiftCardIssue } from "@scalius/core/modules/orders";
 import { shopPresentment, type StoreCurrencyRate } from "@scalius/shared/presentment";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
+
+/**
+ * The UI slots this check answers: the cart page's (checkout's first step)
+ * and the cart drawer's, which both read their cart from it. An app runs only
+ * for a slot it declares, so a slot no app fills costs nothing.
+ */
+const CART_VALIDATION_UI_SLOTS = [...storefrontUiSlotsOn("checkout"), ...storefrontUiSlotsOn("cart_drawer")];
 
 // ─── POST / ──────────────────────────────────────────────────────────────────
 
@@ -271,7 +279,7 @@ app.openapi(cartValidationRoute, async (c) => {
   });
   const attributes = validateCheckoutAttributes(apps, data.attributes);
   let appCart: FunctionCart | null = null;
-  const buyerUi = () => apps.buyerUi?.({ language: c.req.header("x-storefront-language"), locale: c.req.header("x-storefront-locale"), targets: ["checkout.contact.after", "checkout.delivery.after", "cart.page.summary", "checkout.payment.after", "checkout.actions.before"], currency: money.currencyCode, cart: appCart, attributes }) ?? [];
+  const buyerUi = () => apps.buyerUi?.({ language: c.req.header("x-storefront-language"), locale: c.req.header("x-storefront-locale"), targets: CART_VALIDATION_UI_SLOTS, currency: money.currencyCode, cart: appCart, attributes }) ?? [];
   /** App rules, once the platform finds nothing to repair (the signed-in buyer's segments included). */
   const ruleErrorsFor = async (
     valid: boolean,

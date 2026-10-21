@@ -1,5 +1,6 @@
 import { buyerUiBlockSchema, checkoutAttributesSchema } from "@scalius/shared/plugins";
 import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits";
+import { storefrontUiSlotsOn } from "@scalius/shared/plugins/storefront-protocol";
 // Authoritative checkout tax quote.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { requestAppProviders } from "../../plugins/providers/app-providers";
@@ -73,6 +74,9 @@ import {
 } from "./shared";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
+
+/** The UI slots the quote answers: checkout's (the cart page and the payment step, which both draw from it). */
+const TAX_QUOTE_UI_SLOTS = storefrontUiSlotsOn("checkout");
 
 const taxQuoteItemSchema = z.object({
   cartKey: z.string().min(1).max(256).optional().nullable(),
@@ -383,7 +387,7 @@ app.openapi(taxQuoteRoute, async (c) => {
     ), paymentProviders, deferred.gated);
   const toAmount = (minor: number) => fromMinor(minor, quote.decimalPlaces);
   return ok(c, {
-    buyerUi: await apps.buyerUi?.({ language: c.req.header("x-storefront-language"), locale: c.req.header("x-storefront-locale"), targets: ["checkout.contact.after", "checkout.delivery.after", "cart.page.summary", "checkout.payment.after", "checkout.actions.before"], currency: quote.currencyCode, cart: pricing.appCart, attributes, customer: sessionCustomer?.customerId ? { id: sessionCustomer.customerId } : null }) ?? [],
+    buyerUi: await apps.buyerUi?.({ language: c.req.header("x-storefront-language"), locale: c.req.header("x-storefront-locale"), targets: TAX_QUOTE_UI_SLOTS, currency: quote.currencyCode, cart: pricing.appCart, attributes, customer: sessionCustomer?.customerId ? { id: sessionCustomer.customerId } : null }) ?? [],
     valid: true as const,
     quoteFingerprint: await buildStorefrontCheckoutQuoteFingerprint(
       quote,

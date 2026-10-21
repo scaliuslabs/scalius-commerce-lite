@@ -23,6 +23,7 @@ import { queryKeys } from "~/lib/query-keys";
 import { toast } from "~/lib/toast";
 import { formatFileSize } from "../media-manager/utils/formatters";
 import { Fact } from "./AppListingParts";
+import { ThemeAppFallbackNotice } from "./ThemeAppParts";
 
 function useRefreshApps() {
   const queryClient = useQueryClient();
@@ -60,6 +61,7 @@ export function AppStopAction({ app }: { app: AppDetail }) {
             <AlertDialogTitle>{t("stopTitle", { name: app.name })}</AlertDialogTitle>
             <AlertDialogDescription>{t("stopBody")}</AlertDialogDescription>
           </AlertDialogHeader>
+          <ThemeAppFallbackNotice name={app.name} usage={app.themeUsage} action="deactivate" />
           <AlertDialogFooter>
             <AlertDialogCancel disabled={stop.isPending}>{t("cancel")}</AlertDialogCancel>
             <Button type="button" variant="destructive" loading={stop.isPending} onClick={() => stop.mutate()}>

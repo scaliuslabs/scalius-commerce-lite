@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StorefrontIslandContext, StorefrontIslandModule } from "@scalius/shared/plugins/storefront-protocol";
-import { createIslandElement, installAppComponents } from "./app-components";
+import { createDeferredElement, createIslandElement, installAppComponents } from "./app-components";
 
 const cart = vi.hoisted(() => ({ subscribe: vi.fn(), hydrate: vi.fn(), quickAdd: vi.fn() }));
 vi.mock("@/store/cart", () => ({ cartStore: { subscribe: cart.subscribe }, hydrateCartFromStorage: cart.hydrate }));
@@ -229,5 +229,112 @@ describe("app component host installation", () => {
     } finally {
       document.removeEventListener("open-cart", events);
     }
+  });
+});
+
+describe("deferred markup", () => {
+  function deferredMarkup(hydrate: string, inner = "") {
+    const name = `test-scalius-deferred-${++tag}`;
+    customElements.define(name, createDeferredElement());
+    const mount = vi.fn();
+    const load = vi.fn(async () => moduleFor(mount));
+    const islandName = `test-scalius-island-${++tag}`;
+    customElements.define(islandName, createIslandElement(load));
+    const host = document.createElement("div");
+    host.dataset.sxApp = "acme.theme";
+    host.dataset.sxBase = "/_x/acme.theme/release/";
+    host.innerHTML = `<button type="button">Reviews</button><${name} data-hydrate="${hydrate}" style="display:block;min-block-size:24rem"><template>`
+      + `<p class="wall">Wall</p><${islandName} data-island="wall" data-hydrate="load"><p>w</p></${islandName}>${inner.replaceAll("DEFERRED", name)}`
+      + `</template></${name}>`;
+    document.body.append(host);
+    return { host, deferred: host.querySelector<HTMLElement>(name)!, load, mount };
+  }
+  function observeIntersections() {
+    const observers: Array<{ callback: IntersectionObserverCallback; disconnect: ReturnType<typeof vi.fn> }> = [];
+    vi.stubGlobal("IntersectionObserver", class {
+      disconnect = vi.fn();
+      observe = vi.fn();
+      constructor(callback: IntersectionObserverCallback) { observers.push({ callback, disconnect: this.disconnect }); }
+    });
+    const visible = [{ isIntersecting: true }] as IntersectionObserverEntry[];
+    return { observers, show: (index: number) => observers[index]!.callback(visible, {} as IntersectionObserver) };
+  }
+
+  it("lays out nothing until it nears the viewport, then shows its markup and mounts its islands", async () => {
+    const { observers, show } = observeIntersections();
+    const { deferred, load, mount } = deferredMarkup("visible");
+    expect(deferred.querySelector(".wall")).toBeNull();
+    expect(deferred.firstElementChild?.tagName).toBe("TEMPLATE");
+    expect(load).not.toHaveBeenCalled();
+    show(0);
+    expect(deferred.querySelector("template")).toBeNull();
+    expect(deferred.querySelector(".wall")?.textContent).toBe("Wall");
+    expect(deferred.hasAttribute("data-revealed")).toBe(true);
+    expect(observers[0]!.disconnect).toHaveBeenCalled();
+    await vi.waitFor(() => expect(mount).toHaveBeenCalledTimes(1));
+    expect(load).toHaveBeenCalledWith("/_x/acme.theme/release/islands/wall.js");
+    // A queued stale entry changes nothing.
+    show(0);
+    expect(deferred.querySelectorAll(".wall")).toHaveLength(1);
+  });
+
+  it("waits again after a removal before its moment, and shows once", () => {
+    const { observers, show } = observeIntersections();
+    const { host, deferred } = deferredMarkup("visible");
+    deferred.remove();
+    expect(observers[0]!.disconnect).toHaveBeenCalledTimes(1);
+    show(0);
+    expect(deferred.querySelector(".wall")).toBeNull();
+    host.append(deferred);
+    show(1);
+    expect(deferred.querySelectorAll(".wall")).toHaveLength(1);
+    deferred.remove();
+    host.append(deferred);
+    expect(observers).toHaveLength(2);
+  });
+
+  it("shows on the first interaction in the element that holds it", () => {
+    const { host, deferred } = deferredMarkup("interaction");
+    expect(deferred.querySelector(".wall")).toBeNull();
+    host.querySelector("button")!.dispatchEvent(new Event("focusin", { bubbles: true }));
+    expect(deferred.querySelector(".wall")).not.toBeNull();
+  });
+
+  it("shows nested deferred markup at its own moment", () => {
+    const { observers, show } = observeIntersections();
+    const { deferred } = deferredMarkup("visible", '<DEFERRED data-hydrate="visible"><template><p class="deep">Deep</p></template></DEFERRED>');
+    show(0);
+    expect(deferred.querySelector(".deep")).toBeNull();
+    expect(observers).toHaveLength(2);
+    show(1);
+    expect(deferred.querySelector(".deep")?.textContent).toBe("Deep");
+  });
+});
+
+describe("signed-in state", () => {
+  const signOut = () => { document.cookie = "cs_auth=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/"; };
+  afterEach(signOut);
+
+  it("marks the page from the sign-in hint and follows sign-in and sign-out", () => {
+    installAppComponents();
+    signOut();
+    window.dispatchEvent(new Event("pageshow"));
+    expect(document.documentElement.hasAttribute("data-scalius-signed-in")).toBe(false);
+    document.cookie = "cs_auth=1; path=/";
+    window.dispatchEvent(new CustomEvent("customer-login"));
+    expect(document.documentElement.hasAttribute("data-scalius-signed-in")).toBe(true);
+    signOut();
+    window.dispatchEvent(new CustomEvent("customer-logout"));
+    expect(document.documentElement.hasAttribute("data-scalius-signed-in")).toBe(false);
+    expect(customElements.get("scalius-deferred")).toBeDefined();
+  });
+
+  it("tells islands whether the buyer is signed in, read when asked", async () => {
+    let context!: StorefrontIslandContext;
+    element(async () => moduleFor((_island, _props, given) => { context = given; }));
+    await vi.waitFor(() => expect(context).toBeDefined());
+    expect(context.signedIn()).toBe(false);
+    document.cookie = "cs_auth=1; path=/";
+    expect(context.signedIn()).toBe(true);
   });
 });

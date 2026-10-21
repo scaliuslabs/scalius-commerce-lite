@@ -4,18 +4,25 @@
 // (CoreProductCard.astro). The skin gets the same card model (prices in the
 // page's market, photo renditions, the quick-add rules); one that draws
 // nothing, fails or is late gives way to the core card. A grid of app cards
-// is one call to the app (lib/extensions/host.ts).
+// is one call to the app (lib/extensions/host.ts). Apps' card slots
+// (`product_card.badges`, `.meta`) draw on the core card here and on a
+// card skin where it places them, from the same projection.
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import AppSlot from "@/components/apps/AppSlot.astro";
 import Skin from "@/components/apps/Skin.astro";
+import { requestExtensions } from "@/lib/extensions";
 import { productCardData } from "@/lib/extensions/data";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { productCardModel } from "./card-model";
 import CoreProductCard from "./CoreProductCard.astro";
+import type { StorefrontProductCardData } from "@scalius/shared/plugins/storefront-protocol";
 
 type Props = import("astro/types").ComponentProps<typeof CoreProductCard>;
 
 const props = Astro.props;
-const data = async () => {
+let projection: Promise<StorefrontProductCardData> | undefined;
+// Built once, and only when a skin or a slot component draws.
+const data = () => projection ??= (async () => {
   const { resolved } = await currentRequestTheme(Astro.locals);
   const page = { currencySymbol: props.currencySymbol ?? DEFAULT_CURRENCY.symbol, currencyCode: props.currencyCode ?? DEFAULT_CURRENCY.code };
   const model = productCardModel(props.product, {
@@ -29,9 +36,17 @@ const data = async () => {
     position: props.index ?? 0,
     aboveFold: props.aboveFold === true && (props.index ?? 0) < 4,
   };
-};
+})();
+const { filled } = await requestExtensions(Astro.locals, Astro.url);
+const badges = filled.has("product_card.badges");
+const meta = filled.has("product_card.meta");
 ---
 
 <Skin target="product_card" data={data}>
-  <CoreProductCard {...props} />
+  {badges || meta ? (
+    <CoreProductCard {...props} appBadges={badges}>
+      {badges && <AppSlot slot="badges" name="product_card.badges" data={data} />}
+      {meta && <AppSlot slot="meta" name="product_card.meta" data={data} />}
+    </CoreProductCard>
+  ) : <CoreProductCard {...props} />}
 </Skin>

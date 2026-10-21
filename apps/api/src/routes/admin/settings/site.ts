@@ -1,4 +1,5 @@
 import { CATALOG_CHANNEL_IDS } from "@scalius/shared/sales-channels";
+import type { Database } from "@scalius/database/client";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 
 import { STOREFRONT_DECLARATION_THEME_VERSION, readStorefrontAppTemplateTheme, readStorefrontPagePresetSections, type StorefrontThemeDocument } from "@scalius/shared/storefront-theme";
@@ -36,6 +37,7 @@ import {
   createThemePreviewSession,
   THEME_PUBLISH_NOTE_MAX,
   THEME_VERSION_HISTORY_LIMIT,
+  type ThemePublishApps,
   THEME_VERSION_PAGE_LIMIT,
   isValidMediaHostInput,
   saveMediaOptimizationSettings,
@@ -83,7 +85,12 @@ import {
   themeStatusSchema,
 } from "./theme-contract";
 import { readStoreShape, readThemeMedia } from "@scalius/core/modules/storefront";
-import { listPluginInstallations } from "@scalius/core/modules/plugins";
+import {
+  activePluginInstallationsFromRows,
+  activePluginStorefrontExtensions,
+  listPluginInstallations,
+  selectActivePluginInstallations,
+} from "@scalius/core/modules/plugins";
 import { STOREFRONT_COMPONENT_TARGETS, pluginSurfaceKey, storefrontSettingNeeds, type PluginSettingsSchema } from "@scalius/shared/plugins";
 import { isPublicMediaUrl } from "@scalius/shared/platform-config";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -331,8 +338,9 @@ function themeAppSurfaces(installations: PluginInstallations) {
 
 /**
  * The images the theme's app sections name (`image` settings and
- * images in `list` items), read with each active app's own schema, so the
- * editor previews them like the theme's own images.
+ * images in `list` items) and its unit skins' `image` settings, read with
+ * each active app's own schema, so the editor previews them like the
+ * theme's own images.
  */
 function themeAppMediaIds(theme: StorefrontThemeDocument, installations: PluginInstallations): string[] {
   const sections = new Map<string, PluginSettingsSchema>();
@@ -340,13 +348,17 @@ function themeAppMediaIds(theme: StorefrontThemeDocument, installations: PluginI
     if (installation.status !== "active") continue;
     const { storefront } = installation.manifest;
     for (const section of storefront.sections) sections.set(pluginSurfaceKey(installation.pluginId, section.type), section.settings);
+    for (const skin of storefront.skins) sections.set(`skin:${pluginSurfaceKey(installation.pluginId, skin.id)}`, skin.settings);
   }
   const placed = [
     ...theme.pages.home,
     ...Object.values(theme.pages.landing).flatMap((page) => page.sections),
     ...Object.values(theme.pages.templates).flatMap((template) => template.sections),
   ].flatMap((section) => (section.type === "app" ? [{ schema: sections.get(section.settings.app), values: section.settings.values }] : []));
-  // Skins name no images (their settings never do), so only app sections can.
+  // Unit skins name top-level images (section skins and lists never do).
+  for (const skin of Object.values(theme.apps?.skins ?? {})) {
+    if (skin) placed.push({ schema: sections.get(`skin:${skin.app}`), values: skin.values });
+  }
   return [...new Set(placed.flatMap(({ schema, values }) => (schema ? storefrontSettingNeeds(schema, values).mediaIds : [])))];
 }
 
@@ -606,6 +618,19 @@ app.openapi(createRoute({
   return ok(c, draftReceipt({ revision, basePublishedRevision, updatedAt }));
 });
 
+/**
+ * What a publish checks the draft against: the active apps' storefront parts
+ * exactly as the storefront's layout read builds them, and every installed
+ * app's manifest, which names the apps and parts a refusal lists.
+ */
+async function themePublishApps(db: Database): Promise<ThemePublishApps> {
+  const [activeRows, installed] = await Promise.all([selectActivePluginInstallations(db), listPluginInstallations(db)]);
+  return {
+    extensions: activePluginStorefrontExtensions(activePluginInstallationsFromRows(activeRows).values()),
+    installed: installed.map((installation) => ({ pluginId: installation.pluginId, manifest: installation.declaredManifest })),
+  };
+}
+
 app.openapi(createRoute({
   method: "post",
   path: "/theme/publish",
@@ -630,8 +655,9 @@ app.openapi(createRoute({
 }), async (c) => {
   const body = c.req.valid("json");
   const user = c.get("user") as { id?: string } | undefined;
+  const db = c.get("db");
   return ok(c, boundedStatus(await publishThemeDraft(
-    c.get("db"), body.expectedPublishedRevision, body.expectedDraftRevision, user?.id ?? null, body.note ?? null,
+    db, body.expectedPublishedRevision, body.expectedDraftRevision, user?.id ?? null, body.note ?? null, await themePublishApps(db),
   )));
 });
 

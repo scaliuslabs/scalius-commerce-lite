@@ -10,6 +10,7 @@ import { z } from "zod";
 import { PLUGIN_SETTING_KEY, PLUGIN_SETTING_LIST_MAX } from "../plugins/settings-schema";
 import { PLUGIN_PRODUCT_BLOCKS_MAX, PLUGIN_SURFACE_KEY_PATTERN } from "../plugins/storefront";
 import { storefrontSettingBindingsSchema } from "./bindings";
+import { STOREFRONT_COMPONENT_LIMITS } from "../plugins/storefront-protocol";
 
 /** One `list` item's field value. */
 const appSettingItemValue = z.union([z.string().max(5000), z.number().finite(), z.boolean(), z.null()]);
@@ -82,3 +83,37 @@ export const storefrontThemeAppsSchema = storefrontThemeAppsSchemaOf(storefrontS
 export type StorefrontThemeApps = z.infer<typeof storefrontThemeAppsSchema>;
 export type StorefrontThemeSkins = NonNullable<StorefrontThemeApps["skins"]>;
 export type StorefrontThemeSkinUnit = keyof StorefrontThemeSkins;
+
+/** The units a document's `apps.skins` may give an app skin. */
+export const STOREFRONT_THEME_SKIN_UNITS = ["header", "footer", "product_card", "product_main", "listing_main"] as const satisfies readonly StorefrontThemeSkinUnit[];
+
+/**
+ * The images all unit skins' settings may name together (`image` settings
+ * of `apps.skins.*`, `STOREFRONT_COMPONENT_LIMITS.skinImages` per skin),
+ * resolved in the layout read the page already makes.
+ */
+export const STOREFRONT_SKIN_IMAGES_MAX = STOREFRONT_THEME_SKIN_UNITS.length * STOREFRONT_COMPONENT_LIMITS.skinImages;
+
+/** A media id's shape (`media_…`): other values (texts, choices) are never looked up. */
+const MEDIA_ID_SHAPE = /^[a-z]+_[A-Za-z0-9_-]{3,80}$/;
+
+/**
+ * The values of a document's unit skins that could name an image (its
+ * top-level settings' id-shaped strings, in unit then key order, capped):
+ * what the layout read looks up, so it needs no app schema. Each app's
+ * schema later says which of them are images. Reads a stored document
+ * leniently (`apps.skins` as stored).
+ */
+export function storefrontThemeSkinMediaCandidates(skins: unknown): string[] {
+  if (!skins || typeof skins !== "object") return [];
+  const ids = new Set<string>();
+  for (const unit of STOREFRONT_THEME_SKIN_UNITS) {
+    const values = (skins as Record<string, { values?: unknown } | undefined>)[unit]?.values;
+    if (!values || typeof values !== "object" || Array.isArray(values)) continue;
+    for (const value of Object.values(values)) {
+      if (typeof value === "string" && MEDIA_ID_SHAPE.test(value)) ids.add(value);
+      if (ids.size >= STOREFRONT_SKIN_IMAGES_MAX) return [...ids];
+    }
+  }
+  return [...ids];
+}

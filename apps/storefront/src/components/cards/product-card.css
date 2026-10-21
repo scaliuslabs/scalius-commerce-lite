@@ -290,6 +290,16 @@
   margin-inline-start: 0.125rem;
 }
 
+/* Apps' line under the price (the `product_card.meta` slot). */
+.site-root .product-card-app-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+  color: var(--muted-foreground);
+  font-size: var(--theme-text-xs, 0.75rem);
+  line-height: 1.4;
+}
+
 .site-root .product-card-foot {
   display: flex;
   flex-direction: column;

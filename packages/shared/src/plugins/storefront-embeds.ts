@@ -6,6 +6,7 @@
 // and dependency-free: it runs in the storefront and in app tests.
 
 import {
+  STOREFRONT_DEFERRED_TAG,
   STOREFRONT_EMBED_KINDS,
   type StorefrontEmbedKind,
   type StorefrontEmbedRule,
@@ -33,6 +34,18 @@ export interface StorefrontEmbedSplit {
 const EMBED = /<scalius-embed\b([^>]*)>[\s\S]*?<\/scalius-embed>/g;
 const ATTRIBUTE = /([a-z][a-z0-9-]*)="([^"]*)"/g;
 const KINDS = new Set<string>(STOREFRONT_EMBED_KINDS);
+const DEFERRED_EDGE = new RegExp(`<(/?)${STOREFRONT_DEFERRED_TAG}\\b`, "g");
+
+/**
+ * Whether a place in the markup is inside deferred markup (its content is a
+ * `<template>` the browser fills in later): an embed there would cut the
+ * template, so it renders nothing, as the sanitizer leaves it out.
+ */
+function deferredAt(html: string): (position: number) => boolean {
+  if (!html.includes(`<${STOREFRONT_DEFERRED_TAG}`)) return () => false;
+  const edges = [...html.matchAll(DEFERRED_EDGE)].map((match) => ({ at: match.index, step: match[1] ? -1 : 1 }));
+  return (position) => edges.reduce((depth, edge) => (edge.at < position ? depth + edge.step : depth), 0) > 0;
+}
 
 function decode(value: string): string {
   return value.replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#39;/g, "'").replace(/&nbsp;/g, "\u00a0").replace(/&amp;/g, "&");
@@ -42,7 +55,7 @@ function decode(value: string): string {
  * The checked markup cut at its embeds, under one render's rule: each
  * allowed kind up to its count (any other embed is dropped), the rule's
  * appended kinds added at the end when the markup leaves them out, and the
- * required kinds it is missing.
+ * required kinds it is missing. An embed inside deferred markup is dropped.
  */
 export function splitStorefrontEmbeds(html: string, rule: StorefrontEmbedRule): StorefrontEmbedSplit {
   const parts: StorefrontMarkupPart[] = [];
@@ -52,6 +65,7 @@ export function splitStorefrontEmbeds(html: string, rule: StorefrontEmbedRule): 
   let index = 0;
   let last = 0;
   if (html.includes("<scalius-embed")) {
+    const deferred = deferredAt(html);
     for (const match of html.matchAll(EMBED)) {
       parts.push({ kind: "html", html: html.slice(last, match.index) });
       last = match.index + match[0].length;
@@ -61,7 +75,7 @@ export function splitStorefrontEmbeds(html: string, rule: StorefrontEmbedRule): 
       const used = counts.get(kind as StorefrontEmbedKind) ?? 0;
       // A slot embed names one of the unit's slots, each placed once.
       const slot = kind === "slot" ? attributes.get("data-name") ?? "" : null;
-      if (used >= allowed || (slot !== null && (!(rule.slots ?? []).some((name) => name === slot) || slots.has(slot)))) {
+      if (used >= allowed || deferred(match.index) || (slot !== null && (!(rule.slots ?? []).some((name) => name === slot) || slots.has(slot)))) {
         dropped += 1;
         continue;
       }

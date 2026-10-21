@@ -3401,7 +3401,7 @@
         },
         "extensions": {
          "default": [],
-         "maxItems": 9,
+         "maxItems": 12,
          "type": "array",
          "items": {
           "type": "string",
@@ -3409,8 +3409,11 @@
            "checkout.contact.after",
            "checkout.delivery.after",
            "cart.page.summary",
+           "cart.page.below",
            "checkout.payment.after",
            "checkout.actions.before",
+           "checkout.summary.after",
+           "cart_drawer.footer",
            "order.confirmation",
            "account.order",
            "account.overview",
@@ -5086,7 +5089,7 @@
      },
      "extensions": {
       "default": [],
-      "maxItems": 9,
+      "maxItems": 12,
       "type": "array",
       "items": {
        "type": "object",
@@ -5097,8 +5100,11 @@
           "checkout.contact.after",
           "checkout.delivery.after",
           "cart.page.summary",
+          "cart.page.below",
           "checkout.payment.after",
           "checkout.actions.before",
+          "checkout.summary.after",
+          "cart_drawer.footer",
           "order.confirmation",
           "account.order",
           "account.overview",
@@ -5254,7 +5260,7 @@
         },
         "targets": {
          "minItems": 1,
-         "maxItems": 6,
+         "maxItems": 8,
          "type": "array",
          "items": {
           "type": "string",
@@ -5264,6 +5270,8 @@
            "product.buy_box.after",
            "product.below",
            "footer.columns",
+           "product_card.badges",
+           "product_card.meta",
            "page"
           ]
          }

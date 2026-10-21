@@ -41,6 +41,16 @@
   -webkit-overflow-scrolling: touch;
 }
 
+/* Signed-in parts of app markup (the SDK's whenSignedIn()/whenSignedOut()):
+   the browser marks <html data-scalius-signed-in> from the sign-in hint
+   (scripts/app-components.ts), so until it does a page shows its signed-out
+   parts and a guest never sees signed-in UI. Zero specificity, but
+   important: an app's own display rule cannot show the other version. */
+:where(html:not([data-scalius-signed-in]) [data-scalius-when="signed-in"]),
+:where(html[data-scalius-signed-in] [data-scalius-when="signed-out"]) {
+  display: none !important;
+}
+
 /* Arrows and chevrons along the line point the reading way on a right-to-left
    page (Icon.astro marks them); a rotated one keeps its turn. */
 [dir="rtl"] [data-dir-icon]:not([class*="rotate"]) {

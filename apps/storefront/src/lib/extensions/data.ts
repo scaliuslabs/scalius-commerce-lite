@@ -23,7 +23,7 @@ import type {
   StorefrontTile,
 } from "@scalius/shared/plugins/storefront-protocol";
 import { STOREFRONT_SECTION_SKIN_PROJECTIONS } from "@scalius/shared/plugins/storefront-protocol";
-import { STOREFRONT_CORE_ROUTES } from "@scalius/shared/storefront-routes";
+import { STOREFRONT_CORE_ROUTES, STOREFRONT_SEARCH_SCOPE_PARAM as SEARCH_SCOPE_PARAM } from "@scalius/shared/storefront-routes";
 import {
   HOME_PRODUCT_LIST_LIMIT,
   coreSectionSkinSettings,
@@ -60,6 +60,8 @@ import { objectFieldViews } from "@/lib/object-fields";
 import { isVariantAvailable } from "@/lib/product-sellable-variants";
 import { navigationFromCategoryTree, sourceNavigation, type NavigationSource } from "@/components/header/nav-tree";
 import { phoneNavigation } from "@/components/header/phone-navigation";
+import { hasSeveralMarkets, marketCountryOptions, selectedMarketCountry } from "@/lib/market-selector";
+import { MARKET_SELECTION_PATH, stripPresencePath, type MarketMatrix } from "@scalius/shared/markets";
 import type { RequestTheme } from "@/lib/storefront-theme-context";
 import {
   collectionShowsProducts,
@@ -71,14 +73,50 @@ import {
   type HomepageHeaderLead,
 } from "@/lib/homepage-sections";
 
-/** Three levels at most, store paths or https links only. */
+/** Three levels at most, store paths or https links only; a linked category's photo as the item's image. */
 function menuItems(items: readonly NavigationItem[] | undefined, depth = 1): StorefrontMenuItem[] {
   if (!items || depth > 3) return [];
   return items.flatMap((item) => {
     const url = item.href?.trim() ?? "";
     if (!item.title?.trim() || (url && !/^(?:\/(?!\/)|https:\/\/)/.test(url))) return [];
-    return [{ title: item.title.trim(), url: url || "#", children: menuItems(item.subMenu, depth + 1) }];
+    const title = item.title.trim();
+    return [{
+      title,
+      url: url || "#",
+      children: menuItems(item.subMenu, depth + 1),
+      image: item.imageUrl ? storefrontImageOf({ url: item.imageUrl, alt: title }) : null,
+    }];
   });
+}
+
+/** The header's market facts (`StorefrontHeaderData.market`), from the layout read the page already has. */
+export type StorefrontHeaderMarket = NonNullable<StorefrontHeaderData["market"]>;
+
+export function headerMarket(input: {
+  matrix: MarketMatrix | null | undefined;
+  /** The page's presence (null at the root). */
+  presence: string | null;
+  /** The page market's currency, and the shop's (a market without its own sells in it). */
+  currency: string;
+  shopCurrency: string;
+  language: string;
+  /** The page's path (its query is left out: the header is shared by a listing's every filter). */
+  pathname: string;
+}): StorefrontHeaderMarket {
+  const matrix = input.matrix ?? { markets: [] };
+  return {
+    country: selectedMarketCountry(matrix, input.presence),
+    currency: input.currency,
+    language: input.language,
+    selection: hasSeveralMarkets(matrix)
+      ? {
+        action: MARKET_SELECTION_PATH,
+        returnTo: stripPresencePath(input.pathname, input.presence),
+        countries: marketCountryOptions(matrix, input.language, input.shopCurrency)
+          .map((option) => ({ code: option.code, name: option.name, currency: option.currencyCode ?? input.shopCurrency })),
+      }
+      : null,
+  };
 }
 
 /** An image from the media library: its URL, renditions and size. */
@@ -94,18 +132,26 @@ export function storefrontImageOf(asset: { url: string; alt?: string | null; wid
   };
 }
 
+/** A header's search scopes at most (a department select). */
+const HEADER_SEARCH_SCOPES_MAX = 40;
+
 export function headerData(input: {
   theme: RequestTheme;
   storeName: string | null;
   navigation: readonly NavigationItem[];
   categoryTree: { nodes: CategoryNavigationNode[] } | null | undefined;
   page?: StorefrontHeaderData["page"];
+  market?: StorefrontHeaderMarket;
 }): StorefrontHeaderData {
   const { resolved, brand } = input.theme;
   const nodes = input.categoryTree?.nodes ?? [];
   const topBar = resolved.blocks.topBar;
   const settings = topBar.settings as { text?: unknown; link?: unknown };
   const text = topBar.variant !== "none" && typeof settings.text === "string" ? settings.text.trim() : "";
+  // Search within a category: the top published categories (the tree holds published ones only).
+  const searchScopes = nodes.filter((node) => node.parentId === null && node.slug)
+    .slice(0, HEADER_SEARCH_SCOPES_MAX)
+    .map((node) => ({ title: node.name, value: node.slug }));
   return {
     store: {
       name: input.storeName?.trim() || "Store",
@@ -116,8 +162,18 @@ export function headerData(input: {
     menu: menuItems(sourceNavigation(resolved.blocks.navigation.source as NavigationSource, input.navigation, nodes)),
     categories: menuItems(navigationFromCategoryTree(nodes)),
     announcement: text ? { text, url: typeof settings.link === "string" && settings.link ? settings.link : null } : null,
-    routes: { home: STOREFRONT_CORE_ROUTES.home, search: STOREFRONT_CORE_ROUTES.search, cart: STOREFRONT_CORE_ROUTES.cart, account: STOREFRONT_CORE_ROUTES.account },
+    routes: {
+      home: STOREFRONT_CORE_ROUTES.home,
+      search: STOREFRONT_CORE_ROUTES.search,
+      cart: STOREFRONT_CORE_ROUTES.cart,
+      account: STOREFRONT_CORE_ROUTES.account,
+      orders: STOREFRONT_CORE_ROUTES.orders,
+      trackOrder: STOREFRONT_CORE_ROUTES.trackOrder,
+    },
     searchParam: "q",
+    searchScopes,
+    searchScopeParam: SEARCH_SCOPE_PARAM,
+    ...(input.market ? { market: input.market } : {}),
     phoneNavigation: (({ menu, tabBar }) => ({ menu, tabBar }))(phoneNavigation(resolved.blocks)),
     ...(input.page !== undefined ? { page: input.page } : {}),
   };
@@ -330,6 +386,9 @@ export function productPageData(input: {
   const availability = BAND_ORDER.find((band) => bands.includes(band)) ?? "out_of_stock";
   const summary = product.reviews?.summary;
   const brand = product.brand?.name?.trim();
+  const emi = product.emi;
+  // A product without options sells one SKU: its code is the product's.
+  const only = input.options.length === 0 && input.variants.length === 1 ? input.variants[0] : undefined;
   return {
     product: {
       id: product.id,
@@ -341,6 +400,10 @@ export function productPageData(input: {
       price: amount(input.price.current),
       compareAt: compare(input.price.current, input.price.regular),
       priceVaries: input.price.from,
+      sku: only?.sku?.trim() || null,
+      installments: emi && emi.monthlyMinor > 0 && emi.months > 0
+        ? { provider: emi.provider, months: emi.months, monthly: storefrontMoneyOf({ amountMinor: emi.monthlyMinor, currency: page.currencyCode }, page) }
+        : null,
       availability,
       rating: summary && summary.count > 0 ? { average: summary.average, count: summary.count } : null,
       options: input.options.map((option) => ({
@@ -352,6 +415,7 @@ export function productPageData(input: {
         const image = variant.imageUrl ? storefrontImageOf({ url: variant.imageUrl, alt: product.name }) : null;
         return {
           id: variant.id,
+          sku: variant.sku?.trim() || null,
           title: variant.selectedOptions.map((option) => option.value).join(" / ") || product.name,
           options: input.options.map((option) => variant.selectedOptions.find((each) => each.optionDefinitionId === option.id)?.value ?? ""),
           price: amount(price),
@@ -384,6 +448,8 @@ export function listingPageData(input: {
   pagination: { page: number; totalPages: number; total: number; totalIsCapped?: boolean };
   breadcrumbs: ReadonlyArray<{ label: string; href: string }>;
   fields: StorefrontFieldValues;
+  /** A category's published children (the category read's `children`). */
+  children?: ReadonlyArray<{ name: string; slug: string; canonicalPath?: string | null; imageUrl?: string | null }>;
 }): StorefrontListingPage {
   return {
     kind: input.kind,
@@ -397,6 +463,11 @@ export function listingPageData(input: {
     pageCount: input.pagination.totalPages,
     breadcrumbs: input.breadcrumbs.map((crumb) => ({ title: crumb.label, url: crumb.href })),
     fields: input.fields,
+    children: (input.children ?? []).map((child) => ({
+      title: child.name,
+      url: child.canonicalPath?.startsWith("/") ? child.canonicalPath : `/categories/${encodeURIComponent(child.slug)}`,
+      image: child.imageUrl ? storefrontImageOf({ url: child.imageUrl, alt: child.name }) : null,
+    })),
   };
 }
 
