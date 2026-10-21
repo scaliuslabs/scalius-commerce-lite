@@ -1,18 +1,25 @@
 /**
- * Which header, footer, product card, product page or product listing the
- * store draws: the theme's own, or an installed app's skin of it
- * (`apps.skins.<unit>`). With an app's chosen, its settings come first and
- * the built-in settings stay below as the fallback: the store draws the
- * built-in one while the app is not active or draws nothing. Where no app
- * offers a skin of the unit, the built-in settings show alone, as before.
+ * Which design the store draws for a part: the theme's own, or an installed
+ * app's skin of it. A unit (header, footer, product card, product page,
+ * product listing) keeps its choice in `apps.skins.<unit>`; a core section
+ * (a delivery and trust strip, a banner) on its placement, `section.skin`.
+ *
+ * With an app's design chosen, its settings come first. For a unit the
+ * theme's own settings fold below as what the store shows while the app is
+ * off or cannot draw. A section's own settings stay open below: the app's
+ * design draws the same content (its words, items and links), only styled
+ * its way. Where no app offers a design for the part, its settings show
+ * alone, as before. A design the store recently drew without says so here.
  */
 import { useId, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
+import type { StorefrontPlatformSection, StorefrontSkinRef } from "@scalius/shared/storefront-theme";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { useMessages } from "~/i18n";
 import { themeEditorFull } from "~/i18n/theme-editor-panes";
 import type { ThemeApp } from "~/lib/api-query-options/online-store";
+import { StorefrontProblemNotice } from "~/components/admin/apps/StorefrontProblemNotice";
 import { appSettingDefaults, themeAppFields } from "../schema-form/app-settings";
 import { AppSettingFields } from "../schema-form/AppSettingFields";
 import type { MediaPreviews } from "../schema-form/media-previews";
@@ -27,6 +34,8 @@ const BUILT_IN = "built-in";
  * the choice, or folded into the `fallback` group under an app's settings.
  */
 export type SkinSettingsPlace = "alone" | "below" | "fallback";
+
+type UpdateSkin = (update: (current: StorefrontSkinRef | null) => StorefrontSkinRef | null) => void;
 
 /** The built-in settings as the store's fallback, folded until opened. */
 function Fallback({ children }: { children: ReactNode }) {
@@ -57,41 +66,46 @@ function Fallback({ children }: { children: ReactNode }) {
   );
 }
 
-export function AppSkinSettings({ unit, theme, apps, media, setDraft, children }: {
-  unit: AppSkinUnit;
-  theme: Theme;
-  apps: readonly ThemeApp[];
+/** The choice between the theme's design and the apps' designs of one part, with the chosen app's settings. */
+function SkinPicker({ target, offered, chosen, update, media, idPrefix, choiceLabel, builtInLabel, children, keepBelow }: {
+  /** The skin target: a unit or `section:<type>`. */
+  target: string;
+  offered: readonly AppSkinEntry[];
+  chosen: StorefrontSkinRef | null;
+  update: UpdateSkin;
   media: MediaPreviews;
-  setDraft: SetTheme;
-  /** The built-in unit's settings, for where they sit. */
+  idPrefix: string;
+  choiceLabel: string;
+  builtInLabel: string;
   children: (place: SkinSettingsPlace) => ReactNode;
+  /** The part's own settings stay open below an app's design (a section's content). */
+  keepBelow: boolean;
 }) {
   const t = useMessages(themeEditorFull);
   const labelId = useId();
-  const offered: AppSkinEntry[] = apps.flatMap((app) => app.skins.filter((each) => each.target === unit).map((each) => ({ app, skin: each })));
-  const chosen = themeAppSkin(theme, unit);
   if (offered.length === 0 && !chosen) return <>{children("alone")}</>;
   const entry = chosen ? offered.find((each) => each.skin.key === chosen.app) : undefined;
-  const choose = (key: string) => setDraft((current) => {
-    if (key === BUILT_IN) return setThemeAppSkin(current, unit, null);
+  const choose = (key: string) => update((current) => {
+    if (key === BUILT_IN) return null;
     const picked = offered.find((each) => each.skin.key === key);
     // An inactive app stays chosen until another choice replaces it.
-    return picked ? setThemeAppSkin(current, unit, { app: key, values: appSettingDefaults(picked.skin.settings) }) : current;
+    return picked ? { app: key, values: appSettingDefaults(picked.skin.settings) } : current;
   });
   const options = [
-    { value: BUILT_IN, label: t(`skinBuiltIn_${unit}`), help: t("skinBuiltInHelp") },
+    { value: BUILT_IN, label: builtInLabel, help: t("skinBuiltInHelp") },
     ...offered.map(({ app, skin }) => ({
       value: skin.key,
       label: skin.name,
       help: `${skin.description ? `${skin.description} ` : ""}${t("appFrom", { app: app.name })}`,
     })),
     // A chosen app that is not active stays listed, saying so, until another is chosen.
-    ...(chosen && !entry ? [{ value: chosen.app, label: chosen.app, help: t("appInactive") }] : []),
+    ...(chosen && !entry ? [{ value: chosen.app, label: t("skinInactiveLabel"), help: t("appInactive") }] : []),
   ];
+  const [pluginId, skinId] = chosen ? [chosen.app.slice(0, chosen.app.indexOf("/")), chosen.app.slice(chosen.app.indexOf("/") + 1)] : ["", ""];
   return (
-    <div className="space-y-4" data-app-skin={unit}>
+    <div className="space-y-4" data-app-skin={target}>
       <div className="space-y-2">
-        <p id={labelId} className="text-body font-medium">{t(`skinChoice_${unit}`)}</p>
+        <p id={labelId} className="text-body font-medium">{choiceLabel}</p>
         <RadioGroup value={chosen?.app ?? BUILT_IN} aria-labelledby={labelId} onValueChange={choose}>
           {options.map((option) => (
             <label key={option.value} className="flex min-h-11 items-start gap-2 py-1 text-body">
@@ -106,30 +120,90 @@ export function AppSkinSettings({ unit, theme, apps, media, setDraft, children }
       </div>
       {chosen ? (
         <>
+          {entry ? <StorefrontProblemNotice appId={pluginId} part={{ kind: "skin", type: skinId, target }} /> : null}
           {!entry ? (
-            <p role="status" className="text-body text-muted-foreground">{t("skinAppInactive", { app: chosen.app })}</p>
+            <p role="status" className="text-body text-muted-foreground">{t("skinAppInactive")}</p>
           ) : themeAppFields(entry.skin.settings).length > 0 ? (
             <AppSettingFields
-              idPrefix={appSkinFieldPrefix(unit)}
+              idPrefix={idPrefix}
               fields={entry.skin.settings}
               values={chosen.values}
               bindings={chosen.bindings}
-              onBindingsChange={(bindings) => setDraft((current) => {
-                const now = themeAppSkin(current, unit);
-                return now ? setThemeAppSkin(current, unit, { ...now, bindings }) : current;
-              })}
+              onBindingsChange={(bindings) => update((now) => (now ? { ...now, bindings } : now))}
               media={media}
-              onChange={(values) => setDraft((current) => {
-                const now = themeAppSkin(current, unit);
-                return now ? setThemeAppSkin(current, unit, { ...now, values }) : current;
-              })}
+              onChange={(values) => update((now) => (now ? { ...now, values } : now))}
             />
           ) : (
             <p className="text-body text-muted-foreground">{t("skinNoSettings")}</p>
           )}
-          <Fallback>{children("fallback")}</Fallback>
+          {keepBelow ? children("below") : <Fallback>{children("fallback")}</Fallback>}
         </>
       ) : children("below")}
     </div>
+  );
+}
+
+/** The apps' skins of one target, each with its app. */
+function offeredSkins(apps: readonly ThemeApp[], target: string): AppSkinEntry[] {
+  return apps.flatMap((app) => app.skins.filter((each) => each.target === target).map((each) => ({ app, skin: each })));
+}
+
+export function AppSkinSettings({ unit, theme, apps, media, setDraft, children }: {
+  unit: AppSkinUnit;
+  theme: Theme;
+  apps: readonly ThemeApp[];
+  media: MediaPreviews;
+  setDraft: SetTheme;
+  /** The built-in unit's settings, for where they sit. */
+  children: (place: SkinSettingsPlace) => ReactNode;
+}) {
+  const t = useMessages(themeEditorFull);
+  return (
+    <SkinPicker
+      target={unit}
+      offered={offeredSkins(apps, unit)}
+      chosen={themeAppSkin(theme, unit)}
+      update={(change) => setDraft((current) => setThemeAppSkin(current, unit, change(themeAppSkin(current, unit))))}
+      media={media}
+      idPrefix={appSkinFieldPrefix(unit)}
+      choiceLabel={t(`skinChoice_${unit}`)}
+      builtInLabel={t(`skinBuiltIn_${unit}`)}
+      keepBelow={false}
+    >
+      {children}
+    </SkinPicker>
+  );
+}
+
+/** The field ids of a section skin's app settings start with this (`theme-section-skin-usp-1`). */
+export const sectionSkinFieldPrefix = (sectionId: string) => `theme-section-skin-${sectionId}`;
+
+/**
+ * A core section's design: the theme's own, or an app's skin of the section
+ * type (`section:<type>`), with the section's own settings below either way.
+ */
+export function SectionSkinSettings({ section, apps, media, onChange, children }: {
+  section: StorefrontPlatformSection;
+  apps: readonly ThemeApp[];
+  media: MediaPreviews;
+  /** Applies the section's new skin (null: the theme's own design). */
+  onChange: (update: (current: StorefrontSkinRef | null) => StorefrontSkinRef | null) => void;
+  children: ReactNode;
+}) {
+  const t = useMessages(themeEditorFull);
+  return (
+    <SkinPicker
+      target={`section:${section.type}`}
+      offered={offeredSkins(apps, `section:${section.type}`)}
+      chosen={section.skin ?? null}
+      update={onChange}
+      media={media}
+      idPrefix={sectionSkinFieldPrefix(section.id)}
+      choiceLabel={t("skinChoice_section")}
+      builtInLabel={t("skinBuiltIn_section")}
+      keepBelow
+    >
+      {() => children}
+    </SkinPicker>
   );
 }

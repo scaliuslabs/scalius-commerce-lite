@@ -576,7 +576,7 @@ describe("app skins of the theme's units", () => {
     // The built-in settings stay, folded, as what the store shows without the app.
     expect(headerGroups()).toEqual([]);
     const toggle = fallback()!.querySelector<HTMLButtonElement>("button[aria-expanded]")!;
-    expect(toggle.textContent).toBe("Fallback (when the app is unavailable)");
+    expect(toggle.textContent).toBe("Your theme's design settings");
     click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     expect(headerGroups(fallback()!)[0]).toBe("Layout");
@@ -591,7 +591,8 @@ describe("app skins of the theme's units", () => {
     const gone = { ...DEFAULT_STOREFRONT_THEME, apps: { skins: { footer: { app: "acme.gone/footer", values: { note: "kept" } } } } };
     renderPart(gone, EDITOR_PARTS.footer, { kind: "home" }, [STUDIO]);
     expect(radioIn(skinChoice(), "acme.gone/footer").getAttribute("aria-checked")).toBe("true");
-    expect(skinChoice().textContent).toContain("acme.gone/footer isn't active, so your store shows the built-in one.");
+    expect(skinChoice().textContent).toContain("The app for this design isn't active, so your store shows your theme's own design.");
+    expect(skinChoice().textContent).not.toContain("acme.gone/footer");
     click(radioIn(skinChoice(), "acme.studio/footer"));
     expect(latest.apps).toEqual({ skins: { footer: { app: "acme.studio/footer", values: {} } } });
     expect(skinChoice().textContent).toContain("The app has no settings for this.");
