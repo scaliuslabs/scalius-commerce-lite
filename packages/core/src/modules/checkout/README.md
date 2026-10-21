@@ -80,6 +80,8 @@ language with the merchant's edits).
   hash, the cart key and the quote fingerprint) and of the checkout attempt
   hash. Core prices nothing for it: the owning app prices it
   (`cart.line_prices`, `checkout.discounts`) and checks it (`cart.validate`).
+  Only that app's line price applies to the line, and it outranks every
+  price list (`resolvePrice()`); without it the line keeps its one-time price.
   The order line freezes it as its `_purchase_option` property
   (`LINE_PURCHASE_OPTION_PROPERTY_KEY`, after the add-ons), so every
   line-property surface shows it, and the order representation's line

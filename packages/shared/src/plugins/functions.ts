@@ -285,8 +285,10 @@ export const FUNCTION_PRICE_SOURCES = ["sale", "segment", "market", "fx", "base"
 
 /**
  * Per line: where its price came from and the bundle it belongs to (an
- * expanded line's components). Only lines priced at `fx` or `base` take an
- * app price: sale, segment and market lists stay authoritative.
+ * expanded line's components). A one-time line takes an app price only when
+ * it is priced at `fx` or `base`: sale, segment and market lists stay
+ * authoritative. A line bought with a purchase option takes only its owning
+ * app's price, which outranks every list (`resolvePrice()`).
  */
 export const functionLinePriceFactsSchema = z.object({
   lineId: id,
@@ -301,9 +303,10 @@ export const LINE_ADJUSTMENT_MAX_MINOR = 1_000_000_000_000;
 
 /**
  * `prices`: unit prices in the cart currency's minor units, before
- * buyer-input surcharges (they are added on top), only for lines priced at
- * `fx` or `base`. Several apps: the first in priority order that prices a
- * line wins. A line not named keeps its price.
+ * buyer-input surcharges (they are added on top), for one-time lines priced
+ * at `fx` or `base` and for lines bought with the app's own purchase option
+ * (above every list). Several apps: the first in priority order that prices
+ * a line wins. A line not named keeps its price.
  *
  * `adjustments`: add-ons to each unit of a line (an engraving's letters, a
  * gift wrap), applied after the whole price precedence, so sale, segment

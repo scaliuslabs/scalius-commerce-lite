@@ -1,9 +1,10 @@
 import { validateCheckoutAttributes } from "./attributes";
 // App line prices (`cart.line_prices`, docs/platform/PLUGINS.md): a checkout
 // function's unit price for a cart line takes the app place in
-// `resolvePrice()` (sale > segment > market list > app > FX > base), so B2B
-// contract, subscription and tiered prices replace the catalogue price while
-// market and price-list rules stay authoritative.
+// `resolvePrice()` (purchase option > sale > segment > market list > app >
+// FX > base), so B2B contract and tiered prices replace the catalogue price
+// while market and price-list rules stay authoritative, and a purchase
+// option (a subscription, a rental) is priced by the app that offers it.
 //
 // Cart validation prices twice when an app implements the point: a first
 // pass without the submitted-price check gives the app each line's price and
@@ -14,9 +15,13 @@ import { validateCheckoutAttributes } from "./attributes";
 // Rules (pure, `resolveAppLinePrices`):
 // - Apps in priority order (lower first, then app id); the first app that
 //   prices a line wins it.
-// - A line priced by a sale, segment or market list keeps that price: the
-//   answer is skipped and logged for the merchant. So is a gift-card line
-//   (money) and a line that is not in the cart.
+// - A line bought with a purchase option is priced only by the app that
+//   declares the option, and that price outranks every list; another app's
+//   answer for it is skipped and logged. Without the owner's answer the
+//   line keeps its one-time price.
+// - A one-time line priced by a sale, segment or market list keeps that
+//   price: the answer is skipped and logged for the merchant. So is a
+//   gift-card line (money) and a line that is not in the cart.
 // - The price rounds half-up to the market's price increment and is never
 //   zero; buyer-input surcharges are added on top.
 //
@@ -35,6 +40,7 @@ import { LINE_ADJUSTMENTS_PER_LINE_MAX, type FunctionCart, type PluginFunctionOu
 import type { AppLinePrice, ResolvedPriceSource } from "@scalius/shared/market-pricing";
 import { lineAdjustmentProperty, type ResolvedLineProperty } from "@scalius/shared/line-properties";
 import { roundToIncrementMinor } from "@scalius/shared/money";
+import { purchaseOptionAppId } from "@scalius/shared/plugins/ids";
 import { buildStorefrontTaxAllocationLineId } from "../tax";
 import {
     appCartMarketCountry,
@@ -143,7 +149,7 @@ export function createAppLinePricer(
 
 /** The winning app price of each line, by line index (see the rules above). */
 export function resolveAppLinePrices(
-    items: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "isGiftCard" | "priceSource">>,
+    items: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "isGiftCard" | "priceSource" | "purchaseOption">>,
     lineIds: readonly string[],
     results: ReadonlyArray<Pick<CheckoutAppFunctionResult<"cart.line_prices">, "pluginId" | "output">>,
     apps?: Pick<CheckoutAppFunctions, "report">,
@@ -159,6 +165,16 @@ export function resolveAppLinePrices(
             }
             if (prices.has(item.index)) continue;
             if (item.isGiftCard) continue;
+            const option = item.purchaseOption?.id ?? null;
+            if (option) {
+                // The option is its app's offer: only that app prices it, above every list.
+                if (purchaseOptionAppId(option) !== result.pluginId) {
+                    apps?.report(result.pluginId, "cart.line_prices", `Line ${answer.lineId} is bought with ${option}, which only its own app prices; it was skipped.`);
+                    continue;
+                }
+                prices.set(item.index, { amountMinor: answer.unitPriceMinor, pluginId: result.pluginId, purchaseOption: option });
+                continue;
+            }
             if (!APP_PRICEABLE_SOURCES.has(item.priceSource)) {
                 apps?.report(result.pluginId, "cart.line_prices", `Line ${answer.lineId} is priced by a ${item.priceSource} price list, which an app price never replaces; it was skipped.`);
                 continue;
