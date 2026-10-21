@@ -11,7 +11,9 @@ import { formatDiscountBadge } from "@/components/product/lib/pricing-engine";
 import { getProductImageSrcSet, getProductImageUrl, hasProductImage, resolveProductImageUrl } from "@/lib/product-media";
 import { isUnrenderedMediaOriginal } from "@scalius/shared/media-variants";
 import { capImageSrcSet } from "@/lib/responsive-image";
-import { PRODUCT_CONDITION_LABELS } from "@scalius/shared/product-condition";
+import type { ProductCondition } from "@scalius/shared/product-condition";
+import { storefrontCopy, storefrontLanguage } from "@/lib/storefront-copy";
+import { pageLanguage } from "@/lib/store-time-zone";
 import type { StorefrontImageRatio } from "@scalius/shared/storefront-theme";
 import { cssNamedColour } from "./css-colours";
 
@@ -118,6 +120,15 @@ function cardFactValues(product: ProductCardProduct, money: (amount: number) => 
   };
 }
 
+/**
+ * Whether a card states the product's condition: only a used or refurbished
+ * one. "New" is the default of every new product, and on a card it reads as
+ * a new-arrival badge.
+ */
+export function cardCondition(condition: ProductCondition | null | undefined): condition is "used" | "refurbished" {
+  return condition === "used" || condition === "refurbished";
+}
+
 export function productCardModel(
   product: ProductCardProduct,
   options: {
@@ -141,7 +152,7 @@ export function productCardModel(
     (product.customization?.fields.length ?? 0) === 0;
   return {
     name: product.name,
-    condition: product.productCondition ? PRODUCT_CONDITION_LABELS[product.productCondition] : null,
+    condition: cardCondition(product.productCondition) ? storefrontCopy(storefrontLanguage(pageLanguage())).card.condition[product.productCondition!] : null,
     href: `/products/${product.slug}`,
     soldOut,
     image: photo

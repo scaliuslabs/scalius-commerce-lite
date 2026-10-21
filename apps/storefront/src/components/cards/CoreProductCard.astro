@@ -16,6 +16,7 @@ import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { buildStorefrontThemeTokens } from "@scalius/shared/storefront-theme";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { storefrontCopy } from "@/lib/storefront-copy";
+import { cardCondition } from "./card-model";
 import { formatCount } from "@/lib/store-time-zone";
 import {
   listingFilterColumnPx,
@@ -114,7 +115,9 @@ const model = productCardModel(product, {
 });
 const { facts } = model;
 const TitleTag = headingLevel;
-const condition = product.productCondition ? copy.condition[product.productCondition] : null;
+// "New" is every new product's default and reads as a new-arrival badge on a
+// card, so only a used or refurbished item says its condition here.
+const condition = cardCondition(product.productCondition) ? copy.condition[product.productCondition!] : null;
 const details = [facts.packSize, condition].filter(Boolean).join(" · ");
 const keySpecs = card.facts === "key-specs" ? facts.keySpecs : [];
 const swatches = card.facts === "swatches" ? facts.swatches : { items: [], more: 0 };
