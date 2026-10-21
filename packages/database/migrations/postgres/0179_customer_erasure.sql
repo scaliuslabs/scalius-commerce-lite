@@ -68,7 +68,7 @@ $trigger_function$;
 CREATE TRIGGER "evt_customers_updated"
 AFTER UPDATE ON "customers"
 FOR EACH ROW
-WHEN ((NEW."erased_at" IS NULL AND (OLD."name" IS DISTINCT FROM NEW."name" OR OLD."email" IS DISTINCT FROM NEW."email" OR OLD."phone" IS DISTINCT FROM NEW."phone" OR OLD."account_claimed_at" IS DISTINCT FROM NEW."account_claimed_at" OR OLD."phone_verified_at" IS DISTINCT FROM NEW."phone_verified_at" OR OLD."email_verified_at" IS DISTINCT FROM NEW."email_verified_at" OR OLD."origin" IS DISTINCT FROM NEW."origin" OR OLD."merged_into_customer_id" IS DISTINCT FROM NEW."merged_into_customer_id" OR OLD."deleted_at" IS DISTINCT FROM NEW."deleted_at")))
+WHEN ((NEW."erased_at" IS NULL AND (OLD."name" IS DISTINCT FROM NEW."name" OR OLD."email" IS DISTINCT FROM NEW."email" OR OLD."phone" IS DISTINCT FROM NEW."phone" OR OLD."account_claimed_at" IS DISTINCT FROM NEW."account_claimed_at" OR OLD."phone_verified_at" IS DISTINCT FROM NEW."phone_verified_at" OR OLD."email_verified_at" IS DISTINCT FROM NEW."email_verified_at" OR OLD."origin" IS DISTINCT FROM NEW."origin" OR OLD."merged_into_customer_id" IS DISTINCT FROM NEW."merged_into_customer_id" OR OLD."deleted_at" IS DISTINCT FROM NEW."deleted_at" OR OLD."tax_exempt" IS DISTINCT FROM NEW."tax_exempt" OR OLD."tax_exemption_id" IS DISTINCT FROM NEW."tax_exemption_id")))
 EXECUTE FUNCTION scalius_compat."evt_customers_updated_fn"();
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION scalius_compat."evt_customers_erased_fn"()
@@ -109,4 +109,4 @@ AFTER DELETE ON "customer_addresses"
 FOR EACH ROW
 EXECUTE FUNCTION scalius_compat."evt_customer_addresses_deleted_fn"();
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (179, '0179_customer_erasure', 'ebc0400f10a2ec89a52a5622fae0e47520c4c7e7ed90b80e50e9f8ab8863ed38');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (179, '0179_customer_erasure', 'bf9a9563960802364a6a6356137484e921c44b7f8c71f1753e5631315d67dea3');

@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "9a25babc-1376-4a42-a572-f94f047fbcdb",
-  "prevId": "0585c2b8-2373-44cb-a802-d1be01cf9a3f",
+  "id": "e866b580-1337-40f0-9eea-840f43269f7c",
+  "prevId": "1cafbc23-73d5-498f-87bb-a958c1665ea5",
   "tables": {
     "account": {
       "name": "account",
@@ -7421,6 +7421,21 @@
           "notNull": false,
           "autoincrement": false
         },
+        "tax_exempt": {
+          "name": "tax_exempt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "tax_exemption_id": {
+          "name": "tax_exemption_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "erased_at": {
           "name": "erased_at",
           "type": "integer",
@@ -12248,6 +12263,21 @@
         },
         "address_source": {
           "name": "address_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "tax_exempt": {
+          "name": "tax_exempt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "tax_exemption_id": {
+          "name": "tax_exemption_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

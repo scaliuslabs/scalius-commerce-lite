@@ -792,6 +792,9 @@ export const customerDetailSchema = z.object({
   })),
   /** The address book, the default first. */
   addresses: z.array(customerAddressSchema),
+  /** Their orders pay no tax; `taxExemptionId` is the certificate or registration number (null: none). */
+  taxExempt: z.boolean(),
+  taxExemptionId: z.string().nullable(),
 });
 
 // ─────────────────────────────────────────

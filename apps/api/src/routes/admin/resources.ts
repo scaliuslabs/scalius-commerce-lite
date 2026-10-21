@@ -21,7 +21,8 @@ import { encodeListCursorOrNull, type ListCursorShape } from "@scalius/shared/pa
 import { fromMinor } from "@scalius/shared/money";
 import { keysetCondition, keysetOrderBy, readListCursor, type KeysetOrder } from "@scalius/core/utils/keyset";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
-import { buildAppPaymentReviewHoldInsert, buildOrderEventInsert, createOrderSchema, manualOrderPaymentMethodSchema, orderEventIdForRequest, overdueOrderCondition } from "@scalius/core/modules/orders";
+import { buildAppPaymentReviewHoldInsert, buildOrderEventInsert, createOrderSchema, manualOrderPaymentMethodSchema, orderEventIdForRequest, overdueOrderCondition, releaseAppOrderHold } from "@scalius/core/modules/orders";
+import { AppError } from "@scalius/core/errors";
 import { recordOrderPayment } from "@scalius/core/modules/payments";
 import { paymentTermsSchema, RECORDED_PAYMENT_VIAS } from "@scalius/shared/payment-terms";
 import { placeManualOrder } from "./orders/create";
@@ -381,6 +382,51 @@ app.openapi(createRoute({
   const [order] = await readOrderRepresentations(db, [response.id]);
   if (!order) throw new NotFoundError("Order not found");
   return created(c, { order });
+});
+
+// ─── An app's own hold ───────────────────────────────────────────────────────
+
+const releaseHoldBody = z.object({
+  expectedRevision: z.number().int().min(1).openapi({
+    description: "The order `revision` you read; a change since is refused with 409 and the hold stays. Releasing a released hold answers it again whatever the revision.",
+  }),
+}).strict();
+
+app.openapi(createRoute({
+  operationId: "dashboard.resources.orders.release_hold",
+  method: "post",
+  path: "/orders/{id}/release-hold",
+  tags: ["App API - Orders"],
+  summary: "Release the hold your app placed on an order",
+  description: "Releases the hold the calling app placed with `ctx.orders.hold` (a company approver said yes in the app's portal), under the order's revision, which advances. Only that hold: another app's, staff's and the platform's review holds stay with staff. Once no hold is open the order is shipped, handed over and moved on again, and its gift cards and downloads go out when it is paid. Only an app calls it.",
+  request: {
+    params: idParam,
+    headers: idempotencyKeyHeaderSchema,
+    body: { required: true, content: { "application/json": { schema: releaseHoldBody } } },
+  },
+  responses: {
+    200: {
+      description: "The order, with whether the hold was already released",
+      content: { "application/json": { schema: successEnvelope(z.object({ order: OrderResource, replayed: z.boolean() })) } },
+    },
+    ...errorResponses,
+    409: conflictResponse,
+  },
+}), async (c) => {
+  const appPrincipal = c.get("pluginPrincipal");
+  if (!appPrincipal) throw new AppError(403, "app_principal_required", "Only an app releases its own hold here; staff release holds on the order page.");
+  const db = c.get("db");
+  const orderId = c.req.valid("param").id;
+  const result = await releaseAppOrderHold(db, {
+    orderId,
+    pluginId: appPrincipal.pluginId,
+    expectedVersion: c.req.valid("json").expectedRevision,
+  });
+  // The last open hold gone: a settled order's gift cards and downloads go out now.
+  if (!result.replayed) await autoFulfilAfterResponse(c, db, orderId, "app-hold-released");
+  const [order] = await readOrderRepresentations(db, [orderId]);
+  if (!order) throw new NotFoundError("Order not found");
+  return ok(c, { order, replayed: result.replayed });
 });
 
 const recordPaymentHeaders = z.object({

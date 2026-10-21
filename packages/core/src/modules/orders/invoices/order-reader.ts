@@ -9,6 +9,7 @@ import {
   orderReturnLines,
   orderReturns,
   orders,
+  orderTaxSnapshots,
   PaymentRecordStatus,
 } from "@scalius/database/schema";
 import { fromMinor } from "@scalius/shared/money";
@@ -74,6 +75,9 @@ export async function readInvoiceOrderSource(
       fulfillmentStatus: orders.fulfillmentStatus,
       paymentTermsDays: orders.paymentTermsDays,
       paymentDueAt: orders.paymentDueAt,
+      // The buyer's exemption the order was priced with (its tax snapshot, 0178).
+      taxExempt: sql<number | null>`(SELECT ${orderTaxSnapshots.taxExempt} FROM ${orderTaxSnapshots} WHERE ${orderTaxSnapshots.orderId} = ${orders.id})`,
+      taxExemptionId: sql<string | null>`(SELECT ${orderTaxSnapshots.taxExemptionId} FROM ${orderTaxSnapshots} WHERE ${orderTaxSnapshots.orderId} = ${orders.id})`,
       createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
       updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`,
       deletedAt: sql<number | null>`CAST(${orders.deletedAt} AS INTEGER)`,
@@ -131,10 +135,13 @@ export async function readInvoiceOrderSource(
     refundedMinor,
     paymentTermsDays,
     paymentDueAt,
+    taxExempt,
+    taxExemptionId,
     ...orderFacts
   } = order;
   return {
     ...orderFacts,
+    taxExemption: Number(taxExempt) === 1 ? { exemptionId: taxExemptionId ?? null } : null,
     // Net terms as placed: the invoice prints them with the due date.
     paymentTerms: paymentTermsDays !== null && paymentDueAt
       ? { kind: "net", days: paymentTermsDays, dueAt: paymentDueAt.toISOString() }

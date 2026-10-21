@@ -334,6 +334,8 @@ app.openapi(taxQuoteRoute, async (c) => {
     discountCodes: data.discountCodes,
     customerId: sessionCustomer?.customerId ?? null,
     segmentCustomerId: sessionCustomer?.customerId ?? null,
+    // The account's tax exemption, read with its session: quoted as the order will be.
+    taxExemption: sessionCustomer?.taxExemption ?? null,
     customerPhone: data.customerPhone,
     currency: {
       code: currency.code,

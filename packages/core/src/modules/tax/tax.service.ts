@@ -14,6 +14,7 @@ import {
     type TaxMarketInclusion,
     type TaxPlaceType,
     type TaxQuote,
+    type TaxQuoteCustomer,
     type TaxQuoteLineInput,
     type TaxRateDefinition,
     type TaxRegionDefinition,
@@ -261,6 +262,8 @@ export interface StorefrontTaxQuoteInput {
     promotionDiscountAllocation?: TaxDiscountAllocationInput;
     /** The checkout's currency authority; absent reads the store currency. */
     currency?: PricingCurrency;
+    /** The buyer and their tax exemption (`taxExemptionApplies`); absent or null: a guest. */
+    customer?: TaxQuoteCustomer | null;
 }
 
 export interface StorefrontTaxQuoteOptions {
@@ -348,5 +351,6 @@ export async function calculateStorefrontTaxQuote(
         shippingMinor: input.shippingMinor,
         discountMinor: discount.discountMinor,
         discountAllocation: discount.allocation,
+        ...(input.customer ? { customer: input.customer } : {}),
     }, options);
 }

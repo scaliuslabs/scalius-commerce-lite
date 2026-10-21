@@ -10,7 +10,7 @@ import { eraseCustomer } from "./customer-erasure";
 import { restoreCustomer } from "./customers.service";
 
 /** Everything that identifies Abdur Rahim (acct_rahim) and his merged guest record. */
-const PII = ["Abdur Rahim", "Rahim Old", "+8801711111111", "+8801799999999", "rahim@example.test", "rahim.old@example.test", "House 1, Road 2", "Flat 9B", "my gate code is 4417", "203.0.113.7", "rahim-google-sub"];
+const PII = ["Abdur Rahim", "Rahim Old", "+8801711111111", "+8801799999999", "rahim@example.test", "rahim.old@example.test", "House 1, Road 2", "Flat 9B", "my gate code is 4417", "203.0.113.7", "rahim-google-sub", "TIN-RAHIM-7741"];
 
 describe("eraseCustomer", () => {
   let store: ReviewStore;
@@ -22,6 +22,7 @@ describe("eraseCustomer", () => {
       -- A guest record merged into the account: the same person's older contact.
       INSERT INTO customers (id, name, phone, email, origin, merged_into_customer_id, deleted_at)
         VALUES ('cus_old', 'Rahim Old', '+8801799999999', 'rahim.old@example.test', 'order', 'acct_rahim', 1780000000);
+      UPDATE customers SET tax_exempt = 1, tax_exemption_id = 'TIN-RAHIM-7741' WHERE id = 'acct_rahim';
       INSERT INTO customer_history (id, customer_id, name, email, phone, change_type)
         VALUES ('hist_1', 'acct_rahim', 'Abdur Rahim', 'rahim@example.test', '+8801711111111', 'created'),
                ('hist_2', 'cus_old', 'Rahim Old', NULL, '+8801799999999', 'created');

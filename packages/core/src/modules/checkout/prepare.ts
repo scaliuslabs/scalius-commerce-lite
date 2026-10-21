@@ -907,6 +907,8 @@ export async function createStorefrontOrder(
         customerPhone: data.customerPhone,
         // Segment-limited promotions: the signed-in account only, as the commit re-check sees it.
         segmentCustomerId: accountOwnerCustomer?.id ?? null,
+        // A tax-exempt account pays no tax (read with its session; a guest never is).
+        taxExemption: customerIdentity?.taxExemption ?? null,
         currency: requestCurrency,
         taxAuthority: taxAuthoritySnapshot,
         apps: appOptions.apps,

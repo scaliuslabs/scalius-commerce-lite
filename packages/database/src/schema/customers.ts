@@ -41,6 +41,16 @@ export const customers = sqliteTable("customers", {
      */
     mergedIntoCustomerId: text("merged_into_customer_id"),
     /**
+     * The merchant (or an app, through `customers.update`) marked the buyer
+     * tax-exempt (migration 0178): their orders pay no tax
+     * (`taxExemptionApplies` in core tax/region-match.ts). Read only from a
+     * verified identity: a signed-in account at checkout, or the customer
+     * named on a staff or app order. `tax_exemption_id` is the certificate or
+     * registration number, kept on each order's tax snapshot and invoice.
+     */
+    taxExempt: integer("tax_exempt", { mode: "boolean" }).notNull().default(false),
+    taxExemptionId: text("tax_exemption_id"),
+    /**
      * When staff erased the customer's personal data (migration 0179,
      * `eraseCustomer`): contact, addresses, sign-in identities, saved
      * methods, consents and their own words on orders, reviews and

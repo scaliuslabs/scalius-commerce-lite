@@ -118,6 +118,12 @@ export interface InvoiceOrderSnapshot {
    * schema version 3. Whether it is overdue is live state, never printed.
    */
   paymentTerms?: InvoicePaymentTermsSnapshot | null;
+  /**
+   * The buyer was tax-exempt when the order was priced (no tax charged), with
+   * their certificate or registration number. Null when not; absent on
+   * invoices issued before schema version 4.
+   */
+  taxExemption?: { exemptionId: string | null } | null;
   createdAt: string | number;
   updatedAt: string | number;
   items: InvoiceOrderItemSnapshot[];
@@ -125,13 +131,14 @@ export interface InvoiceOrderSnapshot {
 
 /**
  * 1: the original shape. 2: item lines may carry `properties`. 3: the order
- * may carry `paymentTerms`. All read the same way; an older snapshot simply
- * has no buyer inputs or terms.
+ * may carry `paymentTerms`. 4: the order may carry `taxExemption`. All read
+ * the same way; an older snapshot simply has no buyer inputs, terms or
+ * exemption.
  */
-export const INVOICE_SNAPSHOT_SCHEMA_VERSION = 3 as const;
+export const INVOICE_SNAPSHOT_SCHEMA_VERSION = 4 as const;
 
 export interface StoredInvoiceSnapshot {
-  schemaVersion: 1 | 2 | typeof INVOICE_SNAPSHOT_SCHEMA_VERSION;
+  schemaVersion: 1 | 2 | 3 | typeof INVOICE_SNAPSHOT_SCHEMA_VERSION;
   renderVersion: typeof INVOICE_RENDER_VERSION;
   invoiceNumber: number;
   formattedNumber: string;
@@ -265,6 +272,7 @@ export function snapshotInvoiceOrder(
     paymentTerms: order.paymentTerms
       ? { kind: "net", days: order.paymentTerms.days, dueAt: order.paymentTerms.dueAt }
       : null,
+    taxExemption: order.taxExemption ? { exemptionId: order.taxExemption.exemptionId ?? null } : null,
     createdAt: timestamp(order.createdAt),
     updatedAt: timestamp(order.updatedAt),
     items: order.items.map((item) => ({

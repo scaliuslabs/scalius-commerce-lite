@@ -186,6 +186,9 @@ export const CUSTOMER_UPDATED_COLUMNS = [
   "origin",
   "merged_into_customer_id",
   "deleted_at",
+  // Tax exemption (0178), announced from 0179.
+  "tax_exempt",
+  "tax_exemption_id",
 ] as const;
 
 /** Address-book columns whose change is a `customer.updated` of its customer (not timestamps). */
@@ -939,11 +942,12 @@ const INSTALLED_IN_0172: ReadonlySet<string> = new Set([
  * 0179 added customer erasure: `customer.erased` fires when `erased_at` is
  * set, and an erased record announces nothing else (no `customer.updated`
  * for its scrubbed profile or its deleted address book). It re-creates the
- * two guarded triggers; their guards before 0179.
+ * two guarded triggers (and `customers_updated` now also announces 0178's
+ * tax exemption); their guards before 0179.
  */
 export const CUSTOMER_ERASURE_MIGRATION = "0179_customer_erasure";
 export const EVENT_WHEN_BEFORE_0179: Readonly<Record<string, EventCondition>> = {
-  customers_updated: changed(...CUSTOMER_UPDATED_COLUMNS),
+  customers_updated: changed(...CUSTOMER_UPDATED_COLUMNS.filter((column) => column !== "tax_exempt" && column !== "tax_exemption_id")),
   customer_addresses_deleted: notNull(lookup("customers", "id", "id", OLD("customer_id"))),
 };
 /** Triggers 0179 installed for the first time (no earlier form exists). */

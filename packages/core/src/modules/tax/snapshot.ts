@@ -84,5 +84,8 @@ export function orderTaxSnapshotColumns(quote: TaxQuote) {
         providerCalculationId: (quote.jurisdiction as TaxQuote["jurisdiction"] | undefined)?.calculationId ?? null,
         // An SQL literal (one of three words): the order's snapshot binds nothing more.
         addressSource: addressSourceLiteral((quote.jurisdiction as TaxQuote["jurisdiction"] | undefined)?.addressSource),
+        // The buyer's exemption the quote honoured (0178): no tax was charged.
+        taxExempt: sql.raw(quote.exemption ? "1" : "0"),
+        taxExemptionId: quote.exemption?.exemptionId ?? null,
     };
 }

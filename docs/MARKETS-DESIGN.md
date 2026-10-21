@@ -697,10 +697,27 @@ generator keeps the columns `0100` saw for `tax_rates` and `tax_settings`
 (`CACHE_DEP_BASELINE_COLUMNS`). Migration 0116 reinstalls their generated
 triggers. The property and race gate reports zero findings.
 
+**Tax-exempt buyers (audit I9, migration 0178).** Staff (the customer page)
+or an app (`customers.update`, `taxExempt` and `taxExemptionId`) mark a
+customer tax-exempt with an optional certificate or registration number. The
+one rule is `taxExemptionApplies` in `tax/region-match.ts`: an exempt buyer
+pays no tax anywhere the store collects it. The region and provider are still
+resolved; the system provider applies no rate (`ratesForTaxClass`), an app
+provider is asked with `customer: { id, exempt: true, exemptionId }` and an
+answer that still charges tax is refused (`tax_unavailable`). The exemption
+is read only from a verified identity: the signed-in account (it rides the
+session read, so checkout's statement count does not move), or the customer
+staff or an app name on a manual order. A guest is never exempt, whatever
+phone it gives. The order's tax snapshot keeps `tax_exempt` and
+`tax_exemption_id`, an amendment keeps them, and the invoice prints them. An
+exempt buyer pays the listed price: in a market whose prices include tax,
+nothing is taken off it.
+
 **Left for later.** Calling `void` on cancellation and `refund` on a refund
 for app providers (the port and the snapshot's calculation id are ready).
-Duties and import taxes. Tax registration numbers on invoices. Customer tax
-exemptions. Tax overrides per collection.
+Duties and import taxes. The store's own tax registration number on invoices.
+Exemptions limited to some regions, or by segment. Taking included tax off
+an exempt buyer's price. Tax overrides per collection.
 
 ## Store setup (G1a)
 

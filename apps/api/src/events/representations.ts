@@ -545,6 +545,8 @@ export async function readCustomerRepresentations(db: Database, ids: readonly st
       contact: consent.contact || null,
       updatedAt: isoRequired(consent.updatedAt),
     })),
+    taxExempt: customer.taxExempt === true,
+    taxExemptionId: customer.taxExempt === true ? customer.taxExemptionId ?? null : null,
     createdAt: isoRequired(customer.createdAt),
     updatedAt: isoRequired(customer.updatedAt),
     deletedAt: iso(customer.deletedAt),

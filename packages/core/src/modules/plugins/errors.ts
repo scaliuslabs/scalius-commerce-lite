@@ -73,6 +73,8 @@ const STATUS: Partial<Record<PluginErrorCode, number>> = {
   "orders_not_allowed": 403,
   "orders_invalid": 422,
   "orders_not_found": 404,
+  "orders_hold_not_found": 404,
+  "orders_conflict": 409,
   "customers_not_allowed": 403,
   "customers_invalid": 422,
   "customers_not_found": 404,

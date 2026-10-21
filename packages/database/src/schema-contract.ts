@@ -668,9 +668,14 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     sourceSha256: "2ebd2d7e7f51054207bd4a8b15587dd625d0e744dabeae69823f340dfb479172",
   },
   {
+    version: 178,
+    name: "0178_tax_exempt_customers",
+    sourceSha256: "d88cec1c207953eb4c6a8ea9b11ede2cad0dd173481d66ed21d5aadd98e8175d",
+  },
+  {
     version: 179,
     name: "0179_customer_erasure",
-    sourceSha256: "ebc0400f10a2ec89a52a5622fae0e47520c4c7e7ed90b80e50e9f8ab8863ed38",
+    sourceSha256: "bf9a9563960802364a6a6356137484e921c44b7f8c71f1753e5631315d67dea3",
   },
 ] as const;
 

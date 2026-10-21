@@ -1249,9 +1249,16 @@
       "breakpoints": true
     },
     {
+      "idx": 178,
+      "version": "6",
+      "when": 1792618529658,
+      "tag": "0178_tax_exempt_customers",
+      "breakpoints": true
+    },
+    {
       "idx": 179,
       "version": "6",
-      "when": 1792619562182,
+      "when": 1792623426311,
       "tag": "0179_customer_erasure",
       "breakpoints": true
     }

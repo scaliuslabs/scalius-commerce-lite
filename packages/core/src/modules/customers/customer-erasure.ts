@@ -153,6 +153,9 @@ export async function eraseCustomer(
       phoneVerifiedAt: null,
       emailVerifiedAt: null,
       lastAuthenticatedAt: null,
+      // A tax registration number names its holder; the order snapshots keep theirs as issued.
+      taxExempt: false,
+      taxExemptionId: null,
       erasedAt: now,
       deletedAt: sql`coalesce(${customers.deletedAt}, unixepoch())`,
       updatedAt: now,

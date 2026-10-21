@@ -940,6 +940,12 @@ describe("provider-neutral schema upgrades", () => {
         postgresStatements: 9,
       },
       {
+        version: 178,
+        name: "0178_tax_exempt_customers",
+        sqliteStatements: 5,
+        postgresStatements: 5,
+      },
+      {
         version: 179,
         name: "0179_customer_erasure",
         sqliteStatements: 15,
@@ -1213,6 +1219,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 175, name: "0175_promotions_automatic_live" },
           { version: 176, name: "0176_event_demand_approved_apps" },
           { version: 177, name: "0177_saved_method_owner" },
+          { version: 178, name: "0178_tax_exempt_customers" },
           { version: 179, name: "0179_customer_erasure" },
         ],
       });

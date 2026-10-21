@@ -5,7 +5,9 @@
 --     it (evt_customers_erased), and an erased record announces no
 --     customer.updated, neither for its profile nor for its deleted address
 --     book (evt_customers_updated and evt_customer_addresses_deleted are
---     re-created with that guard; scripts/event-outbox-triggers.ts).
+--     re-created with that guard; scripts/event-outbox-triggers.ts). The
+--     re-created evt_customers_updated also announces 0178's tax exemption
+--     (tax_exempt, tax_exemption_id).
 --   conversation_messages stay append-only, except one change: a buyer's
 --     message body may become the erasure marker '[erased]', and nothing
 --     else about the message may change with it.
@@ -58,7 +60,7 @@ DROP TRIGGER IF EXISTS evt_customers_updated;
 DROP TRIGGER IF EXISTS evt_customer_addresses_deleted;
 --> statement-breakpoint
 CREATE TRIGGER `evt_customers_updated` AFTER UPDATE ON `customers`
-WHEN (NEW.`erased_at` IS NULL AND (OLD.`name` IS NOT NEW.`name` OR OLD.`email` IS NOT NEW.`email` OR OLD.`phone` IS NOT NEW.`phone` OR OLD.`account_claimed_at` IS NOT NEW.`account_claimed_at` OR OLD.`phone_verified_at` IS NOT NEW.`phone_verified_at` OR OLD.`email_verified_at` IS NOT NEW.`email_verified_at` OR OLD.`origin` IS NOT NEW.`origin` OR OLD.`merged_into_customer_id` IS NOT NEW.`merged_into_customer_id` OR OLD.`deleted_at` IS NOT NEW.`deleted_at`)) AND EXISTS (SELECT 1 FROM event_demand WHERE filter IN ('*', 'customer.*', 'customer.updated'))
+WHEN (NEW.`erased_at` IS NULL AND (OLD.`name` IS NOT NEW.`name` OR OLD.`email` IS NOT NEW.`email` OR OLD.`phone` IS NOT NEW.`phone` OR OLD.`account_claimed_at` IS NOT NEW.`account_claimed_at` OR OLD.`phone_verified_at` IS NOT NEW.`phone_verified_at` OR OLD.`email_verified_at` IS NOT NEW.`email_verified_at` OR OLD.`origin` IS NOT NEW.`origin` OR OLD.`merged_into_customer_id` IS NOT NEW.`merged_into_customer_id` OR OLD.`deleted_at` IS NOT NEW.`deleted_at` OR OLD.`tax_exempt` IS NOT NEW.`tax_exempt` OR OLD.`tax_exemption_id` IS NOT NEW.`tax_exemption_id`)) AND EXISTS (SELECT 1 FROM event_demand WHERE filter IN ('*', 'customer.*', 'customer.updated'))
 BEGIN
   INSERT INTO `event_outbox` (`id`, `topic`, `resource_type`, `resource_id`, `data`) VALUES ('evt_' || CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) || lower(hex(randomblob(6))), 'customer.updated', 'customer', NEW.`id`, json_object('customerId', NEW.`id`));
 END;
@@ -75,4 +77,4 @@ BEGIN
   INSERT INTO `event_outbox` (`id`, `topic`, `resource_type`, `resource_id`, `data`) VALUES ('evt_' || CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) || lower(hex(randomblob(6))), 'customer.updated', 'customer', OLD.`customer_id`, json_object('customerId', OLD.`customer_id`));
 END;
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (179, '0179_customer_erasure', 'ebc0400f10a2ec89a52a5622fae0e47520c4c7e7ed90b80e50e9f8ab8863ed38');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (179, '0179_customer_erasure', 'bf9a9563960802364a6a6356137484e921c44b7f8c71f1753e5631315d67dea3');

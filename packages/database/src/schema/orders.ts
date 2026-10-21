@@ -828,6 +828,13 @@ export const orderTaxSnapshots = sqliteTable("order_tax_snapshots", {
      * from (pickup, or no address). Null on orders placed before 0119.
      */
     addressSource: text("address_source", { enum: ["shipping", "billing", "origin"] }),
+    /**
+     * The buyer was tax-exempt when the order was priced (migration 0178): no
+     * tax was charged; `tax_exemption_id` is their certificate or
+     * registration number (the invoice shows both).
+     */
+    taxExempt: integer("tax_exempt", { mode: "boolean" }).notNull().default(false),
+    taxExemptionId: text("tax_exemption_id"),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
 }, (table) => [
     index("order_tax_snapshots_created_idx").on(table.createdAt),

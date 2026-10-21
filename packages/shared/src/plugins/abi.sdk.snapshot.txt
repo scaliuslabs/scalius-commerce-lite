@@ -266,6 +266,13 @@ export interface PluginOrders {
         orderId: string;
         reason: string;
     }): Promise<void>;
+    release(input: {
+        orderId: string;
+        expectedRevision: number;
+    }): Promise<{
+        revision: number;
+        replayed: boolean;
+    }>;
     assessRisk(input: {
         orderId: string;
         level: "low" | "medium" | "high";
@@ -756,6 +763,10 @@ export interface PluginRuntimeBridge {
         id: string;
     }>;
     ordersHold?(input: unknown): Promise<void>;
+    ordersRelease?(input: unknown): Promise<{
+        revision: number;
+        replayed: boolean;
+    }>;
     ordersAssessRisk?(input: unknown): Promise<void>;
     ordersRiskHistory?(orderId: unknown): Promise<{
         orders: number;
@@ -2364,6 +2375,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
         pushes: unknown[];
         timeline: unknown[];
         holds: unknown[];
+        releases: unknown[];
         risks: unknown[];
     };
     event: (topic: EventTopic, resource: {

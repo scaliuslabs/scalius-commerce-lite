@@ -8,6 +8,14 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.orders.get": { uncurated: true },
   // The manual-order attempt table replays a repeated Idempotency-Key exactly.
   "dashboard.resources.orders.create": { batch: "forbidden", uncurated: true },
+  // An app releases its own hold (staff are refused: app_principal_required)
+  // under the order's required revision; a repeat answers the released hold
+  // (`replayed`).
+  "dashboard.resources.orders.release_hold": {
+    revision: "required",
+    batch: "forbidden",
+    uncurated: true,
+  },
   "dashboard.resources.payments.list": { uncurated: true },
   // A payment received against an invoice: the payment row's id is derived
   // from the required Idempotency-Key, so a repeat records nothing more.

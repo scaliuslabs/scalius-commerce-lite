@@ -124,7 +124,7 @@ const customerHistoryOrderSchema = z.object({
     createdAt: timestampSchema,
 });
 
-const customerHistoryCustomerSchema = customerDetailSchema.omit({ tags: true, marketing: true, addresses: true }).extend({
+const customerHistoryCustomerSchema = customerDetailSchema.omit({ tags: true, marketing: true, addresses: true, taxExempt: true, taxExemptionId: true }).extend({
     lastOrderAt: nullableTimestampSchema,
     createdAt: timestampSchema,
     updatedAt: timestampSchema,
