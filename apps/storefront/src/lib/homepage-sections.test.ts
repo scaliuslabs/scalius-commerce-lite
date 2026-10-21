@@ -7,6 +7,7 @@ import {
   homepageCollections,
   homepageCollectionsFallback,
   homepageContent,
+  homepageEmptyState,
   homepageLeadSection,
   homepageLead,
   homepagePhoneSections,
@@ -90,6 +91,19 @@ describe("homepage section products", () => {
 });
 
 describe("homepage section rules", () => {
+  it("says a new store has no products instead of a blank homepage, and points at the catalog when sections are hidden", () => {
+    const sections = [section("collections", "c"), section("hero", "empty")];
+    const emptyLists = homepageContent({
+      lists: [{ key: "newest", products: [], category: null, collection: null }] as never,
+      media: [], categories: [], collections: [],
+    } as never, []);
+    expect(homepageEmptyState(sections, emptyLists)).toBe("no-products");
+    // Nothing read: the catalog may still hold products.
+    expect(homepageEmptyState(sections, content({ lists: new Map(), collections: new Map() }))).toBe("browse");
+    expect(homepageEmptyState([{ ...section("collections", "c"), hidden: true }], content())).toBe("browse");
+    expect(homepageEmptyState(sections, content())).toBeNull();
+  });
+
   it("reports the actual lead including text and banner rows, skipping hidden or empty sections", () => {
     const text = section("seo_text", "intro", { heading: "Welcome", body: "Shop here" });
     const hidden = { ...section("banner", "hidden", { heading: "Hidden" }), hidden: true };
