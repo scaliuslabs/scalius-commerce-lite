@@ -738,6 +738,47 @@ describe("theme editor: AI drafts and publishing", () => {
     expect(api.publish.mock.calls[0]![0].body).toMatchObject({ expectedPublishedRevision: 1, expectedDraftRevision: 2, note: "Eid layout" });
   });
 
+  it("keeps the publish dialog open on apps that are not ready, naming their parts and linking each app", async () => {
+    api.publish.mockRejectedValueOnce(new AdminApiResponseError("This theme uses parts of Noor theme, which is not active.", 400, "theme_apps_unavailable", {
+      apps: [
+        {
+          pluginId: "scalius.noor",
+          name: "Noor theme",
+          reason: "app_inactive",
+          parts: [
+            { kind: "skin", type: "noor_header", target: "header", path: "apps.skins.header.app", place: { page: "theme" }, name: "Noor header" },
+            { kind: "section", type: "studio_hero", path: "pages.home.2.settings.app", place: { page: "home", index: 2 }, name: "Studio hero" },
+          ],
+        },
+        { pluginId: "acme.gone", reason: "app_inactive", parts: [{ kind: "product_block", type: "size_chart", path: "blocks.product.apps.0.app", place: { page: "template", template: "product", index: 0 } }] },
+      ],
+      moreParts: 3,
+    }));
+    render();
+    act(() => row("rail").focus());
+    key(row("rail"), { key: "ArrowDown", altKey: true });
+    await autosaved();
+    act(() => button("Publish").click());
+    await ready("[data-publish-dialog]");
+    const dialog = document.querySelector("[data-publish-dialog]")!;
+    await act(async () => [...dialog.querySelectorAll<HTMLButtonElement>("button")].find((each) => each.textContent === "Publish")!.click());
+    await vi.waitFor(() => expect(dialog.querySelector("[data-theme-apps-unavailable]")).not.toBeNull());
+    const alert = dialog.querySelector<HTMLElement>("[data-theme-apps-unavailable]")!;
+    expect(alert.querySelector("[data-theme-app='scalius.noor']")!.textContent).toBe(
+      "Noor theme is not active. Activate it from its page, or remove its parts from the theme:Header (skin 'Noor header')Home page: section 3 'Studio hero'Open Noor theme",
+    );
+    expect(alert.querySelector("[data-theme-app='acme.gone']")!.textContent).toContain("acme.gone is not installed. Add it from Apps");
+    expect(alert.querySelector("[data-theme-app='acme.gone']")!.textContent).toContain("Product page app block");
+    expect([...alert.querySelectorAll("a")].map((link) => [link.textContent, link.getAttribute("href")])).toEqual([
+      ["Open Noor theme", "/admin/apps/$pluginId"],
+      ["Open Apps", "/admin/apps"],
+    ]);
+    expect(alert.textContent).toContain("And 3 more parts not listed here.");
+    // The refusal is the dialog's, not a passing toast.
+    expect(toasts.error).not.toHaveBeenCalled();
+    expect(document.querySelector("[data-publish-dialog]")).not.toBeNull();
+  });
+
   it("lets staff who may only view browse the theme without changing it", () => {
     render(themeWith(HOME), { permissions: ["settings.general.view"] });
     expect(status()).toBe("readOnly");

@@ -208,6 +208,20 @@ describe("themes page", () => {
     expect(api.workspace).toHaveBeenCalled();
   });
 
+  it("lists the apps a refused publish names, with a link to each app's page", async () => {
+    render(workspaceOf(DEFAULT_STOREFRONT_THEME, { published: storefrontTemplateTheme("boutique") }));
+    api.publish.mockRejectedValueOnce(new AdminApiResponseError("Refused.", 400, "theme_apps_unavailable", {
+      apps: [{ pluginId: "scalius.noor", name: "Noor theme", reason: "app_inactive", parts: [{ kind: "skin", type: "noor_header", target: "footer", path: "apps.skins.footer.app", place: { page: "theme" } }] }],
+      moreParts: 0,
+    }));
+    act(() => button("Publish theme").click());
+    await act(async () => confirm("Publish theme").click());
+    const alert = current().querySelector<HTMLElement>("[data-theme-apps-unavailable]")!;
+    expect(alert.textContent).toContain("Noor theme is not active. Activate it from its page, or remove its parts from the theme:Footer (skin)");
+    expect(alert.querySelector("a")?.textContent).toBe("Open Noor theme");
+    expect(toasts.error).not.toHaveBeenCalled();
+  });
+
   it("reloads and says so when another session changed the draft", async () => {
     render(workspaceOf(DEFAULT_STOREFRONT_THEME));
     api.draft.mockRejectedValueOnce(new AdminApiResponseError("Draft changed", 409, "conflict"));

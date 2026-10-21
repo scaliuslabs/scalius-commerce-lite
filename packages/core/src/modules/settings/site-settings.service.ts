@@ -41,6 +41,8 @@ import {
   parseStoredStorefrontThemeDocument,
   storefrontThemeDocumentSchema,
   storefrontThemeTranslationProblems,
+  storefrontThemeAppIssues,
+  storefrontThemeAppProblems,
   storefrontThemeMediaIds,
   storefrontThemeMediaReferences,
   storefrontThemeWithoutMedia,
@@ -50,9 +52,11 @@ import {
   type StorefrontLandingPage,
   type StorefrontPageTemplate,
   type StorefrontSection,
+  type StorefrontThemeAppManifest,
   type StorefrontThemeDocument,
   type ThemeDocumentChange,
 } from "@scalius/shared/storefront-theme";
+import type { StorefrontExtension } from "@scalius/shared/plugins/storefront-components";
 import { mergeSeoDiscoverySettings, type SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import { mergeSeoReturnPolicySettings, type SeoReturnPolicySettings } from "@scalius/shared/seo-return-policy";
 import {
@@ -493,6 +497,47 @@ async function readMissingThemeImages(db: Database, theme: StorefrontThemeDocume
 /** A restore refused because the version names images deleted from Files since (`details.missingImages`: how many). */
 export const THEME_VERSION_IMAGES_MISSING = "theme_version_images_missing";
 
+/**
+ * A publish refused because the draft draws with apps that would fall back
+ * to the store's own design (`details.apps`: each app's id, name, reason and
+ * parts; `details.moreParts`: parts left out of the list).
+ */
+export const THEME_APPS_UNAVAILABLE = "theme_apps_unavailable";
+
+/**
+ * What the store's apps draw, as the publishing route reads it (settings
+ * never reads the plugin tables): the active apps' storefront parts (the
+ * layout's `appExtensions`) and every installed app's manifest, for names.
+ */
+export interface ThemePublishApps {
+  extensions: readonly StorefrontExtension[];
+  installed?: Iterable<StorefrontThemeAppManifest>;
+}
+
+function englishList(names: readonly string[]): string {
+  return names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+}
+
+/**
+ * A theme going live draws only with apps that draw it: every app part it
+ * names (sections, skins, product blocks) belongs to an active app that
+ * still declares it. Otherwise the storefront would silently show the
+ * store's own design there, so publishing refuses and names the apps.
+ */
+function assertThemeApps(theme: StorefrontThemeDocument, apps: ThemePublishApps): void {
+  const issues = storefrontThemeAppIssues(theme, apps.extensions);
+  if (issues.length === 0) return;
+  const problems = storefrontThemeAppProblems(issues, apps.installed ?? []);
+  const named = (reason: string) => problems.apps.filter((app) => app.reason === reason).map((app) => app.name ?? app.pluginId);
+  const inactive = named("app_inactive");
+  const outdated = named("not_declared");
+  const sentences = [
+    ...(inactive.length > 0 ? [`This theme uses parts of ${englishList(inactive)}, which ${inactive.length === 1 ? "is" : "are"} not active. Activate ${englishList(inactive)} in Apps, or remove ${inactive.length === 1 ? "its" : "their"} parts from the theme.`] : []),
+    ...(outdated.length > 0 ? [`${englishList(outdated)} no longer ${outdated.length === 1 ? "offers" : "offer"} some parts this theme uses. Remove those parts from the theme.`] : []),
+  ];
+  throw new AppError(400, THEME_APPS_UNAVAILABLE, sentences.join(" "), problems);
+}
+
 function buildPublishedThemeRevisionGuard(db: Database, expectedRevision: number) {
   return buildBatchGuard(db, expectedRevision === 0
     ? sql`NOT EXISTS (SELECT 1 FROM ${themeSettings} WHERE ${themeSettings.id} = ${THEME_SETTINGS_ID})`
@@ -685,7 +730,9 @@ function publishedThemeWriteStatement(db: Database, serialized: string, expected
  * its version row (with what changed since the previous live document and
  * the merchant's note), prunes history to THEME_VERSION_HISTORY_LIMIT and
  * moves the draft onto the new live revision, so the draft is always based
- * on what is live and nothing is half-published.
+ * on what is live and nothing is half-published. A draft drawing with an app
+ * that is not active, or no longer declares the part, is refused
+ * (`theme_apps_unavailable`); without `apps`, no app is active.
  */
 export async function publishThemeDraft(
   db: Database,
@@ -693,6 +740,7 @@ export async function publishThemeDraft(
   expectedDraftRevision: number,
   actorId: string | null = null,
   note: string | null = null,
+  apps: ThemePublishApps = { extensions: [] },
 ): Promise<ThemeStatus> {
   assertNonnegativeRevision(expectedPublishedRevision, "published");
   if (!Number.isInteger(expectedDraftRevision) || expectedDraftRevision < 1) {
@@ -709,6 +757,7 @@ export async function publishThemeDraft(
   }
   const normalized = serializeThemeSettings(workspace.draft.theme);
   await assertThemeReferences(db, normalized.theme);
+  assertThemeApps(normalized.theme, apps);
   const changes = compareThemeDocuments(workspace.published.theme, normalized.theme);
   const meta: ThemeVersionMeta = {
     changes: changes.slice(0, THEME_VERSION_CHANGES_MAX),
