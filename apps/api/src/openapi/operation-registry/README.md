@@ -8,8 +8,9 @@ metadata; the plugin dispatch, the MCP server and the CLI read that metadata.
 
 `x-scalius-agent.stability` puts every operation in one tier:
 
-- **stable**: the frozen app API (v2.0). A third-party app calls only these
-  through `ctx.api.call`. `stable-operations.snapshot.json` records their
+- **stable**: the frozen app API (v2.0), exactly the operations the sealed
+  app-name table `STABLE_APP_OPERATIONS` lists. A third-party app calls only
+  these through `ctx.api.call`. `stable-operations.snapshot.json` records their
   request and response schemas and `stable-operations.test.ts` accepts only
   additive changes. A breaking change is a new operation.
 - **beta**: may change in any release. Bundled first-party apps may call it;
@@ -85,14 +86,18 @@ mirror a dashboard screen, an editor section or a summary card.
   never stops the others). An item's id derives from its key, per caller and
   operation, so a retry with any `Idempotency-Key`, or a call racing it, creates
   nothing twice (`routes/admin/resources-batch.ts`).
-- **Apps name an operation by resource and verb.** `ctx.api.call` takes the
-  app name (`orders.get`, `products.create`, `objects.upsert`), never the
-  operation id: `dashboard.resources.` or `dashboard.` is dropped, and where
-  the dashboard has its own operation beside the resource one
-  (`dashboard.products.create`), the resource owns the name and the
-  dashboard's has none (`@scalius/shared/plugins/app-operations`).
-  `stable-operations.snapshot.json` is keyed by app name, so the alias table
-  is sealed with the contract. Agents, MCP and the CLI keep operation ids.
+- **Apps name an operation by resource and verb, from one sealed table.**
+  `ctx.api.call` takes the app name (`orders.get`, `fulfillments.void`,
+  `price_lists.set_prices`, `object_types.create`), never the operation id.
+  `STABLE_APP_OPERATIONS` (`@scalius/shared/plugins/app-operations`) maps
+  each designed name, `<resource>.<verb phrase>` with the phrase starting
+  with a verb from the closed `APP_OPERATION_VERBS` list, to one operation,
+  and is the stable tier itself: a registry row never says `stable`. Adding
+  a route never moves a sealed name. Beta operations keep a derived name
+  (`dashboard.resources.` or `dashboard.` dropped, the resource twin owning
+  the name), which never takes a sealed one.
+  `stable-operations.snapshot.json` is keyed by app name, so the table is
+  sealed with the contract. Agents, MCP and the CLI keep operation ids.
 - **One lane per owner.** Operations reach the merchant's data; an app's
   own data goes through `ctx`. An app writes typed order timeline lines with
   `ctx.timeline.add` (`orders.comment_add`, the staff note, is beta), and its

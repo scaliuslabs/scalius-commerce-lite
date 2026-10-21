@@ -99,7 +99,7 @@ describe("ctx.api.call as a plugin principal", () => {
     const read = await call("orders.get", { path: { id: "ord_rbac1" } });
     expect(read).toMatchObject({ ok: true, status: 200, error: null, data: { id: "ord_rbac1", status: "pending" } });
 
-    const write = await call("orders.update_status", { path: { id: "ord_rbac1" }, body: { status: "confirmed" }, idempotencyKey: "plugin-status-1" });
+    const write = await call("orders.set_status", { path: { id: "ord_rbac1" }, body: { status: "confirmed" }, idempotencyKey: "plugin-status-1" });
     expect(write.error).toBeNull();
     expect(sqlite.prepare("SELECT actor_id FROM order_events WHERE order_id = 'ord_rbac1' AND actor_id IS NOT NULL").all())
       .toContainEqual({ actor_id: "owner" });
@@ -124,7 +124,7 @@ describe("ctx.api.call as a plugin principal", () => {
   });
 
   it("names a schema refusal validation_error, as the SDK's contract double does", async () => {
-    const refused = await call("orders.update_status", { path: { id: "ord_rbac1" }, body: { status: 42 }, idempotencyKey: "plugin-status-bad" });
+    const refused = await call("orders.set_status", { path: { id: "ord_rbac1" }, body: { status: 42 }, idempotencyKey: "plugin-status-bad" });
     expect(refused).toMatchObject({ ok: false, status: 400, error: { code: "validation_error" } });
   });
 
@@ -225,7 +225,7 @@ describe("ctx.api.call as a plugin principal", () => {
     expect(await call("settings.email_get")).toMatchObject({ ok: false, status: 403, error: { code: "api_operation_not_stable" } });
     expect(await call("team.users.list")).toMatchObject({ ok: false, status: 403, error: { code: "api_operation_not_stable" } });
     expect(audit()).toContainEqual({ plugin_id: "acme.rbac", operation_id: "dashboard.orders.invoice_get", outcome: "denied", http_status: 403, error_class: "operation_forbidden" });
-    expect((await call("settings.business_get")).ok).toBe(true);
+    expect((await call("settings.get_business")).ok).toBe(true);
   });
 
   it("lets a bundled first-party app call beta operations, never internal or security ones", async () => {

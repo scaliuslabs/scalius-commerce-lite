@@ -29,22 +29,21 @@ export const DASHBOARD_MARKETING_OPERATIONS = {
     limits: { response: 16_384 },
   },
   "dashboard.analytics.update": { revision: "required" },
-  "dashboard.discounts.activate": { stability: "stable", revision: "required" },
+  "dashboard.discounts.activate": { revision: "required" },
   "dashboard.discounts.archive": {
-    stability: "stable",
     risk: "destructive",
     revision: "required",
   },
-  "dashboard.discounts.create": { stability: "stable" },
-  "dashboard.discounts.get": { stability: "stable" },
+  "dashboard.discounts.create": {},
+  "dashboard.discounts.get": {},
   // Page-numbered (dashboard-shaped): beta until a cursor list joins the stable API.
   "dashboard.discounts.list": {},
-  "dashboard.discounts.pause": { stability: "stable", revision: "required" },
+  "dashboard.discounts.pause": { revision: "required" },
   "dashboard.discounts.preview": {
     risk: "read",
     revision: "required",
   },
-  "dashboard.discounts.update": { stability: "stable", revision: "required" },
+  "dashboard.discounts.update": { revision: "required" },
   "dashboard.meta_conversions.get": { limits: { response: 16_384 } },
   "dashboard.meta_conversions.logs_cleanup": {
     risk: "destructive",

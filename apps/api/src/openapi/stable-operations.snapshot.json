@@ -2662,7 +2662,7 @@
     ]
    }
   },
-  "content.create": {
+  "pages.create": {
    "operationId": "dashboard.content.create",
    "method": "POST",
    "path": "/api/v1/admin/pages",
@@ -2872,7 +2872,7 @@
     ]
    }
   },
-  "content.get": {
+  "pages.get": {
    "operationId": "dashboard.content.get",
    "method": "GET",
    "path": "/api/v1/admin/pages/{id}",
@@ -3074,7 +3074,7 @@
     ]
    }
   },
-  "content.update": {
+  "pages.update": {
    "operationId": "dashboard.content.update",
    "method": "PUT",
    "path": "/api/v1/admin/pages/{id}",
@@ -5244,7 +5244,7 @@
     ]
    }
   },
-  "customers.addresses_list": {
+  "customer_addresses.list": {
    "operationId": "dashboard.customers.addresses_list",
    "method": "GET",
    "path": "/api/v1/admin/customers/{id}/addresses",
@@ -5584,7 +5584,7 @@
     ]
    }
   },
-  "customers.marketing_get": {
+  "customers.get_marketing": {
    "operationId": "dashboard.customers.marketing_get",
    "method": "GET",
    "path": "/api/v1/admin/customers/{id}/marketing",
@@ -5845,7 +5845,7 @@
     ]
    }
   },
-  "customers.tags_list": {
+  "customer_tags.list": {
    "operationId": "dashboard.customers.tags_list",
    "method": "GET",
    "path": "/api/v1/admin/customers/tags",
@@ -5924,7 +5924,7 @@
     ]
    }
   },
-  "customers.tags_set": {
+  "customers.set_tags": {
    "operationId": "dashboard.customers.tags_set",
    "method": "PUT",
    "path": "/api/v1/admin/customers/{id}/tags",
@@ -8309,7 +8309,7 @@
     ]
    }
   },
-  "inventory.levels": {
+  "inventory.get_levels": {
    "operationId": "dashboard.inventory.levels",
    "method": "GET",
    "path": "/api/v1/admin/inventory/{variantId}/levels",
@@ -8408,7 +8408,7 @@
     ]
    }
   },
-  "inventory.product_levels": {
+  "inventory.list_levels": {
    "operationId": "dashboard.inventory.product_levels",
    "method": "GET",
    "path": "/api/v1/admin/inventory/levels",
@@ -9753,7 +9753,7 @@
     ]
    }
   },
-  "orders.fulfillment_void": {
+  "fulfillments.void": {
    "operationId": "dashboard.orders.fulfillment_void",
    "method": "POST",
    "path": "/api/v1/admin/orders/{id}/fulfillments/{fulfillmentId}/void",
@@ -9924,7 +9924,7 @@
     ]
    }
   },
-  "orders.pickup_ready": {
+  "orders.mark_pickup_ready": {
    "operationId": "dashboard.orders.pickup_ready",
    "method": "POST",
    "path": "/api/v1/admin/orders/{id}/pickup-ready",
@@ -10012,7 +10012,7 @@
     ]
    }
   },
-  "orders.return_get": {
+  "returns.get": {
    "operationId": "dashboard.orders.return_get",
    "method": "GET",
    "path": "/api/v1/admin/orders/{id}/returns/{returnId}",
@@ -10332,7 +10332,7 @@
     ]
    }
   },
-  "orders.returns": {
+  "returns.list": {
    "operationId": "dashboard.orders.returns",
    "method": "GET",
    "path": "/api/v1/admin/orders/{id}/returns",
@@ -10647,7 +10647,7 @@
     ]
    }
   },
-  "orders.timeline": {
+  "order_timeline.list": {
    "operationId": "dashboard.orders.timeline",
    "method": "GET",
    "path": "/api/v1/admin/orders/{id}/timeline",
@@ -11004,7 +11004,7 @@
     ]
    }
   },
-  "orders.update_status": {
+  "orders.set_status": {
    "operationId": "dashboard.orders.update_status",
    "method": "PUT",
    "path": "/api/v1/admin/orders/{id}/status",
@@ -11110,7 +11110,7 @@
     ]
    }
   },
-  "product_variants.retire": {
+  "variants.retire": {
    "operationId": "dashboard.product_variants.retire",
    "method": "DELETE",
    "path": "/api/v1/admin/products/{id}/variants/{variantId}",
@@ -11189,7 +11189,7 @@
     ]
    }
   },
-  "products.publications_set": {
+  "products.set_publications": {
    "operationId": "dashboard.products.publications_set",
    "method": "PUT",
    "path": "/api/v1/admin/products/{id}/publications",
@@ -14433,7 +14433,7 @@
     ]
    }
   },
-  "price_lists.prices_list": {
+  "price_lists.list_prices": {
    "operationId": "dashboard.resources.price_lists.prices_list",
    "method": "GET",
    "path": "/api/v1/admin/resources/price-lists/{id}/prices",
@@ -14525,7 +14525,7 @@
     ]
    }
   },
-  "price_lists.prices_set": {
+  "price_lists.set_prices": {
    "operationId": "dashboard.resources.price_lists.prices_set",
    "method": "PUT",
    "path": "/api/v1/admin/resources/price-lists/{id}/prices",
@@ -16647,7 +16647,7 @@
     ]
    }
   },
-  "theme.section_settings_set": {
+  "theme.set_section_settings": {
    "operationId": "dashboard.resources.theme.section_settings_set",
    "method": "POST",
    "path": "/api/v1/admin/resources/theme/section-settings",
@@ -17649,7 +17649,7 @@
     ]
    }
   },
-  "sales_channels.products": {
+  "sales_channels.list_products": {
    "operationId": "dashboard.sales_channels.products",
    "method": "GET",
    "path": "/api/v1/admin/settings/sales-channels/{id}/products",
@@ -17732,7 +17732,7 @@
     ]
    }
   },
-  "settings.business_get": {
+  "settings.get_business": {
    "operationId": "dashboard.settings.business_get",
    "method": "GET",
    "path": "/api/v1/admin/settings/business",
@@ -18125,7 +18125,7 @@
     ]
    }
   },
-  "objects.types.create": {
+  "object_types.create": {
    "operationId": "objects.types.create",
    "method": "POST",
    "path": "/api/v1/admin/objects/types",
@@ -18275,7 +18275,7 @@
     ]
    }
   },
-  "objects.types.delete": {
+  "object_types.delete": {
    "operationId": "objects.types.delete",
    "method": "DELETE",
    "path": "/api/v1/admin/objects/types/{type}",
@@ -18322,7 +18322,7 @@
    },
    "output": null
   },
-  "objects.types.get": {
+  "object_types.get": {
    "operationId": "objects.types.get",
    "method": "GET",
    "path": "/api/v1/admin/objects/types/{type}",
@@ -18379,7 +18379,7 @@
     ]
    }
   },
-  "objects.types.list": {
+  "object_types.list": {
    "operationId": "objects.types.list",
    "method": "GET",
    "path": "/api/v1/admin/objects/types",
@@ -18421,7 +18421,7 @@
     ]
    }
   },
-  "objects.types.update": {
+  "object_types.update": {
    "operationId": "objects.types.update",
    "method": "PATCH",
    "path": "/api/v1/admin/objects/types/{type}",

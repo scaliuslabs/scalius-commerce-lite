@@ -67,13 +67,11 @@ export const DASHBOARD_ORDER_OPERATIONS = {
     batch: "forbidden",
   },
   "dashboard.orders.fulfillment_void": {
-    stability: "stable",
     revision: "optional",
     batch: "forbidden",
   },
   // A repeat returns the first mark; the Idempotency-Key is optional.
   "dashboard.orders.pickup_ready": {
-    stability: "stable",
     revision: "optional",
     batch: "forbidden",
   },
@@ -149,13 +147,13 @@ export const DASHBOARD_ORDER_OPERATIONS = {
     idempotency: "required",
     revision: "required",
   },
-  "dashboard.orders.return_get": { stability: "stable" },
+  "dashboard.orders.return_get": {},
   "dashboard.orders.return_receive": {
     idempotency: "required",
     revision: "required",
   },
   "dashboard.orders.return_reconcile": {},
-  "dashboard.orders.returns": { stability: "stable" },
+  "dashboard.orders.returns": {},
   "dashboard.orders.shipment_delete": {
     risk: "destructive",
     openWorld: true,
@@ -183,22 +181,20 @@ export const DASHBOARD_ORDER_OPERATIONS = {
     batch: "forbidden",
   },
   "dashboard.orders.shipments": {},
-  "dashboard.orders.timeline": { stability: "stable" },
+  "dashboard.orders.timeline": {},
   "dashboard.orders.support_request_update": {
     openWorld: true,
     revision: "optional",
     batch: "forbidden",
   },
-  "dashboard.orders.update_details": { stability: "stable", revision: "required" },
+  "dashboard.orders.update_details": { revision: "required" },
   "dashboard.orders.fulfillment_location_set": { revision: "required" },
   "dashboard.orders.update_status": {
-    stability: "stable",
     revision: "optional",
     openWorld: true,
     batch: "forbidden",
   },
   "dashboard.orders.mark_delivered": {
-    stability: "stable",
     revision: "optional",
     openWorld: true,
     batch: "forbidden",

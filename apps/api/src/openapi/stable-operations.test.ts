@@ -12,8 +12,9 @@
 //   3. the snapshot equals the current contract exactly, so an additive
 //      change is reviewed: accept it with `vitest run -u` on this file.
 //
-// The snapshot is keyed by app name (`orders.get`, plugins/app-operations.ts):
-// the one name an app passes to `ctx.api.call`, sealed with its contract.
+// The snapshot is keyed by app name (`orders.get`): the one name an app passes
+// to `ctx.api.call`, from the sealed table `STABLE_APP_OPERATIONS`
+// (`@scalius/shared/plugins/app-operations`), which is also the stable tier.
 //
 // A breaking change needs a new operation (or a new plugin API version), not
 // an edited snapshot. Before the v2 lock a deliberate break (a security fix)
@@ -29,6 +30,7 @@ import { eventDataTruncation } from "@scalius/shared/events";
 import { AGENT_COMPONENT_SCHEMAS, AGENT_OPERATIONS } from "../generated/agent-operations.gen";
 import { isOperationAvailableToPlugin, pluginRbacSatisfied } from "../plugins/authority";
 import { appOperationName, resolveAppOperation } from "../plugins/app-operations";
+import { STABLE_APP_OPERATIONS, STABLE_APP_OPERATION_NAME, STABLE_OPERATION_IDS } from "@scalius/shared/plugins/app-operations";
 import type { AgentOperationManifestEntry } from "./agent-operation-manifest";
 import { referencedComponentSchemas } from "@scalius/shared/openapi-schema-refs";
 import { inputBreakingChanges, schemaBreakingChanges } from "@scalius/shared/schema-compat";
@@ -371,12 +373,20 @@ describe("the stable app API", () => {
     expect([...new Set(unmarked)]).toEqual([]);
   });
 
-  it("names every operation once, by resource and verb, never by the dashboard's route tree", () => {
-    for (const operation of stable) {
-      const name = appOperationName(operation.operationId);
-      expect(name, operation.operationId).toMatch(/^(?!dashboard\.|resources\.)[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/u);
-      expect(resolveAppOperation(name!)?.operationId).toBe(operation.operationId);
+  it("names every operation once, from the sealed table, by resource and a closed-list verb", () => {
+    // The table is the stable tier: every entry is a known stable operation and every stable operation has its entry.
+    const ids = new Set(AGENT_OPERATIONS.map((operation) => operation.operationId));
+    expect(Object.values(STABLE_APP_OPERATIONS).filter((operationId) => !ids.has(operationId))).toEqual([]);
+    expect(stable.map((operation) => operation.operationId).sort()).toEqual([...STABLE_OPERATION_IDS].sort());
+    expect(new Set(Object.values(STABLE_APP_OPERATIONS)).size).toBe(Object.keys(STABLE_APP_OPERATIONS).length);
+    for (const [name, operationId] of Object.entries(STABLE_APP_OPERATIONS)) {
+      expect(name, operationId).toMatch(STABLE_APP_OPERATION_NAME);
+      expect(name, operationId).not.toMatch(/^(dashboard|resources)\./u);
+      expect(appOperationName(operationId)).toBe(name);
+      expect(resolveAppOperation(name)?.operationId).toBe(operationId);
     }
+    // A derived (beta) name never takes a sealed one, and a sealed operation has only its sealed name.
+    expect(resolveAppOperation("orders.fulfillment_void")).toBeNull();
     // Where the dashboard has its own operation beside the resource, the resource owns the name.
     expect(resolveAppOperation("products.create")?.operationId).toBe("dashboard.resources.products.create");
     expect(resolveAppOperation("orders.list")?.operationId).toBe("dashboard.resources.orders.list");

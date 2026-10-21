@@ -50,6 +50,7 @@ import { STOREFRONT_DIGITAL_OPERATIONS } from "./storefront-digital";
 import { STOREFRONT_WARRANTY_OPERATIONS } from "./storefront-warranty";
 import { DASHBOARD_RESOURCE_OPERATIONS } from "./dashboard-resources";
 import type { OperationRegistryEntry } from "./entry";
+import { STABLE_OPERATION_IDS } from "@scalius/shared/plugins/app-operations";
 import { DASHBOARD_WHEN_A } from "./when-dashboard-a";
 import { DASHBOARD_WHEN_B } from "./when-dashboard-b";
 import { STOREFRONT_WHEN } from "./when-storefront";
@@ -207,14 +208,18 @@ export function operationMetadata(
   entry: OperationRegistryEntry,
 ): AgentOperationMetadata {
   const surface = operationSurface(operationId);
+  // The stable tier is the sealed app-name table (STABLE_APP_OPERATIONS).
+  const sealed = STABLE_OPERATION_IDS.has(operationId);
   // v2.0 locks the app API only: the headless storefront contract is beta
   // until a later 2.x seals it (README.md beside this file).
-  if (surface === "storefront" && entry.stability === "stable") {
+  if (surface === "storefront" && sealed) {
     throw new Error(`${operationId}: the storefront API is beta; no storefront operation is stable.`);
   }
+  if (sealed && entry.stability === "internal") throw new Error(`${operationId}: a sealed app operation cannot be internal.`);
   const exposure: AgentOperationExposure = entry.exposure ?? "execute";
-  const stability: AgentOperationStability =
-    entry.stability ?? (exposure === "execute" && surface !== "system" ? "beta" : "internal");
+  const stability: AgentOperationStability = sealed
+    ? "stable"
+    : entry.stability ?? (exposure === "execute" && surface !== "system" ? "beta" : "internal");
   const risk = entry.risk ?? methodRisk(method);
   const batch: AgentOperationBatch =
     entry.batch ??

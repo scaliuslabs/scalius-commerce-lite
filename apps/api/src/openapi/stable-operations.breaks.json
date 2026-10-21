@@ -4,5 +4,167 @@
   "from": "2127040f8b7ff645",
   "change": "dashboard.resources.payments.create: the write_orders scope no longer covers it.",
   "reason": "Pre-lock security fix (audit S3): a recorded payment settles an invoice with no money moving and hands over its gift cards and downloads, so it needs the Sensitive write_payments scope (orders.record_payment, migration 0166), not write_orders."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "81e0e8b5db36a8ec",
+  "change": "content.create: removed from the stable app API.",
+  "reason": "Pre-lock rename (audit L4): stable names are designed as <resource>.<verb> in the sealed table STABLE_APP_OPERATIONS (@scalius/shared/plugins/app-operations), no longer derived from dashboard route ids; content.create is now pages.create, the same operation."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "81e0e8b5db36a8ec",
+  "change": "content.get: removed from the stable app API.",
+  "reason": "Pre-lock rename (audit L4): stable names are designed as <resource>.<verb> in the sealed table STABLE_APP_OPERATIONS (@scalius/shared/plugins/app-operations), no longer derived from dashboard route ids; content.get is now pages.get, the same operation."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "81e0e8b5db36a8ec",
+  "change": "content.update: removed from the stable app API.",
+  "reason": "Pre-lock rename (audit L4): stable names are designed as <resource>.<verb> in the sealed table STABLE_APP_OPERATIONS (@scalius/shared/plugins/app-operations), no longer derived from dashboard route ids; content.update is now pages.update, the same operation."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "81e0e8b5db36a8ec",
+  "change": "customers.addresses_list: removed from the stable app API.",
+  "reason": "Pre-lock rename (audit L4): stable names are designed as <resource>.<verb> in the sealed table STABLE_APP_OPERATIONS (@scalius/shared/plugins/app-operations), no longer derived from dashboard route ids; customers.addresses_list is now customer_addresses.list, the same operation."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "81e0e8b5db36a8ec",
+  "change": "customers.marketing_get: removed from the stable app API.",
+  "reason": "Pre-lock rename (audit L4): stable names are designed as <resource>.<verb> in the sealed table STABLE_APP_OPERATIONS (@scalius/shared/plugins/app-operations), no longer derived from dashboard route ids; customers.marketing_get is now customers.get_marketing, the same operation."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "81e0e8b5db36a8ec",
+  "change": "customers.tags_list: removed from the stable app API.",
+  "reason": "Pre-lock rename (audit L4): stable names are designed as <resource>.<verb> in the sealed table STABLE_APP_OPERATIONS (@scalius/shared/plugins/app-operations), no longer derived from dashboard route ids; customers.tags_list is now customer_tags.list, the same operation."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "81e0e8b5db36a8ec",
+  "change": "customers.tags_set: removed from the stable app API.",
+  "reason": "Pre-lock rename (audit L4): stable names are designed as <resource>.<verb> in the sealed table STABLE_APP_OPERATIONS (@scalius/shared/plugins/app-operations), no longer derived from dashboard route ids; customers.tags_set is now customers.set_tags, the same operation."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "81e0e8b5db36a8ec",
+  "change": "inventory.levels: removed from the stable app API.",
+  "reason": "Pre-lock rename (audit L4): stable names are designed as <resource>.<verb> in the sealed table STABLE_APP_OPERATIONS (@scalius/shared/plugins/app-operations), no longer derived from dashboard route ids; inventory.levels is now inventory.get_levels, the same operation."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "81e0e8b5db36a8ec",
+  "change": "inventory.product_levels: removed from the stable app API.",
+  "reason": "Pre-lock rename (audit L4): stable names are designed as <resource>.<verb> in the sealed table STABLE_APP_OPERATIONS (@scalius/shared/plugins/app-operations), no longer derived from dashboard route ids; inventory.product_levels is now inventory.list_levels, the same operation."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "81e0e8b5db36a8ec",
+  "change": "orders.fulfillment_void: removed from the stable app API.",
+  "reason": "Pre-lock rename (audit L4): stable names are designed as <resource>.<verb> in the sealed table STABLE_APP_OPERATIONS (@scalius/shared/plugins/app-operations), no longer derived from dashboard route ids; orders.fulfillment_void is now fulfillments.void, the same operation."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "81e0e8b5db36a8ec",
+  "change": "orders.pickup_ready: removed from the stable app API.",
+  "reason": "Pre-lock rename (audit L4): stable names are designed as <resource>.<verb> in the sealed table STABLE_APP_OPERATIONS (@scalius/shared/plugins/app-operations), no longer derived from dashboard route ids; orders.pickup_ready is now orders.mark_pickup_ready, the same operation."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "81e0e8b5db36a8ec",
+  "change": "orders.return_get: removed from the stable app API.",
+  "reason": "Pre-lock rename (audit L4): stable names are designed as <resource>.<verb> in the sealed table STABLE_APP_OPERATIONS (@scalius/shared/plugins/app-operations), no longer derived from dashboard route ids; orders.return_get is now returns.get, the same operation."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "81e0e8b5db36a8ec",
+  "change": "orders.returns: removed from the stable app API.",
+  "reason": "Pre-lock rename (audit L4): stable names are designed as <resource>.<verb> in the sealed table STABLE_APP_OPERATIONS (@scalius/shared/plugins/app-operations), no longer derived from dashboard route ids; orders.returns is now returns.list, the same operation."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "81e0e8b5db36a8ec",
+  "change": "orders.timeline: removed from the stable app API.",
+  "reason": "Pre-lock rename (audit L4): stable names are designed as <resource>.<verb> in the sealed table STABLE_APP_OPERATIONS (@scalius/shared/plugins/app-operations), no longer derived from dashboard route ids; orders.timeline is now order_timeline.list, the same operation."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "81e0e8b5db36a8ec",
+  "change": "orders.update_status: removed from the stable app API.",
+  "reason": "Pre-lock rename (audit L4): stable names are designed as <resource>.<verb> in the sealed table STABLE_APP_OPERATIONS (@scalius/shared/plugins/app-operations), no longer derived from dashboard route ids; orders.update_status is now orders.set_status, the same operation."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "81e0e8b5db36a8ec",
+  "change": "product_variants.retire: removed from the stable app API.",
+  "reason": "Pre-lock rename (audit L4): stable names are designed as <resource>.<verb> in the sealed table STABLE_APP_OPERATIONS (@scalius/shared/plugins/app-operations), no longer derived from dashboard route ids; product_variants.retire is now variants.retire, the same operation."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "81e0e8b5db36a8ec",
+  "change": "products.publications_set: removed from the stable app API.",
+  "reason": "Pre-lock rename (audit L4): stable names are designed as <resource>.<verb> in the sealed table STABLE_APP_OPERATIONS (@scalius/shared/plugins/app-operations), no longer derived from dashboard route ids; products.publications_set is now products.set_publications, the same operation."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "81e0e8b5db36a8ec",
+  "change": "price_lists.prices_list: removed from the stable app API.",
+  "reason": "Pre-lock rename (audit L4): stable names are designed as <resource>.<verb> in the sealed table STABLE_APP_OPERATIONS (@scalius/shared/plugins/app-operations), no longer derived from dashboard route ids; price_lists.prices_list is now price_lists.list_prices, the same operation."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "81e0e8b5db36a8ec",
+  "change": "price_lists.prices_set: removed from the stable app API.",
+  "reason": "Pre-lock rename (audit L4): stable names are designed as <resource>.<verb> in the sealed table STABLE_APP_OPERATIONS (@scalius/shared/plugins/app-operations), no longer derived from dashboard route ids; price_lists.prices_set is now price_lists.set_prices, the same operation."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "81e0e8b5db36a8ec",
+  "change": "theme.section_settings_set: removed from the stable app API.",
+  "reason": "Pre-lock rename (audit L4): stable names are designed as <resource>.<verb> in the sealed table STABLE_APP_OPERATIONS (@scalius/shared/plugins/app-operations), no longer derived from dashboard route ids; theme.section_settings_set is now theme.set_section_settings, the same operation."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "81e0e8b5db36a8ec",
+  "change": "sales_channels.products: removed from the stable app API.",
+  "reason": "Pre-lock rename (audit L4): stable names are designed as <resource>.<verb> in the sealed table STABLE_APP_OPERATIONS (@scalius/shared/plugins/app-operations), no longer derived from dashboard route ids; sales_channels.products is now sales_channels.list_products, the same operation."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "81e0e8b5db36a8ec",
+  "change": "settings.business_get: removed from the stable app API.",
+  "reason": "Pre-lock rename (audit L4): stable names are designed as <resource>.<verb> in the sealed table STABLE_APP_OPERATIONS (@scalius/shared/plugins/app-operations), no longer derived from dashboard route ids; settings.business_get is now settings.get_business, the same operation."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "81e0e8b5db36a8ec",
+  "change": "objects.types.create: removed from the stable app API.",
+  "reason": "Pre-lock rename (audit L4): stable names are designed as <resource>.<verb> in the sealed table STABLE_APP_OPERATIONS (@scalius/shared/plugins/app-operations), no longer derived from dashboard route ids; objects.types.create is now object_types.create, the same operation."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "81e0e8b5db36a8ec",
+  "change": "objects.types.delete: removed from the stable app API.",
+  "reason": "Pre-lock rename (audit L4): stable names are designed as <resource>.<verb> in the sealed table STABLE_APP_OPERATIONS (@scalius/shared/plugins/app-operations), no longer derived from dashboard route ids; objects.types.delete is now object_types.delete, the same operation."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "81e0e8b5db36a8ec",
+  "change": "objects.types.get: removed from the stable app API.",
+  "reason": "Pre-lock rename (audit L4): stable names are designed as <resource>.<verb> in the sealed table STABLE_APP_OPERATIONS (@scalius/shared/plugins/app-operations), no longer derived from dashboard route ids; objects.types.get is now object_types.get, the same operation."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "81e0e8b5db36a8ec",
+  "change": "objects.types.list: removed from the stable app API.",
+  "reason": "Pre-lock rename (audit L4): stable names are designed as <resource>.<verb> in the sealed table STABLE_APP_OPERATIONS (@scalius/shared/plugins/app-operations), no longer derived from dashboard route ids; objects.types.list is now object_types.list, the same operation."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "81e0e8b5db36a8ec",
+  "change": "objects.types.update: removed from the stable app API.",
+  "reason": "Pre-lock rename (audit L4): stable names are designed as <resource>.<verb> in the sealed table STABLE_APP_OPERATIONS (@scalius/shared/plugins/app-operations), no longer derived from dashboard route ids; objects.types.update is now object_types.update, the same operation."
  }
 ]

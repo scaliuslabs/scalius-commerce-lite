@@ -9,14 +9,14 @@ import type { OperationRegistryEntry } from "./entry";
 
 const VALUE_OPERATIONS: Record<string, OperationRegistryEntry> = Object.fromEntries(
   CUSTOM_FIELD_OWNER_TYPES.flatMap((ownerType) => [
-    [`dashboard.custom_fields.get_${ownerType}_values`, { stability: "stable" }],
-    [`dashboard.custom_fields.set_${ownerType}_values`, { stability: "stable" }],
+    [`dashboard.custom_fields.get_${ownerType}_values`, {}],
+    [`dashboard.custom_fields.set_${ownerType}_values`, {}],
   ]),
 );
 
 export const DASHBOARD_CUSTOM_FIELD_OPERATIONS = {
-  "dashboard.custom_field_definitions.list": { stability: "stable" },
-  "dashboard.custom_field_definitions.get": { stability: "stable" },
+  "dashboard.custom_field_definitions.list": {},
+  "dashboard.custom_field_definitions.get": {},
   "dashboard.custom_field_definitions.create": {},
   "dashboard.custom_field_definitions.update": { revision: "required" },
   "dashboard.custom_field_definitions.delete": { risk: "destructive", revision: "required" },
