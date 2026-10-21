@@ -13,6 +13,7 @@
 // reads and answers only `custom` namespace values, never another app's.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { isoTimestampSchema, nullableIsoTimestampSchema } from "../../schemas/timestamps";
+import { boundedPage, boundedPageQuery, nextCursorSchema } from "../../utils/bounded-page";
 import {
   createCustomFieldDefinition,
   deleteCustomFieldDefinition,
@@ -34,6 +35,7 @@ import {
   updateCustomFieldDefinitionSchema,
 } from "@scalius/core/modules/custom-fields/browser";
 import {
+  CUSTOM_FIELD_DEFINITIONS_PER_OWNER_MAX,
   CUSTOM_FIELD_MERCHANT_NAMESPACE,
   CUSTOM_FIELD_OWNER_TYPES,
   MERCHANT_CUSTOM_FIELD_WRITER,
@@ -103,25 +105,38 @@ const definitionErrors = { ...errorResponses, 409: conflictResponse };
 
 export const customFieldDefinitionRoutes = new OpenAPIHono<{ Bindings: Env }>();
 
+/** A store holds at most this many definitions (100 per owner type). */
+const DEFINITIONS_BOUND = CUSTOM_FIELD_DEFINITIONS_PER_OWNER_MAX * CUSTOM_FIELD_OWNER_TYPES.length;
+
 const listRoute = createRoute({
   method: "get",
   path: "/",
   operationId: "dashboard.custom_field_definitions.list",
   tags: DEFINITION_TAGS,
   summary: "List custom field definitions",
-  description: "Definitions in their display order, optionally for one owner type, each with how many owners hold a value.",
-  request: { query: z.object({ ownerType: customFieldOwnerTypeSchema.optional() }) },
+  description: "Definitions by owner type, in their display order, optionally for one owner type, each with how many owners hold a value. Follow nextCursor for the next page.",
+  request: { query: z.object({ ownerType: customFieldOwnerTypeSchema.optional(), ...boundedPageQuery(DEFINITIONS_BOUND) }) },
   responses: {
     200: {
-      description: "Definitions",
-      content: { "application/json": { schema: successEnvelope(z.object({ definitions: z.array(definitionListItemSchema) })) } },
+      description: "A page of definitions",
+      content: { "application/json": { schema: successEnvelope(z.object({ definitions: z.array(definitionListItemSchema), nextCursor: nextCursorSchema })) } },
     },
     ...errorResponses,
   },
 });
 
 customFieldDefinitionRoutes.openapi(listRoute, async (c) => {
-  return ok(c, await listCustomFieldDefinitions(c.get("db"), { ownerType: c.req.valid("query").ownerType }));
+  const query = c.req.valid("query");
+  const { definitions } = await listCustomFieldDefinitions(c.get("db"), { ownerType: query.ownerType });
+  const page = boundedPage(definitions, {
+    name: "custom_field_definitions",
+    cursor: query.cursor,
+    limit: query.limit,
+    id: (definition) => definition.id,
+    // The display order: owner type, then position (never negative).
+    sort: { kind: "text", value: (definition) => `${definition.ownerType}:${String(Math.max(0, definition.position)).padStart(10, "0")}` },
+  });
+  return ok(c, { definitions: page.items, nextCursor: page.nextCursor });
 });
 
 const getRoute = createRoute({

@@ -165,7 +165,7 @@ describe("markets settings", () => {
     root = createRoot(container);
     // A one-currency store: only cash on delivery, which charges no other currency.
     sdk.getApiV1AdminSettingsMarketsCurrencies.mockImplementation(() => envelope({ shopCurrencyCode: "BDT", chargeable: ["BDT"], marketCurrencies: [] }));
-    sdk.getApiV1AdminSettingsLanguages.mockImplementation(() => envelope({ items: [
+    sdk.getApiV1AdminSettingsLanguages.mockImplementation(() => envelope({ nextCursor: null, languages: [
       { locale: "bn", published: true, isDefault: true, presences: [""], translatedResources: 0 },
       { locale: "en", published: true, isDefault: false, presences: [], translatedResources: 4 },
     ] }));

@@ -16,7 +16,7 @@ import {
 } from "@scalius/api-client/sdk";
 import { apiData, type ApiBody, type ApiResult } from "../api";
 
-export type StoreLanguage = ApiResult<typeof getApiV1AdminSettingsLanguages>["items"][number];
+export type StoreLanguage = ApiResult<typeof getApiV1AdminSettingsLanguages>["languages"][number];
 export type TranslatableResource = ApiResult<typeof getApiV1AdminTranslationsByTypeById>["resource"];
 export type ResourceTranslationsView = ApiResult<typeof getApiV1AdminTranslationsByTypeById>;
 export type TranslationResourcePage = ApiResult<typeof getApiV1AdminTranslationsResources>;
@@ -41,7 +41,7 @@ export const translationKeys = {
 export const storeLanguagesQueryOptions = () =>
   queryOptions({
     queryKey: translationKeys.languages(),
-    queryFn: async () => (await apiData(getApiV1AdminSettingsLanguages())).items,
+    queryFn: async () => (await apiData(getApiV1AdminSettingsLanguages())).languages,
     staleTime: 30_000,
   });
 

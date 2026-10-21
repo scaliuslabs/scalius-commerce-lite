@@ -81,6 +81,13 @@ describe("custom field definition routes", () => {
 
     const list = await call("GET", "/custom-field-definitions?ownerType=product");
     expect(list.body.data.definitions.map((definition: { key: string }) => definition.key)).toEqual(["care_guide", "msrp"]);
+    expect(list.body.data.nextCursor).toBeNull();
+    // A cursor page at a time, in display order (L9).
+    const page = await call("GET", "/custom-field-definitions?ownerType=product&limit=1");
+    expect(page.body.data.definitions.map((definition: { key: string }) => definition.key)).toEqual(["care_guide"]);
+    const after = await call("GET", `/custom-field-definitions?ownerType=product&limit=1&cursor=${page.body.data.nextCursor}`);
+    expect(after.body.data.definitions.map((definition: { key: string }) => definition.key)).toEqual(["msrp"]);
+    expect(after.body.data.nextCursor).toBeNull();
     const reordered = await call("POST", "/custom-field-definitions/reorder", {
       ownerType: "product",
       definitions: [
