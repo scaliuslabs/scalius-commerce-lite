@@ -150,7 +150,9 @@ describe("MediaFilterBar selection controls", () => {
     act(() => buttonByName(host, "Select").click());
     act(() => buttonByName(host, "Select all shown").click());
 
-    expect(host.textContent).toContain("5 selected");
+    // The picker's footer counts the selection; the bulk row keeps only Clear selection.
+    expect(host.textContent).not.toContain("selected");
+    expect(buttonByName(host, "Clear selection")).toBeTruthy();
     expect(host.textContent).not.toContain("Move to trash");
     expect(host.textContent).not.toContain("Move to folder");
   });
