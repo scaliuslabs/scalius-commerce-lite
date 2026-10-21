@@ -27,6 +27,7 @@ import { appsQueryOptions, type AppCategory, type AppListing, type AppSummary } 
 import { AppIcon } from "./AppIcon";
 import { appMatches } from "./app-listing";
 import { AppStatusBadge } from "./app-status";
+import { RemovedAppDataCard } from "./RemovedAppData";
 import { localizedApp } from "./app-text";
 
 // The available app's listing loads the first time one is opened.
@@ -237,6 +238,9 @@ export function AppsList() {
         ) : undefined}
       />
       <Card className="overflow-clip">{body}</Card>
+      <div className="mt-4 empty:hidden">
+        <RemovedAppDataCard />
+      </div>
       {previewLoaded ? (
         <Suspense fallback={null}>
           <AvailableAppDialog app={preview} open={previewOpen} onOpenChange={setPreviewOpen} />

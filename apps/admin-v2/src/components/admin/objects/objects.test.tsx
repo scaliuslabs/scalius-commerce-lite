@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 /**
  * Content → Objects: the type list, the type form (create, edit, an
- * app's type read-only) and the entry form sending typed values.
+ * app's type read-only), the entry form sending typed values, and the types
+ * of an app that is no longer installed ("From a removed app", Delete data).
  */
 import { act, type AnchorHTMLAttributes, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -20,6 +21,8 @@ const sdk = vi.hoisted(() => ({
   patchApiV1AdminObjectsDefinitionsByIdEntriesByEntryId: vi.fn(),
   deleteApiV1AdminObjectsDefinitionsByIdEntriesByEntryId: vi.fn(),
   getApiV1AdminApps: vi.fn(),
+  getApiV1AdminAppsRemovedData: vi.fn(),
+  postApiV1AdminAppsRemovedDataByIdDelete: vi.fn(),
   getApiV1AdminSettingsCurrency: vi.fn(),
 }));
 const router = vi.hoisted(() => ({ navigate: vi.fn() }));
@@ -90,6 +93,7 @@ describe("objects", () => {
     sdk.getApiV1AdminObjectsDefinitions.mockImplementation(() => envelope({ items: [faq, tiers] }));
     sdk.getApiV1AdminObjectsDefinitionsByIdEntries.mockImplementation(() => envelope({ type: faq, records: [shipping], total: 1 }));
     sdk.getApiV1AdminApps.mockImplementation(() => envelope({ apps: [{ id: "acme.loyalty", name: "Acme Loyalty" }], available: [], sandboxAvailable: true }));
+    sdk.getApiV1AdminAppsRemovedData.mockImplementation(() => envelope({ apps: [] }));
     sdk.getApiV1AdminSettingsCurrency.mockImplementation(() => envelope({ currencyCode: "BDT", currencySymbol: "৳" }));
     sdk.postApiV1AdminObjectsDefinitions.mockImplementation(({ body }: { body: Record<string, unknown> }) =>
       envelope({ type: { ...faq, id: "mod_new", handle: `custom.${String(body.type)}`, type: body.type, name: body.name, fields: body.fields } }));
@@ -216,6 +220,41 @@ describe("objects", () => {
     expect(container.textContent).toContain("only the app can change its fields");
     expect(button("Save")).toBeUndefined();
     expect(button("Delete object type")).toBeUndefined();
+  });
+
+  it("names a removed app's types and lets only a Super Admin delete its data, under the listed revision", async () => {
+    const demo: ObjectType = { ...tiers, id: "oty_scalius.bazaar.demo_items", handle: "scalius.bazaar.demo_items", namespace: "scalius.bazaar", type: "demo_items", name: "Demo items", admin: "read", recordCount: 3 };
+    sdk.getApiV1AdminObjectsDefinitions.mockImplementation(() => envelope({ items: [faq, tiers, demo] }));
+    sdk.getApiV1AdminAppsRemovedData.mockImplementation(() => envelope({ apps: [{
+      id: "scalius.bazaar", name: "Bazaar demo", removedAt: "2026-10-20T08:00:00.000Z", revision: 2,
+      objectTypes: 1, records: 3, objectTypeHandles: ["scalius.bazaar.demo_items"], customFields: 0, keyValues: 0,
+      customerRoles: 0, jobs: 0, catalogItems: 0, settings: true,
+    }] }));
+    sdk.postApiV1AdminAppsRemovedDataByIdDelete.mockImplementation(() => envelope({ id: "scalius.bazaar", deleted: true, catalogDeleted: 0, catalogKept: 0 }));
+
+    await render(<ObjectTypesList />, { permissions: ["objects.view", "apps.view"] });
+    await vi.waitFor(() => expect(container.textContent).toContain("From a removed app: Bazaar demo"));
+    // An installed app's type still reads as managed by it.
+    expect(container.textContent).toContain("Managed by app");
+    expect(container.textContent).toContain("Data from removed apps");
+    expect(container.textContent).toContain("1 object type, 3 entries, and its settings");
+    expect(button("Delete data")).toBeUndefined();
+    expect(container.textContent).toContain("Only a Super Admin can delete it.");
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render(<ObjectTypesList />, { isSuperAdmin: true });
+    await vi.waitFor(() => expect(button("Delete data")).toBeDefined());
+    await act(async () => button("Delete data")!.click());
+    const dialog = document.querySelector<HTMLElement>('[role="alertdialog"]')!;
+    expect(dialog.textContent).toContain("Delete data from “Bazaar demo”?");
+    expect(dialog.textContent).toContain("can't be undone");
+    const confirm = [...dialog.querySelectorAll<HTMLButtonElement>("button")].find((each) => each.textContent?.trim() === "Delete data")!;
+    await act(async () => confirm.click());
+    await vi.waitFor(() => expect(sdk.postApiV1AdminAppsRemovedDataByIdDelete).toHaveBeenCalledWith({
+      path: { id: "scalius.bazaar" },
+      body: { expectedRevision: 2 },
+    }));
   });
 
   it("shows a role that can only view the type read-only", async () => {

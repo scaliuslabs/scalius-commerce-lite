@@ -1,6 +1,7 @@
 // Content → Content types: every content type (the merchant's and the apps')
 // with its entry count and whether the online store can show it. A type opens
-// on its entries.
+// on its entries. A type of an app that is no longer installed reads "From a
+// removed app", and that app's data can be deleted from the card above.
 import { RowLink } from "~/components/admin/data-table/RowLink";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -12,6 +13,8 @@ import { useStaticTable } from "~/components/admin/data-table/use-static-table";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { EmptyState } from "~/components/admin/states";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
+import { AppOwnerBadge } from "~/components/admin/apps/app-owner";
+import { RemovedAppDataCard } from "~/components/admin/apps/RemovedAppData";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { usePermissions } from "~/contexts/PermissionContext";
@@ -48,7 +51,7 @@ export function ObjectTypesList() {
           </RowLink>
           <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
             <code title={row.original.handle} className="min-w-0 truncate">{row.original.handle}</code>
-            {row.original.owner === "app" ? <Badge variant="info">{t("managedByApp")}</Badge> : null}
+            {row.original.owner === "app" ? <AppOwnerBadge namespace={row.original.namespace} managedLabel={() => t("managedByApp")} /> : null}
           </span>
         </span>
       ),
@@ -75,6 +78,9 @@ export function ObjectTypesList() {
     <div className="pb-8">
       <PageHeader title={t("pageTitle")} actions={nothingYet ? null : create} />
       <p className="mb-4 max-w-3xl text-body text-muted-foreground">{t("pageDescription")}</p>
+      <div className="mb-4 empty:hidden">
+        <RemovedAppDataCard show={(group) => group.objectTypes > 0} />
+      </div>
       {nothingYet ? (
         <EmptyState icon={FileText} title={t("emptyTitle")} description={t("emptyBody")} action={create} />
       ) : (

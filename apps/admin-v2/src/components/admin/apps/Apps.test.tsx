@@ -738,13 +738,13 @@ describe("App page", () => {
   });
 
   it("uninstalls keeping the data unless the merchant chooses to delete it", async () => {
-    sdk.postApiV1AdminAppsByIdUninstall.mockImplementation(() => ok({ id: "acme.loyalty", uninstalled: true, keepData: false, hookError: null }));
+    sdk.postApiV1AdminAppsByIdUninstall.mockImplementation(() => ok({ id: "acme.loyalty", uninstalled: true, keepData: false, hookError: null, catalogDeleted: 0, catalogKept: 0 }));
     await renderApp(detail({ status: "active", activatedAt: "2026-10-01T09:00:00.000Z" }), MANAGER);
     await click(button("Uninstall"));
 
     expect(dialog().textContent).toContain("Uninstall Loyalty points?");
     expect(dialog().textContent).toContain("stays in your apps, ready to activate again");
-    const deleteChoice = [...dialog().querySelectorAll("label")].find((label) => label.textContent?.includes("Delete its data"))!;
+    const deleteChoice = [...dialog().querySelectorAll("label")].find((label) => label.textContent?.includes("Delete this app's data"))!;
     await click(deleteChoice.querySelector<HTMLElement>('[role="radio"]')!);
     await click(button("Uninstall", dialog()));
 

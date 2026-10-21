@@ -64,7 +64,7 @@ import {
   type TypeDraft,
   type TypeProblemCode,
 } from "./object-form";
-import { useAppName } from "./use-app-name";
+import { useAppOwner } from "~/components/admin/apps/app-owner";
 import { ChoiceField, FieldRow } from "~/components/ui/field";
 import { Page } from "~/components/admin/resource/Page";
 
@@ -94,7 +94,7 @@ function TypeFormPage({ initial }: { initial: ObjectType | null }) {
   const appOwned = initial?.owner === "app";
   const canEdit = canEditAll && !appOwned;
   const creating = initial === null;
-  const appName = useAppName(initial?.namespace ?? "", appOwned);
+  const owner = useAppOwner(initial?.namespace ?? "", appOwned);
 
   const [saved, setSaved] = useState<ObjectType | null>(initial);
   const [base, setBase] = useState<TypeDraft>(() => (initial ? typeDraftOf(initial) : emptyTypeDraft()));
@@ -202,8 +202,8 @@ function TypeFormPage({ initial }: { initial: ObjectType | null }) {
         {appOwned ? (
           <Alert variant="info">
             <AlertDescription>
-              <p className="font-medium">{t("appManagedTitle", { app: appName })}</p>
-              <p>{t("appManagedHelp")}</p>
+              <p className="font-medium">{t(owner.removed ? "removedAppTitle" : "appManagedTitle", { app: owner.name })}</p>
+              <p>{t(owner.removed ? "removedAppHelp" : "appManagedHelp")}</p>
             </AlertDescription>
           </Alert>
         ) : canEditAll ? null : <ReadOnlyNotice />}

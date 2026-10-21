@@ -318,6 +318,8 @@ export const queryKeys = {
         : (["apps", "deliveries", id] as const),
     /** Every active app's pages, cards, actions and widgets (the dashboard's app surfaces). */
     surfaces: () => ["apps", "surfaces"] as const,
+    /** Data left by apps that are no longer installed, by app. */
+    removedData: () => ["apps", "removed-data"] as const,
     /**
      * One app UI request (a page, card or widget document). Without `route`:
      * every document of one app; without `pluginId`: every app document.

@@ -17,14 +17,13 @@ import { EmptyState } from "~/components/admin/states";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { StatusBadge } from "~/components/admin/resource/StatusBadge";
 import { Alert, AlertDescription } from "~/components/ui/alert";
-import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { useCurrency } from "~/hooks/use-currency";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { useMessages, formatNumber } from "~/i18n";
 import { objectMessages } from "~/i18n/objects";
 import { OBJECT_RECORD_PAGE_SIZE, objectRecordsQueryOptions } from "~/lib/api-query-options/objects";
-import { useAppName } from "./use-app-name";
+import { AppOwnerBadge } from "~/components/admin/apps/app-owner";
 import { moneyMajor } from "~/components/admin/custom-fields/custom-field-draft";
 
 export function ObjectRecordsList({ type }: { type: string }) {
@@ -52,7 +51,6 @@ export function ObjectRecordsList({ type }: { type: string }) {
   };
   const clearFilters = () => { setWhere({}); setPage(1); setCursors([undefined]); setOffsets([0]); };
   const appOwned = definition?.owner === "app";
-  const appName = useAppName(definition?.namespace ?? "", appOwned);
   const add = canEdit ? (
     <Button asChild>
       <Link to="/admin/objects/$type/records/new" params={{ type }}>{t("addEntry")}</Link>
@@ -142,7 +140,7 @@ export function ObjectRecordsList({ type }: { type: string }) {
       <PageHeader
         backTo="/admin/objects"
         title={definition?.name ?? t("pageTitle")}
-        status={appOwned ? <Badge variant="info">{t("managedByAppName", { app: appName })}</Badge> : undefined}
+        status={appOwned ? <AppOwnerBadge namespace={definition?.namespace ?? ""} managedLabel={(app) => t("managedByAppName", { app })} /> : undefined}
         actions={definition ? <>{typeAction}{nothingYet ? null : add}</> : null}
       />
       <p className="mb-4 max-w-3xl text-body text-muted-foreground">{definition?.description || t("entriesHelp")}</p>
