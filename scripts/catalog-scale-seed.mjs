@@ -780,7 +780,7 @@ function seedHuge() {
       const city = foreignKind === 1 ? "San Francisco" : foreignKind === 2 ? "Berlin" : pick(CITIES);
       const createdAt = whale ? NOW - (PROFILE.orderWindowDays - 2) * DAY : Math.min(NOW - 3600, sampleTime(hrng, clock));
       // Phone is required for Bangladesh; an international digital-style buyer may have only an email (NO_PHONE is "").
-      const phone = foreignKind === 1 && index % 500 === 3 ? "" : foreignKind === 0 ? `017${pad(index, 8)}` : foreignKind === 1 ? `+1555${pad(index, 7)}` : `+49151${pad(index, 7)}`;
+      const phone = foreignKind === 1 && index % 500 === 3 ? "" : foreignKind === 0 ? `+88017${pad(index, 8)}` : foreignKind === 1 ? `+1555${pad(index, 7)}` : `+49151${pad(index, 7)}`;
       const email = foreignKind || phone === "" ? `intl${index}@example.test` : hrng.chance(0.6) ? `customer${index}@example.test` : null;
       const deletedAt = index > 40 && hrng.chance(0.003) ? Math.min(NOW - 60, createdAt + 90 * DAY) : null;
       insCustomer.run(id, name, email, phone, 0, null, hrng.chance(0.15) ? "merchant" : "order", createdAt, createdAt, deletedAt);
@@ -1354,8 +1354,8 @@ tx(() => {
     const createdAt = NOW - int(0, 700) * DAY;
     int(1, 200); // the address draws the seed always made (addresses now live in customer_addresses)
     int(1, 30);
-    insCustomer.run(id, name, chance(0.5) ? `customer${index}@example.test` : null, `017${pad(index, 8)}`, 0, null, "order", createdAt, createdAt, null);
-    customerIds.push({ id, name, city, phone: `017${pad(index, 8)}` });
+    insCustomer.run(id, name, chance(0.5) ? `customer${index}@example.test` : null, `+88017${pad(index, 8)}`, 0, null, "order", createdAt, createdAt, null);
+    customerIds.push({ id, name, city, phone: `+88017${pad(index, 8)}` });
   }
 });
 log(`customers: ${CUSTOMERS}`);
