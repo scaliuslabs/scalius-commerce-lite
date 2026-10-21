@@ -111,6 +111,15 @@ export interface PlanLimits {
      * Batched actions (trash, status, category) always take 90.
      */
     readonly bulkPerRowSlice: number;
+    /**
+     * Products a narrowed listing (a search, a filter, a selection) counts its
+     * attribute and option facets over, reading each product's facet rows
+     * (16 a product on the scale-proof store, about 40 rows a product with
+     * its scope). A plain category, brand or shop-all page reads the
+     * maintained counts at any size instead, and a larger narrowed category
+     * or brand shows its own counts.
+     */
+    readonly facetLiveProducts: number;
   };
   /**
    * Items one batch create (`products.batch_create`, `categories.batch_create`,
@@ -178,7 +187,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       orphanAttachmentsPerRun: 10,
       limitScale: 0.2,
     }),
-    lists: Object.freeze({ countCap: 1_000, maxOffset: 1_000, bulkPerRowSlice: 8 }),
+    lists: Object.freeze({ countCap: 1_000, maxOffset: 1_000, bulkPerRowSlice: 8, facetLiveProducts: 300 }),
     batchCreates: Object.freeze({ products: 4, categories: 12, brands: 19 }),
     plugins: Object.freeze({
       cpuMs: 50,
@@ -221,7 +230,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       orphanAttachmentsPerRun: 50,
       limitScale: 1,
     }),
-    lists: Object.freeze({ countCap: 10_000, maxOffset: 10_000, bulkPerRowSlice: 90 }),
+    lists: Object.freeze({ countCap: 10_000, maxOffset: 10_000, bulkPerRowSlice: 90, facetLiveProducts: 5_000 }),
     batchCreates: Object.freeze({ products: 20, categories: 50, brands: 50 }),
     plugins: Object.freeze({
       cpuMs: 200,

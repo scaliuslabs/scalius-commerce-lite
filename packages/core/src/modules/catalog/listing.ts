@@ -36,11 +36,12 @@ import {
 import {
     buildCatalogFacetCountQuery,
     readCatalogFacetsWithSummary,
+    catalogFacetDrivingSet,
     catalogFacetFilterConditions,
     declareFacetReadWithoutProducts,
     groupCatalogFacets,
     groupCatalogRatingFacet,
-    FACET_SCOPE_PRODUCT_LIMIT,
+    facetLiveScopeLimit,
     type CatalogFacetCountInput,
 } from "./facets";
 import {
@@ -168,6 +169,11 @@ type StorefrontCatalogScope = {
     drivenByIdSet?: boolean;
     /** The scope is a category set read through the category index, then sorted. */
     sortAfterScope?: boolean;
+    /**
+     * A category subtree's published category ids: the newest and price
+     * orders page from each category's own index (`subtreePageIds`).
+     */
+    subtree?: { categoryIds: SQL };
     orderBy?: SQL;
     fixedCategory?: StorefrontCategoryProductCategory;
     /** The brand's own page: no brand facet. */
@@ -181,6 +187,12 @@ type StorefrontCatalogScope = {
     categoryFacet?: CatalogFacetCountInput["categoryFacet"] | null;
     /** Published category landing shelves sample children beyond the normal first page. */
     shelfChildIds?: readonly string[];
+    /**
+     * The maintained per-scope counts of a category subtree or brand: a plain
+     * page (nothing narrows it) reads its facets, total and price range
+     * there, at any size.
+     */
+    precomputed?: CatalogFacetCountInput["precomputed"];
 };
 
 /**
@@ -202,6 +214,160 @@ async function readStorefrontCatalogPage(
     return corrected.pagination.total > 0
         ? { ...corrected, correctedQuery }
         : { ...result, correctedQuery: null };
+}
+
+/**
+ * The page ids of a category subtree in the newest or price order: each of
+ * its published categories gives its own first `perCategory` rows through
+ * its own index (category, newest or category, price: a correlated subquery
+ * per category, so no walk crosses categories), and the page is cut from
+ * their union. A page reads at most the smaller of the subtree's rows and
+ * its categories times `perCategory` index rows, whatever the subtree's size
+ * and however its products spread over the newest and price orders.
+ * `conditions` read the unaliased buyer state (the per-category rows).
+ */
+function subtreePageIds(input: {
+    categoryIds: SQL;
+    conditions: SQL[];
+    cursor: SQL | undefined;
+    sort: keyof typeof LISTING_KEYSET_SORTS;
+    perCategory: number;
+    limit: number;
+    offset: number;
+    needsProducts: boolean;
+}): SQL {
+    const order = (row: string) => {
+        if (input.sort === "price-asc") return sql.raw(`${row}.from_minor, ${row}.product_id`);
+        if (input.sort === "price-desc") return sql.raw(`${row}.from_minor DESC, ${row}.product_id`);
+        return sql.raw(`${row}.product_created_at DESC, ${row}.product_id`);
+    };
+    return sql`
+            SELECT page_row.product_id AS page_product_id
+            FROM categories AS subtree_category
+            INNER JOIN ${buyerState} AS page_row ON page_row.product_id IN (
+                SELECT ${buyerState.productId} FROM ${buyerState}
+                ${input.needsProducts ? sql`INNER JOIN ${products} ON ${products.id} = ${buyerState.productId}` : sql``}
+                WHERE ${buyerState.categoryId} = subtree_category.id
+                  AND ${and(...input.conditions, input.cursor)}
+                ORDER BY ${order(`"product_buyer_state"`)}
+                LIMIT ${sql.raw(String(Math.max(1, Math.trunc(input.perCategory))))}
+            )
+            WHERE subtree_category.id IN ${input.categoryIds}
+            ORDER BY ${order("page_row")}
+            LIMIT ${sql.raw(String(input.limit))} OFFSET ${sql.raw(String(input.offset))}`;
+}
+
+/**
+ * Shop-all narrowed by a facet value. Each read (the page, the count, the
+ * lowest and the highest price) takes the cheaper of two forms, chosen in
+ * SQL from the maintained counts (the value's S public products, and T, the
+ * public products with a category):
+ *
+ * - driven: the value's products, each probed by primary key, then sorted
+ *   (about 6 S rows: value rows, buyer state, the other conditions' probes);
+ * - walking: the order's index (any public row for the count) until enough
+ *   rows match, `needed` of them (about 4 needed T / S rows).
+ *
+ * Driven while 3 S² <= 2 needed T (the price range: while S <= 1,000, else
+ * the public range bounds it). The form not chosen gets LIMIT 0 from the
+ * one-row plan (a limit is evaluated before the loop; a WHERE term would be
+ * tested on every row walked). The value's public count is the exact total
+ * when it is the only selection (`sole`, nothing else narrows the page);
+ * any other count is capped like every list total.
+ */
+type NarrowedSummary = {
+    count: number;
+    min: number | null;
+    max: number | null;
+    storeCurrencyCode: string | null;
+    cardFieldsTheme: string | null;
+    publicCatalogueSize: number;
+};
+
+/** The one summary row of a narrowed page (D1 and Turso return objects, the PostgreSQL proxy value arrays). */
+async function readNarrowedSummary(db: Database, query: SQL): Promise<NarrowedSummary | undefined> {
+    const columns = ["count", "min", "max", "storeCurrencyCode", "cardFieldsTheme", "publicCatalogueSize"] as const;
+    const [row] = await db.all<NarrowedSummary | unknown[]>(query);
+    if (!row) return undefined;
+    return Array.isArray(row)
+        ? Object.fromEntries(columns.map((column, index) => [column, row[index]])) as NarrowedSummary
+        : row;
+}
+
+/** A narrowed shop-all page reads its own price range up to this many products of its value. */
+const NARROWED_RANGE_DRIVEN_PRODUCTS = 1_000;
+
+function narrowedShopAllPlan(input: {
+    driving: { productIds: SQL; publicCount: SQL<number>; sole: boolean };
+    conditions: SQL[];
+    drivenConditions: SQL[];
+    needsProducts: boolean;
+    countLimit: number;
+    pageRowsNeeded: number;
+}) {
+    const plan = sql`listing_plan AS MATERIALIZED (
+        SELECT value_size.products AS value_products, (
+            SELECT COALESCE(SUM(plan_count.product_count), 0) FROM product_facet_scope_counts AS plan_count
+            WHERE plan_count.scope_kind = 'category' AND plan_count.facet_kind = 'products'
+        ) AS public_products
+        FROM (SELECT ${input.driving.publicCount} AS products) AS value_size
+    )`;
+    const driven = (needed: number) => sql`(3 * value_products * value_products <= 2 * ${sql.raw(String(Math.max(1, needed)))} * public_products)`;
+    const rowsFor = (form: "driven" | "walking", needed: number, rows: SQL) =>
+        // A boolean is a CASE condition on every provider (PostgreSQL compares no boolean with 1).
+        form === "driven"
+            ? sql`(SELECT CASE WHEN ${driven(needed)} THEN ${rows} ELSE 0 END FROM listing_plan)`
+            : sql`(SELECT CASE WHEN ${driven(needed)} THEN 0 ELSE ${rows} END FROM listing_plan)`;
+    const from = input.needsProducts
+        ? sql`${buyerState} INNER JOIN ${products} ON ${products.id} = ${buyerState.productId}`
+        : sql`${buyerState}`;
+    const where = (form: "driven" | "walking") => and(...(form === "driven" ? input.drivenConditions : input.conditions));
+    // The price range: the value's own rows while they are few (driven);
+    // past that the public range (two index probes), as the slider's bounds.
+    // A walk for the lowest price of a value would read every cheaper public
+    // product first: prices and values go together (no 16 GB RAM under the
+    // cheapest phone), so no uniform estimate bounds it.
+    const fewProducts = sql`(SELECT value_products <= ${sql.raw(String(NARROWED_RANGE_DRIVEN_PRODUCTS))} FROM listing_plan)`;
+    const first = (column: SQL, direction: "" | " DESC") => sql`COALESCE(
+        (SELECT ${column} FROM ${from} WHERE ${where("driven")} ORDER BY +${column}${sql.raw(direction)}
+            LIMIT (SELECT CASE WHEN ${fewProducts} THEN 1 ELSE 0 END)),
+        (SELECT ${column} FROM ${buyerState} WHERE ${publicBuyerStateCondition()} ORDER BY ${column}${sql.raw(direction)}
+            LIMIT (SELECT CASE WHEN ${fewProducts} THEN 0 ELSE 1 END)))`;
+    const countLimit = sql.raw(String(input.countLimit));
+    const count = input.driving.sole
+        ? sql`(SELECT value_products FROM listing_plan)`
+        : sql`(SELECT count(*) FROM (SELECT 1 FROM ${from} WHERE ${where("driven")} LIMIT ${rowsFor("driven", input.countLimit, countLimit)}) AS driven_rows)
+            + (SELECT count(*) FROM (SELECT 1 FROM ${from} WHERE ${where("walking")} LIMIT ${rowsFor("walking", input.countLimit, countLimit)}) AS walked_rows)`;
+    return {
+        drivenConditions: input.drivenConditions,
+        /** The count, the lowest and the highest price of the narrowed rows, plus `extra` columns. */
+        summary: (extra: SQL) => sql`WITH ${plan}
+            SELECT ${count} AS count,
+                ${first(sql`${buyerState.fromMinor}`, "")} AS min,
+                ${first(sql`${buyerState.toMinor}`, " DESC")} AS max
+                ${extra}`,
+        /** The page's ids, one form each (the other reads nothing). */
+        page: (pageRows: number, ids: (form: "driven" | "walking", rows: SQL) => SQL) => {
+            const rows = sql.raw(String(pageRows));
+            return sql`WITH ${plan},
+            listing_page AS MATERIALIZED (
+                SELECT * FROM (${ids("driven", rowsFor("driven", input.pageRowsNeeded, rows))}) AS driven_page
+                UNION ALL
+                SELECT * FROM (${ids("walking", rowsFor("walking", input.pageRowsNeeded, rows))}) AS walking_page
+            )
+            SELECT * FROM listing_page`;
+        },
+    };
+}
+
+/** The category's subtree's published category ids (itself included), as a subquery: the subtree listing's own set. */
+function publishedSubtreeCategoryIds(categoryId: string): SQL {
+    return sql`(
+        SELECT subtree.descendant_id FROM category_closure AS subtree
+        INNER JOIN categories AS subtree_category ON subtree_category.id = subtree.descendant_id
+            AND subtree_category.status = 'published' AND subtree_category.deleted_at IS NULL
+        WHERE subtree.ancestor_id = ${categoryId}
+    )`;
 }
 
 /** The category's closure ancestors (itself included), comma-joined; ids never contain commas. */
@@ -279,15 +445,15 @@ async function readStorefrontCatalogResults(
         idDirection: "asc",
     };
     let cursorCondition: SQL | undefined;
+    let plainCursorCondition: SQL | undefined;
     if (cursor) {
         if (!keysetSort || !keysetOrder) {
             throw invalidCursor("A cursor continues the newest, price-asc and price-desc orders of a listing; other orders (relevance, name, discount, rating) page by number.");
         }
         if (page > 1) throw invalidCursor("Use either page or a cursor, not both.");
-        cursorCondition = keysetCondition(
-            keysetOrder,
-            readListCursor(cursor, { sort, direction: keysetSort.direction, kinds: ["number"] }),
-        );
+        const boundary = readListCursor(cursor, { sort, direction: keysetSort.direction, kinds: ["number"] });
+        cursorCondition = keysetCondition(keysetOrder, boundary);
+        plainCursorCondition = keysetCondition({ ...keysetOrder, column: keysetSort.column }, boundary);
     }
     const offset = cursor ? 0 : (page - 1) * limit;
     // A numbered page this deep is empty: past the last countable page, so the
@@ -352,6 +518,60 @@ async function readStorefrontCatalogResults(
         WITH listing_page AS MATERIALIZED (${relevancePageIds})
         SELECT * FROM listing_page
     ) AS listing_page` : null;
+    const plainShopAll = unscoped && conditions.length === 1 && !countNeedsProducts;
+    // Shop-all narrowed by a facet value: driven from the value's products
+    // while they are few, else the public walk (`narrowedShopAllPlan`).
+    const driving = unscoped && !plainShopAll && !pageTooDeep ? catalogFacetDrivingSet(params.attributeFilters) : undefined;
+    const narrowedPlan = driving ? narrowedShopAllPlan({
+        // The value alone narrows the page (the public condition and its own).
+        driving: { ...driving, sole: driving.sole && conditions.length === 2 && !countNeedsProducts },
+        conditions,
+        drivenConditions: [publicBuyerStateCondition({ drivenByIdSet: true }), ...conditions.slice(1),
+            sql`${buyerState.productId} IN ${driving.productIds}`],
+        needsProducts: countNeedsProducts,
+        countLimit: cappedCountLimit(lists.countCap),
+        pageRowsNeeded: offset + limit + 1,
+    }) : null;
+    // The standard orders pick the page's ids from the buyer state first (with
+    // `products` or the review stats only when the order or a condition reads
+    // them), so a scope read in full before its sort reads index rows, not
+    // card rows. A category subtree pages newest or by price from each of its
+    // categories' own index (`subtreePageIds`).
+    const standardPage = !relevancePage && !shelfPreview && !scope.orderBy && !pageTooDeep;
+    const idsNeedProducts = countNeedsProducts || sort === "name-asc" || sort === "name-desc";
+    const pageIdsFor = (order: SQL, where: Array<SQL | undefined>, scopeConditions: SQL[] = conditions, rows: SQL = sql`${limit + 1}`) => sql`
+            SELECT ${buyerState.productId} AS page_product_id
+            FROM ${buyerState}
+            ${idsNeedProducts ? sql`INNER JOIN ${products} ON ${products.id} = ${buyerState.productId}` : sql``}
+            ${sort === "rating" ? sql`LEFT JOIN ${reviewStats} ON ${reviewStatsJoin(buyerState.productId)}` : sql``}
+            WHERE ${and(...scopeConditions, ...where)}
+            ORDER BY ${order}, ${buyerState.productId}
+            LIMIT ${rows} OFFSET ${offset}`;
+    // A subtree in a keyset order: the page from each category's own index
+    // (its first offset + limit + 1 rows), merged (`subtreePageIds`).
+    const subtreeTop = standardPage && scope.subtree && keysetSort
+        ? subtreePageIds({
+            categoryIds: scope.subtree.categoryIds,
+            conditions: conditions.filter((condition) => condition !== scope.condition),
+            cursor: plainCursorCondition,
+            sort: sort as keyof typeof LISTING_KEYSET_SORTS,
+            perCategory: offset + limit + 1,
+            limit: limit + 1,
+            offset,
+            needsProducts: idsNeedProducts,
+        })
+        : null;
+    const standardPageIds = standardPage
+        ? narrowedPlan
+            ? narrowedPlan.page(limit + 1, (form, rows) => pageIdsFor(
+                form === "driven" ? getStorefrontProductOrderBy(sort, true) : orderBy[0]!,
+                [form === "driven" ? cursorCondition : plainCursorCondition],
+                form === "driven" ? narrowedPlan.drivenConditions : conditions,
+                rows,
+            ))
+            : sql`WITH listing_page AS MATERIALIZED (${subtreeTop ?? pageIdsFor(orderBy[0]!, [cursorCondition])}) SELECT * FROM listing_page`
+        : null;
+    const idPage = relevancePage ?? (standardPageIds ? sql`(${standardPageIds}) AS listing_page` : null);
     const cardOrderBy = relevancePage
         ? [sql`listing_page.relevance_tier`, sql`listing_page.relevance_score`, sql`${products.name}`, desc(buyerState.productCreatedAt)]
         : orderBy;
@@ -383,9 +603,9 @@ async function readStorefrontCatalogResults(
                 ? sql<number | null>`${keysetSort.column}`.as("keyset_value")
                 : sql<number | null>`NULL`.as("keyset_value"),
         })
-        .from(relevancePage ?? buyerState)
+        .from(idPage ?? buyerState)
         .$dynamic();
-    if (relevancePage) {
+    if (idPage) {
         cardQuery = cardQuery.innerJoin(buyerState, sql`${buyerState.productId} = listing_page.page_product_id`);
     }
     const query = cardQuery
@@ -393,7 +613,7 @@ async function readStorefrontCatalogResults(
         .leftJoin(cardSku, buyerStateCardSkuJoin(cardSku))
         // The card rating (and the `rating` order): the page's rows by primary key.
         .leftJoin(reviewStats, reviewStatsJoin(buyerState.productId))
-        .where(relevancePage ? undefined : and(...conditions,
+        .where(idPage ? undefined : and(...conditions,
             shelfPreview ? sql`${buyerState.productId} IN (
                 SELECT product_id FROM (${pageIds}) AS page_sample
                 UNION ALL
@@ -415,7 +635,6 @@ async function readStorefrontCatalogResults(
     // rows (bounded by the scope, and a lone MIN/MAX there would walk the
     // global price index looking for the scope's rows), and the count is capped
     // when it is reported.
-    const plainShopAll = unscoped && conditions.length === 1 && !countNeedsProducts;
     const publicRows = and(...conditions);
     const plainShopAllCountQuery = () => db
         .select({
@@ -433,12 +652,15 @@ async function readStorefrontCatalogResults(
             cardFieldsTheme: cardFieldsThemeSql(),
             min: sql<number | null>`MIN(${buyerState.fromMinor})`,
             max: sql<number | null>`MAX(${buyerState.toMinor})`,
-            publicCatalogueSize: boundedPublicCatalogueSizeSql(FACET_SCOPE_PRODUCT_LIMIT),
+            publicCatalogueSize: boundedPublicCatalogueSizeSql(facetLiveScopeLimit()),
         })
         .from(buyerState)
         .$dynamic();
     if (countNeedsProducts) countQuery = countQuery.innerJoin(products, eq(products.id, buyerState.productId));
     countQuery = countQuery.where(and(...conditions));
+    const narrowedCountQuery = () => narrowedPlan!.summary(sql`, ${storeCurrencyCodeSql()} AS storeCurrencyCode,
+        ${cardFieldsThemeSql()} AS cardFieldsTheme,
+        ${boundedPublicCatalogueSizeSql(facetLiveScopeLimit())} AS publicCatalogueSize`);
 
     let priceRangeQuery = db
         .select({
@@ -453,7 +675,13 @@ async function readStorefrontCatalogResults(
     priceRangeQuery = priceRangeQuery.where(and(...priceRangeConditions));
 
     // Every facet (brand, option axes, attributes) in one statement.
+    // Nothing narrows the scope: its counts are maintained (any size).
+    const plainScope = !search && !params.ids && !params.category && !params.attributeFilters?.length
+        && params.minPrice === undefined && params.maxPrice === undefined && minRating === undefined
+        && !params.freeDelivery && !params.hasDiscount && params.inStock !== "true";
     const facetInput: CatalogFacetCountInput = {
+        precomputed: plainScope ? scope.precomputed : undefined,
+        fallbackCounts: plainScope ? undefined : scope.precomputed,
         baseConditions: facetBaseConditions,
         needsProducts: countNeedsProducts,
         allPublic: plainShopAll,
@@ -471,9 +699,10 @@ async function readStorefrontCatalogResults(
     const [fetchedList, separateCount, filteredPriceRange, scopedRead] = await Promise.all([
         // One row past the page tells whether another page follows.
         (pageTooDeep ? Promise.resolve([])
-            : shelfPreview || relevancePage ? query.orderBy(...cardOrderBy, buyerState.productId).all()
+            : shelfPreview || idPage ? query.orderBy(...cardOrderBy, buyerState.productId).all()
                 : query.orderBy(...cardOrderBy, buyerState.productId).limit(limit + 1).offset(offset).all()) as Promise<StorefrontProductListRowWithVariants[]>,
-        !unscoped ? Promise.resolve(null) : plainShopAll ? plainShopAllCountQuery().get() : countQuery.get(),
+        !unscoped ? Promise.resolve(null) : plainShopAll ? plainShopAllCountQuery().get()
+            : narrowedPlan ? readNarrowedSummary(db, narrowedCountQuery()) : countQuery.get(),
         hasPriceFilter ? priceRangeQuery.get() : Promise.resolve(null),
         unscoped ? Promise.resolve(null) : readCatalogFacetsWithSummary(db, facetInput, {
             categoryAncestors: ancestorsCategoryId ? categoryAncestorIdsSql(ancestorsCategoryId) : undefined,
@@ -491,7 +720,7 @@ async function readStorefrontCatalogResults(
     // Shop-all with a selection counts live only while the catalogue is small.
     const shopAllFacetsLive = unscoped && (plainShopAll || Number(
         (separateCount as { publicCatalogueSize?: number } | null)?.publicCatalogueSize ?? 0,
-    ) <= FACET_SCOPE_PRODUCT_LIMIT);
+    ) <= facetLiveScopeLimit());
 
     // A fixed category names every row in it; a subtree listing still reads
     // the sub-categories its other rows sit in (none on a flat store).
@@ -651,11 +880,16 @@ export async function getStorefrontCategoryProducts(
         condition: options.includeDescendants
             ? publicCategorySubtreeCondition(buyerState.categoryId, category.id)
             : eq(buyerState.categoryId, category.id),
+        subtree: options.includeDescendants ? { categoryIds: publishedSubtreeCategoryIds(category.id) } : undefined,
         sortAfterScope: options.includeDescendants === true,
         fixedCategory: category,
         // Its sub-categories with their subtree counts; a leaf has none.
         categoryFacet: options.includeDescendants ? { parentId: category.id } : null,
         shelfChildIds: options.shelfPreview && options.includeDescendants ? options.shelfChildIds : undefined,
+        precomputed: {
+            kind: "category",
+            categoryIds: options.includeDescendants ? publishedSubtreeCategoryIds(category.id) : sql`(SELECT ${category.id})`,
+        },
     }, options.pricing ?? null);
 }
 
@@ -690,6 +924,7 @@ export async function getStorefrontBrandProducts(
         // The buyer state's brand index: (is_public, brand_id, newest).
         condition: eq(buyerState.brandId, brand.id),
         withoutBrandFacet: true,
+        precomputed: { kind: "brand", brandId: brand.id },
     }, pricing);
 }
 
