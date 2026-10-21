@@ -62,7 +62,7 @@ import {
   formatOrderReceiptDay,
   localizeOrderReceiptGatewayPresentation,
 } from "@/lib/order-success-localization";
-import { formatPageNumber } from "@/lib/store-time-zone";
+import { formatCount, formatPageNumber } from "@/lib/store-time-zone";
 import { isGatewayEligibleForPaymentAmount } from "@/lib/checkout/gateway-amount-eligibility";
 import { DEFAULT_CURRENCY, formatMoney } from "@/lib/currency";
 import { fromMinor } from "@scalius/shared/money";
@@ -822,7 +822,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
                       </ul>
                     )}
                     <p class="text-sm text-muted-foreground mt-1">
-                      {formatCheckoutLanguageText(copy.orderReceiptQuantityText, { quantity: item.quantity })} × {savedLine
+                      {formatCheckoutLanguageText(copy.orderReceiptQuantityText, { quantity: formatCount(item.quantity) })} × {savedLine
                         ? formatReceiptMinor(savedLine.unitPriceMinor)
                         : formatReceiptAmount(item.price)}
                     </p>

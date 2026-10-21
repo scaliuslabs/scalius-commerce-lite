@@ -40,7 +40,7 @@ import { fromMinor, toMinor } from "@scalius/shared/money";
 import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
 import { numberLocale } from "@scalius/shared/locale-format";
 import { formatList } from "@scalius/shared/locale-words";
-import { storeRegion } from "@/lib/store-time-zone";
+import { formatCount, storeRegion } from "@/lib/store-time-zone";
 import { nanoid } from "nanoid";
 import { getProductImageUrl } from "@/lib/product-media";
 import { applyCheckoutButtonState } from "./checkout-button-state";
@@ -1442,7 +1442,7 @@ function renderCartLine(
             ${issueBlock || `<div class="mt-2 flex min-h-11 items-center justify-between gap-2">
               <div class="flex h-11 items-center overflow-hidden rounded-md ring-1 ring-inset ring-border sm:h-9">
                 <button type="button" aria-label="${escapeHtml(formatCheckoutLanguageText(copy.decreaseQuantityText, { item: rawName }))}"${describedBy} class="${stepperButton}" onclick="window.updateCartQuantity(${jsCartKey}, ${Math.max(0, item.quantity - 1)})">−</button>
-                <span class="flex h-full min-w-8 items-center justify-center px-1 text-center text-sm tabular-nums text-foreground" aria-live="polite">${item.quantity}</span>
+                <span class="flex h-full min-w-8 items-center justify-center px-1 text-center text-sm tabular-nums text-foreground" aria-live="polite">${escapeHtml(formatCount(item.quantity))}</span>
                 <button type="button" aria-label="${increaseLabel}"${describedBy} ${increaseDisabled ? "disabled" : ""} class="${stepperButton}" onclick="window.updateCartQuantity(${jsCartKey}, ${item.quantity + 1})">+</button>
               </div>
               <div class="text-end"><div class="text-sm font-medium tabular-nums text-foreground sm:text-base">${formatMoney(item.price * item.quantity)}</div>${item.quantity > 1 ? `<div class="text-sm tabular-nums text-muted-foreground">${formatMoney(item.price)} ${escapeHtml(copy.eachText)}</div>` : ""}</div>

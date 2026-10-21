@@ -46,6 +46,7 @@ import { relabelOrderProgress, relabelOrderTimeline } from "@/lib/order-line-gro
 import { formatMoney } from "@/lib/currency";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
+import { formatCount } from "@/lib/store-time-zone";
 import {
   ENGLISH_CHECKOUT_LANGUAGE_DATA,
   checkoutLanguageBaseCode,
@@ -227,7 +228,7 @@ const invalid = (field: "reference" | "contact" | "code", errorId: string) => fi
                   <span class="min-w-0 flex-1 text-sm">
                     <span class="block font-medium text-foreground">{item.productName}</span>
                     {item.variantLabel && <span class="block text-muted-foreground">{item.variantLabel}</span>}
-                    <span class="block text-muted-foreground">{formatCheckoutLanguageText(copy.orderReceiptQuantityText, { quantity: item.quantity })}</span>
+                    <span class="block text-muted-foreground">{formatCheckoutLanguageText(copy.orderReceiptQuantityText, { quantity: formatCount(item.quantity) })}</span>
                   </span>
                 </li>
               ))}
