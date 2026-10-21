@@ -21,7 +21,15 @@ function fakeRewriter(forms: Array<Record<string, string>>, prepended: string[][
           prepended[index] = [];
           await handler?.({ getAttribute: (name) => attributes[name] ?? null, prepend: (content) => void prepended[index]!.push(content) });
         });
-        return new Response(Promise.all(done).then(() => "ok") as unknown as BodyInit, response);
+        // Like the Workers rewriter, the body ends only after every element handler settled.
+        const body = new ReadableStream<Uint8Array>({
+          async start(controller) {
+            await Promise.all(done);
+            controller.enqueue(new TextEncoder().encode("ok"));
+            controller.close();
+          },
+        });
+        return new Response(body, response);
       },
     };
     return rewriter;
