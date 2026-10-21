@@ -4,6 +4,7 @@ import {
   getApiV1AdminCustomersById,
   getApiV1AdminCustomersByIdHistory,
   getApiV1AdminCustomersByIdMarketing,
+  getApiV1AdminCustomersByIdPaymentMethods,
   getApiV1AdminCustomersSegments,
   getApiV1AdminCustomersSegmentsBySegmentId,
   getApiV1AdminCustomersSegmentsBySegmentIdCount,
@@ -24,6 +25,7 @@ type CustomerHistoryQuery = ApiQuery<typeof getApiV1AdminCustomersByIdHistory>;
 export type CustomerMarketing = ApiResult<typeof getApiV1AdminCustomersByIdMarketing>;
 export type CustomerConsent = CustomerMarketing["consents"][number];
 export type CustomerConsentEvent = CustomerMarketing["events"][number];
+export type CustomerSavedPaymentMethod = ApiResult<typeof getApiV1AdminCustomersByIdPaymentMethods>["paymentMethods"][number];
 export type CustomerTagCount = ApiResult<typeof getApiV1AdminCustomersTags>["tags"][number];
 export type CustomerSegment = ApiResult<typeof getApiV1AdminCustomersSegmentsBySegmentId>;
 export type CustomerSegmentDefinitionBody = ApiBody<typeof postApiV1AdminCustomersSegmentsPreview>["definition"];
@@ -62,6 +64,14 @@ export const customerMarketingQueryOptions = (id: string) =>
   queryOptions({
     queryKey: queryKeys.customers.marketing(id),
     queryFn: () => apiData(getApiV1AdminCustomersByIdMarketing({ path: { id } })),
+    staleTime: 0,
+  });
+
+/** The cards or wallets a provider kept for this customer, oldest first. */
+export const customerPaymentMethodsQueryOptions = (id: string) =>
+  queryOptions({
+    queryKey: queryKeys.customers.paymentMethods(id),
+    queryFn: () => apiData(getApiV1AdminCustomersByIdPaymentMethods({ path: { id } })),
     staleTime: 0,
   });
 
