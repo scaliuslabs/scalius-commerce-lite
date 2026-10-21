@@ -3267,6 +3267,8 @@ export type CustomerResource = {
         contact: string | null;
         updatedAt: string;
     }>;
+    taxExempt: boolean;
+    taxExemptionId: string | null;
     createdAt: string;
     updatedAt: string;
     deletedAt: string | null;
@@ -25233,6 +25235,74 @@ export type GetApiV1AdminResourcesOrdersByIdResponses = {
 
 export type GetApiV1AdminResourcesOrdersByIdResponse = GetApiV1AdminResourcesOrdersByIdResponses[keyof GetApiV1AdminResourcesOrdersByIdResponses];
 
+export type PostApiV1AdminResourcesOrdersByIdReleaseHoldData = {
+    body: {
+        /**
+         * The order `revision` you read; a change since is refused with 409 and the hold stays. Releasing a released hold answers it again whatever the revision.
+         */
+        expectedRevision: number;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/orders/{id}/release-hold';
+};
+
+export type PostApiV1AdminResourcesOrdersByIdReleaseHoldErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesOrdersByIdReleaseHoldError = PostApiV1AdminResourcesOrdersByIdReleaseHoldErrors[keyof PostApiV1AdminResourcesOrdersByIdReleaseHoldErrors];
+
+export type PostApiV1AdminResourcesOrdersByIdReleaseHoldResponses = {
+    /**
+     * The order, with whether the hold was already released
+     */
+    200: {
+        success: true;
+        data: {
+            order: OrderResource;
+            replayed: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesOrdersByIdReleaseHoldResponse = PostApiV1AdminResourcesOrdersByIdReleaseHoldResponses[keyof PostApiV1AdminResourcesOrdersByIdReleaseHoldResponses];
+
 export type GetApiV1AdminResourcesOrdersByIdPaymentsData = {
     body?: never;
     path: {
@@ -35062,6 +35132,8 @@ export type GetApiV1AdminCustomersByIdResponses = {
                 createdAt: string;
                 updatedAt: string;
             }>;
+            taxExempt: boolean;
+            taxExemptionId: string | null;
             relatedObjects: Array<{
                 typeId: string;
                 typeHandle: string;
@@ -35080,6 +35152,8 @@ export type PutApiV1AdminCustomersByIdData = {
         name?: string;
         email?: string | null;
         phone?: string;
+        taxExempt?: boolean;
+        taxExemptionId?: string | null;
     };
     headers?: {
         /**
@@ -55816,6 +55890,12 @@ export type GetApiV1AdminOrdersByIdInvoiceResponses = {
                      */
                     dueAt: string;
                 } | null;
+                /**
+                 * The buyer was tax-exempt when the order was priced (no tax charged), with their certificate or registration number; null when not, absent on invoices issued before exemptions were printed.
+                 */
+                taxExemption?: {
+                    exemptionId: string | null;
+                } | null;
                 createdAt: string | number;
                 updatedAt: string | number;
                 items: Array<{
@@ -56012,6 +56092,12 @@ export type PostApiV1AdminOrdersByIdInvoiceResponses = {
                      * ISO 8601 due date: placement plus the net days.
                      */
                     dueAt: string;
+                } | null;
+                /**
+                 * The buyer was tax-exempt when the order was priced (no tax charged), with their certificate or registration number; null when not, absent on invoices issued before exemptions were printed.
+                 */
+                taxExemption?: {
+                    exemptionId: string | null;
                 } | null;
                 createdAt: string | number;
                 updatedAt: string | number;
@@ -57840,6 +57926,7 @@ export type PostApiV1AdminOrdersQuoteData = {
         shippingCharge: number;
         shippingMethodId?: string | null;
         paymentMethod?: 'cod' | 'net_terms';
+        customerId?: string | null;
     };
     path?: never;
     query?: never;
