@@ -4,7 +4,9 @@
 // product, manual collection or dynamic collection), the product page lists
 // a Buy X get Y behind many other automatic promotions, and turning on one
 // more than the cap fails loudly at write time instead of silently at checkout.
-import type { DatabaseSync } from "node:sqlite";
+// Because writes cap them, the read loads every automatic promotion that is
+// on through its index and parses no rule in SQL (docs/SCALE.md, finding 11).
+import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { Database } from "@scalius/database/client";
@@ -22,7 +24,7 @@ const NOW = 1_900_000_000;
 let sqlite: DatabaseSync | undefined;
 afterEach(() => sqlite?.close());
 
-function openStore(): Database {
+function openStore(onQuery?: (query: string, values: readonly SQLInputValue[]) => void): Database {
     sqlite = createMigratedSqlite({ provider: "d1" });
     sqlite.exec(`
         INSERT INTO categories (id, name, slug) VALUES ('cat_phones', 'Phones', 'phones'), ('cat_other', 'Other', 'other');
@@ -36,7 +38,7 @@ function openStore(): Database {
             ('col_off', 'Off', 'grid', '{"source":"manual","productIds":["prod_phone"]}', 0),
             ('col_elsewhere', 'Elsewhere', 'grid', '{"source":"dynamic","categoryIds":["cat_other"]}', 1);
     `);
-    return createSqliteD1Database({ sqlite }).db;
+    return createSqliteD1Database({ sqlite, onQuery }).db;
 }
 
 const cart: StorefrontDiscountCart = {
@@ -92,6 +94,33 @@ describe("automatic promotions beyond the first twenty by priority (d1)", () => 
         const result = await quote(db);
         expect(result.applied?.discounts.map(({ promotionName }) => promotionName)).toEqual(["Last by priority"]);
         expect(result.applied?.totalDiscountMinor).toBe(5_000);
+    });
+
+    it("reads the automatic promotions that are on through their index, parsing no rule in SQL", async () => {
+        const queries: Array<{ query: string; values: readonly SQLInputValue[] }> = [];
+        const db = openStore((query, values) => queries.push({ query, values }));
+        await crowd(db);
+        await live(db, { name: "Last by priority", priority: 9_000, effects: [lineOff(1_000, { collectionIds: ["col_dynamic"] })] });
+        await live(db, { name: "Code", method: "code", codes: [{ code: "PHONE10" }], effects: [lineOff(500, { productIds: ["prod_phone"] })] });
+        // History the read must not walk: automatic promotions that ended.
+        sqlite!.exec(`UPDATE promotions SET ends_at = ${NOW - 60} WHERE name LIKE 'Ahead 1%'`);
+        queries.length = 0;
+
+        expect(await appliedNames(db)).toEqual(["Last by priority"]);
+
+        const promotionReads = queries.filter(({ query }) => /^\s*select/i.test(query) && /"promotion(s|_\w+)"/.test(query));
+        expect(promotionReads.length).toBeGreaterThanOrEqual(5);
+        const steps = promotionReads.flatMap(({ query, values }) => {
+            expect(query).not.toMatch(/json_/);
+            const bound = values.map((value) => typeof value === "boolean" ? Number(value) : value);
+            return (sqlite!.prepare(`EXPLAIN QUERY PLAN ${query}`).all(...bound) as Array<{ detail: string }>).map(({ detail }) => detail);
+        });
+        const promotionSteps = steps.filter((detail) => /^(SEARCH|SCAN) promotions\b/.test(detail));
+        expect(promotionSteps.length).toBeGreaterThan(0);
+        for (const detail of promotionSteps) {
+            expect(detail).toMatch(/USING (COVERING )?INDEX (promotions_automatic_live_idx \(method=\? AND status=\? AND deleted_at=\? AND ends_at[=>]\?\)|sqlite_autoindex_promotions_1 \(id=\?\))$/);
+        }
+        expect(steps.filter((detail) => /^SCAN promotion/.test(detail))).toEqual([]);
     });
 
     it("keeps a Buy X get Y whose buy side is in the cart, so its nudge still shows", async () => {

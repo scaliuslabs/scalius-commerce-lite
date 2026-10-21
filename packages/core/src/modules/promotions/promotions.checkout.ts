@@ -14,7 +14,7 @@ import {
 import { ValidationError } from "@scalius/core/errors";
 import { formatMoney, getDecimalPlaces } from "@scalius/shared/currency";
 import { discountedPriceMinor, fromMinor } from "@scalius/shared/money";
-import { and, asc, eq, isNull, sql, type AnyColumn, type SQL } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql, type AnyColumn, type SQL } from "drizzle-orm";
 
 import { collectionMembershipForConfig } from "../collections";
 import { publicProductBaseConditions, publicProductHasCustomerOptions } from "../products";
@@ -224,70 +224,44 @@ function idList(column: AnyColumn, ids: readonly string[]): SQL {
  */
 const untargetedPromotionSql = sql`NOT EXISTS (SELECT 1 FROM promotion_customer_segments AS segment_limit WHERE segment_limit.promotion_id = "promotions"."id")`;
 
-/** A stored rule's id array at `path`, or no rows: json_each fails closed on Postgres. */
-function storedIdRows(config: string, path: `$.${string}`): SQL {
-    const empty = path.slice(2).split(".").reduceRight((inner, key) => `{"${key}":${inner}}`, "[]");
-    return sql.raw(`json_each(CASE WHEN json_valid(${config}) THEN CASE WHEN json_type(${config}, '${path}') = 'array' THEN ${config} ELSE '${empty}' END ELSE '${empty}' END, '${path}')`);
-}
-
-/** The rule scope at `base` names products or collections (empty means every line). */
-function scopedSql(config: string, base: "$" | "$.buy"): SQL {
-    return sql`(EXISTS (SELECT 1 FROM ${storedIdRows(config, `${base}.productIds`)})
-        OR EXISTS (SELECT 1 FROM ${storedIdRows(config, `${base}.collectionIds`)}))`;
-}
-
 /**
- * Some cart product is in the rule scope at `base`: named directly, or in an
- * active collection that lists it (manual) or its category (dynamic), the
- * same membership `resolveLineCollections` resolves for the evaluator.
+ * The automatic promotions on now, first by priority. Writes keep at most
+ * `MAX_ACTIVE_AUTOMATIC_PROMOTIONS` automatic promotions on (active and not
+ * ended: `PROMOTION_AUTOMATIC_CAP`), so this read loads every one and its
+ * bound never cuts; the evaluator decides which reach the cart (a rule's
+ * scope is JSON, which SQL would parse row by row: docs/SCALE.md, finding 11).
+ *
+ * Each branch seeks `promotions_automatic_live_idx` by its end (none, or
+ * after now), so the read visits the promotions that are on, never the ended
+ * ones or the code discounts, however long the store's history. The open-ended
+ * branch walks the index by priority and stops at the bound.
  */
-function scopeTouchesCartSql(config: string, base: "$" | "$.buy", productIdsJson: string): SQL {
-    const cartProducts = sql`SELECT CAST(value AS TEXT) FROM json_each(${productIdsJson})`;
-    const source = sql.raw("COALESCE(CASE WHEN json_valid(target_collection.config) THEN json_extract(target_collection.config, '$.source') END, 'manual')");
-    return sql`(EXISTS (SELECT 1 FROM ${storedIdRows(config, `${base}.productIds`)} AS scope_product
-            WHERE CAST(scope_product.value AS TEXT) IN (${cartProducts}))
-        OR EXISTS (SELECT 1 FROM ${storedIdRows(config, `${base}.collectionIds`)} AS scope_collection
-            INNER JOIN collections AS target_collection ON target_collection.id = CAST(scope_collection.value AS TEXT)
-            WHERE target_collection.is_active = 1 AND target_collection.deleted_at IS NULL
-              AND ((${source} = 'dynamic'
-                    AND EXISTS (SELECT 1 FROM ${storedIdRows("target_collection.config", "$.categoryIds")} AS rule_category
-                        WHERE CAST(rule_category.value AS TEXT) IN (
-                            SELECT cart_product.category_id FROM products AS cart_product
-                            WHERE cart_product.id IN (${cartProducts}) AND cart_product.category_id IS NOT NULL)))
-                OR (${source} <> 'dynamic'
-                    AND EXISTS (SELECT 1 FROM ${storedIdRows("target_collection.config", "$.productIds")} AS member_product
-                        WHERE CAST(member_product.value AS TEXT) IN (${cartProducts}))))))`;
+function liveAutomaticIdsSql(now: number, guest: boolean): SQL {
+    const branch = (end: SQL) => sql`SELECT ${promotions.id} AS id, ${promotions.priority} AS priority FROM ${promotions}
+        WHERE ${promotions.method} = 'automatic' AND ${promotions.status} = 'active'
+          AND ${promotions.deletedAt} IS NULL AND ${end}
+          AND (${promotions.startsAt} IS NULL OR ${promotions.startsAt} <= ${now})
+          ${guest ? sql`AND ${untargetedPromotionSql}` : sql``}
+        ORDER BY ${promotions.priority}, ${promotions.id} LIMIT ${MAX_ACTIVE_AUTOMATIC_PROMOTIONS}`;
+    return sql`SELECT live_ids.id FROM (SELECT live.id FROM (
+            SELECT open_ended.id, open_ended.priority FROM (${branch(sql`${promotions.endsAt} IS NULL`)}) AS open_ended
+            UNION ALL
+            SELECT ending.id, ending.priority FROM (${branch(sql`${promotions.endsAt} > ${now}`)}) AS ending
+        ) AS live ORDER BY live.priority, live.id LIMIT ${MAX_ACTIVE_AUTOMATIC_PROMOTIONS}) AS live_ids`;
 }
 
-/**
- * An automatic promotion can do something for this cart: its product
- * discount's scope (or, for Buy X get Y, the scope to buy) reaches a cart
- * product, and every scoped minimum (other than one that gates only bundled
- * free shipping) counts a cart product. A promotion failing this can neither
- * save nor nudge (offers come from a Buy X get Y whose buy side is met), so
- * the read leaves it out before its bound.
- */
-function automaticReachesCartSql(productIds: readonly string[]): SQL {
-    const productIdsJson = JSON.stringify([...new Set(productIds)]);
-    return sql`NOT EXISTS (SELECT 1 FROM promotion_effects AS line_effect
-            WHERE line_effect.promotion_id = "promotions"."id" AND line_effect.deleted_at IS NULL
-              AND line_effect.target = 'line'
-              AND ${scopedSql("line_effect.config", "$")}
-              AND NOT ${scopeTouchesCartSql("line_effect.config", "$", productIdsJson)}
-              AND NOT (COALESCE(json_type(line_effect.config, '$.buy'), '') = 'object'
-                  AND (NOT ${scopedSql("line_effect.config", "$.buy")}
-                      OR ${scopeTouchesCartSql("line_effect.config", "$.buy", productIdsJson)})))
-        AND NOT EXISTS (SELECT 1 FROM promotion_conditions AS scoped_minimum
-            WHERE scoped_minimum.promotion_id = "promotions"."id"
-              AND COALESCE(json_type(scoped_minimum.config, '$.shippingOnly'), '') <> 'true'
-              AND ${scopedSql("scoped_minimum.config", "$")}
-              AND NOT ${scopeTouchesCartSql("scoped_minimum.config", "$", productIdsJson)})`;
+/** The candidate promotion ids: the submitted codes' promotions and the automatic ones on now. */
+export function promotionCandidateIdsSql(codes: readonly string[], now: number, guest: boolean): SQL {
+    const live = liveAutomaticIdsSql(now, guest);
+    return codes.length > 0
+        ? sql`(${promotionCodeIdsSql(codes)} UNION ${live})`
+        : sql`(${live})`;
 }
 
-/** Product pages list automatic Buy X get Y offers only. */
-const buyGetPromotionSql = sql`EXISTS (SELECT 1 FROM promotion_effects AS buy_get_effect
-    WHERE buy_get_effect.promotion_id = "promotions"."id" AND buy_get_effect.deleted_at IS NULL
-      AND COALESCE(json_type(buy_get_effect.config, '$.buy'), '') = 'object')`;
+/** The promotions of the submitted codes (at most `MAX_SUBMITTED_DISCOUNT_CODES`). */
+function promotionCodeIdsSql(codes: readonly string[]): SQL {
+    return sql`SELECT ${promotionCodes.promotionId} FROM ${promotionCodes} WHERE ${inArray(promotionCodes.normalizedCode, [...codes])}`;
+}
 
 /**
  * Loads the codes' promotions (any status, so the buyer hears why they fail)
@@ -296,38 +270,35 @@ const buyGetPromotionSql = sql`EXISTS (SELECT 1 FROM promotion_effects AS buy_ge
  * limited to segments compete only for a signed-in customer; then, when a
  * loaded active promotion is limited, the customer's membership of those
  * segments is read once per distinct segment (`matchCustomerSegments`).
- *
- * Automatic promotions are filtered in SQL first (those that reach the cart,
- * or the Buy X get Y ones for a product page) and bounded after. The bound is
- * the cap on automatic promotions that may be on at once, so it never cuts one.
+ * Every automatic promotion that is on is a candidate (`liveAutomaticIdsSql`);
+ * the read is bounded by the cap on them, not by the cart.
  */
 async function loadCandidates(
     db: Database,
     codes: readonly string[],
     input: StorefrontDiscountInput,
     now: number,
-    options: { declareTransition?: boolean; automatic?: "cart" | "buy_get" } = {},
+    options: { declareTransition?: boolean } = {},
 ) {
     const declareTransition = Boolean(options.declareTransition) && deps.active();
-    const codeIds = sql`SELECT ${promotionCodes.promotionId} FROM ${promotionCodes} WHERE ${idList(promotionCodes.normalizedCode, codes)}`;
-    const reaches = options.automatic === "buy_get"
-        ? buyGetPromotionSql
-        : automaticReachesCartSql(input.cart.lines.map((line) => line.productId));
-    const automaticIds = sql`SELECT automatic.id FROM (SELECT ${promotions.id} AS id FROM ${promotions}
-        WHERE ${promotions.method} = 'automatic' AND ${promotions.status} = 'active'
-          AND ${promotions.deletedAt} IS NULL
-          AND (${promotions.startsAt} IS NULL OR ${promotions.startsAt} <= ${now})
-          AND (${promotions.endsAt} IS NULL OR ${promotions.endsAt} > ${now})
-          ${input.segmentCustomerId ? sql`` : sql`AND ${untargetedPromotionSql}`}
-          AND ${reaches}
-        ORDER BY ${promotions.priority}, ${promotions.id} LIMIT ${MAX_ACTIVE_AUTOMATIC_PROMOTIONS}) AS automatic`;
-    const candidateIds = sql`(${codeIds} UNION ${automaticIds})`;
+    const candidateIds = promotionCandidateIdsSql(codes, now, !input.segmentCustomerId);
     const customerMatch = input.customerId
         ? sql`${promotionRedemptions.customerId} = ${input.customerId}`
         : input.customerPhone
             ? sql`${promotionRedemptions.customerId} IN (SELECT ${customers.id} FROM ${customers} WHERE ${customers.phone} = ${input.customerPhone})`
             : sql`1 = 0`;
-    const [parents, codeRows, conditionRows, effectRows, segmentRows, usageRows, transitionRows] = await db.batch([
+    // Redemption counts limit code discounts only; a cart without codes reads none.
+    const usageStatements = codes.length > 0
+        ? [db.select({
+            promotionId: promotionRedemptions.promotionId,
+            redemptionCount: sql<number>`count(*)`,
+            discountSpendMinor: sql<number>`coalesce(sum(${promotionRedemptions.discountAmountMinor}), 0)`,
+            customerRedemptionCount: sql<number>`coalesce(sum(CASE WHEN ${customerMatch} THEN 1 ELSE 0 END), 0)`,
+        }).from(promotionRedemptions)
+            .where(sql`${promotionRedemptions.promotionId} IN (${promotionCodeIdsSql(codes)})`)
+            .groupBy(promotionRedemptions.promotionId)]
+        : [];
+    const [parents, codeRows, conditionRows, effectRows, segmentRows, ...optionalRows] = await db.batch([
         db.select().from(promotions).where(sql`${promotions.id} IN ${candidateIds}`),
         db.select().from(promotionCodes)
             .where(sql`${promotionCodes.promotionId} IN ${candidateIds}`)
@@ -341,18 +312,14 @@ async function loadCandidates(
         db.select({ promotionId: promotionCustomerSegments.promotionId, segmentId: promotionCustomerSegments.segmentId })
             .from(promotionCustomerSegments)
             .where(sql`${promotionCustomerSegments.promotionId} IN ${candidateIds}`),
-        db.select({
-            promotionId: promotionRedemptions.promotionId,
-            redemptionCount: sql<number>`count(*)`,
-            discountSpendMinor: sql<number>`coalesce(sum(${promotionRedemptions.discountAmountMinor}), 0)`,
-            customerRedemptionCount: sql<number>`coalesce(sum(CASE WHEN ${customerMatch} THEN 1 ELSE 0 END), 0)`,
-        }).from(promotionRedemptions)
-            .where(sql`${promotionRedemptions.promotionId} IN (${codeIds})`)
-            .groupBy(promotionRedemptions.promotionId),
+        ...usageStatements,
         ...(declareTransition ? [nextAutomaticPromotionTransitionStatement(db, now)] : []),
     ]);
+    const usageRows = (usageStatements.length > 0 ? optionalRows[0] : []) as Array<{
+        promotionId: string; redemptionCount: number; discountSpendMinor: number; customerRedemptionCount: number;
+    }>;
     if (declareTransition) {
-        declareNextAutomaticPromotionTransition(transitionRows as Array<{ nextStart: number | null; nextEnd: number | null }> | undefined);
+        declareNextAutomaticPromotionTransition(optionalRows.at(-1) as Array<{ nextStart: number | null; nextEnd: number | null }> | undefined);
     }
     const usage = new Map(usageRows.map((row) => [row.promotionId, row]));
     // Only an active promotion can apply; the others fail on their status first.
@@ -909,7 +876,7 @@ export async function listProductBuyGetOffers(
         [],
         { cart: { currencyCode: currency.code, priceIncrementMinor: currency.priceIncrementMinor, lines: [], shippingAmountMinor: 0 } },
         evaluatedAtEpochSeconds,
-        { declareTransition: true, automatic: "buy_get" },
+        { declareTransition: true },
     );
     const candidates = typedCandidates(loaded)
         .filter((candidate) => candidate.method === "automatic" && buyGetEffect(candidate));
