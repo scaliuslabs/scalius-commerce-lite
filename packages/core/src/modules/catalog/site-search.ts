@@ -169,8 +169,10 @@ async function runSearch(
         { minPrice: options?.minPrice, maxPrice: options?.maxPrice },
         options?.pricing ? await options.pricing.context : null,
       );
+      // A live list prices its SKUs in the market: any list price can move a product across the bounds.
+      if (bounds.marketListPrices) deps.table("price_list_prices");
       productConditions.push(
-        buyerCatalogHasSkuInPriceRange(bounds.minPriceMinor, bounds.maxPriceMinor),
+        buyerCatalogHasSkuInPriceRange(bounds.minPriceMinor, bounds.maxPriceMinor, bounds.marketListPrices),
       );
     }
 

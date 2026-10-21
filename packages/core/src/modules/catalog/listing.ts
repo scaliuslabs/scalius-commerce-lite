@@ -7,6 +7,7 @@
 import { products, categories } from "@scalius/database/schema";
 import { and, sql, desc, eq, type SQL, type SQLWrapper } from "drizzle-orm";
 import { suggestSearchCorrection } from "./search-correction";
+import { marketPriceOrder } from "./market-price-order";
 import { productSearchRank, productSearchRelevanceOrder } from "./search-relevance";
 import { unixToDate } from "@scalius/shared/utils";
 import { fromMinor } from "@scalius/shared/money";
@@ -398,11 +399,19 @@ async function readStorefrontCatalogResults(
         cursor,
     } = params;
     const lists = planLimits().lists;
-    // A price filter in a market prices its bounds in the market first (FX).
-    const boundsMarket = pricing && (params.minPrice !== undefined || params.maxPrice !== undefined)
+    // A price filter in a market prices its bounds in the market first (FX),
+    // and a price order there needs the market's lists before its page.
+    const priceSort = sort === "price-asc" || sort === "price-desc";
+    const boundsMarket = pricing && (params.minPrice !== undefined || params.maxPrice !== undefined || priceSort)
         ? await pricing.context
         : null;
     const priceBounds = priceFilterBoundsMinor(params, boundsMarket);
+    // A live list can price a product anywhere: the price order is the
+    // market's own (`marketPriceOrder`), by page number.
+    const listedPriceOrder = Boolean(boundsMarket?.listed && priceSort && !scope.orderBy);
+    if (listedPriceOrder && cursor) {
+        throw invalidCursor("In a market priced by its lists, a price order pages by number, not by a cursor.");
+    }
     const unscoped = !scope.condition && !params.category && !params.search && !params.ids;
     // Facet counts apply every selection except their own facet's, so they
     // read the scope conditions before the facet filters are applied.
@@ -433,7 +442,7 @@ async function readStorefrontCatalogResults(
             : [getStorefrontProductOrderBy(sort, scope.sortAfterScope)];
     // A `cursor` continues the keyset orders; any other order pages by number
     // (within the plan's offset bound).
-    const keysetSort = !scope.orderBy && !(sort === "relevance" && search)
+    const keysetSort = !scope.orderBy && !(sort === "relevance" && search) && !listedPriceOrder
         ? LISTING_KEYSET_SORTS[sort as keyof typeof LISTING_KEYSET_SORTS]
         : undefined;
     const keysetOrder: KeysetOrder | undefined = keysetSort && {
@@ -571,10 +580,24 @@ async function readStorefrontCatalogResults(
             ))
             : sql`WITH listing_page AS MATERIALIZED (${subtreeTop ?? pageIdsFor(orderBy[0]!, [cursorCondition])}) SELECT * FROM listing_page`
         : null;
-    const idPage = relevancePage ?? (standardPageIds ? sql`(${standardPageIds}) AS listing_page` : null);
+    // The market's price order: the page's ids in order, as a JSON list.
+    const marketOrder = listedPriceOrder && !pageTooDeep
+        ? await marketPriceOrder(db, boundsMarket!, {
+            conditions,
+            needsProducts: countNeedsProducts,
+            key: "from",
+            direction: sort === "price-asc" ? "asc" : "desc",
+            needed: offset + limit + 1,
+        })
+        : null;
+    const marketPage = marketOrder ? sql`(
+        SELECT CAST(market_page.value AS TEXT) AS page_product_id, CAST(market_page.key AS INTEGER) AS page_position
+        FROM json_each(${JSON.stringify(marketOrder.slice(offset).map((row) => row.id))}) AS market_page
+    ) AS listing_page` : null;
+    const idPage = relevancePage ?? marketPage ?? (standardPageIds ? sql`(${standardPageIds}) AS listing_page` : null);
     const cardOrderBy = relevancePage
         ? [sql`listing_page.relevance_tier`, sql`listing_page.relevance_score`, sql`${products.name}`, desc(buyerState.productCreatedAt)]
-        : orderBy;
+        : marketPage ? [sql`listing_page.page_position`] : orderBy;
     const cardSku = buyerStateCardSku();
     // A presence page's cards in its language (MARKETS-DESIGN D9); none at the root.
     const translation = translationScopeOf(pricing);
@@ -716,6 +739,14 @@ async function readStorefrontCatalogResults(
     const market = await marketPriceContextOf(pricing);
     const decimalPlaces = marketDecimalPlaces(market, storeDecimalPlacesFromCode(totalCount?.storeCurrencyCode));
     const { total, totalIsCapped } = capTotal(totalCount?.count ?? 0, lists.countCap);
+    // In a market priced by its lists the range is the market's own: its
+    // lowest card price and its highest price, from the same two streams.
+    const listedRange = market?.listed && !pageTooDeep
+        ? await Promise.all([
+            marketPriceOrder(db, market, { conditions: priceRangeConditions, needsProducts: priceRangeNeedsProducts, key: "from", direction: "asc", needed: 1 }),
+            marketPriceOrder(db, market, { conditions: priceRangeConditions, needsProducts: priceRangeNeedsProducts, key: "to", direction: "desc", needed: 1 }),
+        ])
+        : null;
     const rawPriceRange = hasPriceFilter ? filteredPriceRange : totalCount;
     // Shop-all with a selection counts live only while the catalogue is small.
     const shopAllFacetsLive = unscoped && (plainShopAll || Number(
@@ -771,6 +802,8 @@ async function readStorefrontCatalogResults(
             : Promise.resolve([] as ListedCategory[]),
         shopAllFacetsLive ? facetReads() : Promise.resolve(scopedFacets),
     ]);
+    // A live list's prices order, bound and range a market's listing: any list price can move them.
+    if (market?.listed) deps.table("price_list_prices");
     declareListing(scope.dependencies ?? { scopes: ["all"] }, params, {
         facets: !unscoped || shopAllFacetsLive,
     });
@@ -843,7 +876,10 @@ async function readStorefrontCatalogResults(
                 })
                 : null,
         },
-        priceRange: {
+        priceRange: listedRange ? {
+            min: fromMinor(listedRange[0][0]?.price ?? 0, decimalPlaces),
+            max: fromMinor(listedRange[1][0]?.price ?? 0, decimalPlaces),
+        } : {
             min: fromMinor(marketAmountMinor(market, rawPriceRange?.min ?? 0), decimalPlaces),
             max: fromMinor(marketAmountMinor(market, rawPriceRange?.max ?? 0), decimalPlaces),
         },
