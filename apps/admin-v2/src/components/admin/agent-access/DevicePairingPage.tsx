@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { toast } from "~/lib/toast";
+import { AdminApiResponseError } from "~/lib/admin-api-error";
 
 import { SettingsCard, SettingsField } from "~/components/admin/settings/SettingsPage";
 import { Button } from "~/components/ui/button";
@@ -31,6 +32,7 @@ export function DevicePairingPage() {
   const [device, setDevice] = useState<AgentDeviceAuthorization | null>(null);
   const [selection, setSelection] = useState<AgentGrantSelection>(() => defaultSelection("cli"));
   const [decision, setDecision] = useState<"approved" | "denied" | null>(null);
+  const [needsTwoStep, setNeedsTwoStep] = useState(false);
 
   const lookup = useMutation({
     mutationFn: () => lookupAgentDeviceAuthorization(userCode),
@@ -38,7 +40,13 @@ export function DevicePairingPage() {
       setDevice(result);
       setSelection(defaultSelection("cli", result.resource));
     },
-    onError: () => toast.error(t("pairNotFound")),
+    // The API refuses (403) a session that may not connect tools: a Super
+    // Admin without two-step verification, or who skipped it at sign-in.
+    // That is not a wrong code; say what to do instead.
+    onError: (error) => {
+      if (error instanceof AdminApiResponseError && error.status === 403) setNeedsTwoStep(true);
+      else toast.error(t(error instanceof AdminApiResponseError && error.status === 404 ? "pairNotFound" : "pairLookupFailed"));
+    },
   });
   const decide = useMutation({
     mutationFn: (approve: boolean) =>
@@ -61,7 +69,18 @@ export function DevicePairingPage() {
   };
 
   let body;
-  if (decision || (device && device.status !== "pending")) {
+  if (needsTwoStep) {
+    body = (
+      <SettingsCard title={t("pairTwoStepTitle")} description={t("pairTwoStepBody")}>
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button type="button" variant="ghost" onClick={() => setNeedsTwoStep(false)}>{t("pairOtherCode")}</Button>
+          <Button asChild>
+            <a href="/admin/account">{t("pairTwoStepAction")}</a>
+          </Button>
+        </div>
+      </SettingsCard>
+    );
+  } else if (decision || (device && device.status !== "pending")) {
     body = (
       <SettingsCard
         title={decision === "approved" ? t("pairConnected") : decision ? t("pairNotConnected") : t("pairUnavailable")}
