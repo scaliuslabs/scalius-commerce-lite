@@ -109,7 +109,8 @@ export const STRUCTURAL_OP_GAPS: Readonly<Record<string, string>> = {
  * they change only through parent_id writes, category inserts and deletes.
  *
  * The same holds for the derived projections the registry exempts because
- * their sources' keys cover them: `product_facet_public_counts` (0138: kept
+ * their sources' keys cover them: `product_facet_public_counts` (0138) and
+ * `product_facet_scope_counts` (0174) (kept
  * by triggers on product_facet_values and product_buyer_state, rebuilt only
  * by `rebuildCatalogProjections`, which advances `store`) and
  * `recommendation_order_products` (kept by triggers on orders and
@@ -121,6 +122,7 @@ export const STRUCTURAL_OP_GAPS: Readonly<Record<string, string>> = {
 export const TRIGGER_OWNED_TABLES: ReadonlySet<string> = new Set([
   "category_closure",
   "product_facet_public_counts",
+  "product_facet_scope_counts",
   "recommendation_order_products",
 ]);
 export const TRIGGER_OWNED_COLUMNS: ReadonlySet<string> = new Set([

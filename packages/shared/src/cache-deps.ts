@@ -1060,6 +1060,7 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   // Derived or machinery.
   products_fts: FTS,
   product_facet_public_counts: "Derived public facet counts read by plain shop-all facets; canonical facet lf and buyer-state lm dependencies cover them.",
+  product_facet_scope_counts: "Derived public facet counts per category and brand (0174), read by plain category, brand and shop-all listings; canonical facet lf, buyer-state lm and review-stat dependencies cover them.",
   recommendation_order_products: "Derived order/product popularity; source orders and order_items advance recommendation-signals in the same transaction, which every live ranking declares.",
   categories_fts: FTS,
   pages_fts: "FTS index maintained by triggers from pages title and content, which advance pg:<id> and pg:*.",

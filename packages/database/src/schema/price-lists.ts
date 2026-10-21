@@ -82,6 +82,8 @@ export const priceListPrices = sqliteTable("price_list_prices", {
 }, (table) => [
     primaryKey({ columns: [table.priceListId, table.variantId, table.currencyCode, table.minQuantity] }),
     index("price_list_prices_variant_idx").on(table.variantId),
+    // A listing priced by a market's lists walks each list's prices in amount order (0174).
+    index("price_list_prices_amount_idx").on(table.priceListId, table.currencyCode, table.minQuantity, table.amountMinor),
     check("price_list_prices_currency_shape", sql`length(${table.currencyCode}) = 3 AND ${table.currencyCode} NOT GLOB '*[^A-Z]*'`),
     check("price_list_prices_amount_positive", sql`${table.amountMinor} > 0`),
     check("price_list_prices_compare_at", sql`${table.compareAtMinor} IS NULL OR ${table.compareAtMinor} > ${table.amountMinor}`),

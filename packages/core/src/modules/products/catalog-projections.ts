@@ -27,6 +27,7 @@ import {
     productBuyerState,
     productFacetValues,
     productFacetPublicCounts,
+    productFacetScopeCounts,
     productOptionDefinitions,
     productOptionValues,
     productVariantOptionValues,
@@ -35,6 +36,7 @@ import {
 } from "@scalius/database/schema";
 import { chunkForD1, type Database, safeBatch } from "@scalius/database/client";
 import { advanceCacheDeps } from "@scalius/database/cache-dep-writes";
+import { facetScopeCountsSelect } from "@scalius/database/derived-projections";
 import type { BatchItem } from "drizzle-orm/batch";
 import { and, asc, eq, gt, isNull, lte, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
@@ -622,6 +624,20 @@ export async function rebuildCatalogProjections(
             }),
             db.delete(productFacetPublicCounts),
             db.insert(productFacetPublicCounts).select(counts),
+            // The per-category and per-brand counts (0174), the same way.
+            advanceCacheDeps(db, ["store"], {
+                with: sql`expected_scope AS MATERIALIZED (${sql.raw(facetScopeCountsSelect)})`,
+                // The counts alone: a kept sample is any product of the scope with the value.
+                when: sql`EXISTS (
+                    SELECT scope_kind, scope_id, facet_kind, facet_key, value_key, product_count FROM expected_scope EXCEPT
+                    SELECT scope_kind, scope_id, facet_kind, facet_key, value_key, product_count FROM product_facet_scope_counts WHERE product_count > 0
+                ) OR EXISTS (
+                    SELECT scope_kind, scope_id, facet_kind, facet_key, value_key, product_count FROM product_facet_scope_counts WHERE product_count > 0
+                    EXCEPT SELECT scope_kind, scope_id, facet_kind, facet_key, value_key, product_count FROM expected_scope
+                )`,
+            }),
+            db.delete(productFacetScopeCounts),
+            db.insert(productFacetScopeCounts).select(sql.raw(facetScopeCountsSelect) as never),
         ] as never);
     }
     let processed = 0;

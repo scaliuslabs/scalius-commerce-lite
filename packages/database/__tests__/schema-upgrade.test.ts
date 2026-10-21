@@ -915,6 +915,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 5,
         postgresStatements: 5,
       },
+      {
+        version: 174,
+        name: "0174_catalog_scale",
+        sqliteStatements: 20,
+        postgresStatements: 20,
+      },
     ]);
   });
 
@@ -1179,6 +1185,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 171, name: "0171_app_customer_roles_and_jobs" },
           { version: 172, name: "0172_line_level_facts" },
           { version: 173, name: "0173_saved_payment_methods" },
+          { version: 174, name: "0174_catalog_scale" },
         ],
       });
     } finally {
