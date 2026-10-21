@@ -20,11 +20,26 @@ export function unitsWithCourier(order: Pick<Order, "items">): number {
   return order.items.reduce((sum, item) => sum + fulfilledUnits(item), 0);
 }
 
+/**
+ * Units that can't come back: a parcel returns from the courier, but a key, a
+ * service or a collected pickup doesn't, so the order is past cancelling.
+ */
+export function unitsHandedOverForGood(order: Pick<Order, "items">): number {
+  return order.items
+    .filter((item) => item.fulfillmentType !== "ship")
+    .reduce((sum, item) => sum + fulfilledUnits(item), 0);
+}
+
 /** Why Cancelled isn't offered, in the merchant's words; null when it can be. */
 export function shippedCancelReason(
   order: Pick<Order, "items">,
-  t: (key: "cancel.shippedOne" | "cancel.shippedMany", vars: { count: number }) => string,
+  t: (
+    key: "cancel.shippedOne" | "cancel.shippedMany" | "cancel.handedOverOne" | "cancel.handedOverMany",
+    vars: { count: number },
+  ) => string,
 ): string | null {
-  const count = unitsWithCourier(order);
-  return count === 0 ? null : t(count === 1 ? "cancel.shippedOne" : "cancel.shippedMany", { count });
+  const handedOver = unitsHandedOverForGood(order);
+  const shipped = unitsWithCourier(order) - handedOver;
+  if (handedOver > 0) return t(handedOver === 1 ? "cancel.handedOverOne" : "cancel.handedOverMany", { count: handedOver });
+  return shipped === 0 ? null : t(shipped === 1 ? "cancel.shippedOne" : "cancel.shippedMany", { count: shipped });
 }

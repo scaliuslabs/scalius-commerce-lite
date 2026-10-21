@@ -17,7 +17,7 @@ import {
 import type { OrderDetailMessageKey } from "~/i18n/order-detail";
 import { clearOrderNotice } from "~/lib/order-notice";
 import { useCancelRequestGuard } from "./CancelRequestGuard";
-import { restockedUnits, shippedCancelReason, unitsWithCourier } from "./cancel-order";
+import { restockedUnits, shippedCancelReason, unitsHandedOverForGood, unitsWithCourier } from "./cancel-order";
 import type { OrderActionRequest } from "./primary-action";
 import type { Order } from "./types";
 
@@ -88,7 +88,8 @@ export function OrderStatusCard({ order, request }: { order: Order; request?: Or
   const blocked = new Map(options.filter((option) => option.block).map((option) => [option.status as string, option.block!]));
   const cancelBlock = blocked.get("cancelled");
   const changeable = !statusLocked(order, canChangeStatus) && options.length > 0;
-  const nextStep = changeable && cancelBlock?.code === "with_courier" ? courierNextStep(order) : null;
+  // Only a parcel can come back; nothing undoes a key or a service already handed over.
+  const nextStep = changeable && cancelBlock?.code === "with_courier" && unitsHandedOverForGood(order) === 0 ? courierNextStep(order) : null;
 
   const change = (next: string) => {
     if (!isAdminOrderStatus(next) || blocked.has(next)) return;
