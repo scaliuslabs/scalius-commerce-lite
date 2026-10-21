@@ -27431,7 +27431,7 @@ export type PostApiV1AdminResourcesOrdersByIdRefundsData = {
          */
         reason: string;
         /**
-         * `original`: back to the payments it came from. `store_credit`: one new gift card for the whole amount, sent to the order contact.
+         * `original`: back to the payments it came from. `store_credit`: one new gift card for the whole amount, sent to the order contact. An app or agent may give store credit only for money a provider captured (or gift-card value); over a cash-on-delivery or recorded payment it is refused with reason `store_credit_needs_staff`.
          */
         settlement?: 'original' | 'store_credit';
         /**
