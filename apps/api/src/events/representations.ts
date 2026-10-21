@@ -145,6 +145,8 @@ export async function readOrderRepresentations(db: Database, ids: readonly strin
       variantId: orderItems.variantId,
       title: orderItems.productName,
       variantLabel: orderItems.variantLabel,
+      // The code it was sold under (0179); older lines read the SKU's current code, in the same read.
+      sku: sql<string | null>`coalesce(${orderItems.sku}, (SELECT ${productVariants.sku} FROM ${productVariants} WHERE ${productVariants.id} = ${orderItems.variantId}))`,
       quantity: orderItems.quantity,
       fulfilledQuantity: orderItems.fulfilledQuantity,
       unitPriceMinor: orderItems.unitPriceMinor,
@@ -171,6 +173,7 @@ type OrderLineRow = {
   variantId: string | null;
   title: string | null;
   variantLabel: string | null;
+  sku: string | null;
   quantity: number;
   fulfilledQuantity: number | null;
   unitPriceMinor: number | null;

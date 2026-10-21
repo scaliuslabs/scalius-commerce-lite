@@ -44,6 +44,29 @@ describe("sealed event representations", () => {
     expect(result).not.toHaveProperty("totalAmount");
   });
 
+  it("keeps the SKU code a line was sold under after the SKU is renamed (0179); an older line reads the current code", async () => {
+    sqlite.exec(`INSERT INTO products (id, name, slug, price_minor, is_active) VALUES ('prod_sku', 'Panjabi', 'panjabi', 6275, 1);
+      INSERT INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory) VALUES ('var_sku', 'prod_sku', 'PNJ-BLUE-M', 6275, 5, 1, 1);
+      INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, status, total_amount_minor)
+      VALUES ('ord_sku', 'Buyer', '+8801711000001', 'House 1', 'city', 'zone', 'pending', 12550);
+      INSERT INTO order_items (id, order_id, product_id, variant_id, quantity, product_name, unit_price_minor)
+      VALUES ('item_sold', 'ord_sku', 'prod_sku', 'var_sku', 1, 'Panjabi', 6275),
+             ('item_none', 'ord_sku', 'prod_sku', NULL, 1, 'Panjabi', 6275);
+      INSERT INTO order_items (id, order_id, product_id, variant_id, quantity, product_name, unit_price_minor, sku)
+      VALUES ('item_legacy', 'ord_sku', 'prod_sku', 'var_sku', 1, 'Panjabi', 6275, NULL);
+      UPDATE order_items SET sku = NULL WHERE id = 'item_legacy';
+      UPDATE product_variants SET sku = 'PNJ-NAVY-M' WHERE id = 'var_sku';`);
+    expect(sqlite.prepare("SELECT id, sku FROM order_items WHERE order_id = 'ord_sku' ORDER BY id").all())
+      .toEqual([{ id: "item_legacy", sku: null }, { id: "item_none", sku: null }, { id: "item_sold", sku: "PNJ-BLUE-M" }]);
+    const result = await createWebhookRepresentationResolver(db)(event({
+      topic: "order.created", resourceType: "order", resourceId: "ord_sku",
+      facts: { orderId: "ord_sku", status: "pending", paymentStatus: "unpaid", channel: "online_store" },
+    }));
+    expect(EVENT_REPRESENTATION_SCHEMAS.order.safeParse(result).success).toBe(true);
+    const skus = Object.fromEntries((result as { lines: Array<{ id: string; sku: string | null }> }).lines.map((entry) => [entry.id, entry.sku]));
+    expect(skus).toEqual({ item_sold: "PNJ-BLUE-M", item_legacy: "PNJ-NAVY-M", item_none: null });
+  });
+
   it("presents payments in minor units without stored provider metadata", async () => {
     sqlite.exec(`INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone)
       VALUES ('ord_event', 'Buyer', '+8801711000001', 'House 1', 'city', 'zone');

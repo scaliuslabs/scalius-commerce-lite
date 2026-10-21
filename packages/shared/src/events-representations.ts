@@ -65,6 +65,12 @@ const orderLineSchema = z.object({
   variantId: id.nullable(),
   title: text.nullable(),
   variantLabel: text.nullable(),
+  /**
+   * The SKU code the line was sold under, frozen when the line was created
+   * (0179); for lines created before 0179, the SKU's current code. Null for a
+   * line without a SKU.
+   */
+  sku: text.nullable(),
   quantity: z.number().int(),
   fulfilledQuantity: z.number().int(),
   unitPriceMinor: minor,
