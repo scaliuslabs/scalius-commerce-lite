@@ -1,6 +1,7 @@
 // The refund dialog of the Payment card, loaded the first time it opens so the
 // order page's first render carries no refund form.
 import { useRef, useState, type FormEvent } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -23,9 +24,10 @@ import { orderDetailLabel } from "~/i18n/order-detail";
 import { orderPaymentDialogMessages } from "~/i18n/order-payment-dialogs";
 import { resourceMessages } from "~/i18n/resource";
 import { orderErrorMessage, useRefundOrder } from "~/lib/api-mutations/orders";
+import { orderReturnsQueryOptions } from "~/lib/api-query-options/orders";
 import { RefundSettlementField, refundSettlementBody, type RefundSettlement } from "./RefundSettlementField";
 import { clampQuantity, getOrderItemName } from "./order-returns/shared";
-import { refundLinesBody, refundableLines } from "./refund-lines";
+import { receivedReturnLineQuantities, refundLinesBody, refundableLines } from "./refund-lines";
 import type { Order } from "./types";
 
 const REFUND_REASONS = ["requested_by_customer", "returned_items", "duplicate", "fraudulent", "out_of_stock"] as const;
@@ -62,7 +64,15 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
   const [reason, setReason] = useState<string>(owed === null ? "requested_by_customer" : "returned_items");
   const [settlement, setSettlement] = useState<RefundSettlement>("original");
   const [manualConfirmed, setManualConfirmed] = useState(false);
-  const [lineQuantities, setLineQuantities] = useState<Record<string, number>>({});
+  const queryClient = useQueryClient();
+  // A refund of what came back starts with the returned lines named (read from the returns card's data).
+  const [lineQuantities, setLineQuantities] = useState<Record<string, number>>(() => owed === null
+    ? {}
+    : receivedReturnLineQuantities(
+      order.items,
+      queryClient.getQueryData(orderReturnsQueryOptions(order.id).queryKey)?.returns ?? [],
+      Number(order.refundedAmount ?? 0),
+    ));
   const lineChoices = refundableLines(order.items);
   const requestKey = useRef(crypto.randomUUID());
   const mutation = useRefundOrder();

@@ -62,6 +62,9 @@ export function ApproveReturnDialog({
     );
   };
 
+  const approvedCount = lines.reduce((sum, line) => sum + line.approvedQuantity, 0);
+  const rejectedCount = lines.reduce((sum, line) => sum + line.rejectedQuantity, 0);
+
   return (
     <Dialog open={open} onOpenChange={(next) => !mutation.isPending && onOpenChange(next)}>
       <DialogContent>
@@ -104,12 +107,11 @@ export function ApproveReturnDialog({
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>{r("cancel")}</Button>
           <Button type="button" variant={rejectAll ? "destructive" : "default"} onClick={submit} loading={mutation.isPending}>
-            {rejectAll
+{rejectAll
               ? t("returns.reject")
-              : t("returns.approveSummary", {
-                  approved: lines.reduce((sum, line) => sum + line.approvedQuantity, 0),
-                  rejected: lines.reduce((sum, line) => sum + line.rejectedQuantity, 0),
-                })}
+              : rejectedCount === 0
+                ? t("returns.approveAll", { count: approvedCount })
+                : t("returns.approveSummary", { approved: approvedCount, rejected: rejectedCount })}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1366,6 +1366,8 @@ const STATUSES = ["pending", "processing", "confirmed", "shipped", "delivered", 
 const SHIPPED_STATUSES = new Set(["shipped", "delivered", "completed", "returned"]);
 let orderItems = 0;
 let fulfilledLines = 0;
+const insPaidPayment = db.prepare(`INSERT INTO order_payments (id, order_id, currency, payment_method, payment_type, status, cod_collected_at, created_at, updated_at, provider_ref, amount_minor, settlement_currency, settlement_amount_minor, settlement_rate)
+  VALUES (?, ?, 'BDT', ?, 'full', 'succeeded', ?, ?, ?, ?, ?, 'BDT', ?8, '1')`);
 for (let start = 0; start < ORDERS; start += 5000) {
   tx(() => {
     for (let index = start; index < Math.min(ORDERS, start + 5000); index += 1) {
@@ -1396,6 +1398,12 @@ for (let start = 0; start < ORDERS; start += 5000) {
         inside ? "sm_scale_inside" : "sm_scale_outside", shipping === 0 ? "Free delivery" : inside ? DELIVERY_RATE_NAMES.inside : DELIVERY_RATE_NAMES.outside,
         status, method, paid ? "paid" : "unpaid", fulfilment === "none" ? "pending" : fulfilment, customer.id,
         subtotal, shipping, total, paid, total - paid, netTerms ? 30 : null, netTerms ? createdAt + 30 * DAY : null, createdAt, updatedAt);
+      // A paid order carries the captured payment its paid amount comes from, so it can be refunded.
+      if (paid > 0) {
+        const paidAt = updatedAt;
+        insPaidPayment.run(`pay_scale_${pad(index, 6)}`, id, method, method === "cod" ? paidAt : null, paidAt, paidAt,
+          method === "cod" ? null : `${method}_${100000 + index}`, paid);
+      }
       lines.forEach((line, lineIndex) => {
         insOrderItem.run(`oi_scale_${pad(index, 6)}_${lineIndex}`, id, line.product_id, line.id, quantities[lineIndex],
           line.product_name, line.label, line.price_minor, line.price_minor * quantities[lineIndex], line.price_minor * quantities[lineIndex], createdAt);
