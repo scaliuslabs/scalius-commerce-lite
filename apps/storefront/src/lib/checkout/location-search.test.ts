@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rankPlaces } from "./location-search";
+import { placeDisplayName, rankPlaces } from "./location-search";
 
 const places = ["Love Road, Mirpur-2", "Mirpur-10", "Dhanmondi", "Mohammadpur", "Gulshan", "Uttara", "Tejgaon", "Banani"];
 const find = (query: string, list = places) =>
@@ -21,6 +21,14 @@ describe("place search", () => {
     expect(find("উত্তরা")).toEqual(["Uttara"]);
     expect(find("তেজগাঁও")).toEqual(["Tejgaon"]);
     expect(find("চট্টগ্রাম", ["Chattogram", "Sylhet"])).toEqual(["Chattogram"]);
+    // The official name finds the courier's older spelling, and back.
+    expect(find("Chattogram", ["Chittagong", "Sylhet"])).toEqual(["Chittagong"]);
+    expect(find("chatto", ["Chittagong", "Sylhet"])).toEqual(["Chittagong"]);
+    expect(find("Barishal", ["Barisal", "Bhola"])).toEqual(["Barisal"]);
+    expect(find("Jessore", ["Jashore", "Khulna"])).toEqual(["Jashore"]);
+    expect(placeDisplayName("Double mooring")).toBe("Double Mooring");
+    expect(placeDisplayName("azampur (Uttara)")).toBe("Azampur (Uttara)");
+    expect(placeDisplayName("Mirpur DOHS")).toBe("Mirpur DOHS");
     // Bangla জ and ভ are written z and v in English place names.
     expect(find("জিন্দা", ["Amberkhana", "Zindabazar"])).toEqual(["Zindabazar"]);
     expect(find("ভাটারা", ["Badda", "Vatara"])).toEqual(["Vatara"]);
