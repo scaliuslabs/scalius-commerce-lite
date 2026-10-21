@@ -636,7 +636,6 @@ app.openapi(createRoute({
   path: "/theme/publish",
   tags: ["Admin - Settings"],
   summary: "Publish the exact saved draft revision, with an optional note for the version history",
-  description: "A draft that draws with an app the storefront would not draw (not active, its storefront code not approved, or no longer declaring that section, skin or product block) is refused with theme_apps_unavailable: details.apps lists each app (pluginId, name when installed, reason app_inactive or not_declared, and its parts: kind, type, target, path, place and the app's name for the part), at most 20 parts in all (details.moreParts counts the rest). Activate the app, or remove its parts, then publish again.",
   operationId: "dashboard.theme.publish",
   request: {
     body: {
