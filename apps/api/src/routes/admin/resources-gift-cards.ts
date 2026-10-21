@@ -72,7 +72,7 @@ const giftCardSummaryShape = {
   source: z.enum(["purchase", "manual", "refund"]),
   customerId: z.string().nullable().openapi({ description: "The customer who owns it, if any." }),
   recipientName: protectedField("name", z.string().nullable()),
-  version: z.number().int().positive().openapi({ description: "Send it as `expectedVersion` to change the card; every balance movement advances it." }),
+  revision: z.number().int().positive().openapi({ description: "Send it as `expectedRevision` to change the card; every balance movement advances it." }),
   createdAt: isoTimestamp,
 };
 
@@ -116,7 +116,7 @@ function summaryResource(card: StaffGiftCardSummary): GiftCardSummaryResourceVal
     source: card.source,
     customerId: card.customer?.id ?? null,
     recipientName: card.recipientName,
-    version: card.version,
+    revision: card.version,
     createdAt: iso(card.createdAt),
   };
 }
@@ -186,7 +186,7 @@ function appLimitRefusal(c: Context, pluginId: string | undefined, limitMinor: n
 }
 
 const giftCardId = z.object({ id: z.string().min(4).max(80) });
-const expectedVersion = z.number().int().positive().openapi({ description: "The card's `version` you read; a card changed since is refused with 409." });
+const expectedRevision = z.number().int().positive().openapi({ description: "The card's `revision` you read; a card changed since is refused with 409." });
 const giftCardEnvelope = successEnvelope(z.object({ giftCard: GiftCardResource }));
 const writeResponses = { ...errorResponses, 409: conflictResponse };
 
@@ -335,7 +335,7 @@ app.openapi(createRoute({
     body: {
       required: true,
       content: { "application/json": { schema: z.object({
-        expectedVersion,
+        expectedRevision,
         amountMinor: z.number().int().min(-Number.MAX_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER).refine((value) => value !== 0, "Enter an amount to add or remove."),
         reason: z.string().trim().min(1).max(500),
       }).strict() } },
@@ -368,7 +368,7 @@ app.openapi(createRoute({
     reason: body.reason,
     requestKey: await scopedRequestKey(c, "dashboard.resources.gift_cards.adjust", c.req.valid("header")["idempotency-key"]),
     actorUserId: actorId(c),
-    expectedVersion: body.expectedVersion,
+    expectedVersion: body.expectedRevision,
     ...(limit ? { extraStatements: appValueStatements(c, limit.pluginId, body.amountMinor, limit.limitMinor) } : {}),
   }).catch(appLimitRefusal(c, limit?.pluginId, limit?.limitMinor ?? 0, store.code));
   return ok(c, { giftCard: await readGiftCardResource(c, id) });
@@ -386,7 +386,7 @@ app.openapi(createRoute({
     body: {
       required: true,
       content: { "application/json": { schema: z.object({
-        expectedVersion,
+        expectedRevision,
         status: z.enum(["active", "disabled"]).optional(),
         expiresAt: z.string().datetime({ offset: true }).nullable().optional().openapi({ description: "null removes the expiry." }),
         customerId: z.string().min(1).max(80).nullable().optional(),
@@ -403,7 +403,7 @@ app.openapi(createRoute({
   const body = c.req.valid("json");
   await updateGiftCardForStaff(c.get("db"), {
     giftCardId: id,
-    version: body.expectedVersion,
+    version: body.expectedRevision,
     status: body.status,
     expiresAt: parseExpiry(body.expiresAt),
     customerId: body.customerId,

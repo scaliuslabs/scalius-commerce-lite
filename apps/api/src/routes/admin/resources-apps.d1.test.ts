@@ -68,18 +68,18 @@ describe("gift cards in the app API", () => {
 
   it("adjusts and disables under the version read, refusing a stale one", async () => {
     const issued = (await call("POST", "/resources/gift-cards", { body: { amountMinor: 10_000 } })).body.data.giftCard;
-    const stale = await call("POST", `/resources/gift-cards/${issued.id}/adjust`, { body: { expectedVersion: issued.version + 1, amountMinor: 5_000, reason: "Goodwill" } });
+    const stale = await call("POST", `/resources/gift-cards/${issued.id}/adjust`, { body: { expectedRevision: issued.revision + 1, amountMinor: 5_000, reason: "Goodwill" } });
     expect(stale.status).toBe(409);
     const adjusted = await call("POST", `/resources/gift-cards/${issued.id}/adjust`, {
-      body: { expectedVersion: issued.version, amountMinor: -4_000, reason: "Correction" },
+      body: { expectedRevision: issued.revision, amountMinor: -4_000, reason: "Correction" },
       headers: { "Idempotency-Key": "correction-0001" },
     });
     expect(adjusted.status).toBe(200);
     expect(adjusted.body.data.giftCard.balanceMinor).toBe(6_000);
     expect(adjusted.body.data.giftCard.transactions.map((row: { kind: string }) => row.kind).sort()).toEqual(["adjust", "issue"]);
-    const disabled = await call("PATCH", `/resources/gift-cards/${issued.id}`, { body: { expectedVersion: adjusted.body.data.giftCard.version, status: "disabled" } });
+    const disabled = await call("PATCH", `/resources/gift-cards/${issued.id}`, { body: { expectedRevision: adjusted.body.data.giftCard.revision, status: "disabled" } });
     expect(disabled.body.data.giftCard).toMatchObject({ status: "disabled", balanceMinor: 6_000 });
-    expect((await call("PATCH", `/resources/gift-cards/${issued.id}`, { body: { expectedVersion: issued.version, status: "active" } })).status).toBe(409);
+    expect((await call("PATCH", `/resources/gift-cards/${issued.id}`, { body: { expectedRevision: issued.revision, status: "active" } })).status).toBe(409);
   });
 });
 
@@ -118,22 +118,22 @@ describe("gift cards an app writes", () => {
     const owned = (await call("POST", "/resources/gift-cards", { body: { amountMinor: 30_000, customerId: "cust_buyer" } })).body.data.giftCard;
     const unowned = (await call("POST", "/resources/gift-cards", { body: { amountMinor: 30_000 } })).body.data.giftCard;
     asApp();
-    const steal = await call("PATCH", `/resources/gift-cards/${owned.id}`, { body: { expectedVersion: owned.version, customerId: "cust_thief" } });
+    const steal = await call("PATCH", `/resources/gift-cards/${owned.id}`, { body: { expectedRevision: owned.revision, customerId: "cust_thief" } });
     expect(steal.status).toBe(403);
-    expect((await call("PATCH", `/resources/gift-cards/${unowned.id}`, { body: { expectedVersion: unowned.version, customerId: "cust_thief" } })).status).toBe(403);
-    expect((await call("PATCH", `/resources/gift-cards/${owned.id}`, { body: { expectedVersion: owned.version, customerId: null } })).status).toBe(403);
+    expect((await call("PATCH", `/resources/gift-cards/${unowned.id}`, { body: { expectedRevision: unowned.revision, customerId: "cust_thief" } })).status).toBe(403);
+    expect((await call("PATCH", `/resources/gift-cards/${owned.id}`, { body: { expectedRevision: owned.revision, customerId: null } })).status).toBe(403);
     expect(sqlite.prepare("SELECT customer_id FROM gift_cards WHERE id = ?").get(owned.id)).toEqual({ customer_id: "cust_buyer" });
     expect(sqlite.prepare("SELECT customer_id FROM gift_cards WHERE id = ?").get(unowned.id)).toEqual({ customer_id: null });
     // A stale version is still a conflict, and other fields still change.
-    expect((await call("PATCH", `/resources/gift-cards/${owned.id}`, { body: { expectedVersion: owned.version + 1, customerId: "cust_thief" } })).status).toBe(409);
-    expect((await call("PATCH", `/resources/gift-cards/${owned.id}`, { body: { expectedVersion: owned.version, customerId: "cust_buyer", note: "VIP" } })).status).toBe(200);
+    expect((await call("PATCH", `/resources/gift-cards/${owned.id}`, { body: { expectedRevision: owned.revision + 1, customerId: "cust_thief" } })).status).toBe(409);
+    expect((await call("PATCH", `/resources/gift-cards/${owned.id}`, { body: { expectedRevision: owned.revision, customerId: "cust_buyer", note: "VIP" } })).status).toBe(200);
     // Spent to zero, the card can be handed to someone else.
-    const emptied = (await call("POST", `/resources/gift-cards/${unowned.id}/adjust`, { body: { expectedVersion: unowned.version, amountMinor: -30_000, reason: "Expired promo" } })).body.data.giftCard;
-    expect((await call("PATCH", `/resources/gift-cards/${unowned.id}`, { body: { expectedVersion: emptied.version, customerId: "cust_thief" } })).status).toBe(200);
+    const emptied = (await call("POST", `/resources/gift-cards/${unowned.id}/adjust`, { body: { expectedRevision: unowned.revision, amountMinor: -30_000, reason: "Expired promo" } })).body.data.giftCard;
+    expect((await call("PATCH", `/resources/gift-cards/${unowned.id}`, { body: { expectedRevision: emptied.revision, customerId: "cust_thief" } })).status).toBe(200);
     // Staff may move a funded card.
     principal = null;
     const current = (await call("GET", `/resources/gift-cards/${owned.id}`)).body.data.giftCard;
-    expect((await call("PATCH", `/resources/gift-cards/${owned.id}`, { body: { expectedVersion: current.version, customerId: "cust_thief" } })).status).toBe(200);
+    expect((await call("PATCH", `/resources/gift-cards/${owned.id}`, { body: { expectedRevision: current.revision, customerId: "cust_thief" } })).status).toBe(200);
   });
 
   it("lets staff set the daily app limit in the store currency, under the revision they read", async () => {
@@ -157,16 +157,16 @@ describe("gift cards an app writes", () => {
     // A replay is the same card, counted once.
     expect((await issue(60_000, "daily reward 0001")).body.data.giftCard.id).toBe(first.body.data.giftCard.id);
     const card = first.body.data.giftCard;
-    const topUp = (amountMinor: number, key: string, version: number) => call("POST", `/resources/gift-cards/${card.id}/adjust`, {
-      body: { expectedVersion: version, amountMinor, reason: "Bonus" },
+    const topUp = (amountMinor: number, key: string, revision: number) => call("POST", `/resources/gift-cards/${card.id}/adjust`, {
+      body: { expectedRevision: revision, amountMinor, reason: "Bonus" },
       headers: { "Idempotency-Key": key },
     });
-    expect((await topUp(50_000, "bonus top-up 0001", card.version)).status).toBe(403);
-    const fits = await topUp(40_000, "bonus top-up 0002", card.version);
+    expect((await topUp(50_000, "bonus top-up 0001", card.revision)).status).toBe(403);
+    const fits = await topUp(40_000, "bonus top-up 0002", card.revision);
     expect(fits.status).toBe(200);
     expect((await issue(100, "one more taka 1")).status).toBe(403);
     // Taking value away is never capped.
-    expect((await topUp(-10_000, "clawback 0001", fits.body.data.giftCard.version)).status).toBe(200);
+    expect((await topUp(-10_000, "clawback 0001", fits.body.data.giftCard.revision)).status).toBe(200);
     expect(sqlite.prepare("SELECT sum(initial_amount_minor) AS n FROM gift_cards").get()).toEqual({ n: 60_000 });
     expect(sqlite.prepare("SELECT value FROM system_kv WHERE substr(key, 1, 21) = 'gift-cards:app-value:'").get()).toEqual({ value: "100000" });
     // Another app has its own day; staff are not capped.

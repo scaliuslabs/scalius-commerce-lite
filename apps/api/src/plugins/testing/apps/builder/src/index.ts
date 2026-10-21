@@ -104,15 +104,15 @@ const steps: Array<(ctx: PluginContext, input: SetupInput, jobId: string) => Pro
   },
   async (ctx) => {
     const { theme } = await call<{ theme: { draft: { revision: number; basePublishedRevision: number } } }>(ctx, "theme.get", {});
-    const applied = await call<{ draft: { revision: number; basePublishedRevision: number } }>(ctx, "theme.apply_template", {
-      body: { template: "launch", expectedDraftRevision: theme.draft.revision, basePublishedRevision: theme.draft.basePublishedRevision },
+    const applied = await call<{ theme: { draft: { revision: number; basePublishedRevision: number } } }>(ctx, "theme.apply_template", {
+      body: { template: "launch", expectedRevision: theme.draft.revision, basePublishedRevision: theme.draft.basePublishedRevision },
     });
     await call(ctx, "theme.set_section_settings", {
       body: {
         sectionId: "laptops",
         settings: { title: "Phones", source: { kind: "category", handle: "phones" } },
-        expectedDraftRevision: applied.draft.revision,
-        basePublishedRevision: applied.draft.basePublishedRevision,
+        expectedRevision: applied.theme.draft.revision,
+        basePublishedRevision: applied.theme.draft.basePublishedRevision,
       },
     });
     return "Home page drafted";

@@ -4,5 +4,29 @@
   "from": "2215ca849929b527",
   "change": "transaction: the representation was removed.",
   "reason": "Pre-lock rename (audit R2 item 11): each topic's prefix names its resource, so the gift card ledger resource transaction is gift_card_transaction (topic gift_card_transaction.created) with the same fields and protection; migration 0164 rewrites stored topics, grants, registrations and subscriptions."
+ },
+ {
+  "snapshot": "events.representations.snapshot.json",
+  "from": "a39390a7c646e076",
+  "change": "order version: the field was removed.",
+  "reason": "Pre-lock (audit L2): one optimistic-concurrency vocabulary. Every resource exposes `revision` and every write takes `expectedRevision`; orders, returns, reviews and gift cards exposed `version` (the same counter, now named revision). `stockVersion`/`expectedStockVersion` stay the one named exception: they guard a SKU's stock counter, not the resource."
+ },
+ {
+  "snapshot": "events.representations.snapshot.json",
+  "from": "a39390a7c646e076",
+  "change": "return version: the field was removed.",
+  "reason": "Pre-lock (audit L2): one optimistic-concurrency vocabulary. Every resource exposes `revision` and every write takes `expectedRevision`; orders, returns, reviews and gift cards exposed `version` (the same counter, now named revision). `stockVersion`/`expectedStockVersion` stay the one named exception: they guard a SKU's stock counter, not the resource."
+ },
+ {
+  "snapshot": "events.representations.snapshot.json",
+  "from": "a39390a7c646e076",
+  "change": "review version: the field was removed.",
+  "reason": "Pre-lock (audit L2): one optimistic-concurrency vocabulary. Every resource exposes `revision` and every write takes `expectedRevision`; orders, returns, reviews and gift cards exposed `version` (the same counter, now named revision). `stockVersion`/`expectedStockVersion` stay the one named exception: they guard a SKU's stock counter, not the resource."
+ },
+ {
+  "snapshot": "events.representations.snapshot.json",
+  "from": "a39390a7c646e076",
+  "change": "gift_card version: the field was removed.",
+  "reason": "Pre-lock (audit L2): one optimistic-concurrency vocabulary. Every resource exposes `revision` and every write takes `expectedRevision`; orders, returns, reviews and gift cards exposed `version` (the same counter, now named revision). `stockVersion`/`expectedStockVersion` stay the one named exception: they guard a SKU's stock counter, not the resource."
  }
 ]

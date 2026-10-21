@@ -166,5 +166,173 @@
   "from": "81e0e8b5db36a8ec",
   "change": "objects.types.update: removed from the stable app API.",
   "reason": "Pre-lock rename (audit L4): stable names are designed as <resource>.<verb> in the sealed table STABLE_APP_OPERATIONS (@scalius/shared/plugins/app-operations), no longer derived from dashboard route ids; objects.types.update is now object_types.update, the same operation."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "a732072f468101d4",
+  "change": "fulfillments.create output data.order.version: the field was removed.",
+  "reason": "Pre-lock (audit L2): one optimistic-concurrency vocabulary. Every resource exposes `revision` and every write takes `expectedRevision` (in the body; a DELETE in the query); orders, returns, reviews, gift cards and webhook subscriptions exposed `version`, the theme took `expectedDraftRevision` (the same counters, renamed). `stockVersion`/`expectedStockVersion` and the theme's `basePublishedRevision` stay the named exceptions: they guard a different counter."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "a732072f468101d4",
+  "change": "gift_cards.adjust input body.expectedVersion: the field is no longer accepted.",
+  "reason": "Pre-lock (audit L2): one optimistic-concurrency vocabulary. Every resource exposes `revision` and every write takes `expectedRevision` (in the body; a DELETE in the query); orders, returns, reviews, gift cards and webhook subscriptions exposed `version`, the theme took `expectedDraftRevision` (the same counters, renamed). `stockVersion`/`expectedStockVersion` and the theme's `basePublishedRevision` stay the named exceptions: they guard a different counter."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "a732072f468101d4",
+  "change": "gift_cards.adjust input body.expectedRevision: a new required field.",
+  "reason": "Pre-lock (audit L2): one optimistic-concurrency vocabulary. Every resource exposes `revision` and every write takes `expectedRevision` (in the body; a DELETE in the query); orders, returns, reviews, gift cards and webhook subscriptions exposed `version`, the theme took `expectedDraftRevision` (the same counters, renamed). `stockVersion`/`expectedStockVersion` and the theme's `basePublishedRevision` stay the named exceptions: they guard a different counter."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "a732072f468101d4",
+  "change": "gift_cards.adjust output data.giftCard.version: the field was removed.",
+  "reason": "Pre-lock (audit L2): one optimistic-concurrency vocabulary. Every resource exposes `revision` and every write takes `expectedRevision` (in the body; a DELETE in the query); orders, returns, reviews, gift cards and webhook subscriptions exposed `version`, the theme took `expectedDraftRevision` (the same counters, renamed). `stockVersion`/`expectedStockVersion` and the theme's `basePublishedRevision` stay the named exceptions: they guard a different counter."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "a732072f468101d4",
+  "change": "gift_cards.create output data.giftCard.version: the field was removed.",
+  "reason": "Pre-lock (audit L2): one optimistic-concurrency vocabulary. Every resource exposes `revision` and every write takes `expectedRevision` (in the body; a DELETE in the query); orders, returns, reviews, gift cards and webhook subscriptions exposed `version`, the theme took `expectedDraftRevision` (the same counters, renamed). `stockVersion`/`expectedStockVersion` and the theme's `basePublishedRevision` stay the named exceptions: they guard a different counter."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "a732072f468101d4",
+  "change": "gift_cards.get output data.giftCard.version: the field was removed.",
+  "reason": "Pre-lock (audit L2): one optimistic-concurrency vocabulary. Every resource exposes `revision` and every write takes `expectedRevision` (in the body; a DELETE in the query); orders, returns, reviews, gift cards and webhook subscriptions exposed `version`, the theme took `expectedDraftRevision` (the same counters, renamed). `stockVersion`/`expectedStockVersion` and the theme's `basePublishedRevision` stay the named exceptions: they guard a different counter."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "a732072f468101d4",
+  "change": "gift_cards.list output data.giftCards[].version: the field was removed.",
+  "reason": "Pre-lock (audit L2): one optimistic-concurrency vocabulary. Every resource exposes `revision` and every write takes `expectedRevision` (in the body; a DELETE in the query); orders, returns, reviews, gift cards and webhook subscriptions exposed `version`, the theme took `expectedDraftRevision` (the same counters, renamed). `stockVersion`/`expectedStockVersion` and the theme's `basePublishedRevision` stay the named exceptions: they guard a different counter."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "a732072f468101d4",
+  "change": "gift_cards.update input body.expectedVersion: the field is no longer accepted.",
+  "reason": "Pre-lock (audit L2): one optimistic-concurrency vocabulary. Every resource exposes `revision` and every write takes `expectedRevision` (in the body; a DELETE in the query); orders, returns, reviews, gift cards and webhook subscriptions exposed `version`, the theme took `expectedDraftRevision` (the same counters, renamed). `stockVersion`/`expectedStockVersion` and the theme's `basePublishedRevision` stay the named exceptions: they guard a different counter."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "a732072f468101d4",
+  "change": "gift_cards.update input body.expectedRevision: a new required field.",
+  "reason": "Pre-lock (audit L2): one optimistic-concurrency vocabulary. Every resource exposes `revision` and every write takes `expectedRevision` (in the body; a DELETE in the query); orders, returns, reviews, gift cards and webhook subscriptions exposed `version`, the theme took `expectedDraftRevision` (the same counters, renamed). `stockVersion`/`expectedStockVersion` and the theme's `basePublishedRevision` stay the named exceptions: they guard a different counter."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "a732072f468101d4",
+  "change": "gift_cards.update output data.giftCard.version: the field was removed.",
+  "reason": "Pre-lock (audit L2): one optimistic-concurrency vocabulary. Every resource exposes `revision` and every write takes `expectedRevision` (in the body; a DELETE in the query); orders, returns, reviews, gift cards and webhook subscriptions exposed `version`, the theme took `expectedDraftRevision` (the same counters, renamed). `stockVersion`/`expectedStockVersion` and the theme's `basePublishedRevision` stay the named exceptions: they guard a different counter."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "a732072f468101d4",
+  "change": "orders.create output data.order.version: the field was removed.",
+  "reason": "Pre-lock (audit L2): one optimistic-concurrency vocabulary. Every resource exposes `revision` and every write takes `expectedRevision` (in the body; a DELETE in the query); orders, returns, reviews, gift cards and webhook subscriptions exposed `version`, the theme took `expectedDraftRevision` (the same counters, renamed). `stockVersion`/`expectedStockVersion` and the theme's `basePublishedRevision` stay the named exceptions: they guard a different counter."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "a732072f468101d4",
+  "change": "orders.get output data.version: the field was removed.",
+  "reason": "Pre-lock (audit L2): one optimistic-concurrency vocabulary. Every resource exposes `revision` and every write takes `expectedRevision` (in the body; a DELETE in the query); orders, returns, reviews, gift cards and webhook subscriptions exposed `version`, the theme took `expectedDraftRevision` (the same counters, renamed). `stockVersion`/`expectedStockVersion` and the theme's `basePublishedRevision` stay the named exceptions: they guard a different counter."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "a732072f468101d4",
+  "change": "orders.list output data.orders[].version: the field was removed.",
+  "reason": "Pre-lock (audit L2): one optimistic-concurrency vocabulary. Every resource exposes `revision` and every write takes `expectedRevision` (in the body; a DELETE in the query); orders, returns, reviews, gift cards and webhook subscriptions exposed `version`, the theme took `expectedDraftRevision` (the same counters, renamed). `stockVersion`/`expectedStockVersion` and the theme's `basePublishedRevision` stay the named exceptions: they guard a different counter."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "a732072f468101d4",
+  "change": "theme.apply_template input body.expectedDraftRevision: the field is no longer accepted.",
+  "reason": "Pre-lock (audit L2): one optimistic-concurrency vocabulary. Every resource exposes `revision` and every write takes `expectedRevision` (in the body; a DELETE in the query); orders, returns, reviews, gift cards and webhook subscriptions exposed `version`, the theme took `expectedDraftRevision` (the same counters, renamed). `stockVersion`/`expectedStockVersion` and the theme's `basePublishedRevision` stay the named exceptions: they guard a different counter."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "a732072f468101d4",
+  "change": "theme.apply_template input body.expectedRevision: a new required field.",
+  "reason": "Pre-lock (audit L2): one optimistic-concurrency vocabulary. Every resource exposes `revision` and every write takes `expectedRevision` (in the body; a DELETE in the query); orders, returns, reviews, gift cards and webhook subscriptions exposed `version`, the theme took `expectedDraftRevision` (the same counters, renamed). `stockVersion`/`expectedStockVersion` and the theme's `basePublishedRevision` stay the named exceptions: they guard a different counter."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "a732072f468101d4",
+  "change": "theme.apply_template output data.draft: the field was removed.",
+  "reason": "Pre-lock (audit L1): one answer shape per kind. A write answers the resource as its get reads it, `{ theme }` (theme.get's view, the template's homepage or the section's page), with its receipt fields (`template`, `unresolved`, `section`) beside it; the bare `draft` receipt is `theme.draft`."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "a732072f468101d4",
+  "change": "theme.set_section_settings input body.expectedDraftRevision: the field is no longer accepted.",
+  "reason": "Pre-lock (audit L2): one optimistic-concurrency vocabulary. Every resource exposes `revision` and every write takes `expectedRevision` (in the body; a DELETE in the query); orders, returns, reviews, gift cards and webhook subscriptions exposed `version`, the theme took `expectedDraftRevision` (the same counters, renamed). `stockVersion`/`expectedStockVersion` and the theme's `basePublishedRevision` stay the named exceptions: they guard a different counter."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "a732072f468101d4",
+  "change": "theme.set_section_settings input body.expectedRevision: a new required field.",
+  "reason": "Pre-lock (audit L2): one optimistic-concurrency vocabulary. Every resource exposes `revision` and every write takes `expectedRevision` (in the body; a DELETE in the query); orders, returns, reviews, gift cards and webhook subscriptions exposed `version`, the theme took `expectedDraftRevision` (the same counters, renamed). `stockVersion`/`expectedStockVersion` and the theme's `basePublishedRevision` stay the named exceptions: they guard a different counter."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "a732072f468101d4",
+  "change": "theme.set_section_settings output data.draft: the field was removed.",
+  "reason": "Pre-lock (audit L1): one answer shape per kind. A write answers the resource as its get reads it, `{ theme }` (theme.get's view, the template's homepage or the section's page), with its receipt fields (`template`, `unresolved`, `section`) beside it; the bare `draft` receipt is `theme.draft`."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "a732072f468101d4",
+  "change": "webhook_subscriptions.create output data.subscription.version: the field was removed.",
+  "reason": "Pre-lock (audit L2): one optimistic-concurrency vocabulary. Every resource exposes `revision` and every write takes `expectedRevision` (in the body; a DELETE in the query); orders, returns, reviews, gift cards and webhook subscriptions exposed `version`, the theme took `expectedDraftRevision` (the same counters, renamed). `stockVersion`/`expectedStockVersion` and the theme's `basePublishedRevision` stay the named exceptions: they guard a different counter."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "a732072f468101d4",
+  "change": "webhook_subscriptions.delete input parameter query:expectedVersion: no longer accepted.",
+  "reason": "Pre-lock (audit L2): one optimistic-concurrency vocabulary. Every resource exposes `revision` and every write takes `expectedRevision` (in the body; a DELETE in the query); orders, returns, reviews, gift cards and webhook subscriptions exposed `version`, the theme took `expectedDraftRevision` (the same counters, renamed). `stockVersion`/`expectedStockVersion` and the theme's `basePublishedRevision` stay the named exceptions: they guard a different counter."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "a732072f468101d4",
+  "change": "webhook_subscriptions.delete input parameter query:expectedRevision: newly required.",
+  "reason": "Pre-lock (audit L2): one optimistic-concurrency vocabulary. Every resource exposes `revision` and every write takes `expectedRevision` (in the body; a DELETE in the query); orders, returns, reviews, gift cards and webhook subscriptions exposed `version`, the theme took `expectedDraftRevision` (the same counters, renamed). `stockVersion`/`expectedStockVersion` and the theme's `basePublishedRevision` stay the named exceptions: they guard a different counter."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "a732072f468101d4",
+  "change": "webhook_subscriptions.list output data.subscriptions[].version: the field was removed.",
+  "reason": "Pre-lock (audit L2): one optimistic-concurrency vocabulary. Every resource exposes `revision` and every write takes `expectedRevision` (in the body; a DELETE in the query); orders, returns, reviews, gift cards and webhook subscriptions exposed `version`, the theme took `expectedDraftRevision` (the same counters, renamed). `stockVersion`/`expectedStockVersion` and the theme's `basePublishedRevision` stay the named exceptions: they guard a different counter."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "a732072f468101d4",
+  "change": "webhook_subscriptions.list output data.maxSubscriptions: the field was removed.",
+  "reason": "Pre-lock (audit L9): every stable list takes `cursor` + `limit` and answers `{ <plural>, nextCursor }` and nothing else; webhook_subscriptions.list pages (at most 5, so `nextCursor` is null unless a smaller limit is asked) and drops `maxSubscriptions` and `apiVersion` (each subscription carries its `apiVersion`; the bound is documented)."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "a732072f468101d4",
+  "change": "webhook_subscriptions.list output data.apiVersion: the field was removed.",
+  "reason": "Pre-lock (audit L9): every stable list takes `cursor` + `limit` and answers `{ <plural>, nextCursor }` and nothing else; webhook_subscriptions.list pages (at most 5, so `nextCursor` is null unless a smaller limit is asked) and drops `maxSubscriptions` and `apiVersion` (each subscription carries its `apiVersion`; the bound is documented)."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "a732072f468101d4",
+  "change": "webhook_subscriptions.update input body.expectedVersion: the field is no longer accepted.",
+  "reason": "Pre-lock (audit L2): one optimistic-concurrency vocabulary. Every resource exposes `revision` and every write takes `expectedRevision` (in the body; a DELETE in the query); orders, returns, reviews, gift cards and webhook subscriptions exposed `version`, the theme took `expectedDraftRevision` (the same counters, renamed). `stockVersion`/`expectedStockVersion` and the theme's `basePublishedRevision` stay the named exceptions: they guard a different counter."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "a732072f468101d4",
+  "change": "webhook_subscriptions.update input body.expectedRevision: a new required field.",
+  "reason": "Pre-lock (audit L2): one optimistic-concurrency vocabulary. Every resource exposes `revision` and every write takes `expectedRevision` (in the body; a DELETE in the query); orders, returns, reviews, gift cards and webhook subscriptions exposed `version`, the theme took `expectedDraftRevision` (the same counters, renamed). `stockVersion`/`expectedStockVersion` and the theme's `basePublishedRevision` stay the named exceptions: they guard a different counter."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "a732072f468101d4",
+  "change": "webhook_subscriptions.update output data.subscription.version: the field was removed.",
+  "reason": "Pre-lock (audit L2): one optimistic-concurrency vocabulary. Every resource exposes `revision` and every write takes `expectedRevision` (in the body; a DELETE in the query); orders, returns, reviews, gift cards and webhook subscriptions exposed `version`, the theme took `expectedDraftRevision` (the same counters, renamed). `stockVersion`/`expectedStockVersion` and the theme's `basePublishedRevision` stay the named exceptions: they guard a different counter."
  }
 ]

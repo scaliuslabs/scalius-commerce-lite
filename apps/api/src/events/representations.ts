@@ -202,7 +202,7 @@ function orderFrom(order: OrderRow, lines: readonly OrderLineRow[]) {
     shippingAddress: order.requiresShipping ? shippingAddress(order) : null,
     billingAddress: billingAddress(order),
     fulfillmentLocationId: order.fulfillmentLocationId ?? null,
-    version: order.version,
+    revision: order.version,
     lines: lines.map(({ orderId: _orderId, properties, ...line }) => ({
       ...line,
       purchaseOption: readLinePurchaseOption(properties),
@@ -228,7 +228,7 @@ async function returnRepresentation(db: Database, returnId: string) {
     status: row.status,
     reason: row.reason,
     source: row.source,
-    version: row.version,
+    revision: row.version,
     requestedAt: isoRequired(row.requestedAt),
     approvedAt: iso(row.approvedAt),
     completedAt: iso(row.completedAt),
@@ -698,7 +698,7 @@ async function reviewRepresentation(db: Database, reviewId: string) {
     authorDisplayName: review.authorDisplayName ?? null,
     publishedAt: iso(review.publishedAt),
     repliedAt: iso(review.repliedAt),
-    version: review.version,
+    revision: review.version,
     createdAt: isoRequired(review.createdAt),
     updatedAt: isoRequired(review.updatedAt),
   });
@@ -719,7 +719,7 @@ async function giftCardRepresentation(db: Database, giftCardId: string) {
     customerId: card.customerId ?? null,
     recipient: { name: card.recipientName ?? null, email: card.recipientEmail ?? null, phone: card.recipientPhone ?? null },
     expiresAt: iso(card.expiresAt),
-    version: card.version,
+    revision: card.version,
     createdAt: isoRequired(card.createdAt),
     updatedAt: isoRequired(card.updatedAt),
   });

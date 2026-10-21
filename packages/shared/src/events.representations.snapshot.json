@@ -385,7 +385,7 @@
      "minLength": 1,
      "maxLength": 128
     },
-    "version": {
+    "revision": {
      "type": "integer",
      "minimum": -9007199254740991,
      "maximum": 9007199254740991
@@ -522,7 +522,7 @@
     "shippingAddress",
     "billingAddress",
     "fulfillmentLocationId",
-    "version",
+    "revision",
     "lines",
     "createdAt",
     "updatedAt",
@@ -556,7 +556,7 @@
      "minLength": 1,
      "maxLength": 64
     },
-    "version": {
+    "revision": {
      "type": "integer",
      "minimum": -9007199254740991,
      "maximum": 9007199254740991
@@ -679,7 +679,7 @@
     "status",
     "reason",
     "source",
-    "version",
+    "revision",
     "requestedAt",
     "approvedAt",
     "completedAt",
@@ -1940,7 +1940,7 @@
      "maxLength": 40,
      "format": "date-time"
     },
-    "version": {
+    "revision": {
      "type": "integer",
      "minimum": -9007199254740991,
      "maximum": 9007199254740991
@@ -1971,7 +1971,7 @@
     "authorDisplayName",
     "publishedAt",
     "repliedAt",
-    "version",
+    "revision",
     "createdAt",
     "updatedAt"
    ]
@@ -2060,7 +2060,7 @@
      "maxLength": 40,
      "format": "date-time"
     },
-    "version": {
+    "revision": {
      "type": "integer",
      "minimum": -9007199254740991,
      "maximum": 9007199254740991
@@ -2090,7 +2090,7 @@
     "customerId",
     "recipient",
     "expiresAt",
-    "version",
+    "revision",
     "createdAt",
     "updatedAt"
    ]

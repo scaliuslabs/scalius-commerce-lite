@@ -107,8 +107,8 @@ export const orderRepresentationSchema = z.object({
   /** Null when the shipping address bills too, or none was taken. */
   billingAddress: postalAddressSchema.nullable(),
   fulfillmentLocationId: id.nullable(),
-  /** Advances with every change: the `expectedVersion` an update takes. */
-  version: z.number().int(),
+  /** Advances with every change: the `expectedRevision` an update takes. */
+  revision: z.number().int(),
   lines: z.array(orderLineSchema),
   createdAt: iso,
   updatedAt: iso,
@@ -121,7 +121,8 @@ export const returnRepresentationSchema = z.object({
   status: state,
   reason: text,
   source: state,
-  version: z.number().int(),
+  /** Advances with every change: the `expectedRevision` a write takes. */
+  revision: z.number().int(),
   requestedAt: iso,
   approvedAt: iso.nullable(),
   completedAt: iso.nullable(),
@@ -363,7 +364,7 @@ export const reviewRepresentationSchema = z.object({
   authorDisplayName: text.nullable(),
   publishedAt: iso.nullable(),
   repliedAt: iso.nullable(),
-  version: z.number().int(),
+  revision: z.number().int(),
   createdAt: iso,
   updatedAt: iso,
 });
@@ -385,7 +386,8 @@ export const giftCardRepresentationSchema = z.object({
     phone: pii("phone", text.nullable()),
   }),
   expiresAt: iso.nullable(),
-  version: z.number().int(),
+  /** Advances with every change: the `expectedRevision` an update or adjustment takes. */
+  revision: z.number().int(),
   createdAt: iso,
   updatedAt: iso,
 });

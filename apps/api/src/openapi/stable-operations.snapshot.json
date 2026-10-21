@@ -12257,11 +12257,11 @@
        "schema": {
         "type": "object",
         "properties": {
-         "expectedVersion": {
+         "expectedRevision": {
           "type": "integer",
           "minimum": 0,
           "exclusiveMinimum": true,
-          "description": "The card's `version` you read; a card changed since is refused with 409."
+          "description": "The card's `revision` you read; a card changed since is refused with 409."
          },
          "amountMinor": {
           "type": "integer",
@@ -12275,7 +12275,7 @@
          }
         },
         "required": [
-         "expectedVersion",
+         "expectedRevision",
          "amountMinor",
          "reason"
         ],
@@ -12618,11 +12618,11 @@
        "schema": {
         "type": "object",
         "properties": {
-         "expectedVersion": {
+         "expectedRevision": {
           "type": "integer",
           "minimum": 0,
           "exclusiveMinimum": true,
-          "description": "The card's `version` you read; a card changed since is refused with 409."
+          "description": "The card's `revision` you read; a card changed since is refused with 409."
          },
          "status": {
           "type": "string",
@@ -12650,7 +12650,7 @@
          }
         },
         "required": [
-         "expectedVersion"
+         "expectedRevision"
         ],
         "additionalProperties": false
        }
@@ -16456,10 +16456,10 @@
           "maxLength": 160,
           "description": "The template: its id in the calling app's manifest (`storefront.templates[].id`), or `<app id>/<template id>`. An app applies only its own templates."
          },
-         "expectedDraftRevision": {
+         "expectedRevision": {
           "type": "integer",
           "minimum": 0,
-          "description": "The draft `revision` you read (`theme.get`); 0 when no draft was ever saved. A draft changed since is refused with 409 and nothing is saved."
+          "description": "The draft `revision` you read (`theme.draft.revision`); 0 when no draft was ever saved. A draft changed since is refused with 409 and nothing is saved."
          },
          "basePublishedRevision": {
           "type": "integer",
@@ -16469,7 +16469,7 @@
         },
         "required": [
          "template",
-         "expectedDraftRevision",
+         "expectedRevision",
          "basePublishedRevision"
         ],
         "additionalProperties": false
@@ -16490,8 +16490,8 @@
      "data": {
       "type": "object",
       "properties": {
-       "draft": {
-        "$ref": "#/components/schemas/ThemeDraftReceipt"
+       "theme": {
+        "$ref": "#/components/schemas/ThemeResource"
        },
        "template": {
         "type": "string"
@@ -16505,7 +16505,7 @@
        }
       },
       "required": [
-       "draft",
+       "theme",
        "template",
        "unresolved"
       ]
@@ -16557,83 +16557,7 @@
       "type": "object",
       "properties": {
        "theme": {
-        "type": "object",
-        "properties": {
-         "documentVersion": {
-          "type": "integer",
-          "minimum": 0,
-          "exclusiveMinimum": true,
-          "description": "The theme document version section settings follow."
-         },
-         "publishedRevision": {
-          "type": "integer",
-          "minimum": 0
-         },
-         "draft": {
-          "$ref": "#/components/schemas/ThemeDraftReceipt"
-         },
-         "draftDiffersFromLive": {
-          "type": "boolean"
-         },
-         "template": {
-          "type": "string",
-          "nullable": true,
-          "description": "The template the draft came from (`<app id>/<template id>`), if any."
-         },
-         "page": {
-          "type": "string",
-          "enum": [
-           "home",
-           "landing"
-          ]
-         },
-         "slug": {
-          "type": "string",
-          "nullable": true
-         },
-         "sections": {
-          "type": "array",
-          "items": {
-           "$ref": "#/components/schemas/ThemeSection"
-          },
-          "maxItems": 24
-         },
-         "landingPages": {
-          "type": "array",
-          "items": {
-           "type": "object",
-           "properties": {
-            "slug": {
-             "type": "string"
-            },
-            "title": {
-             "type": "string"
-            }
-           },
-           "required": [
-            "slug",
-            "title"
-           ]
-          },
-          "maxItems": 20
-         },
-         "readAt": {
-          "type": "string",
-          "format": "date-time"
-         }
-        },
-        "required": [
-         "documentVersion",
-         "publishedRevision",
-         "draft",
-         "draftDiffersFromLive",
-         "template",
-         "page",
-         "slug",
-         "sections",
-         "landingPages",
-         "readAt"
-        ]
+        "$ref": "#/components/schemas/ThemeResource"
        }
       },
       "required": [
@@ -16703,10 +16627,10 @@
           "additionalProperties": {},
           "description": "Settings to merge at the top level (an app section: into its values). Catalogue handles resolve as in apply_template."
          },
-         "expectedDraftRevision": {
+         "expectedRevision": {
           "type": "integer",
           "minimum": 0,
-          "description": "The draft `revision` you read (`theme.get`); 0 when no draft was ever saved. A draft changed since is refused with 409 and nothing is saved."
+          "description": "The draft `revision` you read (`theme.draft.revision`); 0 when no draft was ever saved. A draft changed since is refused with 409 and nothing is saved."
          },
          "basePublishedRevision": {
           "type": "integer",
@@ -16717,7 +16641,7 @@
         "required": [
          "sectionId",
          "settings",
-         "expectedDraftRevision",
+         "expectedRevision",
          "basePublishedRevision"
         ],
         "additionalProperties": false
@@ -16738,15 +16662,15 @@
      "data": {
       "type": "object",
       "properties": {
-       "draft": {
-        "$ref": "#/components/schemas/ThemeDraftReceipt"
+       "theme": {
+        "$ref": "#/components/schemas/ThemeResource"
        },
        "section": {
         "$ref": "#/components/schemas/ThemeSection"
        }
       },
       "required": [
-       "draft",
+       "theme",
        "section"
       ]
      }
@@ -17363,7 +17287,7 @@
        "exclusiveMinimum": true
       },
       "required": true,
-      "name": "expectedVersion",
+      "name": "expectedRevision",
       "in": "query"
      },
      {
@@ -17424,7 +17348,34 @@
    "scopes": [
     "write_webhooks"
    ],
-   "input": {},
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 5,
+       "default": 5,
+       "description": "At most this many items (default and maximum 5)."
+      },
+      "required": false,
+      "description": "At most this many items (default and maximum 5).",
+      "name": "limit",
+      "in": "query"
+     }
+    ]
+   },
    "output": {
     "type": "object",
     "properties": {
@@ -17444,18 +17395,15 @@
         },
         "maxItems": 5
        },
-       "maxSubscriptions": {
-        "type": "integer",
-        "description": "How many one app may keep."
-       },
-       "apiVersion": {
-        "type": "string"
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
        }
       },
       "required": [
        "subscriptions",
-       "maxSubscriptions",
-       "apiVersion"
+       "nextCursor"
       ]
      }
     },
@@ -17507,11 +17455,11 @@
        "schema": {
         "type": "object",
         "properties": {
-         "expectedVersion": {
+         "expectedRevision": {
           "type": "integer",
           "minimum": 0,
           "exclusiveMinimum": true,
-          "description": "The subscription's `version` you read; a stale one is refused with 409."
+          "description": "The subscription's `revision` you read; a stale one is refused with 409."
          },
          "url": {
           "type": "string",
@@ -17614,7 +17562,7 @@
          }
         },
         "required": [
-         "expectedVersion"
+         "expectedRevision"
         ],
         "additionalProperties": false
        }
@@ -18917,11 +18865,11 @@
      "type": "string",
      "description": "The signing secret's last four characters."
     },
-    "version": {
+    "revision": {
      "type": "integer",
      "minimum": 0,
      "exclusiveMinimum": true,
-     "description": "Send it as `expectedVersion` to change or delete it."
+     "description": "Send it as `expectedRevision` to change or delete it."
     },
     "createdAt": {
      "type": "string",
@@ -18946,7 +18894,7 @@
     "lastSuccessAt",
     "lastFailureAt",
     "secretHint",
-    "version",
+    "revision",
     "createdAt",
     "updatedAt"
    ]
@@ -19360,11 +19308,11 @@
      "nullable": true,
      "x-scalius-protected": "name"
     },
-    "version": {
+    "revision": {
      "type": "integer",
      "minimum": 0,
      "exclusiveMinimum": true,
-     "description": "Send it as `expectedVersion` to change the card; every balance movement advances it."
+     "description": "Send it as `expectedRevision` to change the card; every balance movement advances it."
     },
     "createdAt": {
      "type": "string",
@@ -19415,7 +19363,7 @@
     "source",
     "customerId",
     "recipientName",
-    "version",
+    "revision",
     "createdAt",
     "recipientEmail",
     "recipientPhone",
@@ -19481,11 +19429,11 @@
      "nullable": true,
      "x-scalius-protected": "name"
     },
-    "version": {
+    "revision": {
      "type": "integer",
      "minimum": 0,
      "exclusiveMinimum": true,
-     "description": "Send it as `expectedVersion` to change the card; every balance movement advances it."
+     "description": "Send it as `expectedRevision` to change the card; every balance movement advances it."
     },
     "createdAt": {
      "type": "string",
@@ -19504,7 +19452,7 @@
     "source",
     "customerId",
     "recipientName",
-    "version",
+    "revision",
     "createdAt"
    ]
   },
@@ -20601,7 +20549,7 @@
      "minLength": 1,
      "maxLength": 128
     },
-    "version": {
+    "revision": {
      "type": "integer"
     },
     "lines": {
@@ -20724,7 +20672,7 @@
     "shippingAddress",
     "billingAddress",
     "fulfillmentLocationId",
-    "version",
+    "revision",
     "lines",
     "createdAt",
     "updatedAt",
@@ -21499,6 +21447,85 @@
     "revision",
     "basePublishedRevision",
     "updatedAt"
+   ]
+  },
+  "ThemeResource": {
+   "type": "object",
+   "properties": {
+    "documentVersion": {
+     "type": "integer",
+     "minimum": 0,
+     "exclusiveMinimum": true,
+     "description": "The theme document version section settings follow."
+    },
+    "publishedRevision": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "draft": {
+     "$ref": "#/components/schemas/ThemeDraftReceipt"
+    },
+    "draftDiffersFromLive": {
+     "type": "boolean"
+    },
+    "template": {
+     "type": "string",
+     "nullable": true,
+     "description": "The template the draft came from (`<app id>/<template id>`), if any."
+    },
+    "page": {
+     "type": "string",
+     "enum": [
+      "home",
+      "landing"
+     ]
+    },
+    "slug": {
+     "type": "string",
+     "nullable": true
+    },
+    "sections": {
+     "type": "array",
+     "items": {
+      "$ref": "#/components/schemas/ThemeSection"
+     },
+     "maxItems": 24
+    },
+    "landingPages": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "slug": {
+        "type": "string"
+       },
+       "title": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "slug",
+       "title"
+      ]
+     },
+     "maxItems": 20
+    },
+    "readAt": {
+     "type": "string",
+     "format": "date-time"
+    }
+   },
+   "required": [
+    "documentVersion",
+    "publishedRevision",
+    "draft",
+    "draftDiffersFromLive",
+    "template",
+    "page",
+    "slug",
+    "sections",
+    "landingPages",
+    "readAt"
    ]
   },
   "ThemeSection": {
