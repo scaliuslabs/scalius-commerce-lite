@@ -36,7 +36,7 @@ export const CategoryResource = z.object({
   id: z.string(),
   name: z.string(),
   slug: z.string(),
-  status: categoryStatusSchema.openapi({ description: "`published` is public; `draft` and `internal` are not." }),
+  status: categoryStatusSchema.describe("`published` is public; `draft` and `internal` are not."),
   revision: z.number().int().min(1).openapi({ description: "Send it as `expectedRevision` to change the category; every change advances it." }),
   parentId: z.string().nullable().openapi({ description: "The parent category; null at the top level." }),
   depth: z.number().int().min(0).max(3).openapi({ description: "0 at the top level, at most 3." }),
