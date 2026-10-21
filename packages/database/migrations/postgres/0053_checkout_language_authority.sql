@@ -14,7 +14,7 @@ WHERE "id" IN (
 			) AS "authority_rank"
 		FROM "checkout_languages"
 		WHERE "is_active" = 1
-	) AS "ranked"
+	)
 	WHERE "authority_rank" > 1
 );
 --> statement-breakpoint
@@ -34,7 +34,7 @@ WHERE "id" IN (
 			) AS "authority_rank"
 		FROM "checkout_languages"
 		WHERE "is_default" = 1
-	) AS "ranked"
+	)
 	WHERE "authority_rank" > 1
 );
 --> statement-breakpoint
