@@ -3,6 +3,7 @@
 // labels read identically everywhere.
 import ProductCard from "@/components/cards/ProductCard.astro";
 import ProductGrid from "@/components/cards/ProductGrid.astro";
+import Container from "@/components/ui/Container.astro";
 import type { ProductRecommendations } from "@/lib/api";
 import { recommendationTitle } from "@/lib/recommendations";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
@@ -12,9 +13,6 @@ interface Props {
   currencySymbol?: string;
   currencyCode?: string;
 }
-
-// theme-foundation.css keeps the product route's `max-w-7xl` at 80rem.
-const PRODUCT_PAGE_CONTAINER_WIDTH = "80rem";
 
 const {
   recommendations,
@@ -30,7 +28,7 @@ const {
       id="related-products"
       aria-labelledby="related-products-title"
     >
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <Container>
         <h2 id="related-products-title" class="section-heading text-foreground mb-4">
           {recommendationTitle(recommendations.reason)}
         </h2>
@@ -40,11 +38,10 @@ const {
               product={relatedProduct}
               currencySymbol={currencySymbol}
               currencyCode={currencyCode}
-              containerWidth={PRODUCT_PAGE_CONTAINER_WIDTH}
             />
           ))}
         </ProductGrid>
-      </div>
+      </Container>
     </section>
   )
 }
