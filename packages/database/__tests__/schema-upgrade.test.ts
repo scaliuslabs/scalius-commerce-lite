@@ -885,6 +885,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 9,
         postgresStatements: 9,
       },
+      {
+        version: 169,
+        name: "0169_fk_indexes_and_trigger_guards",
+        sqliteStatements: 22,
+        postgresStatements: 22,
+      },
     ]);
   });
 
@@ -1144,6 +1150,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 166, name: "0166_record_payment_permission" },
           { version: 167, name: "0167_promotion_exhaustion_dependency" },
           { version: 168, name: "0168_tax_document_commands" },
+          { version: 169, name: "0169_fk_indexes_and_trigger_guards" },
         ],
       });
     } finally {

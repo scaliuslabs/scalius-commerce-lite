@@ -73,6 +73,8 @@ export const productReviews = sqliteTable("product_reviews", {
         .on(table.customerId, sql`${table.createdAt} DESC`)
         .where(sql`${table.customerId} IS NOT NULL`),
     index("product_reviews_order_idx").on(table.orderId),
+    // A SKU delete (permanent product delete) sets this foreign key to NULL.
+    index("product_reviews_variant_idx").on(table.variantId).where(sql`${table.variantId} IS NOT NULL`),
     check("product_reviews_id_shape", sql`substr(${table.id}, 1, 4) = 'rev_' AND length(${table.id}) BETWEEN 12 AND 68`),
     check("product_reviews_author_type_check", sql`${table.authorType} IN ('customer', 'guest_receipt')`),
     check("product_reviews_display_name_length", sql`length(trim(${table.authorDisplayName})) BETWEEN 1 AND 60`),

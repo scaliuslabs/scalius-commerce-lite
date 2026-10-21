@@ -92,6 +92,8 @@ export const productFacetValues = sqliteTable("product_facet_values", {
     index("product_facet_values_number_idx")
         .on(table.facetKey, table.valueNumber, table.productId)
         .where(sql`${table.valueNumber} IS NOT NULL`),
+    // A SKU delete (permanent product delete) cascades here: without it every deleted SKU scans the table.
+    index("product_facet_values_variant_idx").on(table.variantId).where(sql`${table.variantId} IS NOT NULL`),
 ]);
 
 /** Exact public DISTINCT-product counts, maintained with the facet/buyer writes. */
