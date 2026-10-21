@@ -32,6 +32,7 @@ import {
   type PluginInstallation,
 } from "@scalius/core/modules/plugins";
 import type { PluginManifest } from "@scalius/shared/plugins";
+import { deleteAppDataAround } from "./app-data";
 import { PluginHost, type PluginHostOptions } from "./host";
 import { putServicesToUse } from "./provider-adoption";
 
@@ -235,13 +236,17 @@ export async function uninstallPluginWithHooks(
   context: LifecycleContext,
   pluginId: string,
   options: { expectedRevision: number; keepData: boolean },
-): Promise<{ hookError: string | null }> {
+): Promise<{ hookError: string | null; catalogDeleted: number; catalogKept: number }> {
   const current = await requirePluginInstallation(context.db, pluginId);
   let hookError: string | null = null;
   if (current.status === "active" && current.revision === options.expectedRevision) {
     const outcome = await hostFor(context).invokeLifecycle(current, "uninstall", { keepData: options.keepData });
     if (!outcome.ok) hookError = outcome.error;
   }
-  await uninstallPlugin(context.db, pluginId, options);
-  return { hookError };
+  if (options.keepData) {
+    await uninstallPlugin(context.db, pluginId, options);
+    return { hookError, catalogDeleted: 0, catalogKept: 0 };
+  }
+  const deleted = await deleteAppDataAround(context.db, context.env, pluginId, () => uninstallPlugin(context.db, pluginId, options));
+  return { hookError, ...deleted };
 }

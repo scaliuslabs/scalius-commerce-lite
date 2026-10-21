@@ -57,6 +57,16 @@ export const DASHBOARD_APP_OPERATIONS = {
     revision: "required",
     limits: { request: 16_384, response: 16_384 },
   },
+  // Data left by apps that are no longer installed. Deleting it cannot be
+  // undone: destructive (so confirmed in plain words), it runs alone, and the
+  // route also requires the owner to be a Super Admin.
+  "dashboard.apps.removed_data_list": { limits: { response: 65_536 } },
+  "dashboard.apps.removed_data_delete": {
+    risk: "destructive",
+    batch: "forbidden",
+    revision: "required",
+    limits: { request: 4_096, response: 4_096 },
+  },
   "dashboard.apps.logs_list": { limits: { response: 65_536 } },
   "dashboard.apps.deliveries_list": { limits: { response: 65_536 } },
   "dashboard.apps.delivery_retry": {

@@ -5256,6 +5256,55 @@ export type ThemeAppPart = {
     name?: string;
 };
 
+export type RemovedAppData = {
+    /**
+     * The removed app's id (vendor.name): the namespace of its object types and custom fields.
+     */
+    id: string;
+    /**
+     * The app's name when it was removed; its id when the store kept no record of the removal.
+     */
+    name: string;
+    /**
+     * When it was uninstalled keeping its data; null when the store kept no record.
+     */
+    removedAt: string | null;
+    /**
+     * Send it back as expectedRevision to delete this data (0: the store kept no record of the removal).
+     */
+    revision: number;
+    objectTypes: number;
+    /**
+     * Entries of its object types.
+     */
+    records: number;
+    /**
+     * Its object types the dashboard lists under Objects.
+     */
+    objectTypeHandles: Array<string>;
+    /**
+     * Custom field definitions (their values go with them).
+     */
+    customFields: number;
+    keyValues: number;
+    /**
+     * Roles it granted customers.
+     */
+    customerRoles: number;
+    /**
+     * Background job runs it kept.
+     */
+    jobs: number;
+    /**
+     * Catalogue items it created. They stay in the catalogue; those in the trash are deleted with the data unless the store must keep them.
+     */
+    catalogItems: number;
+    /**
+     * Whether it kept settings that differ from the defaults (restored on reinstall).
+     */
+    settings: boolean;
+};
+
 export type AppLogLine = {
     id: string;
     level: 'debug' | 'info' | 'warn' | 'error';
@@ -69338,6 +69387,101 @@ export type PostApiV1AdminAppsByIdStopResponses = {
 
 export type PostApiV1AdminAppsByIdStopResponse = PostApiV1AdminAppsByIdStopResponses[keyof PostApiV1AdminAppsByIdStopResponses];
 
+export type GetApiV1AdminAppsRemovedDataData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/apps/removed-data';
+};
+
+export type GetApiV1AdminAppsRemovedDataErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+};
+
+export type GetApiV1AdminAppsRemovedDataError = GetApiV1AdminAppsRemovedDataErrors[keyof GetApiV1AdminAppsRemovedDataErrors];
+
+export type GetApiV1AdminAppsRemovedDataResponses = {
+    /**
+     * Removed apps' data
+     */
+    200: {
+        success: true;
+        data: {
+            apps: Array<RemovedAppData>;
+        };
+    };
+};
+
+export type GetApiV1AdminAppsRemovedDataResponse = GetApiV1AdminAppsRemovedDataResponses[keyof GetApiV1AdminAppsRemovedDataResponses];
+
+export type PostApiV1AdminAppsRemovedDataByIdDeleteData = {
+    body: {
+        /**
+         * The group's revision from dashboard.apps.removed_data_list.
+         */
+        expectedRevision: number;
+    };
+    path: {
+        /**
+         * The removed app's id (vendor.name).
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/apps/removed-data/{id}/delete';
+};
+
+export type PostApiV1AdminAppsRemovedDataByIdDeleteErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+};
+
+export type PostApiV1AdminAppsRemovedDataByIdDeleteError = PostApiV1AdminAppsRemovedDataByIdDeleteErrors[keyof PostApiV1AdminAppsRemovedDataByIdDeleteErrors];
+
+export type PostApiV1AdminAppsRemovedDataByIdDeleteResponses = {
+    /**
+     * Deleted
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            deleted: true;
+            /**
+             * Trashed catalogue items it created that were permanently deleted.
+             */
+            catalogDeleted: number;
+            /**
+             * Trashed ones the store must keep; they stay in the trash.
+             */
+            catalogKept: number;
+        };
+    };
+};
+
+export type PostApiV1AdminAppsRemovedDataByIdDeleteResponse = PostApiV1AdminAppsRemovedDataByIdDeleteResponses[keyof PostApiV1AdminAppsRemovedDataByIdDeleteResponses];
+
 export type GetApiV1AdminAppsByIdData = {
     body?: never;
     path: {
@@ -69811,6 +69955,14 @@ export type PostApiV1AdminAppsByIdUninstallResponses = {
             uninstalled: true;
             keepData: boolean;
             hookError: string | null;
+            /**
+             * Trashed catalogue items it created that were permanently deleted (keepData false).
+             */
+            catalogDeleted: number;
+            /**
+             * Trashed ones the store must keep; they stay in the trash.
+             */
+            catalogKept: number;
         };
     };
 };

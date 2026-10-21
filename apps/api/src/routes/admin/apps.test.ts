@@ -186,7 +186,7 @@ describe("admin app routes", () => {
 
     await putObjectRecord(db, "acme.hello", "greetings", (await requirePluginInstallation(db, "acme.hello")).manifest.objects.greetings!, "g1", { order_id: "g1", kind: "paid", created_at: 1 });
     const kept = await call("POST", "/apps/acme.hello/uninstall", { expectedRevision: stopped.json.data.app.revision, keepData: true });
-    expect(kept.json.data).toEqual({ id: "acme.hello", uninstalled: true, keepData: true, hookError: null });
+    expect(kept.json.data).toEqual({ id: "acme.hello", uninstalled: true, keepData: true, hookError: null, catalogDeleted: 0, catalogKept: 0 });
     expect(sqlite.prepare("SELECT count(*) AS n FROM object_records WHERE type_id = 'oty_acme.hello.greetings'").get()).toEqual({ n: 1 });
     // A bundled app is part of this deployment: it is listed again, fresh.
     const relisted = (await call("GET", "/apps")).json.data.apps.find((entry: Json) => entry.id === "acme.hello");
@@ -194,6 +194,37 @@ describe("admin app routes", () => {
     const removed = await call("POST", "/apps/acme.hello/uninstall", { expectedRevision: 1, keepData: false });
     expect(removed.status).toBe(200);
     expect(sqlite.prepare("SELECT count(*) AS n FROM object_records WHERE type_id = 'oty_acme.hello.greetings'").get()).toEqual({ n: 0 });
+  });
+
+  it("lists a removed app's data and lets only a Super Admin delete it, under its revision", async () => {
+    await call("GET", "/apps");
+    // An app taken out of the deployment left a content type, an entry and a custom field.
+    sqlite.exec(`INSERT INTO object_types (id, namespace, type, name, fields_json, admin) VALUES ('oty_acme.gone.items', 'acme.gone', 'items', 'Items', '[{"key":"title","name":"Title","type":"single_line_text"}]', 'read');
+      INSERT INTO object_records (type_id, id, data_json) VALUES ('oty_acme.gone.items', 'i1', '{"title":"One"}');
+      INSERT INTO custom_field_definitions (id, owner_type, namespace, key, name, type) VALUES ('cfd_gone_note', 'product', 'acme.gone', 'note', 'Note', 'single_line_text');
+      INSERT INTO brands (id, name, slug, status, revision, deleted_at) VALUES ('brd_trash001', 'Old', 'old', 'draft', 1, unixepoch()), ('brd_live0001', 'Live', 'live', 'draft', 1, NULL);
+      INSERT INTO app_resource_owners (resource_type, resource_id, plugin_id) VALUES ('brand', 'brd_trash001', 'acme.gone'), ('brand', 'brd_live0001', 'acme.gone');`);
+    const listed = await call("GET", "/apps/removed-data");
+    expect(listed.status).toBe(200);
+    expect(listed.json.data.apps).toEqual([expect.objectContaining({
+      id: "acme.gone", name: "acme.gone", removedAt: null, revision: 0, objectTypes: 1, records: 1,
+      objectTypeHandles: ["acme.gone.items"], customFields: 1, catalogItems: 2, settings: false,
+    })]);
+
+    actor = { id: "manager", isSuperAdmin: false };
+    expect((await call("POST", "/apps/removed-data/acme.gone/delete", { expectedRevision: 0 })).status).toBe(403);
+    actor = { id: "owner", isSuperAdmin: true };
+    expect((await call("POST", "/apps/removed-data/acme.gone/delete", { expectedRevision: 3 })).status).toBe(409);
+    // A bundled app of this deployment is installed, never removed: its data is not deleted here.
+    expect((await call("POST", "/apps/removed-data/acme.hello/delete", { expectedRevision: 0 })).status).toBe(409);
+
+    const deleted = await call("POST", "/apps/removed-data/acme.gone/delete", { expectedRevision: 0 });
+    // Its trashed brand is deleted for good; the live one stays, now the store's own.
+    expect(deleted.json.data).toEqual({ id: "acme.gone", deleted: true, catalogDeleted: 1, catalogKept: 0 });
+    expect(sqlite.prepare("SELECT id FROM brands").all()).toEqual([{ id: "brd_live0001" }]);
+    expect(sqlite.prepare("SELECT count(*) AS n FROM app_resource_owners").get()).toEqual({ n: 0 });
+    expect(sqlite.prepare("SELECT (SELECT count(*) FROM object_records) + (SELECT count(*) FROM custom_field_definitions) AS n").get()).toEqual({ n: 0 });
+    expect((await call("GET", "/apps/removed-data")).json.data.apps).toEqual([]);
   });
 
   it("holds an updated bundled app whose access grows until a Super Admin approves it", async () => {

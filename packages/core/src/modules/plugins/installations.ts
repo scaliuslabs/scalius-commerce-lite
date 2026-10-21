@@ -13,16 +13,10 @@
 import type { Database } from "@scalius/database/client";
 import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database/client";
 import {
-  customFieldDefinitions,
-  objectTypes,
-  pluginCronRuns,
   pluginEventDeliveries,
   pluginInstallations,
-  pluginKv,
   webhookSubscriptions,
   bulkRuns,
-  pluginCustomerRoles,
-  pluginLogEntries,
   pluginMigrations,
   pluginRegistrations,
   salesChannels,
@@ -57,6 +51,13 @@ import { and, asc, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { appSalesChannelId } from "@scalius/shared/sales-channels";
 import { PluginError } from "./errors";
 import { appJobRowsCondition } from "./app-jobs";
+import {
+  appDataDeleteStatements,
+  forgetRetainedAppStatement,
+  readRetainedApp,
+  retainAppStatement,
+  type RetainedApp,
+} from "./app-data";
 import {
   derivePluginSettingsKey,
   isSealedPluginSecret,
@@ -552,6 +553,11 @@ export async function installPlugin(db: Database, input: InstallPluginInput): Pr
   if (await getPluginInstallation(db, manifest.id)) {
     throw new PluginError("installation_exists", `Plugin ${manifest.id} is already installed.`);
   }
+  // Data kept by an earlier uninstall comes back with it, settings included.
+  const retained = (await readRetainedApp(db, manifest.id))?.app ?? null;
+  const settings = retained
+    ? retainedSettings(retained, manifest.settings, input.signerKeyId ?? null)
+    : pluginSettingDefaults(manifest.settings);
   try {
     await safeBatch(db, [
       db.insert(pluginInstallations).values({
@@ -561,7 +567,7 @@ export async function installPlugin(db: Database, input: InstallPluginInput): Pr
         bundleSha256: sha256,
         manifestJson: JSON.stringify(manifest),
         status: "installed",
-        settingsJson: JSON.stringify(pluginSettingDefaults(manifest.settings)),
+        settingsJson: JSON.stringify(settings),
         revision: 1,
         installedBy: input.actorUserId ?? null,
         installedAt: sql`unixepoch()`,
@@ -572,6 +578,7 @@ export async function installPlugin(db: Database, input: InstallPluginInput): Pr
       // Nothing is approved yet: only the base registers (every feature starts off).
       ...registrationInserts(db, manifest.id, manifest, []),
       ...salesChannelStatements(db, manifest.id, manifest.salesChannels, false),
+      forgetRetainedAppStatement(db, manifest.id),
     ] as never);
   } catch (error) {
     if (isPrimaryKeyConflict(error)) throw new PluginError("installation_exists", `Plugin ${manifest.id} is already installed.`);
@@ -783,6 +790,25 @@ async function syncInstallationObjects(db: Database, pluginId: string, manifest:
   throw new PluginError("installation_objects_invalid", reason);
 }
 
+/**
+ * The settings a reinstall gets back from a keep-data uninstall: the values
+ * still valid under its schema. Secrets come back only to code from the same
+ * developer key the app was removed with; otherwise they are left unset.
+ */
+function retainedSettings(retained: RetainedApp, schema: readonly PluginSettingField[], signerKeyId: string | null): Record<string, unknown> {
+  const restored = migrateStoredSettings(retained.settings, schema);
+  if (retained.signerKeyId === signerKeyId) return restored;
+  for (const field of schema) if (field.type === "secret") delete restored[field.key];
+  return restored;
+}
+
+/** Whether any stored setting differs from its default (a sealed secret always does). */
+function settingsCustomized(stored: Record<string, unknown>, schema: readonly PluginSettingField[]): boolean {
+  const defaults = pluginSettingDefaults([...schema]);
+  return Object.entries(stored).some(([key, value]) =>
+    value !== null && value !== undefined && JSON.stringify(value) !== JSON.stringify(defaults[key] ?? null));
+}
+
 /** Stored values that are still valid under a new settings schema; new fields take their defaults. */
 function migrateStoredSettings(stored: Record<string, unknown>, schema: readonly PluginSettingField[]): Record<string, unknown> {
   const next: Record<string, unknown> = { ...pluginSettingDefaults([...schema]) };
@@ -944,10 +970,13 @@ export async function restorePluginRelease(
  * Removes the installation (its registrations go with it), in one batch.
  * `keepData: true` keeps everything the plugin owns for a reinstall: storage
  * records, KV, logs, the delivery and cron history (deliveries still waiting
- * are cancelled) and its custom fields. `keepData: false` deletes all of it,
- * including its custom-field namespace (definitions and, by cascade, values),
- * the customer roles it granted and its background jobs. Either way a job
- * still running stops (`app_inactive`).
+ * are cancelled), its custom fields, and its name and settings
+ * (`retainAppStatement`): a reinstall takes the settings back. `keepData:
+ * false` deletes all of it (`appDataDeleteStatements`), including its
+ * custom-field namespace (definitions and, by cascade, values), the customer
+ * roles it granted, its background jobs and which catalogue items it created;
+ * the caller deletes the trashed ones of those (`listAppCreatedResources`,
+ * read before this). Either way a job still running stops (`app_inactive`).
  */
 export async function uninstallPlugin(
   db: Database,
@@ -955,8 +984,22 @@ export async function uninstallPlugin(
   options: { keepData: boolean; expectedRevision: number },
 ): Promise<void> {
   const waiting = ["pending", "processing", "failed"] as const;
-  const installed = await getPluginInstallation(db, pluginId);
+  const read = await readPluginInstallation(db, pluginId);
+  const installed = read?.readable ? read.installation : null;
   const hadChannels = (installed?.manifest.salesChannels.length ?? 0) > 0;
+  // Read here: a query builder is a thenable, so the statement is built, never awaited, below.
+  const previousRetained = options.keepData ? (await readRetainedApp(db, pluginId))?.app?.revision ?? 0 : 0;
+  const retain = () => {
+    const settings = installed?.storedSettings ?? {};
+    return retainAppStatement(db, pluginId, {
+      name: installed?.declaredManifest.name ?? (read && !read.readable ? read.installation.name : null) ?? pluginId,
+      version: read?.installation.version ?? "",
+      source: read?.installation.source ?? "upload",
+      signerKeyId: installed?.signerKeyId ?? null,
+      settings,
+      settingsCustomized: installed ? settingsCustomized(settings, installed.declaredManifest.settings) : false,
+    }, previousRetained);
+  };
   try {
     await safeBatch(db, [
       revisionGuard(db, pluginId, options.expectedRevision),
@@ -983,22 +1026,9 @@ export async function uninstallPlugin(
             nextAttemptAt: 253_402_300_799,
             updatedAt: sql`unixepoch()`,
           }).where(and(eq(pluginEventDeliveries.pluginId, pluginId), inArray(pluginEventDeliveries.status, [...waiting]))),
+          retain(),
         ]
-        : [
-          db.delete(pluginKv).where(eq(pluginKv.pluginId, pluginId)),
-          db.delete(pluginLogEntries).where(eq(pluginLogEntries.pluginId, pluginId)),
-          db.delete(pluginEventDeliveries).where(eq(pluginEventDeliveries.pluginId, pluginId)),
-          db.delete(pluginCronRuns).where(eq(pluginCronRuns.pluginId, pluginId)),
-          // Its data is gone, so a reinstall runs every data update again.
-          db.delete(pluginMigrations).where(eq(pluginMigrations.pluginId, pluginId)),
-          // Plugin namespaces are plugin ids (COMMERCE-HOOKS H4); values cascade.
-          db.delete(customFieldDefinitions).where(eq(customFieldDefinitions.namespace, pluginId)),
-          // Its object types and, by cascade, their records.
-          db.delete(objectTypes).where(eq(objectTypes.namespace, pluginId)),
-          // The roles it granted customers and its background jobs.
-          db.delete(pluginCustomerRoles).where(eq(pluginCustomerRoles.pluginId, pluginId)),
-          db.delete(bulkRuns).where(appJobRowsCondition(pluginId)),
-        ]),
+        : appDataDeleteStatements(db, pluginId)),
     ] as never);
   } catch (error) {
     if (isBatchGuardError(error, REVISION_GUARD)) await requireRevision(db, pluginId, options.expectedRevision, []);

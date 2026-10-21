@@ -42,6 +42,8 @@ export const DASHBOARD_WHEN_A: Readonly<Record<string, string>> = {
   "dashboard.apps.logs_list": "Use when debugging an app: its newest masked log lines.",
   "dashboard.apps.registry_install": "Use when installing a new app from the app registry (Workers Paid); activation still needs a Super Admin.",
   "dashboard.apps.registry_list": "Use when browsing apps available to install from the store's app registries.",
+  "dashboard.apps.removed_data_delete": "Use when the merchant wants the data an uninstalled app left (its content types, custom fields, settings) permanently deleted; confirm first, it cannot be undone.",
+  "dashboard.apps.removed_data_list": "Use when asked what data apps that are no longer installed left in the store.",
   "dashboard.apps.registry_settings_get": "Use when checking which app registries the store browses and which developer keys it trusts.",
   "dashboard.apps.settings_update": "Use when changing an installed app's settings (API keys, options); replaces its whole settings document.",
   "dashboard.apps.stop": "Use when one app misbehaves and must stop at once (emergency stop, no revision check).",
