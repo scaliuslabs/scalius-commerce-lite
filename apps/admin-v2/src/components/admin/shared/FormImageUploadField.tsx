@@ -67,12 +67,13 @@ export function FormImageUploadField({
           <span className="text-body">{placeholder ?? t("noImage")}</span>
         </div>
       )}
-      {readOnly ? null : <MediaManager
+      {/* The button keeps the preview's width, so the two read as one control. */}
+      {readOnly ? null : <div className={maxWidth}><MediaManager
         capability="image"
         selectedFiles={value ? [value] : []}
         onSelect={(file) => onChange(file)}
         triggerLabel={value ? changeTriggerLabel ?? t("changeImage") : triggerLabel ?? t("chooseImage")}
-      />}
+      /></div>}
     </div>
   );
 }

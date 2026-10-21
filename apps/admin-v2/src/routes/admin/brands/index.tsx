@@ -95,7 +95,7 @@ function BrandsPage() {
     {
       id: "productCount",
       header: t("products"),
-      meta: { mobile: "secondary", priority: 70, minWidth: 110 },
+      meta: { mobile: "secondary", numeric: true, priority: 70, minWidth: 110 },
       cell: ({ row }) => {
         const count = row.original.productCount;
         return (

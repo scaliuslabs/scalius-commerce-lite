@@ -34,8 +34,9 @@ const CENTRED_MODAL = "(min-width: 40rem)";
  * Keeps a centred modal's top edge where it opens. Radix mounts the panel on
  * each open, so this layout effect runs once per open, before the first paint:
  * it measures the panel (centred, as the stylesheet draws it) and pins its top
- * at the height that centres that first content, never nearer than 1rem to the
- * screen's top. After that the panel only grows and shrinks downward; the
+ * at the height that centres that first content, never higher than 4rem from the
+ * screen's top, so it never covers the 56px top bar (overlays keep clear of it,
+ * `OVERLAY_COLLISION_PADDING`). After that the panel only grows and shrinks downward; the
  * height cap (`modalClassName`) keeps its bottom 1rem above the screen's, and
  * the panel scrolls inside. Content that changes height (a filtered list, a
  * chip row, an error line) therefore never moves the dialog or the buttons in
@@ -58,7 +59,7 @@ export function useModalTopAnchor<T extends HTMLElement>(forwardedRef: React.For
     let pinnedTop: number | null = null;
     const pin = (top: number) => {
       pinnedTop = Math.round(top);
-      panel.style.setProperty("--dialog-top", `max(1rem, ${pinnedTop}px)`);
+      panel.style.setProperty("--dialog-top", `max(4rem, ${pinnedTop}px)`);
     };
     const anchor = () => {
       pinnedTop = null;

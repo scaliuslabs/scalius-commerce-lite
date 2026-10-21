@@ -120,7 +120,7 @@ function CategoriesPage() {
     {
       id: "productCount",
       header: t("products"),
-      meta: { mobile: "secondary", priority: 70, minWidth: 110 },
+      meta: { mobile: "secondary", numeric: true, priority: 70, minWidth: 110 },
       cell: ({ row }) => {
         const count = row.original.productCount ?? 0;
         const label = count === 1 ? t("productCountOne") : t("productCount", { count });

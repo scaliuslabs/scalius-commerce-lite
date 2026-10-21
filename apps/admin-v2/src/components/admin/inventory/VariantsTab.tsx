@@ -81,6 +81,7 @@ function AvailableBreakdown({ variant, storeLevel, children }: {
           type="button"
           variant="ghost"
           size="sm"
+          className="-my-3"
           aria-label={t("availableBreakdown", { count: variant.available })}
         >
           {children}
@@ -120,7 +121,7 @@ function StockBadge({ variant, storeLevel }: { variant: InventoryVariant; storeL
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <button type="button" className="inline-flex min-h-11 min-w-6 shrink-0 items-center rounded-md sm:min-h-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <button type="button" className="-my-3 inline-flex min-h-11 min-w-6 shrink-0 items-center rounded-md sm:min-h-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           <Badge variant={status.badge}>{t(status.key)}</Badge>
         </button>
       </TooltipTrigger>
@@ -158,7 +159,8 @@ export function VariantName({ productId, productName, optionLabel }: {
   // The product and its option values each use one line, with the whole value on hover.
   return (
     <span className="block min-w-0">
-      <RowLink to={`/admin/products/${productId}/edit`} title={productName ?? t("unknownProduct")} className="block truncate font-medium hover:underline">
+      {/* One text line, not the table rule's 44px phone link: the whole phone card already opens the product. */}
+      <RowLink to={`/admin/products/${productId}/edit`} title={productName ?? t("unknownProduct")} className="block min-h-0 truncate font-medium hover:underline">
         {productName ?? t("unknownProduct")}
       </RowLink>
       <span title={optionLabel ?? undefined} className="block h-lh truncate text-muted-foreground">{optionLabel}</span>

@@ -239,7 +239,8 @@ function ProductMediaTile({
           </div>
         )}
         {item.isPrimary ? (
-          <span className="absolute inset-s-1.5 top-1.5 rounded-sm bg-foreground px-1.5 text-body font-medium text-background">
+          // The near-black frame colour in both themes: product photos are mostly white, and a theme-flipped chip vanishes on them in dark mode.
+          <span className="absolute inset-s-1.5 top-1.5 rounded-sm bg-sidebar px-1.5 text-body font-medium text-sidebar-foreground">
             {t("mainMedia")}
           </span>
         ) : null}
