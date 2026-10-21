@@ -87,7 +87,8 @@ async function createMug() {
   return created.body.data.product;
 }
 
-const variantBy = (product: { variants: Array<{ sku: string }> }, sku: string) => product.variants.find((variant) => variant.sku === sku);
+type VariantRow = { id: string; sku: string; [key: string]: unknown };
+const variantBy = (product: { variants: VariantRow[] }, sku: string): VariantRow | undefined => product.variants.find((variant) => variant.sku === sku);
 
 describe("the product resource an app diffs against", () => {
   it("carries the description, options, option values, gallery and channels", async () => {
