@@ -24,6 +24,7 @@ import { toast } from "~/lib/toast";
 import { formatFileSize } from "../media-manager/utils/formatters";
 import { Fact } from "./AppListingParts";
 import { ThemeAppFallbackNotice } from "./ThemeAppParts";
+import { pluginKeyFingerprint } from "@scalius/shared/plugins/registry";
 
 function useRefreshApps() {
   const queryClient = useQueryClient();
@@ -167,7 +168,12 @@ export function AppRunFacts({ app }: { app: AppDetail }) {
   return (
     <>
       {signer ? (
-        <Fact label={t("factSignature")}>{signer.name ? t("developerVerified", { name: signer.name }) : t("developerUnknown")}</Fact>
+        <Fact label={t("factSignature")}>
+          <span className="flex flex-col gap-0.5">
+            <span>{signer.official ? t("developerOfficial") : signer.name ? t("developerVerified", { name: signer.name }) : t("developerUnknown")}</span>
+            <span className="font-mono text-muted-foreground">{t("signerFingerprint", { fingerprint: pluginKeyFingerprint(signer.keyId) })}</span>
+          </span>
+        </Fact>
       ) : app.source === "upload" ? (
         <Fact label={t("factSignature")}>{t("unsignedUpload")}</Fact>
       ) : null}

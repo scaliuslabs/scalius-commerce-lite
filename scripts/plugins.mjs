@@ -51,6 +51,7 @@ import {
   buildRegistry,
   generateSigningKey,
   installFromRegistry,
+  loadRegistryContract,
   packSigned,
   parseCommandArgs,
   trustedKeysWith,
@@ -282,8 +283,9 @@ async function pack(target, flags) {
     developer: typeof flags.get("--developer") === "string" ? flags.get("--developer") : null,
   });
   console.log(`Packed ${packed.id}@${packed.version} (${packed.sha256.slice(0, 12)}) in ${relative(process.cwd(), packed.dist) || "dist"}`);
+  const { pluginKeyFingerprint } = await loadRegistryContract();
   console.log(packed.signature
-    ? `Signed by key ${packed.signature.keyId} (${packed.signature.developer}).`
+    ? `Signed with key ${pluginKeyFingerprint(packed.signature.keyId)} (labelled "${packed.signature.developer}"). A store trusts the key, not the label: give merchants this fingerprint so they can check it before they trust your key.`
     : "Not signed: a store needs a Super Admin to accept it as unsigned. Sign it with --key <folder> (make a key with: pnpm plugin keygen <folder>).");
   console.log(`Upload package: ${relative(process.cwd(), packed.zipPath)}`);
 }
@@ -294,7 +296,9 @@ async function keygen(outDir) {
   const key = await generateSigningKey(directory);
   console.log(`Private key: ${key.keyFile}`);
   console.log(`Public key:  ${key.publicKey}`);
-  console.log(`Key id:      ${key.keyId}`);
+  const { pluginKeyFingerprint } = await loadRegistryContract();
+  console.log(`Key fingerprint: ${pluginKeyFingerprint(key.keyId)}`);
+  console.log("Give merchants this fingerprint: the dashboard shows it before a store trusts your key.");
   console.log("\nKeep the private key out of this repository and out of version control: anyone who has it can publish apps as you.");
   if (!relative(root, directory).startsWith("..")) {
     console.log("! This folder is inside the repository. Move signing-key.pem somewhere private before you commit anything.");

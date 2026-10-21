@@ -15,12 +15,14 @@ import { queryKeys } from "~/lib/query-keys";
 import { toast } from "~/lib/toast";
 import { appErrorCode } from "~/lib/api-query-options/apps";
 import { appErrorDetails, appErrorMessage, uploadAppPackage } from "~/lib/api-query-options/apps-lifecycle";
+import { pluginKeyFingerprint } from "@scalius/shared/plugins/registry";
 
 /** The API refuses a larger package (20 MiB). */
 const MAX_PACKAGE_BYTES = 20 * 1024 * 1024;
 
 /** Where the upload stands: choosing a file, or stopped at a warning that a Super Admin may accept. */
-type Step = { kind: "choose" } | { kind: "untrusted"; developer: string | null } | { kind: "unsigned" };
+/** `keyId` identifies the signing key; `developer` is only the label the signer gave it. */
+type Step = { kind: "choose" } | { kind: "untrusted"; developer: string | null; keyId: string | null } | { kind: "unsigned" };
 
 const REFUSALS: Record<string, AppsLifecycleMessageKey> = {
   "package_invalid": "packageInvalid",
@@ -56,10 +58,10 @@ export function UploadAppDialog({ open, onOpenChange }: { open: boolean; onOpenC
       await navigate({ to: "/admin/apps/$pluginId", params: { pluginId: app.id } });
     },
     onError: (error) => {
-      const { code, developer } = appErrorDetails(error);
+      const { code, developer, keyId } = appErrorDetails(error);
       if (code === "signature_untrusted") {
         setProblem(null);
-        setStep({ kind: "untrusted", developer });
+        setStep({ kind: "untrusted", developer, keyId });
         return;
       }
       if (code === "signature_missing") {
@@ -101,7 +103,9 @@ export function UploadAppDialog({ open, onOpenChange }: { open: boolean; onOpenC
   if (step.kind === "untrusted") {
     warning = {
       title: t("untrustedTitle"),
-      body: step.developer ? t("untrustedBody", { developer: step.developer }) : t("untrustedBodyNoName"),
+      body: step.developer
+        ? t("untrustedBody", { developer: step.developer, fingerprint: step.keyId ? pluginKeyFingerprint(step.keyId) : "?" })
+        : t("untrustedBodyNoName", { fingerprint: step.keyId ? pluginKeyFingerprint(step.keyId) : "?" }),
       ask: t("askForTrust"),
       action: t("trustAndInstall"),
       trust: { trustDeveloper: true },

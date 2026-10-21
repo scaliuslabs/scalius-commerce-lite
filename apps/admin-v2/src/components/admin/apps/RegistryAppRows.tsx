@@ -96,7 +96,7 @@ export function RegistryAppRows({ query, chevron, empty, hasOther }: RegistryApp
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <span className="text-body font-medium">{app.name}</span>
-                    {app.signer.trusted ? <Badge variant="success">{t("developerBadgeVerified")}</Badge> : <Badge variant="warning">{t("developerUnknown")}</Badge>}
+                    {app.signer.official ? <Badge variant="success">{t("developerBadgeOfficial")}</Badge> : app.signer.trusted ? <Badge variant="success">{t("developerBadgeVerified")}</Badge> : <Badge variant="warning">{t("developerUnknown")}</Badge>}
                     {app.compatible ? null : <Badge variant="secondary">{t("needsNewerScalius")}</Badge>}
                   </span>
                   <span title={app.tagline ?? app.description} className="line-clamp-2 text-body text-muted-foreground">{app.tagline ?? app.description}</span>

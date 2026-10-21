@@ -129,6 +129,16 @@ export async function pluginKeyId(publicKeyBase64: string): Promise<string> {
   return (await sha256Hex(base64ToBytes(publicKeyBase64))).slice(0, 16);
 }
 
+/**
+ * A key id as people compare it: `1a2b 3c4d 5e6f 7a8b`. The id is the first
+ * 64 bits of the public key's SHA-256, so it identifies the key; the
+ * developer name beside it is only the signer's own label. The CLI prints it
+ * at keygen and pack, and the dashboard shows it before a store trusts a key.
+ */
+export function pluginKeyFingerprint(keyId: string): string {
+  return keyId.toLowerCase().replace(/(.{4})(?=.)/g, "$1 ");
+}
+
 /** A trusted key from a public key the operator pasted or an upload carried; null when it is not a 32-byte key. */
 export async function trustedKeyFrom(publicKeyBase64: string, name: string): Promise<PluginTrustedKey | null> {
   if (!BASE64.test(publicKeyBase64)) return null;

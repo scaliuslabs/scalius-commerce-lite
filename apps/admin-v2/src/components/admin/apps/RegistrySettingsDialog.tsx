@@ -22,6 +22,7 @@ import {
   type AppRegistrySettings,
 } from "~/lib/api-query-options/apps-lifecycle";
 import { toast } from "~/lib/toast";
+import { pluginKeyFingerprint } from "@scalius/shared/plugins/registry";
 
 interface RegistryRow {
   uid: number;
@@ -191,7 +192,7 @@ function SettingsForm({ settings, canEdit, onClose }: { settings: AppRegistrySet
                     <div className="grid min-w-0 flex-1 gap-3">
                       {field(`k${key.uid}-name`, t("developerName"), key.name, (value) => setKeys((rows) => rows.map((row) => (row.uid === key.uid ? { ...row, name: value } : row))), errors[`k${key.uid}.name`])}
                       {field(`k${key.uid}-key`, t("developerKey"), key.publicKey, (value) => setKeys((rows) => rows.map((row) => (row.uid === key.uid ? { ...row, publicKey: value } : row))), errors[`k${key.uid}.key`], true)}
-                      {key.keyId ? <p className="text-body text-muted-foreground">{t("developerKeyId", { id: key.keyId })}</p> : null}
+                      {key.keyId ? <p className="font-mono text-body text-muted-foreground">{t("developerKeyId", { id: pluginKeyFingerprint(key.keyId) })}</p> : null}
                     </div>
                     <Button
                       type="button"
@@ -208,7 +209,7 @@ function SettingsForm({ settings, canEdit, onClose }: { settings: AppRegistrySet
                 ) : (
                   <div className="flex flex-col gap-0.5 text-body">
                     <span className="font-medium">{key.name}</span>
-                    {key.keyId ? <span className="text-muted-foreground">{t("developerKeyId", { id: key.keyId })}</span> : null}
+                    {key.keyId ? <span className="font-mono text-muted-foreground">{t("developerKeyId", { id: pluginKeyFingerprint(key.keyId) })}</span> : null}
                   </div>
                 )}
               </li>

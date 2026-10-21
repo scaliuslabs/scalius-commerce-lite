@@ -16,6 +16,7 @@ import { installRegistryApp, type RegistryApp } from "~/lib/api-query-options/ap
 import { queryKeys } from "~/lib/query-keys";
 import { toast } from "~/lib/toast";
 import { AppIcon } from "./AppIcon";
+import { pluginKeyFingerprint } from "@scalius/shared/plugins/registry";
 
 interface RegistryAppDialogProps {
   /** The last app opened stays while the dialog closes. */
@@ -84,7 +85,10 @@ export function RegistryAppDialog({ app, installMode, open, onOpenChange }: Regi
                 <span className="text-muted-foreground">{main("version")}: </span>
                 <span className="font-mono">{app.version}</span>
               </p>
-              <p className="text-body font-medium">{trusted ? t("developerVerified", { name: app.signer.name ?? "" }) : t("developerUnknown")}</p>
+              <div className="flex flex-col gap-0.5">
+                <p className="text-body font-medium">{app.signer.official ? t("developerOfficial") : trusted ? t("developerVerified", { name: app.signer.name ?? "" }) : t("developerUnknown")}</p>
+                <p className="font-mono text-body text-muted-foreground">{t("signerFingerprint", { fingerprint: pluginKeyFingerprint(app.signer.keyId) })}</p>
+              </div>
               {trusted ? null : (
                 <Alert variant="warning">
                   <AlertDescription>{t("unknownDeveloperWarning")}</AlertDescription>
