@@ -230,7 +230,7 @@ export function fixtureSkinData(target: StorefrontSkinTarget): StorefrontSkinJob
     case "product_card": return { product: fixtureProductCard(), position: 0, aboveFold: true };
     case "product_main": return fixtureProductPage();
     case "listing_main": return fixtureListingPage();
-    default: return fixtureSectionSkinData(target.slice("section:".length) as StorefrontSkinnableSection);
+    default: return fixtureSectionSkinData(target.slice("section:".length) as StorefrontSkinnableSection) as StorefrontSectionSkinData;
   }
 }
 

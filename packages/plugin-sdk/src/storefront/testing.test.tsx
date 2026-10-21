@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { BuyForm, Reviews, Slot, Toolbar } from "./components";
 import { componentFor, defineStorefront, type ComponentProps, type ComponentPropsFor, type ListingMainProps, type ProductMainProps, type SectionSkinProps } from "./define";
 import { raw } from "./html";
-import { STOREFRONT_SECTION_SKIN_PROJECTIONS, type StorefrontSkinnableSection } from "@scalius/shared/plugins/storefront-protocol";
+import { STOREFRONT_SECTION_SKIN_PROJECTIONS, type StorefrontProductCardData, type StorefrontSkinnableSection } from "@scalius/shared/plugins/storefront-protocol";
 import { assertHeaderContract, checkSkinHtml, fixtureProductPage, fixtureSectionSkinData, fixtureSkinData, renderComponent, renderHeader, renderSkin } from "./testing";
 
 describe("section skin fixtures follow the sealed projection", () => {
@@ -45,7 +45,7 @@ describe("component props by target", () => {
         }
       },
     } });
-    expect(renderComponent(app, "badge", "product_card.badges", { suffix: "!" }, { data: fixtureSkinData("product_card") })).toBe("<b>Linen shirt!</b>");
+    expect(renderComponent(app, "badge", "product_card.badges", { suffix: "!" }, { data: fixtureSkinData("product_card") as StorefrontProductCardData })).toBe("<b>Linen shirt!</b>");
     expect(renderComponent(app, "guide", "product.below", {}, { data: fixtureProductPage() })).toContain("Linen shirt");
     expect(() => renderComponent(app, "guide", "header.actions")).toThrow("This component draws at product.buy_box.after, product.below, not header.actions.");
     expect(renderComponent(app, "any", "page", {}, { props: { name: "Vendors" } })).toBe("<h2>Vendors</h2>");
