@@ -1,7 +1,9 @@
 // Settings › Custom data (COMMERCE-HOOKS H4): the custom field definitions of
 // one owner type at a time, in their display order. Add, edit, reorder and
 // delete (deleting removes every value; the confirmation says how many). A
-// plugin's fields are listed but only the plugin edits or deletes them.
+// plugin's fields are listed but only the plugin edits or deletes them; the
+// fields of an app that is no longer installed read "From a removed app", and
+// that app's data can be deleted from the card above the list.
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, MoreHorizontal } from "lucide-react";
@@ -15,6 +17,8 @@ import {
   isCustomFieldListType,
   type CustomFieldOwnerType,
 } from "@scalius/shared/custom-fields";
+import { AppOwnerBadge } from "~/components/admin/apps/app-owner";
+import { RemovedAppDataCard } from "~/components/admin/apps/RemovedAppData";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -69,6 +73,7 @@ export function CustomDataSettings() {
   return (
     <>
       <p className="text-body text-muted-foreground">{t("description")}</p>
+      <RemovedAppDataCard show={(group) => group.customFields > 0} />
       <SettingsCard
         id="customData"
         header={
@@ -107,7 +112,7 @@ export function CustomDataSettings() {
                     <p className="flex flex-wrap items-center gap-2">
                       <span className="break-words text-body font-medium">{definition.name}</span>
                       {definition.storefrontVisible ? <Badge variant="info">{t("storefront")}</Badge> : null}
-                      {own ? null : <Badge variant="secondary">{t("managedBy", { namespace: definition.namespace })}</Badge>}
+                      {own ? null : <AppOwnerBadge namespace={definition.namespace} managedVariant="secondary" managedLabel={(name) => t("managedBy", { namespace: name })} />}
                     </p>
                     <p className="break-words text-body text-muted-foreground">
                       <code>{definition.namespace}.{definition.key}</code> · {typeLabel(definition)} · {t("valueCount", { count: definition.valueCount })}

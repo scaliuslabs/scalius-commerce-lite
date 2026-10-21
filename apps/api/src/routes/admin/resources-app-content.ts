@@ -61,29 +61,29 @@ const outcomeSchema = z.object({
 
 export type AppContentOutcome = z.infer<typeof outcomeSchema>;
 
-/** Whether the item is in the trash: null when it does not exist. */
-async function inTrash(db: Database, type: AppOwnedResourceType, id: string): Promise<boolean | null> {
+/** Whether the item is in the trash, and the revision a permanent delete names; null when it does not exist. */
+async function trashState(db: Database, type: AppOwnedResourceType, id: string): Promise<{ trashed: boolean; revision: number } | null> {
   switch (type) {
     case "product": {
-      const row = await db.select({ deletedAt: products.deletedAt }).from(products).where(eq(products.id, id)).get();
-      return row ? row.deletedAt !== null : null;
+      const row = await db.select({ deletedAt: products.deletedAt, revision: products.aggregateRevision }).from(products).where(eq(products.id, id)).get();
+      return row ? { trashed: row.deletedAt !== null, revision: row.revision } : null;
     }
     case "category": {
-      const row = await db.select({ deletedAt: categories.deletedAt }).from(categories).where(eq(categories.id, id)).get();
-      return row ? row.deletedAt !== null : null;
+      const row = await db.select({ deletedAt: categories.deletedAt, revision: categories.revision }).from(categories).where(eq(categories.id, id)).get();
+      return row ? { trashed: row.deletedAt !== null, revision: row.revision } : null;
     }
     case "brand": {
-      const row = await db.select({ deletedAt: brands.deletedAt }).from(brands).where(eq(brands.id, id)).get();
-      return row ? row.deletedAt !== null : null;
+      const row = await db.select({ deletedAt: brands.deletedAt, revision: brands.revision }).from(brands).where(eq(brands.id, id)).get();
+      return row ? { trashed: row.deletedAt !== null, revision: row.revision } : null;
     }
     case "collection": {
       const row = await db.select({ deletedAt: collections.deletedAt }).from(collections).where(eq(collections.id, id)).get();
-      return row ? row.deletedAt !== null : null;
+      return row ? { trashed: row.deletedAt !== null, revision: 1 } : null;
     }
     case "media": {
-      const row = await db.select({ status: media.status }).from(media).where(eq(media.id, id)).get();
+      const row = await db.select({ status: media.status, version: media.version }).from(media).where(eq(media.id, id)).get();
       if (!row || row.status === "deleted") return null;
-      return row.status === "trashed" || row.status === "deleting";
+      return { trashed: row.status === "trashed" || row.status === "deleting", revision: row.version };
     }
   }
 }
@@ -152,13 +152,13 @@ export async function deleteAppContent(
       outcomes.push({ type: item.type, id: item.id, outcome, message });
     if (!permissions.has(TYPE_PERMISSION[item.type])) { result("forbidden", "The app's grant does not cover this type."); continue; }
     if (!owned.has(`${item.type}:${item.id}`)) { result("not_owned"); continue; }
-    const trashed = await inTrash(db, item.type, item.id);
-    if (trashed === null) {
+    const state = await trashState(db, item.type, item.id);
+    if (state === null) {
       await forget(db, item.type, item.id);
       result("not_found");
       continue;
     }
-    if (!trashed) { result("not_in_trash", "Move it to the trash first."); continue; }
+    if (!state.trashed) { result("not_in_trash", "Move it to the trash first."); continue; }
     try {
       await deleteOne(db, env, item);
       await forget(db, item.type, item.id);
@@ -170,6 +170,35 @@ export async function deleteAppContent(
     }
   }
   return outcomes;
+}
+
+/**
+ * When a removed app's data is deleted (apps/api/src/plugins/app-data.ts):
+ * permanently deletes the items it had created that are in the trash, each
+ * through the staff permanent delete at its current revision, so its rules
+ * hold (a product with inventory history or orders, or a file still shown
+ * somewhere, stays in the trash). Live items are left as they are.
+ */
+export async function deleteTrashedAppItems(
+  db: Database,
+  env: Env,
+  items: ReadonlyArray<{ type: AppOwnedResourceType; id: string }>,
+): Promise<{ deleted: number; kept: number }> {
+  let deleted = 0;
+  let kept = 0;
+  for (const item of items) {
+    const state = await trashState(db, item.type, item.id);
+    if (!state?.trashed) continue;
+    try {
+      await deleteOne(db, env, { type: item.type, id: item.id, expectedRevision: state.revision });
+      deleted += 1;
+    } catch (error) {
+      // The app's data is already deleted: an item that cannot go stays in the trash, the store's own.
+      if (!errorOutcome(error)) console.warn(`[plugins] trashed ${item.type} not deleted (${error instanceof Error ? error.name : "error"})`);
+      kept += 1;
+    }
+  }
+  return { deleted, kept };
 }
 
 function forget(db: Database, type: AppOwnedResourceType, id: string) {

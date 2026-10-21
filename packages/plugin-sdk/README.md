@@ -480,6 +480,7 @@ An app declares versioned updates of its own data (`manifest.migrations`, up to 
 - A rollback does not reverse data. Make each update idempotent (it can run again after a crash), and keep the previous version able to read the result: add first, remove in a later version.
 - Never renumber or remove a declared update.
 - Uninstall with "keep data" keeps the record, so a reinstall does not run the updates again. "Delete data" removes it.
+- "Keep data" keeps your settings too (secrets only for a release signed by the same developer key): a reinstall picks them up. Until then the dashboard lists your data as "From a removed app", and a Super Admin may delete it there.
 
 ## Install, update and trust
 

@@ -24040,6 +24040,81 @@
           "place"
         ]
       },
+      "RemovedAppData": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The removed app's id (vendor.name): the namespace of its object types and custom fields."
+          },
+          "name": {
+            "type": "string",
+            "description": "The app's name when it was removed; its id when the store kept no record of the removal."
+          },
+          "removedAt": {
+            "type": "string",
+            "nullable": true,
+            "description": "When it was uninstalled keeping its data; null when the store kept no record."
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Send it back as expectedRevision to delete this data (0: the store kept no record of the removal)."
+          },
+          "objectTypes": {
+            "type": "integer"
+          },
+          "records": {
+            "type": "integer",
+            "description": "Entries of its object types."
+          },
+          "objectTypeHandles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Its object types the dashboard lists under Objects."
+          },
+          "customFields": {
+            "type": "integer",
+            "description": "Custom field definitions (their values go with them)."
+          },
+          "keyValues": {
+            "type": "integer"
+          },
+          "customerRoles": {
+            "type": "integer",
+            "description": "Roles it granted customers."
+          },
+          "jobs": {
+            "type": "integer",
+            "description": "Background job runs it kept."
+          },
+          "catalogItems": {
+            "type": "integer",
+            "description": "Catalogue items it created. They stay in the catalogue; those in the trash are deleted with the data unless the store must keep them."
+          },
+          "settings": {
+            "type": "boolean",
+            "description": "Whether it kept settings that differ from the defaults (restored on reinstall)."
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "removedAt",
+          "revision",
+          "objectTypes",
+          "records",
+          "objectTypeHandles",
+          "customFields",
+          "keyValues",
+          "customerRoles",
+          "jobs",
+          "catalogItems",
+          "settings"
+        ]
+      },
       "AppLogLine": {
         "type": "object",
         "properties": {
@@ -246733,6 +246808,276 @@
         }
       }
     },
+    "/api/v1/admin/apps/removed-data": {
+      "get": {
+        "operationId": "dashboard.apps.removed_data_list",
+        "tags": [
+          "Admin - Apps"
+        ],
+        "summary": "Data left by apps that are no longer installed",
+        "description": "One group per app that is not installed but left object types, custom fields, key/value data, customer roles, jobs, catalogue ownership or settings. Reinstalling the app reclaims its group; dashboard.apps.removed_data_delete deletes it.",
+        "responses": {
+          "200": {
+            "description": "Removed apps' data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "apps": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/RemovedAppData"
+                          }
+                        }
+                      },
+                      "required": [
+                        "apps"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when asked what data apps that are no longer installed left in the store.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "apps.view"
+        }
+      }
+    },
+    "/api/v1/admin/apps/removed-data/{id}/delete": {
+      "post": {
+        "operationId": "dashboard.apps.removed_data_delete",
+        "tags": [
+          "Admin - Apps"
+        ],
+        "summary": "Permanently delete a removed app's data",
+        "description": "Super Admin only. Permanently deletes what an app that is no longer installed left: its object types and their entries, custom fields and their values, key/value data, the roles it granted customers, its jobs, logs and delivery history, its kept settings and files. Catalogue items it created stay in the catalogue; those in the trash are permanently deleted unless the store must keep them (inventory history, orders, a file still shown). Cannot be undone: confirm in plain words first. Refused while the app is installed again, or when its data changed since the revision read.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$",
+              "description": "The removed app's id (vendor.name)."
+            },
+            "required": true,
+            "description": "The removed app's id (vendor.name).",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "The group's revision from dashboard.apps.removed_data_list."
+                  }
+                },
+                "required": [
+                  "expectedRevision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "deleted": {
+                          "type": "boolean",
+                          "enum": [
+                            true
+                          ]
+                        },
+                        "catalogDeleted": {
+                          "type": "integer",
+                          "description": "Trashed catalogue items it created that were permanently deleted."
+                        },
+                        "catalogKept": {
+                          "type": "integer",
+                          "description": "Trashed ones the store must keep; they stay in the trash."
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "deleted",
+                        "catalogDeleted",
+                        "catalogKept"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "destructive",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 4096,
+          "maxRequestBytes": 4096,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when the merchant wants the data an uninstalled app left (its content types, custom fields, settings) permanently deleted; confirm first, it cannot be undone.",
+          "dryRun": "none",
+          "confirmation": "required"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "apps.manage"
+        }
+      }
+    },
     "/api/v1/admin/apps/{id}": {
       "get": {
         "operationId": "dashboard.apps.get",
@@ -247954,7 +248299,7 @@
           "Admin - Apps"
         ],
         "summary": "Uninstall an app, keeping or deleting its data",
-        "description": "keepData false deletes the app's stored records, key/value data, logs, delivery and job history and its custom fields (with their values). An app compiled into this deployment appears again as installed; remove it from the deployment with pnpm plugin remove.",
+        "description": "keepData true keeps everything the app owns, its settings included, and a reinstall takes it back; until then dashboard.apps.removed_data_list lists it. keepData false permanently deletes it: stored records, key/value data, custom fields (with their values), the roles it granted customers, its jobs, logs, delivery history, settings and files; catalogue items it created stay, and those in the trash are permanently deleted unless the store must keep them (inventory history, orders, a file still shown). Confirm that choice in plain words first. An app compiled into this deployment appears again as installed; remove it from the deployment with pnpm plugin remove.",
         "parameters": [
           {
             "schema": {
@@ -248024,13 +248369,23 @@
                         "hookError": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "catalogDeleted": {
+                          "type": "integer",
+                          "description": "Trashed catalogue items it created that were permanently deleted (keepData false)."
+                        },
+                        "catalogKept": {
+                          "type": "integer",
+                          "description": "Trashed ones the store must keep; they stay in the trash."
                         }
                       },
                       "required": [
                         "id",
                         "uninstalled",
                         "keepData",
-                        "hookError"
+                        "hookError",
+                        "catalogDeleted",
+                        "catalogKept"
                       ]
                     }
                   },
@@ -271340,7 +271695,7 @@
         "surface": "dashboard",
         "kind": "mixed",
         "title": "Manage installed apps",
-        "summary": "Read installed apps, what they may access, their settings, logs and deliveries; retry deliveries, stop or uninstall apps.",
+        "summary": "Read installed apps, what they may access, their settings, logs and deliveries; retry deliveries, stop or uninstall apps, and delete data uninstalled apps left.",
         "examples": [
           "Which apps are installed and which are waiting for approval?",
           "Why did the order tagger app fail last night? Show its log and retry the failed delivery."
@@ -271362,7 +271717,9 @@
           "dashboard.apps.delivery_retry",
           "dashboard.apps.settings_update",
           "dashboard.apps.deactivate",
-          "dashboard.apps.uninstall"
+          "dashboard.apps.uninstall",
+          "dashboard.apps.removed_data_list",
+          "dashboard.apps.removed_data_delete"
         ],
         "requiresFacts": true,
         "requiresConfirmation": true,
@@ -271372,6 +271729,7 @@
           "An app's features start off; turning one on approves its access and is the Super Admin's step in the dashboard. Agents list features and may turn one off (it stops that part at once).",
           "Settings, deactivation and uninstall need the app's current revision; read it first. A secret setting is write-only: never ask for or repeat its value.",
           "Uninstall with keepData false deletes the app's data and custom fields: confirm that choice in plain words first.",
+          "Data an uninstalled app left stays until a reinstall reclaims it or it is deleted: list it, then delete one app's data only after the merchant confirms in plain words (only a Super Admin owner may).",
           "After a retry or a settings change, read the deliveries or log again and report what happened."
         ]
       },
@@ -276265,6 +276623,22 @@
           "mode": "curated",
           "workflowIds": [
             "dashboard.apps-install"
+          ]
+        },
+        {
+          "operationId": "dashboard.apps.removed_data_delete",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.apps-manage"
+          ]
+        },
+        {
+          "operationId": "dashboard.apps.removed_data_list",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.apps-manage"
           ]
         },
         {

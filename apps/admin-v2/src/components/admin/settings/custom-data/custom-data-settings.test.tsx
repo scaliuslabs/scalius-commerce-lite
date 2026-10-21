@@ -14,6 +14,8 @@ const sdk = vi.hoisted(() => ({
   patchApiV1AdminCustomFieldDefinitionsById: vi.fn(),
   deleteApiV1AdminCustomFieldDefinitionsById: vi.fn(),
   postApiV1AdminCustomFieldDefinitionsReorder: vi.fn(),
+  getApiV1AdminApps: vi.fn(),
+  getApiV1AdminAppsRemovedData: vi.fn(),
 }));
 vi.mock("@scalius/api-client/sdk", () => sdk);
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
@@ -50,6 +52,8 @@ describe("custom data settings", () => {
       ],
     }));
     sdk.postApiV1AdminCustomFieldDefinitionsReorder.mockImplementation(() => ok({ definitions: [] }));
+    sdk.getApiV1AdminApps.mockImplementation(() => ok({ apps: [], available: [], sandboxAvailable: false }));
+    sdk.getApiV1AdminAppsRemovedData.mockImplementation(() => ok({ apps: [] }));
   });
 
   afterEach(() => {
@@ -82,6 +86,26 @@ describe("custom data settings", () => {
     expect(container.textContent).not.toContain("VIP");
     // Only the merchant's own field has edit and delete.
     expect(container.querySelectorAll('button[aria-haspopup="menu"]')).toHaveLength(1);
+  });
+
+  it("names the fields of an app that is no longer installed and offers its data's delete", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() => ok({ apps: [{ id: "acme.loyalty", name: "Acme Loyalty" }], available: [], sandboxAvailable: false }));
+    sdk.getApiV1AdminCustomFieldDefinitions.mockImplementation(() => ok({
+      definitions: [
+        definition("cfd_care", "product", "Care"),
+        definition("cfd_points", "product", "Points", { namespace: "acme.loyalty", position: 1 }),
+        definition("cfd_shop", "product", "Shop", { namespace: "scalius.sellers", position: 2 }),
+      ],
+    }));
+    sdk.getApiV1AdminAppsRemovedData.mockImplementation(() => ok({ apps: [{
+      id: "scalius.sellers", name: "Sellers", removedAt: null, revision: 0, objectTypes: 0, records: 0, objectTypeHandles: [],
+      customFields: 1, keyValues: 0, customerRoles: 0, jobs: 0, catalogItems: 0, settings: false,
+    }] }));
+    await render();
+    await vi.waitFor(() => expect(container.textContent).toContain("From a removed app: Sellers"));
+    expect(container.textContent).toContain(t("managedBy", { namespace: "Acme Loyalty" }));
+    expect(container.textContent).toContain("Data from removed apps");
+    expect([...container.querySelectorAll("button")].some((button) => button.textContent === "Delete data")).toBe(true);
   });
 
   async function openAddField(name: string) {

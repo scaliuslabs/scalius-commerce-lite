@@ -43,6 +43,10 @@ export const APP_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/apps/stop-third-party": { POST: manage },
   "/api/v1/admin/apps/*/stop": { POST: manage },
   "/api/v1/admin/apps/*/update": { POST: manage },
+  // Data left by apps that are no longer installed: listing is a read;
+  // deleting it is also Super Admin only (enforced by the route).
+  "/api/v1/admin/apps/removed-data": { GET: view },
+  "/api/v1/admin/apps/removed-data/*/delete": { POST: manage },
   // An app's own dashboard routes: reading its pages needs apps.view; its
   // mutating actions also need apps.use.
   "/api/v1/plugins/*/admin/**": { GET: view, POST: use, PUT: use, PATCH: use, DELETE: use },

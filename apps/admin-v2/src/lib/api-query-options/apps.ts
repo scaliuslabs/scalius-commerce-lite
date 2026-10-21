@@ -9,6 +9,7 @@ import {
   getApiV1AdminAppsById,
   getApiV1AdminAppsByIdDeliveries,
   getApiV1AdminAppsByIdLogs,
+  getApiV1AdminAppsRemovedData,
   getApiV1AdminAppsSurfaces,
   postApiV1AdminAppsByIdActivate,
   postApiV1AdminAppsByIdDeactivate,
@@ -16,6 +17,7 @@ import {
   postApiV1AdminAppsByIdFeaturesByFeatureIdDisable,
   postApiV1AdminAppsByIdFeaturesByFeatureIdEnable,
   postApiV1AdminAppsByIdUninstall,
+  postApiV1AdminAppsRemovedDataByIdDelete,
   putApiV1AdminAppsByIdSettings,
 } from "@scalius/api-client/sdk";
 import type {
@@ -28,12 +30,13 @@ import type {
   AppLogLine,
   AppSettingField,
   AppSummary,
+  RemovedAppData,
 } from "@scalius/api-client/types";
 import { AdminApiResponseError } from "../admin-api-error";
 import { apiData } from "../api";
 import { queryKeys } from "../query-keys";
 
-export type { AppAdminSurfaces, AppDetail, AppEventDelivery, AppFeature, AppGrant, AppListing, AppLogLine, AppSettingField, AppSummary };
+export type { AppAdminSurfaces, AppDetail, AppEventDelivery, AppFeature, AppGrant, AppListing, AppLogLine, AppSettingField, AppSummary, RemovedAppData };
 
 /** The categories an app lists itself under (the manifest's enum). */
 export type AppCategory = AppSummary["categories"][number];
@@ -154,6 +157,18 @@ export async function saveAppSettings(app: Pick<AppDetail, "id" | "revision">, v
 
 export function uninstallApp(app: Pick<AppDetail, "id" | "revision">, keepData: boolean) {
   return apiData(postApiV1AdminAppsByIdUninstall({ path: { id: app.id }, body: { expectedRevision: app.revision, keepData } }));
+}
+
+/** What apps that are no longer installed left in the store, one group per app. */
+export const removedAppDataQueryOptions = () =>
+  queryOptions({
+    queryKey: queryKeys.apps.removedData(),
+    queryFn: async () => (await apiData(getApiV1AdminAppsRemovedData())).apps,
+  });
+
+/** Permanently deletes one removed app's group, if it is still the one the page listed. */
+export function deleteRemovedAppData(group: Pick<RemovedAppData, "id" | "revision">) {
+  return apiData(postApiV1AdminAppsRemovedDataByIdDelete({ path: { id: group.id }, body: { expectedRevision: group.revision } }));
 }
 
 export async function retryAppDelivery(id: string, deliveryId: string) {

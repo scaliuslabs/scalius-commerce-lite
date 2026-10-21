@@ -20,6 +20,7 @@ import {
 } from "@scalius/shared/custom-fields";
 import { DEFAULT_CURRENCY, getDecimalPlaces } from "@scalius/shared/currency";
 import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
+import { AppOwnerText } from "~/components/admin/apps/app-owner";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import {
   SaveConflict,
@@ -224,7 +225,9 @@ export function CustomFieldsEditor({ ownerType, ownerId, canEdit }: EditorProps)
             key={definition.id}
             field={field}
             label={label}
-            help={definition.namespace !== "custom" ? t("managedBy", { namespace: definition.namespace }) : definition.description}
+            help={definition.namespace !== "custom"
+              ? <AppOwnerText namespace={definition.namespace} managedLabel={(name) => t("managedBy", { namespace: name })} />
+              : definition.description}
           />
         );
         const problem = serverProblems[definition.id] ?? problems[definition.id];

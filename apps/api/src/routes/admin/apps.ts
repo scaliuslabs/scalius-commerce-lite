@@ -96,6 +96,7 @@ import type { Database } from "@scalius/database/client";
 import { ServiceUnavailableError } from "@scalius/core/errors";
 import { getThemeSettings } from "@scalius/core/modules/settings";
 import { registerAppLifecycleRoutes } from "./apps-lifecycle";
+import { registerRemovedAppDataRoutes } from "./apps-removed-data";
 
 // The plugin host with its lifecycle hooks and the operation catalogue (risk
 // per permission) load only on the requests that need them, never when this
@@ -978,6 +979,10 @@ app.openapi(surfacesRoute, async (c) => {
 
 registerAppLifecycleRoutes(app, { detail, detailSchema: appDetailSchema, lifecycleContext: lifecycleContext as never });
 
+// ── Data from removed apps (apps-removed-data.ts; before `/{id}`) ──
+
+registerRemovedAppDataRoutes(app);
+
 // ── Get ──
 
 const getRoute = createRoute({
@@ -1237,7 +1242,7 @@ const uninstallRoute = createRoute({
   operationId: "dashboard.apps.uninstall",
   tags: ["Admin - Apps"],
   summary: "Uninstall an app, keeping or deleting its data",
-  description: "keepData false deletes the app's stored records, key/value data, logs, delivery and job history and its custom fields (with their values). An app compiled into this deployment appears again as installed; remove it from the deployment with pnpm plugin remove.",
+  description: "keepData true keeps everything the app owns, its settings included, and a reinstall takes it back; until then dashboard.apps.removed_data_list lists it. keepData false permanently deletes it: stored records, key/value data, custom fields (with their values), the roles it granted customers, its jobs, logs, delivery history, settings and files; catalogue items it created stay, and those in the trash are permanently deleted unless the store must keep them (inventory history, orders, a file still shown). Confirm that choice in plain words first. An app compiled into this deployment appears again as installed; remove it from the deployment with pnpm plugin remove.",
   request: {
     params: idParams,
     body: {
@@ -1250,7 +1255,14 @@ const uninstallRoute = createRoute({
       description: "Uninstalled",
       content: {
         "application/json": {
-          schema: successEnvelope(z.object({ id: z.string(), uninstalled: z.literal(true), keepData: z.boolean(), hookError: z.string().nullable() })),
+          schema: successEnvelope(z.object({
+            id: z.string(),
+            uninstalled: z.literal(true),
+            keepData: z.boolean(),
+            hookError: z.string().nullable(),
+            catalogDeleted: z.number().int().openapi({ description: "Trashed catalogue items it created that were permanently deleted (keepData false)." }),
+            catalogKept: z.number().int().openapi({ description: "Trashed ones the store must keep; they stay in the trash." }),
+          })),
         },
       },
     },
@@ -1264,7 +1276,14 @@ app.openapi(uninstallRoute, async (c) => {
   const body = c.req.valid("json");
   const { uninstallPluginWithHooks } = await lifecycle();
   const result = await uninstallPluginWithHooks(lifecycleContext(c), id, body);
-  return ok(c, { id, uninstalled: true as const, keepData: body.keepData, hookError: result.hookError });
+  return ok(c, {
+    id,
+    uninstalled: true as const,
+    keepData: body.keepData,
+    hookError: result.hookError,
+    catalogDeleted: result.catalogDeleted,
+    catalogKept: result.catalogKept,
+  });
 });
 
 // ── Logs ──
