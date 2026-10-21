@@ -4,7 +4,8 @@
 // row by row through the SQLite compatibility functions, about 12,500
 // json_each calls an order. Writes cap the automatic promotions that are on,
 // so the read now loads all of them through their index and parses nothing.
-// Opt-in: point SCALIUS_TEST_POSTGRES_URL at a disposable server.
+// Opt-in: point SCALIUS_TEST_POSTGRES_URL at a disposable server as its
+// superuser (the test counts function calls with track_functions).
 import { sql } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 
