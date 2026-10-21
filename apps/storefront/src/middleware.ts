@@ -43,6 +43,8 @@ import { currentRequestTheme, pageRendersDegradedTheme, resolveRequestTheme } fr
 import { readStorefrontExtensions } from "@scalius/shared/plugins/storefront-components";
 import { themeAppConnectHosts } from "@/lib/extensions/stylesheets";
 import { readThemePreviewCookie } from "@/lib/theme-preview-cookie";
+import { catalogRedirectBeforeReads } from "@/lib/listing-url-redirect";
+import { presenceOfRenderRequest } from "@/lib/market-presence";
 
 interface PreviewFramingLocals {
   /** Set by the response policy: the page rendered a valid theme preview. */
@@ -195,15 +197,34 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
 // with their own reads, so the whole render is one API batch; every other
 // route waits for the origins first. Nothing is read from Wrangler vars or
 // build-time env, and nothing is retained across requests.
-const requestRuntimeMiddleware = defineMiddleware(({ request, url }, next) =>
-  runWithRequestRuntime(request, getEnv(), async () => {
+const requestRuntimeMiddleware = defineMiddleware(({ request, url, routePattern }, next) => {
+  const early = redirectBeforeReads(request, url, routePattern);
+  if (early) return early;
+  return runWithRequestRuntime(request, getEnv(), async () => {
     const layout = getLayoutData();
     const batchedPage =
       request.method === "GET" && isLayoutBatchedPagePath(url.pathname);
     if (!batchedPage) await layout;
     return next();
-  }),
-);
+  });
+});
+
+/**
+ * A catalog URL whose redirect the page decides from the URL alone answers
+ * here, before the layout read starts, so it costs no API batch
+ * (`catalogRedirectBeforeReads`), with the headers the response policy gives
+ * any redirect. A presence render goes on to its page, so an inactive
+ * presence still answers its 404.
+ */
+function redirectBeforeReads(request: Request, url: URL, routePattern: string): Response | null {
+  if (request.method !== "GET" && request.method !== "HEAD") return null;
+  if (presenceOfRenderRequest(request)) return null;
+  const redirect = catalogRedirectBeforeReads(routePattern, url);
+  if (!redirect) return null;
+  redirect.headers.set("X-Storefront-Build", BUILD_ID);
+  setPrivateResponse(redirect, "BYPASS");
+  return redirect;
+}
 
 const transportSecurityMiddleware = defineMiddleware(
   async ({ request, locals }, next) => {
