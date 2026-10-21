@@ -18,6 +18,7 @@
 // - acme.bulk-discount: checkout.discounts and cart.validate by quantity.
 // - acme.order-tagger: an order card and actions through `ctx.api`.
 // - acme.notes: checkout and customer-account blocks.
+// - acme.marketplace: a multi-seller split kept from fulfilment and refund line facts.
 //
 // Each fingerprint is a fixed test value: an installation made from an entry
 // matches the "deployed" code, and a test that changes it sees an update.
@@ -30,6 +31,7 @@ import { manifest as orderTaggerManifest } from "./apps/order-tagger/src/index";
 import { manifest as wishlistManifest } from "./apps/wishlist/src/index";
 import { manifest as wholesaleManifest } from "./apps/wholesale/src/index";
 import { manifest as riskGuardManifest } from "./apps/risk-guard/src/index";
+import { manifest as marketplaceManifest } from "./apps/marketplace/src/index";
 import type { BundledPluginEntry } from "../loaders/bundled";
 
 /** Directories of the fixture apps, for `packPlugin` (sandbox tests). */
@@ -42,6 +44,7 @@ export const FIXTURE_APP_SOURCES = {
   "acme.notes": "./apps/api/src/plugins/testing/apps/notes",
   "acme.wholesale": "./apps/api/src/plugins/testing/apps/wholesale",
   "acme.risk-guard": "./apps/api/src/plugins/testing/apps/risk-guard",
+  "acme.marketplace": "./apps/api/src/plugins/testing/apps/marketplace",
 } as const;
 
 export const HELLO_BUNDLED: BundledPluginEntry = {
@@ -59,6 +62,7 @@ export const FIXTURE_APPS: Readonly<Record<string, BundledPluginEntry>> = {
   "acme.notes": { version: notesManifest.version, sha256: "4073".repeat(16), load: () => import("./apps/notes/src/index") },
   "acme.wholesale": { version: wholesaleManifest.version, sha256: "b2b0".repeat(16), load: () => import("./apps/wholesale/src/index") },
   "acme.risk-guard": { version: riskGuardManifest.version, sha256: "715c".repeat(16), load: () => import("./apps/risk-guard/src/index") },
+  "acme.marketplace": { version: marketplaceManifest.version, sha256: "5e11".repeat(16), load: () => import("./apps/marketplace/src/index") },
 };
 
 /** The bundled registry with every fixture app added. */

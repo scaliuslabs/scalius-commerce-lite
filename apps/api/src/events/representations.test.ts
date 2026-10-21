@@ -59,7 +59,7 @@ describe("sealed event representations", () => {
     for (let index = 1; index <= 201; index += 1) insert.run(`fulfillment_${index}`, `request-${index}`, index);
     const result = await createWebhookRepresentationResolver(db)(event({
       topic: "fulfillment.created", resourceType: "fulfillment", resourceId: "fulfillment_201",
-      facts: { fulfillmentId: "fulfillment_201", orderId: "ord_fulfillment", kind: "service", locationId: null },
+      facts: { fulfillmentId: "fulfillment_201", orderId: "ord_fulfillment", kind: "service", locationId: null, lines: [] },
     }));
     expect(result).toMatchObject({ id: "fulfillment_201", kind: "service", status: "active", lines: [] });
   });

@@ -19,6 +19,18 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
     batch: "forbidden",
     uncurated: true,
   },
+  // Refunds (routes/admin/resources-refunds.ts): the dashboard refund command
+  // in minor units with the order lines it is for; claimed before any
+  // provider call, one refund per required Idempotency-Key.
+  "dashboard.resources.refunds.list": { stability: "stable", uncurated: true },
+  "dashboard.resources.refunds.create": {
+    stability: "stable",
+    risk: "financial",
+    openWorld: true,
+    idempotency: "required",
+    batch: "forbidden",
+    uncurated: true,
+  },
   "dashboard.resources.fulfillments.list": { stability: "stable", uncurated: true },
   // The fulfilment ledger's own request key carries the Idempotency-Key.
   "dashboard.resources.fulfillments.create": {

@@ -137,6 +137,24 @@ automatic fulfilment).
 COD is not a gateway: collection is recorded in `cod.ts` and COD refunds are
 confirmed manual settlements.
 
+## Refund records and lines (0172)
+
+Every refund command is an `order_refunds` row (its id is the attempts'
+`refund_group_id`), written first in the claim batch with the order lines it
+is for (`order_refund_lines`, `RefundRequest.lines`: quantities only, the
+amount stays the money). The claim batch writes the record, its lines, then
+the attempts; `refund.created` fires on the first attempt with every line
+already written. The record's `status` is maintained from its attempts by
+triggers: `pending` until each settles, then `refunded`, `failed` or
+`partial`, each change a `refund.updated` carrying the lines. A line is
+refused before the claim (and by `order_refund_lines_bounds_insert` under a
+race) when it is not the order's or exceeds its quantity less what refunds
+that did not fail already named. A request key replayed with other lines is
+a conflict. Staff and agents send `lines` to `dashboard.orders.refund`; apps
+use the stable `refunds.create` (minor units, Sensitive `write_refunds`) and
+`refunds.list`. Refunds a provider reports from outside Scalius have no
+record (no command, no lines); `order.refunded` still reports their payments.
+
 ## Deferred payment (net terms)
 
 `@scalius/shared/payment-terms` is the vocabulary; migration 0161 adds

@@ -187,15 +187,25 @@ describe(`${MIGRATION} triggers (D1)`, () => {
 
   it("fulfilments, refunds and returns", () => {
     insertOrder(sqlite, "ord_2", { status: "confirmed" });
+    insertProduct(sqlite, "prod_ful");
+    sqlite.exec(`INSERT INTO order_items (id, order_id, product_id, variant_id, quantity, unit_price_minor)
+      VALUES ('item_b', 'ord_2', 'prod_ful', 'prod_ful_v1', 3, 500), ('item_a', 'ord_2', 'prod_ful', 'prod_ful_v1', 1, 500)`);
     clear(sqlite);
+    // The lines follow their fulfilment in the batch and amend its event (0172).
     sqlite.exec(`INSERT INTO order_fulfillments (id, order_id, kind, request_key, actor_type, location_id)
-      VALUES ('ful_1', 'ord_2', 'ship', 'req_1', 'admin', 'loc_default')`);
+      VALUES ('ful_1', 'ord_2', 'ship', 'req_1', 'admin', 'loc_default');
+      INSERT INTO order_fulfillment_lines (id, fulfillment_id, order_id, order_item_id, quantity)
+      VALUES ('fl_b', 'ful_1', 'ord_2', 'item_b', 2), ('fl_a', 'ful_1', 'ord_2', 'item_a', 1)`);
     expect(topics(sqlite)).toEqual(["order.fulfilled"]);
     expect(JSON.parse(events(sqlite)[0]!.data)).toEqual({
       orderId: "ord_2",
       fulfillmentId: "ful_1",
       kind: "ship",
       locationId: "loc_default",
+      lines: [
+        { orderItemId: "item_a", variantId: "prod_ful_v1", quantity: 1 },
+        { orderItemId: "item_b", variantId: "prod_ful_v1", quantity: 2 },
+      ],
     });
     expect(events(sqlite)[0]!.resource_id).toBe("ord_2");
 

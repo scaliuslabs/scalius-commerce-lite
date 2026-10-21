@@ -39,6 +39,8 @@ export const EVENT_TOPICS = [
   "customer.consent_changed",
   "fulfillment.created",
   "fulfillment.voided",
+  "refund.created",
+  "refund.updated",
   "shipment.updated",
   "payment.updated",
   "checkout.abandoned",
@@ -69,6 +71,7 @@ export const EVENT_RESOURCE_TYPES = [
   "purchase_order",
   "inventory_transfer",
   "fulfillment",
+  "refund",
   "shipment",
   "payment",
   "checkout",
@@ -101,6 +104,8 @@ export const EVENT_TOPIC_RESOURCE: Readonly<Record<EventTopic, EventResourceType
   "customer.consent_changed": "customer",
   "fulfillment.created": "fulfillment",
   "fulfillment.voided": "fulfillment",
+  "refund.created": "refund",
+  "refund.updated": "refund",
   "shipment.updated": "shipment",
   "payment.updated": "payment",
   "checkout.abandoned": "checkout",
@@ -124,6 +129,21 @@ const id = z.string().min(1).max(128);
 const state = z.string().min(1).max(64);
 const nullableState = state.nullable();
 const nullableId = id.nullable();
+
+/** The most lines a `lines` fact lists (a representation lists at most 500 too). */
+export const EVENT_FACT_LINES_MAX = 500;
+
+/**
+ * The order lines a fulfilment or a refund covers (0172): each order line by
+ * id, its SKU (null once the SKU is gone) and the units, sorted by order
+ * line. Quantities only: what a line cost is read from the representation.
+ */
+export const eventFactLinesSchema = z.array(z.object({
+  orderItemId: id,
+  variantId: nullableId,
+  quantity: z.number().int().positive(),
+})).max(EVENT_FACT_LINES_MAX);
+export type EventFactLine = z.infer<typeof eventFactLinesSchema>[number];
 
 /**
  * Facts per topic, as the triggers write them. Every schema is strict about
@@ -161,6 +181,8 @@ export const EVENT_FACT_SCHEMAS = {
     fulfillmentId: id,
     kind: state,
     locationId: nullableId,
+    /** The units this fulfilment handed over. */
+    lines: eventFactLinesSchema,
   }),
   "order.refunded": z.object({
     orderId: id,
@@ -250,12 +272,40 @@ export const EVENT_FACT_SCHEMAS = {
     orderId: id,
     kind: state,
     locationId: nullableId,
+    /** The units it handed over (a void puts them back). */
+    lines: eventFactLinesSchema,
   }),
   "fulfillment.voided": z.object({
     fulfillmentId: id,
     orderId: id,
     kind: state,
     locationId: nullableId,
+    /** The units it handed over (a void puts them back). */
+    lines: eventFactLinesSchema,
+  }),
+  /**
+   * A refund command was claimed (0172): staff, an app or an agent gave money
+   * back and named the order lines it is for (`lines` is empty for an
+   * amount-only refund). `status` is `pending` until every payment it
+   * goes back to settles. Refunds made at a provider outside Scalius have
+   * no refund command; `order.refunded` still reports their payments.
+   */
+  "refund.created": z.object({
+    refundId: id,
+    orderId: id,
+    status: state,
+    lines: eventFactLinesSchema,
+  }),
+  /**
+   * A refund settled: `refunded` (all of it went back), `failed` (none
+   * did) or `partial` (some of its payments failed).
+   */
+  "refund.updated": z.object({
+    refundId: id,
+    orderId: id,
+    previousStatus: state,
+    status: state,
+    lines: eventFactLinesSchema,
   }),
   "shipment.updated": z.object({
     shipmentId: id,
@@ -388,7 +438,7 @@ export function parseEventFacts<T extends EventTopic>(topic: T, raw: unknown): E
  */
 export const EVENT_TOPIC_PREFIXES = [
   "order", "return", "product", "variant", "purchase_order", "inventory_transfer", "customer",
-  "fulfillment", "shipment", "payment", "checkout", "discount", "review", "gift_card",
+  "fulfillment", "refund", "shipment", "payment", "checkout", "discount", "review", "gift_card",
   "gift_card_transaction", "object",
 ] as const;
 export type EventTopicPrefix = (typeof EVENT_TOPIC_PREFIXES)[number];

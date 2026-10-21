@@ -48,7 +48,22 @@ export type EventExpr =
   | { kind: "negate"; expr: EventExpr }
   /** The text from the 1-based position `from` (`substr` in both dialects). */
   | { kind: "substr"; expr: EventExpr; from: number }
-  | { kind: "lookup"; table: string; select: string; key: string; value: EventExpr };
+  | { kind: "lookup"; table: string; select: string; key: string; value: EventExpr }
+  /**
+   * The lines of one row of a line ledger (a fulfilment's, a refund's): a
+   * JSON array `[{ orderItemId, variantId, quantity }]` in order-line order,
+   * at most EVENT_FACT_LINES_MAX. `key` is the ledger row's id.
+   */
+  | { kind: "lines"; ledger: LineLedger; key: EventExpr };
+
+/** The line ledgers a `lines` fact reads (0172): each line names an order line and a quantity. */
+export const LINE_LEDGERS = {
+  fulfillment: { table: "order_fulfillment_lines", key: "fulfillment_id" },
+  refund: { table: "order_refund_lines", key: "refund_id" },
+} as const;
+export type LineLedger = keyof typeof LINE_LEDGERS;
+/** The most lines a `lines` fact lists (a representation lists at most 500 too). */
+export const EVENT_FACT_LINES_MAX = 500;
 
 export type EventCondition =
   | { kind: "eq" | "ne"; left: EventExpr; right: EventExpr }
@@ -67,6 +82,7 @@ const negate = (expr: EventExpr): EventExpr => ({ kind: "negate", expr });
 const substr = (expr: EventExpr, from: number): EventExpr => ({ kind: "substr", expr, from });
 const lookup = (table: string, select: string, key: string, value: EventExpr): EventExpr =>
   ({ kind: "lookup", table, select, key, value });
+const lines = (ledger: LineLedger, key: EventExpr): EventExpr => ({ kind: "lines", ledger, key });
 
 const eq = (left: EventExpr, right: EventExpr): EventCondition => ({ kind: "eq", left, right });
 const ne = (left: EventExpr, right: EventExpr): EventCondition => ({ kind: "ne", left, right });
@@ -352,6 +368,8 @@ const LEGACY_EVENT_TRIGGER_SPECS: readonly EventTriggerSpec[] = [
       ["fulfillmentId", NEW("id")],
       ["kind", NEW("kind")],
       ["locationId", NEW("location_id")],
+      // Written after the fulfilment in its batch: filled by the line amendment (0172).
+      ["lines", lines("fulfillment", NEW("id"))],
     ],
   },
   {
@@ -640,7 +658,7 @@ const BETA_EVENT_TRIGGER_SPECS: EventTriggerSpec[] = [
     when: event === "insert" ? eq(NEW("status"), text("active")) : and(eq(OLD("status"), text("active")), eq(NEW("status"), text("voided"))),
     topic: event === "insert" ? "fulfillment.created" : "fulfillment.voided",
     resourceId: NEW("id"),
-    facts: [["fulfillmentId", NEW("id")], ["orderId", NEW("order_id")], ["kind", NEW("kind")], ["locationId", NEW("location_id")]],
+    facts: [["fulfillmentId", NEW("id")], ["orderId", NEW("order_id")], ["kind", NEW("kind")], ["locationId", NEW("location_id")], ["lines", lines("fulfillment", NEW("id"))]],
   })),
   {
     name: "shipments_status", table: "delivery_shipments", event: "update", when: changed("status"),
@@ -710,7 +728,77 @@ const BETA_EVENT_TRIGGER_SPECS: EventTriggerSpec[] = [
   }),
 ];
 
-export const EVENT_TRIGGER_SPECS: readonly EventTriggerSpec[] = [...LEGACY_EVENT_TRIGGER_SPECS, ...BETA_EVENT_TRIGGER_SPECS];
+/**
+ * Refunds (0172): one `order_refunds` row per refund command, its lines in
+ * `order_refund_lines`. The claim batch writes the refund, its lines, then
+ * its attempts, so `refund.created` fires on the first attempt with every
+ * line already written; the refund's status is trigger-maintained from its
+ * attempts, and each change of it is a `refund.updated`.
+ */
+const REFUND_EVENT_TRIGGER_SPECS: EventTriggerSpec[] = [
+  {
+    name: "refunds_created", table: "refund_attempts", event: "insert",
+    when: eq(NEW("allocation_index"), int(0)),
+    topic: "refund.created", resourceId: NEW("refund_group_id"),
+    facts: [
+      ["refundId", NEW("refund_group_id")],
+      ["orderId", NEW("order_id")],
+      ["status", lookup("order_refunds", "status", "id", NEW("refund_group_id"))],
+      ["lines", lines("refund", NEW("refund_group_id"))],
+    ],
+  },
+  {
+    name: "refunds_updated", table: "order_refunds", event: "update", when: changed("status"),
+    topic: "refund.updated", resourceId: NEW("id"),
+    facts: [
+      ["refundId", NEW("id")],
+      ["orderId", NEW("order_id")],
+      ["previousStatus", OLD("status")],
+      ["status", NEW("status")],
+      ["lines", lines("refund", NEW("id"))],
+    ],
+  },
+];
+
+export const EVENT_TRIGGER_SPECS: readonly EventTriggerSpec[] = [
+  ...LEGACY_EVENT_TRIGGER_SPECS,
+  ...BETA_EVENT_TRIGGER_SPECS,
+  ...REFUND_EVENT_TRIGGER_SPECS,
+];
+
+/**
+ * A fact a trigger cannot know when its row is written, filled in by a later
+ * row of the same batch: one `UPDATE event_outbox` of the pending events of
+ * `topics` whose `matchFact` equals `matchValue`, setting `fact` to `value`.
+ * The fulfilment's lines are written after the fulfilment (they reference
+ * it), so each line amends its fulfilment's events with all lines so far.
+ */
+export interface EventAmendmentSpec {
+  name: string;
+  table: string;
+  event: "insert";
+  topics: readonly EventTopic[];
+  /** The events' resource ids (any of them; the resource types are the topics'). */
+  resourceIds: readonly EventExpr[];
+  matchFact: string;
+  matchValue: EventExpr;
+  fact: string;
+  value: EventExpr;
+}
+
+export const EVENT_AMENDMENT_SPECS: readonly EventAmendmentSpec[] = [
+  {
+    name: "order_fulfillment_lines_facts",
+    table: "order_fulfillment_lines",
+    event: "insert",
+    topics: ["order.fulfilled", "fulfillment.created"],
+    resourceIds: [NEW("order_id"), NEW("fulfillment_id")],
+    matchFact: "fulfillmentId",
+    matchValue: NEW("fulfillment_id"),
+    fact: "lines",
+    value: lines("fulfillment", NEW("fulfillment_id")),
+  },
+];
 
 /**
  * The migration that installed each trigger: 0103 installed the first set;
@@ -817,19 +905,42 @@ interface RenderedSpec extends Omit<EventTriggerSpec, "topic"> {
   resourceType: string;
 }
 
+/**
+ * 0172 gave fulfilment events their lines and added the refund events and
+ * the line amendment: it re-creates the triggers whose facts grew and
+ * installs the new ones. The facts each re-created trigger gained there.
+ */
+export const LINE_FACTS_MIGRATION = "0172_line_level_facts";
+export const EVENT_FACTS_ADDED_IN_0172: Readonly<Record<string, readonly string[]>> = {
+  order_fulfillments_created: ["lines"],
+  fulfillments_created: ["lines"],
+  fulfillments_voided: ["lines"],
+};
+const INSTALLED_IN_0172: ReadonlySet<string> = new Set([
+  ...Object.keys(EVENT_FACTS_ADDED_IN_0172),
+  ...REFUND_EVENT_TRIGGER_SPECS.map((spec) => spec.name),
+  ...EVENT_AMENDMENT_SPECS.map((spec) => spec.name),
+]);
+
 const current = (spec: EventTriggerSpec): RenderedSpec => ({ ...spec, resourceType: EVENT_TOPIC_RESOURCE[spec.topic] });
-const before0164 = (spec: EventTriggerSpec): RenderedSpec => ({ ...current(spec), ...EVENT_TOPICS_BEFORE_0164[spec.topic] });
+/** A spec as the migrations before 0172 installed it: without the facts 0172 added. */
+const before0172 = (spec: EventTriggerSpec): EventTriggerSpec => {
+  const added = EVENT_FACTS_ADDED_IN_0172[spec.name];
+  return added ? { ...spec, facts: spec.facts.filter(([key]) => !added.includes(key)) } : spec;
+};
+const before0164 = (spec: EventTriggerSpec): RenderedSpec => ({ ...current(before0172(spec)), ...EVENT_TOPICS_BEFORE_0164[spec.topic] });
 const renamedIn0164 = (name: string) => {
   const spec = EVENT_TRIGGER_SPECS.find((candidate) => candidate.name === name);
   return spec !== undefined && EVENT_TOPICS_BEFORE_0164[spec.topic] !== undefined;
 };
 
 export const EVENT_TRIGGER_MIGRATIONS: Readonly<Record<string, string>> = Object.fromEntries(
-  EVENT_TRIGGER_SPECS.map((spec) => [spec.name, eventTriggerMigration(spec)]),
+  [...EVENT_TRIGGER_SPECS, ...EVENT_AMENDMENT_SPECS].map((spec) => [spec.name, eventTriggerMigration(spec)]),
 );
 
 /** The migration file name (without `.sql`) that installs the current trigger. */
 export function eventTriggerMigration(spec: Pick<EventTriggerSpec, "name">): string {
+  if (INSTALLED_IN_0172.has(spec.name)) return LINE_FACTS_MIGRATION;
   return renamedIn0164(spec.name) ? EVENT_TOPIC_RENAME_MIGRATION : EVENT_DEMAND_MIGRATION;
 }
 
@@ -837,7 +948,7 @@ export function eventTriggerMigration(spec: Pick<EventTriggerSpec, "name">): str
 // Rendering
 // ---------------------------------------------------------------------------
 
-type Dialect = "sqlite" | "postgres";
+export type Dialect = "sqlite" | "postgres";
 
 const id = (dialect: Dialect, name: string) => (dialect === "sqlite" ? `\`${name}\`` : `"${name}"`);
 const literal = (value: string) => `'${value.replaceAll("'", "''")}'`;
@@ -860,7 +971,32 @@ function renderExpr(dialect: Dialect, expr: EventExpr): string {
       return `substr(${renderExpr(dialect, expr.expr)}, ${expr.from})`;
     case "lookup":
       return `(SELECT ${id(dialect, expr.select)} FROM ${id(dialect, expr.table)} WHERE ${id(dialect, expr.key)} = ${renderExpr(dialect, expr.value)})`;
+    case "lines":
+      return linesSql(dialect, expr.ledger, renderExpr(dialect, expr.key));
   }
+}
+
+/**
+ * A ledger row's lines as a JSON array value. SQLite: the sorted, bounded
+ * rows' objects aggregated (`json()` keeps each element JSON once it leaves
+ * the subquery, and makes the aggregate a JSON value inside `json_object`);
+ * no rows give `[]`. PostgreSQL: the same through `jsonb_agg`.
+ */
+/** A ledger row's `lines` fact for a migration's backfill: `key` is SQL naming the row's id. */
+export function eventFactLinesSql(dialect: Dialect, ledger: LineLedger, key: string): string {
+  return linesSql(dialect, ledger, key);
+}
+
+function linesSql(dialect: Dialect, ledger: LineLedger, key: string): string {
+  const { table, key: keyColumn } = LINE_LEDGERS[ledger];
+  const q = (name: string) => id(dialect, name);
+  const object = dialect === "sqlite" ? "json_object" : "jsonb_build_object";
+  const rows = `SELECT ${object}('orderItemId', ${q("ledger")}.${q("order_item_id")}, 'variantId', ${q("item")}.${q("variant_id")}, 'quantity', ${q("ledger")}.${q("quantity")}) AS ${q("fact")}, ${q("ledger")}.${q("order_item_id")} AS ${q("line_order")}`
+    + ` FROM ${q(table)} AS ${q("ledger")} LEFT JOIN ${q("order_items")} AS ${q("item")} ON ${q("item")}.${q("id")} = ${q("ledger")}.${q("order_item_id")}`
+    + ` WHERE ${q("ledger")}.${q(keyColumn)} = ${key} ORDER BY ${q("ledger")}.${q("order_item_id")} LIMIT ${EVENT_FACT_LINES_MAX}`;
+  return dialect === "sqlite"
+    ? `json((SELECT json_group_array(json(${q("line")}.${q("fact")})) FROM (${rows}) AS ${q("line")}))`
+    : `coalesce((SELECT jsonb_agg(${q("line")}.${q("fact")} ORDER BY ${q("line")}.${q("line_order")}) FROM (${rows}) AS ${q("line")}), '[]'::jsonb)`;
 }
 
 function renderCondition(dialect: Dialect, condition: EventCondition): string {
@@ -911,8 +1047,61 @@ export function eventTriggerName(spec: Pick<EventTriggerSpec, "name">): string {
   return `${EVENT_OUTBOX_TRIGGER_PREFIX}${spec.name}`;
 }
 
-function demandGuard(spec: RenderedSpec): string {
-  return `EXISTS (SELECT 1 FROM event_demand WHERE filter IN ('*', ${literal(`${spec.topic.split(".")[0]}.*`)}, ${literal(spec.topic)}))`;
+function demandGuard(spec: { topic: string } | { topics: readonly string[] }): string {
+  const topics = "topic" in spec ? [spec.topic] : spec.topics;
+  const filters = ["*", ...topics.flatMap((topic) => [`${topic.split(".")[0]}.*`, topic])];
+  return `EXISTS (SELECT 1 FROM event_demand WHERE filter IN (${[...new Set(filters)].map(literal).join(", ")}))`;
+}
+
+/** The one `UPDATE event_outbox` of an amendment (its trigger body). */
+function amendmentUpdateSql(dialect: Dialect, spec: EventAmendmentSpec): string {
+  const q = (name: string) => id(dialect, name);
+  const value = renderExpr(dialect, spec.value);
+  const set = dialect === "sqlite"
+    ? `json_set(${q("data")}, ${literal(`$.${spec.fact}`)}, ${value})`
+    : `jsonb_set(${q("data")}::jsonb, ${literal(`{${spec.fact}}`)}, ${value})::text`;
+  const matched = dialect === "sqlite"
+    ? `json_extract(${q("data")}, ${literal(`$.${spec.matchFact}`)})`
+    : `(${q("data")}::jsonb ->> ${literal(spec.matchFact)})`;
+  const resourceTypes = [...new Set(spec.topics.map((topic) => EVENT_TOPIC_RESOURCE[topic]))];
+  return `UPDATE ${q("event_outbox")} SET ${q("data")} = ${set} WHERE ${[
+    `${q("resource_type")} IN (${resourceTypes.map(literal).join(", ")})`,
+    `${q("resource_id")} IN (${spec.resourceIds.map((expr) => renderExpr(dialect, expr)).join(", ")})`,
+    `${q("topic")} IN (${spec.topics.map(literal).join(", ")})`,
+    `${q("status")} = 'pending'`,
+    `${matched} = ${renderExpr(dialect, spec.matchValue)}`,
+  ].join(" AND ")}`;
+}
+
+function sqliteAmendment(spec: EventAmendmentSpec): string {
+  return [
+    `CREATE TRIGGER ${id("sqlite", eventTriggerName(spec))} AFTER ${spec.event.toUpperCase()} ON ${id("sqlite", spec.table)}`,
+    `WHEN ${demandGuard(spec)}`,
+    "BEGIN",
+    `  ${amendmentUpdateSql("sqlite", spec)};`,
+    "END",
+  ].join("\n");
+}
+
+function postgresAmendment(spec: EventAmendmentSpec): string {
+  const name = eventTriggerName(spec);
+  const fn = `scalius_compat.${id("postgres", `${name}_fn`)}`;
+  return [
+    `CREATE OR REPLACE FUNCTION ${fn}()`,
+    "RETURNS trigger",
+    "LANGUAGE plpgsql",
+    "AS $trigger_function$",
+    "BEGIN",
+    `  IF NOT ${demandGuard(spec)} THEN`, "    RETURN NULL;", "  END IF;",
+    `  ${amendmentUpdateSql("postgres", spec)};`,
+    "  RETURN NULL;",
+    "END",
+    "$trigger_function$;",
+    `CREATE TRIGGER ${id("postgres", name)}`,
+    `AFTER ${spec.event.toUpperCase()} ON ${id("postgres", spec.table)}`,
+    "FOR EACH ROW",
+    `EXECUTE FUNCTION ${fn}()`,
+  ].join("\n");
 }
 
 function sqliteTrigger(spec: RenderedSpec, demandGated = false): string {
@@ -928,7 +1117,7 @@ function sqliteTrigger(spec: RenderedSpec, demandGated = false): string {
 /** Whether a condition reads another table (PostgreSQL forbids a subquery in a trigger's WHEN). */
 function conditionHasLookup(condition: EventCondition): boolean {
   const exprHasLookup = (expr: EventExpr): boolean =>
-    expr.kind === "lookup" || (expr.kind === "negate" && exprHasLookup(expr.expr));
+    expr.kind === "lookup" || expr.kind === "lines" || (expr.kind === "negate" && exprHasLookup(expr.expr));
   switch (condition.kind) {
     case "and":
     case "or":
@@ -1004,6 +1193,13 @@ function exprColumns(table: string, expr: EventExpr, trigger: string, event: Eve
       assertColumn(expr.table, expr.key, trigger);
       exprColumns(table, expr.value, trigger, event);
       return;
+    case "lines": {
+      const ledger = LINE_LEDGERS[expr.ledger];
+      for (const column of [ledger.key, "order_item_id", "quantity"]) assertColumn(ledger.table, column, trigger);
+      assertColumn("order_items", "variant_id", trigger);
+      exprColumns(table, expr.key, trigger, event);
+      return;
+    }
     default:
       return;
   }
@@ -1037,15 +1233,31 @@ export interface GeneratedEventTrigger {
 
 export function generateEventOutboxTriggers(): GeneratedEventTrigger[] {
   const names = new Set<string>();
-  return EVENT_TRIGGER_SPECS.map((spec) => {
-    const name = eventTriggerName(spec);
+  const unique = (name: string) => {
     if (names.has(name)) throw new Error(`Duplicate event trigger ${name}.`);
     names.add(name);
+  };
+  const events = EVENT_TRIGGER_SPECS.map((spec) => {
+    const name = eventTriggerName(spec);
+    unique(name);
     exprColumns(spec.table, spec.resourceId, name, spec.event);
     for (const [, value] of spec.facts) exprColumns(spec.table, value, name, spec.event);
     if (spec.when) conditionColumns(spec.table, spec.when, name, spec.event);
     return { name, table: spec.table, topic: spec.topic, sqlite: sqliteTrigger(current(spec), true), postgres: postgresTrigger(current(spec), true) };
   });
+  const amendments = EVENT_AMENDMENT_SPECS.map((spec) => {
+    const name = eventTriggerName(spec);
+    unique(name);
+    for (const expr of [...spec.resourceIds, spec.matchValue, spec.value]) exprColumns(spec.table, expr, name, spec.event);
+    for (const topic of spec.topics) {
+      const amended = EVENT_TRIGGER_SPECS.filter((event) => event.topic === topic);
+      if (!amended.some((event) => event.facts.some(([key]) => key === spec.fact) && event.facts.some(([key]) => key === spec.matchFact))) {
+        throw new Error(`${name}: no ${topic} trigger writes both ${spec.fact} and ${spec.matchFact}.`);
+      }
+    }
+    return { name, table: spec.table, topic: spec.topics[0]!, sqlite: sqliteAmendment(spec), postgres: postgresAmendment(spec) };
+  });
+  return [...events, ...amendments];
 }
 
 const generated = generateEventOutboxTriggers();
@@ -1062,6 +1274,12 @@ const superseded = [
   ...EVENT_TRIGGER_SPECS.filter((spec) => renamedIn0164(spec.name)).map((spec) => ({
     migration: EVENT_DEMAND_MIGRATION,
     spec: before0164(spec),
+    demandGated: true,
+  })),
+  // The demand-gated forms 0155 installed for the triggers whose facts 0172 grew.
+  ...EVENT_TRIGGER_SPECS.filter((spec) => EVENT_FACTS_ADDED_IN_0172[spec.name] !== undefined).map((spec) => ({
+    migration: EVENT_DEMAND_MIGRATION,
+    spec: current(before0172(spec)),
     demandGated: true,
   })),
 ].map(({ migration, spec, demandGated }) => ({

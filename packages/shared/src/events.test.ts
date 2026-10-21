@@ -34,8 +34,10 @@ describe("event catalog", () => {
 
   it("accepts new commerce facts without contact, payment or object content", () => {
     const cases = [
-      ["fulfillment.created", { fulfillmentId: "f", orderId: "o", kind: "ship", locationId: null }],
-      ["fulfillment.voided", { fulfillmentId: "f", orderId: "o", kind: "pickup", locationId: "loc" }],
+      ["fulfillment.created", { fulfillmentId: "f", orderId: "o", kind: "ship", locationId: null, lines: [{ orderItemId: "i", variantId: "v", quantity: 2 }] }],
+      ["fulfillment.voided", { fulfillmentId: "f", orderId: "o", kind: "pickup", locationId: "loc", lines: [{ orderItemId: "i", variantId: null, quantity: 1 }] }],
+      ["refund.created", { refundId: "r", orderId: "o", status: "pending", lines: [] }],
+      ["refund.updated", { refundId: "r", orderId: "o", previousStatus: "pending", status: "partial", lines: [{ orderItemId: "i", variantId: "v", quantity: 1 }] }],
       ["shipment.updated", { shipmentId: "s", orderId: "o", providerId: null, previousStatus: "pending", status: "delivered" }],
       ["payment.updated", { paymentId: "p", orderId: "o", provider: "cod", previousStatus: null, status: "confirmed" }],
       ["checkout.abandoned", { abandonedCheckoutId: "a", checkoutId: "c" }],
@@ -53,6 +55,11 @@ describe("event catalog", () => {
     }
     expect(parseEventFacts("review.created", { reviewId: "r", productId: "p", previousStatus: null, status: "pending", rating: 6 })).toBeNull();
     expect(parseEventFacts("object.updated", { objectType: "t", objectId: "o", revision: 0, status: "active" })).toBeNull();
+    // Line facts carry quantities only, each a positive whole number; a fact without them is unreadable.
+    expect(parseEventFacts("refund.created", { refundId: "r", orderId: "o", status: "pending", lines: [{ orderItemId: "i", variantId: "v", quantity: 0 }] })).toBeNull();
+    expect(parseEventFacts("order.fulfilled", { orderId: "o", fulfillmentId: "f", kind: "ship", locationId: null })).toBeNull();
+    expect(parseEventFacts("refund.updated", { refundId: "r", orderId: "o", previousStatus: "pending", status: "refunded", lines: [{ orderItemId: "i", variantId: "v", quantity: 1, amountMinor: 900 }] }))
+      .toEqual({ refundId: "r", orderId: "o", previousStatus: "pending", status: "refunded", lines: [{ orderItemId: "i", variantId: "v", quantity: 1 }] });
     const longProviderId = `${"v".repeat(40)}.${"a".repeat(60)}:${"p".repeat(48)}`;
     expect(parseEventFacts("payment.updated", { paymentId: "p", orderId: "o", provider: longProviderId, previousStatus: null, status: "pending" }))
       .toMatchObject({ provider: longProviderId });

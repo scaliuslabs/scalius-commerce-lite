@@ -192,6 +192,8 @@ export const DASHBOARD_WHEN_B: Readonly<Record<string, string>> = {
   "dashboard.resources.orders.get": "Use when an app or sync reads one order in its webhook representation (minor units).",
   "dashboard.resources.orders.list": "Use when syncing orders page by page by updatedAt (webhook representation), or listing overdue invoices (overdue=true).",
   "dashboard.resources.payments.list": "Use when reading an order's payments and refunds in minor units.",
+  "dashboard.resources.refunds.create": "Use when an app gives money back on an order, in minor units, naming the order lines it is for.",
+  "dashboard.resources.refunds.list": "Use when reading an order's refunds with their lines and status in minor units.",
   "dashboard.resources.payments.create": "Use when recording money received against an invoice (net terms) order: a bank transfer, cheque or cash, in minor units.",
   "dashboard.resources.price_lists.create": "Use when an app creates a price list in minor units.",
   "dashboard.resources.price_lists.delete": "Use when an app deletes a price list.",

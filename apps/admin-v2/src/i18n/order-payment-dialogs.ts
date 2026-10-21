@@ -38,6 +38,11 @@ const paymentDialogCopy = defineMessages({
     "cod.amountToCollect": "Cash to collect",
     "cod.returnTitleOne": "Mark 1 item returned by the courier?",
     "cod.returnBalance": "The {amount} balance is cleared.",
+    "refund.lines": "Items refunded",
+    "refund.linesOptional": "(optional)",
+    "refund.linesHelp": "Name the items this refund is for. The amount above stays what goes back.",
+    "refund.linesOrdered": "Ordered: {count}",
+    "refund.linesQty": "Units refunded of {name}",
     "refund.maxOwed": "{owed} is owed for returned items. Up to {amount}.",
   },
   bn: {
@@ -72,6 +77,11 @@ const paymentDialogCopy = defineMessages({
     "cod.amountToCollect": "যত টাকা নিতে হবে",
     "cod.returnTitleOne": "কুরিয়ার ১টি প্রোডাক্ট ফেরত দিয়েছে হিসেবে চিহ্নিত করবেন?",
     "cod.returnBalance": "{amount} বাকি মুছে যাবে।",
+    "refund.lines": "ফেরত দেওয়া প্রোডাক্ট",
+    "refund.linesOptional": "(ঐচ্ছিক)",
+    "refund.linesHelp": "এই রিফান্ড কোন প্রোডাক্টের জন্য তা লিখুন। উপরের পরিমাণই ফেরত যাবে।",
+    "refund.linesOrdered": "অর্ডার করা হয়েছে: {count}",
+    "refund.linesQty": "{name}-এর কতটি ফেরত",
     "refund.maxOwed": "ফেরত আসা প্রোডাক্টের জন্য {owed} বাকি। সর্বোচ্চ {amount}।",
   },
 });

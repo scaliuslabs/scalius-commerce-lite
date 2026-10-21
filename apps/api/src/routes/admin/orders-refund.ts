@@ -1,4 +1,6 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import type { Context } from "hono";
+import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 import { recordOrderEvent } from "@scalius/core/modules/orders";
 import type { Database } from "@scalius/database/client";
 import {
@@ -6,6 +8,7 @@ import {
     processRefund,
     type RefundNotificationFact,
     type RefundRequest,
+    type RefundServiceResult,
     reconcileRefundAttemptForOrder,
     isPaymentMethodId,
 } from "@scalius/core/modules/payments";
@@ -27,6 +30,9 @@ import {
     sendOrderStatusChangeNotification,
 } from "../../utils/order-notifications";
 import { notificationSender } from "../../background/notification-sender";
+import { afterResponse } from "../../background/after-response";
+import { processTaxDocumentCommandsForOrder } from "@scalius/core/modules/tax";
+import { requestAppProviders } from "../../plugins/providers/app-providers";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -35,9 +41,18 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 /** Where a refund goes: back to the original payments, or one new gift card. */
 const REFUND_SETTLEMENTS = ["original", "store_credit"] as const satisfies ReadonlyArray<NonNullable<RefundRequest["settlement"]>>;
 
+/** The order lines a refund is for: quantities only, the amount stays the money (`refund.*` events carry them). */
+export const refundLinesSchema = z.array(z.object({
+    orderItemId: z.string().min(1).max(180),
+    quantity: z.number().int().min(1).max(MAX_LINE_QUANTITY),
+}).strict()).min(1).max(MAX_ORDER_LINES).openapi({
+    description: "Which order lines (and how many units of each) the refund is for; each at most its quantity less what earlier refunds named. Omit for an amount-only refund.",
+});
+
 const refundResultSchema = z.object({
     success: z.boolean(),
     gateway: z.string(),
+    orderRefundId: z.string().optional().openapi({ description: "The refund record (dashboard.resources.refunds.list)." }),
     refundId: z.string().optional(),
     amount: z.number(),
     isFullRefund: z.boolean(),
@@ -211,7 +226,7 @@ async function recordDirectRefundSideEffects(options: {
     db: Database;
     send: NotificationSender | undefined;
     orderId: string;
-    result: Awaited<ReturnType<typeof processRefund>>;
+    result: RefundServiceResult;
 }): Promise<{ notificationCount: number; sideEffectErrors: number }> {
     let notificationCount = 0;
     let sideEffectErrors = 0;
@@ -249,7 +264,7 @@ async function sendStoreCreditNotification(options: {
     return { notificationCount: 1, sideEffectErrors: 0 };
 }
 
-function publicRefundResult<T extends {
+export function publicRefundResult<T extends {
     refundNotification?: unknown;
     availabilityTransitionVariantIds?: unknown;
     storeCredit?: { giftCardId: string; last4: string; amount: number; amountMinor: number; notificationOutboxId?: string };
@@ -292,6 +307,7 @@ const refundOrderRoute = createRoute({
                         requestKey: z.string().trim().min(8).max(128).regex(/^[A-Za-z0-9_-]+$/).optional().openapi({
                             description: "One key per refund (per dialog opening). Repeating it returns the first refund.",
                         }),
+                        lines: refundLinesSchema.optional(),
                     })
                 }
             }
@@ -306,27 +322,23 @@ const refundOrderRoute = createRoute({
     }
 });
 
-app.openapi(refundOrderRoute, async (c) => {
-    const orderId = c.req.valid("param").id;
-    const data = c.req.valid("json");
+/**
+ * One refund as staff, an agent or an app makes it: the refund, its timeline
+ * line (once, with the request key) and its notifications. The dashboard
+ * route and the app API (resources-refunds.ts) both run it.
+ */
+export async function executeOrderRefund(
+    c: Context<{ Bindings: Env }>,
+    request: RefundRequest,
+): Promise<{ result: RefundServiceResult; notificationCount: number; sideEffectErrors: number }> {
     const db = c.get("db");
     // The durable key also seals a store-credit card's code (fails closed when missing).
     const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-    const actorId = (c.get("user") as { id?: string } | undefined)?.id ?? null;
-    let result: Awaited<ReturnType<typeof processRefund>>;
+    let result: RefundServiceResult;
     try {
         result = await processRefund(
             db,
-            {
-                orderId,
-                amount: data.amount,
-                reason: data.reason ?? "Refund requested",
-                gateway: data.gateway,
-                manualSettlementConfirmed: data.manualSettlementConfirmed,
-                requestKey: data.requestKey,
-                settlement: data.settlement,
-                actorUserId: actorId,
-            },
+            request,
             encryptionKey,
             // App gateways refund through the same port as built-in ones (read only when one is named).
             () => requestPaymentProviders(c),
@@ -345,18 +357,19 @@ app.openapi(refundOrderRoute, async (c) => {
     if (!result.success) throw new ValidationError(result.error || "Refund processing failed");
     if (result.replayed) {
         // A repeated click: the first request already logged, notified and refreshed.
-        return ok(c, { ...publicRefundResult(result), notificationCount: 0, sideEffectErrors: 0 });
+        return { result, notificationCount: 0, sideEffectErrors: 0 };
     }
     if (result.amount > 0) {
         await recordOrderEvent(db, {
-            orderId,
+            orderId: request.orderId,
             kind: "refund_recorded",
-            actorId,
-            body: data.reason?.trim() || null,
-            requestKey: data.requestKey,
+            actorId: request.actorUserId ?? null,
+            body: request.reason.trim() || null,
+            requestKey: request.requestKey,
             data: {
                 amount: result.amount,
                 full: result.isFullRefund,
+                ...(request.lines?.length ? { lines: request.lines.length } : {}),
                 // Ids and last 4 only: the code never enters the timeline.
                 ...(result.storeCredit ? {
                     settlement: "store_credit",
@@ -369,7 +382,7 @@ app.openapi(refundOrderRoute, async (c) => {
     const sideEffects = await recordDirectRefundSideEffects({
         db,
         send: notificationSender(c),
-        orderId,
+        orderId: request.orderId,
         result,
     });
     const storeCreditSideEffects = await sendStoreCreditNotification({
@@ -377,11 +390,32 @@ app.openapi(refundOrderRoute, async (c) => {
         send: notificationSender(c),
         outboxId: result.storeCredit?.notificationOutboxId,
     });
-    return ok(c, {
-        ...publicRefundResult(result),
+    // An app tax provider is owed a refund document for each refund payment
+    // (0168 writes the command with it): sent now, retried by the scheduled drain.
+    await afterResponse(c, "refund tax documents", () => processTaxDocumentCommandsForOrder(db, request.orderId, requestAppProviders(c)));
+    return {
+        result,
         notificationCount: sideEffects.notificationCount + storeCreditSideEffects.notificationCount,
         sideEffectErrors: sideEffects.sideEffectErrors + storeCreditSideEffects.sideEffectErrors,
+    };
+}
+
+app.openapi(refundOrderRoute, async (c) => {
+    const orderId = c.req.valid("param").id;
+    const data = c.req.valid("json");
+    const actorId = (c.get("user") as { id?: string } | undefined)?.id ?? null;
+    const { result, notificationCount, sideEffectErrors } = await executeOrderRefund(c, {
+        orderId,
+        amount: data.amount,
+        reason: data.reason ?? "Refund requested",
+        gateway: data.gateway,
+        manualSettlementConfirmed: data.manualSettlementConfirmed,
+        requestKey: data.requestKey,
+        settlement: data.settlement,
+        actorUserId: actorId,
+        ...(data.lines ? { lines: data.lines } : {}),
     });
+    return ok(c, { ...publicRefundResult(result), notificationCount, sideEffectErrors });
 });
 
 // ─── POST /:id/refund-attempts/:attemptId/reconcile ─────────────────────────

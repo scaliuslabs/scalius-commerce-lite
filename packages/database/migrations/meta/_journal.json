@@ -1191,6 +1191,13 @@
       "when": 1792771200000,
       "tag": "0169_fk_indexes_and_trigger_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 172,
+      "version": "6",
+      "when": 1792544012311,
+      "tag": "0172_line_level_facts",
+      "breakpoints": true
     }
   ]
 }

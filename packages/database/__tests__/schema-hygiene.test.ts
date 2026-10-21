@@ -17,7 +17,10 @@ describe("canonical schema hygiene", () => {
         RETIRED_PRE_CONSOLIDATION_TABLES.has(table));
 
       expect(d1Tables).toEqual(tursoTables);
-      expect(d1Tables).toHaveLength(212);
+      expect(d1Tables).toHaveLength(214);
+      // 0172: refund commands and the order lines they are for.
+      expect(d1Tables).toContain("order_refunds");
+      expect(d1Tables).toContain("order_refund_lines");
       expect(d1Tables).toContain("system_kv");
       // 0168: what app tax providers are still owed (commit, void, refund).
       expect(d1Tables).toContain("tax_document_commands");

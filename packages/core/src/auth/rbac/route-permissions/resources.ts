@@ -21,6 +21,8 @@ export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   // Recording money received against an invoice settles it (a paid order hands
   // over its gift cards and downloads): its own sensitive permission.
   "/api/v1/admin/resources/orders/*/payments": { GET: orders, POST: { permission: PERMISSIONS.ORDERS_RECORD_PAYMENT } },
+  // A refund gives money back: the dashboard refund permission (an app: Sensitive write_refunds).
+  "/api/v1/admin/resources/orders/*/refunds": { GET: orders, POST: { permission: PERMISSIONS.ORDERS_REFUND } },
   "/api/v1/admin/resources/orders/*/fulfillments": { GET: orders, POST: shipments },
   "/api/v1/admin/resources/orders/*/shipments": { GET: orders, POST: shipments },
   "/api/v1/admin/resources/shipments/*": { GET: orders },

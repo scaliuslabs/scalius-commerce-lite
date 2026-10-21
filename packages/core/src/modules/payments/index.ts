@@ -69,6 +69,7 @@ export type {
 export { finalizeAcceptedRefundAttemptIds, processRefund } from "./refund-service";
 export type {
   FinalizeAcceptedRefundAttemptsResult,
+  RefundLineInput,
   RefundNotificationFact,
   RefundRequest,
   RefundResult as RefundServiceResult,

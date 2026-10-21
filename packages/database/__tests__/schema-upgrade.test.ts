@@ -891,6 +891,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 22,
         postgresStatements: 22,
       },
+      {
+        version: 172,
+        name: "0172_line_level_facts",
+        sqliteStatements: 24,
+        postgresStatements: 24,
+      },
     ]);
   });
 
@@ -1151,6 +1157,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 167, name: "0167_promotion_exhaustion_dependency" },
           { version: 168, name: "0168_tax_document_commands" },
           { version: 169, name: "0169_fk_indexes_and_trigger_guards" },
+          { version: 172, name: "0172_line_level_facts" },
         ],
       });
     } finally {

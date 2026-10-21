@@ -413,7 +413,9 @@ export function useReleaseOrderHold() {
 export function useRefundOrder() {
   const queryClient = useQueryClient();
   return useSingleFlightMutation({
-    mutationFn: ({ orderId, ...body }: { orderId: string } &
+    // `lines` names the order lines the refund is for (the amount stays the money);
+    // the intersection keeps this compiling before and after the SDK carries the field.
+    mutationFn: ({ orderId, ...body }: { orderId: string; lines?: Array<{ orderItemId: string; quantity: number }> } &
       ApiBody<typeof postApiV1AdminOrdersByIdRefund>) =>
       apiData(postApiV1AdminOrdersByIdRefund({ path: { id: orderId }, body })),
     onSuccess: (result, variables) => {

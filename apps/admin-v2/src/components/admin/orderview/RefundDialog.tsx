@@ -15,6 +15,8 @@ import {
 import { ChoiceField, Field } from "~/components/ui/field";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { MoneyInput } from "~/components/admin/shared/MoneyInput";
+import { Label } from "~/components/ui/label";
+import { NumberInput } from "~/components/ui/number-input";
 import { useMessages } from "~/i18n";
 import { giftCardOrderMessages } from "~/i18n/gift-card-orders";
 import { orderDetailLabel } from "~/i18n/order-detail";
@@ -22,6 +24,8 @@ import { orderPaymentDialogMessages } from "~/i18n/order-payment-dialogs";
 import { resourceMessages } from "~/i18n/resource";
 import { orderErrorMessage, useRefundOrder } from "~/lib/api-mutations/orders";
 import { RefundSettlementField, refundSettlementBody, type RefundSettlement } from "./RefundSettlementField";
+import { clampQuantity, getOrderItemName } from "./order-returns/shared";
+import { refundLinesBody, refundableLines } from "./refund-lines";
 import type { Order } from "./types";
 
 const REFUND_REASONS = ["requested_by_customer", "returned_items", "duplicate", "fraudulent", "out_of_stock"] as const;
@@ -58,6 +62,8 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
   const [reason, setReason] = useState<string>(owed === null ? "requested_by_customer" : "returned_items");
   const [settlement, setSettlement] = useState<RefundSettlement>("original");
   const [manualConfirmed, setManualConfirmed] = useState(false);
+  const [lineQuantities, setLineQuantities] = useState<Record<string, number>>({});
+  const lineChoices = refundableLines(order.items);
   const requestKey = useRef(crypto.randomUUID());
   const mutation = useRefundOrder();
 
@@ -88,6 +94,7 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
         requestKey: requestKey.current,
         amount: value,
         reason,
+        lines: refundLinesBody(order.items, lineQuantities),
         manualSettlementConfirmed: manual ? true : undefined,
         ...refundSettlementBody(settlement),
       },
@@ -133,6 +140,37 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
               options={REFUND_REASONS.map((each) => ({ value: each, label: orderDetailLabel(t, "refund.reason.", each) }))}
             />
           </Field>
+          {lineChoices.length > 0 ? (
+            <div role="group" aria-labelledby="refundLines-label" className="flex min-w-0 flex-col gap-1">
+              <Label id="refundLines-label">
+                {t("refund.lines")}
+                <span className="font-normal text-muted-foreground"> {t("refund.linesOptional")}</span>
+              </Label>
+              <ul className="divide-y rounded-lg border">
+                {lineChoices.map((item) => {
+                  const name = getOrderItemName(item);
+                  return (
+                    <li key={item.id} className="flex items-center justify-between gap-3 px-3 py-2 text-body">
+                      <div className="min-w-0">
+                        <p className="font-medium">{name}</p>
+                        <p className="text-muted-foreground">{t("refund.linesOrdered", { count: item.quantity })}</p>
+                      </div>
+                      <NumberInput
+                        id={`refund-line-${item.id}`}
+                        integer
+                        className="w-20 shrink-0"
+                        aria-label={t("refund.linesQty", { name })}
+                        disabled={locked}
+                        value={lineQuantities[item.id] ?? 0}
+                        onValueChange={(value) => setLineQuantities((current) => ({ ...current, [item.id]: clampQuantity(value, item.quantity) }))}
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
+              <p className="text-body text-muted-foreground">{t("refund.linesHelp")}</p>
+            </div>
+          ) : null}
           <RefundSettlementField order={order} value={settlement} onChange={setSettlement} disabled={locked} />
           {manual ? (
             <ChoiceField

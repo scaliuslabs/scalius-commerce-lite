@@ -45,6 +45,8 @@ describe("beta event catalog on the migrated schema", () => {
     sqlite.exec(`
       INSERT INTO order_fulfillments (id, order_id, kind, request_key, actor_type, location_id)
         VALUES ('ful_beta', 'ord_beta', 'ship', 'fulfill', 'admin', 'loc_default');
+      INSERT INTO order_fulfillment_lines (id, fulfillment_id, order_id, order_item_id, quantity)
+        VALUES ('ful_line_beta', 'ful_beta', 'ord_beta', 'item_beta', 1);
       UPDATE order_fulfillments SET status = 'voided', voided_at = unixepoch() WHERE id = 'ful_beta';
       INSERT INTO delivery_shipments (id, order_id, tracking_id, metadata)
         VALUES ('shp_beta', 'ord_beta', 'Private tracking', '{"email":"private@example.test"}');
@@ -52,12 +54,63 @@ describe("beta event catalog on the migrated schema", () => {
       UPDATE delivery_shipments SET status = 'in_transit';
       UPDATE delivery_shipments SET status = 'in_transit';
     `);
-    const fulfillment = { resourceId: "ful_beta", fulfillmentId: "ful_beta", orderId: "ord_beta", kind: "ship", locationId: "loc_default" };
+    const fulfillment = {
+      resourceId: "ful_beta", fulfillmentId: "ful_beta", orderId: "ord_beta", kind: "ship", locationId: "loc_default",
+      lines: [{ orderItemId: "item_beta", variantId: "var_beta", quantity: 1 }],
+    };
     expect(facts()).toEqual([
       { topic: "fulfillment.created", ...fulfillment },
       { topic: "fulfillment.voided", ...fulfillment },
       { topic: "shipment.updated", resourceId: "shp_beta", shipmentId: "shp_beta", orderId: "ord_beta", providerId: null, previousStatus: "pending", status: "in_transit" },
     ]);
+  });
+
+  it("emits refund facts with their lines and settles a refund from its attempts", () => {
+    demand("refund.*");
+    sqlite.exec(`
+      INSERT INTO order_items (id, order_id, product_id, variant_id, quantity, unit_price_minor)
+        VALUES ('item_beta_2', 'ord_beta', 'prod_beta', 'var_beta', 3, 500);
+      INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, status)
+        VALUES ('ord_other', 'Other Buyer', '+8801722222222', 'Other address', 'city', 'zone', 'confirmed');
+      INSERT INTO order_items (id, order_id, product_id, variant_id, quantity, unit_price_minor)
+        VALUES ('item_other', 'ord_other', 'prod_beta', 'var_beta', 1, 500);
+      INSERT INTO order_payments (id, order_id, amount_minor, payment_method, payment_type, status, provider_ref)
+        VALUES ('pay_src', 'ord_beta', 2000, 'stripe', 'full', 'succeeded', 'pi_1'),
+               ('pay_src_2', 'ord_beta', 500, 'stripe', 'full', 'succeeded', 'pi_2'),
+               ('pay_ref_1', 'ord_beta', 1000, 'stripe', 'refund', 'pending', NULL),
+               ('pay_ref_2', 'ord_beta', 500, 'stripe', 'refund', 'pending', NULL);
+      INSERT INTO order_refunds (id, order_id, currency, amount_minor) VALUES ('refund_1', 'ord_beta', 'BDT', 1500);
+      INSERT INTO order_refund_lines (id, refund_id, order_id, order_item_id, quantity)
+        VALUES ('rl_2', 'refund_1', 'ord_beta', 'item_beta_2', 2), ('rl_1', 'refund_1', 'ord_beta', 'item_beta', 1);
+      INSERT INTO refund_attempts (id, attempt_key, refund_group_id, order_id, source_payment_id, refund_payment_id, gateway, amount_minor, reason, request_hash, provider_idempotency_key, refund_reference, allocation_index, allocation_count)
+        VALUES ('ra_1', 'ak_1', 'refund_1', 'ord_beta', 'pay_src', 'pay_ref_1', 'stripe', 1000, 'Private reason', 'h', 'pk_1', 'rr_1', 0, 2),
+               ('ra_2', 'ak_2', 'refund_1', 'ord_beta', 'pay_src_2', 'pay_ref_2', 'stripe', 500, 'Private reason', 'h', 'pk_2', 'rr_2', 1, 2);
+    `);
+    const lines = [
+      { orderItemId: "item_beta", variantId: "var_beta", quantity: 1 },
+      { orderItemId: "item_beta_2", variantId: "var_beta", quantity: 2 },
+    ];
+    expect(facts()).toEqual([{ topic: "refund.created", resourceId: "refund_1", refundId: "refund_1", orderId: "ord_beta", status: "pending", lines }]);
+    clear();
+    // One allocation settling leaves the refund pending; the last decides it, once.
+    sqlite.exec("UPDATE refund_attempts SET status = 'refunded' WHERE id = 'ra_1'");
+    expect(facts()).toEqual([]);
+    sqlite.exec("UPDATE refund_attempts SET status = 'failed' WHERE id = 'ra_2'");
+    expect(facts()).toEqual([{ topic: "refund.updated", resourceId: "refund_1", refundId: "refund_1", orderId: "ord_beta", previousStatus: "pending", status: "partial", lines }]);
+    clear();
+    // Both settled in one statement: one transition.
+    sqlite.exec("UPDATE refund_attempts SET status = 'processing'; UPDATE order_refunds SET status = 'pending'");
+    clear();
+    sqlite.exec("UPDATE refund_attempts SET status = 'refunded'");
+    expect(facts().map((fact) => [fact.topic, fact.status])).toEqual([["refund.updated", "refunded"]]);
+    // A failed refund frees its lines; a live one bounds them by the line quantity.
+    expect(() => sqlite.exec("INSERT INTO order_refunds (id, order_id, currency, amount_minor) VALUES ('refund_2', 'ord_beta', 'BDT', 500); INSERT INTO order_refund_lines (id, refund_id, order_id, order_item_id, quantity) VALUES ('rl_3', 'refund_2', 'ord_beta', 'item_beta_2', 2)"))
+      .toThrow(/refund exceeds the line quantity/);
+    expect(() => sqlite.exec("INSERT INTO order_refund_lines (id, refund_id, order_id, order_item_id, quantity) VALUES ('rl_4', 'refund_2', 'ord_beta', 'item_other', 1)"))
+      .toThrow(/refund line is not a line of the refund order/);
+    expect(() => sqlite.exec("UPDATE order_refund_lines SET quantity = 1 WHERE id = 'rl_2'")).toThrow(/immutable/);
+    sqlite.exec("UPDATE order_refunds SET status = 'failed' WHERE id = 'refund_1'");
+    sqlite.exec("INSERT INTO order_refund_lines (id, refund_id, order_id, order_item_id, quantity) VALUES ('rl_5', 'refund_2', 'ord_beta', 'item_beta_2', 3)");
   });
 
   it("emits payment status facts without amounts, provider references or metadata", () => {

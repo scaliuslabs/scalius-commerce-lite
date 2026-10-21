@@ -94,6 +94,12 @@ export const PLUGIN_SCOPES = {
    * order an app marked paid wait for staff to release a review hold.
    */
   write_payments: { rbac: ["orders.view", "orders.record_payment"], staff: "orders.record_payment", sensitive: true },
+  /**
+   * Give money back on an order (`refunds.create`): through the payments it
+   * came from or as store credit, never to a destination the app names, with
+   * the order lines it is for. Sensitive: it moves money out of the store.
+   */
+  write_refunds: { rbac: ["orders.view", "orders.refund"], staff: "orders.refund", sensitive: true },
   /** Hand over order lines, create and void fulfilments and courier shipments. */
   write_fulfillments: { rbac: ["orders.view", "orders.manage_shipments"], staff: "orders.manage_shipments" },
   /** Customers, their tags and marketing consent; email, text or push a customer by id (`ctx.messaging`). Contact fields need the protected data scopes. */
