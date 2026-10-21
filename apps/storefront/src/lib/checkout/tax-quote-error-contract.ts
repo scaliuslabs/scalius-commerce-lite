@@ -1,6 +1,6 @@
 import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
 import type { CartRuleError, CartValidationIssue } from "../api/orders";
-import { parseQuotedShippingRate, type QuotedShippingRate } from "./tax-quote-contract";
+import { parseQuotedShippingRate, type QuotedShippingRate } from "./quote-facts";
 
 // Every code and action the API answers with (a Record, so a new one fails to
 // compile here): an issue this list does not know would read as an outage.

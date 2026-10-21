@@ -9,7 +9,7 @@ import {
   parseDiscountFacts,
   parsePreviewBundleDiscountLine,
   type CheckoutDiscountFacts,
-} from "@/lib/checkout/tax-quote-contract";
+} from "@/lib/checkout/quote-facts";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
 import { currentPresence } from "@/lib/presence-url";
