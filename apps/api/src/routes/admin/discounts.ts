@@ -3,7 +3,6 @@ import {
     archivePromotionDraft,
     activatePromotion,
     createPromotionDraft,
-    createPromotionDraftSchema,
     getPromotionAggregate,
     getPromotionOrderUsage,
     listPromotionPage,
@@ -12,20 +11,20 @@ import {
     previewPersistedPromotion,
     pausePromotion,
     updatePromotionDraft,
-    updatePromotionDraftSchema,
 } from "@scalius/core/modules/promotions";
 import { promotionEvaluationCartSchema } from "@scalius/core/modules/promotions/browser";
 
 import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { NotFoundError } from "../../utils/api-error";
 import { isoTimestampSchema, nullableIsoTimestampSchema } from "../../schemas/timestamps";
-import { created, noContent, ok } from "../../utils/api-response";
+import { created, ok } from "../../utils/api-response";
+import type { Database } from "@scalius/database/client";
+import { createDiscountBody, serviceRule, serviceUpdate, updateDiscountBody, wireRule, withWireRefusals } from "./discount-wire";
 
 import {
     cappedPaginationSchema,
     conflictResponse,
     errorResponses,
-    noContentResponse,
     successEnvelope,
 } from "../../schemas/responses";
 
@@ -33,9 +32,12 @@ import {
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const TAG = "Admin - Discounts";
 const idParam = z.object({ id: z.string().trim().min(1).max(180) });
-const revisionBody = z.object({ expectedRevision: z.number().int().positive() }).strict();
+const expectedRevisionField = z.number().int().positive().openapi({
+    description: "The discount's `revision` you read; a discount changed since is refused with 409 and nothing changes.",
+});
+const revisionBody = z.object({ expectedRevision: expectedRevisionField }).strict();
 
-const discountSchema = z.object({
+const discountShape = {
     id: z.string(),
     revision: z.number().int().positive(),
     name: z.string(),
@@ -47,13 +49,13 @@ const discountSchema = z.object({
     combinesWith: z.object({ product: z.boolean(), order: z.boolean(), shipping: z.boolean() }),
     startsAt: nullableIsoTimestampSchema,
     endsAt: nullableIsoTimestampSchema,
-    timezone: z.string(),
+    timeZone: z.string().openapi({ description: "The schedule's IANA time zone." }),
     maxRedemptions: z.number().int().positive().nullable(),
     maxRedemptionsPerCustomer: z.number().int().positive().nullable(),
     /** The store currency: rule amounts and the spend are in its minor units. */
     currency: z.string().length(3).openapi({ description: "The store currency: rule amounts (amountMinor) and the spend are integer minor units of it." }),
     maxDiscountSpendMinor: z.number().int().positive().nullable(),
-    budgetCurrencyCode: z.string().nullable(),
+    budgetCurrency: z.string().nullable().openapi({ description: "The spend budget's currency, with maxDiscountSpendMinor." }),
     redemptionCount: z.number().int().nonnegative().openapi({ description: "Orders that used this discount." }),
     customerRedemptionCount: z.number().int().nonnegative(),
     discountSpendMinor: z.number().int().nonnegative().openapi({ description: "Total savings given, in minor units." }),
@@ -64,28 +66,32 @@ const discountSchema = z.object({
     conditions: z.array(z.object({
         id: z.string(),
         kind: z.enum(["minimum_merchandise_subtotal", "minimum_item_quantity"]),
-        config: z.record(z.string(), z.unknown()),
+        config: z.record(z.string(), z.unknown()).openapi({ description: "As `discounts.create` takes it: an amount beside its `currency`." }),
     })),
     effects: z.array(z.object({
         id: z.string(),
         kind: z.enum(["percentage_off", "fixed_amount_off", "free"]),
         target: z.enum(["line", "order", "shipping"]),
         allocation: z.enum(["across", "once"]),
-        config: z.record(z.string(), z.unknown()),
+        config: z.record(z.string(), z.unknown()).openapi({ description: "As `discounts.create` takes it: an amount beside its `currency`." }),
     })),
     customerSegmentIds: z.array(z.string()).openapi({
         description: "Only signed-in customers in any of these customer segments get this discount; empty means every customer.",
     }),
-});
+};
+
+/** A discount as `discounts.get` reads it; every discount write answers it too (`{ discount }`). */
+const DiscountResource = z.object(discountShape).openapi("DiscountResource");
+const discountEnvelope = successEnvelope(z.object({ discount: DiscountResource }));
 
 type StoredDiscount = Awaited<ReturnType<typeof getPromotionAggregate>> & object;
 const isoOf = (seconds: number | null | undefined) => (typeof seconds === "number" && Number.isFinite(seconds) ? new Date(seconds * 1_000).toISOString() : null);
 
-/** A stored discount as the HTTP contract carries it: every instant ISO 8601. */
-function discountWire<T extends Pick<StoredDiscount, "startsAtEpochSeconds" | "endsAtEpochSeconds" | "createdAtEpochSeconds" | "updatedAtEpochSeconds" | "deletedAtEpochSeconds">>(discount: T) {
+/** A stored discount as the HTTP contract carries it: every instant ISO 8601, one spelling per field (discount-wire.ts). */
+function discountWire<T extends Pick<StoredDiscount, "startsAtEpochSeconds" | "endsAtEpochSeconds" | "createdAtEpochSeconds" | "updatedAtEpochSeconds" | "deletedAtEpochSeconds" | "timezone" | "budgetCurrencyCode" | "conditions" | "effects">>(discount: T) {
     const { startsAtEpochSeconds, endsAtEpochSeconds, createdAtEpochSeconds, updatedAtEpochSeconds, deletedAtEpochSeconds, ...rest } = discount;
     return {
-        ...rest,
+        ...wireRule(rest),
         startsAt: isoOf(startsAtEpochSeconds),
         endsAt: isoOf(endsAtEpochSeconds),
         createdAt: isoOf(createdAtEpochSeconds)!,
@@ -94,14 +100,17 @@ function discountWire<T extends Pick<StoredDiscount, "startsAtEpochSeconds" | "e
     };
 }
 
-const mutationSchema = z.object({
-    id: z.string(),
-    revision: z.number().int().positive(),
-    status: z.enum(["draft", "active", "paused", "archived"]),
-});
+/** The discount as it is now, with its usage; an archived one too. */
+async function readDiscount(db: Database, id: string) {
+    const discount = await getPromotionAggregate(db, id, { includeDeleted: true });
+    if (!discount) throw new NotFoundError("Discount not found");
+    const [usage, currency] = await Promise.all([getPromotionOrderUsage(db, discount.id), readStoreCurrency(db)]);
+    return { ...discountWire(discount), currency: currency.code, ...usage };
+}
+
 const mutationResponse = (description: string) => ({
     description,
-    content: { "application/json": { schema: successEnvelope(mutationSchema) } },
+    content: { "application/json": { schema: discountEnvelope } },
 });
 
 app.openapi(createRoute({
@@ -125,7 +134,7 @@ app.openapi(createRoute({
         200: {
             description: "Discounts, most recently updated first unless sorted",
             content: { "application/json": { schema: successEnvelope(z.object({
-                discounts: z.array(discountSchema.extend({
+                discounts: z.array(z.object(discountShape).extend({
                     codeCount: z.number().int().nonnegative().openapi({ description: "Codes the discount has; `codes` holds the first only." }),
                 })),
                 pagination: cappedPaginationSchema,
@@ -153,9 +162,13 @@ app.openapi(createRoute({
     path: "/",
     tags: [TAG],
     summary: "Create a draft discount",
-    request: { body: { required: true, content: { "application/json": { schema: createPromotionDraftSchema } } } },
-    responses: { 201: mutationResponse("Draft discount created"), 409: conflictResponse, ...errorResponses },
-}), async (c) => created(c, await createPromotionDraft(c.get("db"), c.req.valid("json"))));
+    request: { body: { required: true, content: { "application/json": { schema: createDiscountBody } } } },
+    responses: { 201: mutationResponse("The new draft discount"), 409: conflictResponse, ...errorResponses },
+}), async (c) => {
+    const db = c.get("db");
+    const { id } = await withWireRefusals(() => createPromotionDraft(db, serviceRule(c.req.valid("json"))));
+    return created(c, { discount: await readDiscount(db, id) });
+});
 
 app.openapi(createRoute({
     operationId: "dashboard.discounts.get",
@@ -165,15 +178,14 @@ app.openapi(createRoute({
     summary: "Get a discount",
     request: { params: idParam },
     responses: {
-        200: { description: "Discount", content: { "application/json": { schema: successEnvelope(discountSchema) } } },
+        200: { description: "The discount", content: { "application/json": { schema: discountEnvelope } } },
         ...errorResponses,
     },
 }), async (c) => {
     const db = c.get("db");
-    const discount = await getPromotionAggregate(db, c.req.valid("param").id);
-    if (!discount) throw new NotFoundError("Discount not found");
-    const [usage, currency] = await Promise.all([getPromotionOrderUsage(db, discount.id), readStoreCurrency(db)]);
-    return ok(c, { ...discountWire(discount), currency: currency.code, ...usage });
+    const { id } = c.req.valid("param");
+    if (!(await getPromotionAggregate(db, id))) throw new NotFoundError("Discount not found");
+    return ok(c, { discount: await readDiscount(db, id) });
 });
 
 app.openapi(createRoute({
@@ -184,13 +196,14 @@ app.openapi(createRoute({
     summary: "Replace a discount's rules (revision-checked)",
     request: {
         params: idParam,
-        body: { required: true, content: { "application/json": { schema: updatePromotionDraftSchema } } },
+        body: { required: true, content: { "application/json": { schema: updateDiscountBody } } },
     },
-    responses: { 200: mutationResponse("Discount updated"), 409: conflictResponse, ...errorResponses },
+    responses: { 200: mutationResponse("The discount as updated"), 409: conflictResponse, ...errorResponses },
 }), async (c) => {
-    const result = await updatePromotionDraft(c.get("db"), c.req.valid("param").id, c.req.valid("json"));
-
-    return ok(c, result);
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    await withWireRefusals(() => updatePromotionDraft(db, id, serviceUpdate(c.req.valid("json"))));
+    return ok(c, { discount: await readDiscount(db, id) });
 });
 
 app.openapi(createRoute({
@@ -206,7 +219,7 @@ app.openapi(createRoute({
             content: {
                 "application/json": {
                     schema: z.object({
-                        expectedRevision: z.number().int().positive(),
+                        expectedRevision: expectedRevisionField,
                         customerId: z.string().trim().min(1).max(180).nullable().optional().openapi({
                             description: "Preview as this customer, signed in: their usage and customer segments. Without one, a discount limited to segments does not apply.",
                         }),
@@ -258,9 +271,10 @@ for (const [command, summary, run] of [
         request: { params: idParam, body: { required: true, content: { "application/json": { schema: revisionBody } } } },
         responses: { 200: mutationResponse(summary), 409: conflictResponse, ...errorResponses },
     }), async (c) => {
-        const result = await run(c.get("db"), c.req.valid("param").id, c.req.valid("json").expectedRevision);
-
-        return ok(c, result);
+        const db = c.get("db");
+        const { id } = c.req.valid("param");
+        await run(db, id, c.req.valid("json").expectedRevision);
+        return ok(c, { discount: await readDiscount(db, id) });
     });
 }
 
@@ -269,13 +283,18 @@ app.openapi(createRoute({
     method: "delete",
     path: "/{id}",
     tags: [TAG],
-    summary: "Delete a discount (kept for order history)",
-    request: { params: idParam, body: { required: true, content: { "application/json": { schema: revisionBody } } } },
-    responses: { 204: noContentResponse, 409: conflictResponse, ...errorResponses },
+    summary: "Archive a discount (kept for order history)",
+    description: "The discount stops applying and leaves the list; orders that used it keep it. Answers the archived discount.",
+    request: {
+        params: idParam,
+        query: z.object({ expectedRevision: z.coerce.number().int().positive().openapi({ description: "The discount's `revision` you read; a discount changed since is refused with 409 and nothing changes." }) }),
+    },
+    responses: { 200: mutationResponse("The archived discount"), 409: conflictResponse, ...errorResponses },
 }), async (c) => {
-    await archivePromotionDraft(c.get("db"), c.req.valid("param").id, c.req.valid("json").expectedRevision);
-
-    return noContent(c);
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    await archivePromotionDraft(db, id, c.req.valid("query").expectedRevision);
+    return ok(c, { discount: await readDiscount(db, id) });
 });
 
 export { app as adminDiscountRoutes };

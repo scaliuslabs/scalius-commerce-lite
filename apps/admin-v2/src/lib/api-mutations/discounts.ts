@@ -36,12 +36,12 @@ export function useCreateDiscount() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ input, activate }: { input: DiscountInput; activate: boolean }) => {
-      const created = await apiData(postApiV1AdminDiscounts({ body: input }));
+      const { discount: created } = await apiData(postApiV1AdminDiscounts({ body: input }));
       if (!activate) return created;
       return apiData(postApiV1AdminDiscountsByIdActivate({
         path: { id: created.id },
         body: { expectedRevision: created.revision },
-      })).catch((error: unknown) => {
+      })).then(({ discount }) => discount).catch((error: unknown) => {
         // Saved as a draft; the editor offers Activate with the reason.
         toast.error(getServerFnError(error, t("saveFailed")));
         return created;
@@ -55,7 +55,7 @@ export function useUpdateDiscount() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: DiscountUpdateInput }) =>
-      apiData(putApiV1AdminDiscountsById({ path: { id }, body: input })),
+      apiData(putApiV1AdminDiscountsById({ path: { id }, body: input })).then(({ discount }) => discount),
     onSuccess: (_result, { id }) => invalidate(queryClient, id),
   });
 }
@@ -66,7 +66,7 @@ export function useSetDiscountActive() {
   return useMutation({
     mutationFn: ({ id, expectedRevision, active }: RevisionClaim & { active: boolean }) => {
       const command = active ? postApiV1AdminDiscountsByIdActivate : postApiV1AdminDiscountsByIdPause;
-      return apiData(command({ path: { id }, body: { expectedRevision } }));
+      return apiData(command({ path: { id }, body: { expectedRevision } })).then(({ discount }) => discount);
     },
     onSuccess: (_result, { id }) => invalidate(queryClient, id),
   });
@@ -76,7 +76,7 @@ export function useDeleteDiscount() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, expectedRevision }: RevisionClaim) =>
-      apiData(deleteApiV1AdminDiscountsById({ path: { id }, body: { expectedRevision } })),
+      apiData(deleteApiV1AdminDiscountsById({ path: { id }, query: { expectedRevision } })).then(({ discount }) => discount),
     onSuccess: (_result, { id }) => {
       invalidate(queryClient);
       queryClient.removeQueries({ queryKey: queryKeys.discounts.detail(id) });

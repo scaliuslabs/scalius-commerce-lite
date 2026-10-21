@@ -54,8 +54,8 @@ function record(type: DiscountDraft["type"] = "products", patch: Partial<Discoun
   return {
     ...input, id: "promo_saved", revision, status: "active", priority: 100, conflictPolicy: "best", combinesWith: input.combinesWith!,
     title: input.title ?? null, startsAt: input.startsAt ?? null, endsAt: input.endsAt ?? null,
-    timezone: "Asia/Dhaka", maxRedemptions: input.maxRedemptions ?? null, maxRedemptionsPerCustomer: input.maxRedemptionsPerCustomer ?? null,
-    currency: "BDT", maxDiscountSpendMinor: null, budgetCurrencyCode: null, redemptionCount: 7, customerRedemptionCount: 0, discountSpendMinor: 0,
+    timeZone: "Asia/Dhaka", maxRedemptions: input.maxRedemptions ?? null, maxRedemptionsPerCustomer: input.maxRedemptionsPerCustomer ?? null,
+    currency: "BDT", maxDiscountSpendMinor: null, budgetCurrency: null, redemptionCount: 7, customerRedemptionCount: 0, discountSpendMinor: 0,
     createdAt: "1970-01-01T00:00:00.000Z", updatedAt: "1970-01-01T00:00:00.000Z", deletedAt: null,
     codes: (input.codes ?? []).map(({ code }) => ({ code, isActive: true })),
     conditions: (input.conditions ?? []).map((condition, index) => ({ id: `c${index}`, ...condition })),
