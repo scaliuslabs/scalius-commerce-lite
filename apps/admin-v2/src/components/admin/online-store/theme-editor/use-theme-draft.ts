@@ -131,6 +131,8 @@ export function useThemeDraft({ workspace, refetch, canEdit, apps }: {
    * otherwise both send the same revision and the second would answer 409.
    */
   const inFlight = useRef(false);
+  /** Takes the server's newer draft without asking (set below, once `reload` exists). */
+  const adoptNewer = useRef<(() => void) | null>(null);
 
   /** Names who saved over the editor's draft, from the server's draft now. */
   const noteConflict = useCallback(async () => {
@@ -143,6 +145,19 @@ export function useThemeDraft({ workspace, refetch, canEdit, apps }: {
     }
   }, [refetch]);
 
+  /**
+   * The cached workspace follows every draft this editor saves, so the next
+   * time the editor opens (its route reads the cache first) it starts from
+   * this revision, not one it already replaced: that stale start sent the
+   * first-draft save with an old revision and named the merchant's own
+   * earlier save as a conflict.
+   */
+  const rememberSaved = useCallback((next: SavedDraft) => {
+    queryClient.setQueryData(themeWorkspaceQueryOptions().queryKey, (current) => (current
+      ? { ...current, draft: { ...current.draft, theme: next.theme as typeof current.draft.theme, revision: next.revision, basePublishedRevision: next.basePublishedRevision } }
+      : current));
+  }, [queryClient]);
+
   const save = useCallback(async () => {
     const { pending: sending, saved: base, conflict: blocked, busy: replacing } = latest.current;
     if (!sending || inFlight.current || blocked || replacing) return false;
@@ -153,21 +168,28 @@ export function useThemeDraft({ workspace, refetch, canEdit, apps }: {
       const result = await apiData(postApiV1AdminSettingsThemeDraft({
         body: { expectedDraftRevision: base.revision, basePublishedRevision: base.basePublishedRevision, theme: sending },
       }));
-      setSaved({ theme: sending, revision: result.revision, basePublishedRevision: result.basePublishedRevision });
+      const next = { theme: sending, revision: result.revision, basePublishedRevision: result.basePublishedRevision };
+      setSaved(next);
+      rememberSaved(next);
       setLastSent(sending);
       setFailure(null);
       // The other people in the editor hear it at once (realtime presence).
       announceSave(THEME_PRESENCE_KEY, result.revision);
       return true;
     } catch (error) {
-      if (isAdminApiConflictError(error)) void noteConflict();
+      // A save that carried none of this editor's edits (the first draft it
+      // creates on open), with none made since, loses nothing to a newer
+      // draft: take the newer one instead of asking.
+      const untouched = same(sending, base.theme) && same(latest.current.pending, sending);
+      if (isAdminApiConflictError(error) && untouched) adoptNewer.current?.();
+      else if (isAdminApiConflictError(error)) void noteConflict();
       else setFailure({ for: sending, message: actionErrorText(error) });
       return false;
     } finally {
       inFlight.current = false;
       setSaving(false);
     }
-  }, [noteConflict]);
+  }, [noteConflict, rememberSaved]);
 
   // Edits save themselves a moment after the last one (at once when the preview needs them saved).
   useEffect(() => {
@@ -217,6 +239,7 @@ export function useThemeDraft({ workspace, refetch, canEdit, apps }: {
       setBusy(false);
     }
   }, [refetch]);
+  adoptNewer.current = () => void reload();
 
   /**
    * Restores a published version or a restore point to the draft, or discards
