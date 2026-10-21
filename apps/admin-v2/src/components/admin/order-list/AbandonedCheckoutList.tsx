@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useMatch, useNavigate } from "@tanstack/react-router";
 import { toast } from "~/lib/toast";
-import { ExternalLink, Trash2 } from "lucide-react";
+import { ExternalLink, ShoppingCart, Trash2 } from "lucide-react";
 import { deleteApiV1AdminAbandonedCheckouts } from "@scalius/api-client/sdk";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { getStoreRegion } from "~/lib/store-time-zone";
@@ -20,7 +20,7 @@ import {
 import { DataTable } from "@/components/admin/data-table/DataTable";
 import { DataTableToolbar, IndexBulkBar } from "@/components/admin/data-table/DataTableToolbar";
 import { DataTableSortMenu } from "@/components/admin/data-table/DataTableSortMenu";
-import { FilteredEmptyState } from "~/components/admin/states";
+import { EmptyState, FilteredEmptyState } from "~/components/admin/states";
 import { DataTableRowActions } from "@/components/admin/data-table/DataTableRowActions";
 import { useServerTable } from "@/components/admin/data-table/useServerTable";
 import { createSelectColumn } from "@/components/admin/data-table/columns/column-factories";
@@ -451,9 +451,14 @@ export function AbandonedCheckoutList({
     </Button>
   ) : null;
   const deleteCount = deleteIds?.length ?? 0;
+  // No checkout was ever left: an empty state (E1), not a table of nothing.
+  const nothingYet = !isLoading && !isError && !term && routeState.page === 1 && table.getRowModel().rows.length === 0;
 
   return (
     <>
+      {nothingYet ? (
+        <EmptyState card={false} icon={ShoppingCart} title={t("abandonedEmptyTitle")} description={t("abandonedEmptyBody")} />
+      ) : (
       <DataTable
         variant="bare"
         getRowHref={(checkout) => `/admin/orders/abandoned/${encodeURIComponent(checkout.id)}`}
@@ -499,6 +504,7 @@ export function AbandonedCheckoutList({
           <FilteredEmptyState title={t("abandonedEmptyTitle")} description={t("abandonedEmptyBody")} />
         )}
       />
+      )}
 
       <ConfirmDialog
         open={deleteIds !== null}
