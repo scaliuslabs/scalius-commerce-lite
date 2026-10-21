@@ -70,7 +70,6 @@ export const STABLE_APP_OPERATIONS = {
   "orders.get": "dashboard.resources.orders.get",
   "orders.create": "dashboard.resources.orders.create",
   "orders.set_status": "dashboard.orders.update_status",
-  "orders.update_details": "dashboard.orders.update_details",
   "orders.mark_delivered": "dashboard.orders.mark_delivered",
   "orders.mark_pickup_ready": "dashboard.orders.pickup_ready",
   "order_timeline.list": "dashboard.orders.timeline",

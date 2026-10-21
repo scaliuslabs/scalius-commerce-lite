@@ -57659,12 +57659,6 @@ export type PutApiV1AdminOrdersByIdDetailsData = {
         billingPostalCode?: string | null;
         expectedVersion: number;
     };
-    headers?: {
-        /**
-         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
-         */
-        'idempotency-key'?: string;
-    };
     path: {
         id: string;
     };
