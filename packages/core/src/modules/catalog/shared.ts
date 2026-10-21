@@ -18,6 +18,7 @@ import type { Database } from "@scalius/database/client";
 import { maxBaseForFxPrice, minBaseForFxPrice } from "@scalius/shared/market-pricing";
 import { toMinor } from "@scalius/shared/money";
 import type { MarketPriceContext } from "../price-lists";
+import type { MarketListPriceFilter } from "../products";
 import { reviewsEnabledSql } from "../settings";
 import { publicCategoryConditions } from "../categories";
 import { buyerState, publicBuyerStateCondition } from "./buyer-state";
@@ -105,35 +106,57 @@ function buildProductLookupCondition(
 }
 
 /** Decimal HTTP price-filter bounds in store minor units. */
-/** Decimal price filters as store minor units, resolved in SQL (no separate currency read). */
+/**
+ * Decimal price filters as store minor units, resolved in SQL (no separate
+ * currency read). In a market whose public lists are live, also the bounds in
+ * the market's currency that SKUs with a list price are tested by
+ * (`marketListPrices`).
+ */
 export function priceFilterBoundsMinor(
     params: Pick<StorefrontProductFilterInput, "minPrice" | "maxPrice">,
     market: MarketPriceContext | null = null,
-) {
-    if (market?.fx) return fxPriceFilterBoundsMinor(params, market);
-    const bound = (value: number | undefined) =>
-        value === undefined || !Number.isFinite(value) ? undefined : storeDecimalToMinorSql(Math.max(0, value));
-    return { minPriceMinor: bound(params.minPrice), maxPriceMinor: bound(params.maxPrice) };
+): { minPriceMinor?: SQL<number>; maxPriceMinor?: SQL<number>; marketListPrices?: MarketListPriceFilter } {
+    const marketListPrices = market && market.listed && (params.minPrice !== undefined || params.maxPrice !== undefined)
+        ? {
+            marketId: market.marketId,
+            currencyCode: market.currencyCode,
+            atSeconds: market.atSeconds,
+            incrementMinor: market.incrementMinor,
+            minMarketMinor: marketMinorBound(params.minPrice, market),
+            maxMarketMinor: marketMinorBound(params.maxPrice, market),
+        }
+        : undefined;
+    if (market?.fx) return { ...fxPriceFilterBoundsMinor(params, market), ...(marketListPrices ? { marketListPrices } : {}) };
+    const bound = (value: number | undefined) => {
+        if (value === undefined || !Number.isFinite(value)) return undefined;
+        // A market's bounds are in its own minor units (its currency is the shop's without FX).
+        const marketMinor = market ? marketMinorBound(value, market) : undefined;
+        return marketMinor !== undefined ? sql<number>`${marketMinor}` : storeDecimalToMinorSql(Math.max(0, value));
+    };
+    return { minPriceMinor: bound(params.minPrice), maxPriceMinor: bound(params.maxPrice), ...(marketListPrices ? { marketListPrices } : {}) };
+}
+
+/** A decimal price bound in a market's minor units (undefined when absent or unrepresentable). */
+function marketMinorBound(value: number | undefined, market: MarketPriceContext): number | undefined {
+    if (value === undefined || !Number.isFinite(value)) return undefined;
+    try {
+        return toMinor(Math.max(0, value), market.decimalPlaces);
+    } catch {
+        return undefined;
+    }
 }
 
 /**
  * A buyer's price bounds in an FX market as base-price bounds: FX-derived
  * prices never fall as the base rises, so "at most M" in the market is "at
  * most the largest base whose market price is M or less" (exact, no
- * rounding error). Fixed list prices do not move the bounds (documented).
+ * rounding error). A SKU with a live list price is tested in the market's
+ * currency instead (`marketListPrices`).
  */
 function fxPriceFilterBoundsMinor(params: Pick<StorefrontProductFilterInput, "minPrice" | "maxPrice">, market: MarketPriceContext) {
     const conversion = market.fx!;
-    const minor = (value: number | undefined) => {
-        if (value === undefined || !Number.isFinite(value)) return undefined;
-        try {
-            return toMinor(Math.max(0, value), market.decimalPlaces);
-        } catch {
-            return undefined;
-        }
-    };
-    const min = minor(params.minPrice);
-    const max = minor(params.maxPrice);
+    const min = marketMinorBound(params.minPrice, market);
+    const max = marketMinorBound(params.maxPrice, market);
     return {
         minPriceMinor: min === undefined ? undefined : sql<number>`${minBaseForFxPrice(min, conversion)}`,
         maxPriceMinor: max === undefined ? undefined : sql<number>`${maxBaseForFxPrice(max, conversion)}`,
@@ -145,6 +168,7 @@ export function buildStorefrontProductConditions(
     params: Omit<StorefrontProductFilterInput, "minPrice" | "maxPrice"> & {
         minPriceMinor?: SQL<number>;
         maxPriceMinor?: SQL<number>;
+        marketListPrices?: MarketListPriceFilter;
     },
     options: StorefrontProductConditionOptions = {},
     buyerPricing?: BuyerCatalogPricingProjection,
@@ -165,7 +189,7 @@ export function buildStorefrontProductConditions(
     ];
 
     if (buyerPricing && (minPriceMinor !== undefined || maxPriceMinor !== undefined)) {
-        conditions.push(buyerCatalogHasSkuInPriceRange(minPriceMinor, maxPriceMinor));
+        conditions.push(buyerCatalogHasSkuInPriceRange(minPriceMinor, maxPriceMinor, params.marketListPrices));
     } else {
         if (minPriceMinor !== undefined) conditions.push(sql`${products.priceMinor} >= ${minPriceMinor}`);
         if (maxPriceMinor !== undefined) conditions.push(sql`${products.priceMinor} <= ${maxPriceMinor}`);
@@ -197,6 +221,7 @@ export function buildStorefrontBuyerStateConditions(
     params: Omit<StorefrontProductFilterInput, "minPrice" | "maxPrice"> & {
         minPriceMinor?: SQL<number>;
         maxPriceMinor?: SQL<number>;
+        marketListPrices?: MarketListPriceFilter;
     },
     options: { drivenByIdSet?: boolean } = {},
 ): { conditions: SQL[]; needsProducts: boolean } {
@@ -224,7 +249,7 @@ export function buildStorefrontBuyerStateConditions(
     }
     if (params.minPriceMinor !== undefined || params.maxPriceMinor !== undefined) {
         needsProducts = true;
-        conditions.push(buyerCatalogHasSkuInPriceRange(params.minPriceMinor, params.maxPriceMinor));
+        conditions.push(buyerCatalogHasSkuInPriceRange(params.minPriceMinor, params.maxPriceMinor, params.marketListPrices));
     }
     if (params.freeDelivery === "true" || params.freeDelivery === "false") {
         needsProducts = true;

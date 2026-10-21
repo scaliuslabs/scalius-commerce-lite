@@ -1219,6 +1219,13 @@
       "when": 1792548146517,
       "tag": "0173_saved_payment_methods",
       "breakpoints": true
+    },
+    {
+      "idx": 174,
+      "version": "6",
+      "when": 1792573210859,
+      "tag": "0174_catalog_scale",
+      "breakpoints": true
     }
   ]
 }

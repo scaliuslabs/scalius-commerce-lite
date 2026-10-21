@@ -785,14 +785,15 @@ async function runScheduledMaintenanceInner(
   if (failures.length > 0) throw failures[0];
 }
 
-/** Sales stats, a projection rebuild request, sold products' recommendations, app storage sizes and a sampled drift check. */
+/** Sales stats, a catalogue projection drift check, sold products' recommendations, app storage sizes and a sampled drift check of the order projections. */
 async function runNightlyPass({ db, runContext, timed }: SweepContext): Promise<void> {
   const nightly = await timed("nightly_catalog_maintenance", () =>
     runNightlyCatalogMaintenance(db, runContext.scheduledAt!),
   );
   console.log(
     `[scheduled] Nightly catalogue: salesStatsProducts=${nightly.salesStatsProducts}, ` +
-      `soldRecommendations=${nightly.soldRecommendations}`,
+      `soldRecommendations=${nightly.soldRecommendations}, projectionsChecked=${nightly.projectionsChecked}, ` +
+      `projectionsRepaired=${nightly.projectionsRepaired}`,
   );
   const { measurePluginStorage } = await import("./plugins/scheduled");
   await timed("plugin_storage_measure", () => measurePluginStorage(db));

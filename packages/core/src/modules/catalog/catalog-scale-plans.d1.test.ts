@@ -3,7 +3,7 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, describe, expect, it } from "vitest";
 import { planLimits } from "@scalius/shared/plan-limits";
 
-import { FACET_SCOPE_PRODUCT_LIMIT, resolvePublicAttributeFilters } from "./facets";
+import { facetLiveScopeLimit, resolvePublicAttributeFilters } from "./facets";
 import { resolveCollectionProductsBatch } from "./collections";
 import { search } from "./site-search";
 import { getHomepageData } from "../storefront/storefront.service";
@@ -75,6 +75,9 @@ function setup() {
 }
 
 const joinsPricing = (sql: string) => sql.includes("buyer_ranked_skus");
+/** A scope read through one of the buyer state's category (or brand) indexes: newest order, or a price probe (0174). */
+const CATEGORY_SCOPE_INDEX = /product_buyer_state_category_(newest|price|to)_idx \(is_public=\? AND category_id=\?\)/;
+const BRAND_SCOPE_INDEX = /product_buyer_state_brand_(newest|price|to)_idx \(is_public=\? AND brand_id=\?\)/;
 const readsBuyerState = (sql: string) => sql.includes("product_buyer_state") && !sql.startsWith("insert");
 
 /** Fills the stored projections for the raw-SQL seed (as a release does), then forgets those statements. */
@@ -109,7 +112,7 @@ describe("catalogue-scale query plans", () => {
         const statePlans = plans(readsBuyerState);
         expect(statePlans).toHaveLength(2); // page, facet counts with listing totals
         for (const plan of statePlans) {
-            expect(plan).toContain("product_buyer_state_category_newest_idx (is_public=? AND category_id=?)");
+            expect(plan).toMatch(CATEGORY_SCOPE_INDEX);
             expectBuyerStateListing(plan);
         }
         expect(plans(joinsPricing)).toEqual([]);
@@ -128,7 +131,7 @@ describe("catalogue-scale query plans", () => {
             expectBuyerStateListing(plan);
             // Never the public walk: the member set drives by id.
             expect(plan).not.toMatch(/SEARCH product_buyer_state USING (COVERING )?INDEX product_buyer_state_(price|newest)_idx/);
-            expect(plan).toContain("SEARCH collection_member USING COVERING INDEX product_buyer_state_category_newest_idx");
+            expect(plan).toMatch(/SEARCH collection_member USING COVERING INDEX product_buyer_state_category_(newest|price)_idx/);
         }
         expect(plans(joinsPricing)).toEqual([]);
     });
@@ -159,11 +162,11 @@ describe("catalogue-scale query plans", () => {
             ["prod_b", "cat_gaming"],
         ]);
         for (const plan of brandPlans) {
-            expect(plan).toContain("product_buyer_state_brand_newest_idx (is_public=? AND brand_id=?)");
+            expect(plan).toMatch(BRAND_SCOPE_INDEX);
             expectBuyerStateListing(plan);
         }
         for (const plan of subtreePlans) {
-            expect(plan).toContain("product_buyer_state_category_newest_idx (is_public=? AND category_id=?)");
+            expect(plan).toMatch(CATEGORY_SCOPE_INDEX);
             expect(plan).not.toMatch(/SCAN (subtree|category_closure)\b/);
             expectBuyerStateListing(plan);
         }
@@ -184,10 +187,13 @@ describe("catalogue-scale query plans", () => {
         expect(newest.pagination.total).toBe(3);
         expect(cheapest.products.map((product) => product.id)).toEqual(["prod_c", "prod_a"]);
         expect(deepest.products).toHaveLength(2);
-        expect(newestPage).toContain("SEARCH product_buyer_state USING INDEX product_buyer_state_newest_idx (is_public=?)");
-        expect(newestPage).not.toContain("USE TEMP B-TREE FOR ORDER BY");
-        expect(pricePage).toContain("SEARCH product_buyer_state USING INDEX product_buyer_state_price_idx (is_public=?)");
-        expect(pricePage).not.toContain("USE TEMP B-TREE FOR ORDER BY");
+        // The page's ids walk the order's own index; only the page's own rows
+        // (limit + 1) are sorted again once their cards are joined.
+        const sorts = (plan: string) => plan.split("USE TEMP B-TREE FOR ORDER BY").length - 1;
+        expect(newestPage).toMatch(/SEARCH product_buyer_state USING (COVERING )?INDEX product_buyer_state_newest_idx \(is_public=\?\)/);
+        expect(sorts(newestPage!)).toBeLessThanOrEqual(1);
+        expect(pricePage).toMatch(/SEARCH product_buyer_state USING (COVERING )?INDEX product_buyer_state_price_idx \(is_public=\?\)/);
+        expect(sorts(pricePage!)).toBeLessThanOrEqual(1);
         // The count reads the buyer state alone: no products join, no pricing.
         expect(newestCount).not.toMatch(/SEARCH products\b/);
         for (const plan of [newestPage!, newestCount!, pricePage!]) expectBuyerStateListing(plan);
@@ -210,14 +216,15 @@ describe("catalogue-scale query plans", () => {
         const filters = await resolvePublicAttributeFilters(db, { maker: "asus" }, []);
         const selected = await getStorefrontProducts(db, { page: 1, limit: 2, attributeFilters: filters });
         expect(selected.facets.find((facet) => facet.slug === "maker")!.values[0]).toMatchObject({ value: "asus", count: 1 });
-        expect(queries.filter((query) => query.sql.includes("product_facet_public_counts"))).toEqual([]);
+        // (The narrowed page's plan reads the value's public count to pick its form.)
+        expect(queries.filter((query) => query.sql.includes("facet_scope") && query.sql.includes("FROM product_facet_public_counts WHERE"))).toEqual([]);
 
-        // Past FACET_SCOPE_PRODUCT_LIMIT products a scope keeps its brand, category
+        // Past facetLiveScopeLimit() products a scope keeps its brand, category
         // and rating facets; attribute and option values are not counted.
         const insertProduct = sqlite!.prepare("INSERT INTO products (id, name, price_minor, slug, category_id, is_active, created_at) VALUES (?, ?, 10000, ?, 'cat_phone', 1, 1600000000)");
         const insertSku = sqlite!.prepare("INSERT INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory) VALUES (?, ?, ?, 10000, 1, 1, 0)");
         const insertValue = sqlite!.prepare("INSERT INTO product_attribute_values (id, product_id, attribute_id, value) VALUES (?, ?, 'attr_maker', 'Xiaomi')");
-        for (let index = 0; index < FACET_SCOPE_PRODUCT_LIMIT; index += 1) {
+        for (let index = 0; index < facetLiveScopeLimit(); index += 1) {
             insertProduct.run(`prod_bulk_${index}`, `Bulk ${index}`, `bulk-${index}`);
             insertSku.run(`var_bulk_${index}`, `prod_bulk_${index}`, `BULK-${index}`);
             insertValue.run(`val_bulk_${index}`, `prod_bulk_${index}`);
@@ -225,11 +232,15 @@ describe("catalogue-scale query plans", () => {
         await project(db, queries);
         const large = await getStorefrontProducts(db, { page: 1, limit: 2 });
         // The total is a lower bound beyond the plan's count cap (and reads that many rows at most).
-        expect(large.pagination).toMatchObject({ total: planLimits().lists.countCap, totalIsCapped: true });
+        const catalogue = facetLiveScopeLimit() + 3;
+        expect(large.pagination).toMatchObject({
+            total: Math.min(catalogue, planLimits().lists.countCap),
+            totalIsCapped: catalogue > planLimits().lists.countCap,
+        });
         expect(large.facets.find((facet) => facet.slug === "maker")!.values.map((value) => [value.value, value.count]))
-            .toEqual([["asus", 1], ["xiaomi", FACET_SCOPE_PRODUCT_LIMIT]]);
+            .toEqual([["asus", 1], ["xiaomi", facetLiveScopeLimit()]]);
         const phones = await getStorefrontProducts(db, { page: 1, limit: 2, category: "gaming-phone" });
-        expect(phones.pagination.total).toBe(Math.min(FACET_SCOPE_PRODUCT_LIMIT + 1, planLimits().lists.countCap));
+        expect(phones.pagination.total).toBe(Math.min(facetLiveScopeLimit() + 1, planLimits().lists.countCap));
         expect(phones.facets.map((facet) => facet.slug)).not.toContain("maker");
         const laptops = await getStorefrontProducts(db, { page: 1, limit: 2, category: "laptop" });
         expect(laptops.facets.map((facet) => facet.slug)).toEqual(["maker"]);
@@ -431,9 +442,9 @@ describe("catalogue-scale query plans", () => {
         const statePlans = plans(readsBuyerState);
         expect(statePlans).toHaveLength(2); // page, every facet with count + price range
         for (const plan of statePlans) {
-            expect(plan).toContain("product_buyer_state_category_newest_idx (is_public=? AND category_id=?)");
+            expect(plan).toMatch(CATEGORY_SCOPE_INDEX);
             expect(plan).not.toContain("product_buyer_state_brand_newest_idx");
-            expect(plan).not.toMatch(/SCAN (product_facet_values|attribute_row|option_row|attribute_selected_row|range_selected_row|option_selected_row|option_sku)\b/);
+            expect(plan).not.toMatch(/SCAN (product_facet_values|facet_row|attribute_selected_row|range_selected_row|option_selected_row|option_sku)\b/);
             expect(plan).not.toMatch(/SCAN product_attribute_values\b/);
             expectBuyerStateListing(plan);
         }
@@ -464,9 +475,9 @@ describe("catalogue-scale query plans", () => {
         }]);
         const joined = plans(readsBuyerState).join("\n");
         // Either facet index answers (product, axis, value) with three equalities.
-        expect(joined).toMatch(/SEARCH option_sku (EXISTS )?USING INDEX product_facet_values_(product_idx \(product_id=\? AND facet_key=\? AND value_key=\?|value_idx \(facet_key=\? AND value_key=\? AND product_id=\?)\)/);
-        expect(joined).toMatch(/SEARCH option_row USING COVERING INDEX product_facet_values_product_idx \(product_id=\?\)/);
-        expect(joined).not.toMatch(/SCAN (product_facet_values|option_row|option_sku|option_selected_row|product_variant_option_values)\b/);
+        expect(joined).toMatch(/SEARCH option_sku (EXISTS )?USING (COVERING )?INDEX product_facet_values_(product_idx \(product_id=\? AND facet_key=\? AND value_key=\?|value_idx \(facet_key=\? AND value_key=\? AND product_id=\?)\)/);
+        expect(joined).toMatch(/SEARCH facet_row USING COVERING INDEX product_facet_values_product_idx \(product_id=\?\)/);
+        expect(joined).not.toMatch(/SCAN (product_facet_values|facet_row|option_sku|option_selected_row|product_variant_option_values)\b/);
     });
 
     it("compares products by primary key and their specs by product index, in one wave", async () => {
@@ -667,7 +678,7 @@ describe("catalogue-scale query plans", () => {
         expect(sortedPlans).toHaveLength(2);
         expect(filteredPlans).toHaveLength(2);
         for (const plan of [...sortedPlans, ...filteredPlans]) {
-            expect(plan).toContain("product_buyer_state_category_newest_idx (is_public=? AND category_id=?)");
+            expect(plan).toMatch(CATEGORY_SCOPE_INDEX);
             expectBuyerStateListing(plan);
         }
         const joined = [...sortedPlans, ...filteredPlans].join("\n");
@@ -714,8 +725,8 @@ describe("catalogue-scale query plans", () => {
             .toEqual([["prod_a", 1], ["prod_b", 5], ["prod_c", 10]]);
         for (const plan of listingPlans) expectBuyerStateListing(plan);
         const joined = listingPlans.join("\n");
-        expect(joined).toContain("SEARCH product_buyer_state USING INDEX product_buyer_state_brand_newest_idx (is_public=? AND brand_id=?)");
-        expect(joined).toContain("SEARCH collection_member USING COVERING INDEX product_buyer_state_category_newest_idx");
+        expect(joined).toMatch(new RegExp(`SEARCH product_buyer_state USING (COVERING )?INDEX ${BRAND_SCOPE_INDEX.source}`));
+        expect(joined).toMatch(/SEARCH collection_member USING COVERING INDEX product_buyer_state_category_(newest|price)_idx/);
         expect(cardPlans.length).toBeGreaterThanOrEqual(1);
         for (const plan of cardPlans) {
             expect(plan).toContain("SEARCH product_review_stats USING INDEX sqlite_autoindex_product_review_stats_1 (product_id=?)");
@@ -762,7 +773,7 @@ describe("catalogue-scale query plans", () => {
         expect(shopAll.facets.map((facet) => facet.slug)).not.toContain("maker");
         expect(shopAll.ratingFacet).toEqual([]);
         for (const plan of categoryPlans) {
-            expect(plan).toContain("product_buyer_state_category_newest_idx (is_public=? AND category_id=?)");
+            expect(plan).toMatch(CATEGORY_SCOPE_INDEX);
             expectBuyerStateListing(plan);
         }
         neverReadsReviews([...categoryQueries, ...queries], [...categoryPlans, ...plans(readsBuyerState)]);

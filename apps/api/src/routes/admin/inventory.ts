@@ -776,10 +776,10 @@ app.openapi(defaultAlertLevelRoute, async (c) => {
     const { defaultLowStockThreshold } = c.req.valid("json");
     const result = await setDefaultLowStockThreshold(c.get("db"), defaultLowStockThreshold);
     // The level shapes buyer availability bands for every SKU that uses it,
-    // including each product's stored card band: rebuild those off the
-    // request path; database triggers advance the affected dependencies.
-
-    await rebuildCatalogProjectionsAfterWrite(c, c.get("db"), "inventory");
+    // including each product's stored card band: a band-only lap recomputes
+    // those off the request path (one card SKU probe a product, never a full
+    // rebuild); database triggers advance the affected dependencies.
+    await rebuildCatalogProjectionsAfterWrite(c, c.get("db"), "inventory", "bands");
     return ok(c, result);
 });
 

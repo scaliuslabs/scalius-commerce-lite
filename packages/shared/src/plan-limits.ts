@@ -70,6 +70,10 @@ export interface PlanLimits {
     readonly catalogRebuildChunk: number;
     /** Rebuild chunks one drain runs before it leaves the cursor to the next tick. */
     readonly catalogRebuildChunksPerDrain: number;
+    /** Products one band-only lap chunk recomputes (one statement: a card SKU probe each). */
+    readonly catalogBandRefreshChunk: number;
+    /** Products the nightly drift check compares with their sources (a rotating window). */
+    readonly catalogDriftCheckPerNight: number;
     /** Chunks (90 items each) of due bulk runs one drain commits; the rest continue next tick. */
     readonly bulkRunChunksPerDrain: number;
     /**
@@ -107,6 +111,15 @@ export interface PlanLimits {
      * Batched actions (trash, status, category) always take 90.
      */
     readonly bulkPerRowSlice: number;
+    /**
+     * Products a narrowed listing (a search, a filter, a selection) counts its
+     * attribute and option facets over, reading each product's facet rows
+     * (16 a product on the scale-proof store, about 40 rows a product with
+     * its scope). A plain category, brand or shop-all page reads the
+     * maintained counts at any size instead, and a larger narrowed category
+     * or brand shows its own counts.
+     */
+    readonly facetLiveProducts: number;
   };
   /**
    * Items one batch create (`products.batch_create`, `categories.batch_create`,
@@ -161,6 +174,8 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       nightlySoldRecommendationLimit: 5,
       catalogRebuildChunk: 90,
       catalogRebuildChunksPerDrain: 1,
+      catalogBandRefreshChunk: 1_000,
+      catalogDriftCheckPerNight: 450,
       bulkRunChunksPerDrain: 3, bundledAppSyncsPerTick: 1,
     }),
     maintenance: Object.freeze({
@@ -172,7 +187,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       orphanAttachmentsPerRun: 10,
       limitScale: 0.2,
     }),
-    lists: Object.freeze({ countCap: 1_000, maxOffset: 1_000, bulkPerRowSlice: 8 }),
+    lists: Object.freeze({ countCap: 1_000, maxOffset: 1_000, bulkPerRowSlice: 8, facetLiveProducts: 300 }),
     batchCreates: Object.freeze({ products: 4, categories: 12, brands: 19 }),
     plugins: Object.freeze({
       cpuMs: 50,
@@ -202,6 +217,8 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       nightlySoldRecommendationLimit: 200,
       catalogRebuildChunk: 900,
       catalogRebuildChunksPerDrain: 10,
+      catalogBandRefreshChunk: 5_000,
+      catalogDriftCheckPerNight: 9_000,
       bulkRunChunksPerDrain: 12, bundledAppSyncsPerTick: 1_000,
     }),
     maintenance: Object.freeze({
@@ -213,7 +230,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       orphanAttachmentsPerRun: 50,
       limitScale: 1,
     }),
-    lists: Object.freeze({ countCap: 10_000, maxOffset: 10_000, bulkPerRowSlice: 90 }),
+    lists: Object.freeze({ countCap: 10_000, maxOffset: 10_000, bulkPerRowSlice: 90, facetLiveProducts: 5_000 }),
     batchCreates: Object.freeze({ products: 20, categories: 50, brands: 50 }),
     plugins: Object.freeze({
       cpuMs: 200,

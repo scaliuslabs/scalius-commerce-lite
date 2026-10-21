@@ -1,5 +1,5 @@
-// Source definitions of two trigger-maintained projections, shared by their
-// migrations (0139, 0141) and the drift check and repair that heal them.
+// Source definitions of trigger-maintained projections, shared by their
+// migrations (0139, 0141, 0174) and the drift check and repair that heal them.
 // Pure SQL text: no bindings or database access.
 
 const REAL_STATUSES = "('pending', 'processing', 'confirmed', 'shipped', 'delivered', 'completed')";
@@ -68,3 +68,25 @@ export const conversationInboxCountsDriftSql = symmetricDifference(
   `SELECT scope, unread, open, unassigned_open FROM conversation_inbox_counts
     WHERE scope = '*' OR unread <> 0 OR open <> 0 OR unassigned_open <> 0`,
 );
+
+/**
+ * `product_facet_scope_counts` (0174) from its sources: every public product
+ * counted once per scope (its category, its brand) for each of its facet
+ * values, the scope's products, the other scope and its whole-star rating;
+ * a facet value's sample is the scope's smallest product with it (the
+ * triggers then keep a sample until its product leaves). The migration's
+ * backfill and the rebuild's repair (one statement).
+ */
+export const facetScopeCountsSelect = `SELECT scope.scope_kind, scope.scope_id, item.facet_kind, item.facet_key, item.value_key, count(DISTINCT scope.product_id) AS product_count,
+  CASE WHEN item.facet_kind IN ('attribute', 'option') THEN MIN(scope.product_id) END AS sample_product_id
+FROM (SELECT b.product_id, 'category' AS scope_kind, b.category_id AS scope_id FROM product_buyer_state b WHERE b.is_public = 1 AND b.category_id IS NOT NULL
+  UNION ALL SELECT b.product_id, 'brand', b.brand_id FROM product_buyer_state b WHERE b.is_public = 1 AND b.brand_id IS NOT NULL) scope
+JOIN (SELECT facet.product_id, facet.facet_kind, facet.facet_key, facet.value_key FROM product_facet_values facet
+  UNION ALL SELECT b.product_id, 'products', '', '' FROM product_buyer_state b
+  UNION ALL SELECT b.product_id, 'brand', 'brand', b.brand_id FROM product_buyer_state b WHERE b.brand_id IS NOT NULL
+  UNION ALL SELECT b.product_id, 'category', 'category', b.category_id FROM product_buyer_state b WHERE b.category_id IS NOT NULL
+  UNION ALL SELECT stats.product_id, 'rating', 'rating', CAST(CAST(stats.rating_avg_centi / 100 AS INTEGER) AS TEXT)
+    FROM product_review_stats stats WHERE stats.rating_avg_centi IS NOT NULL) item
+  ON item.product_id = scope.product_id AND item.facet_kind != scope.scope_kind
+GROUP BY scope.scope_kind, scope.scope_id, item.facet_kind, item.facet_key, item.value_key`;
+

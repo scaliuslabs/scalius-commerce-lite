@@ -108,6 +108,39 @@ export const productFacetPublicCounts = sqliteTable("product_facet_public_counts
     check("product_facet_public_counts_nonnegative", sql`${table.productCount} >= 0`),
 ]);
 
+export const PRODUCT_FACET_SCOPE_KINDS = ["category", "brand"] as const;
+/**
+ * What a scope count counts: a facet value (`attribute`, `option`), the
+ * other scope's members (`brand` in a category, `category` in a brand), the
+ * scope's public products (`products`, key and value '') and its products by
+ * whole-star rating (`rating`, value '0'-'5').
+ */
+export const PRODUCT_FACET_SCOPE_COUNT_KINDS = ["attribute", "option", "brand", "category", "products", "rating"] as const;
+
+/**
+ * Exact public DISTINCT-product counts per category and per brand (migration
+ * 0174), maintained by triggers with the facet/buyer/review-stat writes. A
+ * scope is a product's own category or brand; a category subtree sums its
+ * published categories' rows, so listings of any size count facets without
+ * reading their products.
+ */
+export const productFacetScopeCounts = sqliteTable("product_facet_scope_counts", {
+    scopeKind: text("scope_kind", { enum: PRODUCT_FACET_SCOPE_KINDS }).notNull(),
+    scopeId: text("scope_id").notNull(),
+    facetKind: text("facet_kind", { enum: PRODUCT_FACET_SCOPE_COUNT_KINDS }).notNull(),
+    facetKey: text("facet_key").notNull(),
+    valueKey: text("value_key").notNull(),
+    productCount: integer("product_count").notNull(),
+    /** A facet value's row: one public product of the scope that has it (its label, order and axis on the listing). */
+    sampleProductId: text("sample_product_id"),
+}, (table) => [
+    // Kind before scope: shop-all reads one kind of every scope (each brand's products) as one range.
+    primaryKey({ columns: [table.scopeKind, table.facetKind, table.scopeId, table.facetKey, table.valueKey] }),
+    check("product_facet_scope_counts_scope_kind", sql`${table.scopeKind} IN ('category', 'brand')`),
+    check("product_facet_scope_counts_kind", sql`${table.facetKind} IN ('attribute', 'option', 'brand', 'category', 'products', 'rating')`),
+    check("product_facet_scope_counts_nonnegative", sql`${table.productCount} >= 0`),
+]);
+
 export const PRODUCT_BUYER_AVAILABILITY_BANDS = ["untracked", "out_of_stock", "low_stock", "in_stock"] as const;
 
 /**
@@ -167,6 +200,17 @@ export const productBuyerState = sqliteTable("product_buyer_state", {
         table.availableForSale, table.categoryId, table.productCreatedAt,
     ),
     index("product_buyer_state_scope_idx").on(table.isPublic, table.productId, table.fromMinor, table.toMinor),
+    // 0174: a listing's highest price is one probe (shop-all, and per category or brand of a large scope),
+    // and a large category or brand pages by price through its own index.
+    index("product_buyer_state_to_idx").on(table.isPublic, table.toMinor),
+    index("product_buyer_state_category_price_idx").on(table.isPublic, table.categoryId, table.fromMinor, table.productId),
+    index("product_buyer_state_category_to_idx").on(table.isPublic, table.categoryId, table.toMinor),
+    index("product_buyer_state_brand_price_idx")
+        .on(table.isPublic, table.brandId, table.fromMinor, table.productId)
+        .where(sql`${table.brandId} IS NOT NULL`),
+    index("product_buyer_state_brand_to_idx")
+        .on(table.isPublic, table.brandId, table.toMinor)
+        .where(sql`${table.brandId} IS NOT NULL`),
 ]);
 
 export const PRODUCT_RECOMMENDATION_REASONS = ["also_bought", "similar", "popular", "new_arrivals"] as const;

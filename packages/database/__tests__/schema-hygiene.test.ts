@@ -17,7 +17,9 @@ describe("canonical schema hygiene", () => {
         RETIRED_PRE_CONSOLIDATION_TABLES.has(table));
 
       expect(d1Tables).toEqual(tursoTables);
-      expect(d1Tables).toHaveLength(216);
+      expect(d1Tables).toHaveLength(217);
+      // 0174: public facet counts per category and brand.
+      expect(d1Tables).toContain("product_facet_scope_counts");
       // 0173: payment methods a provider vaulted for later charges.
       expect(d1Tables).toContain("customer_payment_methods");
       // 0172: refund commands and the order lines they are for.

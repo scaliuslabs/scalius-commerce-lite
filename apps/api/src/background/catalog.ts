@@ -10,15 +10,19 @@
 //   once, and the next lap starts a day after this one started, so a small
 //   catalogue is not re-ranked all day and a large one still gets a lap a day
 //   up to the plan's per-run size times the runs in a day.
-// - The buyer-state/facet projection rebuild: a request stores its cursor in
-//   `system_kv` ("" = from the start); every drain runs a bounded number of
-//   keyset chunks and saves the cursor (compare-and-set, so a rebuild
-//   requested meanwhile restarts instead of being overwritten) until done.
+// - The buyer-state/facet projection rebuild: a request stores a lap in
+//   `system_kv`; every drain runs a bounded number of keyset chunks and
+//   saves the lap (compare-and-set, so a request that lands meanwhile wins)
+//   until done. A request while a lap runs keeps its position and moves its
+//   end to where it is, one circle later, so requests that keep arriving
+//   never send it back to the first product. A band-only lap (a store-wide
+//   band input changed) recomputes stored bands alone, in larger chunks.
 import type { Database } from "@scalius/database/client";
 import { systemKv } from "@scalius/database/schema";
 import { getSystemKv, putSystemKv } from "@scalius/core/utils/system-kv";
 import { planLimits } from "@scalius/shared/plan-limits";
 import { and, eq } from "drizzle-orm";
+import type { CatalogProjectionRebuildResult } from "@scalius/core/modules/products";
 import { afterResponse, type BackgroundCaller } from "./after-response";
 
 /** `system_kv`: the product id the projection rebuild continues after ("" = from the start); absent = no rebuild. */
@@ -85,19 +89,87 @@ export async function rotateRecommendations(db: Database, nowSeconds = Math.floo
   return queued.length + ids.length;
 }
 
-/** Starts (or restarts) the projection rebuild; the next drain runs it. */
-export async function requestCatalogProjectionRebuild(db: Database): Promise<void> {
-  await putSystemKv(db, PROJECTION_REBUILD_CURSOR_KEY, "");
+/**
+ * What a rebuild lap recomputes: `full` both projections; `bands` only the
+ * stored availability band of each product (a store-wide input of the band
+ * changed: the default low-stock level), one cheap statement per chunk.
+ */
+export type CatalogRebuildMode = "full" | "bands";
+
+/**
+ * The durable state of a rebuild lap (`system_kv`, JSON). The lap walks
+ * product ids upward from `after`; with `stop` set it wraps once at the end
+ * and finishes at `stop`, so it visits every product once after the latest
+ * request without going back over the products it already did.
+ */
+export interface CatalogRebuildState {
+  mode: CatalogRebuildMode;
+  /** The last product id done (null: from the first product). */
+  after: string | null;
+  /** Where a wrapped lap ends (inclusive); null: at the last product. */
+  stop: string | null;
+  /** The lap passed the last product and continues from the first. */
+  wrapped: boolean;
+  /** Recount the public facet counts before the next chunk (a full request asked for it). */
+  repairCounts: boolean;
+}
+
+/** Reads the stored lap; the pre-lap cursor ("" or a product id) reads as a full lap from it. */
+export function parseCatalogRebuildState(raw: string | null): CatalogRebuildState | null {
+  if (raw === null) return null;
+  if (!raw.startsWith("{")) return { mode: "full", after: raw || null, stop: null, wrapped: false, repairCounts: raw === "" };
+  try {
+    const value = JSON.parse(raw) as Partial<CatalogRebuildState>;
+    const id = (field: unknown) => (typeof field === "string" && field !== "" ? field : null);
+    return {
+      mode: value.mode === "bands" ? "bands" : "full",
+      after: id(value.after),
+      stop: id(value.stop),
+      wrapped: value.wrapped === true,
+      repairCounts: value.repairCounts === true,
+    };
+  } catch {
+    return { mode: "full", after: null, stop: null, wrapped: false, repairCounts: true };
+  }
+}
+
+/**
+ * The lap after a new request. A running lap keeps its position and now
+ * ends where it is, one circle later: every product is visited after the
+ * request and none twice. A full request turns a band lap into a full one.
+ */
+export function nextCatalogRebuildState(current: CatalogRebuildState | null, mode: CatalogRebuildMode): CatalogRebuildState {
+  const lapMode: CatalogRebuildMode = mode === "full" || current?.mode === "full" ? "full" : "bands";
+  const repairCounts = mode === "full" || current?.repairCounts === true;
+  if (!current || (current.after === null && !current.wrapped)) {
+    return { mode: lapMode, after: null, stop: null, wrapped: false, repairCounts };
+  }
+  return { mode: lapMode, after: current.after, stop: current.after, wrapped: false, repairCounts };
+}
+
+/**
+ * Requests a rebuild lap (`full` unless only bands changed); the next drain
+ * runs it. A lap already running keeps its progress, so requests that keep
+ * arriving never send it back to the first product.
+ */
+export async function requestCatalogProjectionRebuild(db: Database, mode: CatalogRebuildMode = "full"): Promise<void> {
+  const current = parseCatalogRebuildState(await getSystemKv(db, PROJECTION_REBUILD_CURSOR_KEY));
+  await putSystemKv(db, PROJECTION_REBUILD_CURSOR_KEY, JSON.stringify(nextCatalogRebuildState(current, mode)));
 }
 
 /**
  * Records the rebuild request with the write (the scheduled drain runs it if
  * nothing else does) and runs its first chunks right after the response.
- * Never throws: a failed request is logged, and the nightly rebuild heals.
+ * Never throws: a failed request is logged, and the nightly drift check heals.
  */
-export async function rebuildCatalogProjectionsAfterWrite(caller: BackgroundCaller, db: Database, source: string): Promise<void> {
+export async function rebuildCatalogProjectionsAfterWrite(
+  caller: BackgroundCaller,
+  db: Database,
+  source: string,
+  mode: CatalogRebuildMode = "full",
+): Promise<void> {
   try {
-    await requestCatalogProjectionRebuild(db);
+    await requestCatalogProjectionRebuild(db, mode);
   } catch (error) {
     console.warn(`[${source}] projection rebuild request failed`, error instanceof Error ? error.name : "unknown");
     return;
@@ -110,27 +182,40 @@ export function projectionRebuildDueProbe(db: Database) {
   return db.select({ key: systemKv.key }).from(systemKv).where(eq(systemKv.key, PROJECTION_REBUILD_CURSOR_KEY)).limit(1);
 }
 
-/** Runs up to this plan's chunks of a requested rebuild. Returns the products recomputed. */
+/**
+ * Runs up to this plan's chunks of a requested lap. Returns the products
+ * recomputed. Each save is a compare-and-set on the stored state: a request
+ * that lands meanwhile wins, and the next drain continues from it.
+ */
 export async function drainCatalogProjectionRebuild(db: Database): Promise<number> {
-  let cursor = await getSystemKv(db, PROJECTION_REBUILD_CURSOR_KEY);
-  if (cursor === null) return 0;
-  const { rebuildCatalogProjections } = await import("@scalius/core/modules/products");
+  let raw = await getSystemKv(db, PROJECTION_REBUILD_CURSOR_KEY);
+  let state = parseCatalogRebuildState(raw);
+  if (raw === null || state === null) return 0;
+  const products = await import("@scalius/core/modules/products");
   const limits = planLimits().background;
   let processed = 0;
   for (let chunk = 0; chunk < limits.catalogRebuildChunksPerDrain; chunk += 1) {
-    const result = await rebuildCatalogProjections(db, { afterProductId: cursor || null, limit: limits.catalogRebuildChunk });
+    const range = { afterProductId: state.after, untilProductId: state.wrapped ? state.stop : null };
+    const result: CatalogProjectionRebuildResult = state.mode === "bands"
+      ? await products.refreshCatalogAvailabilityBands(db, { ...range, limit: limits.catalogBandRefreshChunk })
+      : await products.rebuildCatalogProjections(db, { ...range, limit: limits.catalogRebuildChunk, repairFacetCounts: state.repairCounts });
     processed += result.processed;
-    const where = and(eq(systemKv.key, PROJECTION_REBUILD_CURSOR_KEY), eq(systemKv.value, cursor));
-    if (result.done) {
+    const where = and(eq(systemKv.key, PROJECTION_REBUILD_CURSOR_KEY), eq(systemKv.value, raw));
+    let next: CatalogRebuildState | null = null;
+    if (!result.done) next = { ...state, after: result.nextAfterProductId, repairCounts: false };
+    // At the last product a lap with a stop wraps to the first product, once.
+    else if (state.stop !== null && !state.wrapped) next = { ...state, after: null, wrapped: true, repairCounts: false };
+    if (next === null) {
       // The rebuild's atomic batches advance `store` only when they repair drift.
       await db.delete(systemKv).where(where);
       return processed;
     }
-    const next = result.nextAfterProductId ?? "";
-    const saved = await db.update(systemKv).set({ value: next }).where(where).returning({ key: systemKv.key });
-    // A rebuild requested meanwhile reset the cursor: leave it for the next drain.
+    const value = JSON.stringify(next);
+    const saved = await db.update(systemKv).set({ value }).where(where).returning({ key: systemKv.key });
+    // A request landed meanwhile: its state is the next drain's.
     if (saved.length === 0) return processed;
-    cursor = next;
+    raw = value;
+    state = next;
   }
   return processed;
 }

@@ -436,9 +436,12 @@ export async function getStorefrontFeedProducts(
     const boundsMarket = marketPricing && (params.minPrice !== undefined || params.maxPrice !== undefined)
         ? await marketPricing.context
         : null;
+    const priceBounds = priceFilterBoundsMinor(params, boundsMarket);
+    // A live list prices its SKUs in the market: any list price can move a product across the bounds.
+    if (priceBounds.marketListPrices) deps.table("price_list_prices");
     conditions.push(...buildStorefrontProductConditions(db, {
         ...params,
-        ...priceFilterBoundsMinor(params, boundsMarket),
+        ...priceBounds,
     }, {
         includeLookupHandles: true,
         includeVariantLookups: true,

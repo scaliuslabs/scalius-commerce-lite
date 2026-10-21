@@ -587,6 +587,43 @@ export async function priceProductCards<T extends BuyerPricingMinor & { id: stri
     });
 }
 
+/**
+ * The market card price of each product (its lowest buyable SKU's resolved
+ * price, as `priceProductCards` shows it) and its highest, from one read of
+ * the products' buyer SKUs. Each product's facts and list prices are
+ * declared, so a listing ordered or bounded by them depends on them.
+ */
+export async function marketCardPrices(
+    db: Database,
+    context: MarketPriceContext,
+    productIds: readonly string[],
+): Promise<Map<string, { amountMinor: number; maxAmountMinor: number }>> {
+    const ids = [...new Set(productIds)];
+    const prices = new Map<string, { amountMinor: number; maxAmountMinor: number }>();
+    if (ids.length === 0) return prices;
+    deps.products(ids);
+    deps.marketProductPricing(context.marketId, ids);
+    const byProduct = new Map<string, CardSkuRow[]>();
+    for (const sku of await readCardSkus(db, context.marketId, ids)) {
+        const list = byProduct.get(sku.productId) ?? [];
+        list.push(sku);
+        byProduct.set(sku.productId, list);
+    }
+    for (const [productId, skus] of byProduct) {
+        const card = cardPriceOf(skus.map((sku) => ({
+            skuId: sku.skuId,
+            available: Number(sku.available) === 1,
+            resolved: resolvePublicSkuPrice(
+                context,
+                { priceMinor: Number(sku.priceMinor), effectiveMinor: Number(sku.effectiveMinor) },
+                parseMarketListPrices(sku.listPrices),
+            ),
+        })));
+        if (card) prices.set(productId, { amountMinor: card.card.resolved.amountMinor, maxAmountMinor: card.maxAmountMinor });
+    }
+    return prices;
+}
+
 /** A base amount (a price filter bound, a facet edge) in the market: FX only, lists never move it. */
 export function marketAmountMinor(context: MarketPriceContext | null | undefined, baseMinor: number): number {
     if (!context?.fx) return baseMinor;

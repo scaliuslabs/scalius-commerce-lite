@@ -247,14 +247,52 @@ export function presentBuyerPriceRange(
 }
 
 /**
+ * A price filter in a market whose public lists are live: its bounds in the
+ * market's currency, and what decides a SKU's price there. A SKU with a live
+ * list price (in the market's currency, at quantity 1) costs the winning one
+ * (`resolvePrice`: sale before market list, then the higher priority, the
+ * lower amount, the smaller list id), rounded half-up to the increment; any
+ * other SKU its FX-derived price, which the base bounds already express.
+ */
+export interface MarketListPriceFilter {
+    marketId: string;
+    currencyCode: string;
+    atSeconds: number;
+    incrementMinor: number;
+    minMarketMinor?: number;
+    maxMarketMinor?: number;
+}
+
+/** The winning live public list amount of a SKU (a column reference) in a market, rounded to its increment; NULL without one. */
+export function marketListSkuPriceSql(variantId: SQL, market: MarketListPriceFilter): SQL<number | null> {
+    const increment = Math.max(1, Math.trunc(market.incrementMinor));
+    const winner = sql`(SELECT winner_price.amount_minor FROM price_list_prices AS winner_price
+        INNER JOIN price_lists AS winner_list ON winner_list.id = winner_price.price_list_id
+        WHERE winner_price.variant_id = ${variantId} AND winner_price.currency_code = ${market.currencyCode}
+          AND winner_price.min_quantity = 1 AND winner_list.market_id = ${market.marketId}
+          AND winner_list.status = 'active' AND winner_list.kind <> 'segment'
+          AND (winner_list.starts_at IS NULL OR winner_list.starts_at <= ${market.atSeconds})
+          AND (winner_list.ends_at IS NULL OR winner_list.ends_at > ${market.atSeconds})
+        ORDER BY CASE winner_list.kind WHEN 'sale' THEN 0 ELSE 1 END, winner_list.priority DESC,
+            winner_price.amount_minor, winner_list.id
+        LIMIT 1)`;
+    if (increment <= 1) return sql<number | null>`${winner}`;
+    const step = sql.raw(String(increment));
+    return sql<number | null>`MAX(${step}, ((2 * ${winner} + ${step}) / (2 * ${step})) * ${step})`;
+}
+
+/**
  * True when at least one SKU in the same buyer pool used for card pricing is
  * inside the requested effective-price range (minor units). This avoids the
  * common min/max shortcut where a product with only 50 and 150 SKUs
- * incorrectly matches an 80–120 filter.
+ * incorrectly matches an 80–120 filter. In a market with live lists
+ * (`market`), a SKU with a list price is tested by it, in the market's
+ * currency; the others by the base bounds.
  */
 export function buyerCatalogHasSkuInPriceRange(
     minPriceMinor?: number | SQL<number>,
     maxPriceMinor?: number | SQL<number>,
+    market?: MarketListPriceFilter,
 ): SQL {
     const buyerFilterAvailable = channelAvailableStockSql(skuStockRefs("buyer_filter_sku"));
     const buyerAvailableSkuAvailable = channelAvailableStockSql(skuStockRefs("buyer_filter_available_sku"));
@@ -272,8 +310,18 @@ export function buyerCatalogHasSkuInPriceRange(
         discountBps: sql`${products.discountBps}`,
         discountAmountMinor: sql`${products.discountAmountMinor}`,
     });
-    const lowerBound = minPriceMinor === undefined ? sql`` : sql`AND ${effectivePrice} >= ${minPriceMinor}`;
-    const upperBound = maxPriceMinor === undefined ? sql`` : sql`AND ${effectivePrice} <= ${maxPriceMinor}`;
+    const baseInRange = and(
+        minPriceMinor === undefined ? undefined : sql`${effectivePrice} >= ${minPriceMinor}`,
+        maxPriceMinor === undefined ? undefined : sql`${effectivePrice} <= ${maxPriceMinor}`,
+    );
+    const listPrice = market ? marketListSkuPriceSql(sql.raw("buyer_filter_sku.id"), market) : null;
+    const listInRange = market ? and(
+        market.minMarketMinor === undefined ? undefined : sql`${listPrice} >= ${market.minMarketMinor}`,
+        market.maxMarketMinor === undefined ? undefined : sql`${listPrice} <= ${market.maxMarketMinor}`,
+    ) : undefined;
+    const inRange = listPrice
+        ? sql`AND (CASE WHEN ${listPrice} IS NULL THEN ${baseInRange ?? sql`1 = 1`} ELSE ${listInRange ?? sql`1 = 1`} END)`
+        : baseInRange ? sql`AND ${baseInRange}` : sql``;
 
     return sql`EXISTS (
         SELECT 1
@@ -319,7 +367,6 @@ export function buyerCatalogHasSkuInPriceRange(
                     )
               )
           )
-          ${lowerBound}
-          ${upperBound}
+          ${inRange}
     )`;
 }

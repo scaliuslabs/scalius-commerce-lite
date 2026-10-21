@@ -27,6 +27,7 @@ import {
     productBuyerState,
     productFacetValues,
     productFacetPublicCounts,
+    productFacetScopeCounts,
     productOptionDefinitions,
     productOptionValues,
     productVariantOptionValues,
@@ -35,8 +36,9 @@ import {
 } from "@scalius/database/schema";
 import { chunkForD1, type Database, safeBatch } from "@scalius/database/client";
 import { advanceCacheDeps } from "@scalius/database/cache-dep-writes";
+import { facetScopeCountsSelect } from "@scalius/database/derived-projections";
 import type { BatchItem } from "drizzle-orm/batch";
-import { and, asc, eq, gt, isNull, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, lte, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { OPTION_FACET_KEY_PREFIX } from "@scalius/shared/catalog-attributes";
 import { buildBuyerCatalogPricingProjection } from "./buyer-projection";
@@ -107,16 +109,31 @@ const EVERY_PRODUCT: ProductScope = { on: () => sql`1 = 1`, pricing: undefined }
  *   the store default), as `resolveBuyerAvailabilityBand`, over the units
  *   the online store sells (its linked locations).
  */
-export function selectLiveCatalogBuyerState(db: Database, scope: SQL, pricingScope: SQL | undefined = scope) {
-    const pricing = buildBuyerCatalogPricingProjection(db, { productScope: pricingScope });
-    const cardSku = alias(productVariants, "buyer_state_card_sku");
-    const effective = sql`${pricing.effectivePriceMinor}`;
+/**
+ * The stored availability band of a card SKU (an aliased `product_variants`
+ * row; a missing row is out of stock): its own low-stock level, else the
+ * store default, over the units the online store sells.
+ */
+function cardAvailabilityBandSql(cardSku: ReturnType<typeof alias<typeof productVariants, string>>): SQL<string> {
     const available = channelAvailableStockSql({
         id: sql`${cardSku.id}`,
         stock: sql`${cardSku.stock}`,
         reservedStock: sql`${cardSku.reservedStock}`,
     });
     const threshold = sql`COALESCE(${cardSku.lowStockThreshold}, ${storeDefaultLowStockThresholdSql()})`;
+    return sql<string>`CASE
+                WHEN ${cardSku.id} IS NULL THEN 'out_of_stock'
+                WHEN ${cardSku.trackInventory} = 0 THEN 'untracked'
+                WHEN ${available} <= 0 THEN 'out_of_stock'
+                WHEN ${threshold} > 0 AND ${available} <= ${threshold} THEN 'low_stock'
+                ELSE 'in_stock'
+            END`;
+}
+
+export function selectLiveCatalogBuyerState(db: Database, scope: SQL, pricingScope: SQL | undefined = scope) {
+    const pricing = buildBuyerCatalogPricingProjection(db, { productScope: pricingScope });
+    const cardSku = alias(productVariants, "buyer_state_card_sku");
+    const effective = sql`${pricing.effectivePriceMinor}`;
     return db
         .select({
             productId: products.id,
@@ -149,13 +166,7 @@ export function selectLiveCatalogBuyerState(db: Database, scope: SQL, pricingSco
             hasDiscount: sql<number>`COALESCE(${pricing.hasDiscount}, 0)`.as("buyer_state_has_discount"),
             availableForSale: sql<number>`COALESCE(${pricing.availableForSale}, 0)`.as("buyer_state_available_for_sale"),
             hasCustomerOptions: sql<number>`COALESCE(${pricing.hasCustomerOptions}, 0)`.as("buyer_state_has_customer_options"),
-            availabilityBand: sql<string>`CASE
-                WHEN ${cardSku.id} IS NULL THEN 'out_of_stock'
-                WHEN ${cardSku.trackInventory} = 0 THEN 'untracked'
-                WHEN ${available} <= 0 THEN 'out_of_stock'
-                WHEN ${threshold} > 0 AND ${available} <= ${threshold} THEN 'low_stock'
-                ELSE 'in_stock'
-            END`.as("buyer_state_availability_band"),
+            availabilityBand: cardAvailabilityBandSql(cardSku).as("buyer_state_availability_band"),
             refreshedAt: sql<number>`unixepoch()`.as("buyer_state_refreshed_at"),
         })
         .from(products)
@@ -406,6 +417,160 @@ export function catalogProjectionFillStatements(db: Database): SQLiteBatchItem[]
     return [...facetRefreshStatements(db, EVERY_PRODUCT), buyerStateUpsert(db, EVERY_PRODUCT)];
 }
 
+/**
+ * One read-only statement: the products among `productIds` (at most 90)
+ * whose stored projections differ from what their sources give now, in
+ * either direction (a stored buyer row or facet row that the live projection
+ * does not reproduce, or a live one that is not stored).
+ */
+const FACET_COLUMNS = "owner_id, product_id, variant_id, facet_kind, facet_key, value_key, value_label, value_number, sort_order";
+
+function driftedProductsStatement(db: Database, after: string | null, size: number): SQL {
+    // The window: the next `size` product ids, an index range read where it is used.
+    const window = sql`(SELECT drift_window.id FROM products AS drift_window
+        WHERE ${after === null ? sql`1 = 1` : sql`drift_window.id > ${after}`}
+        ORDER BY drift_window.id LIMIT ${sql.raw(String(Math.trunc(size)))})`;
+    const scope: ProductScope = { on: (column) => sql`${column} IN ${window}`, pricing: sql`${products.id} IN ${window}` };
+    const live = selectLiveCatalogBuyerState(db, scope.on(sql`${products.id}`), scope.pricing);
+    const liveFacets = selectLiveAttributeFacetRows(db, scope.on(sql`${productAttributeValues.productId}`))
+        .union(selectLiveOptionFacetRows(db, scope.on(sql`${productVariants.productId}`)) as never);
+    // The live selects name their columns after their sources (two are
+    // `id`), so each CTE names them by position; each projection is read
+    // once (two copies of the live buyer state pass D1's 100 KB statement
+    // limit). `refreshed_at` is the live select's clock, never compared.
+    const buyerColumns = BUYER_STATE_COLUMNS.map(([, column]) => column).join(", ");
+    return sql`WITH drift_live_rows (product_id, ${sql.raw(buyerColumns)}, refreshed_at) AS (${live.getSQL()}),
+            drift_live_facets (${sql.raw(FACET_COLUMNS)}) AS (${liveFacets.getSQL()}),
+            drift_stored_rows AS (SELECT product_id, ${sql.raw(buyerColumns)} FROM product_buyer_state
+                WHERE ${scope.on(sql.raw("product_buyer_state.product_id"))}),
+            drift_stored_facets AS (SELECT ${sql.raw(FACET_COLUMNS)} FROM product_facet_values
+                WHERE ${scope.on(sql.raw("product_facet_values.product_id"))})
+        SELECT 'drift' AS kind, drifted.product_id AS product_id, 0 AS products FROM (
+            SELECT buyer_missing.product_id FROM (
+                SELECT product_id, ${sql.raw(buyerColumns)} FROM drift_live_rows
+                EXCEPT SELECT * FROM drift_stored_rows) AS buyer_missing
+            UNION SELECT buyer_stale.product_id FROM (
+                SELECT * FROM drift_stored_rows
+                EXCEPT SELECT product_id, ${sql.raw(buyerColumns)} FROM drift_live_rows) AS buyer_stale
+            UNION SELECT facet_missing.product_id FROM (
+                SELECT * FROM drift_live_facets EXCEPT SELECT * FROM drift_stored_facets) AS facet_missing
+            UNION SELECT facet_stale.product_id FROM (
+                SELECT * FROM drift_stored_facets EXCEPT SELECT * FROM drift_live_facets) AS facet_stale
+        ) AS drifted
+        UNION ALL SELECT 'window', max(window_end.id), count(*) FROM ${window} AS window_end`;
+}
+
+export interface CatalogProjectionDriftResult {
+    /** Products compared. */
+    checked: number;
+    /** Products whose stored projections were wrong; they are now repaired. */
+    repaired: string[];
+    nextAfterProductId: string | null;
+    done: boolean;
+}
+
+/**
+ * A drift check of the next `limit` products after `afterProductId` (id
+ * order): one read-only comparison per 90 products, and a repair batch only
+ * for the products that differ. Cheaper than a rebuild (nothing is written
+ * where nothing drifted, and the public facet counts are not recounted), so
+ * a nightly pass can visit a bounded window and request a full rebuild only
+ * when it finds drift.
+ */
+export async function checkCatalogProjectionDrift(
+    db: Database,
+    input: { afterProductId?: string | null; limit: number },
+): Promise<CatalogProjectionDriftResult> {
+    const limit = Math.max(1, Math.trunc(input.limit));
+    let after = input.afterProductId ?? null;
+    let checked = 0;
+    const repaired: string[] = [];
+    while (checked < limit) {
+        const pageSize = Math.min(CATALOG_PROJECTION_PRODUCTS_PER_CALL, limit - checked);
+        type Row = { kind: string; product_id: string | null; products: number };
+        const rows = (await db.all<Row | [string, string | null, number]>(driftedProductsStatement(db, after, pageSize)))
+            .map((row): Row => (Array.isArray(row) ? { kind: row[0], product_id: row[1], products: Number(row[2]) } : row));
+        const window = rows.find((row) => row.kind === "window");
+        const size = Number(window?.products ?? 0);
+        if (!window?.product_id || size === 0) return { checked, repaired, nextAfterProductId: null, done: true };
+        const drifted = rows.filter((row) => row.kind === "drift" && typeof row.product_id === "string").map((row) => row.product_id!);
+        if (drifted.length > 0) {
+            // Precise keys: only the drifted products' pages change.
+            await safeBatch(db, catalogProjectionRefreshStatements(db, drifted) as never);
+            repaired.push(...drifted);
+        }
+        checked += size;
+        after = window.product_id;
+        if (size < pageSize) return { checked, repaired, nextAfterProductId: null, done: true };
+    }
+    return { checked, repaired, nextAfterProductId: after, done: false };
+}
+
+/**
+ * The projection's definition as text: the SQL of one product's refresh.
+ * A deploy whose definition is unchanged cannot have left drift behind
+ * (the previous version wrote the same projection in the same batches), so
+ * the post-deploy rebuild runs only when this text changes.
+ */
+export function catalogProjectionDefinition(db: Database): string {
+    return catalogProjectionRefreshStatements(db, ["prod_definition"])
+        .map((statement) => (statement as unknown as { toSQL(): { sql: string } }).toSQL().sql)
+        .join(";\n");
+}
+
+/** Products one band refresh statement covers (a primary-key probe of the card SKU each). */
+export const CATALOG_BAND_REFRESH_MAX_LIMIT = 5_000;
+
+/**
+ * Recomputes only the stored availability band of the next `limit` products
+ * after `afterProductId` (up to `untilProductId`), from each product's stored
+ * card SKU: the lap a store-wide band input (the default low-stock level)
+ * needs, instead of a full rebuild. One id read and one batch per call; a
+ * row is written only when its band differs, and the batch runs in coarse
+ * mode (a changed band advances `store` once).
+ */
+export async function refreshCatalogAvailabilityBands(
+    db: Database,
+    input: { afterProductId?: string | null; untilProductId?: string | null; limit: number },
+): Promise<CatalogProjectionRebuildResult> {
+    const limit = Math.min(Math.max(Math.trunc(input.limit), 1), CATALOG_BAND_REFRESH_MAX_LIMIT);
+    const after = input.afterProductId ?? null;
+    const until = input.untilProductId ?? null;
+    const rows = await db
+        .select({ id: productBuyerState.productId })
+        .from(productBuyerState)
+        .where(and(
+            after === null ? undefined : gt(productBuyerState.productId, after),
+            until === null ? undefined : lte(productBuyerState.productId, until),
+        ))
+        .orderBy(asc(productBuyerState.productId))
+        .limit(limit)
+        .all();
+    if (rows.length === 0) return { processed: 0, nextAfterProductId: null, done: true };
+    const first = rows[0]!.id;
+    const last = rows[rows.length - 1]!.id;
+    const cardSku = alias(productVariants, "band_card_sku");
+    // Qualified: an update renders its own columns bare, and the card SKU has a `product_id` too.
+    const band = sql`(SELECT ${cardAvailabilityBandSql(cardSku)}
+        FROM (SELECT 1) AS band_probe
+        LEFT JOIN "product_variants" AS "band_card_sku" ON ${cardSku.id} = "product_buyer_state"."sku_id"
+            AND ${cardSku.productId} = "product_buyer_state"."product_id")`;
+    await safeBatch(db, [
+        db.update(cacheClock).set({ coarse: 1 }).where(eq(cacheClock.id, 1)),
+        db.update(productBuyerState)
+            .set({ availabilityBand: band as never })
+            .where(and(
+                sql`"product_buyer_state"."product_id" BETWEEN ${first} AND ${last}`,
+                // The band is never NULL, so `<>` is null-safe here on every provider.
+                sql`"product_buyer_state"."availability_band" <> ${band}`,
+            )),
+        db.update(cacheClock).set({ coarse: 0 }).where(eq(cacheClock.id, 1)),
+    ] as never);
+    return rows.length < limit
+        ? { processed: rows.length, nextAfterProductId: null, done: true }
+        : { processed: rows.length, nextAfterProductId: last, done: false };
+}
+
 export interface CatalogProjectionRebuildResult {
     processed: number;
     nextAfterProductId: string | null;
@@ -414,19 +579,25 @@ export interface CatalogProjectionRebuildResult {
 
 /**
  * Recomputes both projections for the next `limit` products after
- * `afterProductId` (id order), in sequential batches of 90. Returns the
- * cursor for the next call; `done` once the last product is covered.
+ * `afterProductId` (id order), in sequential batches of 90, up to and
+ * including `untilProductId` when given. Returns the cursor for the next
+ * call; `done` once the last product of the range is covered.
+ *
+ * `repairFacetCounts` (default: when the walk starts at the first product)
+ * first recounts `product_facet_public_counts` from the facet rows: one scan
+ * of every facet row, so a rebuild lap does it once, at its start.
  */
 export async function rebuildCatalogProjections(
     db: Database,
-    input: { afterProductId?: string | null; limit?: number } = {},
+    input: { afterProductId?: string | null; untilProductId?: string | null; limit?: number; repairFacetCounts?: boolean } = {},
 ): Promise<CatalogProjectionRebuildResult> {
     const limit = Math.min(
         Math.max(Math.trunc(input.limit ?? CATALOG_PROJECTION_REBUILD_DEFAULT_LIMIT), 1),
         CATALOG_PROJECTION_REBUILD_MAX_LIMIT,
     );
     let after = input.afterProductId ?? null;
-    if (after === null) {
+    const until = input.untilProductId ?? null;
+    if (input.repairFacetCounts ?? after === null) {
         // Repair the derived counters before any facet deletion can apply a
         // negative delta to a drifted count. Only the initial full-rebuild
         // call scans the existing projections; ordinary refreshes stay local.
@@ -453,6 +624,20 @@ export async function rebuildCatalogProjections(
             }),
             db.delete(productFacetPublicCounts),
             db.insert(productFacetPublicCounts).select(counts),
+            // The per-category and per-brand counts (0174), the same way.
+            advanceCacheDeps(db, ["store"], {
+                with: sql`expected_scope AS MATERIALIZED (${sql.raw(facetScopeCountsSelect)})`,
+                // The counts alone: a kept sample is any product of the scope with the value.
+                when: sql`EXISTS (
+                    SELECT scope_kind, scope_id, facet_kind, facet_key, value_key, product_count FROM expected_scope EXCEPT
+                    SELECT scope_kind, scope_id, facet_kind, facet_key, value_key, product_count FROM product_facet_scope_counts WHERE product_count > 0
+                ) OR EXISTS (
+                    SELECT scope_kind, scope_id, facet_kind, facet_key, value_key, product_count FROM product_facet_scope_counts WHERE product_count > 0
+                    EXCEPT SELECT scope_kind, scope_id, facet_kind, facet_key, value_key, product_count FROM expected_scope
+                )`,
+            }),
+            db.delete(productFacetScopeCounts),
+            db.insert(productFacetScopeCounts).select(sql.raw(facetScopeCountsSelect) as never),
         ] as never);
     }
     let processed = 0;
@@ -461,7 +646,10 @@ export async function rebuildCatalogProjections(
         const rows = await db
             .select({ id: products.id })
             .from(products)
-            .where(after === null ? undefined : gt(products.id, after))
+            .where(and(
+                after === null ? undefined : gt(products.id, after),
+                until === null ? undefined : lte(products.id, until),
+            ))
             .orderBy(asc(products.id))
             .limit(pageSize)
             .all();
