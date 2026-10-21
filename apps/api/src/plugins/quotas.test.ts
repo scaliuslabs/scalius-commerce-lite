@@ -1,4 +1,4 @@
-// Quotas and data updates in the host (docs/platform/PLUGINS.md, "Quotas and
+// Quotas and data updates in the host (packages/plugin-sdk/docs/apps.md, "Quotas and
 // kill switch", "Data updates"): pending data updates run before an app's
 // next run and a failing one marks it failed; the plan's runs a minute,
 // storage size and calls per run are refused and recorded as breaches; and

@@ -1,4 +1,4 @@
-// App access scopes (docs/platform/PLUGINS.md, "Scopes"; COMMERCE-HOOKS H5):
+// App access scopes (packages/plugin-sdk/docs/apps.md, "Scopes"; COMMERCE-HOOKS H5):
 // the frozen names a manifest asks for (`scopes`), the merchant approves on
 // the consent screen, and the platform maps to its RBAC permissions here, in
 // this one table. RBAC can be refactored freely; an installed app keeps the

@@ -1,4 +1,4 @@
-// The plugin bridge (docs/platform/PLUGINS.md, "Execution boundary"): one host
+// The plugin bridge (packages/plugin-sdk/docs/apps.md, "Execution boundary"): one host
 // class implementing every capability a plugin's `ctx` reaches. A sandboxed
 // plugin calls it over RPC through the `PluginBridge` WorkerEntrypoint
 // (bridge-entrypoint.ts); a bundled plugin calls the same class in-process
@@ -51,7 +51,7 @@ export interface PluginBridgeProps {
   /** Private host metadata, never accepted from plugin input. */
   operator?: { userId: string };
   /**
-   * The plan's quotas for this run (docs/platform/PLUGINS.md, "Quotas"):
+   * The plan's quotas for this run (packages/plugin-sdk/docs/apps.md, "Quotas"):
    * calls per run (counted here for bundled apps; the sandbox counts its
    * own), and whether the app's measured storage is at its size limit, when
    * writes that add data are refused and recorded as a breach.

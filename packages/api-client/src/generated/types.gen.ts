@@ -8679,7 +8679,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 pages: Array<'all' | 'home' | 'product' | 'listing'>;
             }>;
             /**
-             * Active apps with storefront components (docs/STOREFRONT-COMPONENTS.md): the sections, components and skins their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts.
+             * Active apps with storefront components (packages/plugin-sdk/docs/storefront.md): the sections, components and skins their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts.
              */
             appExtensions: Array<{
                 pluginId: string;

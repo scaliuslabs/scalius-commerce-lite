@@ -1,4 +1,4 @@
-// Build steps of the plugin platform (docs/platform/PLUGINS.md), shared by
+// Build steps of the plugin platform (packages/plugin-sdk/docs/apps.md), shared by
 // `pnpm plugin` (scripts/plugins.mjs) and the tests that prove generated
 // files are fresh:
 //

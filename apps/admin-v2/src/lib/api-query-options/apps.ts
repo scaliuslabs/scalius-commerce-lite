@@ -1,4 +1,4 @@
-// Apps (installed plugins, docs/platform/PLUGINS.md): the Apps list and one
+// Apps (installed plugins, packages/plugin-sdk/docs/apps.md): the Apps list and one
 // app's page. Every write is guarded by the revision the page showed; an
 // activation also sends back the grant key, so a Super Admin approves exactly
 // the access the page listed. Secret settings are write-only: reads say only

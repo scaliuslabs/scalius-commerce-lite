@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // `pnpm plugin <command>`: the operator's tool for bundled plugins
-// (docs/platform/PLUGINS.md). Plugins compiled into the API Worker are listed
+// (packages/plugin-sdk/docs/apps.md). Plugins compiled into the API Worker are listed
 // in scalius.plugins.json; this keeps that lockfile, the generated
 // apps/api/src/plugins/bundled.gen.ts, the plugins' listing images
 // (assets.gen.ts), the catalog of first-party plugins not bundled

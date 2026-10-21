@@ -8,7 +8,7 @@ import type { PluginHead } from "@scalius/shared/plugins/storefront";
 type ComponentObjects = NonNullable<Extract<StorefrontRenderJob, { kind: "section" }>["objects"]>;
 
 /**
- * A component section's data (docs/STOREFRONT-COMPONENTS.md): the app's
+ * A component section's data (packages/plugin-sdk/docs/storefront.md): the app's
  * storefront module draws it here, at the edge, from these values and the
  * images and product cards its settings name.
  */

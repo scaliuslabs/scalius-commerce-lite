@@ -429,7 +429,7 @@ const layoutDataSchema = z.object({
     stylesheet: z.boolean(),
     connect: z.array(z.string()),
   })).openapi({
-    description: "Active apps with storefront components (docs/STOREFRONT-COMPONENTS.md): the sections, components and skins their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts.",
+    description: "Active apps with storefront components (packages/plugin-sdk/docs/storefront.md): the sections, components and skins their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts.",
   }),
   purchaseOptions: z.array(z.object({
     id: z.string().openapi({ description: "`<app id>.<key>`: what a cart, tax-quote or order line sends as its `purchaseOption`." }),

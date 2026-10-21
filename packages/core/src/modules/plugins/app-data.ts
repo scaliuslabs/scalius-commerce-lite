@@ -1,5 +1,5 @@
 // What an app leaves in the store, and the one delete of it
-// (docs/platform/PLUGINS.md, "Uninstalling"). Everything an app owns is keyed
+// (packages/plugin-sdk/docs/apps.md, "Uninstalling"). Everything an app owns is keyed
 // by its plugin id, not by the installation row: its object types (namespace)
 // and records, custom fields (namespace) and values, key/value data, the
 // customer roles it granted, its background jobs, the catalogue items it

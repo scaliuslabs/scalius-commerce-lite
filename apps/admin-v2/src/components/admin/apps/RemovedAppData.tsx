@@ -1,4 +1,4 @@
-// Data from removed apps (docs/platform/PLUGINS.md, "Uninstalling"): an app
+// Data from removed apps (packages/plugin-sdk/docs/apps.md, "Uninstalling"): an app
 // that is no longer installed (uninstalled keeping its data, or a bundled app
 // taken out of the deployment) leaves its object types, custom fields and
 // settings in the store. Wherever that data appears it reads "From a removed

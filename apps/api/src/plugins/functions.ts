@@ -1,4 +1,4 @@
-// Function points (docs/platform/PLUGINS.md, "Extension points" 2): checkout
+// Function points (packages/plugin-sdk/docs/apps.md, "Extension points" 2): checkout
 // asks every active plugin that implements a point, in priority order, and
 // merges what comes back (core checkout/app-functions.ts). This is the runner
 // it calls. With no active implementation the cost is one indexed read that

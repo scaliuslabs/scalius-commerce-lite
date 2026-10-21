@@ -1,4 +1,4 @@
-// The storefront app proxy (docs/platform/PLUGINS.md, "Extension points" 4):
+// The storefront app proxy (packages/plugin-sdk/docs/apps.md, "Extension points" 4):
 // `/apps/<plugin id>/<route>[/<sub path>]` on the store's own origin forwards
 // to the plugin's public route `/api/v1/plugins/<id>/public/<route>/...`
 // through the API service binding. The API answers only for active plugins

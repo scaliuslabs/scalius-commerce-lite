@@ -1,4 +1,4 @@
-// Plugin platform runtime state (docs/platform/PLUGINS.md, P1).
+// Plugin platform runtime state (packages/plugin-sdk/docs/apps.md, P1).
 //
 // `plugin_installations` is the authority for what may run: one row per
 // plugin with its validated manifest, the grant a Super Admin approved, its

@@ -1,5 +1,5 @@
 // Which registries the store browses and which developer keys it trusts
-// (docs/platform/PLUGINS.md, "Registry"). One settings document,
+// (packages/plugin-sdk/docs/apps.md, "Registry"). One settings document,
 // `plugin_registry`: the operator's own registries (index URLs) and the
 // public keys a Super Admin chose to trust. The official registry and its key
 // are pinned in code (`OFFICIAL_PLUGIN_REGISTRY`) and are empty until the

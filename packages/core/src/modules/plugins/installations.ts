@@ -1,4 +1,4 @@
-// Plugin installations (docs/platform/PLUGINS.md, P1): install, approve and
+// Plugin installations (packages/plugin-sdk/docs/apps.md, P1): install, approve and
 // activate, turn features on and off, deactivate, update, uninstall, and the
 // merchant's settings. Every write is a compare-and-set on `revision`; the
 // extension-point registrations are rewritten in the same batch as the

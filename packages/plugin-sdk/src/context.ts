@@ -1,4 +1,4 @@
-// The context every plugin handler receives (docs/platform/PLUGINS.md). It is
+// The context every plugin handler receives (packages/plugin-sdk/docs/apps.md). It is
 // the whole surface a plugin can reach: each call crosses the host bridge,
 // which checks the plugin's granted manifest before doing anything. The same
 // context is built for a sandboxed plugin (Dynamic Worker, Workers Paid) and a

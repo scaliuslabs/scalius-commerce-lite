@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * Composition end to end (docs/STOREFRONT-COMPONENTS.md): two real test apps
+ * Composition end to end (packages/plugin-sdk/docs/storefront.md): two real test apps
  * (`apps/api/src/plugins/testing/apps/compose` and `studio`) run as bundled
  * storefront modules through the real render host, in the real pages (Astro
  * container through a Vite dev server, API stubbed). Compose adds badges and

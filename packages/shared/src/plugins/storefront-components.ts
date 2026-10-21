@@ -1,4 +1,4 @@
-// Storefront components (docs/STOREFRONT-COMPONENTS.md): the presentation an
+// Storefront components (packages/plugin-sdk/docs/storefront.md): the presentation an
 // app compiles once and the storefront runs at the edge. An app's storefront
 // module draws its sections, its components (in slots and app pages), and skins of core-owned units
 // (the header, the footer, the product card, the product page's main part,

@@ -1,4 +1,4 @@
-// Bundled plugins in the database (docs/platform/PLUGINS.md, "Lifecycle"):
+// Bundled plugins in the database (packages/plugin-sdk/docs/apps.md, "Lifecycle"):
 // every plugin compiled into this Worker (bundled.gen.ts) has an installation
 // row, kept in step with the deployed code. Idempotent and stateless: it runs
 // when the Apps page or API lists plugins, on the scheduled tick, and when the

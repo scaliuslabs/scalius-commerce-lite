@@ -1,4 +1,4 @@
-// How the storefront runs an app's storefront module (docs/STOREFRONT-COMPONENTS.md):
+// How the storefront runs an app's storefront module (packages/plugin-sdk/docs/storefront.md):
 //
 // - bundled apps (every plan): the module `pnpm plugin` compiled into this
 //   Worker (extensions/bundled.gen.ts), called in process with a structured

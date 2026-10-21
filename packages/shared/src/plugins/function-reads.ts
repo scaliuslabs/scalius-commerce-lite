@@ -1,4 +1,4 @@
-// Declared reads of a function (docs/platform/PLUGINS.md, "Functions"): the
+// Declared reads of a function (packages/plugin-sdk/docs/apps.md, "Functions"): the
 // app's own data a function needs, named in the manifest and resolved by the
 // host in the checkout read batch it already runs, so a function stays pure
 // (no I/O) and a store pays nothing for reads no app declares.

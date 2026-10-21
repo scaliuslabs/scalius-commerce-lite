@@ -1,4 +1,4 @@
-// Staff Web Push (docs/platform/PLUGINS.md, "Push"), mounted at
+// Staff Web Push (packages/plugin-sdk/docs/apps.md, "Push"), mounted at
 // /admin/web-push: the VAPID public key a dashboard browser subscribes
 // with, the signed-in staff member's own browsers, and subscribe and
 // unsubscribe. Every staff member manages only their own browsers. A staff

@@ -2,6 +2,8 @@
 
 The SDK for Scalius apps (plugins), for plugin authors. An app declares what it may do (the manifest) and writes the handlers the platform calls. Workspace imports use source; the package build emits portable JavaScript and declarations for publishing.
 
+This README is the quick start. The full reference ships with the package in [`docs/`](docs/README.md): the platform and app lifecycle ([apps.md](docs/apps.md)), the checkout functions, ports and stable app API ([commerce-hooks.md](docs/commerce-hooks.md)) and storefront components ([storefront.md](docs/storefront.md)).
+
 ## Quick start
 
 An app is an ordinary npm package that depends on `@scalius/plugin-sdk`. It can live in its own repository; it does not need a clone of Scalius to build or test.
@@ -322,7 +324,7 @@ A function is pure: `(input, settings) => output`, with no I/O. The host stops i
 
 Which seam: a decision inside a request is a function; a provider of a capability is a port (`providers`); a reaction after the order commits is an event handler. Order risk is the last kind: handle `order.created` and call `ctx.orders`.
 
-- **`cart.transform`** answers `{ operations: [{ expand: { lineId, title?, components: [{ variantId, quantity }] } } | { merge: { lineIds, title } }] }`. A bundle's components become real order lines (stock, tax and refunds per SKU); the buyer sees one line at their summed price. Lines with buyer inputs, gift cards and carts above 99 lines are never changed.
+- **`cart.transform`** answers `{ operations: [{ op: "expand", lineId, title?, components: [{ variantId, quantity }] } | { op: "merge", lineIds, title }] }`. A bundle's components become real order lines (stock, tax and refunds per SKU); the buyer sees one line at their summed price. Lines with buyer inputs, gift cards and carts above 99 lines are never changed.
 - **`cart.line_prices`** answers `{ prices: [{ lineId, unitPriceMinor }], adjustments: [{ lineId, amountMinor, title }] }` (both optional).
   - `prices` are B2B, tiered, member or purchase-option prices (`resolvePrice()`: purchase option > sale > segment > market list > your price > FX > base). A one-time line takes your price only when no price list does, and the first app by priority wins it. A line bought with a purchase option is priced only by the app that declares the option, and that price wins over every list (a subscription on a sale item costs the subscription price); without your answer it keeps its one-time price.
   - `adjustments` are add-ons to each unit (an engraving's letters, a gift wrap), applied after that whole precedence, so discounted, sale and price-listed lines take them too. Every app's add-ons apply, at most five per line, each in the cart currency and rounded half-up to the market's price increment. Gift cards and bundle lines take none. The buyer sees each as "Add-on: <title> (+price)" in the cart, checkout, receipt and emails. Tax, discounts, totals and refunds include it.
@@ -384,7 +386,7 @@ The input includes the target, language, locale, currency, relevant cart/order/c
 
 ## Storefront components
 
-An app can redesign the storefront without a fork: component sections, the header, footer and product card, ready-made templates, client islands and a stylesheet, compiled once by `pnpm plugin pack` and run at the edge as a pure function of the page's data. A paid store uploads and activates the app; a free store bundles it with `pnpm plugin add`. Component sections can place the store's own order form (`<OrderForm product={...} />`) for single-page order landings. [docs/STOREFRONT-COMPONENTS.md](../../docs/STOREFRONT-COMPONENTS.md) is the guide; `plugins/noor` is a complete theme and `apps/api/src/plugins/testing/apps/studio` a small example. Core section types, skin units and embed kinds are snake_case (`usp_strip`, `product_card`, `buy_form`; theme document v12), and `StorefrontMoney` is `{ amountMinor, currency, formatted }`. Publishing a theme that draws with parts of an app that is inactive or no longer declares them is refused (`theme_apps_unavailable`, naming each app and its parts), and deactivating or uninstalling an app lists the live parts that would fall back to the store's design.
+An app can redesign the storefront without a fork: component sections, the header, footer and product card, ready-made templates, client islands and a stylesheet, compiled once by `pnpm plugin pack` and run at the edge as a pure function of the page's data. A paid store uploads and activates the app; a free store bundles it with `pnpm plugin add`. Component sections can place the store's own order form (`<OrderForm product={...} />`) for single-page order landings. [packages/plugin-sdk/docs/storefront.md](../../packages/plugin-sdk/docs/storefront.md) is the guide; `plugins/noor` is a complete theme and `apps/api/src/plugins/testing/apps/studio` a small example. Core section types, skin units and embed kinds are snake_case (`usp_strip`, `product_card`, `buy_form`; theme document v12), and `StorefrontMoney` is `{ amountMinor, currency, formatted }`. Publishing a theme that draws with parts of an app that is inactive or no longer declares them is refused (`theme_apps_unavailable`, naming each app and its parts), and deactivating or uninstalling an app lists the live parts that would fall back to the store's design.
 
 ## Providers
 

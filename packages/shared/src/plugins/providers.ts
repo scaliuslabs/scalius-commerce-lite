@@ -1,4 +1,4 @@
-// Provider ports (docs/platform/PLUGINS.md, "Providers"): one typed port per
+// Provider ports (packages/plugin-sdk/docs/apps.md, "Providers"): one typed port per
 // kind that both the platform's own adapters and app providers implement.
 // The pieces live in ./providers/*; this barrel is the one import path
 // (`@scalius/shared/plugins/providers`). Code that must stay free of zod

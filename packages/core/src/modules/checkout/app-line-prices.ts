@@ -1,5 +1,5 @@
 import { validateCheckoutAttributes } from "./attributes";
-// App line prices (`cart.line_prices`, docs/platform/PLUGINS.md): a checkout
+// App line prices (`cart.line_prices`, packages/plugin-sdk/docs/apps.md): a checkout
 // function's unit price for a cart line takes the app place in
 // `resolvePrice()` (purchase option > sale > segment > market list > app >
 // FX > base), so B2B contract and tiered prices replace the catalogue price

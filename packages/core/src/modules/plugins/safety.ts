@@ -1,4 +1,4 @@
-// The app safety layer (docs/platform/PLUGINS.md, "Quotas and kill switch",
+// The app safety layer (packages/plugin-sdk/docs/apps.md, "Quotas and kill switch",
 // "Data updates"): the emergency stop of one app or of every third-party app,
 // limit breaches that stop an app when they repeat (WordPress's fatal-error
 // recovery), the ledger of data updates, and the measured storage size.

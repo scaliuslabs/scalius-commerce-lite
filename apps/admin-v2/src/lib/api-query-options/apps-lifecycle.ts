@@ -1,4 +1,4 @@
-// The app lifecycle beyond the installed list (docs/platform/PLUGINS.md,
+// The app lifecycle beyond the installed list (packages/plugin-sdk/docs/apps.md,
 // "Registry", "Quotas and kill switch"): browse the registries, install or
 // update from one, upload a package, the emergency stop, and the registries
 // and developer keys the store trusts. Loaded on demand with the screens that

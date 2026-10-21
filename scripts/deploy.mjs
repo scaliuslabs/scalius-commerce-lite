@@ -341,7 +341,7 @@ function buildTarget(target) {
  * (dist/server/wrangler.json) from the committed Free config; a Paid deploy
  * adds the plan's CPU limit to that generated file (scripts/plan.mjs), and
  * with the plugin sandbox the Worker Loader that runs uploaded apps'
- * storefront components (docs/STOREFRONT-COMPONENTS.md).
+ * storefront components (packages/plugin-sdk/docs/storefront.md).
  */
 function applyStorefrontPlan(plan, pluginSandbox = false) {
   if (plan === "free") return;

@@ -1,4 +1,4 @@
-// App features (docs/platform/PLUGINS.md, "Features"): the parts of an app a
+// App features (packages/plugin-sdk/docs/apps.md, "Features"): the parts of an app a
 // merchant turns on one at a time. A pack with many services (the Bangladesh
 // pack: payment gateways, couriers, SMS gateways, fraud checkers, places) asks
 // for nothing until the merchant turns a part on, and then only for what that

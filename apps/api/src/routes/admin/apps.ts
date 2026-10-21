@@ -1,4 +1,4 @@
-// Admin OpenAPI routes for installed apps (plugins, docs/platform/PLUGINS.md):
+// Admin OpenAPI routes for installed apps (plugins, packages/plugin-sdk/docs/apps.md):
 // the list (bundled plugins appear as installed automatically), one app's
 // detail with its consent request in structured form, activation (Super Admin
 // approves the grant), its features (each off until a Super Admin turns it on

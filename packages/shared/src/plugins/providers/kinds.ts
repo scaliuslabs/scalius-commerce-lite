@@ -1,5 +1,5 @@
 // Provider ports: the kinds, their operations, provider identities and the
-// typed error every port raises (docs/platform/PLUGINS.md, "Providers").
+// typed error every port raises (packages/plugin-sdk/docs/apps.md, "Providers").
 //
 // A port is one interface per kind (payment, courier, sms, email,
 // courier_history, tax, translation, ai, messaging, push, search, address,

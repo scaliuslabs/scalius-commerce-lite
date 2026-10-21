@@ -607,7 +607,7 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
     },
   },
   {
-    // Plugins (docs/platform/PLUGINS.md): bundled installations in step with
+    // Plugins (packages/plugin-sdk/docs/apps.md): bundled installations in step with
     // the deployed code (a new deployment syncs on its first tick, see
     // bundled_plugin_sync_after_deploy), then due cron slots (each claimed once).
     name: "plugin_maintenance",

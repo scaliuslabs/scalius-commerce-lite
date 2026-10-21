@@ -1,4 +1,4 @@
-// The signed-in buyer's Web Push (docs/platform/PLUGINS.md, "Push"): the
+// The signed-in buyer's Web Push (packages/plugin-sdk/docs/apps.md, "Push"): the
 // VAPID key the account page subscribes with, whether this browser is
 // subscribed, and subscribe and unsubscribe. Order notifications and apps
 // (`ctx.messaging.pushCustomer`) send to these browsers.

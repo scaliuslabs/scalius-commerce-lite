@@ -1,4 +1,4 @@
-// The browser side of app components (docs/STOREFRONT-COMPONENTS.md), loaded
+// The browser side of app components (packages/plugin-sdk/docs/storefront.md), loaded
 // once on pages that show one. It gives app markup the store's own
 // behaviours with no app JavaScript, and mounts declared islands:
 //

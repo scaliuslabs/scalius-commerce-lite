@@ -1,4 +1,4 @@
-// The storefront's render host for app components (docs/STOREFRONT-COMPONENTS.md).
+// The storefront's render host for app components (packages/plugin-sdk/docs/storefront.md).
 //
 // A page asks for each component as Astro reaches it (the header, every card
 // of a grid, each section, skin and slot component). The host joins every ask made in the same task

@@ -1,4 +1,4 @@
-// Address autocomplete at checkout (docs/platform/PLUGINS.md, "Providers",
+// Address autocomplete at checkout (packages/plugin-sdk/docs/apps.md, "Providers",
 // address), mounted at /address-rules/autocomplete: suggestions from the
 // store's address app as the buyer types, then one suggestion as the
 // canonical address fields (`@scalius/shared/address`) the form fills. The

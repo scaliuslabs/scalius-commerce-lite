@@ -1,4 +1,4 @@
-// The plugin registry format (docs/platform/PLUGINS.md, "Registry"): a static,
+// The plugin registry format (packages/plugin-sdk/docs/apps.md, "Registry"): a static,
 // signed index that any HTTPS host can serve, the way a package mirror or a
 // browser-extension update manifest is served.
 //
