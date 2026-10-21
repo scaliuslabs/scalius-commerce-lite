@@ -1,53 +1,60 @@
 // @vitest-environment happy-dom
 
 import { readFileSync } from "node:fs";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { storefrontSourcePath } from "../test-source-paths";
 
 const checkoutPage = readFileSync(storefrontSourcePath("pages", "checkout.astro"), "utf8");
-/** The inline script that runs while the page is parsed, before any module loads. */
+/** The inline script that runs right inside the page root, before anything below it is parsed. */
 const prePaintScript = checkoutPage.match(/<script is:inline>([\s\S]*?checkoutPageRoot[\s\S]*?)<\/script>/)?.[1] ?? "";
 
 /**
- * Without a checkout session the page shows "return to your cart" at first
- * paint (CLS 0), instead of moving it in when the checkout script loads.
+ * The HTML is the empty cart (what a buyer without JavaScript has: the cart
+ * lives in the browser). A checkout in progress paints its loading state, and
+ * a buyer with no checkout is sent to the cart, the step they skipped,
+ * instead of a Payment step with an error.
  */
 describe("checkout page first paint", () => {
+  let replace: ReturnType<typeof vi.fn>;
+
   beforeEach(() => {
-    document.body.innerHTML = `<div id="checkoutPageRoot" data-checkout-state="loading"><a id="checkoutRecoveryAction" href="/cart" hidden>Back</a></div>`;
+    document.body.innerHTML = `<div id="checkoutPageRoot" data-checkout-state="missing"></div>`;
+    replace = vi.fn();
   });
 
   afterEach(() => {
     sessionStorage.clear();
   });
 
-  const run = () => {
-    new Function(prePaintScript)();
-    return {
-      state: document.getElementById("checkoutPageRoot")!.dataset.checkoutState,
-      linkHidden: document.getElementById("checkoutRecoveryAction")!.hidden,
-    };
+  const run = (pathname = "/checkout") => {
+    new Function("location", prePaintScript)({ pathname, replace });
+    return document.getElementById("checkoutPageRoot")!.dataset.checkoutState;
   };
 
-  it("paints the missing-session state when the browser holds no checkout", () => {
+  it("sends a buyer without a checkout to the cart, keeping the market's path", () => {
     expect(prePaintScript).not.toBe("");
-    expect(run()).toEqual({ state: "missing", linkHidden: false });
+    expect(run()).toBe("redirect");
+    expect(replace).toHaveBeenCalledExactlyOnceWith("/cart");
+    replace.mockClear();
+    run("/bn/checkout/");
+    expect(replace).toHaveBeenCalledExactlyOnceWith("/bn/cart");
   });
 
   it("leaves a checkout in progress, and an order just placed, to the page script", () => {
     sessionStorage.setItem("scalius_checkout_data", "{}");
-    expect(run()).toEqual({ state: "loading", linkHidden: true });
+    expect(run()).toBe("loading");
     sessionStorage.clear();
     sessionStorage.setItem("scalius_last_order", "ord_1");
-    expect(run()).toEqual({ state: "loading", linkHidden: true });
+    expect(run()).toBe("loading");
+    expect(replace).not.toHaveBeenCalled();
   });
 
-  it("server-renders the missing-session message and hides the session's sections with CSS only in that state", () => {
-    expect(checkoutPage).toMatch(/id="errorMsg"[\s\S]*?group-data-\[checkout-state=missing\]:block[\s\S]*?>\{copy\.checkoutDetailsMissingText\}<\/div>/);
-    for (const id of ["orderSummary", "giftCardSection", "paymentMethods"]) {
-      expect(checkoutPage).toMatch(new RegExp(`id="${id}"[\\s\\S]{0,200}?group-data-\\[checkout-state=missing\\]:hidden`));
-    }
+  it("server-renders the empty cart and hides the payment step until a checkout is known", () => {
+    expect(checkoutPage).toContain('id="checkoutPageRoot" data-checkout-state="missing"');
+    expect(checkoutPage).toMatch(/class="hidden group-data-\[checkout-state=missing\]:block[^"]*"[\s\S]*?\{copy\.emptyCartText\}[\s\S]*?\{copy\.continueShoppingText\}/);
+    expect(checkoutPage).toMatch(/group-data-\[checkout-state=missing\]:hidden group-data-\[checkout-state=redirect\]:hidden">\s*<CheckoutProgress/);
+    expect(checkoutPage).toMatch(/lg:gap-10 group-data-\[checkout-state=missing\]:hidden group-data-\[checkout-state=redirect\]:hidden">\s*<aside\s+id="orderSummary"/);
     // The script reads the same session keys the checkout and receipt modules write.
     const checkoutSource = readFileSync(storefrontSourcePath("lib", "checkout", "index.ts"), "utf8");
     const receiptSource = readFileSync(storefrontSourcePath("lib", "checkout", "receipt-finalization.ts"), "utf8");
