@@ -3,6 +3,7 @@ import {
   CustomerNotificationsCard,
   SendingCard,
   StaffNotificationsCard,
+  WebPushAddressNotice,
 } from "~/components/admin/settings/NotificationSettings";
 import { AppKindCard } from "~/components/admin/settings/AppKindCard";
 import { BrowserNotificationsCard } from "~/components/admin/settings/BrowserNotificationsCard";
@@ -34,6 +35,7 @@ function NotificationsPage() {
   const canEdit = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT);
   return (
     <SettingsPage page="notifications" readOnly={!canEdit}>
+      <WebPushAddressNotice />
       <CustomerNotificationsCard />
       <StaffNotificationsCard />
       <SendingCard />

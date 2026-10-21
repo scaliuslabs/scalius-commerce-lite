@@ -242,17 +242,30 @@ export function useCloseSettingsDialog(): (() => void) | null {
   return useContext(CloseDialogContext);
 }
 
+/** What a SettingsDialog layout draws: its own content element around these parts. */
+export interface SettingsDialogParts {
+  title: ReactNode;
+  description?: ReactNode;
+  body: ReactNode;
+  actions: ReactNode;
+  busy: boolean;
+  onClose: () => void;
+}
+
 /**
- * A multi-field edit in a dialog. Editors inside register with its save scope
+ * A multi-field edit in a dialog, or, with `layout={settingsSheet}`
+ * (`./SettingsSheet`), in a right-hand sheet for a form longer than a dialog's
+ * five fields (DESIGN O2, O4). Editors inside register with its save scope
  * (`useSaveBar` / `useSettingsForm`); Save saves them and closes. Cancel, Esc,
- * ✕ or a click outside closes a clean dialog, and asks before discarding
- * edits. A failed save keeps the dialog open with the problems listed.
+ * ✕ or a click outside closes a clean one, and asks before discarding edits.
+ * A failed save keeps it open with the problems listed.
  */
 export function SettingsDialog({
   title,
   description,
   trigger,
   savedMessage,
+  layout,
   children,
 }: {
   title: ReactNode;
@@ -260,6 +273,8 @@ export function SettingsDialog({
   trigger: ReactElement;
   /** The success toast instead of "Changes saved", e.g. "Invite sent". */
   savedMessage?: string;
+  /** Draws the content instead of the centred dialog; the sheet lives in its own module so pages without one never load it. */
+  layout?: (parts: SettingsDialogParts) => ReactNode;
   children: ReactNode;
 }) {
   const t = useMessages(settingsMessages);
@@ -276,39 +291,48 @@ export function SettingsDialog({
     if (state.dirty) setConfirmDiscard(true);
     else close(state);
   };
+  const body = (state: SaveScopeState) => (
+    <>
+      <SaveErrorBanner />
+      <CloseDialogContext.Provider value={() => close(state)}>{children}</CloseDialogContext.Provider>
+    </>
+  );
+  const actions = (state: SaveScopeState) => (
+    <>
+      <Button type="button" variant="outline" disabled={state.busy} onClick={() => requestClose(state)}>
+        {t("cancel")}
+      </Button>
+      <Button
+        type="button"
+        loading={state.busy}
+        disabled={!state.dirty}
+        onClick={async () => {
+          if (await state.saveAll()) setOpen(false);
+        }}
+      >
+        {t("save")}
+      </Button>
+    </>
+  );
   return (
     <SaveScope
       savedMessage={savedMessage}
       render={(state) => (
         <>
+          {/* One mounted root (a sheet is a Radix dialog too); `layout` draws other content. */}
           <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : requestClose(state))}>
             <DialogTrigger asChild>{trigger}</DialogTrigger>
-            <DialogContent className="sm:max-w-160">
-              <DialogHeader>
-                <DialogTitle>{title}</DialogTitle>
-                {description ? <DialogDescription>{description}</DialogDescription> : null}
-              </DialogHeader>
-              <div className="space-y-4">
-                <SaveErrorBanner />
-                <CloseDialogContext.Provider value={() => close(state)}>{children}</CloseDialogContext.Provider>
-              </div>
-              {/* Long forms scroll; the footer is a pinned, bordered bar (DialogFooter). */}
-              <DialogFooter>
-                <Button type="button" variant="outline" disabled={state.busy} onClick={() => requestClose(state)}>
-                  {t("cancel")}
-                </Button>
-                <Button
-                  type="button"
-                  loading={state.busy}
-                  disabled={!state.dirty}
-                  onClick={async () => {
-                    if (await state.saveAll()) setOpen(false);
-                  }}
-                >
-                  {t("save")}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
+            {layout ? layout({ title, description, body: body(state), actions: actions(state), busy: state.busy, onClose: () => requestClose(state) }) : (
+              <DialogContent className="sm:max-w-160">
+                <DialogHeader>
+                  <DialogTitle>{title}</DialogTitle>
+                  {description ? <DialogDescription>{description}</DialogDescription> : null}
+                </DialogHeader>
+                <div className="space-y-4">{body(state)}</div>
+                {/* Long forms scroll; the footer is a pinned, bordered bar (DialogFooter). */}
+                <DialogFooter>{actions(state)}</DialogFooter>
+              </DialogContent>
+            )}
           </Dialog>
           <ConfirmDialog
             open={confirmDiscard && state.dirty}

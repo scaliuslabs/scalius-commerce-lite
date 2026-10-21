@@ -10,7 +10,7 @@ import { useMessages } from "~/i18n";
 import { inboxMessages } from "~/i18n/inbox";
 import { ContextRail } from "./ContextRail";
 import { ConversationPane, NoConversationSelected } from "./ConversationPane";
-import { InboxList } from "./InboxList";
+import { InboxEmpty, InboxList, type InboxView } from "./InboxList";
 import { inboxSummaryQueryOptions, type StaffThread } from "~/lib/api-query-options/inbox";
 import { validateInboxSearch, type InboxSearch } from "./inbox-search";
 
@@ -74,6 +74,8 @@ function AccountWorkspace({ search, selectedId, currentUserId }: WorkspaceProps 
   const railOpen = wide && (preferences.details ?? true);
   const listHidden = Boolean(selectedId && (!split || preferences.hideList));
   const detailsOpen = wide ? railOpen : sheetOpen;
+  const [listView, setListView] = useState<InboxView>("loading");
+  const emptyInPane = split && !selectedId;
   const onSearchChange = useCallback((next: Partial<InboxSearch>) => {
     if (Object.hasOwn(next, "assignee")) {
       try { localStorage.setItem(`${preferenceKey}:scope`, next.assignee ?? "all"); } catch { /* Current view remains usable. */ }
@@ -108,13 +110,23 @@ function AccountWorkspace({ search, selectedId, currentUserId }: WorkspaceProps 
         <Card className="flex min-h-0 flex-1 overflow-clip">
           <InboxList search={search} query={query} onQueryChange={(value) => setInboxSearch(currentUserId, value)}
             active={!sheetOpen || wide} selectedId={selectedId} onSearchChange={onSearchChange}
+            emptyElsewhere={emptyInPane} onViewChange={setListView}
             className={listHidden ? "hidden" : split ? "flex w-72 shrink-0 border-e xl:w-80" : "flex min-w-0 flex-1"} />
           {selectedId ? <ConversationPane conversationId={selectedId} currentUserId={currentUserId} search={search}
             active={!sheetOpen || wide} onThread={setThread} className="flex min-w-0 flex-1"
             split={split} listHidden={listHidden} onToggleList={() => remember({ hideList: !preferences.hideList })}
             detailsOpen={detailsOpen} detailsTrigger={detailsTrigger}
             onToggleDetails={() => wide ? remember({ details: !railOpen }) : setSheetOpen((open) => !open)} />
-            : split ? <NoConversationSelected className="flex min-w-0 flex-1" /> : null}
+            : !split ? null
+              // "Select a conversation" only when there is one to select; an empty view says so here, once.
+              : listView === "rows" ? <NoConversationSelected className="flex min-w-0 flex-1" />
+                : listView === "loading" ? <section aria-hidden className="flex min-w-0 flex-1" />
+                  : <section className="flex min-w-0 flex-1 items-center justify-center">
+                    <InboxEmpty kind={listView} onClear={() => {
+                      setInboxSearch(currentUserId, "");
+                      onSearchChange({ assignee: undefined, subject: undefined, unread: undefined, sort: undefined });
+                    }} />
+                  </section>}
           {railOpen && activeThread ? <ContextRail thread={activeThread} className="w-72 shrink-0 border-s" /> : null}
         </Card>
       </div>

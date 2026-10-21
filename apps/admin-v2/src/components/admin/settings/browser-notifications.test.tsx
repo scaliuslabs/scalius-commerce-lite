@@ -31,7 +31,7 @@ import { PermissionProvider } from "~/contexts/PermissionContext";
 import { setLocale } from "~/i18n";
 import { SaveScope, type SaveScopeState } from "../shared/SaveBar";
 import { BrowserNotificationsCard } from "./BrowserNotificationsCard";
-import { CustomerNotificationsCard } from "./NotificationSettings";
+import { CustomerNotificationsCard, WebPushAddressNotice } from "./NotificationSettings";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -134,13 +134,31 @@ describe("the Browser column of the customer rules", () => {
 
   it("is disabled with the reason when browser notifications are not ready, but a saved rule can still be switched off", async () => {
     sdk.getApiV1AdminSettingsNotificationChannels.mockImplementation(() => ok(rules({ customerPush: unready })));
-    await render(<CustomerNotificationsCard />);
+    await render(<><WebPushAddressNotice /><CustomerNotificationsCard /></>);
     await vi.waitFor(() => expect(browserBoxes().length).toBeGreaterThan(0));
     const shipped = browserBoxes().find((box) => box.getAttribute("aria-label")?.startsWith("Order shipped"))!;
     const created = browserBoxes().find((box) => box.getAttribute("aria-label")?.startsWith("Order placed"))!;
     expect(shipped.disabled).toBe(true);
     expect(created.disabled).toBe(false);
-    expect(host.textContent).toContain("Browser notifications need your store's https web address.");
+    expect(host.textContent).toContain("Browser and staff notifications need your store's https web address.");
+    expect(host.querySelector('a[href="/admin/settings/store"][hash="webAddresses"]')).not.toBeNull();
+  });
+
+  it("says a missing https address once for the whole page, not in each card", async () => {
+    sdk.getApiV1AdminSettingsNotificationChannels.mockImplementation(() => ok(rules({ customerPush: unready, push: unready })));
+    sdk.getApiV1AdminSettingsProviders.mockImplementation(() => ok({ providers: [] }));
+    await render(<><WebPushAddressNotice /><CustomerNotificationsCard /><BrowserNotificationsCard /></>);
+    await vi.waitFor(() => expect(host.querySelector("#push-provider")).not.toBeNull());
+    await vi.waitFor(() => expect(browserBoxes().length).toBeGreaterThan(0));
+    expect(host.textContent!.match(/https/g)).toHaveLength(1);
+    // The built-in sender stays choosable, and an app can send instead.
+    expect(host.textContent).toContain("An app can send them instead.");
+  });
+
+  it("shows no address notice when Web Push can sign", async () => {
+    await render(<><WebPushAddressNotice /><CustomerNotificationsCard /></>);
+    await vi.waitFor(() => expect(browserBoxes().length).toBeGreaterThan(0));
+    expect(host.textContent).not.toContain("https");
   });
 });
 
@@ -193,20 +211,18 @@ describe("Browser notifications card", () => {
     expect(sdk.putApiV1AdminSettingsNotificationChannels.mock.calls[0]![0].body).toMatchObject({ pushProvider: "", expectedRevision: 5 });
   });
 
-  it("says why the built-in sender is not ready, and that an app can send instead", async () => {
+  it("says that an app can send instead", async () => {
     sdk.getApiV1AdminSettingsNotificationChannels.mockImplementation(() => ok(rules({ customerPush: unready })));
     sdk.getApiV1AdminSettingsProviders.mockImplementation(() => ok({ providers: [] }));
     await render(<BrowserNotificationsCard />);
-    await vi.waitFor(() => expect(host.textContent).toContain("Browser notifications need your store's https web address."));
-    expect(host.textContent).toContain("An app can send them instead.");
+    await vi.waitFor(() => expect(host.textContent).toContain("An app can send them instead."));
     expect(host.querySelector('a[href="/admin/apps"]')).not.toBeNull();
   });
 
-  it("writes the not-ready reason in Bangla in the Bangla dashboard, not the API's English", async () => {
+  it("writes the address notice in Bangla in the Bangla dashboard, not the API's English", async () => {
     setLocale("bn");
     sdk.getApiV1AdminSettingsNotificationChannels.mockImplementation(() => ok(rules({ customerPush: unready })));
-    sdk.getApiV1AdminSettingsProviders.mockImplementation(() => ok({ providers: [] }));
-    await render(<BrowserNotificationsCard />);
+    await render(<WebPushAddressNotice />);
     await vi.waitFor(() => expect(host.textContent).toContain("ওয়েব ঠিকানা লাগে"));
     expect(host.textContent).not.toContain("need your store");
   });

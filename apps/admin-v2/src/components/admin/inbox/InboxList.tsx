@@ -47,6 +47,8 @@ export function InboxList({
   active = true,
   selectedId,
   onSearchChange,
+  emptyElsewhere = false,
+  onViewChange,
   className,
 }: {
   search: InboxSearch;
@@ -55,6 +57,10 @@ export function InboxList({
   active?: boolean;
   selectedId: string | null;
   onSearchChange: (next: Partial<InboxSearch>) => void;
+  /** The workspace shows the empty state in its reading pane, so the list leaves it out. */
+  emptyElsewhere?: boolean;
+  /** What the current view shows: still loading, rows, or which empty state. */
+  onViewChange?: (view: InboxView) => void;
   className?: string;
 }) {
   const t = useMessages(inboxMessages);
@@ -92,6 +98,13 @@ export function InboxList({
   const lastPage = list.data?.pages.at(-1);
   const continuingSearch = lastPage?.scanExhausted === false;
   const filtered = Boolean(searchQuery) || assignee !== "all" || subject !== "all" || search.unread || search.sort;
+  const emptyKind: InboxEmptyKind = filtered ? "filtered" : status;
+  const view: InboxView = !list.isSuccess ? "loading" : items.length > 0 || continuingSearch ? "rows" : emptyKind;
+  useEffect(() => onViewChange?.(view), [view, onViewChange]);
+  const clearFilters = () => {
+    onQueryChange("");
+    onSearchChange({ assignee: undefined, subject: undefined, unread: undefined, sort: undefined });
+  };
   useEffect(() => {
     if (focusSearchOnMount && !selectedId) {
       focusSearchOnMount = false;
@@ -162,25 +175,11 @@ export function InboxList({
             <p className="text-body text-destructive">{t("loadFailed")}</p>
             <Button type="button" size="sm" variant="outline" onClick={() => void list.refetch()}>{t("retry")}</Button>
           </div>
+        ) : items.length === 0 && continuingSearch ? (
+          <EmptyState icon={Inbox} title={t("searchContinue")} description={t("searchContinueHelp")} />
         ) : items.length === 0 ? (
-          <EmptyState
-            icon={Inbox}
-            title={continuingSearch ? t("searchContinue") : filtered ? t("empty.filtered") : t(`empty.${status}`)}
-            description={continuingSearch ? t("searchContinueHelp") : filtered ? t("empty.filteredBody") : t(`empty.${status}Body`)}
-            help={!filtered && status === "open"}
-            action={filtered ? (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  onQueryChange("");
-                  onSearchChange({ assignee: undefined, subject: undefined, unread: undefined, sort: undefined });
-                }}
-              >
-                {t("clearFilters")}
-              </Button>
-            ) : undefined}
-          />
+          // Beside an empty reading pane the pane says it, once, where there is room.
+          emptyElsewhere ? null : <InboxEmpty kind={emptyKind} onClear={clearFilters} />
         ) : (
           <ul className="divide-y">
             {items.map((item) => (
@@ -197,6 +196,23 @@ export function InboxList({
         ) : null}
       </div>
     </section>
+  );
+}
+
+export type InboxEmptyKind = "filtered" | "open" | "pending" | "closed";
+export type InboxView = InboxEmptyKind | "rows" | "loading";
+
+/** The one empty state of an inbox view: in the list on phones, in the reading pane beside it. */
+export function InboxEmpty({ kind, onClear }: { kind: InboxEmptyKind; onClear: () => void }) {
+  const t = useMessages(inboxMessages);
+  return (
+    <EmptyState
+      icon={Inbox}
+      title={t(`empty.${kind}`)}
+      description={t(`empty.${kind}Body`)}
+      help={kind === "open"}
+      action={kind === "filtered" ? <Button type="button" variant="outline" onClick={onClear}>{t("clearFilters")}</Button> : undefined}
+    />
   );
 }
 

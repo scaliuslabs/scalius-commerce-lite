@@ -10,6 +10,7 @@ import {
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
+import { ReadOnlyValue } from "~/components/ui/field";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -149,16 +150,17 @@ function RoleForm({ role, initial, readOnly = false }: {
     <>
       <Card>
         <CardContent className="pt-4">
-          <SettingsField id="role-name" label={t("roleName")} error={readOnly ? undefined : nameError} help={readOnly ? t("builtInHelp") : undefined}>
-            <Input
-              id="role-name"
-              maxLength={100}
-              disabled={readOnly}
-              aria-describedby={readOnly ? "role-name-note" : undefined}
-              value={draft.name}
-              onChange={(event) => setDraft({ ...draft, name: event.target.value })}
-            />
-          </SettingsField>
+          {/* A built-in role cannot change: its name is text, not a disabled field (DESIGN R5). */}
+          {readOnly ? <ReadOnlyValue label={t("roleName")} value={draft.name} help={t("builtInHelp")} /> : (
+            <SettingsField id="role-name" label={t("roleName")} error={nameError}>
+              <Input
+                id="role-name"
+                maxLength={100}
+                value={draft.name}
+                onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+              />
+            </SettingsField>
+          )}
         </CardContent>
       </Card>
       <SettingsCard

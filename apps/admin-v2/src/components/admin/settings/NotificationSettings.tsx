@@ -48,12 +48,12 @@ import {
   buildCustomerNotificationConfig,
   serializeAdminNotificationConfig,
   serializeCustomerNotificationConfig,
+  webPushNeedsAddress,
   type CustomerRules,
   type NotificationEventGroup,
 } from "./notification-channel-policy";
 import { AppProviderStatus, appProviderOption } from "./AppProviderStatus";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
-import { usePushIssueText } from "./push-issue-text";
 import { webPushMessages } from "~/i18n/settings-web-push";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
 import { FieldRow } from "~/components/ui/field";
@@ -169,9 +169,23 @@ function RulesTable({
   );
 }
 
+/** The one notice for a store without an https web address, above the notification cards. */
+export function WebPushAddressNotice() {
+  const t = useMessages(notificationsMessages);
+  const rules = useQuery(customerRulesQuery).data;
+  if (!rules || !webPushNeedsAddress(rules)) return null;
+  return (
+    <Alert variant="warning">
+      <p>
+        {t("httpsNeeded")}{" "}
+        <Link to="/admin/settings/store" hash="webAddresses" className="text-link hover:underline">{t("httpsNeededAction")}</Link>
+      </p>
+    </Alert>
+  );
+}
+
 export function CustomerNotificationsCard() {
   const t = useMessages(notificationsMessages);
-  const pushIssueText = usePushIssueText();
   const common = useMessages(settingsMessages);
   const canEdit = useCanEditNotifications();
   const { values, setValues, isLoadError, refetch } = useSettingsForm<CustomerRules>({
@@ -215,10 +229,10 @@ export function CustomerNotificationsCard() {
             channels: { ...draft.channels, [event]: toggled(draft.channels[event], channel) },
           }))}
       />
-      {unready.map((channel) => (
+      {unready.filter((channel) => channel !== "push" || !webPushNeedsAddress(values)).map((channel) => (
         <p key={channel} className="text-body text-muted-foreground">
           {channel === "push"
-            ? pushIssueText(values.customerPush?.issues[0]) ?? t("browserNotReady")
+            ? values.customerPush?.issues[0]?.message ?? t("browserNotReady")
             : t("notReady", { channel: t(channel) })}
         </p>
       ))}
@@ -282,10 +296,6 @@ export function StaffNotificationsCard() {
             adminChannels: { ...draft.adminChannels, [event]: toggled(draft.adminChannels[event], channel) },
           }))}
       />
-      {!pushReady ? (
-        // Staff push is Web Push: it needs the store's https address (Sending has no push row any more).
-        <p className="text-body text-muted-foreground">{push("reasonHttps")}</p>
-      ) : null}
       {/* Staff push is set up per person, on their own devices (My account): one place, open to every staff member. */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border pt-4">
         <p className="min-w-0 flex-1 basis-60 text-body text-muted-foreground">{push("settingsPointer")}</p>

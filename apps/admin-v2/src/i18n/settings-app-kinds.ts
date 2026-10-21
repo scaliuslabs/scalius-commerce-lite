@@ -21,7 +21,6 @@ export const appKindsMessages = defineMessages({
     browserBuiltInHelp: "Browser notifications work without an app.",
     browserEmpty: "An app can send them instead.",
     browserLoadFailed: "Browser notifications",
-    browserUnavailable: "Browser notifications need your store's https web address. Add it in Settings → Store details → Web addresses.",
 
     ratesTitle: "Exchange rates",
     ratesDescription: "A market that sells in its own currency can take its rate from an app instead of a rate you type.",
@@ -53,7 +52,6 @@ export const appKindsMessages = defineMessages({
     browserBuiltIn: "ব্রাউজার (বিল্ট-ইন)",
     browserEmpty: "একটি অ্যাপ এর বদলে পাঠাতে পারে।",
     browserLoadFailed: "ব্রাউজার নোটিফিকেশন",
-    browserUnavailable: "ব্রাউজার নোটিফিকেশনের জন্য আপনার স্টোরের https ওয়েব ঠিকানা লাগে। সেটিংস → স্টোরের তথ্য → ওয়েব ঠিকানায় যোগ করুন।",
 
     ratesTitle: "এক্সচেঞ্জ রেট",
     ratesDescription: "নিজের কারেন্সিতে বিক্রি করা মার্কেট আপনার লেখা রেটের বদলে অ্যাপ থেকে রেট নিতে পারে।",

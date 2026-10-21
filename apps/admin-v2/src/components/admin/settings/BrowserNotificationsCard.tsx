@@ -3,12 +3,12 @@
  * notifications that signed-in buyers allow on their account page. Web Push is
  * built in; an installed app's push provider can send them instead. The choice
  * saves with the notification rules, under their revision. Staff alerts do not
- * use this choice: they always go by Web Push and Firebase.
+ * use this choice: they always go by Web Push and Firebase. The built-in
+ * sender's one blocker, a missing https address, is the page's notice
+ * (`WebPushAddressNotice`), not repeated here.
  */
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { putApiV1AdminSettingsNotificationChannels } from "@scalius/api-client/sdk";
-import { isReady } from "@scalius/shared/readiness";
-import { Alert } from "~/components/ui/alert";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
@@ -23,7 +23,6 @@ import { useProviderPortAccess } from "~/lib/provider-port-access";
 import { AppProviderStatus, appProviderOption } from "./AppProviderStatus";
 import { NoAppsLine } from "./AppKindCard";
 import { pushProviderBody, type CustomerRules } from "./notification-channel-policy";
-import { usePushIssueText } from "./push-issue-text";
 import { SettingsCard, SettingsCardLoading, SettingsField } from "./SettingsPage";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 
@@ -34,7 +33,6 @@ export function BrowserNotificationsCard() {
   const t = useMessages(appKindsMessages);
   const appT = useMessages(appProvidersMessages);
   const common = useMessages(settingsMessages);
-  const pushIssueText = usePushIssueText();
   const queryClient = useQueryClient();
   const canEdit = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT);
   const apps = useQuery({ ...appProvidersQuery("push"), enabled: useProviderPortAccess("push").canView }).data ?? [];
@@ -63,9 +61,6 @@ export function BrowserNotificationsCard() {
     // An app that is gone stays visible, so the choice can be changed back.
     ...(choice !== BUILT_IN && !app ? [{ value: choice, label: choice }] : []),
   ];
-  const builtInIssue = choice === BUILT_IN && values.customerPush && !isReady(values.customerPush)
-    ? pushIssueText(values.customerPush.issues[0])
-    : null;
   return (
     <SettingsCard id="browserNotifications" title={t("browserTitle")} description={t("browserDescription")}>
       <SettingsField id="push-provider" label={t("sendWith")} help={choice === BUILT_IN ? t("browserBuiltInHelp") : undefined}>
@@ -81,7 +76,6 @@ export function BrowserNotificationsCard() {
         />
       </SettingsField>
       {app ? <AppProviderStatus provider={app} /> : null}
-      {builtInIssue ? <Alert variant="warning">{builtInIssue}</Alert> : null}
       {apps.length === 0 ? <NoAppsLine>{t("browserEmpty")}</NoAppsLine> : null}
     </SettingsCard>
   );

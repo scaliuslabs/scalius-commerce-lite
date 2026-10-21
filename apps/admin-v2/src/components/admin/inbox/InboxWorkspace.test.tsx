@@ -12,9 +12,19 @@ vi.mock("@tanstack/react-router", () => ({
   useRouteContext: () => "staff_1",
   Link: ({ to, children, params: _params, ...props }: { to: string; children: ReactNode; params?: unknown }) => <a href={to} {...props}>{children}</a>,
 }));
-vi.mock("./InboxList", () => ({ InboxList: () => null }));
+const listView = vi.hoisted(() => ({ current: "rows" as string }));
+vi.mock("./InboxList", async () => {
+  const { useEffect } = await import("react");
+  return {
+    InboxList: ({ onViewChange, emptyElsewhere }: { onViewChange?: (view: string) => void; emptyElsewhere?: boolean }) => {
+      useEffect(() => onViewChange?.(listView.current), [onViewChange]);
+      return <p data-testid="list" data-empty-elsewhere={String(emptyElsewhere)} />;
+    },
+    InboxEmpty: ({ kind }: { kind: string }) => <p data-testid="empty">{kind}</p>,
+  };
+});
 vi.mock("./ConversationPane", () => ({
-  NoConversationSelected: () => null,
+  NoConversationSelected: () => <p data-testid="pick">Select a conversation</p>,
   ConversationPane: ({ conversationId, onThread, active, onToggleDetails, detailsTrigger }: { conversationId: string; active: boolean; onThread: (thread: StaffThread) => void; onToggleDetails: () => void; detailsTrigger: RefObject<HTMLButtonElement | null> }) => {
     useEffect(() => onThread({ id: conversationId, customerId: "customer_1", customerName: "Customer", subjectType: "store", order: null } as StaffThread), [conversationId, onThread]);
     return <><h2 data-timeline-active={String(active)}>Conversation</h2><button ref={detailsTrigger} onClick={onToggleDetails}>Details</button></>;
@@ -34,7 +44,7 @@ const render = async (id = "thread_1") => {
   await settle();
 };
 beforeEach(() => {
-  viewport.width = 390; viewport.top = 80;
+  viewport.width = 390; viewport.top = 80; listView.current = "rows";
   localStorage.clear();
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(() => ({ width: viewport.width, height: 600, top: viewport.top, bottom: viewport.top + 600, left: 0, right: viewport.width, x: 0, y: viewport.top, toJSON: () => ({}) }));
   host = document.createElement("div");
@@ -122,4 +132,29 @@ it("leaves height to the shell even at a restored scroll offset and reserves onl
   Object.assign(visual, { height: 844, offsetTop: 0, scale: 1 });
   await act(async () => visual.dispatchEvent(new Event("resize")));
   expect(inset()).toBe("0px");
+});
+
+it("asks to select a conversation only when the list has one, and shows an empty view's state once, in the pane", async () => {
+  viewport.width = 1280;
+  listView.current = "open";
+  await act(async () => root.render(<InboxWorkspace selectedId={null} search={{}} />));
+  await settle();
+  expect(host.querySelector('[data-testid="pick"]')).toBeNull();
+  expect(host.querySelector('[data-testid="empty"]')?.textContent).toBe("open");
+  expect(host.querySelector('[data-testid="list"]')?.getAttribute("data-empty-elsewhere")).toBe("true");
+  act(() => root.unmount());
+  root = createRoot(host);
+  listView.current = "rows";
+  await act(async () => root.render(<InboxWorkspace selectedId={null} search={{}} />));
+  await settle();
+  expect(host.querySelector('[data-testid="pick"]')).not.toBeNull();
+  expect(host.querySelector('[data-testid="empty"]')).toBeNull();
+});
+
+it("leaves a phone's empty state in the list", async () => {
+  listView.current = "open";
+  await act(async () => root.render(<InboxWorkspace selectedId={null} search={{}} />));
+  await settle();
+  expect(host.querySelector('[data-testid="empty"]')).toBeNull();
+  expect(host.querySelector('[data-testid="list"]')?.getAttribute("data-empty-elsewhere")).toBe("false");
 });
