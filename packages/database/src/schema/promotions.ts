@@ -63,6 +63,18 @@ export const promotions = sqliteTable("promotions", {
         table.priority,
         table.id,
     ),
+    // The automatic promotions on now (0175): checkout's candidate read seeks
+    // the open-ended and the not-yet-ended ones, by priority, without walking
+    // ended or code promotions.
+    index("promotions_automatic_live_idx").on(
+        table.method,
+        table.status,
+        table.deletedAt,
+        table.endsAt,
+        table.priority,
+        table.id,
+        table.startsAt,
+    ),
     check("promotions_method_valid", sql`${table.method} IN ('automatic', 'code')`),
     check("promotions_status_valid", sql`${table.status} IN ('draft', 'active', 'paused', 'archived')`),
     check("promotions_conflict_policy_valid", sql`${table.conflictPolicy} = 'best'`),

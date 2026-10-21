@@ -1226,6 +1226,13 @@
       "when": 1792573210859,
       "tag": "0174_catalog_scale",
       "breakpoints": true
+    },
+    {
+      "idx": 175,
+      "version": "6",
+      "when": 1792580517786,
+      "tag": "0175_promotions_automatic_live",
+      "breakpoints": true
     }
   ]
 }

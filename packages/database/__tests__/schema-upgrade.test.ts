@@ -921,6 +921,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 20,
         postgresStatements: 20,
       },
+      {
+        version: 175,
+        name: "0175_promotions_automatic_live",
+        sqliteStatements: 2,
+        postgresStatements: 2,
+      },
     ]);
   });
 
@@ -1186,6 +1192,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 172, name: "0172_line_level_facts" },
           { version: 173, name: "0173_saved_payment_methods" },
           { version: 174, name: "0174_catalog_scale" },
+          { version: 175, name: "0175_promotions_automatic_live" },
         ],
       });
     } finally {
