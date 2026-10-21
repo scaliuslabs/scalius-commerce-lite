@@ -83,6 +83,7 @@ export const appsLifecycleMessages = defineMessages({
     installUnverified: "The app couldn't be verified, so it wasn't installed.",
 
     uploadTitle: "Upload an app",
+    uploadNewVersion: "Upload a new version",
     uploadBody: "Choose the .zip file your developer gave you.",
     chooseFile: "Choose file",
     replaceFile: "Choose another file",
@@ -213,6 +214,7 @@ export const appsLifecycleMessages = defineMessages({
     installUnverified: "অ্যাপটি যাচাই করা যায়নি, তাই ইনস্টল হয়নি।",
 
     uploadTitle: "একটি অ্যাপ আপলোড করুন",
+    uploadNewVersion: "নতুন ভার্সন আপলোড করুন",
     uploadBody: "আপনার ডেভেলপার যে .zip ফাইল দিয়েছেন সেটি বেছে নিন।",
     chooseFile: "ফাইল বেছে নিন",
     replaceFile: "অন্য ফাইল বেছে নিন",

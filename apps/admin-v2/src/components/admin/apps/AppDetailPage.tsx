@@ -25,6 +25,7 @@ import { usePermissions } from "~/contexts/PermissionContext";
 import { useLocale, useMessages } from "~/i18n";
 import { providerLabel } from "~/i18n/provider-copy";
 import { installedAppsMessages } from "~/i18n/apps";
+import { appsLifecycleMessages } from "~/i18n/apps-lifecycle";
 import { localizedAppDetail } from "./app-detail-text";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import type { AppDetail, AppFunction } from "~/lib/api-query-options/apps";
@@ -52,6 +53,7 @@ import { appJobScheduleText } from "./app-job-schedule";
 // load after the page: none of them is needed to read it.
 const AppStopAction = lazy(() => import("./AppLifecycleParts").then((module) => ({ default: module.AppStopAction })));
 const AppLifecycleNotices = lazy(() => import("./AppLifecycleParts").then((module) => ({ default: module.AppLifecycleNotices })));
+const UploadAppDialog = lazy(() => import("./UploadAppDialog").then((module) => ({ default: module.UploadAppDialog })));
 const AppRunFacts = lazy(() => import("./AppLifecycleParts").then((module) => ({ default: module.AppRunFacts })));
 
 type DialogName = "activate" | "deactivate" | "uninstall" | null;
@@ -386,6 +388,8 @@ function AppPage({ app, section }: { app: AppDetail; section: AppSection }) {
   const missing = !active ? app.settings.fields.filter((field) => app.settings.missing.includes(field.key)) : [];
   // An update that needs approval leaves the app "installed" (paused), so this covers both.
   const canActivate = isSuperAdmin && !active;
+  const lifecycle = useMessages(appsLifecycleMessages);
+  const [uploading, setUploading] = useState(false);
 
   return (
     <Page width="detail">
@@ -399,6 +403,10 @@ function AppPage({ app, section }: { app: AppDetail; section: AppSection }) {
         )}
         status={<AppStatusBadge app={app} />}
         meta={t("byline", { version: app.version, author: app.author.name })}
+        // An uploaded app is updated the way it came: a new package from its developer.
+        actions={canManage && app.source === "upload" ? (
+          <Button type="button" variant="outline" onClick={() => setUploading(true)}>{lifecycle("uploadNewVersion")}</Button>
+        ) : undefined}
         primaryAction={canActivate ? (
           <Button type="button" disabled={!app.runtimeAvailable} onClick={() => setDialog("activate")}>
             {t(app.needsApproval ? "reviewUpdate" : "reviewActivate")}
@@ -406,6 +414,11 @@ function AppPage({ app, section }: { app: AppDetail; section: AppSection }) {
         ) : undefined}
       />
       {!canManage ? <ReadOnlyNotice /> : null}
+      {uploading ? (
+        <Suspense fallback={null}>
+          <UploadAppDialog open={uploading} onOpenChange={setUploading} />
+        </Suspense>
+      ) : null}
       <div className="flex flex-col gap-4">
         <SaveErrorBanner />
         {app.status === "failed" ? (
