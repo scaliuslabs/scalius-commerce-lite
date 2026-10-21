@@ -6,14 +6,7 @@ import { MoneyInput } from "~/components/admin/shared/MoneyInput";
 import { useSubmitOnce } from "~/components/admin/shared/use-submit-once";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "~/components/ui/sheet";
 import { Input } from "~/components/ui/input";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Textarea } from "~/components/ui/textarea";
@@ -48,7 +41,8 @@ function serverFieldIssue(error: unknown): { field: IssueField; message: string 
 }
 
 /**
- * Shopify's "Issue gift card". One request key per opening makes a double
+ * Shopify's "Issue gift card", as a sheet: it holds more than a dialog's five
+ * fields (DESIGN O2). One request key per opening makes a double
  * click or a retry return the same card. The code comes back once: it is
  * shown from the mutation result only (never a query, the URL or a log) and
  * dropped when the dialog closes.
@@ -130,18 +124,19 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
   const busy = mutation.isPending;
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
-      <DialogContent
-        // With the code on screen, only Done or Esc closes: a stray click must not lose it.
+    <Sheet open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
+      <SheetContent
+        className="flex flex-col"
+        // With the code on screen, only Done, the close button or Esc closes: a stray click must not lose it.
         onInteractOutside={(event) => { if (issued) event.preventDefault(); }}
       >
         {issued ? (
           <>
-            <DialogHeader>
-              <DialogTitle>{t("codeTitle")}</DialogTitle>
-              <DialogDescription>{maskedGiftCard(issued.giftCard.last4)}</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
+            <SheetHeader>
+              <SheetTitle>{t("codeTitle")}</SheetTitle>
+              <SheetDescription>{maskedGiftCard(issued.giftCard.last4)}</SheetDescription>
+            </SheetHeader>
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4">
               <div className="space-y-1.5">
                 <p id="gift-card-code-label" className="text-body font-medium">{t("codeLabel")}</p>
                 <div className="flex flex-wrap items-center gap-2 rounded-lg bg-muted px-3 py-2">
@@ -161,22 +156,22 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
               </Alert>
               {mutation.variables?.notify ? <p className="text-body text-muted-foreground">{t("codeSending")}</p> : null}
             </div>
-            <DialogFooter>
+            <SheetFooter>
               <Button type="button" variant="outline" asChild>
                 <Link to="/admin/gift-cards/$giftCardId" params={{ giftCardId: issued.giftCard.id }} onClick={() => onOpenChange(false)}>
                   {t("viewGiftCard")}
                 </Link>
               </Button>
               <Button type="button" onClick={() => onOpenChange(false)}>{t("done")}</Button>
-            </DialogFooter>
+            </SheetFooter>
           </>
         ) : (
           <>
-            <DialogHeader>
-              <DialogTitle>{t("issueGiftCard")}</DialogTitle>
-              <DialogDescription>{t("issueHelp")}</DialogDescription>
-            </DialogHeader>
-            <form id="issue-gift-card" method="post" noValidate className="space-y-4" onSubmit={submit}>
+            <SheetHeader closeDisabled={busy}>
+              <SheetTitle>{t("issueGiftCard")}</SheetTitle>
+              <SheetDescription>{t("issueHelp")}</SheetDescription>
+            </SheetHeader>
+            <form id="issue-gift-card" method="post" noValidate className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4" onSubmit={submit}>
               {mutation.isError && !serverIssue ? (
                 <Alert variant="destructive"><AlertDescription>{getServerFnError(mutation.error, t("issueFailed"))}</AlertDescription></Alert>
               ) : null}
@@ -240,7 +235,7 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
                     onChange={(event) => update({ recipientName: event.target.value })}
                   />
                 </Field>
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-3">
                   <Field id="gift-card-deliver-by" label={t("deliverBy")}>
                     <SearchableSelect
                       id="gift-card-deliver-by"
@@ -251,7 +246,7 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
                       options={[{ value: "email", label: t("deliverByEmail") }, { value: "sms", label: t("deliverBySms") }]}
                     />
                   </Field>
-                  <div className="sm:col-span-2">
+                  <div>
                     <Field
                       id="gift-card-contact"
                       label={t(draft.deliverBy === "email" ? "recipientEmail" : "recipientPhone")}
@@ -313,13 +308,13 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
                 </div>
               </div>
             </form>
-            <DialogFooter>
+            <SheetFooter>
               <Button type="button" variant="outline" disabled={busy} onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
               <Button type="submit" form="issue-gift-card" loading={busy}>{t("issue")}</Button>
-            </DialogFooter>
+            </SheetFooter>
           </>
         )}
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }

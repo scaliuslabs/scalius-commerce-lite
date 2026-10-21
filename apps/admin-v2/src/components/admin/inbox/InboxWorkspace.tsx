@@ -3,8 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouteContext } from "@tanstack/react-router";
 import { activateInboxDraftAccount, getInboxSearch, setInboxSearch, subscribeInboxDrafts } from "~/lib/inbox-drafts";
 import { getDashboardBasePath } from "~/lib/dashboard-base-path";
-import { Button } from "~/components/ui/button";
-import { Sheet, SheetClose, SheetContent, SheetTitle } from "~/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "~/components/ui/sheet";
 import { Card } from "~/components/ui/card";
 import { useMessages } from "~/i18n";
 import { inboxMessages } from "~/i18n/inbox";
@@ -133,10 +132,9 @@ function AccountWorkspace({ search, selectedId, currentUserId }: WorkspaceProps 
       <SheetContent className="flex flex-col" aria-describedby={undefined} onCloseAutoFocus={(event) => {
         if (detailsTrigger.current?.isConnected) { event.preventDefault(); detailsTrigger.current.focus(); }
       }}>
-        <header className="flex shrink-0 items-center justify-between gap-2 border-b p-4">
+        <SheetHeader>
           <SheetTitle>{t("rail")}</SheetTitle>
-          <SheetClose asChild><Button variant="outline">{t("close")}</Button></SheetClose>
-        </header>
+        </SheetHeader>
         {!wide && sheetOpen && activeThread ? <ContextRail thread={activeThread} className="min-h-0 flex-1" /> : null}
       </SheetContent>
     </Sheet>

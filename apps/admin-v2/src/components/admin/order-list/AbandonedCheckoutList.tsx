@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useMatch, useNavigate } from "@tanstack/react-router";
 import { toast } from "~/lib/toast";
-import { ExternalLink, Trash2, X } from "lucide-react";
+import { ExternalLink, ShoppingBag, Trash2 } from "lucide-react";
 import { deleteApiV1AdminAbandonedCheckouts } from "@scalius/api-client/sdk";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { getStoreRegion } from "~/lib/store-time-zone";
@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Sheet,
-  SheetClose,
   SheetContent,
   SheetDescription,
   SheetFooter,
@@ -21,7 +20,7 @@ import {
 import { DataTable } from "@/components/admin/data-table/DataTable";
 import { DataTableToolbar, IndexBulkBar } from "@/components/admin/data-table/DataTableToolbar";
 import { DataTableSortMenu } from "@/components/admin/data-table/DataTableSortMenu";
-import { FilteredEmptyState } from "~/components/admin/states";
+import { EmptyState, FilteredEmptyState } from "~/components/admin/states";
 import { DataTableRowActions } from "@/components/admin/data-table/DataTableRowActions";
 import { useServerTable } from "@/components/admin/data-table/useServerTable";
 import { createSelectColumn } from "@/components/admin/data-table/columns/column-factories";
@@ -159,7 +158,6 @@ function CheckoutSheet({
   onClose: () => void;
 }) {
   const t = useMessages(orderListMessages);
-  const tr = useMessages(resourceMessages);
   const td = useMessages(orderDetailMessages);
   const { fmt } = useCurrency();
   const navigate = useNavigate();
@@ -181,24 +179,17 @@ function CheckoutSheet({
   return (
     <Sheet open={open} onOpenChange={(next) => !next && onClose()}>
       <SheetContent className="flex flex-col">
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-6">
-          <div className="flex items-start gap-2">
-            <SheetHeader className="min-w-0 flex-1">
-              <SheetTitle className="break-words">{name}</SheetTitle>
-              <SheetDescription>
-                {checkout ? (
-                  <>
-                    <Reference checkout={checkout} /> · <ListDate value={checkout.updatedAt} />
-                  </>
-                ) : null}
-              </SheetDescription>
-            </SheetHeader>
-            <SheetClose asChild>
-              <Button variant="ghost" size="icon" className="-me-2 -mt-2 shrink-0" aria-label={tr("close")}>
-                <X className="size-4" />
-              </Button>
-            </SheetClose>
-          </div>
+        <SheetHeader>
+          <SheetTitle className="break-words">{name}</SheetTitle>
+          <SheetDescription>
+            {checkout ? (
+              <>
+                <Reference checkout={checkout} /> · <ListDate value={checkout.updatedAt} />
+              </>
+            ) : null}
+          </SheetDescription>
+        </SheetHeader>
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-4">
           {checkout && display ? (
             <>
               <div className="flex flex-wrap items-center gap-2">
@@ -460,9 +451,14 @@ export function AbandonedCheckoutList({
     </Button>
   ) : null;
   const deleteCount = deleteIds?.length ?? 0;
+  // No checkout was ever left: an empty state (E1), not a table of nothing.
+  const nothingYet = !isLoading && !isError && !term && routeState.page === 1 && table.getRowModel().rows.length === 0;
 
   return (
     <>
+      {nothingYet ? (
+        <EmptyState card={false} icon={ShoppingBag} title={t("abandonedEmptyTitle")} description={t("abandonedEmptyBody")} />
+      ) : (
       <DataTable
         variant="bare"
         getRowHref={(checkout) => `/admin/orders/abandoned/${encodeURIComponent(checkout.id)}`}
@@ -508,6 +504,7 @@ export function AbandonedCheckoutList({
           <FilteredEmptyState title={t("abandonedEmptyTitle")} description={t("abandonedEmptyBody")} />
         )}
       />
+      )}
 
       <ConfirmDialog
         open={deleteIds !== null}

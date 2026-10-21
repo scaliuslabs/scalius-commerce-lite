@@ -568,7 +568,6 @@ html:lang(bn) {
 body:has([data-leave-guard][data-state="open"]) [data-save-bar] {
   animation: save-bar-shake 320ms ease-in-out;
 }
-
 body:has([data-leave-guard][data-state="open"]) [data-save-bar]::after {
   animation: save-bar-flash-again 700ms ease-out;
 }

@@ -221,7 +221,7 @@ export function MediaPreview({ open, file, files, onOpenChange, onNavigate, onUp
       <Dialog open={open && Boolean(file)} onOpenChange={requestClose}>
         <DialogContent data-presence-root={open && file ? presenceKey("media", file.id) : undefined} aria-busy={saving || undefined} onEscapeKeyDown={(event) => {
           if (original?.active) { event.preventDefault(); showFit(); }
-        }} className="flex h-[92svh] w-full flex-col gap-0 overflow-hidden p-0 sm:w-[94vw] sm:max-w-[100rem]">
+        }} className="flex h-[calc(100svh-5rem)] w-full flex-col gap-0 overflow-hidden p-0 sm:w-[94vw] sm:max-w-[100rem]">
           <div className="flex shrink-0 flex-col gap-1 border-b py-3 ps-4 pe-14">
             <DialogTitle className="line-clamp-2 break-words text-heading-sm">{file?.filename}</DialogTitle>
             <DialogDescription className="break-words">{meta}</DialogDescription>

@@ -8,12 +8,12 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { ArrowLeft, Info, Search, Sparkles, X } from "lucide-react";
+import { ArrowLeft, Info, Search, Sparkles } from "lucide-react";
 import { STOREFRONT_SECTION_RENDERERS, type StorefrontSectionType, type StorefrontThemeDocument } from "@scalius/shared/storefront-theme";
 import { cn } from "@scalius/shared/utils";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "~/components/ui/sheet";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "~/components/ui/sheet";
 import { Input } from "~/components/ui/input";
 import { useMediaQuery } from "~/hooks/use-media-query";
 import { useMessages } from "~/i18n";
@@ -187,17 +187,12 @@ export function SectionLibrary({ open, onOpenChange, theme, options, apps, previ
   const categories: Category[] = ["all", "banners", "products", "text", ...(entries.some((entry) => entry.category === "apps") ? ["apps" as const] : [])];
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="left" className="flex flex-col gap-3 p-4 sm:max-w-6xl" data-section-library>
-        <div className="flex items-start gap-2">
-          <SheetHeader className="min-w-0 flex-1">
-            <SheetTitle>{t("libraryTitle")}</SheetTitle>
-            <SheetDescription>{t("libraryHelp")}</SheetDescription>
-          </SheetHeader>
-          <SheetClose asChild>
-            <Button type="button" variant="ghost" size="icon-sm" aria-label={t("close")}><X aria-hidden="true" /></Button>
-          </SheetClose>
-        </div>
-        <div className="flex min-h-0 flex-1 gap-4">
+      <SheetContent side="left" bar="editor" className="flex flex-col sm:max-w-6xl" data-section-library>
+        <SheetHeader>
+          <SheetTitle>{t("libraryTitle")}</SheetTitle>
+          <SheetDescription>{t("libraryHelp")}</SheetDescription>
+        </SheetHeader>
+        <div className="flex min-h-0 flex-1 gap-4 p-4">
         <div className={cn("min-h-0 max-w-sm flex-1 flex-col gap-3", active && detail ? "hidden md:flex" : "flex")}>
         <div className="relative">
           <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />

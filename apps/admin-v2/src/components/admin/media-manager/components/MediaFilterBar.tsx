@@ -64,6 +64,7 @@ export function MediaFilterBar(props: MediaFilterBarProps) {
   const selecting = props.allowSelection !== false && props.selectionMode;
   const permissions = useMediaPermissions();
   const canAct = props.allowManagement && props.selectedCount > 0;
+  const showSelectAll = props.canSelectAllShown ?? (props.selectableCount > 0 && props.selectedCount < props.selectableCount);
   const filtered = Boolean(search.trim()) || (props.capability === "both" && Boolean(props.filters.kind)) || props.currentFolderId !== "all";
 
   useEffect(() => {
@@ -145,17 +146,20 @@ export function MediaFilterBar(props: MediaFilterBarProps) {
         ) : null}
       </div>
 
-      {selecting ? (
+      {/* A picker counts the selection once, in its footer beside Add; this row then keeps only Select all and Clear. */}
+      {selecting && (props.allowManagement || showSelectAll || props.selectedCount > 0) ? (
         <div
           role="toolbar"
           aria-label={t("bulkActions")}
           aria-busy={props.isMutating || undefined}
           className="flex flex-wrap items-center gap-2 border-t bg-muted px-3 py-1.5"
         >
-          <span className="me-auto text-body font-medium tabular-nums" aria-live="polite" aria-atomic="true">
-            {r("selected", { count: props.selectedCount })}
-          </span>
-          {(props.canSelectAllShown ?? (props.selectableCount > 0 && props.selectedCount < props.selectableCount)) ? (
+          {props.allowManagement ? (
+            <span className="me-auto text-body font-medium tabular-nums" aria-live="polite" aria-atomic="true">
+              {r("selected", { count: props.selectedCount })}
+            </span>
+          ) : null}
+          {showSelectAll ? (
             <Button type="button" variant="ghost" size="sm" onClick={props.onSelectAll}>{t("selectAllShown")}</Button>
           ) : null}
           {props.selectedCount > 0 ? (

@@ -234,7 +234,13 @@ export function AdjustStockDialog({
         <DialogHeader>
           <DialogTitle>{t("adjustTitle")}</DialogTitle>
           <DialogDescription>
-            {variant ? [variant.productName ?? t("unknownProduct"), variant.optionLabel, variant.sku].filter(Boolean).join(" · ") : null}
+            {variant ? (
+              <>
+                {[variant.productName ?? t("unknownProduct"), variant.optionLabel].filter(Boolean).join(" · ")}
+                {/* A SKU is a code: mono and never broken across lines (F5). */}
+                {variant.sku ? <> · <code className="whitespace-nowrap">{variant.sku}</code></> : null}
+              </>
+            ) : null}
           </DialogDescription>
         </DialogHeader>
 

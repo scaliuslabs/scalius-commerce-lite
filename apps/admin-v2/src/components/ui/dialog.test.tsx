@@ -155,8 +155,9 @@ describe("modal top anchor", () => {
     panelHeight = 900;
     await render(<Harness />);
     expect(top()).toBe("max(4rem, -50px)");
-    // The cap stops 1rem above the bottom edge, measured from the pinned top.
-    expect(panel()?.className).toContain("max-h-[calc(100dvh-var(--dialog-top,0px)-1rem)]");
+    // The cap stops 1rem above the bottom edge, measured from the pinned top
+    // (on phones, from under the top bar: a bottom sheet never covers it).
+    expect(panel()?.className).toContain("max-h-[calc(100dvh-var(--dialog-top,3.5rem)-1rem)]");
     expect(panel()?.className).toContain("overflow-y-auto");
   });
 

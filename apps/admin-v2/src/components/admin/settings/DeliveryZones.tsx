@@ -1018,9 +1018,9 @@ export function DeliveryZonesCard() {
                 ))}
               </ul>
               {!hasPlaces ? (
-                <p className="px-4 pb-3 text-body text-muted-foreground">
+                <div className="px-4 pb-3 text-body">
                   <Link to="/admin/settings/shipping/areas" className="text-link hover:underline">{t("templateNeedsPlaces")}</Link>
-                </p>
+                </div>
               ) : null}
             </section>
           ) : null}

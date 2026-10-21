@@ -3,13 +3,13 @@
 // Failed, exhausted and cancelled deliveries can be sent again.
 import { Fragment, useState, type ReactNode } from "react";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, X } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { toast } from "~/lib/toast";
 import { cn } from "@scalius/shared/utils";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { SearchableSelect } from "~/components/ui/searchable-select";
-import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "~/components/ui/sheet";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "~/components/ui/sheet";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
 import { useMessages } from "~/i18n";
@@ -96,7 +96,7 @@ function DeliveriesLog({ subscription, canManage }: { subscription: WebhookSubsc
   let body: ReactNode;
   if (log.isError) {
     body = (
-      <div className="flex flex-wrap items-center justify-between gap-2 px-6 py-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 p-4">
         <p className="text-body text-destructive">{t("deliveriesFailed")}</p>
         <Button type="button" variant="outline" size="sm" loading={log.isRefetching} onClick={() => void log.refetch()}>
           {t("tryAgain")}
@@ -105,14 +105,14 @@ function DeliveriesLog({ subscription, canManage }: { subscription: WebhookSubsc
     );
   } else if (!log.data) {
     body = (
-      <div aria-busy className="space-y-3 px-6 py-4">
+      <div aria-busy className="space-y-3 p-4">
         <Skeleton className="h-4 w-2/3" />
         <Skeleton className="h-4 w-1/2" />
         <Skeleton className="h-4 w-3/5" />
       </div>
     );
   } else if (deliveries.length === 0) {
-    body = <p className="px-6 py-4 text-body text-muted-foreground">{t(status ? "noFilteredDeliveries" : "noDeliveries")}</p>;
+    body = <p className="p-4 text-body text-muted-foreground">{t(status ? "noFilteredDeliveries" : "noDeliveries")}</p>;
   } else {
     body = (
       <Table>
@@ -179,21 +179,15 @@ function DeliveriesLog({ subscription, canManage }: { subscription: WebhookSubsc
   }
 
   return (
+    <>
+    <SheetHeader>
+      <SheetTitle>{t("deliveriesTitle")}</SheetTitle>
+      <SheetDescription>
+        <span className="block truncate font-mono" title={subscription.url}>{subscription.url}</span>
+      </SheetDescription>
+    </SheetHeader>
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
-      <div className="flex items-start gap-2 p-6 pb-4">
-        <SheetHeader className="min-w-0 flex-1">
-          <SheetTitle>{t("deliveriesTitle")}</SheetTitle>
-          <SheetDescription>
-            <span className="block truncate font-mono">{subscription.url}</span>
-          </SheetDescription>
-        </SheetHeader>
-        <SheetClose asChild>
-          <Button type="button" variant="ghost" size="icon" className="-me-2 -mt-2 shrink-0" aria-label={t("close")}>
-            <X className="size-4" aria-hidden="true" />
-          </Button>
-        </SheetClose>
-      </div>
-      <div className="px-6 pb-4">
+      <div className="p-4">
         <SearchableSelect
           id="webhook-delivery-status"
           ariaLabel={t("statusFilter")}
@@ -211,7 +205,7 @@ function DeliveriesLog({ subscription, canManage }: { subscription: WebhookSubsc
       </div>
       <div className="border-t border-border">{body}</div>
       {log.hasNextPage ? (
-        <div className="border-t border-border px-6 py-4">
+        <div className="border-t border-border p-4">
           <Button
             type="button"
             variant="outline"
@@ -223,6 +217,7 @@ function DeliveriesLog({ subscription, canManage }: { subscription: WebhookSubsc
         </div>
       ) : null}
     </div>
+    </>
   );
 }
 

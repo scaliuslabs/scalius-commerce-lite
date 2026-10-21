@@ -274,6 +274,8 @@ export function ThemeEditor({ workspace, refetch }: {
   const defaultLocale = marketOptions.find((option) => option.backup)?.locale ?? null;
   const previewLocale = marketOptions.find((option) => option.value === presence)?.locale ?? defaultLocale;
   const [previewRevision, setPreviewRevision] = useState<number | null>(null);
+  // An older version on the canvas is read-only: the panes show it and take no edits until "Current draft".
+  const editable = canEdit && previewRevision === null;
   const versionDocument = useQuery(themeVersionDocumentQuery(page.kind === "landing" ? previewRevision : null));
   const versionLacksPage = page.kind === "landing" && previewRevision !== null && versionDocument.data !== undefined && !versionDocument.data.pages.landing[page.slug];
   const basePath = versionLacksPage ? "/" : previewPath(page, resource?.url ?? null);
@@ -637,7 +639,7 @@ export function ThemeEditor({ workspace, refetch }: {
       const at = ids.indexOf(selectionMark(selected) ?? "");
       const next = ids[matchesEditorShortcut("previous", press) ? Math.max(0, at - 1) : Math.min(ids.length - 1, at + 1)];
       if (next) select(next, "tree");
-    } else if (canEdit && selectedSection && block === null) {
+    } else if (editable && selectedSection && block === null) {
       if (matchesEditorShortcut("duplicate", press)) { handled(); duplicate(selectedSection.id); }
       else if (matchesEditorShortcut("hide", press)) { handled(); toggle(selectedSection.id); }
       else if (matchesEditorShortcut("remove", press)) { handled(); remove(selectedSection.id); }
@@ -663,7 +665,7 @@ export function ThemeEditor({ workspace, refetch }: {
   // ── The tree, the selection's settings and the canvas' chrome ───────────
   const pageName = pageNameOf(page, theme);
   const heldSections = useHeldSections(draft.held);
-  const groups = useEditorTree({ theme, page, pageName, resolved, appSections, heldSections, readOnly: !canEdit, handlers });
+  const groups = useEditorTree({ theme, page, pageName, resolved, appSections, heldSections, readOnly: !editable, handlers });
   const expandTo = block ? [block.sectionId] : selectedModule(selected) ? [EDITOR_PARTS.productMain] : selected === EDITOR_PARTS.listingToolbar || selected === EDITOR_PARTS.listingFilters ? [EDITOR_PARTS.listing] : [];
 
   const names = useMemo(() => {
@@ -769,7 +771,7 @@ export function ThemeEditor({ workspace, refetch }: {
       <SectionPane
         section={selectedSection}
         media={media}
-        canEdit={canEdit}
+        canEdit={editable}
         reveal={revealErrors}
         onSelectBlock={(id) => select(id, "tree")}
         onChange={(settings) => editSection(selectedSection.id, (section) => ({ ...section, settings } as Section))}
@@ -807,7 +809,7 @@ export function ThemeEditor({ workspace, refetch }: {
       onBack={() => setSelected(wide || !block ? null : block.sectionId)}
       closes={wide}
       actions={paneActions}
-      readOnly={!canEdit}
+      readOnly={!editable}
     >
       <DynamicSourceResource.Provider value={resourceKind}><Suspense fallback={null}>{paneContent}</Suspense></DynamicSourceResource.Provider>
     </SettingsPane>
@@ -842,7 +844,7 @@ export function ThemeEditor({ workspace, refetch }: {
       </div>
       <TabsContent value="sections" className="mt-0 min-h-0 flex-1">{tree}</TabsContent>
       <TabsContent value="theme" className="mt-0 min-h-0 flex-1 overflow-y-auto">
-        <fieldset disabled={!canEdit} className="min-w-0">
+        <fieldset disabled={!editable} className="min-w-0">
           <Suspense fallback={null}>
             <ThemeSettingsPanel theme={theme} resolved={resolved} media={media} apps={workspace.apps} setDraft={setDraft} reveal={themeReveal} />
           </Suspense>
@@ -1093,7 +1095,7 @@ export function ThemeEditor({ workspace, refetch }: {
             ["theme", SlidersHorizontal, () => { setTab("theme"); setSelected(null); setDrawerOpen((open) => !(open && tab === "theme")); }],
             ["add", Plus, () => setLibraryAt(items.length)],
           ] as const).map(([key, Icon, onClick]) => (
-            <TopBarButton key={key} label={t(`bar_${key}`)} tip={false} onClick={onClick} disabled={key === "add" && (!sections || !canEdit)} className="flex h-auto w-auto flex-1 flex-col gap-0.5 text-foreground hover:bg-accent">
+            <TopBarButton key={key} label={t(`bar_${key}`)} tip={false} onClick={onClick} disabled={key === "add" && (!sections || !editable)} className="flex h-auto w-auto flex-1 flex-col gap-0.5 text-foreground hover:bg-accent">
               <Icon aria-hidden="true" />
               <span className="text-caption">{t(`bar_${key}`)}</span>
             </TopBarButton>

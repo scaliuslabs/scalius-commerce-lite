@@ -359,6 +359,34 @@ const insOrder = insert(`INSERT INTO orders (id, order_number, customer_name, cu
 const insShipFulfillment = insert(`INSERT INTO order_fulfillments (id, order_id, kind, status, request_key, actor_type, actor_id, created_at, location_id) VALUES (?, ?, 'ship', 'active', 'seed-0', 'system', NULL, ?, 'loc_default')`);
 const insShipFulfillmentLine = insert(`INSERT INTO order_fulfillment_lines (id, fulfillment_id, order_id, order_item_id, quantity, created_at) VALUES (?, ?, ?, ?, ?, ?)`);
 const insOrderItem = insert(`INSERT INTO order_items (id, order_id, product_id, variant_id, quantity, product_name, variant_label, inventory_tracked, unit_price_minor, line_subtotal_minor, taxable_amount_minor, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`);
+// Checkout snapshots the tax it applied with every order (commit-order.ts); the default
+// profile's single market has no tax region, so each order and line snapshots "no tax".
+const insOrderTaxSnapshot = insert(`INSERT INTO order_tax_snapshots (order_id, currency_code, decimal_places, display_label, prices_include_tax, shipping_taxed, settings_version, calculation_version, destination_snapshot, rate_snapshot, provider_id, address_source, created_at) VALUES (?, 'BDT', 2, 'VAT', 0, 0, 1, 'tax-v1', ?, ?, 'system', 'shipping', ?)`);
+const insOrderItemTaxSnapshot = insert(`INSERT INTO order_item_tax_snapshots (order_item_id, order_id, tax_class_id, tax_class_name, prices_include_tax, rate_snapshot, country_code, tax_region_id, provider_id, created_at) VALUES (?, ?, NULL, NULL, 0, '[]', 'BD', NULL, 'system', ?)`);
+function seedUntaxedSnapshot(orderId, itemIds, shippingMinor, destination, createdAt) {
+  const shipping = { taxClassId: null, taxClassName: null, grossAmountMinor: shippingMinor, discountMinor: 0, taxableAmountMinor: shippingMinor, taxMinor: 0, totalMinor: shippingMinor, components: [] };
+  insOrderTaxSnapshot.run(orderId, JSON.stringify(destination),
+    JSON.stringify({ lines: itemIds.map((lineId) => ({ lineId, taxClassId: null, taxClassName: null, components: [] })), shipping }), createdAt);
+  for (const itemId of itemIds) insOrderItemTaxSnapshot.run(itemId, orderId, createdAt);
+}
+// A COD order and its collection lifecycle are one durable fact (commit-order.ts writes the
+// row with the order), so every seeded COD order carries its cod_tracking row.
+const insCodTracking = insert(`INSERT INTO cod_tracking (id, order_id, delivery_attempts, last_attempt_at, cod_status, collected_by, collected_amount_minor, collected_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+/** The order's COD row: collected once cash is in, returned when it came back unpaid, else pending. */
+function seedCodTracking(orderId, { status, paidMinor, shippedAt, collectedAt, collectedBy, createdAt, updatedAt }) {
+  const codStatus = paidMinor > 0 ? "collected" : status === "returned" ? "returned" : "pending";
+  const attempts = shippedAt === null ? 0 : 1;
+  const collected = codStatus === "collected";
+  insCodTracking.run(`cod_${orderId}`, orderId, attempts, attempts ? shippedAt : null, codStatus,
+    collected ? collectedBy : null, collected ? paidMinor : null, collected ? collectedAt : null, createdAt, updatedAt);
+}
+/** "Red / XL" per optioned SKU, axes in definition order; default SKUs have none. */
+function variantLabels() {
+  const rows = db.prepare(`SELECT vo.variant_id AS variant_id, group_concat(ov.value, ' / ') AS label
+    FROM (SELECT variant_id, option_definition_id, option_value_id FROM product_variant_option_values ORDER BY variant_id, option_definition_id) AS vo
+    JOIN product_option_values AS ov ON ov.id = vo.option_value_id GROUP BY vo.variant_id`).all();
+  return new Map(rows.map((row) => [row.variant_id, row.label]));
+}
 
 // The huge seed writes millions of rows whose domain events would only flood
 // the outbox queue; see the header for why dropping them for the run is safe.
@@ -762,10 +790,7 @@ function seedHuge() {
   log(`promotions: ${promos.length} (${codePromos.length} redeemable code, ${autoPromos.length} automatic percentage)`);
 
   // ------------------------------------------------------------ order catalog
-  const labelRows = db.prepare(`SELECT vo.variant_id AS variant_id, group_concat(ov.value, ' / ') AS label
-    FROM (SELECT variant_id, option_definition_id, option_value_id FROM product_variant_option_values ORDER BY variant_id, option_definition_id) AS vo
-    JOIN product_option_values AS ov ON ov.id = vo.option_value_id GROUP BY vo.variant_id`).all();
-  const labels = new Map(labelRows.map((row) => [row.variant_id, row.label]));
+  const labels = variantLabels();
   const variants = db.prepare(`SELECT v.id AS id, v.product_id AS product_id, v.price_minor AS price, v.discount_bps AS bps, v.track_inventory AS tracked,
       p.name AS pname, p.is_active AS active, p.deleted_at AS pdel, pm.media_id AS media_id
     FROM product_variants AS v JOIN products AS p ON p.id = v.product_id
@@ -1000,6 +1025,10 @@ function seedHuge() {
     else if (life.payment === "failed") payRow("a", "full", "failed", total, ts + 60, method === "cod" ? null : `${method}_${orderNumber}`);
     else payRow("a", "full", "pending", total, ts + 60, method === "cod" ? null : `${method}_${orderNumber}`);
     if (refunded > 0) payRow("r", "refund", "refunded", refunded, Math.min(NOW - 5, ret ? retTs + DAY : ts + 2 * DAY), null);
+    if (method === "cod") {
+      seedCodTracking(orderId, { status: life.status, paidMinor: captured, shippedAt: life.fulfillment === "pending" ? null : shipTs,
+        collectedAt: paidTs, collectedBy: activeStaff[i % activeStaff.length], createdAt: ts, updatedAt });
+    }
 
     // Returns.
     if (ret) {
@@ -1246,7 +1275,11 @@ if (HUGE) {
   seedHuge();
 } else {
 // ---------------------------------------------------------------- customers + orders
-const variantsByProduct = db.prepare(`SELECT id, product_id, sku, price_minor FROM product_variants WHERE deleted_at IS NULL`).all();
+// Order lines snapshot the product's name and the SKU's option label, as checkout does.
+const lineLabels = variantLabels();
+const variantsByProduct = db.prepare(`SELECT v.id AS id, v.product_id AS product_id, v.price_minor AS price_minor, p.name AS product_name
+  FROM product_variants AS v JOIN products AS p ON p.id = v.product_id WHERE v.deleted_at IS NULL`).all()
+  .map((row) => ({ ...row, label: lineLabels.get(row.id) ?? null }));
 const customerIds = [];
 tx(() => {
   for (let index = 0; index < CUSTOMERS; index += 1) {
@@ -1283,17 +1316,26 @@ for (let start = 0; start < ORDERS; start += 5000) {
       // against them); one in five multi-line shipped orders is only partly fulfilled.
       const shipped = SHIPPED_STATUSES.has(status);
       const fulfilment = !shipped ? "none" : status === "shipped" && lines.length > 1 && chance(0.2) ? "partial" : "complete";
-      insOrder.run(id, 100000 + index, customer.name, customer.phone, null, `House ${int(1, 200)}, ${customer.city}`,
-        customer.city, "zone", customer.city, "Zone", status, chance(0.8) ? "cod" : "sslcommerz",
+      const address = `House ${int(1, 200)}, ${customer.city}`;
+      const method = chance(0.8) ? "cod" : "sslcommerz";
+      const updatedAt = createdAt + int(0, 10) * DAY;
+      insOrder.run(id, 100000 + index, customer.name, customer.phone, null, address,
+        customer.city, "zone", customer.city, "Zone", status, method,
         paid ? "paid" : "unpaid", fulfilment === "none" ? "pending" : fulfilment, customer.id,
-        subtotal, shipping, total, paid, total - paid, createdAt, createdAt + int(0, 10) * DAY);
+        subtotal, shipping, total, paid, total - paid, createdAt, updatedAt);
       lines.forEach((line, lineIndex) => {
         insOrderItem.run(`oi_scale_${pad(index, 6)}_${lineIndex}`, id, line.product_id, line.id, quantities[lineIndex],
-          line.sku, null, line.price_minor, line.price_minor * quantities[lineIndex], line.price_minor * quantities[lineIndex], createdAt);
+          line.product_name, line.label, line.price_minor, line.price_minor * quantities[lineIndex], line.price_minor * quantities[lineIndex], createdAt);
         orderItems += 1;
       });
+      seedUntaxedSnapshot(id, lines.map((_line, lineIndex) => `oi_scale_${pad(index, 6)}_${lineIndex}`), shipping,
+        { city: customer.city, zone: "zone", area: null, cityName: customer.city, zoneName: "Zone", areaName: null }, createdAt);
+      const shippedAt = fulfilment === "none" ? null : createdAt + int(1, 3) * DAY;
+      if (method === "cod") {
+        seedCodTracking(id, { status, paidMinor: paid, shippedAt, collectedAt: shippedAt === null ? null : shippedAt + DAY,
+          collectedBy: "Steadfast", createdAt, updatedAt });
+      }
       if (fulfilment !== "none") {
-        const shippedAt = createdAt + int(1, 3) * DAY;
         const fulfillmentId = `ful_scale_${pad(index, 6)}`;
         insShipFulfillment.run(fulfillmentId, id, shippedAt);
         lines.forEach((_line, lineIndex) => {
@@ -1383,7 +1425,7 @@ if (!flag("--no-media-files")) {
 
 // No ANALYZE: a migrated D1 has no sqlite_stat1, so plans here match production.
 checkpoint();
-const COUNT_TABLES = ["products", "product_variants", "product_media", "media", "product_option_definitions", "product_option_values", "product_variant_option_values", "product_attribute_values", "inventory_levels", "inventory_movements", "categories", "category_closure", "brands", "product_buyer_state", "product_facet_values", "collections", "customers", "customer_addresses", "customer_order_stats", "orders", "order_items", "order_payments", "order_fulfillments", "order_fulfillment_lines", "order_returns", "order_return_lines", "order_events", "order_discount_allocations", "promotions", "promotion_codes", "promotion_effects", "promotion_conditions", "promotion_redemptions", "gift_cards", "gift_card_transactions", "product_reviews", "product_review_stats", "conversations", "conversation_messages", "user", "markets", "notification_outbox", "notification_delivery_receipts", "agent_audit_events", "cache_dep", "event_outbox", "product_sales_stats"];
+const COUNT_TABLES = ["products", "product_variants", "product_media", "media", "product_option_definitions", "product_option_values", "product_variant_option_values", "product_attribute_values", "inventory_levels", "inventory_movements", "categories", "category_closure", "brands", "product_buyer_state", "product_facet_values", "collections", "customers", "customer_addresses", "customer_order_stats", "orders", "order_items", "order_payments", "cod_tracking", "order_fulfillments", "order_fulfillment_lines", "order_returns", "order_return_lines", "order_events", "order_discount_allocations", "promotions", "promotion_codes", "promotion_effects", "promotion_conditions", "promotion_redemptions", "gift_cards", "gift_card_transactions", "product_reviews", "product_review_stats", "conversations", "conversation_messages", "user", "markets", "notification_outbox", "notification_delivery_receipts", "agent_audit_events", "cache_dep", "event_outbox", "product_sales_stats"];
 const counts = Object.fromEntries(COUNT_TABLES.map((table) => [table, db.prepare(`SELECT count(*) AS n FROM ${table}`).get().n]));
 console.log(JSON.stringify(counts, null, 2));
 db.close();
