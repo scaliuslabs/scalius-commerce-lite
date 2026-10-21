@@ -4,14 +4,14 @@
 // never see it, so with nobody named it stays off.
 import { useQuery } from "@tanstack/react-query";
 import { NET_TERMS_DAYS, NET_TERMS_SEGMENTS_MAX, NET_TERMS_TAGS_MAX, type NetTermsSettings } from "@scalius/shared/payment-terms";
-import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { SearchableSelect } from "~/components/ui/searchable-select";
-import { Switch } from "~/components/ui/switch";
+import { FieldGroup, Inset } from "~/components/ui/field";
 import { customerSegmentsQueryOptions } from "~/lib/api-query-options/customers";
 import { formatNumber, useMessages } from "~/i18n";
 import { paymentsMessages } from "~/i18n/settings-payments";
 import { SettingsField } from "./SettingsPage";
+import { SettingsCheckbox } from "./SettingsCheckbox";
 
 /** "wholesale, B2B " → ["wholesale", "b2b"]: Customers → Tags are lowercase. */
 export function parseNetTermsTags(text: string): string[] {
@@ -32,7 +32,8 @@ export function NetTermsPanel({ value, disabled, onChange }: {
     segmentIds: on ? [...value.segmentIds, id].slice(0, NET_TERMS_SEGMENTS_MAX) : value.segmentIds.filter((item) => item !== id),
   });
   return (
-    <div className="w-full space-y-4 rounded-md border border-border bg-muted/30 p-4" data-net-terms-panel>
+    <Inset className="w-full" data-net-terms-panel>
+      <FieldGroup inset>
       <SettingsField id="net-terms-days" label={t("netTermsDays")} help={t("netTermsDaysHelp")}>
         <SearchableSelect
           id="net-terms-days"
@@ -61,30 +62,31 @@ export function NetTermsPanel({ value, disabled, onChange }: {
         ) : segmentList.length === 0 ? (
           <p className="text-body text-muted-foreground">{segments.isPending ? t("netTermsSegmentsLoading") : t("netTermsNoSegments")}</p>
         ) : (
-          <ul className="space-y-1">
+          <ul className="flex flex-col gap-4">
             {segmentList.map((segment) => (
               <li key={segment.id}>
-                <label className="flex min-h-11 items-center gap-3 text-body md:min-h-9">
-                  <Checkbox
-                    checked={value.segmentIds.includes(segment.id)}
-                    disabled={disabled || (!value.segmentIds.includes(segment.id) && value.segmentIds.length >= NET_TERMS_SEGMENTS_MAX)}
-                    onCheckedChange={(checked) => toggleSegment(segment.id, checked === true)}
-                  />
-                  {segment.name}
-                </label>
+                <SettingsCheckbox
+                  id={`net-terms-segment-${segment.id}`}
+                  label={segment.name}
+                  checked={value.segmentIds.includes(segment.id)}
+                  disabled={disabled || (!value.segmentIds.includes(segment.id) && value.segmentIds.length >= NET_TERMS_SEGMENTS_MAX)}
+                  onCheckedChange={(checked) => toggleSegment(segment.id, checked)}
+                />
               </li>
             ))}
           </ul>
         )}
       </fieldset>
-      <label className="flex min-h-11 items-start justify-between gap-4">
-        <span>
-          <span className="block text-body font-medium">{t("netTermsApps")}</span>
-          <span className="block text-body text-muted-foreground">{t("netTermsAppsHelp")}</span>
-        </span>
-        <Switch checked={value.appsDecide} disabled={disabled} onCheckedChange={(appsDecide) => onChange({ ...value, appsDecide })} />
-      </label>
+      <SettingsCheckbox
+        id="net-terms-apps"
+        label={t("netTermsApps")}
+        help={t("netTermsAppsHelp")}
+        checked={value.appsDecide}
+        disabled={disabled}
+        onCheckedChange={(appsDecide) => onChange({ ...value, appsDecide })}
+      />
       {!named ? <p role="alert" className="text-body text-destructive">{t("netTermsNobody")}</p> : null}
-    </div>
+      </FieldGroup>
+    </Inset>
   );
 }

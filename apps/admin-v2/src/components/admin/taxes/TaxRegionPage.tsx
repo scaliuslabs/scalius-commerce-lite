@@ -50,7 +50,7 @@ import {
   percentToBasisPoints,
   taxRegionName,
 } from "./tax-form";
-import { NONE, SwitchRow, useCanManageTaxes, useGroupName, useRefreshTaxes, useSaveFailure, useWriteFailure } from "./tax-shared";
+import { NONE, CheckRow, useCanManageTaxes, useGroupName, useRefreshTaxes, useSaveFailure, useWriteFailure } from "./tax-shared";
 import { FieldRow } from "~/components/ui/field";
 
 const BD = "BD";
@@ -235,7 +235,7 @@ function RateForm({ rate, country, regions, config }: {
         />
       </SettingsField>
       {inCountry ? null : (
-        <SwitchRow label={t("combinable")} help={t("combinableHelp")} checked={draft.combinable} onCheckedChange={(on) => set("combinable", on)} />
+        <CheckRow label={t("combinable")} help={t("combinableHelp")} checked={draft.combinable} onCheckedChange={(on) => set("combinable", on)} />
       )}
       <SettingsField
         id="tax-rate-order"
@@ -252,8 +252,8 @@ function RateForm({ rate, country, regions, config }: {
           onChange={(event) => set("priority", event.target.value)}
         />
       </SettingsField>
-      <SwitchRow label={t("compound")} checked={draft.isCompound} onCheckedChange={(on) => set("isCompound", on)} />
-      <SwitchRow label={t("active")} checked={draft.isActive} onCheckedChange={(on) => set("isActive", on)} />
+      <CheckRow label={t("compound")} checked={draft.isCompound} onCheckedChange={(on) => set("isCompound", on)} />
+      <CheckRow label={t("active")} checked={draft.isActive} onCheckedChange={(on) => set("isActive", on)} />
       {roles.length > 0 ? (
         <p
           role={breaksCoverage ? "alert" : undefined}

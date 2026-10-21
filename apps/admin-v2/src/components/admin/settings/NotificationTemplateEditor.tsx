@@ -191,7 +191,7 @@ function TestSmsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("testSmsTitle")}</DialogTitle>
           <DialogDescription>{isOrderNotificationType(event) ? t("testSmsHelp") : t("testSmsHelpSample")}</DialogDescription>

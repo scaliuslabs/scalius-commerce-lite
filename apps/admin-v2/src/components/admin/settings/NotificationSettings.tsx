@@ -134,12 +134,15 @@ function RulesTable({
                     params={{ event }}
                     aria-label={t("editMessage", { event: events(event) })}
                     title={events(event)}
-                    className="line-clamp-2 min-h-11 min-w-6 text-link hover:underline sm:min-h-6"
+                    className="flex min-h-11 min-w-6 items-center text-link hover:underline sm:min-h-6"
                   >
-                    {events(event)}
+                    {/* The 44px phone target centres its text on the row, beside the checkboxes (T4). */}
+                    <span className="line-clamp-2">{events(event)}</span>
                   </Link>
                 ) : (
-                  <span title={events(event)} className="line-clamp-2 min-h-11 sm:min-h-6">{events(event)}</span>
+                  <span title={events(event)} className="flex min-h-11 items-center sm:min-h-6">
+                    <span className="line-clamp-2">{events(event)}</span>
+                  </span>
                 )}
               </td>
               {columns.map((column) => (

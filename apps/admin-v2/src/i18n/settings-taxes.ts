@@ -35,7 +35,7 @@ export const taxesMessages = defineMessages({
     noGroups: "Add a group, like Standard, before adding rates.",
     advancedTitle: "Tax groups and product overrides",
     startGroupHelp: "Rates belong to a tax group. Start with one group for all your products.",
-    startGroup: "Create a Standard group",
+    startGroup: "Create Standard group",
     standardGroupName: "Standard",
     startGroupFailed: "Couldn't create the group",
     addGroup: "Add tax group",

@@ -202,8 +202,9 @@ describe("markets settings", () => {
     return queryClient;
   }
 
+  // Saved with the save bar: checkboxes (DESIGN F9), found through their label's for attribute.
   const switchNamed = (text: string) =>
-    [...container.querySelectorAll("label")].find((label) => label.textContent?.includes(text))!.querySelector<HTMLButtonElement>("button[role=switch]")!;
+    document.getElementById([...container.querySelectorAll("label")].find((label) => label.textContent?.includes(text))!.htmlFor) as HTMLButtonElement;
 
   it("lists each market with its status, countries and currency, the primary one labelled", async () => {
     await render(<MarketsList />);

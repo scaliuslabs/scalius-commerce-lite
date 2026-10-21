@@ -53,6 +53,7 @@ import { shippingMessages } from "~/i18n/settings-shipping";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { useSaveBar } from "../shared/SaveBar";
 import { SettingsCard, SettingsDialog, SettingsField } from "./SettingsPage";
+import { SettingsCheckbox } from "./SettingsCheckbox";
 
 const PAGE_SIZE = 20;
 
@@ -175,10 +176,7 @@ function LocationForm({ country, level, location }: { country: string; level: nu
           />
         </SettingsField>
       ) : null}
-      <label className="flex min-h-11 items-center justify-between gap-4 text-body font-medium">
-        {t("active")}
-        <Switch checked={draft.isActive} onCheckedChange={(isActive) => setDraft({ ...draft, isActive })} />
-      </label>
+      <SettingsCheckbox id="location-active" label={t("active")} checked={draft.isActive} onCheckedChange={(isActive) => setDraft({ ...draft, isActive })} />
       {location ? (
         <>
           <Button type="button" variant="ghost" className="self-start" onClick={() => setConfirmDelete(true)}>

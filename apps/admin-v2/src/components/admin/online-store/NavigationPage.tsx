@@ -108,7 +108,7 @@ function AddMenuDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("addMenu")}</DialogTitle>
           <DialogDescription>{t("addMenuHelp")}</DialogDescription>

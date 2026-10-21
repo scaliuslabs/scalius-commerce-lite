@@ -161,7 +161,7 @@ export function TypographyCard({ theme, setDraft, frame: Frame = SectionCard }: 
       />
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-200">
           <DialogHeader>
             <DialogTitle>{t("typographyPick")}</DialogTitle>
             <DialogDescription>{t("typographyPickHelp")}</DialogDescription>

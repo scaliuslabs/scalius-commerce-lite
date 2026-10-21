@@ -1,7 +1,8 @@
 // Settings → Taxes: what the taxes page and a country's tax page share.
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
-import { Switch } from "~/components/ui/switch";
+import { useId } from "react";
+import { SettingsCheckbox } from "~/components/admin/settings/SettingsCheckbox";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { isAdminApiConflictError } from "~/lib/admin-api-error";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
@@ -56,7 +57,8 @@ export function useRefreshTaxes() {
   return () => queryClient.invalidateQueries({ queryKey: queryKeys.settings.taxes() });
 }
 
-export function SwitchRow({
+/** A yes/no saved with the page or the dialog: a checkbox (DESIGN F9). */
+export function CheckRow({
   label,
   help,
   checked,
@@ -69,15 +71,8 @@ export function SwitchRow({
   disabled?: boolean;
   onCheckedChange: (checked: boolean) => void;
 }) {
-  return (
-    <label className="flex min-h-11 items-center justify-between gap-4 text-body">
-      <span>
-        <span className="block font-medium">{label}</span>
-        {help ? <span className="block text-muted-foreground">{help}</span> : null}
-      </span>
-      <Switch checked={checked} disabled={disabled} onCheckedChange={onCheckedChange} />
-    </label>
-  );
+  const id = useId();
+  return <SettingsCheckbox id={id} label={label} help={help} checked={checked} disabled={disabled} onCheckedChange={onCheckedChange} />;
 }
 
 export function useGroupName() {

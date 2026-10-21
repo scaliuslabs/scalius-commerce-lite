@@ -104,7 +104,7 @@ describe("AccountSessions", () => {
     await flush();
 
     expect(host.textContent).toContain("Couldn't load your devices.");
-    expect(buttonIn(host, "Sign out all other devices").disabled).toBe(true);
+    expect(buttonIn(host, "Sign out all other devices")).toBeUndefined();
     api.list.mockResolvedValue({ sessions: [session("cmd_this", true, "Chrome on Mac")], hasMore: false });
     act(() => buttonIn(host, "Try again").click());
     await flush();

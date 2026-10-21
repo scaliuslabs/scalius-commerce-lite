@@ -258,7 +258,7 @@ export function WebhookFormDialog({
       render={(state) => (
         <>
           <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : requestClose(state))}>
-            <DialogContent className="sm:max-w-xl">
+            <DialogContent className="sm:max-w-160">
               <DialogHeader>
                 <DialogTitle>{t(subscription ? "editTitle" : "createTitle")}</DialogTitle>
                 <DialogDescription>{t("formDescription")}</DialogDescription>

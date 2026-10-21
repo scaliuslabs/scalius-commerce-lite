@@ -636,7 +636,8 @@ export function MetaConnectionFields({ canEdit, tagPixelId }: { canEdit: boolean
       </SettingsField>
       <SettingsField
         id="meta-test-code"
-        label={`${t("testCode")} (${common("optional")})`}
+        label={t("testCode")}
+        optional
         help={draft.testEventCode === MASKED_VALUE ? t("secretSaved") : t("testCodeHelp")}
       >
         <Input

@@ -89,7 +89,7 @@ export const accountMessages = defineMessages({
     locked: "Too many wrong codes. For your security, try again in 15 minutes.",
 
     devices: "Signed-in devices",
-    devicesHelp: "Sign out any device you don't recognise.",
+    devicesHelp: "Sign out any device you don't recognize.",
     loadingDevices: "Loading devices",
     devicesLoadFailed: "Couldn't load your devices.",
     thisDevice: "This device",

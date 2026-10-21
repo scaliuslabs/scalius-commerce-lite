@@ -35,7 +35,6 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { SearchableSelect } from "~/components/ui/searchable-select";
-import { Switch } from "~/components/ui/switch";
 import { Textarea } from "~/components/ui/textarea";
 import { useCurrency } from "~/hooks/use-currency";
 import { useMessages } from "~/i18n";
@@ -268,7 +267,7 @@ export function CustomFieldDefinitionDialog({ ownerType, definition, open, onOpe
   return (
     <>
       <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : requestClose())}>
-        <DialogContent className="sm:max-w-xl">
+        <DialogContent className="sm:max-w-160">
           <DialogHeader>
             <DialogTitle>{creating ? t("addTitle", { owner: t(`ownerOne.${ownerType}` as CustomFieldMessageKey) }) : t("editTitle")}</DialogTitle>
           </DialogHeader>
@@ -352,15 +351,15 @@ export function CustomFieldDefinitionDialog({ ownerType, definition, open, onOpe
             ) : null}
             <ChoiceField
               id="custom-field-definition-storefront"
-              controlAt="end"
               label={t("storefrontVisible")}
               help={storefrontAllowed ? t("storefrontHelp") : t("storefrontNever")}
               control={(
-              <Switch
+              <Checkbox
                 id="custom-field-definition-storefront"
                 checked={storefrontAllowed && draft.storefrontVisible}
                 disabled={!storefrontAllowed}
-                onCheckedChange={(value) => set("storefrontVisible", value)}
+                aria-describedby="custom-field-definition-storefront-help"
+                onCheckedChange={(value) => set("storefrontVisible", value === true)}
               />
               )}
             />

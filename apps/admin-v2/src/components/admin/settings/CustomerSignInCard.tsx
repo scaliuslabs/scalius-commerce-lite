@@ -98,7 +98,7 @@ export function CustomerSignInCard() {
             <span className="font-medium">{t("phoneField")}</span>
             <span className="text-muted-foreground">{t(phoneless ? "phoneDigitalOptional" : "phoneLocked")}</span>
           </div>
-          <label className="flex min-h-11 items-start gap-3 py-3 text-body">
+          <label className="flex min-h-11 items-start gap-2 py-3 text-body">
             <span className="flex h-lh items-center">
             <Checkbox
               checked={phoneless}
@@ -126,7 +126,7 @@ export function CustomerSignInCard() {
             onValueChange={(mode) => set({ ...identity, email: mode as EmailCollectionMode })}
           >
             {EMAIL_COLLECTION_MODES.map((mode) => (
-              <label key={mode} className="flex min-h-11 items-start gap-3 py-3 text-body">
+              <label key={mode} className="flex min-h-11 items-start gap-2 py-3 text-body">
                 <span className="flex h-lh items-center"><RadioGroupItem value={mode} disabled={mode === "hidden" && (emailCodes || phoneless)} /></span>
                 {t(EMAIL_LABEL[mode])}
               </label>
@@ -145,7 +145,7 @@ export function CustomerSignInCard() {
             onValueChange={(mode) => set({ ...identity, whatsapp: mode as WhatsAppCollectionMode })}
           >
             {WHATSAPP_COLLECTION_MODES.map((mode) => (
-              <label key={mode} className="flex min-h-11 items-start gap-3 py-3 text-body">
+              <label key={mode} className="flex min-h-11 items-start gap-2 py-3 text-body">
                 <span className="flex h-lh items-center"><RadioGroupItem value={mode} disabled={mode === "off" && whatsappCodes} /></span>
                 {t(WHATSAPP_LABEL[mode])}
               </label>
@@ -175,7 +175,7 @@ export function CustomerSignInCard() {
                 : null;
             return (
               <div key={channel}>
-                <label className="flex min-h-11 items-start gap-3 py-3 text-body">
+                <label className="flex min-h-11 items-start gap-2 py-3 text-body">
                   <span className="flex h-lh items-center">
                   <Checkbox
                     checked={on}
