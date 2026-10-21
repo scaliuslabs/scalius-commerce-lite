@@ -28,6 +28,8 @@ import ColumnsFooter from "./footer/ColumnsFooter.astro";
 import NewsletterFooter from "./footer/NewsletterFooter.astro";
 import DirectoryFooter from "./footer/DirectoryFooter.astro";
 import FooterBottom from "./footer/FooterBottom.astro";
+import FooterLocalization from "./footer/FooterLocalization.astro";
+import type { FooterLocalizationModel } from "./footer/footer-localization";
 import { newsletterLanguage } from "@/lib/newsletter-copy";
 import Container from "./ui/Container.astro";
 import { storefrontCopy } from "@/lib/storefront-copy";
@@ -47,9 +49,11 @@ interface Props {
   /** The coarse renderer fact (`resolved.layout.footer`); the variant comes from the resolved theme. */
   variant: StorefrontFooterRenderer;
   business: StorefrontBusinessInfo | null | undefined;
+  /** The country/region and language forms (the layout's), above the bottom row. */
+  localization?: FooterLocalizationModel | null;
 }
 
-const { menus, storeName, storePhone, social, policies, business, languageCode } = Astro.props;
+const { menus, storeName, storePhone, social, policies, business, languageCode, localization } = Astro.props;
 const { resolved, brand, language } = await currentRequestTheme(Astro.locals);
 const copy = storefrontCopy(language).chrome;
 const variant = resolved.blocks.footer.variant;
@@ -91,6 +95,7 @@ const TONES: Record<string, string | undefined> = { muted: "muted", header: "hea
     {variant === "centered-compact" && <NewsletterFooter model={model} signup={signup} />}
     {variant === "directory" && <DirectoryFooter model={model} marketplace={marketplaceDirectory} />}
     <AppSlot name="footer.columns" />
+    <FooterLocalization localization={localization} />
     {!marketplaceDirectory && <FooterBottom model={model} showPolicies={variant !== "centered-compact"} />}
   </Container>
   {marketplaceDirectory && (

@@ -1,0 +1,39 @@
+---
+// The footer's localization forms (Dawn): country/region with more than one
+// market, language when the page's market has two languages (`/bn-bd`). They
+// sit inside the footer, above its bottom row: the core footer draws them
+// after its app columns, and a footer skin where it places its
+// `footer.columns` slot (Footer.astro).
+import LanguageSelector from "@/components/markets/LanguageSelector.astro";
+import MarketSelector from "@/components/markets/MarketSelector.astro";
+import type { FooterLocalizationModel } from "./footer-localization";
+
+interface Props {
+  localization?: FooterLocalizationModel | null;
+}
+
+const { localization } = Astro.props;
+---
+
+{localization && (localization.markets || localization.language) && (
+  <div class="footer-locale-row" data-footer-localization>
+    {localization.markets && (
+      <MarketSelector
+        matrix={localization.matrix}
+        presence={localization.presence}
+        currencyCode={localization.currencyCode}
+        language={localization.pageLanguage}
+        returnTo={localization.returnTo}
+      />
+    )}
+    {localization.language && (
+      <LanguageSelector
+        market={localization.language.market}
+        presence={localization.presence}
+        country={localization.language.country}
+        language={localization.pageLanguage}
+        returnTo={localization.returnTo}
+      />
+    )}
+  </div>
+)}

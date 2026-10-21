@@ -224,17 +224,19 @@ body {
   }
 }
 
-/* The country and language choices under the footer: one bar on the page
-   container, so its edge lines up with the footer above it. */
-.site-root .footer-locale {
-  border-block-start: 1px solid var(--color-border);
-}
+/* The country and language choices inside the footer, above its bottom row
+   (core footer) or where a footer skin places its columns slot; their words
+   take the footer's own colour. */
 .site-root .footer-locale-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem 2rem;
-  padding-block: 0.75rem;
+  margin-block-start: 1.5rem;
+}
+/* In a skin's slot the skin's next row follows directly: keep the same gap below. */
+.site-root [data-sx-embed] .footer-locale-row {
+  margin-block-end: 1.5rem;
 }
 
 .site-root :where(header, footer) .max-w-7xl,
