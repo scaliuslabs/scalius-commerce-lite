@@ -20,7 +20,7 @@ export const settingsLocationsMessages = defineMessages({
     name: "Name",
     nameRequired: "Give the location a name.",
     code: "Code",
-    codeHelp: "A short code staff recognise, like DHK-1.",
+    codeHelp: "A short code staff recognize, like DHK-1.",
     codeRequired: "Enter a code.",
     codeInvalid: "Use letters, numbers, hyphens or underscores.",
     codeTaken: "Another location already uses this code.",

@@ -141,17 +141,20 @@ export function AccountSessions() {
         )}
         {sessionsQuery.data?.hasMore ? <p className="pt-3 text-body text-muted-foreground">{t("moreDevices")}</p> : null}
       </CardContent>
-      <CardFooter className="justify-end">
-        <Button
-          type="button"
-          variant="outline"
-          disabled={!canSignOutOthers || loadFailed || pending}
-          loading={signOutOthers.isPending}
-          onClick={() => setConfirm("others")}
-        >
-          {t("signOutOthers")}
-        </Button>
-      </CardFooter>
+      {/* Only when another device is signed in: never a disabled button without a reason (C5). */}
+      {canSignOutOthers && !loadFailed ? (
+        <CardFooter className="justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={pending}
+            loading={signOutOthers.isPending}
+            onClick={() => setConfirm("others")}
+          >
+            {t("signOutOthers")}
+          </Button>
+        </CardFooter>
+      ) : null}
       <ConfirmDialog
         open={confirm !== null}
         onOpenChange={(open) => !open && setConfirm(null)}
