@@ -1,6 +1,8 @@
-// The account navigation: Orders, Profile and Inbox always, then Reviews,
-// Downloads, Gift cards and Warranties (active ones) while the account has something there (or the
-// buyer is on that page). One server read, GET /customer-auth/account-summary,
+// The account navigation: Orders, Profile and Inbox always; Reviews whenever
+// the store shows reviews and Downloads whenever it sells digital items (so
+// the strip is the same on every account page, Shopify-style), and Gift
+// cards and Warranties (active ones) while the account has something there
+// (or the buyer is on that page). One server read, GET /customer-auth/account-summary,
 // gives every count, so every account page renders the same strip and nothing
 // shifts between pages. Labels and badge digits are in the page's language.
 import { accountCopy } from "./account-copy";
@@ -33,8 +35,20 @@ function badgeText(count: number): string {
   return count > 99 ? `${formatCount(99)}+` : formatCount(Math.floor(count));
 }
 
+/** What the store offers: a section it offers is always in the strip. */
+export interface AccountStoreFacts {
+  /** Reviews are on and the store has a published review. */
+  hasReviews: boolean;
+  /** The store sells a digital line. */
+  hasDigitalLines: boolean;
+}
+
 /** The tabs in their fixed order for this page. */
-export function accountNavTabs(current: AccountSection, summary: AccountSummary | null): AccountNavTab[] {
+export function accountNavTabs(
+  current: AccountSection,
+  summary: AccountSummary | null,
+  store: AccountStoreFacts = { hasReviews: false, hasDigitalLines: false },
+): AccountNavTab[] {
   const has = (key: AccountSection, count: number) => key === current || count > 0;
   const words = accountCopy().shell;
   const tabs: Array<AccountNavTab & { show: boolean }> = [
@@ -47,9 +61,9 @@ export function accountNavTabs(current: AccountSection, summary: AccountSummary 
       label: words.reviews,
       badge: badgeText(summary?.reviewsToWrite ?? 0),
       badgeLabel: words.toReview,
-      show: has("reviews", (summary?.reviewsToWrite ?? 0) + (summary?.reviewsWritten ?? 0)),
+      show: store.hasReviews || has("reviews", (summary?.reviewsToWrite ?? 0) + (summary?.reviewsWritten ?? 0)),
     },
-    { key: "downloads", href: "/account/downloads", label: words.downloads, badge: "", badgeLabel: "", show: has("downloads", summary?.downloads ?? 0) },
+    { key: "downloads", href: "/account/downloads", label: words.downloads, badge: "", badgeLabel: "", show: store.hasDigitalLines || has("downloads", summary?.downloads ?? 0) },
     { key: "gift-cards", href: "/account/gift-cards", label: words.giftCards, badge: "", badgeLabel: "", show: has("gift-cards", summary?.giftCards ?? 0) },
     { key: "warranties", href: "/account/warranties", label: words.warranties, badge: "", badgeLabel: "", show: has("warranties", summary?.activeWarranties ?? 0) },
   ];
