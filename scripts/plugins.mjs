@@ -54,6 +54,7 @@ import {
   packSigned,
   parseCommandArgs,
   trustedKeysWith,
+  shownPath,
   userPath,
 } from "./plugin-registry.mjs";
 import { resolvePnpmExecutable } from "./dev-local-utils.mjs";
@@ -234,7 +235,7 @@ function create(id, args) {
   const name = id.split(".")[1];
   const dir = flags.get("--dir");
   const directory = typeof dir === "string" ? userPath(dir) : join(root, "plugins", name);
-  const shown = relative(process.env.INIT_CWD || process.cwd(), directory) || ".";
+  const shown = shownPath(directory);
   if (existsSync(directory)) throw new Error(`${shown} already exists.`);
   const standalone = !isWorkspacePackageDir(directory);
   const version = sdkVersion();
@@ -281,11 +282,11 @@ async function pack(target, flags) {
     key: typeof key === "string" ? userPath(key) : null,
     developer: typeof flags.get("--developer") === "string" ? flags.get("--developer") : null,
   });
-  console.log(`Packed ${packed.id}@${packed.version} (${packed.sha256.slice(0, 12)}) in ${relative(process.cwd(), packed.dist) || "dist"}`);
+  console.log(`Packed ${packed.id}@${packed.version} (${packed.sha256.slice(0, 12)}) in ${shownPath(packed.dist)}`);
   console.log(packed.signature
     ? `Signed by key ${packed.signature.keyId} (${packed.signature.developer}).`
     : "Not signed: a store needs a Super Admin to accept it as unsigned. Sign it with --key <folder> (make a key with: pnpm plugin keygen <folder>).");
-  console.log(`Upload package: ${relative(process.cwd(), packed.zipPath)}`);
+  console.log(`Upload package: ${shownPath(packed.zipPath)}`);
 }
 
 async function keygen(outDir) {

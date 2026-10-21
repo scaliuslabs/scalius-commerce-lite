@@ -5,7 +5,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { bundlePlugin, loadPluginContract, packStorefront, pluginPackageDir, resolvePluginEntry, root, sealBundle } from "./plugin-build.mjs";
-import { BUNDLE_MAX_BYTES } from "./plugin-registry.mjs";
+import { BUNDLE_MAX_BYTES, shownPath } from "./plugin-registry.mjs";
 
 export const BUNDLE_WARN_BYTES = 1024 * 1024;
 
@@ -154,11 +154,11 @@ export function formatChecks(checks) {
 /** Runs the checks, prints them and sets the exit code. */
 export async function runValidate(directory) {
   if (!existsSync(directory)) {
-    console.error(`✗ ${relative(root, directory) || directory} does not exist.`);
+    console.error(`✗ ${shownPath(directory)} does not exist.`);
     process.exitCode = 1;
     return null;
   }
-  console.log(`Checking ${relative(process.cwd(), directory) || "."}`);
+  console.log(`Checking ${shownPath(directory)}`);
   const outcome = await validatePlugin(directory);
   console.log(formatChecks(outcome.checks));
   const failed = outcome.checks.filter((check) => check.status === "fail").length;
