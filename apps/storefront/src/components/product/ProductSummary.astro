@@ -2,6 +2,7 @@
 import Icon from "@/components/icons/Icon.astro";
 import ProductDetails from "./ProductDetails.astro";
 import ProductBuyerInputs from "./ProductBuyerInputs.astro";
+import ProductPurchaseOptions from "./ProductPurchaseOptions.astro";
 import type { Product, ProductOptionDefinition, ProductVariant } from "@/lib/api";
 import {
   getBuyerVariantPricePresentation,
@@ -31,6 +32,8 @@ import { moneyPlaces, pickBuyerInputCopy } from "./lib/buyer-inputs";
 import { specificationValue } from "./lib/product-page-modules";
 import { catalogCopy } from "@/lib/catalog-copy";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { getLayoutData } from "@/lib/api/storefront";
+import { getRuntime } from "@/lib/api/runtime";
 import type { StorefrontBuyBoxLook } from "@scalius/shared/storefront-theme";
 import type { StorefrontProductPage } from "@scalius/shared/plugins/storefront-protocol";
 
@@ -155,6 +158,11 @@ const noScriptVariants = options.length > 0
       .filter((variant) => variant.label)
   : [];
 const buyerInputCopy = pickBuyerInputCopy(pageCopy);
+// An app's ways to buy (a subscription), from the layout read the page already
+// made; none on a gift card (money), or while nothing can be bought.
+const purchaseOptions = purchaseBlocked || product.isGiftCard
+  ? []
+  : ((getRuntime() ? await getLayoutData() : null)?.purchaseOptions ?? []);
 const stockAvailable = buyerStockSummary.tone === "available";
 // A price on each option value only when the values are priced differently.
 const onlyWhenDifferent = (prices: Map<string, number>) => new Set(prices.values()).size > 1 ? prices : new Map<string, number>();
@@ -432,6 +440,12 @@ function optionAriaLabel(
           <input type="hidden" name="variant" value={initialSelectedVariant?.id ?? ""} />
         </form>
       )}
+
+      <ProductPurchaseOptions
+        formId={buyFormId}
+        options={purchaseOptions}
+        copy={{ legend: catalogWords.purchaseOptions, oneTime: catalogWords.oneTimePurchase, price: catalogWords.purchaseOptionPrice }}
+      />
 
       {noScriptVariants.length > 0 ? (
         <noscript>

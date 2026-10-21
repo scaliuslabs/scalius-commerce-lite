@@ -60,7 +60,7 @@ describe("context.product for islands", () => {
     quantity.dispatchEvent(new Event("input", { bubbles: true }));
     await tick();
     expect(preview.textContent).toBe("ring_l: A & B x3");
-    expect(product.state()).toEqual({ variantId: "ring_l", quantity: 3, inputs: { engraving: "A & B", gift_wrap: "" } });
+    expect(product.state()).toEqual({ variantId: "ring_l", quantity: 3, inputs: { engraving: "A & B", gift_wrap: "" }, purchaseOption: null });
 
     stop();
     pickSize("ring_m");

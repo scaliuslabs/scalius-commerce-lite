@@ -86,6 +86,24 @@ async function quickAdd(productUrl: string): Promise<boolean> {
   }
 }
 
+/** An island's `addLine`: the buyer UI's add-line flow, for this app (its own purchase options only). */
+function addLineFor(pluginId: string): NonNullable<StorefrontIslandContext["addLine"]> {
+  return async (line) => {
+    try {
+      const { addVariantLine } = await import("@/lib/buyer-ui/actions");
+      const addedLineKey = await addVariantLine({
+        variantId: typeof line?.variantId === "string" ? line.variantId : "",
+        quantity: line?.quantity ?? 1,
+        ...(typeof line?.purchaseOption === "string" ? { purchaseOption: line.purchaseOption } : {}),
+      }, pluginId);
+      document.dispatchEvent(new CustomEvent("open-cart", { detail: { addedLineKey } }));
+      return true;
+    } catch {
+      return false;
+    }
+  };
+}
+
 function contextFor(element: Element): StorefrontIslandContext | null {
   const host = element.closest<HTMLElement>("[data-sx-app][data-sx-base]");
   const pluginId = host?.dataset.sxApp;
@@ -101,6 +119,7 @@ function contextFor(element: Element): StorefrontIslandContext | null {
     formatMoney: (money) => formatMinorMoney(money),
     openCart,
     quickAdd,
+    addLine: addLineFor(pluginId),
     onCart,
     fetchApp: (path, init) => fetch(`/apps/${pluginId}/${path.replace(/^\/+/, "")}`, { credentials: "same-origin", ...init }),
     signedIn: signedInHint,

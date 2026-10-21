@@ -6,6 +6,7 @@
  */
 import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
 import type { CartLineProperty } from "@/store/cart";
+import { cartLinePurchaseOptionId } from "./purchase-option";
 
 const STORAGE_KEY = "scalius_cart_line_edit";
 /** An edit left unfinished this long ago no longer applies. */
@@ -17,6 +18,8 @@ export interface CartLineEdit {
   variantId: string;
   quantity: number;
   properties: Array<Pick<CartLineProperty, "key" | "value">>;
+  /** The line's purchase option (`<app id>.<key>`), kept when the line is updated. */
+  purchaseOption?: string;
   createdAt: number;
 }
 
@@ -57,12 +60,14 @@ export function readCartLineEdit(productId: string, now = Date.now()): CartLineE
     isRecord(entry) && typeof entry.key === "string" && typeof entry.value === "string"
       ? [{ key: entry.key, value: entry.value }]
       : []);
+  const purchaseOption = cartLinePurchaseOptionId(parsed.purchaseOption);
   return {
     lineKey: parsed.lineKey,
     productId,
     variantId: parsed.variantId,
     quantity: Math.min(MAX_LINE_QUANTITY, Math.max(1, Math.floor(parsed.quantity))),
     properties,
+    ...(purchaseOption ? { purchaseOption } : {}),
     createdAt: parsed.createdAt,
   };
 }

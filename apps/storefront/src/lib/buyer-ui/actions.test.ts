@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BuyerUiBlock } from "@scalius/shared/plugins/buyer-ui";
 import { runBuyerUiAction } from "./actions";
 
-const { addToCart, addDiscountCode } = vi.hoisted(() => ({ addToCart: vi.fn(), addDiscountCode: vi.fn() }));
-vi.mock("@/store/cart", () => ({ addToCart, addDiscountCode }));
+const { addToCart, addDiscountCode, cartLineKeyFor } = vi.hoisted(() => ({ addToCart: vi.fn(), addDiscountCode: vi.fn(), cartLineKeyFor: vi.fn(async () => "line_key") }));
+vi.mock("@/store/cart", () => ({ addToCart, addDiscountCode, cartLineKeyFor }));
 const fetchMock = vi.fn();
 const block: BuyerUiBlock = {
   appId: "vendor.example", releaseId: "release_1", target: "checkout.actions.before",

@@ -425,5 +425,69 @@ describe("the stable contract's shapes", () => {
     const published = await call("PUT", "/products/p_tea/publications", { body: { channelIds: [] } });
     expect(published.status).toBe(200);
     expect(published.body.data).toEqual({ product: expect.objectContaining({ id: "p_tea" }), salesChannelIds: [] });
+describe("a Worker that dies after the write commits and before its response is kept", () => {
+  /** Puts every kept response back to the claim its run left: the write committed, the response did not. */
+  function loseResponses(leaseUntil: number | null) {
+    const rows = sqlite.prepare("SELECT key, value FROM system_kv WHERE key >= 'idem:' AND key < 'idem;'").all() as Array<{ key: string; value: string }>;
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      const { request } = JSON.parse(row.value) as { request: string };
+      const claim = leaseUntil === null ? { state: "processing", request } : { state: "processing", request, lease: "dead-worker", leaseUntil };
+      sqlite.prepare("UPDATE system_kv SET value = ? WHERE key = ?").run(JSON.stringify(claim), row.key);
+    }
+  }
+  const lapsed = () => Math.floor(Date.now() / 1000) - 1;
+
+  it("answers an order's repeat with the order it committed once the lease lapses, and keeps that answer", async () => {
+    sqlite.exec(`INSERT INTO customers (id, name, phone, email, origin) VALUES ('cust_b2b', 'Trader Ltd', '+8801744444444', 'buyer@trader.test', 'merchant')`);
+    principal = { pluginId: "acme.subscriptions", protectedData: new Set() };
+    const body = {
+      customerId: "cust_b2b",
+      items: [{ productId: "p_tea", variantId: "v_tea", quantity: 1 }],
+      shippingAddress: { countryCode: "IN", line1: "12 MG Road", locality: "Bengaluru", adminArea: "KA", postalCode: "560001" },
+      shippingMinor: 0,
+    };
+    const headers = { "Idempotency-Key": "renewal sub_7 2026-11" };
+    const placed = await call("POST", "/resources/orders", { body, headers });
+    expect(placed.status).toBe(201);
+
+    // While the first run could still be alive, a repeat waits.
+    loseResponses(Math.floor(Date.now() / 1000) + 60);
+    expect((await call("POST", "/resources/orders", { body, headers })).body.error.code).toBe("idempotency_in_progress");
+
+    loseResponses(lapsed());
+    const recovered = await call("POST", "/resources/orders", { body, headers });
+    expect({ status: recovered.status, error: recovered.body.error }).toEqual({ status: 201, error: undefined });
+    expect(recovered.body.data.order.id).toBe(placed.body.data.order.id);
+    expect((sqlite.prepare("SELECT count(*) AS n FROM orders WHERE customer_id = 'cust_b2b'").get() as { n: number }).n).toBe(1);
+    // The recovered answer is kept: the next repeat replays it.
+    const replayed = await call("POST", "/resources/orders", { body, headers });
+    expect(replayed).toMatchObject({ status: 201, replayed: "true" });
+    expect(replayed.body.data.order.id).toBe(placed.body.data.order.id);
+  });
+
+  it("moves stock once when the repeat recovers an adjustment, also from a claim kept before leases", async () => {
+    const headers = { "Idempotency-Key": "erp push 2026-10-21 #88" };
+    const body = { delta: 5, reason: "received" };
+    const first = await call("POST", "/inventory/v_tea/adjust", { body, headers });
+    expect({ status: first.status, error: first.body.error }).toEqual({ status: 200, error: undefined });
+    loseResponses(null);
+    const recovered = await call("POST", "/inventory/v_tea/adjust", { body, headers });
+    expect(recovered.status).toBe(200);
+    expect(recovered.replayed).toBeNull();
+    expect((await call("GET", "/resources/variants/v_tea")).body.data).toMatchObject({ onHand: 105 });
+  });
+
+  it("never creates twice: a create without a key of its own answers outcome unknown", async () => {
+    const body = { name: "Nadia Islam", email: null, phone: "+8801733333333" };
+    const headers = { "Idempotency-Key": "crm import nadia" };
+    expect((await call("POST", "/customers", { body, headers })).status).toBe(201);
+    loseResponses(lapsed());
+    const repeat = await call("POST", "/customers", { body, headers });
+    expect(repeat.status).toBe(409);
+    expect(repeat.body.error.code).toBe("idempotency_outcome_unknown");
+    expect((sqlite.prepare("SELECT count(*) AS n FROM customers WHERE phone = '+8801733333333'").get() as { n: number }).n).toBe(1);
+    // A different request under the key is still refused as reuse.
+    expect((await call("POST", "/customers", { body: { ...body, name: "Other" }, headers })).body.error.code).toBe("idempotency_key_reused");
   });
 });

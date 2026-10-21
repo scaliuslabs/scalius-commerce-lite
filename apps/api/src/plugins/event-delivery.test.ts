@@ -1,7 +1,8 @@
 // The `plugins.deliver` consumer with the bundled loader on the migrated
 // schema: an outbox event reaches the subscribed plugin exactly once per
 // delivery row; a throwing handler is retried with backoff and dead-lettered;
-// a deactivated plugin's deliveries are cancelled; a plugin at its in-flight
+// a stopped plugin's deliveries are held and sent when it runs again, an
+// uninstalled one's cancelled; a plugin at its in-flight
 // cap is deferred; an installation behind the deployed build is updated in
 // place without using the delivery's attempt. The event pipeline end to end:
 // dispatch → fan-out (webhooks + plugins) → delivery.
@@ -16,13 +17,18 @@ import { processEventDispatch, toOutboxEvent } from "@scalius/core/modules/event
 import {
   activatePlugin,
   deactivatePlugin,
+  dropExpiredHeldPluginDeliveries,
   getPluginKv,
+  HELD_UNTIL,
   installPlugin,
+  listDuePluginEventDeliveries,
   pluginEventFanOutTarget,
   requirePluginInstallation,
 } from "@scalius/core/modules/plugins";
+import { planLimits } from "@scalius/shared/plan-limits";
 import { PLUGIN_API_VERSION } from "@scalius/shared/plugins";
 import { eq } from "drizzle-orm";
+import { runScheduledEventRetention } from "../events/dispatch";
 import { API_EVENT_FAN_OUT_TARGETS } from "../events/targets";
 import { BUNDLED_PLUGINS } from "./bundled.gen";
 import { processPluginEventDelivery } from "./event-delivery";
@@ -120,12 +126,58 @@ describe("plugin event delivery", () => {
     expect(row(id!)).toMatchObject({ status: "exhausted", attempts: 8 });
   });
 
-  it("cancels deliveries of a deactivated plugin and defers a plugin at its in-flight cap", async () => {
+  it("holds a stopped app's events, keeps them through retention, and sends them when it runs again", async () => {
+    const [before] = await deliveriesFor("acme.hello");
+    const hello = await requirePluginInstallation(db, "acme.hello");
+    const stopped = await deactivatePlugin(db, "acme.hello", { expectedRevision: hello.revision });
+    // A delivery claimed while it is off waits, its attempt given back.
+    expect(await deliver(before!)).toEqual({ status: "held", deliveryId: before, retryInSeconds: null });
+    expect(row(before!)).toMatchObject({ status: "pending", attempts: 0 });
+    // An event while it is off is still written (demand) and fanned out held: never sent, never due.
+    expect(sqlite.prepare("SELECT count(*) AS n FROM plugin_registrations AS r JOIN event_demand AS d ON d.filter = r.name WHERE r.plugin_id = 'acme.hello' AND r.kind = 'event'").get()).not.toEqual({ n: 0 });
+    const fanned = await pluginEventFanOutTarget.fanOut(db, await outboxEvent());
+    const heldRows = () => sqlite.prepare("SELECT id FROM plugin_event_deliveries WHERE plugin_id = 'acme.hello' AND status = 'pending' AND next_attempt_at >= ?").all(HELD_UNTIL) as Array<{ id: string }>;
+    expect(heldRows()).toHaveLength(2);
+    expect(fanned.map((message) => (message as { deliveryId: string }).deliveryId)).not.toContain(heldRows()[1]!.id);
+    expect(await listDuePluginEventDeliveries(db)).not.toContain(heldRows()[0]!.id);
+    // Retention keeps the events they wait for.
+    sqlite.exec("UPDATE event_outbox SET status = 'dispatched', dispatched_at = unixepoch() - 8 * 86400");
+    await runScheduledEventRetention(db);
+    expect(sqlite.prepare("SELECT count(*) AS n FROM plugin_event_deliveries WHERE plugin_id = 'acme.hello' AND event_id IS NOT NULL AND status = 'pending'").get()).toEqual({ n: 2 });
+
+    // Turned on again: both go out, and it still counts as active since its first approval.
+    const running = await activatePlugin(db, "acme.hello", { actorUserId: "owner", expectedRevision: stopped.revision });
+    expect(running.activatedAt).toBe(hello.activatedAt);
+    expect(heldRows()).toEqual([]);
+    for (const id of await listDuePluginEventDeliveries(db)) {
+      if ((sqlite.prepare("SELECT plugin_id FROM plugin_event_deliveries WHERE id = ?").get(id) as { plugin_id: string }).plugin_id !== "acme.hello") continue;
+      expect(await deliver(id)).toMatchObject({ status: "succeeded" });
+    }
+    expect(await getPluginKv(db, "acme.hello", "created_count")).toBe(2);
+  });
+
+  it("drops what an app that is off keeps past the plan's bound, oldest first", async () => {
+    const hello = await requirePluginInstallation(db, "acme.hello");
+    await deactivatePlugin(db, "acme.hello", { expectedRevision: hello.revision });
+    const { heldEvents, heldEventDays } = planLimits().plugins;
+    const now = Math.floor(Date.now() / 1000);
+    const insert = sqlite.prepare(`INSERT INTO plugin_event_deliveries (id, plugin_id, topic, resource_type, resource_id, status, next_attempt_at, created_at)
+      VALUES (?, 'acme.hello', 'order.created', 'order', 'x', 'pending', ?, ?)`);
+    const id = (n: number) => `pld_${String(1_700_000_000_000 + n).padStart(13, "0")}${String(n).padStart(12, "0")}`;
+    // One past the window, then heldEvents + 2 recent ones: the old one and the two oldest recent ones go.
+    insert.run(id(0), HELD_UNTIL, now - heldEventDays * 86400 - 60);
+    for (let n = 1; n <= heldEvents + 2; n += 1) insert.run(id(n), HELD_UNTIL, now - 60);
+    expect(await dropExpiredHeldPluginDeliveries(db)).toBe(3);
+    const cancelled = sqlite.prepare("SELECT id FROM plugin_event_deliveries WHERE status = 'cancelled' ORDER BY id").all() as Array<{ id: string }>;
+    expect(cancelled.map((row) => row.id)).toEqual([id(0), id(1), id(2)]);
+    expect(await dropExpiredHeldPluginDeliveries(db)).toBe(0);
+  });
+
+  it("cancels a delivery whose app was uninstalled and defers a plugin at its in-flight cap", async () => {
     const [cancelled] = await deliveriesFor("acme.flaky");
-    const flaky = await requirePluginInstallation(db, "acme.flaky");
-    await deactivatePlugin(db, "acme.flaky", { expectedRevision: flaky.revision });
+    sqlite.exec("DELETE FROM plugin_installations WHERE plugin_id = 'acme.flaky'");
     expect(await deliver(cancelled!)).toMatchObject({ status: "cancelled" });
-    expect(row(cancelled!)).toMatchObject({ status: "cancelled", last_error: "The app is not active or no longer receives this event." });
+    expect(row(cancelled!)).toMatchObject({ status: "cancelled", last_error: "The app was uninstalled." });
 
     const ids = [...await deliveriesFor("acme.hello"), ...await deliveriesFor("acme.hello")];
     sqlite.prepare("UPDATE plugin_event_deliveries SET status = 'processing', claim_id = 'held', claim_expires_at = unixepoch() + 60 WHERE id = ?").run(ids[0]!);

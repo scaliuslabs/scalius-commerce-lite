@@ -8,6 +8,7 @@ import type { CartValidationIssue } from "../api/orders";
 import { checkoutOrderRefusal, type CheckoutOrderRefusal } from "./tax-quote-error-contract";
 import { cartItemVariantLabel } from "../cart/item-options";
 import { cartLineInputs, readDiscountCodes } from "./tax-quote-client";
+import { cartLinePurchaseOptionId } from "../cart/purchase-option";
 import { checkoutAddressForMode, isCheckoutDeliveryMode } from "./delivery-mode";
 import { storedCheckoutBillingFields } from "./billing-address";
 import { giftCardRequestFields } from "./gift-cards";
@@ -61,6 +62,7 @@ type CheckoutCartLine = {
   name?: string;
   options?: unknown;
   properties?: unknown;
+  purchaseOption?: unknown;
 };
 
 type ErrorPayload = {
@@ -150,6 +152,7 @@ export async function createOrder(
 
   const items = Object.entries(cartItems).map(([cartKey, item]) => {
     const properties = cartLineInputs(item.properties);
+    const purchaseOption = cartLinePurchaseOptionId(item.purchaseOption);
     return {
       cartKey,
       productId: item.id,
@@ -159,6 +162,7 @@ export async function createOrder(
       productName: typeof item.name === "string" ? item.name : null,
       variantLabel: variantLabelForCartLine(item),
       ...(properties ? { properties } : {}),
+      ...(purchaseOption ? { purchaseOption } : {}),
     };
   });
   // The address goes with the order only when something ships.

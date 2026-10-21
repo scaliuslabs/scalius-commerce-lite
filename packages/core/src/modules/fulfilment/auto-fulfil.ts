@@ -2,7 +2,7 @@
 // over by the system once payment settles. Wave A ships the seam — the
 // registry lookup, the idempotent job and the sweep — with no automatic
 // fulfiller registered, so every run is a no-op until Wave B adds them.
-import { safeBatch, type Database } from "@scalius/database/client";
+import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import { orderItems, orders, OrderStatus, PaymentStatus } from "@scalius/database/schema";
 import type { BatchItem } from "drizzle-orm/batch";
 import { and, asc, eq, gt, inArray, isNull, notInArray, sql } from "drizzle-orm";
@@ -14,9 +14,11 @@ import {
 import { nanoid } from "nanoid";
 import { autoFulfillerFor, FULFILLER_REGISTRY, type AutoFulfilRuntime, type FulfillerRegistry } from "./registry";
 import { buildFulfilmentInsertStatements, deriveOrderFulfilmentStatus } from "./ledger";
-import { applyOrderStatusChange, listOrderHolds } from "../orders";
+import { applyOrderStatusChange, listOrderHolds, noOpenOrderHoldCondition } from "../orders";
+import { awaitingAppHoldDecision } from "./hold-window";
 import { type AutoFulfilMode, checkoutDocument } from "../settings";
 
+const ORDER_ON_HOLD = "AUTO_FULFIL_ORDER_ON_HOLD";
 const SETTLED_PAYMENT_STATUSES = [PaymentStatus.PAID, PaymentStatus.PARTIALLY_REFUNDED];
 const CLOSED_ORDER_STATUSES = [
     OrderStatus.CANCELLED,
@@ -45,7 +47,8 @@ export interface AutoFulfilResult {
     unavailableTypes: FulfillmentType[];
     /** `awaiting_confirmation`: the store hands over only after staff confirm the order. */
     /** `on_hold`: staff review an app's hold; the sweep hands it over once released. */
-    skipped: "no_auto_lines" | "unsettled" | "closed" | "awaiting_confirmation" | "on_hold" | null;
+    /** `hold_window`: an app that may hold the order has not seen it yet (hold-window.ts). */
+    skipped: "no_auto_lines" | "unsettled" | "closed" | "awaiting_confirmation" | "on_hold" | "hold_window" | null;
     delivered: boolean;
 }
 
@@ -76,6 +79,7 @@ export async function autoFulfilOrder(
         status: orders.status,
         paymentStatus: orders.paymentStatus,
         deletedAt: orders.deletedAt,
+        createdAt: orders.createdAt,
     }).from(orders).where(eq(orders.id, orderId)).get();
     if (!order || order.deletedAt || (CLOSED_ORDER_STATUSES as string[]).includes(order.status)) {
         return { ...result, skipped: "closed" };
@@ -108,6 +112,9 @@ export async function autoFulfilOrder(
     if ((await listOrderHolds(db, [orderId])).get(orderId)?.some((hold) => hold.releasedAt === null)) {
         return { ...result, skipped: "on_hold" };
     }
+    if (deliverable && await awaitingAppHoldDecision(db, orderId, Math.floor(order.createdAt.getTime() / 1000))) {
+        return { ...result, skipped: "hold_window" };
+    }
 
     const fulfilledAfter = new Map(items.map((item) => [item.id, item.fulfilledQuantity]));
     for (const type of AUTO_FULFILLMENT_TYPES) {
@@ -138,7 +145,10 @@ export async function autoFulfilOrder(
             fulfilledQuantity: fulfilledAfter.get(item.id) ?? item.fulfilledQuantity,
         })));
         const statements: BatchItem<"sqlite">[] = [
-            // The ledger rows first: their unique request key makes a
+            // A hold that committed since the check above wins: the batch
+            // stops before anything is handed over.
+            buildBatchGuard(db, noOpenOrderHoldCondition(orderId), ORDER_ON_HOLD) as BatchItem<"sqlite">,
+            // The ledger rows next: their unique request key makes a
             // concurrent or repeated run fail here before any delivery.
             ...buildFulfilmentInsertStatements(db, {
                 fulfillmentId,
@@ -158,6 +168,10 @@ export async function autoFulfilOrder(
             await safeBatch(db, statements);
             result.fulfilledTypes.push(type);
         } catch (error) {
+            if (isBatchGuardError(error, ORDER_ON_HOLD)) {
+                // Types handed over earlier in this run stay handed over; the rest wait for staff.
+                return { ...result, skipped: result.fulfilledTypes.length > 0 ? null : "on_hold" };
+            }
             const message = error instanceof Error ? error.message : "";
             // Another run already handed this type over.
             if (

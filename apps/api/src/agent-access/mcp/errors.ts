@@ -176,6 +176,14 @@ export function recoveryFor(input: {
       hint: "The same request is still running. Wait 2 s and retry with the same idempotencyKey.",
     };
   }
+  if (code === "idempotency_outcome_unknown") {
+    const list = siblingOperation(operationId, LIST_SIBLINGS);
+    return {
+      retryable: false,
+      current: null,
+      hint: `The first call with this idempotencyKey stopped before its answer was kept and may have taken effect. ${list ? `Read ${list}` : "Read the resource"} to check; call again with a new idempotencyKey only if it is missing.`,
+    };
+  }
   if (code === "idempotency_key_reused") {
     return { retryable: false, field: "idempotencyKey", hint: "This key was used for a different request. Omit idempotencyKey (one is generated) or use a new one." };
   }

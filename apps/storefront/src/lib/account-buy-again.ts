@@ -8,6 +8,7 @@ import type { OrderLineFulfilmentFacts } from "@/lib/api/types";
 import type { CartValidationResult } from "@/lib/api/orders";
 import { currentPresence } from "@/lib/presence-url";
 import { accountCopy } from "@/lib/account-copy";
+import { readLinePurchaseOption } from "@scalius/shared/line-properties";
 
 /** Lines the store no longer sells as ordered; a short stock line still goes in, capped. */
 const GONE = new Set(["product_unavailable", "variant_required", "variant_unavailable", "variant_mismatch"]);
@@ -35,6 +36,8 @@ export async function addOrderToCart(items: Array<CustomerOrderItem & OrderLineF
           ...(item.properties?.some(({ key }) => !key.startsWith("_"))
             ? { properties: item.properties.filter(({ key }) => !key.startsWith("_")).map(({ key, value }) => ({ key, value })) }
             : {}),
+          // Bought under an app's option (a subscription): again under it, if it is still offered.
+          ...(readLinePurchaseOption(item.properties ?? null) ? { purchaseOption: readLinePurchaseOption(item.properties ?? null)! } : {}),
         })),
         // Today's price in the page's market (MARKETS-DESIGN D5).
         ...(currentPresence() ? { presence: currentPresence() } : {}),
@@ -63,6 +66,7 @@ export async function addOrderToCart(items: Array<CustomerOrderItem & OrderLineF
       imageMediaId: line.productImageMediaId ?? undefined,
       options: line.variantLabel ? [{ name: accountCopy().format.variant, label: line.variantLabel }] : undefined,
       freeDelivery: line.freeDelivery,
+      ...(line.purchaseOption ? { purchaseOption: line.purchaseOption } : {}),
       ...(line.fulfillmentKind ? { fulfillmentKind: line.fulfillmentKind } : {}),
       ...(line.properties?.length
         ? {

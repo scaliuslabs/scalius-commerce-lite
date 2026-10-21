@@ -17,6 +17,7 @@ import {
   completePluginEventDelivery,
   failPluginEventDelivery,
   getPluginInstallation,
+  holdPluginEventDelivery,
   releasePluginEventDelivery,
 } from "@scalius/core/modules/plugins";
 import { toOutboxEvent, type OutboxEvent } from "@scalius/core/modules/events";
@@ -29,7 +30,7 @@ import type { PluginHostOptions } from "./host";
 const OUTDATED_RETRY_SECONDS = 5;
 
 export type PluginDeliveryOutcome =
-  | { status: "succeeded" | "cancelled" | "busy" | "released"; deliveryId: string; retryInSeconds: number | null }
+  | { status: "succeeded" | "cancelled" | "busy" | "released" | "held"; deliveryId: string; retryInSeconds: number | null }
   | { status: "failed" | "exhausted"; deliveryId: string; retryInSeconds: number | null }
   | { status: "skipped"; deliveryId: string; reason: "missing" | "not_due" };
 
@@ -67,10 +68,15 @@ export async function processPluginEventDelivery(options: {
     getPluginInstallation(db, delivery.pluginId),
     delivery.eventId ? db.select().from(eventOutbox).where(eq(eventOutbox.id, delivery.eventId)).get() : Promise.resolve(undefined),
   ]);
-  if (!installation || installation.status !== "active" || !installation.grant
-    || !topicMatchesAnyFilter(delivery.topic as never, installation.grant.events)) {
-    await cancelPluginEventDelivery(db, delivery, claimId, "The app is not active or no longer receives this event.");
+  // Only an uninstall or a grant that no longer covers the topic ends a
+  // delivery; an app that is off keeps it until it runs again (held).
+  if (!installation || !installation.grant || !topicMatchesAnyFilter(delivery.topic as never, installation.grant.events)) {
+    await cancelPluginEventDelivery(db, delivery, claimId, installation ? "The app no longer receives this event." : "The app was uninstalled.");
     return { status: "cancelled", deliveryId, retryInSeconds: null };
+  }
+  if (installation.status !== "active") {
+    await holdPluginEventDelivery(db, delivery, claimId);
+    return { status: "held", deliveryId, retryInSeconds: null };
   }
   const event = eventRow ? toOutboxEvent(eventRow) : null;
   if (!event) {
@@ -85,6 +91,12 @@ export async function processPluginEventDelivery(options: {
   const durationMs = Date.now() - started;
   if (outcome.ok) {
     await completePluginEventDelivery(db, delivery, claimId, { durationMs });
+    if (delivery.topic === "order.created" && installation.grant.scopes.includes("write_orders")) {
+      // This app may have held the order; its automatic lines waited for it
+      // (fulfilment/hold-window.ts) and go out now unless it did.
+      const { autoFulfilAfterResponse } = await import("../background/auto-fulfil");
+      await autoFulfilAfterResponse({ env, executionCtx: options.ctx }, db, delivery.resourceId, "app hold window");
+    }
     return { status: "succeeded", deliveryId, retryInSeconds: null };
   }
   if (outcome.failure === "outdated") {
@@ -94,8 +106,8 @@ export async function processPluginEventDelivery(options: {
     return { status: "released", deliveryId, retryInSeconds: OUTDATED_RETRY_SECONDS };
   }
   if (outcome.failure === "inactive") {
-    await cancelPluginEventDelivery(db, delivery, claimId, "The app is not active.");
-    return { status: "cancelled", deliveryId, retryInSeconds: null };
+    await holdPluginEventDelivery(db, delivery, claimId);
+    return { status: "held", deliveryId, retryInSeconds: null };
   }
   const failed = await failPluginEventDelivery(db, delivery, claimId, { error: outcome.error ?? "The app failed.", durationMs });
   return { status: failed.status, deliveryId, retryInSeconds: failed.retryInSeconds };

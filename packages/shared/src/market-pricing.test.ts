@@ -153,6 +153,27 @@ describe("resolvePrice", () => {
     expect(resolvePrice({ ...plain, app: { amountMinor: 1.5, pluginId: "acme.b2b" } }).source).toBe("base");
   });
 
+  it("places a purchase option's own app price above every list, struck against the one-time price", () => {
+    const option = { amountMinor: 85_049, pluginId: "acme.subscriptions", purchaseOption: "acme.subscriptions.subscribe" };
+    const sale = price({ priceListId: "pl_x", kind: "sale", amountMinor: 97_000 });
+    const segment = price({ priceListId: "pl_s", kind: "segment", amountMinor: 95_000 });
+    const market = price({ priceListId: "pl_m", kind: "market", amountMinor: 90_000 });
+    // A subscription on a sale item costs the subscription price, struck against the sale's own compare-at.
+    expect(resolvePrice({ ...plain, prices: [sale], app: option }))
+      .toEqual({ amountMinor: 85_000, compareAtMinor: 100_000, source: "app", priceListId: null });
+    // Every list loses to it; the struck price is the one-time price (the sale, compared above the segment price).
+    expect(resolvePrice({ ...plain, prices: [sale, segment, market], app: option }))
+      .toEqual({ amountMinor: 85_000, compareAtMinor: 97_000, source: "app", priceListId: null });
+    // On a plain item it strikes the base compare-at; above FX too.
+    expect(resolvePrice({ ...plain, app: option })).toEqual({ amountMinor: 85_000, compareAtMinor: 120_000, source: "app", priceListId: null });
+    expect(resolvePrice({ ...plain, fx: usd(), incrementMinor: 1, app: { ...option, amountMinor: 800 } })).toMatchObject({ amountMinor: 800, source: "app" });
+    // A broken or zero answer falls back to the one-time precedence (the sale wins again).
+    expect(resolvePrice({ ...plain, prices: [sale], app: { ...option, amountMinor: 0 } })).toMatchObject({ source: "sale", amountMinor: 97_000 });
+    expect(resolvePrice({ ...plain, prices: [sale], app: { ...option, amountMinor: 1.5 } })).toMatchObject({ source: "sale" });
+    // A plain app price (no option) still loses to the sale.
+    expect(resolvePrice({ ...plain, prices: [sale], app: { amountMinor: 85_049, pluginId: "acme.b2b" } })).toMatchObject({ source: "sale" });
+  });
+
   it("breaks ties by priority, then the lowest amount, then the list id", () => {
     const low = price({ priceListId: "pl_b", kind: "market", amountMinor: 80_000, priority: 1 });
     const high = price({ priceListId: "pl_a", kind: "market", amountMinor: 90_000, priority: 5 });

@@ -9,7 +9,8 @@
  *
  * Precedence, documented once (Medusa price lists, Shopify catalogs):
  *
- *   active sale list > segment list > market list > app price > FX-derived > base
+ *   purchase-option app price > active sale list > segment list > market list
+ *     > app price > FX-derived > base
  *
  * - A list price applies only while its list is active and inside its
  *   schedule, in the market's currency, and (segment lists) to a member of
@@ -33,6 +34,13 @@
  *   subscription and tiered prices replace them. The compare-at is the price
  *   without the app when that is higher. Checkout only: catalogue reads never
  *   run apps.
+ * - Purchase-option app price: a line bought with an app's purchase option
+ *   (`purchaseOption`, a subscription or a rental) is that app's offer, so
+ *   only the app that declares the option prices it, and its price outranks
+ *   every list: a subscription on a sale item is charged the subscription
+ *   price, never the sale price. Without its answer the line takes the
+ *   one-time precedence below. Lists keep pricing one-time lines. The
+ *   compare-at is the one-time price when that is higher.
  * - Base: the SKU's price after its catalogue discount (`discountedPriceMinor`).
  *
  * Promotions, bundles and app discounts apply after this, in today's order:
@@ -312,6 +320,11 @@ export interface ResolvedPrice {
 export interface AppLinePrice {
   amountMinor: number;
   pluginId: string;
+  /**
+   * The line's purchase option (`<app id>.<key>`) when the app that declares
+   * it priced the line: the price outranks every list (see the module header).
+   */
+  purchaseOption?: string | null;
 }
 
 export interface PriceResolutionInput {
@@ -324,7 +337,7 @@ export interface PriceResolutionInput {
   fx: FxConversion | null;
   /** The market currency's price increment: list amounts round half-up to it. */
   incrementMinor: number;
-  /** An app's price for this line (checkout only); every list outranks it. */
+  /** An app's price for this line (checkout only); every list outranks it, unless it prices the line's purchase option. */
   app?: AppLinePrice | null;
 }
 
@@ -374,14 +387,21 @@ function better(left: PriceListPrice, right: PriceListPrice): boolean {
 
 /** The one price of a SKU in a market for a buyer and quantity (see the module header). */
 export function resolvePrice(input: PriceResolutionInput): ResolvedPrice {
+  const app = input.app && Number.isSafeInteger(input.app.amountMinor) && input.app.amountMinor > 0 ? input.app : null;
+  if (app?.purchaseOption) {
+    // The option's own price: above every list, struck against the one-time price.
+    const oneTime = resolvePrice({ ...input, app: null });
+    const amountMinor = toIncrement(app.amountMinor, input.incrementMinor);
+    return { amountMinor, compareAtMinor: compareAbove(amountMinor, oneTime.compareAtMinor ?? oneTime.amountMinor), source: "app", priceListId: null };
+  }
   const quantity = Math.max(1, Math.floor(input.quantity ?? 1));
   const candidates = rowPerList(input.prices, quantity);
   let winner: PriceListPrice | null = null;
   for (const candidate of candidates) if (!winner || better(candidate, winner)) winner = candidate;
   if (!winner) {
     const fallback = withoutLists(input);
-    if (!input.app || !Number.isSafeInteger(input.app.amountMinor) || input.app.amountMinor <= 0) return fallback;
-    const amountMinor = toIncrement(input.app.amountMinor, input.incrementMinor);
+    if (!app) return fallback;
+    const amountMinor = toIncrement(app.amountMinor, input.incrementMinor);
     const without = fallback.compareAtMinor ?? fallback.amountMinor;
     return { amountMinor, compareAtMinor: compareAbove(amountMinor, without), source: "app", priceListId: null };
   }

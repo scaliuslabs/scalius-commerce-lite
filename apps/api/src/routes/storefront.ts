@@ -431,6 +431,13 @@ const layoutDataSchema = z.object({
   })).openapi({
     description: "Active apps with storefront components (docs/STOREFRONT-COMPONENTS.md): the sections, components and skins their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts.",
   }),
+  purchaseOptions: z.array(z.object({
+    id: z.string().openapi({ description: "`<app id>.<key>`: what a cart, tax-quote or order line sends as its `purchaseOption`." }),
+    title: z.string(),
+    description: z.string().nullable(),
+  })).optional().openapi({
+    description: "Ways to buy a line the active apps offer (manifest `checkout.purchaseOptions`: a subscription, a rental), the ones checkout accepts. The product page's buy form lists them beside a one-time purchase; the app prices the line at checkout.",
+  }),
   appServices: z.object({
     search: z.string().nullable().openapi({ description: "The search app predictive search passes as `provider` to /search; null: built-in search." }),
     address: z.object({

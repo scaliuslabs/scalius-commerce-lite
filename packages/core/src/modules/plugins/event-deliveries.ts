@@ -4,9 +4,21 @@
 // state, mirroring webhook deliveries:
 //
 //   fan-out ──▶ pending ──drain──▶ processing ──▶ succeeded
-//                  ▲                  │
-//                  └─ failed (backoff) ◀┤──▶ exhausted (8 attempts)
-//                                     └──▶ cancelled (plugin inactive, event pruned)
+//      │           ▲                  │
+//      │           └─ failed (backoff) ◀┤──▶ exhausted (8 attempts)
+//      │           │                  └──▶ cancelled (uninstalled, topic no longer granted, event pruned)
+//      └──▶ held ──┘ (the app runs again)
+//
+// Held: an app with an approved grant that is not running (stopped by staff,
+// by its limits or an emergency stop; failed; an update waiting for
+// approval) keeps its events. Its deliveries are `pending` with no next
+// attempt (`HELD_UNTIL`), written at fan-out or when a claimed one finds the
+// app off (its attempt given back), and become due in the batch that makes
+// the app active again (`releaseHeldPluginDeliveriesStatement`). They are
+// bounded by the plan (`planLimits().plugins.heldEventDays`, and
+// `heldEvents` per app, oldest dropped first: `dropExpiredHeldPluginDeliveries`),
+// and an event a delivery still waits for is never pruned. Only an uninstall
+// or a grant that no longer covers the topic cancels one.
 //
 // Delivery is at least once: a dead Worker or an expired lease redelivers, so the same event can reach a plugin more than once. The
 // event id (`event.id`) is the plugin's idempotency key, stable across every
@@ -29,11 +41,13 @@ import {
   type PluginEventDeliveryStatus,
 } from "@scalius/database/schema";
 import { topicMatchesAnyFilter } from "@scalius/shared/events";
+import { planLimits } from "@scalius/shared/plan-limits";
 import { and, asc, desc, eq, inArray, lt, lte, or, sql } from "drizzle-orm";
 import type { EventDelivery, EventFanOutTarget } from "../events";
 import { PluginError } from "./errors";
 import { maskPluginLogText } from "./logs";
-import { hasActiveEventPlugins, listActiveEventPlugins, getActivePluginInstallation } from "./registry";
+import { HELD_UNTIL } from "./held-deliveries";
+import { hasApprovedEventPlugins, listApprovedEventPlugins, getActivePluginInstallation } from "./registry";
 
 export const PLUGIN_DELIVERY_MAX_ATTEMPTS = 8;
 /** Delay after attempt n (1-based) fails; the same 7 waits over about 22.6 hours as webhooks. */
@@ -46,7 +60,8 @@ export const MAX_PLUGIN_DELIVERY_FLUSH_LIMIT = 200;
 export const PLUGIN_DELIVERY_RETENTION_SECONDS = 30 * 24 * 60 * 60;
 export const PLUGIN_DELIVERY_LIST_MAX_LIMIT = 100;
 const MAX_ERROR_LENGTH = 500;
-const NEVER = 253_402_300_799;
+const NEVER = HELD_UNTIL;
+const HELD_REASON = "Waiting for the app to run again: it is turned off, failed or waiting for approval.";
 const PRUNE_BATCH_SIZE = 500;
 /** Bound values per delivery insert row (id, plugin, event, topic, resource type and id). */
 const INSERT_PARAMETERS_PER_ROW = 6;
@@ -70,10 +85,10 @@ function normalizeError(error: unknown): string {
 
 export const pluginEventFanOutTarget: EventFanOutTarget = {
   name: "plugins",
-  hasSubscribers: (db) => hasActiveEventPlugins(db),
+  hasSubscribers: (db) => hasApprovedEventPlugins(db),
   async fanOut(db, event) {
-    const subscribers = await listActiveEventPlugins(db, event.topic);
-    // The approved grant decides, and a plugin activated after the event never receives it.
+    const subscribers = await listApprovedEventPlugins(db, event.topic);
+    // The approved grant decides, and a plugin first approved after the event never receives it.
     const eligible = subscribers.filter(({ installation }) =>
       installation.grant !== null
       && topicMatchesAnyFilter(event.topic, installation.grant.events)
@@ -92,11 +107,25 @@ export const pluginEventFanOutTarget: EventFanOutTarget = {
     for (const chunk of chunkRowsForD1(rows, INSERT_PARAMETERS_PER_ROW)) {
       await db.insert(pluginEventDeliveries).values(chunk).onConflictDoNothing();
     }
-    // A redelivered event re-sends only deliveries still waiting.
+    // An app that is not running keeps the event until it runs again.
+    const held = eligible.filter(({ installation }) => installation.status !== "active").map(({ installation }) => installation.pluginId);
+    if (held.length > 0) {
+      await db.update(pluginEventDeliveries).set({ nextAttemptAt: HELD_UNTIL, lastError: HELD_REASON }).where(and(
+        eq(pluginEventDeliveries.eventId, event.id),
+        inArray(pluginEventDeliveries.pluginId, held),
+        eq(pluginEventDeliveries.status, "pending"),
+        eq(pluginEventDeliveries.attempts, 0),
+      ));
+    }
+    // A redelivered event re-sends only deliveries still waiting (never the held ones).
     const pending = await db
       .select({ id: pluginEventDeliveries.id })
       .from(pluginEventDeliveries)
-      .where(and(eq(pluginEventDeliveries.eventId, event.id), eq(pluginEventDeliveries.status, "pending")))
+      .where(and(
+        eq(pluginEventDeliveries.eventId, event.id),
+        eq(pluginEventDeliveries.status, "pending"),
+        lt(pluginEventDeliveries.nextAttemptAt, HELD_UNTIL),
+      ))
       .all();
     return pending.map((row): EventDelivery => ({ type: "plugins.deliver", deliveryId: row.id }));
   },
@@ -242,6 +271,28 @@ export async function cancelPluginEventDelivery(
 }
 
 /**
+ * Holds a claimed delivery for an app that is not running (turned off,
+ * stopped by its limits, failed, or an update waiting for approval): its
+ * attempt is given back and it waits, with no next attempt, until the app
+ * runs again (`releaseHeldPluginDeliveriesStatement`).
+ */
+export async function holdPluginEventDelivery(
+  db: Database,
+  delivery: PluginEventDeliveryRow,
+  claimId: string,
+): Promise<void> {
+  await db.update(pluginEventDeliveries).set({
+    status: "pending",
+    attempts: sql`CASE WHEN ${pluginEventDeliveries.attempts} > 0 THEN ${pluginEventDeliveries.attempts} - 1 ELSE 0 END`,
+    claimId: null,
+    claimExpiresAt: null,
+    lastError: HELD_REASON,
+    nextAttemptAt: HELD_UNTIL,
+    updatedAt: sql`unixepoch()`,
+  }).where(claimed(delivery, claimId));
+}
+
+/**
  * Gives a claimed delivery back without using up its attempt (the platform,
  * not the plugin, was not ready: its code is being updated in place).
  */
@@ -274,6 +325,28 @@ export async function listDuePluginEventDeliveries(db: Database, limit = MAX_PLU
     .limit(Math.max(1, Math.min(limit, MAX_PLUGIN_DELIVERY_FLUSH_LIMIT)))
     .all();
   return due.map((row) => row.id);
+}
+
+/**
+ * Bounds what apps that are not running keep (the plan's
+ * `plugins.heldEventDays`, and `plugins.heldEvents` per app): held
+ * deliveries older than the window, or beyond an app's newest `heldEvents`,
+ * are cancelled, at most 500 a run. The app reconciles what it missed by
+ * reading with `updatedSince` (packages/plugin-sdk/README.md, "Events").
+ */
+export async function dropExpiredHeldPluginDeliveries(db: Database, nowSeconds = Math.floor(Date.now() / 1000)): Promise<number> {
+  const { heldEventDays, heldEvents } = planLimits().plugins;
+  const cutoff = nowSeconds - heldEventDays * 24 * 60 * 60;
+  const rows = await db.update(pluginEventDeliveries).set({
+    status: "cancelled",
+    lastError: `The app was not running: it keeps at most ${heldEvents} events for ${heldEventDays} days.`,
+    updatedAt: sql`unixepoch()`,
+  }).where(inArray(pluginEventDeliveries.id, sql`(SELECT held.id FROM (
+      SELECT id, created_at, row_number() OVER (PARTITION BY plugin_id ORDER BY id DESC) AS newest
+      FROM plugin_event_deliveries WHERE status = 'pending' AND next_attempt_at >= ${HELD_UNTIL}
+    ) AS held WHERE held.newest > ${heldEvents} OR held.created_at < ${cutoff} LIMIT ${PRUNE_BATCH_SIZE})`))
+    .returning({ id: pluginEventDeliveries.id });
+  return rows.length;
 }
 
 /** Bounded delete (500 rows per run) of terminal deliveries older than 30 days. */

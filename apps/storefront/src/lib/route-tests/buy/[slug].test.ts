@@ -714,6 +714,53 @@ describe("/buy/[slug]", () => {
       expect(response.headers.get("Location")).toBe("/products/engraved-pen?error=customization_invalid");
     });
 
+    it("subscribes without JavaScript: the option rides the body, the app's price is the line's, and checkout gets both", async () => {
+      // acme.subscriptions offers "Subscribe and save"; its line costs 1,080 (the app's price), not the page's 1,200.
+      mocks.getProductBySlug.mockResolvedValueOnce(customizedProduct({ customization: { fields: [] }, requiresCustomization: false }));
+      mocks.validateCartItems
+        .mockResolvedValueOnce({
+          success: true,
+          data: {
+            valid: false, items: [], subtotal: 0, hasFreeDeliveryProduct: false,
+            issues: [{ index: 0, productId: "prod_1", variantId: "var_default_prod_1", code: "price_changed", action: "refresh_item", message: "The price changed.", productName: "Engraved Pen", variantLabel: null, requestedQuantity: 1, submittedPrice: 1200, currentPrice: 1080 }],
+          },
+        })
+        .mockResolvedValueOnce(validCartValidation({
+          unitPrice: 1080,
+          productName: "Engraved Pen",
+          purchaseOption: { id: "acme.subscriptions.subscribe", title: "Subscribe and save" },
+          propertiesHash: "0123456789abcdef",
+        }));
+
+      const response = await post(formRequest([
+        ["variant", "var_default_prod_1"],
+        ["purchaseOption", "acme.subscriptions.subscribe"],
+      ]));
+      const html = await response.text();
+      const quickBuyData = extractQuickBuyData(html) as { cartItem?: Record<string, unknown> };
+
+      expect(response.status).toBe(200);
+      // Checked once at the page's price, then once more at the store's price for the option.
+      expect(mocks.validateCartItems.mock.calls.map(([items]) => items)).toEqual([
+        [expect.objectContaining({ price: 1200, purchaseOption: "acme.subscriptions.subscribe" })],
+        [expect.objectContaining({ price: 1080, purchaseOption: "acme.subscriptions.subscribe" })],
+      ]);
+      expect(quickBuyData.cartItem).toMatchObject({
+        price: 1080,
+        purchaseOption: { id: "acme.subscriptions.subscribe", title: "Subscribe and save" },
+      });
+      // The no-JavaScript checkout form carries the line, option included, in its body.
+      const form = (html.match(/name="cartItems" value="([^"]*)"/)?.[1] ?? "").replace(/&quot;/g, '"');
+      expect(form).toContain('"purchaseOption":{"id":"acme.subscriptions.subscribe","title":"Subscribe and save"}');
+    });
+
+    it("refuses a malformed purchase option in the body", async () => {
+      const response = await post(formRequest([["variant", "var_default_prod_1"], ["purchaseOption", "subscribe please"]]));
+      expect(response.status).toBe(303);
+      expect(response.headers.get("Location")).toBe("/products/engraved-pen?error=customization_invalid");
+      expect(mocks.validateCartItems).not.toHaveBeenCalled();
+    });
+
     it("refuses cross-origin form posts that carry cookies", async () => {
       // The test DOM's Request drops Cookie (a forbidden header), so the
       // guard reads a plain request with the same method, URL and headers.

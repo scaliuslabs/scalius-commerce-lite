@@ -80,6 +80,7 @@ import {
 import { publicCategoryConditions } from "../categories";
 import {
   activePluginInstallationsFromRows,
+  activePluginPurchaseOptions,
   activePluginStorefrontExtensions,
   activePluginStorefrontScripts,
   selectActivePluginInstallations,
@@ -857,6 +858,8 @@ export async function getLayoutData(
     // Active apps' approved scripts: the storefront loads them on their pages and adds their hosts to the CSP.
     appScripts: activePluginStorefrontScripts(activeApps.values()),
     appExtensions,
+    // Ways to buy a line the active apps offer (a subscription): the buy form lists them.
+    purchaseOptions: activePluginPurchaseOptions(activeApps.values()),
     // The page groups where an active app draws a checkout or account block:
     // only those pages read their blocks part (none: no read at all).
     // Buyer services apps provide (search, address autocomplete, sign-in): the pages call them only when named.

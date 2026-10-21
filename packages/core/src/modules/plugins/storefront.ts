@@ -10,6 +10,7 @@ import { pluginInstallations, type PluginInstallationRow } from "@scalius/databa
 import { and, asc, eq, sql } from "drizzle-orm";
 import { deps } from "../../cache-deps";
 import { pluginHasStorefrontModule, type StorefrontExtension, type StorefrontSkinTarget } from "@scalius/shared/plugins";
+import { purchaseOptionId } from "@scalius/shared/plugins/ids";
 import { toPluginInstallation, type PluginInstallation } from "./installations";
 
 /**
@@ -37,6 +38,35 @@ export function activePluginInstallationsFromRows(rows: readonly PluginInstallat
     if (installation && installation.status === "active" && installation.grant) installations.set(installation.pluginId, installation);
   }
   return installations;
+}
+
+/** A way to buy a line an active app offers (`checkout.purchaseOptions`), as the product page lists it. */
+export interface PluginStorefrontPurchaseOption {
+  /** `<app id>.<key>`: what a cart line sends as its `purchaseOption`. */
+  id: string;
+  title: string;
+  description: string | null;
+}
+
+/**
+ * The purchase options the product page offers: those checkout accepts
+ * (`checkoutPurchaseOptions`), so the options of an active app that checkout
+ * reads (`selectActiveCheckoutRegistrations`: a checkout function, a
+ * storefront extension or a payment provider registered). Plugin id, then
+ * manifest order.
+ */
+export function activePluginPurchaseOptions(installations: Iterable<PluginInstallation>): PluginStorefrontPurchaseOption[] {
+  const options: PluginStorefrontPurchaseOption[] = [];
+  const sorted = [...installations].sort((left, right) => left.pluginId.localeCompare(right.pluginId));
+  for (const { pluginId, manifest } of sorted) {
+    const readByCheckout = manifest.functions.length > 0 || manifest.storefront.extensions.length > 0
+      || manifest.providers.some((provider) => provider.kind === "payment");
+    if (!readByCheckout) continue;
+    for (const option of manifest.checkout?.purchaseOptions ?? []) {
+      options.push({ id: purchaseOptionId(pluginId, option.key), title: option.title, description: option.description ?? null });
+    }
+  }
+  return options;
 }
 
 /** The pages a storefront script may load on (`storefront.scripts[].pages`). */

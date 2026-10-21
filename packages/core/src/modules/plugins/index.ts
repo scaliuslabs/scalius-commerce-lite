@@ -11,6 +11,7 @@ export * from "./cron-runs";
 export * from "./errors";
 export * from "./event-deliveries";
 export * from "./grants";
+export * from "./held-deliveries";
 
 export * from "./installations";
 export * from "./kv";

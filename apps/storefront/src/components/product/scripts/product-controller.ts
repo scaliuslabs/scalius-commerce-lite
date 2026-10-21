@@ -48,6 +48,8 @@ import {
 import { moneyPlaces, unitPriceWithSurcharge } from "../lib/buyer-inputs";
 import { initBuyerInputs, type BuyerInputsController } from "./buyer-inputs-controller";
 import { pagePath } from "@/lib/presence-url";
+import { acceptedNewCartLine, validateCartLinesInBrowser, validateNewCartLine } from "@/lib/cart/new-line";
+import type { CartLinePurchaseOption } from "@/lib/cart/purchase-option";
 
 const state = {
   variants: [] as Variant[],
@@ -173,6 +175,7 @@ export function init() {
     if (state.edit) {
       if (cache.quantity) cache.quantity.value = String(state.edit.quantity);
       state.buyerInputs.prefill(state.edit.properties);
+      selectPurchaseOption(state.edit.purchaseOption ?? "");
     }
   }
 
@@ -185,6 +188,23 @@ export function init() {
   requestAnimationFrame(() => {
     delete document.documentElement.dataset.variantPending;
   });
+}
+
+/** The buy form's purchase-option radios (an app's ways to buy, beside a one-time purchase). */
+function purchaseOptionInputs(): HTMLInputElement[] {
+  return Array.from(document.querySelectorAll<HTMLInputElement>('[data-product-purchase-options] input[name="purchaseOption"]'));
+}
+
+function selectPurchaseOption(id: string) {
+  const inputs = purchaseOptionInputs();
+  const match = inputs.find((input) => input.value === id) ?? inputs.find((input) => input.value === "");
+  if (match) match.checked = true;
+}
+
+/** The chosen app option; null for a one-time purchase (or a page without options). */
+function selectedPurchaseOption(): CartLinePurchaseOption | null {
+  const input = purchaseOptionInputs().find((entry) => entry.checked && entry.value);
+  return input ? { id: input.value, title: input.dataset.purchaseOptionTitle || input.value } : null;
 }
 
 /** Offers end on their own schedule: hide one that ended while the page was cached. */
@@ -686,16 +706,38 @@ async function addSelected(redirect: boolean) {
   });
   if (!cartData.valid || !cartData.data)
     return showError(cartData.errors[0] || "Unable to add this product");
+  let failureMessage = cache.actions?.dataset.cartAddFailedText ?? "";
+  // An app's option (a subscription) is priced by the app: the line takes the store's price for it.
+  const purchaseOption = selectedPurchaseOption();
+  let price = cartData.data.price;
+  let chosenOption = purchaseOption;
+  if (purchaseOption) {
+    const checked = acceptedNewCartLine(await validateNewCartLine(validateCartLinesInBrowser, {
+      cartKey: "new",
+      productId: cartData.data.id,
+      variantId: validation.variant.id,
+      quantity,
+      price,
+      productName: cartData.data.name,
+      variantLabel: selectedCartOptions(validation.variant).map((option) => option.label).join(" / ") || null,
+      ...(properties.length > 0 ? { properties: properties.map(({ key, value }) => ({ key, value })) } : {}),
+      purchaseOption: purchaseOption.id,
+    }));
+    if (!checked.item) return showError(checked.message || failureMessage);
+    price = checked.item.unitPrice;
+    chosenOption = checked.item.purchaseOption ?? purchaseOption;
+  }
   const line = {
     ...cartData.data,
+    price,
     variantId: validation.variant.id,
     options: selectedCartOptions(validation.variant),
     ...(properties.length > 0 ? { properties } : {}),
+    ...(chosenOption ? { purchaseOption: chosenOption } : {}),
     ...(validation.variant.fulfillmentKind ? { fulfillmentKind: validation.variant.fulfillmentKind } : {}),
   };
   const edit = state.edit;
   // Buy now keeps the full cart and requires persistence before navigation.
-  let failureMessage = cache.actions?.dataset.cartAddFailedText ?? "";
   const options = {
     onFailure(reason: CartAddFailureReason) {
       if (reason === "quantity_limit") {

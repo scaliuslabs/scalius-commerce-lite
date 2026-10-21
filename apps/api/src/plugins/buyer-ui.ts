@@ -4,6 +4,7 @@ import type { Database } from "@scalius/database/client";
 import { resolveMediaUrl } from "@scalius/shared/media-url";
 import type { BuyerUiBlock } from "@scalius/shared/plugins/buyer-ui";
 import { pluginUiNodes } from "@scalius/shared/plugins/ui";
+import { purchaseOptionId } from "@scalius/shared/plugins/ids";
 import type { RegisteredPlugin } from "@scalius/core/modules/plugins";
 
 /** Validate references against the app's approved declaration before exposing a tree. */
@@ -20,6 +21,9 @@ export async function prepareBuyerUiBlocks(db: Database, blocks: BuyerUiBlock[],
       if (node.type === "button") {
         const action = node.action;
         if (action.kind === "cart" && action.op === "set_attribute" && !fields.has(action.key)) return false;
+        // A line under a purchase option names one of the app's own declared options.
+        if (action.kind === "cart" && action.op === "add_line" && action.purchaseOption
+          && !(installation.manifest.checkout?.purchaseOptions ?? []).some((option) => purchaseOptionId(installation.pluginId, option.key) === action.purchaseOption)) return false;
         if (action.kind === "route" && (!proxy || !installation.manifest.routes.public.some((route) => route.name === action.route && route.methods.includes(action.method ?? "POST")))) return false;
       }
       if (node.type === "image" && typeof node.src === "object" && "media" in node.src) ids.add(node.src.media);

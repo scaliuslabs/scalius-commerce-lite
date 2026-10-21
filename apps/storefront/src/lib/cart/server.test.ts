@@ -164,6 +164,44 @@ describe("cart server order processing", () => {
     );
   });
 
+  it("places a subscribed line (acme.subscriptions) with its purchase option, as the store accepted it", async () => {
+    const formData = buildCodFormData();
+    formData.set("cartItems", JSON.stringify({
+      line_sub: {
+        id: "product-1", slug: "product-1", name: "Product 1", price: 90, quantity: 1, variantId: "variant_1",
+        purchaseOption: { id: "acme.subscriptions.subscribe", title: "Subscribe and save" },
+      },
+    }));
+    mocks.validateCartItems.mockResolvedValueOnce({
+      success: true,
+      data: {
+        valid: true, issues: [], subtotal: 90, hasFreeDeliveryProduct: false,
+        items: [{
+          index: 0, cartKey: "line_sub", productId: "product-1", variantId: "variant_1", quantity: 1, unitPrice: 90,
+          productName: "Product 1", variantLabel: null, freeDelivery: false, availableQuantity: 5,
+          purchaseOption: { id: "acme.subscriptions.subscribe", title: "Subscribe and save" },
+        }],
+        delivery: { shippingCharge: 60, cityName: "Dhaka", zoneName: "Mirpur", areaName: null },
+      },
+    });
+
+    expect(await processOrder(formData)).toMatchObject({ success: true });
+    expect(mocks.validateCartItems.mock.calls[0]![0]).toEqual([
+      expect.objectContaining({ cartKey: "line_sub", purchaseOption: "acme.subscriptions.subscribe" }),
+    ]);
+    expect(mocks.createOrder.mock.calls[0]![0].items).toEqual([
+      expect.objectContaining({ cartKey: "line_sub", price: 90, purchaseOption: "acme.subscriptions.subscribe" }),
+    ]);
+
+    // A malformed option is refused, never bought one-time.
+    formData.set("cartItems", JSON.stringify({
+      line_bad: { id: "product-1", name: "Product 1", price: 90, quantity: 1, variantId: "variant_1", purchaseOption: { id: "not an option" } },
+    }));
+    mocks.createOrder.mockClear();
+    expect(await processOrder(formData)).toMatchObject({ success: false });
+    expect(mocks.createOrder).not.toHaveBeenCalled();
+  });
+
   it.each(["checkout_attempt_expired", "checkout_attempt_conflict"])("preserves %s for page recovery without treating it as a new order", async (errorCode) => {
     const refusal = {
       success: false, status: 409, errorCode, error: "Checkout needs review",

@@ -52,7 +52,8 @@ export type CartValidationIssue = {
     | "price_changed"
     | "properties_required"
     | "properties_invalid"
-    | "fulfilment_unavailable";
+    | "fulfilment_unavailable"
+    | "purchase_option_unavailable";
   action: "remove" | "select_variant" | "reduce_quantity" | "refresh_item" | "edit_properties";
   message: string;
   productName: string | null;
@@ -89,6 +90,8 @@ export type CartValidationRequestItem = {
   variantLabel?: string | null;
   /** Buyer inputs, body only (never a URL). */
   properties?: Array<{ key: string; value: string }>;
+  /** An app's purchase option for the line (`<app id>.<key>`); absent: one-time. */
+  purchaseOption?: string;
 };
 
 export type CartValidationItem = {
@@ -107,7 +110,9 @@ export type CartValidationItem = {
   properties?: OrderLineProperty[];
   /** Apps' add-ons to each unit, in `unitPrice` ("Add-on: …"); never sent back. */
   adjustments?: OrderLineProperty[];
-  /** Canonical inputs hash for the v3 line key; "none" without inputs. */
+  /** The app's purchase option the line is bought with, and its title. */
+  purchaseOption?: { id: string; title: string };
+  /** Canonical identity hash (inputs, then purchase option) for the v3 line key; "none" without either. */
   propertiesHash?: string;
   fulfillmentKind?: FulfillmentKind;
   /** Null for a physical line until a delivery or pickup method is chosen. */

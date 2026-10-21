@@ -14,6 +14,7 @@ const ISSUE_CODES = new Set(Object.keys({
   properties_required: true,
   properties_invalid: true,
   fulfilment_unavailable: true,
+  purchase_option_unavailable: true,
 } satisfies Record<CartValidationIssue["code"], true>));
 const ISSUE_ACTIONS = new Set(Object.keys({
   remove: true,
