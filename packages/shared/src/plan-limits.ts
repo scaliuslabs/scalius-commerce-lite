@@ -109,6 +109,17 @@ export interface PlanLimits {
     readonly bulkPerRowSlice: number;
   };
   /**
+   * Items one batch create (`products.batch_create`, `categories.batch_create`,
+   * `brands.batch_create`; routes/admin/resources-batch.ts) accepts. Each item
+   * costs a few D1 queries of the invocation, so the Free bound keeps one call
+   * well under its 50.
+   */
+  readonly batchCreates: {
+    readonly products: number;
+    readonly categories: number;
+    readonly brands: number;
+  };
+  /**
    * Per-app ceilings (docs/platform/PLUGINS.md, "Quotas"). An app's manifest
    * `limits` apply within them; the platform takes the lower value.
    */
@@ -160,6 +171,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       limitScale: 0.2,
     }),
     lists: Object.freeze({ countCap: 1_000, maxOffset: 1_000, bulkPerRowSlice: 8 }),
+    batchCreates: Object.freeze({ products: 4, categories: 12, brands: 19 }),
     plugins: Object.freeze({
       cpuMs: 50,
       wallMs: 10_000,
@@ -199,6 +211,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       limitScale: 1,
     }),
     lists: Object.freeze({ countCap: 10_000, maxOffset: 10_000, bulkPerRowSlice: 90 }),
+    batchCreates: Object.freeze({ products: 20, categories: 50, brands: 50 }),
     plugins: Object.freeze({
       cpuMs: 200,
       wallMs: 30_000,

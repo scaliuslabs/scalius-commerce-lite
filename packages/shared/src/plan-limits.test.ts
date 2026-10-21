@@ -111,6 +111,12 @@ describe("plan profile", () => {
     expect(free.lists.countCap).toBeLessThanOrEqual(paid.lists.countCap);
     expect(free.lists.maxOffset).toBeLessThanOrEqual(paid.lists.maxOffset);
     expect(free.lists.bulkPerRowSlice).toBeLessThanOrEqual(paid.lists.bulkPerRowSlice);
+    // Batch creates: Free fits Workers Free's 50 D1 queries (routes/admin/resources-batch.d1.test.ts measures it).
+    for (const key of ["products", "categories", "brands"] as const) {
+      expect(free.batchCreates[key], key).toBeLessThanOrEqual(paid.batchCreates[key]);
+      expect(free.batchCreates[key], key).toBeGreaterThanOrEqual(1);
+    }
+    expect(paid.batchCreates).toEqual({ products: 20, categories: 50, brands: 50 });
     expect(paid.lists.bulkPerRowSlice).toBe(90);
     for (const key of ["sweepsPerTick", "inventoryExpiryPerRun", "staleOrdersPerRun", "digitalUploadsPerState", "orphanAttachmentsPerRun", "limitScale"] as const) {
       expect(free.maintenance[key], key).toBeLessThanOrEqual(paid.maintenance[key]);

@@ -296,8 +296,10 @@ async function derivedBrandSlugCandidates(db: Database, name: string) {
 export async function createBrand(
     db: Database,
     data: CreateBrandInput,
+    /** `id`: the new brand's id when the caller derives one (a batch item's retry key); otherwise a fresh one. */
+    options: { id?: string } = {},
 ): Promise<{ id: string; slug: string; revision: number; status: BrandStatus }> {
-    const id = `${BRAND_ID_PREFIX}${nanoid()}`;
+    const id = options.id ?? `${BRAND_ID_PREFIX}${nanoid()}`;
     const insertWithSlug = async (slug: string) => {
         const insert = db.insert(brands).values({
             id,

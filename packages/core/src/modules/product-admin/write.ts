@@ -438,6 +438,8 @@ function isProductSlugConstraintError(error: unknown): boolean {
 export async function createProduct(
     db: Database,
     data: CreateProductInput,
+    /** `id`: the new product's id when the caller derives one (a batch item's retry key); otherwise a fresh one. */
+    options: { id?: string } = {},
 ): Promise<{ id: string; aggregateRevision: number }> {
     // A digital SKU's stock is its licence keys (the schema refuses this too).
     assertDigitalStockInput(data);
@@ -450,7 +452,7 @@ export async function createProduct(
         if (existingProduct) throw new ConflictError("A product with this slug already exists");
     }
 
-    const productId = "prod_" + nanoid();
+    const productId = options.id ?? "prod_" + nanoid();
     // Typed attribute value rows, validated before any other read (unknown enum values are created first).
     const attributeRows = await prepareProductAttributeValueRows(db, productId, data.attributes ?? []);
     await assertLiveBrand(db, data.brandId);

@@ -125,15 +125,16 @@ function unwrap(status: number, ok: boolean, body: unknown): PluginApiResult {
  * The resources a successful create operation made, by operation: the id
  * paths in its `{ success, data }` body. Recorded as the app's own
  * (`app_resource_owners`) so `app_content.delete` can let
- * it permanently delete them later. A replayed create answers the same ids.
+ * it permanently delete them later. A replayed create answers the same ids;
+ * a batch create lists its created and replayed items' ids alike.
  */
 const APP_CREATE_OPERATIONS: Readonly<Record<string, { type: AppOwnedResourceType; ids: (data: unknown) => unknown[] }>> = {
   "products.create": { type: "product", ids: (data) => [dataPath(data, "product", "id")] },
-  "products.bulk_create": { type: "product", ids: (data) => createdItemIds(data, "product") },
+  "products.batch_create": { type: "product", ids: (data) => createdItemIds(data, "product") },
   "categories.create": { type: "category", ids: (data) => [dataPath(data, "id")] },
-  "categories.bulk_create": { type: "category", ids: (data) => createdItemIds(data, "category") },
+  "categories.batch_create": { type: "category", ids: (data) => createdItemIds(data, "category") },
   "brands.create": { type: "brand", ids: (data) => [dataPath(data, "id") ?? dataPath(data, "brand", "id")] },
-  "brands.bulk_create": { type: "brand", ids: (data) => createdItemIds(data, "brand") },
+  "brands.batch_create": { type: "brand", ids: (data) => createdItemIds(data, "brand") },
   "collections.create": { type: "collection", ids: (data) => [dataPath(data, "id")] },
   "media.import_url": { type: "media", ids: (data) => [dataPath(data, "file", "id")] },
 };

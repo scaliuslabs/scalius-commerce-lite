@@ -40,6 +40,14 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   // PIM sync (routes/admin/resources-products.ts): the editor's create and
   // base-section writes in minor units; stock stays with inventory.
   "dashboard.resources.products.create": { stability: "stable", batch: "forbidden", uncurated: true },
+  // An importer or PIM sync creates many products per call: an item's id derives
+  // from its key, so it replays (routes/admin/resources-batch.ts); the bound is a plan value.
+  "dashboard.resources.products.batch_create": {
+    stability: "stable",
+    idempotency: "supported",
+    batch: "forbidden",
+    uncurated: true,
+  },
   "dashboard.resources.products.update": { stability: "stable", revision: "required", batch: "forbidden", uncurated: true },
   // An app permanently deletes the trashed content it created itself
   // (routes/admin/resources-app-content.ts); ownership is the platform's record.

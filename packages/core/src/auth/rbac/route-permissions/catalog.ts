@@ -10,6 +10,10 @@ export const CATALOG_ROUTE_PERMISSIONS: RoutePermissionMap = {
     GET: { permission: PERMISSIONS.CATEGORIES_VIEW },
     POST: { permission: PERMISSIONS.CATEGORIES_CREATE },
   },
+  // Many creates in one call (stable app API), under the permission of one.
+  "/api/v1/admin/categories/batch": {
+    POST: { permission: PERMISSIONS.CATEGORIES_CREATE },
+  },
   "/api/v1/admin/categories/form-options": {
     GET: {
       anyOf: [
