@@ -16,7 +16,8 @@ function leaves(value: unknown, path = ""): Array<[string, unknown]> {
 /** Sample arguments for the catalogue's functions (a count, an amount, a list of names). */
 function call(fn: (...args: never[]) => unknown, path: string): unknown {
   if (path === "rating.summary") return (fn as (average: string, count: string, reviews: number) => unknown)("4.6", "128", 128);
-  if (path === "stock.low" || path === "card.moreColours") return (fn as (count: number) => unknown)(3);
+  if (path === "stock.low") return (fn as (count: string) => unknown)("3");
+  if (path === "card.moreColours") return (fn as (count: string, colours: number) => unknown)("3", 3);
   return (fn as (text: string) => unknown)("৳600");
 }
 
@@ -47,7 +48,7 @@ describe("storefront copy", () => {
     const en = storefrontCopy("en");
     expect(en.price.from("৳2,450")).toContain("৳2,450");
     expect(en.price.save("৳600")).toContain("৳600");
-    expect(en.stock.low(3)).toContain("3");
+    expect(en.stock.low("3")).toContain("3");
     expect(en.card.deliveryFrom("৳60")).toContain("৳60");
     expect(en.card.colours("Navy")).toContain("Navy");
     expect(en.rating.summary("4.6", "128", 128)).toContain("4.6");
@@ -55,7 +56,7 @@ describe("storefront copy", () => {
     const bn = storefrontCopy("bn");
     expect(bn.price.from("৳2,450")).toContain("৳2,450");
     expect(bn.price.save("৳600")).toContain("৳600");
-    expect(bn.stock.low(3)).toContain("3");
+    expect(bn.stock.low("৩")).toContain("৩");
     expect(bn.card.deliveryFrom("৳60")).toContain("৳60");
     expect(bn.card.colours("Navy")).toContain("Navy");
     expect(bn.rating.summary("4.6", "128", 128)).toContain("4.6");
@@ -66,8 +67,8 @@ describe("storefront copy", () => {
     const en = storefrontCopy("en");
     expect(en.rating.summary("5.0", "1", 1)).toBe("Rated 5.0 out of 5 from 1 review");
     expect(en.rating.summary("4.0", "2", 2)).toBe("Rated 4.0 out of 5 from 2 reviews");
-    expect(en.card.moreColours(1)).toBe("1 more colour");
-    expect(en.card.moreColours(2)).toBe("2 more colours");
+    expect(en.card.moreColours("1", 1)).toBe("1 more colour");
+    expect(en.card.moreColours("2", 2)).toBe("2 more colours");
   });
 
   it("writes Bangla in Bengali script", () => {

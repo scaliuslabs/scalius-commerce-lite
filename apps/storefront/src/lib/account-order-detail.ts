@@ -29,7 +29,7 @@ import {
   wordOrderTracking,
 } from "@/lib/account-format";
 import { accountCopy } from "@/lib/account-copy";
-import { formatCount, pageLanguage } from "@/lib/store-time-zone";
+import { formatCount, formatStoreDateTime, pageLanguage } from "@/lib/store-time-zone";
 import { addOrderToCart } from "@/lib/account-buy-again";
 import { accountPill, orderStatusTone } from "@/lib/account-ui";
 import { getProductImageUrl } from "@/lib/product-media";
@@ -41,7 +41,7 @@ import { escapeHtml } from "@scalius/shared/html-escape";
 import { fromMinor } from "@scalius/shared/money";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { formatBdMobile } from "@scalius/shared/phone-input";
-import { ENGLISH_CHECKOUT_LANGUAGE_DATA, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
+import { ENGLISH_CHECKOUT_LANGUAGE_DATA, formatCheckoutLanguageText, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { summarizeOrderDiscounts } from "@/lib/order-discount-summary";
 import { orderDeliveryRow } from "@/lib/order-delivery-row";
 import { orderShowsLineDiscounts, presentedLineTotalMinor } from "@/lib/order-line-discounts";
@@ -66,6 +66,7 @@ import {
   supportActionDescription,
 } from "@/lib/order-line-groups";
 import { pagePath } from "@/lib/presence-url";
+import { getOrderReceiptSupportActionLabel } from "@/lib/order-success-localization";
 import { renderBuyerUi } from "@/lib/buyer-ui";
 
 /** The customer order-detail payload, including the buyer tracking fields. */
@@ -416,7 +417,7 @@ function openSupportForm(type: CustomerOrderSupportRequestType): void {
   setSupportError(null);
   setSupportButton(accountCopy().order.submit);
   const title = byId("orderSupportFormTitle");
-  if (title) title.textContent = action.label;
+  if (title) title.textContent = getOrderReceiptSupportActionLabel(action.type, copy);
   const reasons = byId("orderSupportReasons");
   if (reasons) {
     reasons.innerHTML = supportReasons(type).map((reason) => `
@@ -453,7 +454,7 @@ function renderSupport(detail: AccountOrderDetail): void {
     actions.hidden = !canRequest;
     actions.innerHTML = detail.supportRequestActions.map((action) => `
       <button type="button" data-support-request-type="${escapeHtml(action.type)}" ${action.eligible ? "" : "disabled"} class="min-h-11 rounded-lg border border-border px-3 py-2 text-start text-sm transition-colors ${action.eligible ? "text-foreground hover:bg-muted" : "cursor-not-allowed text-muted-foreground"}">
-        <span class="font-medium">${escapeHtml(action.label)}</span>
+        <span class="font-medium">${escapeHtml(getOrderReceiptSupportActionLabel(action.type, copy))}</span>
         <span class="mt-0.5 block text-muted-foreground">${escapeHtml(action.eligible ? supportActionDescription(action, detail.order, copy) : action.disabledReason ?? supportActionDescription(action, detail.order, copy))}</span>
       </button>`).join("");
   }
@@ -697,6 +698,13 @@ function renderPayment(detail: AccountOrderDetail): void {
     payment.innerHTML = [
       `<p class="font-medium text-foreground">${escapeHtml(line.method)}</p>`,
       `<p class="text-muted-foreground">${escapeHtml(line.state)}</p>`,
+      // An invoice still owed: "Payment due by November 20, 2026 (net 30)", as the receipt says it.
+      order.paymentTerms && line.balanceDue > 0
+        ? `<p class="text-muted-foreground" data-payment-terms>${escapeHtml(formatCheckoutLanguageText(order.paymentTerms.overdue ? copy.invoiceOverdueText : copy.invoiceDueText, {
+          date: formatStoreDateTime(new Date(order.paymentTerms.dueAt), pageLanguage(), { dateStyle: "long" }),
+          days: formatCount(order.paymentTerms.days),
+        }))}</p>`
+        : "",
       // The card rows in the summary already say what the gift cards paid.
       line.balanceDue > 0 && order.paidAmount > 0 && !paidByGiftCards ? `<p class="text-muted-foreground">${escapeHtml(words.paid(money(order.paidAmount)))}</p>` : "",
       detail.cod?.collectedAmount ? `<p class="text-muted-foreground">${escapeHtml(words.collected(money(detail.cod.collectedAmount)))}</p>` : "",

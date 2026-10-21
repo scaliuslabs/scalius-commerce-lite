@@ -59,6 +59,7 @@ import {
 import { getGatewayPresentation, isAppGatewayId } from "@/lib/checkout/gateway-presentation";
 import {
   formatOrderReceiptDate,
+  formatOrderReceiptDay,
   localizeOrderReceiptGatewayPresentation,
 } from "@/lib/order-success-localization";
 import { formatPageNumber } from "@/lib/store-time-zone";
@@ -382,7 +383,7 @@ const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.
 // An invoice still owed: "Payment due by 19 November 2026 (net 30)", or that it was due.
 const receiptPaymentTerms = order?.paymentTerms && order.balanceDue > 0
   ? formatCheckoutLanguageText(order.paymentTerms.overdue ? copy.invoiceOverdueText : copy.invoiceDueText, {
-      date: formatOrderReceiptDate(order.paymentTerms.dueAt, checkoutLanguage.code) ?? "",
+      date: formatOrderReceiptDay(order.paymentTerms.dueAt, checkoutLanguage.code) ?? "",
       days: formatPageNumber(order.paymentTerms.days, checkoutLanguageBaseCode(checkoutLanguage.code)),
     })
   : null;

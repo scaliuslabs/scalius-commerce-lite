@@ -12,12 +12,12 @@ describe("chrome copy", () => {
       expect(nav.featuredIn("Shoes")).toContain("Shoes");
       expect(footer.aboutStore("Nila")).toContain("Nila");
       expect(footer.call("017")).toContain("017");
-      expect(footer.showMoreLinks(7, "Care")).toContain("7");
-      expect(footer.showMoreLinks(7, "Care")).toContain("Care");
+      expect(footer.showMoreLinks("7", "Care")).toContain("7");
+      expect(footer.showMoreLinks("7", "Care")).toContain("Care");
       expect(footer.hideExtraLinks("Care")).toContain("Care");
-      expect(footer.rights(2026, "Nila")).toContain("2026");
-      expect(footer.rights(2026, "Nila")).toContain("Nila");
-      expect(footer.rightsNoName(2026)).toContain("2026");
+      expect(footer.rights("2026", "Nila")).toContain("2026");
+      expect(footer.rights("2026", "Nila")).toContain("Nila");
+      expect(footer.rightsNoName("2026")).toContain("2026");
     }
   });
 

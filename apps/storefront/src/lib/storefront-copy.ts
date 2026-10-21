@@ -6,6 +6,7 @@
 // chrome into its pages. Slices that move more strings here add keys to
 // both languages; the test fails when one language lacks a key.
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
+import type { ProductCondition } from "@scalius/shared/product-condition";
 import { CHROME_BN, CHROME_EN, type ChromeCopy } from "./chrome-copy";
 
 export type StorefrontLanguage = "en" | "bn";
@@ -31,7 +32,8 @@ export interface StorefrontCopy {
   badge: { sale: string; soldOut: string; new: string };
   stock: {
     inStock: string;
-    low: (count: number) => string;
+    /** `count` in the page's digits. */
+    low: (count: string) => string;
     soldOut: string;
     preOrder: string;
   };
@@ -44,8 +46,10 @@ export interface StorefrontCopy {
     chooseOptions: string;
     viewProduct: string;
     colours: (names: string) => string;
-    /** "+2" after the swatches, and its words. */
-    moreColours: (count: number) => string;
+    /** "+2" after the swatches, and its words (`count` in the page's digits). */
+    moreColours: (count: string, colours: number) => string;
+    /** The saved product condition, as the card's detail line names it. */
+    condition: Record<ProductCondition, string>;
     freeDelivery: string;
     deliveryFrom: (fee: string) => string;
     /** The visually hidden heading over a grid of cards. */
@@ -119,7 +123,8 @@ const EN: StorefrontCopy = {
     chooseOptions: "Choose options",
     viewProduct: "View product",
     colours: (names) => `Colours: ${names}`,
-    moreColours: (count) => `${count} more ${count === 1 ? "colour" : "colours"}`,
+    moreColours: (count, colours) => `${count} more ${colours === 1 ? "colour" : "colours"}`,
+    condition: { new: "New", refurbished: "Refurbished", used: "Used" },
     freeDelivery: "Free delivery",
     deliveryFrom: (fee) => `Delivery from ${fee}`,
     products: "Products",
@@ -196,6 +201,7 @@ const BN: StorefrontCopy = {
     viewProduct: "পণ্যটি দেখুন",
     colours: (names) => `রং: ${names}`,
     moreColours: (count) => `আরও ${count}টি রং`,
+    condition: { new: "নতুন", refurbished: "রিফার্বিশড", used: "ব্যবহৃত" },
     freeDelivery: "ফ্রি ডেলিভারি",
     deliveryFrom: (fee) => `ডেলিভারি ${fee} থেকে`,
     products: "পণ্যসমূহ",

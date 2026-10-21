@@ -30,6 +30,18 @@ export function formatOrderReceiptDate(
   return formatStoreDateTime(date, checkoutLanguageBaseCode(languageCode), { dateStyle: "medium", timeStyle: "short" }, timeZone);
 }
 
+/** A due day ("November 20, 2026"), as checkout promised it: a calendar day in store time, no clock time. */
+export function formatOrderReceiptDay(
+  value: string | null | undefined,
+  languageCode: string,
+  timeZone: string = storeTimeZone(),
+): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return formatStoreDateTime(date, checkoutLanguageBaseCode(languageCode), { dateStyle: "long" }, timeZone);
+}
+
 export function formatOrderSuccessLabel(
   value: string | null | undefined,
   copy: CheckoutLanguageData,

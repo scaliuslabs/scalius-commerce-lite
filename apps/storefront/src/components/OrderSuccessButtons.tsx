@@ -273,7 +273,7 @@ export default function OrderSuccessButtons({
         {!statusView && <a
           href={pagePath("/")}
           data-astro-prefetch="false"
-          className="inline-flex min-h-10 flex-1 items-center justify-center rounded-xl bg-black px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-gray-800"
+          className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
         >
           <svg
             className="w-5 h-5 me-2"
@@ -293,7 +293,7 @@ export default function OrderSuccessButtons({
         </a>}
         <Button
           variant="outline"
-          className="flex-1 rounded-xl border-border px-6 py-3 font-medium transition-colors hover:bg-muted"
+          className="h-auto min-h-11 flex-1 rounded-xl border-border px-6 py-2.5 font-medium transition-colors hover:bg-muted"
           onClick={handlePrintOrder}
         >
           <svg
