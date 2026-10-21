@@ -112,9 +112,9 @@ describe("saved-method charges and authorizations", () => {
          'BDT', 2, 150000, 150000, 'confirmed', 'net_terms', 'unpaid', 0, 150000, 30, unixepoch() + 2592000, 1),
         ('ord_guest', 7002, NULL, NULL, 'Guest', '+8801712345670', 'House 2', 'city_1', 'zone_1',
          'BDT', 2, 50000, 50000, 'confirmed', '${PROVIDER}', 'unpaid', 0, 50000, NULL, NULL, 1);
-      INSERT INTO customer_payment_methods (id, customer_id, provider_id, provider_method_ref, brand, last4, expiry_month, expiry_year)
-      VALUES ('cpm_1', 'cust_1', '${PROVIDER}', 'pm_card_1', 'visa', '4242', 12, 2030),
-             ('cpm_2', 'cust_2', '${PROVIDER}', 'pm_card_2', 'visa', '1881', 1, 2031);
+      INSERT INTO customer_payment_methods (id, customer_id, provider_id, provider_method_ref, brand, last4, expiry_month, expiry_year, created_at)
+      VALUES ('cpm_1', 'cust_1', '${PROVIDER}', 'pm_card_1', 'visa', '4242', 12, 2030, 1),
+             ('cpm_2', 'cust_2', '${PROVIDER}', 'pm_card_2', 'visa', '1881', 1, 2031, 1);
     `);
   });
   afterEach(() => sqlite.close());

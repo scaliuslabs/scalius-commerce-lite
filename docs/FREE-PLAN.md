@@ -33,6 +33,9 @@ Code reads values from the profile and never branches on the plan name. Paid val
 | Each sweep's row limit | 20% | 100% |
 | List total counted up to (`countCap`) | 1,000 | 10,000 |
 | Deepest numbered page (`maxOffset`) | 1,000 rows | 10,000 rows |
+| Bulk-run and app-job chunks per drain (`bulkRunChunksPerDrain`) | 3 | 12 |
+| Items per app batch create (`batchCreates`: products, categories, brands) | 4, 12, 19 | 20, 50, 50 |
+| App jobs running at once (`plugins.runningJobs`) | 3 | 10 |
 
 The profile also sets the bulk page, the products refreshed after a catalogue write, the nightly sold-products refresh, the catalogue rebuild chunk and the backfill image limit.
 
@@ -97,6 +100,7 @@ A store has no queue: a queue is one more resource per store, and Free allows 10
 | Domain events, webhooks, app deliveries | `event_outbox`, `webhook_event_deliveries`, `plugin_event_deliveries` | `flushEventsAfterWrite` | backoff; `dead_lettered` or `exhausted` after 8 attempts, retried from the dashboard |
 | Payment events | `webhook_events` (`payload`, `attempts`, `next_attempt_at`) | applied after the provider gets its 200 | 6 attempts, 1 to 16 minutes apart; then `failed`, a dead-letter issue on the order page |
 | Sign-in codes | `auth_otp_delivery_receipts` | up to 3 attempts, 2 s and 6 s apart | none after that: a code lives 5 minutes, so the buyer asks for a new one |
+| Bulk runs and app jobs | `bulk_runs` (kind `app.job` for an app's job) | `bulkRunChunksPerDrain` chunks right after the response | the minute cron continues from the run's cursor; a job step is tried 3 times, then the job fails |
 | Automatic fulfilment | the settled order | `runOrderAutoFulfil` | `auto_fulfil_sweep` |
 | Projection rebuild | `system_kv` `catalog:projections:rebuild-cursor` | the first chunks | each drain continues from the cursor |
 | Recommendations | `system_kv` `catalog:recommendations:rotation-cursor` | the written products and their peers | a daily lap visits every public product once (up to the per-run size times the runs in a day); the nightly tick refreshes products sold that day |

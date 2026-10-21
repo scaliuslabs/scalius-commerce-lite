@@ -8,7 +8,7 @@ The v2 beta core is deployed. The contract baseline is sealed in the manifest, p
 - Custom fields can reference a declared Object type. Deleted or non-public targets resolve to null in public reads.
 - Buyer extensions are declarative storefront extensions (`storefront.extensions`, one render per UI slot) with host actions. Checkout attributes are validated, persisted and bound to quotes and retries. Account and receipt output stays private. Static checkout app blocks and `request.render` are retired.
 - Shipping methods can use app-calculated courier rates. Requests have bounded deadlines and fallback policy; signed quotes bind the selected rate through checkout, including cash collection for deposits. The Bangladesh pack supplies Pathao rates.
-- Theme v10 adds dynamic sources, selected custom fields on product cards and Specifications. Core and Noor share typed product/listing projections.
+- Theme documents (v10 added, v12 is current) carry dynamic sources, selected custom fields on product cards and Specifications; a stored older document upgrades on read through pure steps. Core and Noor share typed product/listing projections.
 - Events are emitted only when an active subscriber needs the topic. The expanded catalog remains facts-only; realtime writes retain their own observer.
 - Plugin preview/watch commands and a self-contained SDK package support the authoring loop. Manifest, protocol, SDK and stable-operation snapshots define the beta baseline.
 - PostgreSQL order numbers use a native sequence. Free-plan operation budgets retain the 50-call invocation ceiling.
@@ -17,7 +17,7 @@ The v2 beta core is deployed. The contract baseline is sealed in the manifest, p
 
 Migrations 0154–0157 were applied by `pnpm run deploy` on 2026-10-15 before the new application code.
 
-0155 deliberately removes the disposable pre-beta metaobject/app-record tables. It also resets stored themes, drafts, history, restore points and previews: old theme versions are not upgraded on read. Reconfigure saved theme branding and landing layouts after that reset. Other catalog, order and customer data are not part of this reset.
+0155 deliberately removes the disposable pre-beta metaobject/app-record tables. It also reset stored themes, drafts, history, restore points and previews once, before theme upgrades existed. Since then a stored theme is never reset: a read upgrades an older version through pure `vN → vN+1` steps (`packages/shared/src/storefront-theme.md`, Compatibility), and one that cannot upgrade reads as unreadable. Other catalog, order and customer data are not part of this reset.
 
 0156 preserves existing custom-field definitions and values while expanding the type constraint. SQLite retains foreign-key enforcement throughout the rebuild; PostgreSQL changes only the constraint.
 
@@ -67,3 +67,15 @@ Additions to the sealed contract (all additive; the snapshots were updated and r
 - Agents confirm security changes (access keys, roles, webhooks, platform origins) like destructive and financial ones. `node scripts/agent-eval.mjs` runs the 30-task agent evaluation.
 - `pnpm test` runs the suite in two passes (`scripts/test-runner.mjs`).
 - Reference apps `plugins/volt`, `plugins/bazaar` and `plugins/sellers` (not bundled).
+
+The contract seal (2026-10-21) fixed the app API's shape before the first release; breaks made then are recorded in `abi.breaks.json` and `stable-operations.breaks.json`:
+
+- Apps name operations by resource and verb (`orders.get`, `products.create`); every error code is lower_snake; stable lists page by `cursor` and `nextCursor`; every stable instant is an ISO 8601 string; `StorefrontMoney` is `{ amountMinor, currency, formatted }`; core storefront names are snake_case (theme document v12); buyer UI is a storefront extension, not a checkout function; one lane per capability (`ctx.timeline`, `ctx.customFields`).
+
+Additive since then (the stable app API is 144 operations):
+
+- Events: fulfilment and refund events list their order lines; refunds are records with `refund.created` and `refund.updated` and the stable `refunds.create` / `refunds.list` (`write_refunds`, migration 0172).
+- Payment port: saved methods, off-session charges, manual capture and void (`vault` and `manualCapture` capabilities, `payments.charge`, `payments.capture`, `payments.void`, `payment_methods.*`, migration 0173). Apps declare purchase options, and app discounts have classes with `combinesWith`; function carts carry the sales channel, segments, shipping facts and customer roles.
+- App writes for building a store (migrations 0170 and 0171): `write_themes` and `write_navigation`, theme draft and menu operations, catalogue content by handle, `products.batch_create` and its siblings, customer roles and background jobs. An app never publishes the theme, and publishing refuses a theme that draws with an inactive app (`theme_apps_unavailable`).
+- Storefront: card slots any app fills, cart drawer, cart page and checkout summary UI slots, more projection data (menu photos, skin images, SKU and EMI, child categories, header facts), deferred markup and signed-in parts.
+- PostgreSQL upgrade migrations 0160, 0165 and 0173 now apply on a real server (the whole chain from 0050 was applied to a temporary PostgreSQL 15, where only 0053 needs PostgreSQL 16 for its unaliased derived tables; `postgres-migration-dialect.test.ts` keeps GLOB and trigger-WHEN subqueries out); production schema tools replay the migration chain instead of restoring the cached test image.

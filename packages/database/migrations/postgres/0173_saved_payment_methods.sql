@@ -23,7 +23,7 @@ CREATE TABLE "customer_payment_methods" (
 	FOREIGN KEY ("customer_id") REFERENCES "customers"("id") ON UPDATE no action ON DELETE cascade DEFERRABLE INITIALLY DEFERRED,
 	FOREIGN KEY ("source_order_id") REFERENCES "orders"("id") ON UPDATE no action ON DELETE set null DEFERRABLE INITIALLY DEFERRED,
 	CONSTRAINT "customer_payment_methods_status_check" CHECK("customer_payment_methods"."status" IN ('active', 'removed')),
-	CONSTRAINT "customer_payment_methods_last4_check" CHECK("customer_payment_methods"."last4" IS NULL OR (length("customer_payment_methods"."last4") = 4 AND "customer_payment_methods"."last4" NOT GLOB '*[^0-9]*')),
+	CONSTRAINT "customer_payment_methods_last4_check" CHECK("customer_payment_methods"."last4" IS NULL OR (length("customer_payment_methods"."last4") = 4 AND "customer_payment_methods"."last4" !~ '[^0-9]')),
 	CONSTRAINT "customer_payment_methods_expiry_check" CHECK(("customer_payment_methods"."expiry_month" IS NULL OR "customer_payment_methods"."expiry_month" BETWEEN 1 AND 12) AND ("customer_payment_methods"."expiry_year" IS NULL OR "customer_payment_methods"."expiry_year" BETWEEN 2000 AND 2200))
 );
 --> statement-breakpoint
