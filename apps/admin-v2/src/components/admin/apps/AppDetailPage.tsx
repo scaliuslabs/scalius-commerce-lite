@@ -45,6 +45,7 @@ import { useAppSettingsDraft } from "./AppSettingsForm";
 import { AppSettingsSections } from "./AppSettingsSections";
 import { AppWhereItAppears } from "./AppWhereItAppears";
 import { AppStatusBadge } from "./app-status";
+import { StorefrontProblemNotice } from "./StorefrontProblemNotice";
 import { appJobScheduleText } from "./app-job-schedule";
 
 // The lifecycle additions (Stop now, why an app is stopped, a registry update, who signed it)
@@ -426,6 +427,8 @@ function AppPage({ app, section }: { app: AppDetail; section: AppSection }) {
             <AlertDescription>{t("needsApprovalBody")}</AlertDescription>
           </Alert>
         ) : null}
+        {/* A storefront part the store drew without lately: what, why and what shoppers saw. */}
+        {active ? <StorefrontProblemNotice appId={app.id} link={false} /> : null}
         {!app.runtimeAvailable ? (
           <Alert variant="warning">
             <TriangleAlert aria-hidden="true" />

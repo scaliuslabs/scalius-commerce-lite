@@ -10,6 +10,7 @@ import {
   getApiV1AdminAppsByIdDeliveries,
   getApiV1AdminAppsByIdLogs,
   getApiV1AdminAppsRemovedData,
+  getApiV1AdminAppsStorefrontProblems,
   getApiV1AdminAppsSurfaces,
   postApiV1AdminAppsByIdActivate,
   postApiV1AdminAppsByIdDeactivate,
@@ -29,6 +30,7 @@ import type {
   AppListing,
   AppLogLine,
   AppSettingField,
+  AppStorefrontProblem,
   AppSummary,
   RemovedAppData,
 } from "@scalius/api-client/types";
@@ -36,7 +38,7 @@ import { AdminApiResponseError } from "../admin-api-error";
 import { apiData } from "../api";
 import { queryKeys } from "../query-keys";
 
-export type { AppAdminSurfaces, AppDetail, AppEventDelivery, AppFeature, AppGrant, AppListing, AppLogLine, AppSettingField, AppSummary, RemovedAppData };
+export type { AppAdminSurfaces, AppDetail, AppEventDelivery, AppFeature, AppGrant, AppListing, AppLogLine, AppSettingField, AppStorefrontProblem, AppSummary, RemovedAppData };
 
 /** The categories an app lists itself under (the manifest's enum). */
 export type AppCategory = AppSummary["categories"][number];
@@ -69,6 +71,19 @@ export const appsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.apps.list(),
     queryFn: () => apiData(getApiV1AdminApps()),
+  });
+
+/**
+ * Apps whose storefront section, block or design the store drew without in
+ * the last day, newest first (one per app). The theme editor and an app's
+ * page show it; a quick refresh keeps a fix visible soon after it lands.
+ */
+export const appStorefrontProblemsQueryOptions = () =>
+  queryOptions({
+    queryKey: queryKeys.apps.storefrontProblems(),
+    queryFn: async (): Promise<AppStorefrontProblem[]> => (await apiData(getApiV1AdminAppsStorefrontProblems())).problems,
+    staleTime: 30_000,
+    retry: false,
   });
 
 export const appQueryOptions = (id: string) =>

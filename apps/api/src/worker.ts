@@ -26,6 +26,7 @@ import {
 } from "./public-cache-policy";
 import { createPublicPartReader, renderPublicRead } from "./public-read";
 import { cacheFrontierEndpoint, serveCacheFrontierCheck, serveCacheFrontierDelta } from "./cache-frontier";
+import { isStorefrontIncidentEndpoint } from "./plugins/storefront-incident-path";
 import { isAgentAccessPath } from "./agent-access/paths";
 import { fetchRuntimeApiApp } from "./runtime/fetch-runtime-app";
 import { composeApiRuntimeEnv, hasMasterSecret } from "./runtime/runtime-env";
@@ -140,6 +141,20 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
       ).catch((error: unknown) => {
         console.error("[CacheFrontier] read failed", error instanceof Error ? error.name : "unknown");
         return Response.json({ success: false, error: "Cache proof unavailable" }, { status: 503, headers: { "Cache-Control": "private, no-store" } });
+      });
+      return applyBaselineSecurityHeaders(request, response, { frameProtection: "deny" });
+    }
+
+    // The storefront's render incidents (an app part a page drew without):
+    // internal, frontier-key authenticated, written to the app's log.
+    if (isStorefrontIncidentEndpoint(request.method, pathname)) {
+      const [{ getDb }, { serveStorefrontIncidents }] = await Promise.all([
+        import("@scalius/database/client"),
+        import("./plugins/storefront-incidents"),
+      ]);
+      const response = await serveStorefrontIncidents(request, this.env, () => getDb(this.env)).catch((error: unknown) => {
+        console.error("[StorefrontIncidents] write failed", error instanceof Error ? error.name : "unknown");
+        return new Response(null, { status: 503, headers: { "Cache-Control": "private, no-store" } });
       });
       return applyBaselineSecurityHeaders(request, response, { frameProtection: "deny" });
     }

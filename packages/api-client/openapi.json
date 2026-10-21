@@ -23807,6 +23807,59 @@
           "icon"
         ]
       },
+      "AppStorefrontProblem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "section",
+              "component",
+              "skin",
+              null
+            ]
+          },
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "target": {
+            "type": "string",
+            "nullable": true
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "unavailable",
+              "late",
+              "error",
+              "refused",
+              "missing",
+              null
+            ]
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "message",
+          "kind",
+          "type",
+          "target",
+          "reason",
+          "at"
+        ]
+      },
       "RegistryState": {
         "type": "object",
         "properties": {
@@ -248901,6 +248954,110 @@
         }
       }
     },
+    "/api/v1/admin/apps/storefront-problems": {
+      "get": {
+        "operationId": "dashboard.apps.storefront_problems_list",
+        "tags": [
+          "Admin - Apps"
+        ],
+        "summary": "List apps whose storefront parts the store recently drew without",
+        "description": "The newest storefront render problem of each installed app with storefront parts in the last 24 hours: a section, block or skin a page was drawn without (unavailable, late, failed or refused), as written in the app's log. Pages never fail because of it; the store draws its own instead.",
+        "responses": {
+          "200": {
+            "description": "Recent storefront problems, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "problems": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/AppStorefrontProblem"
+                          }
+                        }
+                      },
+                      "required": [
+                        "problems"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app's section, block or design does not show on the storefront: which apps' parts the store drew without in the last day, and why.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "anyOf",
+          "permissions": [
+            "apps.view",
+            "settings.theme.edit"
+          ]
+        }
+      }
+    },
     "/api/v1/admin/apps/registry": {
       "get": {
         "operationId": "dashboard.apps.registry_list",
@@ -275136,6 +275293,7 @@
         "operationIds": [
           "dashboard.apps.list",
           "dashboard.apps.surfaces",
+          "dashboard.apps.storefront_problems_list",
           "dashboard.apps.get",
           "dashboard.apps.features_list",
           "dashboard.apps.feature_disable",
@@ -280090,6 +280248,14 @@
           "mode": "curated",
           "workflowIds": [
             "dashboard.apps-install"
+          ]
+        },
+        {
+          "operationId": "dashboard.apps.storefront_problems_list",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.apps-manage"
           ]
         },
         {

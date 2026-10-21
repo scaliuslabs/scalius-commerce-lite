@@ -5164,6 +5164,16 @@ export type AppProviderEntry = {
     icon: string | null;
 };
 
+export type AppStorefrontProblem = {
+    id: string;
+    message: string;
+    kind: 'section' | 'component' | 'skin' | null;
+    type: string | null;
+    target: string | null;
+    reason: 'unavailable' | 'late' | 'error' | 'refused' | 'missing' | null;
+    at: string;
+};
+
 export type RegistryState = {
     id: string;
     name: string;
@@ -70220,6 +70230,40 @@ export type GetApiV1AdminAppsSurfacesResponses = {
 };
 
 export type GetApiV1AdminAppsSurfacesResponse = GetApiV1AdminAppsSurfacesResponses[keyof GetApiV1AdminAppsSurfacesResponses];
+
+export type GetApiV1AdminAppsStorefrontProblemsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/apps/storefront-problems';
+};
+
+export type GetApiV1AdminAppsStorefrontProblemsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+};
+
+export type GetApiV1AdminAppsStorefrontProblemsError = GetApiV1AdminAppsStorefrontProblemsErrors[keyof GetApiV1AdminAppsStorefrontProblemsErrors];
+
+export type GetApiV1AdminAppsStorefrontProblemsResponses = {
+    /**
+     * Recent storefront problems, newest first
+     */
+    200: {
+        success: true;
+        data: {
+            problems: Array<AppStorefrontProblem>;
+        };
+    };
+};
+
+export type GetApiV1AdminAppsStorefrontProblemsResponse = GetApiV1AdminAppsStorefrontProblemsResponses[keyof GetApiV1AdminAppsStorefrontProblemsResponses];
 
 export type GetApiV1AdminAppsRegistryData = {
     body?: never;

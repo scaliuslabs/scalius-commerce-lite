@@ -89,7 +89,7 @@ export async function runStorefrontModule(
     const bundled = BUNDLED_STOREFRONT_EXTENSIONS[extension.pluginId];
     // The installation runs another release than this Worker was built with: draw nothing until a deploy.
     if (!bundled || bundled.release !== extension.release) {
-      throw new ExtensionUnavailableError(`${extension.pluginId} ${extension.release.slice(0, 12)} is not the release compiled into this storefront.`);
+      throw new ExtensionUnavailableError(`release ${extension.release.slice(0, 12)} is not the one compiled into this storefront (deploy the storefront)`);
     }
     const module = (await bundled.module()).default;
     const reply = module.render(structuredClone(batch));
@@ -97,10 +97,10 @@ export async function runStorefrontModule(
     return structuredClone(reply);
   }
   const loader = runtime.env.LOADER;
-  if (!loader) throw new ExtensionUnavailableError(`${extension.pluginId} needs the storefront's Worker Loader (Workers Paid).`);
+  if (!loader) throw new ExtensionUnavailableError("an uploaded app needs the storefront's Worker Loader (Workers Paid with the app sandbox on)");
   const isolate = loader.get(storefrontIsolateId(extension.pluginId, extension.release), async () => {
     const file = await readExtensionFile(runtime.env, runtime.store ?? "", extension.pluginId, extension.release, STOREFRONT_MODULE_FILE);
-    if (!file) throw new ExtensionUnavailableError(`${extension.pluginId}: its storefront module could not be read.`);
+    if (!file) throw new ExtensionUnavailableError("its storefront module could not be read from the API");
     return {
       compatibilityDate: STOREFRONT_ISOLATE_COMPATIBILITY_DATE,
       mainModule: "main.js",

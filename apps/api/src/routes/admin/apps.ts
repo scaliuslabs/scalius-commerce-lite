@@ -55,6 +55,7 @@ import {
   pluginGrantAdditions,
   pluginGrantKey,
   pluginGrantRequest,
+  pluginHasStorefrontModule,
   appSettingsSections,
   providerOwnSettingKeys,
   providerSettingKeys,
@@ -65,6 +66,7 @@ import {
   type FunctionReadKey,
 } from "@scalius/shared/plugins";
 import { PROVIDER_KINDS, qualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
+import { STOREFRONT_INCIDENT_REASONS } from "@scalius/shared/plugins/storefront-incidents";
 import { appSettingField, appSettingFieldSchema, appSettingValueSchema, providerConnectionSchema } from "../../schemas/app-settings";
 import { ConflictError, ForbiddenError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
@@ -973,6 +975,61 @@ app.openapi(surfacesRoute, async (c) => {
       + surfaces.listColumns.length + surfaces.providers.length > 0)
     .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
   return ok(c, { apps });
+});
+
+// ── Storefront problems (before `/{id}`) ──
+
+const storefrontProblemSchema = z.object({
+  /** The app. */
+  id: z.string(),
+  /** What the store could not show, why, and what it showed instead (the app's log line). */
+  message: z.string(),
+  kind: z.enum(["section", "component", "skin"]).nullable(),
+  /** The section type, component type or skin id. */
+  type: z.string().nullable(),
+  /** A component's slot or a skin's target (`product_card`, `section:usp_strip`). */
+  target: z.string().nullable(),
+  /** Why: the store cannot run this version here, the app answered late, its code failed, what it drew broke the limits, or it left the part out. */
+  reason: z.enum(STOREFRONT_INCIDENT_REASONS).nullable(),
+  at: z.string(),
+}).openapi("AppStorefrontProblem");
+
+const storefrontProblemsRoute = createRoute({
+  method: "get",
+  path: "/storefront-problems",
+  operationId: "dashboard.apps.storefront_problems_list",
+  tags: ["Admin - Apps"],
+  summary: "List apps whose storefront parts the store recently drew without",
+  description: "The newest storefront render problem of each installed app with storefront parts in the last 24 hours: a section, block or skin a page was drawn without (unavailable, late, failed or refused), as written in the app's log. Pages never fail because of it; the store draws its own instead.",
+  responses: {
+    200: {
+      description: "Recent storefront problems, newest first",
+      content: { "application/json": { schema: successEnvelope(z.object({ problems: z.array(storefrontProblemSchema) })) } },
+    },
+    401: errorResponses[401],
+    403: errorResponses[403],
+  },
+});
+
+app.openapi(storefrontProblemsRoute, async (c) => {
+  noStore(c);
+  const db = c.get("db");
+  const installations = await listPluginInstallations(db);
+  const withStorefront = installations.filter((installation) => pluginHasStorefrontModule(installation.manifest.storefront));
+  const { recentStorefrontProblems } = await import("../../plugins/storefront-incidents");
+  const problems = await recentStorefrontProblems(db, withStorefront.map((installation) => installation.pluginId));
+  const kinds = new Set(["section", "component", "skin"]);
+  return ok(c, {
+    problems: problems.map((problem) => ({
+      id: problem.pluginId,
+      message: problem.message,
+      kind: problem.kind !== null && kinds.has(problem.kind) ? problem.kind as "section" | "component" | "skin" : null,
+      type: problem.type,
+      target: problem.target,
+      reason: problem.reason,
+      at: iso(problem.at),
+    })),
+  });
 });
 
 // ── Registry, upload, update and emergency stop (apps-lifecycle.ts; before `/{id}`) ──

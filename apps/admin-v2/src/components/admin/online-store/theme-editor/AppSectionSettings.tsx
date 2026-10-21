@@ -11,6 +11,7 @@ import { themeAppFields, type AppSettingValues } from "../schema-form/app-settin
 import { AppSettingFields } from "../schema-form/AppSettingFields";
 import type { MediaPreviews } from "../schema-form/media-previews";
 import type { AppSectionEntry } from "./editor-state";
+import { StorefrontProblemNotice } from "~/components/admin/apps/StorefrontProblemNotice";
 
 /** The field ids of an app section's settings start with this (`theme-section-app-2-values`). */
 export const appSectionFieldPrefix = (sectionId: string) => `${sectionFieldPrefix(sectionId)}-values`;
@@ -44,6 +45,7 @@ export function AppSectionSettings({ section, entry, issues, media, onChange }: 
   const t = useMessages(themeEditorFull);
   if (!entry) return <p role="status" className="text-body text-muted-foreground">{t("appInactiveHelp")}</p>;
   const { fields, other } = issuesByKey(issues);
+  const [pluginId = "", type = ""] = section.settings.app.split("/");
   const description = entry.section.description;
   return (
     <div className="space-y-4">
@@ -51,6 +53,7 @@ export function AppSectionSettings({ section, entry, issues, media, onChange }: 
         {description ? `${description} ` : null}
         {t("appFrom", { app: entry.app.name })}
       </p>
+      <StorefrontProblemNotice appId={pluginId} part={{ kind: "section", type }} />
       {other ? <p role="alert" className="text-body text-destructive">{other}</p> : null}
       {themeAppFields(entry.section.settings).length > 0 ? (
         <AppSettingFields

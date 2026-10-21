@@ -1384,6 +1384,7 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     operationIds: [
       "dashboard.apps.list",
       "dashboard.apps.surfaces",
+      "dashboard.apps.storefront_problems_list",
       "dashboard.apps.get",
       "dashboard.apps.features_list",
       "dashboard.apps.feature_disable",

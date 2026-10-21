@@ -37,6 +37,7 @@ import { dateLocale } from "@scalius/shared/locale-format";
 import { markPageUnproven } from "@/lib/page-dependencies";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { ExtensionHost } from "./host";
+import { storefrontIncidentReporter } from "./incidents";
 import { storefrontImageOf } from "./data";
 import type { ExtensionRuntime } from "./loaders";
 
@@ -75,6 +76,12 @@ const perRequest = new WeakMap<object, Promise<RequestExtensions>>();
 
 function runtimeEnv(): ExtensionRuntime["env"] {
   return (getWorkerEnv() ?? {}) as unknown as ExtensionRuntime["env"];
+}
+
+/** The request's `waitUntil` (Astro on Workers), when it has one. */
+function requestWaitUntil(locals: object): ((promise: Promise<unknown>) => void) | undefined {
+  const context = (locals as { cfContext?: ExecutionContext }).cfContext;
+  return context ? (promise) => context.waitUntil(promise) : undefined;
 }
 
 /** The request's extensions and render host (one per request, built on first use). */
@@ -119,6 +126,8 @@ export function requestExtensions(locals: object, url: URL): Promise<RequestExte
         jsonLd: () => pages.get(locals)?.noIndex !== true,
         // A page drawn with a fallback is never stored (it would stay until an unrelated write).
         degraded: () => markPageUnproven(dependencies),
+        // ...and the app's log says which part and why (the merchant and the theme editor read it).
+        report: storefrontIncidentReporter(runtimeEnv() as Parameters<typeof storefrontIncidentReporter>[0], requestWaitUntil(locals)),
       });
       const filled = new Set(list.flatMap((extension) => extension.components.flatMap((component) => component.targets)));
       return { list, byId, filled, host };
