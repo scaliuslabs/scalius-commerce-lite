@@ -4,7 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/api/transport", () => ({ createApiUrl: (path: string) => `/api/v1${path}` }));
+vi.mock("@/lib/api/browser-url", () => ({ browserApiUrl: (path: string) => `/api/v1${path}` }));
 
 import CommandPalette from "./CommandPalette";
 

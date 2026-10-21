@@ -1,4 +1,4 @@
-import type { ProductPageData } from "@/lib/api/products";
+import type { ProductPageData } from "@/lib/api/product-payloads";
 import type { CartItem } from "@/store/cart";
 import { resolveVariantCartMedia } from "@/components/product/lib/cart-media";
 import { calculateVariantPrice } from "@/components/product/lib/pricing-engine";
@@ -54,11 +54,11 @@ export function initQuickAddCards(): void {
     try {
       const slug = new URL(link.href).pathname.split("/").pop();
       if (!slug) throw new Error("Missing product handle");
-      const [{ getProductBySlugResult }, { addToCart, cartLineKeyFor }] = await Promise.all([
-        import("@/lib/api/products"),
+      const [{ fetchProductBySlugResult }, { addToCart, cartLineKeyFor }] = await Promise.all([
+        import("@/lib/api/browser-products"),
         import("@/store/cart"),
       ]);
-      const result = await getProductBySlugResult(decodeURIComponent(slug));
+      const result = await fetchProductBySlugResult(decodeURIComponent(slug));
       const line = result.state === "found"
         ? quickAddCartLine(result.data, window.__CURRENCY_CODE__ || "BDT")
         : null;

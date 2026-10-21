@@ -42,7 +42,7 @@ import { formatNumber, numberLocale } from "@scalius/shared/locale-format";
 import { PRODUCT_IMAGE_FALLBACK, productImageSources, resolveProductImageUrl } from "@/lib/product-media";
 import type { ImageSlot } from "@/lib/responsive-image";
 import { previewCartDiscounts } from "@/lib/cart/browser-api";
-import { discountLineKey, type CheckoutDiscountFacts } from "@/lib/checkout/tax-quote-contract";
+import { discountLineKey, type CheckoutDiscountFacts } from "@/lib/checkout/quote-facts";
 import type { CartRuleError, CartValidationIssue } from "@/lib/api/orders";
 import { parseCartRuleErrors } from "@/lib/checkout/tax-quote-error-contract";
 import { groupCartRuleErrors } from "@/lib/cart/rule-errors";

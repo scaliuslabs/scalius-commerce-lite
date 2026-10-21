@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   logoutCustomer: vi.fn(),
 }));
 vi.mock("@/lib/api/customer-auth", () => mocks);
-vi.mock("@/lib/api/transport", () => ({ createApiUrl: (path: string) => `/api/v1${path}` }));
+vi.mock("@/lib/api/browser-url", () => ({ browserApiUrl: (path: string) => `/api/v1${path}` }));
 
 import AuthModal from "./AuthModal";
 

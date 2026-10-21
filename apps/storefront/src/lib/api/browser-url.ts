@@ -13,5 +13,5 @@ export function browserApiUrl(path: string): string {
       "PUBLIC_API_URL is not configured. Set the API URL in the dashboard under Settings -> System -> Platform.",
     );
   }
-  return `${base}${path}`;
+  return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }

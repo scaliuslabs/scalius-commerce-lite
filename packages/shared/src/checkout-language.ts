@@ -1,3 +1,7 @@
+import { checkoutLanguageBaseCode } from "./checkout-language-format";
+
+export { checkoutLanguageBaseCode };
+
 export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   pageTitle: "Cart & Checkout",
   checkoutSectionTitle: "Checkout information",
@@ -1628,11 +1632,6 @@ function parseStoredLanguageData(value: unknown): Record<string, unknown> {
   } catch {
     return {};
   }
-}
-
-export function checkoutLanguageBaseCode(code: unknown): string {
-  if (typeof code !== "string") return "en";
-  return code.trim().toLowerCase().split(/[-_]/, 1)[0] || "en";
 }
 
 export function getCheckoutLanguagePreset(code: unknown): CheckoutLanguageData {

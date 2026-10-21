@@ -14,7 +14,7 @@ import {
 import { cn } from "@scalius/shared/utils";
 import { formatMoney } from "@/lib/currency";
 import { getProductImageUrl, hasProductImage } from "@/lib/product-media";
-import { createApiUrl } from "@/lib/api/transport";
+import { browserApiUrl } from "@/lib/api/browser-url";
 import { normalizeSearchQuery } from "@/lib/search-query";
 import { currentPresence, pagePath } from "@/lib/presence-url";
 import { pageLocale, searchProvider } from "@/lib/app-services";
@@ -228,7 +228,7 @@ export default function CommandPalette() {
           params.set("locale", pageLocale());
         }
 
-        const res = await fetch(createApiUrl(`/search?${params}`), {
+        const res = await fetch(browserApiUrl(`/search?${params}`), {
           signal: controller.signal,
         });
         if (!res.ok) throw new Error("Search failed");

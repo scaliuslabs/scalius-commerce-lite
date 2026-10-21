@@ -2,7 +2,7 @@
 // a live theme preview (the draft renders instead of the published theme):
 // it says so and offers to leave, like Shopify's preview bar. Buyers never
 // see it: it needs a valid preview, and preview pages are never cached.
-import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
+import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
 
 export interface ThemePreviewBarCopy {
   label: string;

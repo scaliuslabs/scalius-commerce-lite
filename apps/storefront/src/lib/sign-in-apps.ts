@@ -4,7 +4,7 @@
 // carries the buyer to the app's sign-in page and back with a session. A link
 // works without JavaScript. Failures come back as a fixed `sign_in_error`
 // value in the account page's URL: never a provider message.
-import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
+import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
 
 export interface SignInApp {
   /** The app provider id (`<plugin id>:<provider id>`). */

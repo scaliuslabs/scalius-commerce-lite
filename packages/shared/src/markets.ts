@@ -142,14 +142,54 @@ const PRESENCE_DISCOVERY_PATHS = [
   /^\/api\/facebook-feed\.xml$/,
 ];
 
+/** The same segments as a list, for the allocation-free first-segment test below. */
+const NON_PAGE_SEGMENT_LIST = [...NON_PAGE_SEGMENTS];
+
+const SLASH = 0x2f;
+const HYPHEN = 0x2d;
+const isLowerAscii = (code: number) => code >= 0x61 && code <= 0x7a;
+
+/**
+ * Whether the first `end` characters of `text` are a storefront page path
+ * (`isStorefrontPagePath`), read in place without split or slice: the
+ * presence HTML rewriter runs it for every link of a presence page.
+ */
+function isPagePathSpan(text: string, end: number): boolean {
+  if (end === 0 || text.charCodeAt(0) !== SLASH || (end > 1 && text.charCodeAt(1) === SLASH)) return false;
+  const backslash = text.indexOf("\\");
+  if (backslash !== -1 && backslash < end) return false;
+  // Empty segments do not count: drop trailing slashes (a second slash
+  // never follows the first, so the first segment starts at 1).
+  let last = end;
+  while (last > 1 && text.charCodeAt(last - 1) === SLASH) last -= 1;
+  if (last === 1) return true;
+  let first = text.indexOf("/", 1);
+  if (first === -1 || first > last) first = last;
+  const length = first - 1;
+  for (const segment of NON_PAGE_SEGMENT_LIST) {
+    if (segment.length === length && text.startsWith(segment, 1)) return false;
+  }
+  // A file (robots.txt, sitemap.xml, favicon.svg, feed.xml) is not a page.
+  return text.lastIndexOf(".", last - 1) < text.lastIndexOf("/", last - 1) + 1;
+}
+
+/**
+ * The end of the presence segment that starts at `start` and ends by `end`
+ * (`en` or `en-in`, then a slash or the end), else -1.
+ */
+function presenceSegmentEnd(text: string, start: number, end: number): number {
+  if (start + 2 > end || !isLowerAscii(text.charCodeAt(start)) || !isLowerAscii(text.charCodeAt(start + 1))) return -1;
+  let next = start + 2;
+  if (next < end && text.charCodeAt(next) === HYPHEN) {
+    if (next + 3 > end || !isLowerAscii(text.charCodeAt(next + 1)) || !isLowerAscii(text.charCodeAt(next + 2))) return -1;
+    next += 3;
+  }
+  return next === end || text.charCodeAt(next) === SLASH ? next : -1;
+}
+
 /** Whether a root-relative path names a storefront page (a presence links to it under its subfolder). */
 export function isStorefrontPagePath(pathname: string): boolean {
-  if (!pathname.startsWith("/") || pathname.startsWith("//") || pathname.includes("\\")) return false;
-  const segments = pathname.split("/").filter(Boolean);
-  if (segments.length === 0) return true;
-  if (NON_PAGE_SEGMENTS.has(segments[0]!)) return false;
-  // A file (robots.txt, sitemap.xml, favicon.svg, feed.xml) is not a page.
-  return !segments[segments.length - 1]!.includes(".");
+  return isPagePathSpan(pathname, pathname.length);
 }
 
 /** Whether a presence serves this (presence-stripped) path: its pages and its discovery files. */
@@ -163,8 +203,12 @@ export function isPresenceServedPath(pathname: string): boolean {
  * the presence matrix's answer, never the shape's.
  */
 export function presenceOfPath(pathname: string): string | null {
-  const first = pathname.split("/")[1] ?? "";
-  return isMarketSubfolder(first) ? first : null;
+  // The second "/"-separated part, as `pathname.split("/")[1]` names it.
+  const start = pathname.indexOf("/") + 1;
+  if (start === 0) return null;
+  const slash = pathname.indexOf("/", start);
+  const end = slash === -1 ? pathname.length : slash;
+  return presenceSegmentEnd(pathname, start, end) === end ? pathname.slice(start, end) : null;
 }
 
 /** The path without its presence (`/en-in/products/x` → `/products/x`, `/en-in` → `/`). */
@@ -182,13 +226,15 @@ export function stripPresencePath(pathname: string, presence: string | null): st
  * Idempotent: an href already under a presence keeps it.
  */
 export function presencePath(presence: string | null | undefined, href: string): string {
-  if (!presence || !href.startsWith("/") || href.startsWith("//")) return href;
-  const end = href.search(/[?#]/);
-  const pathname = end === -1 ? href : href.slice(0, end);
-  const rest = end === -1 ? "" : href.slice(end);
-  if (presenceOfPath(pathname) !== null) return href;
-  if (!isStorefrontPagePath(pathname)) return href;
-  return `/${presence}${pathname === "/" ? "" : pathname}${rest}`;
+  if (!presence || href.charCodeAt(0) !== SLASH || href.charCodeAt(1) === SLASH) return href;
+  const query = href.indexOf("?");
+  const hash = href.indexOf("#");
+  const end = query === -1 ? (hash === -1 ? href.length : hash) : hash === -1 ? query : Math.min(query, hash);
+  // Already under a presence: `/en-in`, `/en-in/...` (the first segment, up to a slash or the path's end).
+  const slash = href.indexOf("/", 1);
+  if (presenceSegmentEnd(href, 1, slash === -1 || slash > end ? end : slash) !== -1) return href;
+  if (!isPagePathSpan(href, end)) return href;
+  return end === 1 ? `/${presence}${href.slice(1)}` : `/${presence}${href}`;
 }
 
 /**

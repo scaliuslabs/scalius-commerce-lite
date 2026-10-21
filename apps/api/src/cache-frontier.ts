@@ -26,13 +26,18 @@
 import { sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import {
+  CACHE_FRONTIER_CHECK_MAX_DEPS,
+  CACHE_FRONTIER_CHECK_PATH,
   CACHE_FRONTIER_KEY_HEADER,
   CACHE_FRONTIER_MAX_CHANGES,
+  CACHE_FRONTIER_PATH,
   CACHE_FRONTIER_SECRET_PURPOSE,
   hashCacheDep,
+  isCacheDepHash,
   type CacheFrontierCheck,
   type CacheFrontierDelta,
 } from "@scalius/shared/cache-frontier";
+import { readWorkerVersion, type WorkerVersionMetadataEnv } from "@scalius/shared/cache-generation";
 import { deriveRuntimeSecret, readMasterSecret } from "@scalius/shared/runtime-secrets";
 
 /** The Platform settings row as stored (`settings` category `platform`, key `document`). */
@@ -223,4 +228,56 @@ export async function hasFrontierKey(request: Request, env: { SCALIUS_SECRET?: u
   const master = readMasterSecret(env);
   if (!presented || !master) return false;
   return constantTimeEqual(presented, await deriveRuntimeSecret(master, CACHE_FRONTIER_SECRET_PURPOSE));
+}
+
+// ─── The frontier endpoints ─────────────────────────────────────────────────
+// GET /api/v1/storefront/frontier and POST /api/v1/storefront/frontier/check
+// (CACHE-DESIGN §6.7): internal, authenticated with the storefront's frontier
+// key, never cached, not part of the public contract. The Worker entry
+// answers them before the Platform settings, the route families and the
+// middleware chain: a quiet store's page hit blocks on this call, so it costs
+// one key check and one statement.
+
+type FrontierEnv = { SCALIUS_SECRET?: unknown } & WorkerVersionMetadataEnv;
+
+const FRONTIER_HEADERS = { "Cache-Control": "private, no-store" } as const;
+const frontierJson = (body: unknown, status = 200) => Response.json(body, { status, headers: FRONTIER_HEADERS });
+const nonNegativeInteger = (value: unknown): number | null =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
+
+/** Which frontier endpoint a request is (exact method and path), else null. */
+export function cacheFrontierEndpoint(method: string, pathname: string): "delta" | "check" | null {
+  if (method === "GET" && pathname === CACHE_FRONTIER_PATH) return "delta";
+  if (method === "POST" && pathname === CACHE_FRONTIER_CHECK_PATH) return "check";
+  return null;
+}
+
+/** `GET /storefront/frontier?since=<S>`: every key changed after `since`, up to the clock. */
+export async function serveCacheFrontierDelta(request: Request, env: FrontierEnv, db: () => Database): Promise<Response> {
+  if (!(await hasFrontierKey(request, env))) return frontierJson({ success: false, error: "Not found" }, 404);
+  const apiVersion = readWorkerVersion(env);
+  if (!apiVersion) return frontierJson({ success: false, error: "Cache proof unavailable" }, 503);
+  const url = new URL(request.url);
+  const since = url.searchParams.has("since") ? nonNegativeInteger(Number(url.searchParams.get("since"))) : null;
+  if (url.searchParams.has("since") && since === null) {
+    return frontierJson({ success: false, error: "since must be a clock value" }, 400);
+  }
+  const limit = nonNegativeInteger(Number(url.searchParams.get("limit") ?? CACHE_FRONTIER_MAX_CHANGES)) ?? CACHE_FRONTIER_MAX_CHANGES;
+  const delta = await readFrontierDelta(db(), since, Math.max(1, limit));
+  return frontierJson({ success: true, data: { ...delta, apiVersion } });
+}
+
+/** `POST /storefront/frontier/check`: did any of these hashed keys change after `s0`? */
+export async function serveCacheFrontierCheck(request: Request, env: FrontierEnv, db: () => Database): Promise<Response> {
+  if (!(await hasFrontierKey(request, env))) return frontierJson({ success: false, error: "Not found" }, 404);
+  const apiVersion = readWorkerVersion(env);
+  if (!apiVersion) return frontierJson({ success: false, error: "Cache proof unavailable" }, 503);
+  const input = await request.json().catch(() => null) as { s0?: unknown; deps?: unknown } | null;
+  const s0 = nonNegativeInteger(input?.s0);
+  const hashes = Array.isArray(input?.deps) ? input!.deps as unknown[] : null;
+  if (s0 === null || !hashes || hashes.length > CACHE_FRONTIER_CHECK_MAX_DEPS || !hashes.every(isCacheDepHash)) {
+    return frontierJson({ success: false, error: "Invalid frontier check" }, 400);
+  }
+  const result = await checkHashedDependencies(db(), s0, hashes as string[]);
+  return frontierJson({ success: true, data: { ...result, apiVersion } });
 }

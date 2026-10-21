@@ -45,7 +45,6 @@ import {
   type StorefrontThemeText,
 } from "@scalius/shared/storefront-theme";
 import { translatePluginSettingValues } from "@scalius/shared/plugins/settings-schema";
-import { readWorkerVersion } from "@scalius/shared/cache-generation";
 import {
   MAX_STOREFRONT_BATCH_PARTS,
   STOREFRONT_BATCH_PART_PARAM,
@@ -53,12 +52,7 @@ import {
 import { serveStorefrontBatch } from "../storefront-batch";
 import { createPublicPartReader, renderPublicRead } from "../public-read";
 import { API_PART_CACHE_MODE } from "../public-cache-policy";
-import { checkHashedDependencies, hasFrontierKey, readFrontierDelta } from "../cache-frontier";
-import {
-  CACHE_FRONTIER_CHECK_MAX_DEPS,
-  CACHE_FRONTIER_MAX_CHANGES,
-  isCacheDepHash,
-} from "@scalius/shared/cache-frontier";
+import { serveCacheFrontierCheck, serveCacheFrontierDelta } from "../cache-frontier";
 
 /**
  * Parts of one batch rendered at once: every part of a page (the product
@@ -805,40 +799,11 @@ app.openapi(batchRoute, async (c) => {
 
 // GET /storefront/frontier and POST /storefront/frontier/check: the
 // dependency-validated cache's change frontier for the storefront page cache
-// (CACHE-DESIGN §6.7). Internal: authenticated with the storefront's frontier
-// key (HKDF of SCALIUS_SECRET), never cached, not part of the public contract.
-const frontierHeaders = { "Cache-Control": "private, no-store" } as const;
-const frontierDenied = () => Response.json({ success: false, error: "Not found" }, { status: 404, headers: frontierHeaders });
-const nonNegativeInteger = (value: unknown): number | null =>
-  typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
-
-app.get("/frontier", async (c) => {
-  if (!(await hasFrontierKey(c.req.raw, c.env))) return frontierDenied();
-  const apiVersion = readWorkerVersion(c.env);
-  if (!apiVersion) return Response.json({ success: false, error: "Cache proof unavailable" }, { status: 503, headers: frontierHeaders });
-  const url = new URL(c.req.url);
-  const since = url.searchParams.has("since") ? nonNegativeInteger(Number(url.searchParams.get("since"))) : null;
-  if (url.searchParams.has("since") && since === null) {
-    return Response.json({ success: false, error: "since must be a clock value" }, { status: 400, headers: frontierHeaders });
-  }
-  const limit = nonNegativeInteger(Number(url.searchParams.get("limit") ?? CACHE_FRONTIER_MAX_CHANGES)) ?? CACHE_FRONTIER_MAX_CHANGES;
-  const delta = await readFrontierDelta(c.get("db"), since, Math.max(1, limit));
-  return Response.json({ success: true, data: { ...delta, apiVersion } }, { headers: frontierHeaders });
-});
-
-app.post("/frontier/check", async (c) => {
-  if (!(await hasFrontierKey(c.req.raw, c.env))) return frontierDenied();
-  const apiVersion = readWorkerVersion(c.env);
-  if (!apiVersion) return Response.json({ success: false, error: "Cache proof unavailable" }, { status: 503, headers: frontierHeaders });
-  const input = await c.req.json().catch(() => null) as { s0?: unknown; deps?: unknown } | null;
-  const s0 = nonNegativeInteger(input?.s0);
-  const hashes = Array.isArray(input?.deps) ? input!.deps as unknown[] : null;
-  if (s0 === null || !hashes || hashes.length > CACHE_FRONTIER_CHECK_MAX_DEPS || !hashes.every(isCacheDepHash)) {
-    return Response.json({ success: false, error: "Invalid frontier check" }, { status: 400, headers: frontierHeaders });
-  }
-  const result = await checkHashedDependencies(c.get("db"), s0, hashes as string[]);
-  return Response.json({ success: true, data: { ...result, apiVersion } }, { headers: frontierHeaders });
-});
+// (CACHE-DESIGN §6.7). The Worker entry answers the storefront's calls before
+// this router (cache-frontier.ts); these routes give any other request to the
+// same paths the same answer.
+app.get("/frontier", (c) => serveCacheFrontierDelta(c.req.raw, c.env, () => c.get("db")));
+app.post("/frontier/check", (c) => serveCacheFrontierCheck(c.req.raw, c.env, () => c.get("db")));
 
 const resolveThemePreviewRoute = createRoute({
   method: "post",

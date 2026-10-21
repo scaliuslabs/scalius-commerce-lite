@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/api/transport", () => ({ createApiUrl: (path: string) => `https://api.test/api/v1${path}` }));
+vi.mock("@/lib/api/browser-url", () => ({ browserApiUrl: (path: string) => `https://api.test/api/v1${path}` }));
 
 import type { ProductFacet } from "@/lib/api";
 import {

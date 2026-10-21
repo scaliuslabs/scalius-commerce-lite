@@ -1,3 +1,13 @@
+/**
+ * A checkout language code's base language ("bn-BD" and "BN_bd" are "bn"),
+ * "en" when there is none. Here, not in checkout-language.ts, so browser
+ * copy pickers do not load the preset catalog.
+ */
+export function checkoutLanguageBaseCode(code: unknown): string {
+  if (typeof code !== "string") return "en";
+  return code.trim().toLowerCase().split(/[-_]/, 1)[0] || "en";
+}
+
 /** Fills `{placeholder}` tokens in merchant checkout copy. */
 export function formatCheckoutLanguageText(
   template: string,

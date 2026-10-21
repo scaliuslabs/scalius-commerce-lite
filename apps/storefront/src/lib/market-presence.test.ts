@@ -104,12 +104,18 @@ describe("the buyer's explicit choice", () => {
   });
 });
 
-/** A rewriter double: applies each handler to the given elements, by selector. */
+/**
+ * A rewriter double: applies each handler to the given elements of every tag
+ * its selector list names. It does not evaluate the native filters
+ * (`hreflang`, fragments); the workerd test proves those.
+ */
 function fakeRewriter(elements: Record<string, FakeElement[]>) {
   return (): PresenceRewriter => {
     const rewriter: PresenceRewriter = {
       on(selector, handlers) {
-        for (const element of elements[selector] ?? []) handlers.element(element);
+        for (const [tag, list] of Object.entries(elements)) {
+          if (selector.split(",").some((part) => part.trim().startsWith(`${tag}[`))) for (const element of list) handlers.element(element);
+        }
         return rewriter;
       },
       transform: (response) => response,
@@ -120,7 +126,6 @@ function fakeRewriter(elements: Record<string, FakeElement[]>) {
 class FakeElement implements PresenceElement {
   constructor(readonly attributes: Record<string, string>) {}
   getAttribute(name: string) { return this.attributes[name] ?? null; }
-  hasAttribute(name: string) { return name in this.attributes; }
   setAttribute(name: string, value: string) { this.attributes[name] = value; }
 }
 
@@ -136,25 +141,24 @@ describe("presence responses", () => {
     expect(feed.headers.get("Link")).toBe(`<${ORIGIN}/en-in/api/product-feed.xml?cursor=feed-v1.a.b&limit=100>; rel="next"`);
   });
 
-  it("rewrites page links and form actions, never assets, other origins or alternates", async () => {
+  it("rewrites page links and form actions, never assets or other origins", async () => {
     const elements = {
-      "a[href]": [
+      a: [
         new FakeElement({ href: "/products/tee" }),
         new FakeElement({ href: `${ORIGIN}/categories/bags?page=2` }),
         new FakeElement({ href: "/media/x.webp" }),
         new FakeElement({ href: "https://facebook.com/shop" }),
-        new FakeElement({ href: "#reviews" }),
-        new FakeElement({ href: "/", hreflang: "bn-BD" }),
+        new FakeElement({ href: "?page=2" }),
       ],
-      "form[action]": [new FakeElement({ action: "/buy/tee" }), new FakeElement({ action: "/localization" }), new FakeElement({ action: "/api/newsletter/subscribe" })],
-      "button[formaction]": [new FakeElement({ formaction: "/search" })],
+      form: [new FakeElement({ action: "/buy/tee" }), new FakeElement({ action: "/localization" }), new FakeElement({ action: "/api/newsletter/subscribe" })],
+      button: [new FakeElement({ formaction: "/search" })],
     };
     const response = localizePresenceResponse(new Response("<p>x</p>", { headers: { "Content-Type": "text/html; charset=utf-8" } }), "en-in", ORIGIN, fakeRewriter(elements));
     expect(await response.text()).toBe("<p>x</p>");
-    expect(elements["a[href]"].map((element) => element.attributes.href)).toEqual([
-      "/en-in/products/tee", `${ORIGIN}/en-in/categories/bags?page=2`, "/media/x.webp", "https://facebook.com/shop", "#reviews", "/",
+    expect(elements.a.map((element) => element.attributes.href)).toEqual([
+      "/en-in/products/tee", `${ORIGIN}/en-in/categories/bags?page=2`, "/media/x.webp", "https://facebook.com/shop", "?page=2",
     ]);
-    expect(elements["form[action]"].map((element) => element.attributes.action)).toEqual(["/en-in/buy/tee", "/localization", "/api/newsletter/subscribe"]);
-    expect(elements["button[formaction]"][0]!.attributes.formaction).toBe("/en-in/search");
+    expect(elements.form.map((element) => element.attributes.action)).toEqual(["/en-in/buy/tee", "/localization", "/api/newsletter/subscribe"]);
+    expect(elements.button[0]!.attributes.formaction).toBe("/en-in/search");
   });
 });

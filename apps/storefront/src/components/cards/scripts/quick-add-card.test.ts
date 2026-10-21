@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
-import type { ProductPageData } from "@/lib/api/products";
+import type { ProductPageData } from "@/lib/api/product-payloads";
 import { initQuickAddCards, quickAddCartLine } from "./quick-add-card";
 
 const buyer = vi.hoisted(() => ({ read: vi.fn(), add: vi.fn(), track: vi.fn() }));
-vi.mock("@/lib/api/products", () => ({ getProductBySlugResult: buyer.read }));
+vi.mock("@/lib/api/browser-products", () => ({ fetchProductBySlugResult: buyer.read }));
 vi.mock("@/store/cart", () => ({ addToCart: buyer.add, cartLineKeyFor: async () => "line_rice" }));
 vi.mock("@/components/product/lib/product-analytics", () => ({ trackProductAddToCart: buyer.track }));
 

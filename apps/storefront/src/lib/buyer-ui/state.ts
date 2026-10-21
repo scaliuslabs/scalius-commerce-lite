@@ -1,4 +1,4 @@
-import { checkoutAttributesSchema } from "@scalius/shared/plugins/buyer-ui";
+import { parseCheckoutAttributeValues } from "./checkout-attributes";
 import { STOREFRONT_UI_SLOT_PAGES, type StorefrontUiSlot } from "@scalius/shared/plugins/storefront-protocol";
 
 /**
@@ -26,15 +26,14 @@ export function readBuyerAttributes(): Record<string, string> {
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY);
     if (!raw || raw.length > 8192) return {};
-    const parsed = checkoutAttributesSchema.safeParse(JSON.parse(raw));
-    return parsed.success ? parsed.data : {};
+    return parseCheckoutAttributeValues(JSON.parse(raw)) ?? {};
   } catch { return {}; }
 }
 
 export function writeBuyerAttribute(key: string, value: string): boolean {
-  const parsed = checkoutAttributesSchema.safeParse({ ...readBuyerAttributes(), [key]: value });
-  if (!parsed.success) return false;
-  try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(parsed.data)); return true; }
+  const answers = parseCheckoutAttributeValues({ ...readBuyerAttributes(), [key]: value });
+  if (!answers) return false;
+  try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(answers)); return true; }
   catch { return false; }
 }
 
