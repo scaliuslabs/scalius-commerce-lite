@@ -158,8 +158,8 @@ describe("CollectionForm", () => {
     document.body.append(host);
     root = createRoot(host);
     queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-    api.createCollection.mockResolvedValue({ id: "col_new", version: 1 });
-    api.updateCollection.mockResolvedValue({ id: "col_eid", version: 8 });
+    api.createCollection.mockResolvedValue({ collection: { id: "col_new", revision: 1 } });
+    api.updateCollection.mockResolvedValue({ collection: { id: "col_eid", revision: 8 } });
   });
 
   afterEach(() => {
@@ -234,7 +234,7 @@ describe("CollectionForm", () => {
     await waitFor(() => expect(api.updateCollection).toHaveBeenCalledTimes(1));
     expect(api.updateCollection.mock.calls[0]?.[0]?.path).toEqual({ id: "col_eid" });
     expect(lastUpdateBody()).toMatchObject({
-      expectedVersion: 7,
+      expectedRevision: 7,
       canonicalPath: "/collections/col_eid",
       excludeFromSitemap: true,
       config: {
@@ -256,14 +256,14 @@ describe("CollectionForm", () => {
     await click(button("Move Jamdani sari down"));
     await click(button("Save"));
     await waitFor(() => expect(api.updateCollection).toHaveBeenCalledTimes(2));
-    expect(lastUpdateBody().expectedVersion).toBe(8);
+    expect(lastUpdateBody().expectedRevision).toBe(8);
   });
 
   it("reloads a conflicting collection under the merchant's edits and saves with the fresh version", async () => {
     api.updateCollection.mockRejectedValueOnce(new AdminApiResponseError("changed", 409, "collection_revision_conflict"));
     api.getCollection.mockResolvedValue({
       ...savedCollection,
-      version: 9,
+      revision: 9,
       metaTitle: "Saved elsewhere",
       config: JSON.stringify({ ...savedCollection.config, title: "Latest heading" }),
     });
@@ -282,7 +282,7 @@ describe("CollectionForm", () => {
     await click(button("Save"));
     await waitFor(() => expect(api.updateCollection).toHaveBeenCalledTimes(2));
     expect(lastUpdateBody()).toMatchObject({
-      name: "My collection title", expectedVersion: 9, metaTitle: "Saved elsewhere",
+      name: "My collection title", expectedRevision: 9, metaTitle: "Saved elsewhere",
       config: { title: "Latest heading", productIds: savedCollection.config!.productIds },
     });
   });

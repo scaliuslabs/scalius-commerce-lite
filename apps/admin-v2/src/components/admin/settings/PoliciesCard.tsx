@@ -43,7 +43,7 @@ type NewPage = Parameters<typeof postApiV1AdminPages>[0]["body"];
 async function createPolicyPage(body: NewPage) {
   for (let attempt = 1; ; attempt += 1) {
     try {
-      return await apiData(postApiV1AdminPages({ body: attempt === 1 ? body : { ...body, slug: `${body.slug}-${attempt}` } }));
+      return (await apiData(postApiV1AdminPages({ body: attempt === 1 ? body : { ...body, slug: `${body.slug}-${attempt}` } }))).page;
     } catch (error) {
       if (!(error instanceof AdminApiResponseError && error.status === 409) || attempt >= 5) throw error;
     }

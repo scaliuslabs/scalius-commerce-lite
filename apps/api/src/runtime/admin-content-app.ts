@@ -3,6 +3,7 @@ import { buildRouteGroupApp, type RouteGroupParts } from "./route-groups";
 import { checkoutLanguageRoutes } from "../routes/checkout-languages";
 import { adminNavigationRoutes } from "../routes/admin/navigation";
 import { adminResourceMenuRoutes } from "../routes/admin/resources-menus";
+import { adminResourceCatalogContentRoutes } from "../routes/admin/resources-catalog-content";
 import { adminResourceThemeRoutes } from "../routes/admin/resources-theme";
 import { adminPageRoutes } from "../routes/admin/pages";
 import { adminTranslationRoutes } from "../routes/admin/translations";
@@ -18,6 +19,7 @@ export const adminContentParts: RouteGroupParts<"admin-content"> = {
     adminNavigationRoutes,
     adminResourceThemeRoutes,
     adminResourceMenuRoutes,
+    adminResourceCatalogContentRoutes,
     adminTranslationRoutes,
     adminSettingsRoutes,
     customFieldDefinitionRoutes,

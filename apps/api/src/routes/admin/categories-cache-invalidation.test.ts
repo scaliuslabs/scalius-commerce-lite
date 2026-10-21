@@ -14,8 +14,13 @@ const mocks = vi.hoisted(() => ({
   bulkDeleteCategories: vi.fn(),
   restoreCategories: vi.fn(),
   permanentlyDeleteCategory: vi.fn(),
-
+  readCategoryResource: vi.fn(),
 }));
+
+vi.mock("./resources-catalog-content", async () => {
+  const actual = await vi.importActual<typeof import("./resources-catalog-content")>("./resources-catalog-content");
+  return { ...actual, readCategoryResource: mocks.readCategoryResource };
+});
 
 vi.mock("@scalius/core/modules/categories", async () => {
   const actual = await vi.importActual<typeof import("@scalius/core/modules/categories")>(
@@ -37,6 +42,9 @@ vi.mock("@scalius/core/modules/categories", async () => {
 });
 
 import { adminCategoryRoutes } from "./categories";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- assertions inspect the wire envelope.
+type WireBody = { data: any; error: any };
 
 function createCategoryBody(overrides: Record<string, unknown> = {}) {
   return {
@@ -61,6 +69,9 @@ function createDb() {
   };
 }
 
+/** The category every write answers (`{ category }`). */
+const CATEGORY = { id: "cat_1", slug: "fresh-fish", revision: 2, status: "published" };
+
 function createTestApp() {
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
   const db = createDb();
@@ -81,6 +92,7 @@ function createTestApp() {
   mocks.bulkDeleteCategories.mockResolvedValue(undefined);
   mocks.restoreCategories.mockResolvedValue(undefined);
   mocks.permanentlyDeleteCategory.mockResolvedValue(undefined);
+  mocks.readCategoryResource.mockResolvedValue(CATEGORY);
 
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
@@ -130,6 +142,7 @@ describe("admin category write behavior", () => {
     );
 
     expect(response.status).toBe(201);
+    expect((await response.json() as WireBody).data).toEqual({ category: CATEGORY });
 
   });
 
@@ -149,6 +162,8 @@ describe("admin category write behavior", () => {
     );
 
     expect(response.status).toBe(200);
+    expect((await response.json() as WireBody).data).toEqual({ category: CATEGORY });
+    expect(mocks.readCategoryResource).toHaveBeenCalledWith(expect.anything(), "cat_1");
 
   });
 });

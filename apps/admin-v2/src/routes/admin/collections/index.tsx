@@ -63,7 +63,7 @@ function CollectionsPage() {
   const tableCopy = useMessages(dataTableMessages);
   const { collections: can } = useCatalogActionPermissions();
   const update = useResourceMutation(
-    (action: { kind: "activate" | "deactivate"; ids: string[] } | { kind: "reorder"; items: Array<{ id: string; sortOrder: number; expectedVersion: number }> }) =>
+    (action: { kind: "activate" | "deactivate"; ids: string[] } | { kind: "reorder"; items: Array<{ id: string; sortOrder: number; expectedRevision: number }> }) =>
       action.kind === "reorder"
         ? apiData(postApiV1AdminCollectionsReorder({ body: { items: action.items } }))
         : inChunks(action.ids, (ids) =>
@@ -136,7 +136,7 @@ function CollectionsPage() {
         if (!moved) return;
         next.splice(to, 0, moved);
         update.mutate({
-          variables: { kind: "reorder", items: next.map((row, index) => ({ id: row.id, sortOrder: index, expectedVersion: row.version })) },
+          variables: { kind: "reorder", items: next.map((row, index) => ({ id: row.id, sortOrder: index, expectedRevision: row.revision })) },
           success: t("reordered"),
         });
       }}

@@ -126,8 +126,8 @@ describe("CategoryForm", () => {
     document.body.append(host);
     root = createRoot(host);
     queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    api.create.mockResolvedValue({ id: "cat_new", revision: 1, status: "draft" });
-    api.update.mockResolvedValue({ id: "cat_panjabi", revision: 5, status: "draft" });
+    api.create.mockResolvedValue({ category: { id: "cat_new", revision: 1, status: "draft" } });
+    api.update.mockResolvedValue({ category: { id: "cat_panjabi", revision: 5, status: "draft" } });
   });
 
   afterEach(() => {
@@ -275,7 +275,7 @@ describe("CategoryForm", () => {
   }
 
   it("creates an active category and warns that it stays empty until products are added", async () => {
-    api.create.mockResolvedValue({ id: "cat_new", revision: 1, status: "published" });
+    api.create.mockResolvedValue({ category: { id: "cat_new", revision: 1, status: "published" } });
     await render();
 
     type(byLabel("Name"), "Eid sale");

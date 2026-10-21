@@ -39,8 +39,16 @@ import { pageSchema } from "../../schemas/entities";
 import { ok, created, noContent } from "../../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
-const pageMutationSchema = z.object({ revision: z.number().int().min(1) });
-const pageCreateResultSchema = pageMutationSchema.extend({ id: z.string() });
+/** A page as `pages.get` reads it; create and update answer it too (`{ page }`). */
+const PageResource = pageSchema.openapi("PageResource");
+const pageEnvelope = successEnvelope(z.object({ page: PageResource }));
+
+/** The page as it is now (not in the trash). */
+async function readPage(db: Database, id: string) {
+  const page = await getPageById(db, id);
+  if (!page) throw new NotFoundError("Page not found");
+  return page;
+}
 const pageRevisionBodySchema = pageRevisionClaimSchema.omit({ id: true });
 
 /**
@@ -176,10 +184,8 @@ const createPageRoute = createRoute({
   },
   responses: {
     201: {
-      description: "Page created",
-      content: {
-        "application/json": { schema: successEnvelope(pageCreateResultSchema) },
-      },
+      description: "The new page",
+      content: { "application/json": { schema: pageEnvelope } },
     },
     ...errorResponses,
     409: conflictResponse,
@@ -195,12 +201,11 @@ function reservedDashboardSlugs(env: Env): ReadonlySet<string> {
 
 app.openapi(createPageRoute, async (c) => {
   const db = c.get("db");
-  const result = await createPage(db, c.req.valid("json"), {
+  const { id } = await createPage(db, c.req.valid("json"), {
     canPublish: c.get("adminPermissions").has(PERMISSIONS.PAGES_PUBLISH),
     reservedSlugs: reservedDashboardSlugs(c.env),
   });
-
-  return created(c, result);
+  return created(c, { page: await readPage(db, id) });
 });
 
 // ── Bulk Delete Pages ──
@@ -363,8 +368,8 @@ const getByIdRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Page details",
-      content: { "application/json": { schema: successEnvelope(pageSchema) } },
+      description: "The page",
+      content: { "application/json": { schema: pageEnvelope } },
     },
     ...errorResponses,
   },
@@ -372,10 +377,7 @@ const getByIdRoute = createRoute({
 
 app.openapi(getByIdRoute, async (c) => {
   const db = c.get("db");
-  const { id } = c.req.valid("param");
-  const page = await getPageById(db, id);
-  if (!page) throw new NotFoundError("Page not found");
-  return ok(c, page);
+  return ok(c, { page: await readPage(db, c.req.valid("param").id) });
 });
 
 // ── Update Page ──
@@ -392,10 +394,8 @@ const updatePageRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Page updated",
-      content: {
-        "application/json": { schema: successEnvelope(pageMutationSchema) },
-      },
+      description: "The page as updated",
+      content: { "application/json": { schema: pageEnvelope } },
     },
     ...errorResponses,
     409: conflictResponse,
@@ -405,12 +405,11 @@ const updatePageRoute = createRoute({
 app.openapi(updatePageRoute, async (c) => {
   const db = c.get("db");
   const { id } = c.req.valid("param");
-  const result = await updatePage(db, id, c.req.valid("json"), {
+  await updatePage(db, id, c.req.valid("json"), {
     canPublish: c.get("adminPermissions").has(PERMISSIONS.PAGES_PUBLISH),
     reservedSlugs: reservedDashboardSlugs(c.env),
   });
-
-  return ok(c, result);
+  return ok(c, { page: await readPage(db, id) });
 });
 
 // ── Delete Page ──

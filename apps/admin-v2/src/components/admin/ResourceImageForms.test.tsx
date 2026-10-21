@@ -69,7 +69,8 @@ describe.each(["brand", "category"] as const)("%s image identity", (resource) =>
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    api.update.mockResolvedValue({ revision: 5, status: "draft" });
+    // Each form reads its own resource from the write's answer.
+    api.update.mockResolvedValue({ brand: { revision: 5, status: "draft" }, category: { revision: 5, status: "draft" } });
     document.body.innerHTML = "";
     const host = document.createElement("div");
     document.body.append(host);

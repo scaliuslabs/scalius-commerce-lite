@@ -68,7 +68,7 @@ export default function CategoryPickerList({
           image: null,
         },
       }));
-      onCreated({ id: data.id, name, status: data.status });
+      onCreated({ id: data.category.id, name, status: data.category.status });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() }),
         queryClient.invalidateQueries({ queryKey: queryKeys.categories.formOptions() }),

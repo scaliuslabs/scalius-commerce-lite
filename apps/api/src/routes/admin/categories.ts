@@ -34,10 +34,11 @@ import {
     CATEGORY_BATCH_LIMIT,
 } from "@scalius/core/modules/categories/browser";
 import { categories } from "@scalius/database/schema";
-import { and, asc, inArray, isNull } from "drizzle-orm";
+import { asc, inArray, isNull } from "drizzle-orm";
 import { planLimits } from "@scalius/shared/plan-limits";
 import { idempotencyKeyHeaderSchema } from "./idempotency";
-import { batchItemKeySchema, batchRequestSchema, batchResultSchema, runBatchCreate, type BatchCreateData, type BatchRef } from "./resources-batch";
+import { batchItemKeySchema, batchRequestSchema, batchResultSchema, runBatchCreate, type BatchCreateData } from "./resources-batch";
+import { CategoryResource, readCategoryResource, readCategoryResources, type CategoryResourceData } from "./resources-catalog-content";
 import {
     successEnvelope,
     paginatedEnvelope,
@@ -54,9 +55,10 @@ const categoryIdsSchema = z
     .array(categoryRevisionClaimSchema)
     .min(1)
     .max(CATEGORY_BATCH_LIMIT);
-const categoryMutationResultSchema = z.object({
-    revision: z.number().int().min(1),
-    status: categoryStatusSchema,
+/** Every category write answers the category as `categories.get` reads it. */
+const categoryEnvelope = successEnvelope(z.object({ category: CategoryResource }));
+const expectedRevisionField = z.number().int().min(1).openapi({
+    description: "The category's `revision` you read; a category changed since is refused with 409 and nothing changes.",
 });
 const categoryPublishReadinessSchema = z.object({
     ready: z.boolean(),
@@ -424,12 +426,8 @@ const createCategoryRoute = createRoute({
     },
     responses: {
         201: {
-            description: "Category created",
-            content: { "application/json": { schema: successEnvelope(z.object({
-                id: z.string(),
-                revision: z.number().int().min(1),
-                status: categoryStatusSchema,
-            })) } },
+            description: "The new category",
+            content: { "application/json": { schema: categoryEnvelope } },
         },
         ...errorResponses,
         409: conflictResponse,
@@ -438,10 +436,8 @@ const createCategoryRoute = createRoute({
 
 app.openapi(createCategoryRoute, async (c) => {
     const db = c.get("db");
-    const data = c.req.valid("json");
-    const result = await createCategory(db, data);
-
-    return created(c, result);
+    const { id } = await createCategory(db, c.req.valid("json"));
+    return created(c, { category: await readCategoryResource(db, id) });
 });
 
 // ── Batch create (stable app API, resources-batch.ts) ──
@@ -462,13 +458,13 @@ const batchCreateRoute = createRoute({
     operationId: "dashboard.categories.batch_create",
     tags: ["Admin - Categories"],
     summary: "Create many categories in one call",
-    description: "Creates up to the plan's bound of categories (50 on Paid, fewer on Free), each the body of `categories.create` plus a `key` of yours. Items run in order (put a parent before its children) and one refusal never stops the others: each result is `created`, `replayed` (that key already created its category earlier; nothing is created again) or `failed` with the refusal's code. Results carry `{ id, slug, revision }`. Send an Idempotency-Key too: a repeat of the whole request returns the first response.",
+    description: "Creates up to the plan's bound of categories (50 on Paid, fewer on Free), each the body of `categories.create` plus a `key` of yours. Items run in order (put a parent before its children) and one refusal never stops the others: each result is `created`, `replayed` (that key already created its category earlier; nothing is created again) or `failed` with the refusal's code. Each result carries the category as `categories.get` reads it. Send an Idempotency-Key too: a repeat of the whole request returns the first response.",
     request: {
         headers: idempotencyKeyHeaderSchema,
         body: { required: true, content: { "application/json": { schema: batchCreateBody } } },
     },
     responses: {
-        200: { description: "One result per item, in request order", content: { "application/json": { schema: successEnvelope(batchResultSchema("category")) } } },
+        200: { description: "One result per item, in request order", content: { "application/json": { schema: successEnvelope(batchResultSchema("category", CategoryResource)) } } },
         ...errorResponses,
         409: conflictResponse,
     },
@@ -486,15 +482,9 @@ app.openapi(batchCreateRoute, async (c) => {
         idPrefix: "cat_",
         create: ({ key: _key, ...body }, id) => createCategory(db, body, { id }),
         existing: async (ids) => new Set((await db.select({ id: categories.id }).from(categories).where(inArray(categories.id, [...ids]))).map((row) => row.id)),
-        readRefs: async (ids) => {
-            const rows = await db
-                .select({ id: categories.id, slug: categories.slug, revision: categories.revision })
-                .from(categories)
-                .where(and(inArray(categories.id, [...ids]), isNull(categories.deletedAt)));
-            return new Map<string, BatchRef>(rows.map((row) => [row.id, row]));
-        },
+        readRefs: async (ids) => new Map((await readCategoryResources(db, ids)).flatMap((category) => (category.deletedAt ? [] : [[category.id, category] as const]))),
     });
-    return ok(c, data as BatchCreateData<"category">);
+    return ok(c, data as BatchCreateData<"category", CategoryResourceData>);
 });
 
 // ── Bulk Delete Categories ──
@@ -578,8 +568,8 @@ const updateCategoryRoute = createRoute({
     },
     responses: {
         200: {
-            description: "Category updated",
-            content: { "application/json": { schema: successEnvelope(categoryMutationResultSchema) } },
+            description: "The category as updated",
+            content: { "application/json": { schema: categoryEnvelope } },
         },
         ...errorResponses,
         409: conflictResponse,
@@ -589,10 +579,8 @@ const updateCategoryRoute = createRoute({
 app.openapi(updateCategoryRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const data = c.req.valid("json");
-    const result = await updateCategory(db, id, data);
-
-    return ok(c, result);
+    await updateCategory(db, id, c.req.valid("json"));
+    return ok(c, { category: await readCategoryResource(db, id) });
 });
 
 const updateStatusRoute = createRoute({
@@ -607,8 +595,8 @@ const updateStatusRoute = createRoute({
     },
     responses: {
         200: {
-            description: "Category status changed",
-            content: { "application/json": { schema: successEnvelope(categoryMutationResultSchema) } },
+            description: "The category with its new status",
+            content: { "application/json": { schema: categoryEnvelope } },
         },
         ...errorResponses,
         409: conflictResponse,
@@ -618,10 +606,8 @@ const updateStatusRoute = createRoute({
 app.openapi(updateStatusRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const data = c.req.valid("json");
-    const result = await updateCategoryStatus(db, id, data);
-
-    return ok(c, result);
+    await updateCategoryStatus(db, id, c.req.valid("json"));
+    return ok(c, { category: await readCategoryResource(db, id) });
 });
 
 // ── Delete Category ──
@@ -631,15 +617,17 @@ const deleteCategoryRoute = createRoute({
     path: "/{id}",
     operationId: "dashboard.categories.trash",
     tags: ["Admin - Categories"],
-    summary: "Soft-delete a category",
+    summary: "Move a category to the trash",
+    description: "The category goes to the trash (and becomes a draft); its products stay. Answers the trashed category.",
     request: {
         params: z.object({ id: categoryIdSchema }),
-        body: { content: { "application/json": { schema: z.object({
-            expectedRevision: z.number().int().min(1),
-        }) } } },
+        query: z.object({ expectedRevision: z.coerce.number().int().min(1).openapi({ description: "The category's `revision` you read; a category changed since is refused with 409 and nothing changes." }) }),
     },
     responses: {
-        204: noContentResponse,
+        200: {
+            description: "The trashed category",
+            content: { "application/json": { schema: categoryEnvelope } },
+        },
         ...errorResponses,
         409: conflictResponse,
     }
@@ -648,10 +636,8 @@ const deleteCategoryRoute = createRoute({
 app.openapi(deleteCategoryRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const { expectedRevision } = c.req.valid("json");
-    await deleteCategory(db, id, expectedRevision);
-
-    return noContent(c);
+    await deleteCategory(db, id, c.req.valid("query").expectedRevision);
+    return ok(c, { category: await readCategoryResource(db, id) });
 });
 
 // ── Permanent Delete Category ──
@@ -691,17 +677,18 @@ const restoreCategoryRoute = createRoute({
     path: "/{id}/restore",
     operationId: "dashboard.categories.restore",
     tags: ["Admin - Categories"],
-    summary: "Restore a soft-deleted category",
+    summary: "Restore a category from the trash",
+    description: "The category comes back as a draft. Answers the restored category.",
     request: {
         params: z.object({ id: categoryIdSchema }),
         body: { content: { "application/json": { schema: z.object({
-            expectedRevision: z.number().int().min(1),
+            expectedRevision: expectedRevisionField,
         }) } } },
     },
     responses: {
         200: {
-            description: "Category restored",
-            content: { "application/json": { schema: successEnvelope(z.object({})) } },
+            description: "The restored category",
+            content: { "application/json": { schema: categoryEnvelope } },
         },
         ...errorResponses,
         409: conflictResponse,
@@ -713,8 +700,7 @@ app.openapi(restoreCategoryRoute, async (c) => {
     const { id } = c.req.valid("param");
     const { expectedRevision } = c.req.valid("json");
     await restoreCategories(db, [{ id, expectedRevision }]);
-
-    return ok(c, {});
+    return ok(c, { category: await readCategoryResource(db, id) });
 });
 
 export { app as adminCategoryRoutes };

@@ -131,8 +131,8 @@ describe("PageForm", () => {
     document.body.append(host);
     root = createRoot(host);
     queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    api.create.mockResolvedValue({ id: "page_new", revision: 1 });
-    api.update.mockResolvedValue({ id: "page_size_guide", revision: 3 });
+    api.create.mockResolvedValue({ page: { id: "page_new", revision: 1 } });
+    api.update.mockResolvedValue({ page: { id: "page_size_guide", revision: 3 } });
   });
 
   afterEach(() => {
@@ -211,7 +211,7 @@ describe("PageForm", () => {
 
   it("normalizes an empty server reload while preserving the local edit until discard", async () => {
     api.update.mockRejectedValue(new AdminApiResponseError("changed", 409, "page_revision_conflict"));
-    api.read.mockResolvedValue({ ...savedPost, revision: 3, content: "<p></p>", isPublished: false, publishedAt: null });
+    api.read.mockResolvedValue({ page: { ...savedPost, revision: 3, content: "<p></p>", isPublished: false, publishedAt: null } });
     await render({ contentType: "article", defaultValues: savedPost, isEdit: true });
     type(byLabel("Title"), "My local title");
     await settle();

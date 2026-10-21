@@ -100,6 +100,11 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.menus.get": { uncurated: true },
   "dashboard.resources.menus.create": { batch: "forbidden", uncurated: true },
   "dashboard.resources.menus.update": { revision: "required", batch: "forbidden", uncurated: true },
+  // Categories and collections as resources (routes/admin/resources-catalog-content.ts).
+  "dashboard.resources.categories.get": { uncurated: true },
+  "dashboard.resources.categories.list": { uncurated: true },
+  "dashboard.resources.collections.get": { uncurated: true },
+  "dashboard.resources.collections.list": { uncurated: true },
   "dashboard.resources.variants.get": { uncurated: true },
   "dashboard.resources.variants.lookup": { risk: "read", uncurated: true },
   "dashboard.resources.customers.list": { uncurated: true },

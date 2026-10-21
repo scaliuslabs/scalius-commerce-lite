@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   trashBrands: vi.fn(),
   restoreBrands: vi.fn(),
   permanentlyDeleteBrands: vi.fn(),
+  getBrandById: vi.fn(),
+  getBrandsByIds: vi.fn(),
   moveCategory: vi.fn(),
 
 }));
@@ -24,6 +26,8 @@ vi.mock("@scalius/core/modules/brands", async () => {
     trashBrands: mocks.trashBrands,
     restoreBrands: mocks.restoreBrands,
     permanentlyDeleteBrands: mocks.permanentlyDeleteBrands,
+    getBrandById: mocks.getBrandById,
+    getBrandsByIds: mocks.getBrandsByIds,
   };
 });
 
@@ -35,6 +39,14 @@ vi.mock("@scalius/core/modules/categories", async () => {
 import { adminBrandRoutes } from "./brands";
 import { adminCategoryRoutes } from "./categories";
 
+/** The brand every write answers (`{ brand }`, as brands.get reads it). */
+const BRAND = {
+  id: "brd_walton01", name: "Walton", slug: "walton", status: "published", sortOrder: 0, revision: 2,
+  noIndex: false, excludeFromSitemap: false, productCount: 0, logo: null,
+  createdAt: "2026-10-21T00:00:00.000Z", updatedAt: "2026-10-21T00:00:00.000Z", deletedAt: null,
+  description: null, metaTitle: null, metaDescription: null, canonicalPath: null, listingTemplate: null, logoMediaId: null,
+};
+
 function createTestApp() {
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
   const env = {} as unknown as Env;
@@ -44,6 +56,8 @@ function createTestApp() {
   mocks.trashBrands.mockResolvedValue(undefined);
   mocks.restoreBrands.mockResolvedValue(undefined);
   mocks.permanentlyDeleteBrands.mockResolvedValue(undefined);
+  mocks.getBrandById.mockResolvedValue(BRAND);
+  mocks.getBrandsByIds.mockResolvedValue([BRAND]);
 
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
@@ -83,7 +97,10 @@ describe("admin brand and category tree writes", () => {
     const response = await send(app, env, path, method, body);
 
     expect(response.status, await response.clone().text()).toBe(status);
-
+    const data = (await response.json() as { data: Record<string, unknown> }).data;
+    if (path.endsWith("/trash") || path.endsWith("/restore")) expect(data).toEqual({ brands: [BRAND] });
+    else if (path.endsWith("/delete-permanently")) expect(data).toEqual({ count: 1 });
+    else expect(data).toEqual({ brand: BRAND });
   });
 
   it("reports a refused brand write", async () => {

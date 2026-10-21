@@ -100,7 +100,7 @@ describe("lookup query options", () => {
         config: "{}",
         sortOrder: 0,
         isActive: true,
-        version: 1,
+        revision: 1,
         listingTemplate: null,
         canonicalPath: null,
         noIndex: false,

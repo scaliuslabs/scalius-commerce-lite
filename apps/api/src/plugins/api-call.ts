@@ -131,11 +131,11 @@ function unwrap(status: number, ok: boolean, body: unknown): PluginApiResult {
 const APP_CREATE_OPERATIONS: Readonly<Record<string, { type: AppOwnedResourceType; ids: (data: unknown) => unknown[] }>> = {
   "products.create": { type: "product", ids: (data) => [dataPath(data, "product", "id")] },
   "products.batch_create": { type: "product", ids: (data) => createdItemIds(data, "product") },
-  "categories.create": { type: "category", ids: (data) => [dataPath(data, "id")] },
+  "categories.create": { type: "category", ids: (data) => [dataPath(data, "category", "id")] },
   "categories.batch_create": { type: "category", ids: (data) => createdItemIds(data, "category") },
-  "brands.create": { type: "brand", ids: (data) => [dataPath(data, "id") ?? dataPath(data, "brand", "id")] },
+  "brands.create": { type: "brand", ids: (data) => [dataPath(data, "brand", "id")] },
   "brands.batch_create": { type: "brand", ids: (data) => createdItemIds(data, "brand") },
-  "collections.create": { type: "collection", ids: (data) => [dataPath(data, "id")] },
+  "collections.create": { type: "collection", ids: (data) => [dataPath(data, "collection", "id")] },
   "media.import_url": { type: "media", ids: (data) => [dataPath(data, "file", "id")] },
 };
 
