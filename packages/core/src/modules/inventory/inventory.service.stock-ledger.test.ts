@@ -22,15 +22,11 @@ vi.mock("./alerts", () => ({
 // stock; the D1 tests cover real levels.
 vi.mock("./locations", async (importActual) => ({
   ...(await importActual<typeof import("./locations")>()),
-  resolveActiveInventoryLocation: vi.fn(async () => ({ id: "loc_default", name: "Main location" })),
-  readLocationOnHand: vi.fn(async (db: { select: () => { from: (table: unknown) => { where: () => { get: () => Promise<{ stock: number } | null> } } } }, _locationId: string, variantIds: string[]) => {
-    const variant = await db.select().from(undefined).where().get();
-    return new Map(variantIds.map((id) => [id, variant?.stock ?? 0]));
-  }),
+  selectActiveLocationOnHand: vi.fn(() => ({ kind: "select", table: "location" })),
 }));
 
 type MockStatement = {
-  kind: "insert" | "update";
+  kind: "insert" | "update" | "select";
   table: unknown;
   values?: Record<string, unknown>;
 };
@@ -51,6 +47,8 @@ function createInventoryAdjustmentDbMock(variant: {
           return {
             where() {
               return {
+                kind: "select" as const,
+                table,
                 get: async () => table === inventoryOperations ? null : persistedVariant,
               };
             },
@@ -85,6 +83,14 @@ function createInventoryAdjustmentDbMock(variant: {
       };
     },
     batch: async (statements: MockStatement[]) => {
+      // The operation's read batch: no earlier result, the SKU, and a location holding all of its stock.
+      if (statements.every((statement) => statement.kind === "select")) {
+        return statements.map((statement) => statement.table === inventoryOperations
+          ? []
+          : statement.table === productVariants
+            ? [persistedVariant]
+            : [{ id: "loc_default", name: "Main location", status: "active", onHand: persistedVariant.stock }]);
+      }
       batchCalls.push(statements);
       return [
         [{ id: "movement_1" }],

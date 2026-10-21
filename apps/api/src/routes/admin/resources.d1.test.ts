@@ -268,7 +268,8 @@ describe("the stable app API's resources", () => {
     expect(set.body.data).toMatchObject({ variantId: "v_tea", newStock: 80, variant: { id: "v_tea", onHand: 80, stockVersion: stockVersion + 1 } });
     const again = await call("POST", "/inventory/stock-set", { body, headers: { "Idempotency-Key": "stocktake 2026-10-19 aisle 5" } });
     expect(again).toMatchObject({ status: 200, replayed: "true" });
-    expect((await call("GET", "/resources/variants/v_tea")).body.data.variant).toMatchObject({ onHand: 80, stockVersion: stockVersion + 1 });
+    // Read inside the commit batch, it is exactly what a read afterwards answers (levels and updatedAt too).
+    expect((await call("GET", "/resources/variants/v_tea")).body.data.variant).toEqual(set.body.data.variant);
     // No key, no stock move.
     expect((await call("POST", "/inventory/stock-set", { body: { variantId: "v_tea", newStock: 70 } })).status).toBe(400);
   });

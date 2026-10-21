@@ -15,11 +15,11 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { checkAndAlertLowStock } from "./alerts";
 import { buildStockMovementClaim } from "./stock-movement-claims";
 import {
+  activeLocationOnHandFrom,
   inventoryLocationErrorFrom,
   isInventoryLevelShortfallError,
   isInventoryLocationRequiredError,
-  readLocationOnHand,
-  resolveActiveInventoryLocation,
+  selectActiveLocationOnHand,
   type InventoryLocationRef,
 } from "./locations";
 import {
@@ -65,6 +65,18 @@ export interface InventoryOperationOptions {
    * operations that change the counter (delta ≠ 0).
    */
   companionStatements?: readonly BatchItem<"sqlite">[];
+  /**
+   * Reads that ride at the end of the commit batch, so they see the committed
+   * stock at no extra round trip (a stable stock write answering its SKU).
+   * Their results land in `rows` only when this run's own batch committed; a
+   * replay or a lost race leaves `rows` unset and the caller reads instead.
+   */
+  readAfter?: InventoryReadAfter;
+}
+
+export interface InventoryReadAfter {
+  statements: readonly BatchItem<"sqlite">[];
+  rows?: unknown[];
 }
 
 export type InventoryOperationPool = "stock" | "preorderStock";
@@ -151,9 +163,26 @@ export async function executeInventoryOperation(
   const companionStatements = options.companionStatements ?? [];
   const normalized = normalizeInventoryOperationRequest(input);
   const requestHash = await hashNormalizedRequest(normalized);
-  const existing = await selectInventoryOperation(db, normalized.operationKey);
-  if (existing) {
-    const replay = replayInventoryOperation(existing, requestHash);
+  const physical = normalized.pool === "stock";
+  // One read batch (one D1 call): the key's earlier result, the SKU and, for
+  // physical stock, the location with the SKU's on-hand there. Every level
+  // change bumps the SKU's stockVersion, so the on-hand is covered by the
+  // same compare-and-set as the counters.
+  const readState = async (withOperation: boolean) => {
+    const rows = await safeBatch(db, [
+      inventoryVariantQuery(db, normalized.variantId),
+      ...(physical ? [selectActiveLocationOnHand(db, normalized.locationId, normalized.variantId)] : []),
+      ...(withOperation ? [inventoryOperationQuery(db, normalized.operationKey)] : []),
+    ] as never) as unknown[][];
+    return {
+      variant: (rows[0]?.[0] as InventoryVariantState | undefined) ?? null,
+      location: physical ? rows[1] as Parameters<typeof activeLocationOnHandFrom>[0] : null,
+      existing: withOperation ? (rows[physical ? 2 : 1]?.[0] as ExistingOperationRow | undefined) ?? null : null,
+    };
+  };
+  let state = await readState(true);
+  if (state.existing) {
+    const replay = replayInventoryOperation(state.existing, requestHash);
     if (normalized.pool === "stock") {
       await checkAndAlertLowStock(db, normalized.variantId);
     }
@@ -161,22 +190,18 @@ export async function executeInventoryOperation(
   }
 
   const movementId = `imov_${(await sha256Hex(`inventory-operation:${normalized.operationKey}`)).slice(0, 48)}`;
-  // Physical stock moves at a location; preorder allocation has none.
-  const location = normalized.pool === "stock"
-    ? await resolveActiveInventoryLocation(db, normalized.locationId)
-    : null;
 
   for (let attempt = 0; attempt < MAX_CAS_RETRIES; attempt++) {
-    const variant = await selectInventoryVariant(db, normalized.variantId);
+    if (attempt > 0) state = await readState(false);
+    // Physical stock moves at a location; preorder allocation has none.
+    const located = state.location ? activeLocationOnHandFrom(state.location, normalized.locationId) : null;
+    const location: InventoryLocationRef | null = located ? { id: located.id, name: located.name } : null;
+    const { variant } = state;
     if (!variant) throw new NotFoundError("Variant not found");
     if (input.expectedStockVersion !== undefined && variant.stockVersion !== input.expectedStockVersion) {
       throw new ConflictError("This SKU's stock changed since you read it. Read it again, then retry.");
     }
-    // Every level change bumps the SKU's stockVersion, so this read is
-    // covered by the same compare-and-set as the counters.
-    const locationPreviousStock = location
-      ? (await readLocationOnHand(db, location.id, [normalized.variantId])).get(normalized.variantId) ?? 0
-      : undefined;
+    const locationPreviousStock = located?.onHand;
 
     const previousStock = normalized.pool === "preorderStock"
       ? variant.preorderStock
@@ -235,6 +260,7 @@ export async function executeInventoryOperation(
           result,
           variant,
           adminUserId,
+          options.readAfter,
         )
         : await commitCounterOperation(
           db,
@@ -246,6 +272,7 @@ export async function executeInventoryOperation(
           location,
           adminUserId,
           companionStatements,
+          options.readAfter,
         );
 
       if (committed) {
@@ -315,6 +342,7 @@ async function commitCounterOperation(
   location: InventoryLocationRef | null,
   adminUserId?: string,
   companionStatements: readonly BatchItem<"sqlite">[] = [],
+  readAfter?: InventoryReadAfter,
 ): Promise<boolean> {
   const nextVersion = variant.stockVersion + 1;
   const movementInsert = buildStockMovementClaim(db, {
@@ -367,7 +395,7 @@ async function commitCounterOperation(
     ))
     .returning({ id: productVariants.id });
 
-  const [movementRows, operationRows, updateRows] = await safeBatch(
+  const results = await safeBatch(
     db,
     [
       movementInsert,
@@ -393,14 +421,22 @@ async function commitCounterOperation(
           ...companionStatements,
         ]
         : []),
+      ...(readAfter?.statements ?? []),
     ] as never,
   ) as Array<Array<{ id?: string; operationKey?: string }>>;
+  const [movementRows, operationRows, updateRows] = results;
 
-  return Boolean(
+  const committed = Boolean(
     movementRows?.[0]?.id &&
     operationRows?.[0]?.operationKey &&
     updateRows?.[0]?.id,
   );
+  if (committed) keepReadAfter(readAfter, results);
+  return committed;
+}
+
+function keepReadAfter(readAfter: InventoryReadAfter | undefined, results: unknown[]): void {
+  if (readAfter && readAfter.statements.length > 0) readAfter.rows = results.slice(-readAfter.statements.length);
 }
 
 async function commitNoopOperation(
@@ -410,6 +446,7 @@ async function commitNoopOperation(
   result: InventoryOperationResult,
   variant: InventoryVariantState,
   adminUserId?: string,
+  readAfter?: InventoryReadAfter,
 ): Promise<boolean> {
   const operationInsert = buildOperationInsert(db, {
     input,
@@ -420,11 +457,13 @@ async function commitNoopOperation(
     stockVersionAfter: variant.stockVersion,
     adminUserId,
   });
-  const [operationRows] = await safeBatch(
+  const results = await safeBatch(
     db,
-    [operationInsert] as never,
+    [operationInsert, ...(readAfter?.statements ?? [])] as never,
   ) as Array<Array<{ operationKey?: string }>>;
-  return Boolean(operationRows?.[0]?.operationKey);
+  const committed = Boolean(results[0]?.[0]?.operationKey);
+  if (committed) keepReadAfter(readAfter, results);
+  return committed;
 }
 
 function buildOperationInsert(
@@ -461,11 +500,8 @@ function buildOperationInsert(
     .returning({ operationKey: inventoryOperations.operationKey });
 }
 
-async function selectInventoryVariant(
-  db: Database,
-  variantId: string,
-): Promise<InventoryVariantState | null> {
-  const row = await db
+function inventoryVariantQuery(db: Database, variantId: string) {
+  return db
     .select({
       id: productVariants.id,
       stock: productVariants.stock,
@@ -478,24 +514,24 @@ async function selectInventoryVariant(
     .where(and(
       eq(productVariants.id, variantId),
       isNull(productVariants.deletedAt),
-    ))
-    .get();
-  return row ?? null;
+    ));
+}
+
+function inventoryOperationQuery(db: Database, operationKey: string) {
+  return db
+    .select({
+      requestHash: inventoryOperations.requestHash,
+      resultPayload: inventoryOperations.resultPayload,
+    })
+    .from(inventoryOperations)
+    .where(eq(inventoryOperations.operationKey, operationKey));
 }
 
 async function selectInventoryOperation(
   db: Database,
   operationKey: string,
 ): Promise<ExistingOperationRow | null> {
-  const row = await db
-    .select({
-      requestHash: inventoryOperations.requestHash,
-      resultPayload: inventoryOperations.resultPayload,
-    })
-    .from(inventoryOperations)
-    .where(eq(inventoryOperations.operationKey, operationKey))
-    .get();
-  return row ?? null;
+  return (await inventoryOperationQuery(db, operationKey).get()) ?? null;
 }
 
 function replayInventoryOperation(

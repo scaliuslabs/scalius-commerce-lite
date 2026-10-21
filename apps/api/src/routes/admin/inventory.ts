@@ -40,6 +40,7 @@ import {
     setSkuCostsSchema,
     canViewLocationDetails,
     locationWithoutDetails,
+    type InventoryReadAfter,
 } from "@scalius/core/modules/inventory";
 import { lowStockThresholdSchema } from "@scalius/core/modules/products";
 import { INVENTORY_LOCATION_KINDS, INVENTORY_LOCATION_STATUSES } from "@scalius/database/schema";
@@ -49,7 +50,7 @@ import { NotFoundError, ValidationError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
 import { successEnvelope, paginationSchema, errorResponses, conflictResponse, namedSharedSchema } from "../../schemas/responses";
 import { EVENT_REPRESENTATION_SCHEMAS } from "@scalius/shared/events";
-import { readVariantRepresentation } from "../../events/representations";
+import { readVariantRepresentation, variantRepresentationReads } from "../../events/representations";
 import type { Database } from "@scalius/database/client";
 import { rebuildCatalogProjectionsAfterWrite } from "../../background/catalog";
 
@@ -226,11 +227,22 @@ const stockAdjustResultSchema = z.object({
 
 const VariantResource = namedSharedSchema(EVENT_REPRESENTATION_SCHEMAS.variant, "VariantResource");
 
-/** The SKU after a stable stock write, as `variants.get` reads it (audit L1). */
-async function readVariantResource(db: Database, variantId: string) {
-    const variant = await readVariantRepresentation(db, variantId);
-    if (!variant) throw new NotFoundError("Variant not found");
-    return variant;
+/**
+ * The SKU after a stable stock write, as `variants.get` reads it (audit L1):
+ * its reads ride in the write's commit batch (`readAfter`), so answering it
+ * costs no round trip; a replayed or raced write reads it afterwards.
+ */
+function variantResourceAfterWrite(db: Database, variantId: string) {
+    const reads = variantRepresentationReads(db, { ids: [variantId] });
+    const readAfter: InventoryReadAfter = { statements: reads.statements };
+    return {
+        readAfter,
+        async variant() {
+            const variant = readAfter.rows ? reads.assemble(readAfter.rows)[0] : await readVariantRepresentation(db, variantId);
+            if (!variant) throw new NotFoundError("Variant not found");
+            return variant;
+        },
+    };
 }
 
 const optionalLocationIdSchema = z.string().trim().min(1).max(100).optional().openapi({
@@ -697,9 +709,10 @@ app.openapi(adjustRoute, async (c) => {
     const operationKey = await inventoryOperationKey(c, "dashboard.inventory.adjust", c.req.valid("header")["idempotency-key"]);
     const user = c.get("user");
     try {
-        const result = await adjustInventory(db, variantId, { ...payload, operationKey }, user?.id);
+        const after = variantResourceAfterWrite(db, variantId);
+        const result = await adjustInventory(db, variantId, { ...payload, operationKey }, user?.id, { readAfter: after.readAfter });
 
-        return ok(c, { ...result, variant: await readVariantResource(db, variantId) });
+        return ok(c, { ...result, variant: await after.variant() });
     } catch (error: unknown) {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
         throw error;
@@ -931,9 +944,10 @@ app.openapi(stockSetRoute, async (c) => {
     const operationKey = await inventoryOperationKey(c, "dashboard.inventory.set_stock", c.req.valid("header")["idempotency-key"]);
     const user = c.get("user");
     try {
-        const result = await setStock(db, variantId, newStock, operationKey, reason, user?.id, locationId, { expectedStockVersion });
+        const after = variantResourceAfterWrite(db, variantId);
+        const result = await setStock(db, variantId, newStock, operationKey, reason, user?.id, locationId, { expectedStockVersion, readAfter: after.readAfter });
 
-        return ok(c, { ...result, variant: await readVariantResource(db, variantId) });
+        return ok(c, { ...result, variant: await after.variant() });
     } catch (error: unknown) {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
         throw error;

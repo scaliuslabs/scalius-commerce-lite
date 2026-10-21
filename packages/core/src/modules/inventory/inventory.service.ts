@@ -18,7 +18,7 @@ import {
 
 const availableStockSql = sql<number>`(${productVariants.stock} - ${productVariants.reservedStock})`;
 import { adjustInventorySchema } from "./inventory.validation";
-import { executeInventoryOperation } from "./inventory-operations";
+import { executeInventoryOperation, type InventoryReadAfter } from "./inventory-operations";
 import { locationOnHandSql } from "./locations";
 import { incomingUnitsSql } from "./inventory-insights";
 
@@ -691,7 +691,7 @@ export async function adjustInventory(db: Database, variantId: string, payload: 
     locationId?: string;
     /** The SKU's stockVersion the caller read; a change since refuses (409). */
     expectedStockVersion?: number;
-}, adminUserId?: string) {
+}, adminUserId?: string, options: { readAfter?: InventoryReadAfter } = {}) {
     const parsedPayload = adjustInventorySchema.safeParse(payload);
     if (!parsedPayload.success) {
         throw new ValidationError(
@@ -710,5 +710,5 @@ export async function adjustInventory(db: Database, variantId: string, payload: 
         reason,
         ...(notes ? { notes } : {}),
         ...(locationId ? { locationId } : {}),
-    }, adminUserId);
+    }, adminUserId, options.readAfter ? { readAfter: options.readAfter } : {});
 }

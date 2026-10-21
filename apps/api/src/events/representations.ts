@@ -342,45 +342,65 @@ async function productRepresentation(db: Database, productId: string) {
   return (await readProductRepresentations(db, [productId]))[0] ?? null;
 }
 
+type VariantWhere = { ids: readonly string[] } | { skus: readonly string[] };
+
 /**
- * SKUs' sealed representations (their stock in total and per location), by
- * id or by SKU code (`lower(trim(sku))`, the identity index): two reads for
- * at most 90 SKUs.
+ * The two reads of SKUs' sealed representations (the SKUs and their levels),
+ * for a caller's batch: `readVariantRepresentations` sends them alone, and a
+ * stock write appends them to its commit batch (`InventoryReadAfter`).
  */
-export async function readVariantRepresentations(db: Database, where: { ids: readonly string[] } | { skus: readonly string[] }) {
+export function variantRepresentationReads(db: Database, where: VariantWhere) {
   const keys = "ids" in where ? where.ids : where.skus.map((sku) => sku.trim().toLowerCase());
-  if (keys.length === 0) return [];
   const matches = "ids" in where
     ? inArray(productVariants.id, [...keys])
     : inArray(sql`lower(trim(${productVariants.sku}))`, [...keys]);
-  // The SKUs and their levels in one batch (one D1 call): a stock write answers its SKU at no extra round trip.
-  const [rows, levelRows] = await db.batch([
-    db.select({
-      id: productVariants.id,
-      productId: productVariants.productId,
-      sku: productVariants.sku,
-      trackInventory: productVariants.trackInventory,
-      stock: productVariants.stock,
-      stockVersion: productVariants.stockVersion,
-      updatedAt: productVariants.updatedAt,
-    }).from(productVariants).where(matches),
-    db.select({ variantId: inventoryLevels.variantId, locationId: inventoryLevels.locationId, onHand: inventoryLevels.onHand })
-      .from(inventoryLevels).innerJoin(productVariants, eq(productVariants.id, inventoryLevels.variantId)).where(matches)
-      .orderBy(asc(inventoryLevels.variantId), asc(inventoryLevels.locationId)),
-  ]);
-  if (rows.length === 0) return [];
-  const levels = groupBy(levelRows, (level) => level.variantId);
-  const byKey = new Map(rows.map((variant) => ["ids" in where ? variant.id : variant.sku.trim().toLowerCase(), sealed("variant", {
-    id: variant.id,
-    productId: variant.productId,
-    sku: variant.sku,
-    trackInventory: variant.trackInventory,
-    onHand: variant.stock,
-    stockVersion: variant.stockVersion,
-    levels: (levels.get(variant.id) ?? []).map(({ variantId: _variantId, ...level }) => level),
-    updatedAt: isoRequired(variant.updatedAt),
-  })]));
-  return inIdOrder([...new Set(keys)], byKey);
+  const variantsRead = db.select({
+    id: productVariants.id,
+    productId: productVariants.productId,
+    sku: productVariants.sku,
+    trackInventory: productVariants.trackInventory,
+    stock: productVariants.stock,
+    stockVersion: productVariants.stockVersion,
+    updatedAt: productVariants.updatedAt,
+  }).from(productVariants).where(matches);
+  const levelsRead = db.select({ variantId: inventoryLevels.variantId, locationId: inventoryLevels.locationId, onHand: inventoryLevels.onHand })
+    .from(inventoryLevels).innerJoin(productVariants, eq(productVariants.id, inventoryLevels.variantId)).where(matches)
+    .orderBy(asc(inventoryLevels.variantId), asc(inventoryLevels.locationId));
+  type VariantRow = Awaited<typeof variantsRead>[number];
+  type LevelRow = Awaited<typeof levelsRead>[number];
+  return {
+    statements: [variantsRead, levelsRead] as const,
+    /** The representations, in the order of the keys, from the two reads' rows. */
+    assemble(results: readonly unknown[]) {
+      const rows = (results[0] ?? []) as VariantRow[];
+      const levelRows = (results[1] ?? []) as LevelRow[];
+      if (rows.length === 0) return [];
+      const levels = groupBy(levelRows, (level) => level.variantId);
+      const byKey = new Map(rows.map((variant) => ["ids" in where ? variant.id : variant.sku.trim().toLowerCase(), sealed("variant", {
+        id: variant.id,
+        productId: variant.productId,
+        sku: variant.sku,
+        trackInventory: variant.trackInventory,
+        onHand: variant.stock,
+        stockVersion: variant.stockVersion,
+        levels: (levels.get(variant.id) ?? []).map(({ variantId: _variantId, ...level }) => level),
+        updatedAt: isoRequired(variant.updatedAt),
+      })]));
+      return inIdOrder([...new Set(keys)], byKey);
+    },
+  };
+}
+
+/**
+ * SKUs' sealed representations (their stock in total and per location), by
+ * id or by SKU code (`lower(trim(sku))`, the identity index): two reads in
+ * one batch (one D1 call) for at most 90 SKUs.
+ */
+export async function readVariantRepresentations(db: Database, where: VariantWhere) {
+  const keys = "ids" in where ? where.ids : where.skus;
+  if (keys.length === 0) return [];
+  const reads = variantRepresentationReads(db, where);
+  return reads.assemble(await db.batch([reads.statements[0], reads.statements[1]]));
 }
 
 export async function readVariantRepresentation(db: Database, variantId: string) {

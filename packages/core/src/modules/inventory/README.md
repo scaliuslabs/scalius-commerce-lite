@@ -81,6 +81,7 @@ Types: `reserved`, `preorder_reserved`, `released`, `deducted`, `preorder_deduct
 
 - `executeInventoryOperation()` (`inventory-operations.ts`) runs `manual_adjustment`, `scanner_adjustment`, `stocktake` and `licence_keys`. It requires a 16 to 128 character operation key (the `Idempotency-Key` header or `operationKey`).
 - It commits the movement, the CAS update and the `inventory_operations` row in one batch, with no pending row. An exact retry replays the stored result. The same key with a changed request is a conflict (409).
+- It reads the key's earlier result, the SKU and the location with the SKU's on-hand there in one batch. `readAfter` reads ride at the end of the commit batch and see the committed stock (the stable stock writes answer their SKU this way); a replay or a lost race leaves them unread.
 - `adjustInventory()` is the dashboard adjustment. Reasons: `received`, `correction`, `damage`, `theft`, `return`, `other`. `received` and `return` need a positive delta; `damage` and `theft` a negative one. Pools: `stock`, `preorderStock`.
 
 ## Low-stock alerts and availability bands

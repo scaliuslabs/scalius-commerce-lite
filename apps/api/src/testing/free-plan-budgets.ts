@@ -57,6 +57,14 @@
  * bump: rows written per 20-line checkout commit 559 -> 365, 99-line
  * 2,523 -> 1,503, 3-line order 93 -> 69, SKU stock change 48 -> 6, bulk run
  * chunk 1,944 -> 996. Budgets lowered to the new measurements.
+ *
+ * SKU stock change (2026-10-21): the stable write answering its SKU (L1) had
+ * taken it to 13 calls and 18 statements (the Idempotency-Key lease adds no
+ * call: its claim and completion are the two the key always cost). The
+ * operation's reads (its key's earlier result, the SKU, the location with the
+ * SKU's on-hand there) are one batch, and the SKU's read-back rides at the end
+ * of the commit batch: 9 calls, 17 statements. Run alone, the case pays 6 more
+ * for the cold RBAC reconciliation marker (15).
  */
 import type { WorkersPlan } from "@scalius/shared/plan-limits";
 
@@ -103,7 +111,7 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "admin-product-save": { d1Calls: 24, d1Statements: 39, externalFetches: 0, rowsWritten: 549, rowsRead: 161, fullScans: 29 },
     "order-status-change": { d1Calls: 50, d1Statements: 42, externalFetches: 0, rowsWritten: 35, rowsRead: 1286, fullScans: 5 },
     "order-refund": { d1Calls: 50, d1Statements: 53, externalFetches: 0, rowsWritten: 73, rowsRead: 1292, fullScans: 6 },
-    "sku-stock-change": { d1Calls: 13, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 21, fullScans: 7 },
+    "sku-stock-change": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 21, fullScans: 7 },
     "cron-idle": { d1Calls: 19, d1Statements: 20, externalFetches: 0, rowsWritten: 117, rowsRead: 7556, fullScans: 21, meanRowsWritten: 0, meanRowsRead: 15.79 },
     "cron-nightly": { d1Calls: 25, d1Statements: 32, externalFetches: 0, rowsWritten: 432, rowsRead: 25963, fullScans: 91 },
     "drain-busy": { d1Calls: 7, d1Statements: 17, externalFetches: 0, rowsWritten: 103, rowsRead: 882, fullScans: 21 },
@@ -137,7 +145,7 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "admin-product-save": { d1Calls: 38, d1Statements: 60, externalFetches: 0, rowsWritten: 1254, rowsRead: 345, fullScans: 57 },
     "order-status-change": { d1Calls: 50, d1Statements: 42, externalFetches: 0, rowsWritten: 35, rowsRead: 1286, fullScans: 5 },
     "order-refund": { d1Calls: 50, d1Statements: 53, externalFetches: 0, rowsWritten: 73, rowsRead: 1292, fullScans: 6 },
-    "sku-stock-change": { d1Calls: 13, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 21, fullScans: 7 },
+    "sku-stock-change": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 21, fullScans: 7 },
     "cron-idle": { d1Calls: 57, d1Statements: 63, externalFetches: 0, rowsWritten: 175, rowsRead: 7992, fullScans: 27, meanRowsWritten: 0, meanRowsRead: 30.1 },
     "cron-nightly": { d1Calls: 213, d1Statements: 314, externalFetches: 0, rowsWritten: 432, rowsRead: 28529, fullScans: 467 },
     "drain-busy": { d1Calls: 8, d1Statements: 23, externalFetches: 0, rowsWritten: 118, rowsRead: 890, fullScans: 27 },

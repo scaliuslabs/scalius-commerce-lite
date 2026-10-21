@@ -17,7 +17,7 @@ import {
 } from "../products";
 import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
 import { fromMinor } from "@scalius/shared/money";
-import { executeInventoryOperation } from "./inventory-operations";
+import { executeInventoryOperation, type InventoryReadAfter } from "./inventory-operations";
 
 export interface StockAdjustResult {
   variantId: string;
@@ -70,7 +70,7 @@ export async function setStock(
   reason?: string,
   adminUserId?: string,
   locationId?: string,
-  options: { expectedStockVersion?: number } = {},
+  options: { expectedStockVersion?: number; readAfter?: InventoryReadAfter } = {},
 ): Promise<StockSetResult> {
   return executeInventoryOperation(db, {
     operationKey,
@@ -82,7 +82,7 @@ export async function setStock(
     newStock: newStockValue,
     reason: reason?.trim() || "Stocktake",
     ...(locationId ? { locationId } : {}),
-  }, adminUserId);
+  }, adminUserId, options.readAfter ? { readAfter: options.readAfter } : {});
 }
 
 /**

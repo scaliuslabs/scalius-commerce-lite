@@ -31,7 +31,11 @@ const mocks = vi.hoisted(() => ({
 }));
 
 // The stable stock writes answer the SKU as variants.get reads it.
-vi.mock("../../events/representations", () => ({ readVariantRepresentation: mocks.readVariantRepresentation }));
+// The mocked writes never fill the commit batch's reads, so the route reads the SKU after.
+vi.mock("../../events/representations", () => ({
+  readVariantRepresentation: mocks.readVariantRepresentation,
+  variantRepresentationReads: () => ({ statements: [], assemble: () => [] }),
+}));
 
 vi.mock("@scalius/core/modules/inventory", async () => {
   const { z } = await import("@hono/zod-openapi");
@@ -493,7 +497,7 @@ describe("admin inventory write behavior", () => {
     }, { "Idempotency-Key": "invop_api_preorder_001" });
 
     expect(response.status).toBe(200);
-    expect(mocks.adjustInventory).toHaveBeenCalledWith(expect.anything(), "var_1", expect.objectContaining({ pool: "preorderStock", delta: 2 }), expect.anything());
+    expect(mocks.adjustInventory).toHaveBeenCalledWith(expect.anything(), "var_1", expect.objectContaining({ pool: "preorderStock", delta: 2 }), expect.anything(), expect.anything());
     await expect(response.json()).resolves.toMatchObject({ success: true, data: { variantId: "var_1", previousStock: 5, newStock: 7, delta: 2, variant: { id: "var_1", stockVersion: 2 } } });
 
   });
@@ -827,8 +831,8 @@ describe("admin inventory locations", () => {
     await postJson(app, env, "/stock-set", { variantId: "var_1", newStock: 4, locationId: "loc_branch" }, { "Idempotency-Key": "invop_api_location_002" });
     await app.request("/api/v1/admin/inventory?section=variants&locationId=loc_branch", {}, env);
 
-    expect(mocks.adjustInventory).toHaveBeenCalledWith(expect.anything(), "var_1", expect.objectContaining({ locationId: "loc_branch" }), "user_1");
-    expect(mocks.setStock).toHaveBeenCalledWith(expect.anything(), "var_1", 4, expect.stringMatching(/^api-[0-9a-f]{48}$/u), undefined, "user_1", "loc_branch", { expectedStockVersion: undefined });
+    expect(mocks.adjustInventory).toHaveBeenCalledWith(expect.anything(), "var_1", expect.objectContaining({ locationId: "loc_branch" }), "user_1", expect.objectContaining({ readAfter: expect.anything() }));
+    expect(mocks.setStock).toHaveBeenCalledWith(expect.anything(), "var_1", 4, expect.stringMatching(/^api-[0-9a-f]{48}$/u), undefined, "user_1", "loc_branch", expect.objectContaining({ expectedStockVersion: undefined, readAfter: expect.anything() }));
     expect(mocks.getInventoryOverview).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ locationId: "loc_branch" }));
   });
 

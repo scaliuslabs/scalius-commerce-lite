@@ -21,13 +21,11 @@ vi.mock("./alerts", () => ({
 // One location holding all of the SKU's stock; the D1 tests cover levels.
 vi.mock("./locations", async (importActual) => ({
   ...(await importActual<typeof import("./locations")>()),
-  resolveActiveInventoryLocation: vi.fn(async () => ({ id: "loc_default", name: "Main location" })),
-  readLocationOnHand: vi.fn(async (_db: unknown, _locationId: string, variantIds: string[]) =>
-    new Map(variantIds.map((id) => [id, 5]))),
+  selectActiveLocationOnHand: vi.fn(() => ({ kind: "select", table: "location" })),
 }));
 
 type StoredOperation = { requestHash: string; resultPayload: string };
-type Statement = { kind: "insert" | "update"; table: unknown };
+type Statement = { kind: "insert" | "update" | "select"; table: unknown };
 
 const baseInput: InventoryOperationInput = {
   operationKey: "invop_core_operation_0001",
@@ -70,6 +68,8 @@ function createOperationDb(options: {
           return {
             where() {
               return {
+                kind: "select" as const,
+                table,
                 get: async () => table === inventoryOperations ? operation : variant,
               };
             },
@@ -104,6 +104,14 @@ function createOperationDb(options: {
       };
     },
     async batch(statements: Statement[]) {
+      // The operation's read batch (its key, the SKU, the location): answered from the fake rows, not counted as a write.
+      if (statements.every((statement) => statement.kind === "select")) {
+        return statements.map((statement) => statement.table === inventoryOperations
+          ? (operation ? [operation] : [])
+          : statement.table === productVariants
+            ? [variant]
+            : [{ id: "loc_default", name: "Main location", status: "active", onHand: 5 }]);
+      }
       batches.push(statements);
       if (options.batchError) {
         operation = options.operationAfterBatchError ?? operation;
@@ -144,6 +152,24 @@ describe("merchant inventory operation idempotency", () => {
       expect.anything(),
     ]);
     expect(checkAndAlertLowStock).toHaveBeenCalledWith(db, "variant_1");
+  });
+
+  it("carries readAfter reads at the end of the commit batch and keeps their rows", async () => {
+    const readAfter = { statements: [{ kind: "select", table: "after" }] as never[], rows: undefined as unknown[] | undefined };
+    const { db, batches } = createOperationDb({
+      batchResults: [[
+        [{ id: "movement_1" }],
+        [{ operationKey: baseInput.operationKey }],
+        [{ id: "variant_1" }],
+        [],
+        [{ id: "variant_1", stock: 8 }],
+      ]],
+    });
+
+    await executeInventoryOperation(db as never, baseInput, "admin_1", { readAfter });
+
+    expect(batches[0]?.at(-1)).toEqual({ kind: "select", table: "after" });
+    expect(readAfter.rows).toEqual([[{ id: "variant_1", stock: 8 }]]);
   });
 
   it("returns the exact committed result without another batch on replay", async () => {

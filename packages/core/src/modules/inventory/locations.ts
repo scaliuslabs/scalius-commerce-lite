@@ -120,6 +120,35 @@ export async function resolveActiveInventoryLocation(
     return { id: row.id, name: row.name };
 }
 
+/**
+ * One read of the location a stock change applies at (the named one, else the
+ * default) and the SKU's on-hand there, for a caller's read batch; settle it
+ * with `activeLocationOnHandFrom`.
+ */
+export function selectActiveLocationOnHand(db: Database, locationId: string | null | undefined, variantId: string) {
+    return db.select({
+        id: inventoryLocations.id,
+        name: inventoryLocations.name,
+        status: inventoryLocations.status,
+        // Qualified by hand: Drizzle prints a one-table select's columns bare, and the subquery must name the outer row.
+        onHand: sql<number | null>`(SELECT il.on_hand FROM inventory_levels AS il WHERE il.location_id = inventory_locations.id AND il.variant_id = ${variantId})`,
+    }).from(inventoryLocations).where(locationId
+        ? eq(inventoryLocations.id, locationId)
+        : and(eq(inventoryLocations.isDefault, true), eq(inventoryLocations.status, "active")));
+}
+
+/** `resolveActiveInventoryLocation`'s answer (and refusals) from `selectActiveLocationOnHand`'s rows. */
+export function activeLocationOnHandFrom(
+    rows: ReadonlyArray<{ id: string; name: string; status: string; onHand: number | null }>,
+    locationId: string | null | undefined,
+): InventoryLocationRef & { onHand: number } {
+    const row = rows[0];
+    if (!locationId && !row) throw new ConflictError("No default inventory location is set. Set one in Settings → Locations.");
+    if (!row) throw new NotFoundError("Location not found");
+    if (row.status !== "active") throw new ValidationError(`${row.name} is archived. Choose an active location.`);
+    return { id: row.id, name: row.name, onHand: Number(row.onHand ?? 0) };
+}
+
 /** Where an order's stock leaves from: its fulfilment location, or the default. */
 export async function resolveOrderFulfillmentLocation(
     db: Database,

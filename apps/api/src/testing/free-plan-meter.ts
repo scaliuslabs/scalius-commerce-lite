@@ -284,6 +284,13 @@ export function createScanEstimator(sqlite: DatabaseSync): ScanEstimator {
   };
 }
 
+/** FREE_PLAN_BUDGET_TRACE=1 prints every D1 call's statements (one line each) to stderr. */
+function trace(call: number, queries: ReadonlyArray<string | undefined>): void {
+  if (process.env.FREE_PLAN_BUDGET_TRACE !== "1") return;
+  const lines = queries.map((query) => `    ${(query ?? "?").replace(/\s+/g, " ").slice(0, 160)}`);
+  process.stderr.write(`[d1 #${call}${queries.length > 1 ? ` batch ${queries.length}` : ""}]\n${lines.join("\n")}\n`);
+}
+
 export function meterD1(
   inner: D1Database,
   counters: () => FreePlanCounters,
@@ -311,8 +318,9 @@ export function meterD1(
           const c = counters();
           c.d1Calls += 1;
           c.d1Statements += 1;
-          const pending = timedEngine(clock, () => (value as AnyFn).apply(target, args)) as Promise<unknown>;
           const query = (target as { query?: string }).query;
+          trace(c.d1Calls, [query]);
+          const pending = timedEngine(clock, () => (value as AnyFn).apply(target, args)) as Promise<unknown>;
           return pending.then((result) => {
             c.d1RowsChanged += rowsChanged(result);
             read(query, result);
@@ -333,6 +341,7 @@ export function meterD1(
           const c = counters();
           c.d1Calls += 1;
           c.d1Statements += statements.length;
+          trace(c.d1Calls, statements.map((statement) => (statement as { query?: string }).query));
           const pending = timedEngine(clock, () => target.batch(statements)) as Promise<unknown[]>;
           return pending.then((results) => {
             results.forEach((result, index) => {
