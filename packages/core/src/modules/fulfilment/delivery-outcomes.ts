@@ -321,5 +321,7 @@ export async function markOrderDelivered(
                 ? `${unsent} items haven't been sent yet. Send them first.`
                 : "Send the order first.");
     }
-    return applyOrderStatusChange(db, orderId, OrderStatus.DELIVERED, { expectedVersion: options.expectedVersion }, { generic: false });
+    // A cash on delivery order may be delivered before its cash is remitted;
+    // Collect cash records the money later (allowed on a delivered order).
+    return applyOrderStatusChange(db, orderId, OrderStatus.DELIVERED, { expectedVersion: options.expectedVersion }, { generic: false, codCashPending: true });
 }

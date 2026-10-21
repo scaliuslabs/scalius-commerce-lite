@@ -24,6 +24,7 @@ vi.mock("~/hooks/use-order-action-permissions", () => ({
 vi.mock("~/lib/api-mutations/orders", () => ({
   orderErrorMessage: (error: Error) => error.message,
   useMarkPickupReady: () => ({ mutate: mocks.ready, isPending: false }),
+  useMarkOrderDelivered: () => ({ mutate: vi.fn(), isPending: false }),
   useVoidFulfillment: () => ({ mutate: mocks.voided, reset: vi.fn(), isPending: false, isError: false }),
   useSetOrderFulfillmentLocation: () => ({ mutate: mocks.setLocation, isPending: false }),
 }));

@@ -37,6 +37,7 @@ export function CodDialogs({
   onClose,
   initialCollector,
   hasBalanceDue,
+  delivered = false,
   collectTitle,
   cashAmount,
   amountDue,
@@ -53,6 +54,8 @@ export function CodDialogs({
   /** Usually the rider who took the parcel collected the cash (R3-ORD-08); still editable. */
   initialCollector: string;
   hasBalanceDue: boolean;
+  /** The parcel was already marked delivered: collecting only pays it. */
+  delivered?: boolean;
   collectTitle: string;
   cashAmount: number;
   amountDue: number;
@@ -106,7 +109,7 @@ export function CodDialogs({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{collectTitle}</DialogTitle>
-            <DialogDescription>{t(hasBalanceDue ? "cod.balanceHelp" : "cod.collectHelp")}</DialogDescription>
+            <DialogDescription>{t(delivered ? "cod.collectHelpDelivered" : hasBalanceDue ? "cod.balanceHelp" : "cod.collectHelp")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             {failure}

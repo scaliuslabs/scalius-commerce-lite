@@ -44,17 +44,17 @@ export function isPartSent(order: Pick<Order, "status" | "items">): boolean {
 }
 
 /**
- * A shipped, fully sent order that is already paid online can be marked
- * delivered; a cash order is delivered by recording the cash instead.
+ * A shipped, fully sent order can be marked delivered: one already paid, an
+ * invoice, or a cash on delivery order whose cash is remitted later (it stays
+ * due until Collect cash records it).
  */
 export function canMarkDelivered(
   order: Pick<Order, "status" | "items" | "paymentMethod" | "paymentStatus" | "balanceDue" | "archivedAt" | "activeRefundOperation" | "shipmentRecovery">,
 ): boolean {
   const shipLines = order.items.filter((item) => lineFulfillmentType(item) === "ship");
   return order.status.toLowerCase() === "shipped"
-    && order.paymentMethod !== "cod"
-    && ["paid", "partially_refunded"].includes(order.paymentStatus ?? "")
-    && !(Number(order.balanceDue ?? 0) > 0)
+    && (order.paymentMethod === "cod" || order.paymentMethod === "net_terms"
+      || (["paid", "partially_refunded"].includes(order.paymentStatus ?? "") && !(Number(order.balanceDue ?? 0) > 0)))
     && shipLines.length > 0
     && shipLines.every((item) => fulfilledUnits(item) >= item.quantity)
     && !order.archivedAt

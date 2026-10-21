@@ -130,10 +130,21 @@ describe("fulfilment status only follows real parcels", () => {
         expect(stock()).toEqual({ stock: 21, reserved_stock: 0 });
     });
 
+    it("delivers a cash on delivery parcel before its cash is remitted, then records the cash on the delivered order", async () => {
+        const id = await manualOrder();
+        await sendParcel(db, id, {});
+        await markOrderDelivered(db, id);
+        expect(one("SELECT status, payment_status, balance_due_minor > 0 AS due FROM orders WHERE id = ?", id))
+            .toEqual({ status: "delivered", payment_status: "unpaid", due: 1 });
+        expect(one("SELECT status FROM delivery_shipments WHERE order_id = ?", id)).toEqual({ status: "delivered" });
+        const total = one<{ total: number }>("SELECT total_amount_minor / 100 AS total FROM orders WHERE id = ?", id).total;
+        await processCodAction(db, id, { action: "collected", collectedBy: "Rider Kamal", collectedAmount: total });
+        expect(one("SELECT status, payment_status FROM orders WHERE id = ?", id)).toEqual({ status: "delivered", payment_status: "paid" });
+    });
+
     it("marks a paid, fully sent order delivered through its own action", async () => {
         const id = await manualOrder();
         await sendParcel(db, id, {});
-        await expect(markOrderDelivered(db, id)).rejects.toThrow("Mark the cash as collected first.");
         sqlite.exec(`UPDATE orders SET payment_method = 'stripe', payment_status = 'paid', paid_amount_minor = total_amount_minor, balance_due_minor = 0 WHERE id = '${id}'`);
         sqlite.exec(`UPDATE orders SET payment_status = 'partial', paid_amount_minor = 50000, balance_due_minor = total_amount_minor - 50000 WHERE id = '${id}'`);
         await expect(markOrderDelivered(db, id)).rejects.toThrow("Record the rest of the payment first.");

@@ -222,8 +222,8 @@ const markDeliveredRoute = createRoute({
     method: "post",
     path: "/{id}/mark-delivered",
     tags: ["Admin - Orders"],
-    summary: "Mark a paid order your own rider delivered in full as delivered",
-    description: "Cash-on-delivery orders are delivered by recording the cash (POST /{id}/cod). Refused while anything is unsent or money is due.",
+    summary: "Mark an order your own rider delivered in full as delivered",
+    description: "Refused while anything is unsent. A paid order, an invoice, or a cash on delivery order whose cash is remitted later: the order stays unpaid until the cash is recorded (POST /{id}/cod, `collected`), which is also allowed on a delivered order.",
     request: {
         params: z.object({ id: z.string() }),
         body: {

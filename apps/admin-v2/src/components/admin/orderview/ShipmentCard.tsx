@@ -557,9 +557,15 @@ export function ShipmentCard({ order }: { order: Order }) {
           )
         ) : null}
         {canDeliver ? (
-          <Button type="button" variant="outline" className="w-full" loading={deliveredMutation.isPending} onClick={() => deliveredMutation.mutate({ orderId: order.id })}>
-            {t("primary.markDelivered")}
-          </Button>
+          <div className="space-y-1">
+            <Button type="button" variant="outline" className="w-full" loading={deliveredMutation.isPending} onClick={() => deliveredMutation.mutate({ orderId: order.id })}>
+              {t("primary.markDelivered")}
+            </Button>
+            {/* A parcel delivered before the rider or courier hands over the cash. */}
+            {order.paymentMethod === "cod" && Number(order.balanceDue ?? 0) > 0 ? (
+              <p className="text-body text-muted-foreground">{t("shipments.deliveredCashLater")}</p>
+            ) : null}
+          </div>
         ) : null}
       </CardContent>
       <CourierCheckDialog

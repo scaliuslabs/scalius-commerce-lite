@@ -33,7 +33,8 @@ import { useOpenedOnce } from "~/hooks/use-opened-once";
 import { formatNumber, useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { resourceMessages } from "~/i18n/resource";
-import { orderErrorMessage, useMarkPickupReady, useVoidFulfillment } from "~/lib/api-mutations/orders";
+import { orderErrorMessage, useMarkOrderDelivered, useMarkPickupReady, useVoidFulfillment } from "~/lib/api-mutations/orders";
+import { canMarkDelivered } from "./primary-action";
 import { orderReturnsQueryOptions } from "~/lib/api-query-options/orders";
 import { ORDER_DETAIL_PREFETCH_STALE_MS } from "~/lib/order-detail-prefetch";
 import { resolveDeliveryMethodPresentation } from "~/lib/delivery-method-presentation";
@@ -374,8 +375,16 @@ function FulfilledCard({ order, group, number, money, returned }: {
   const t = useMessages(orderDetailMessages);
   const [voiding, setVoiding] = useState(false);
   const fulfillment = group.fulfillment;
-  const canManage = useOrderActionPermissions().canManageOrderShipments;
+  const permissions = useOrderActionPermissions();
+  const canManage = permissions.canManageOrderShipments;
   const canVoid = canManage && fulfillment?.canVoid === true && !order.archivedAt;
+  // Your own rider handed every parcel over: mark the order delivered from the parcel itself.
+  const delivered = useMarkOrderDelivered();
+  const canDeliver = group.type === "ship" && fulfillment?.status !== "voided"
+    && permissions.canChangeOrderStatus && canMarkDelivered(order);
+  // Once the order is delivered, so is every parcel still counted on it.
+  const orderDelivered = ["delivered", "completed"].includes(order.status.toLowerCase());
+  const badge = group.type === "ship" && orderDelivered && fulfillment?.status !== "voided" ? "badge.delivered" : DONE_BADGES[group.type];
   // The server says whether and why not; an archived order is restored first.
   const blockedReason = canManage && fulfillment && typeof fulfillment.canVoid === "boolean" && !canVoid
     ? t(order.archivedAt ? "void.blocked.archived" : `void.blocked.${fulfillment.voidBlockedReason ?? "voided"}`)
@@ -386,7 +395,7 @@ function FulfilledCard({ order, group, number, money, returned }: {
     fulfillment?.cashCollected != null ? t("fulfilled.cash", { amount: money.major(fulfillment.cashCollected) }) : null,
   ].filter(Boolean).join(" · ");
   const voidLabel = t(group.type === "ship" ? "shipments.cameBack" : "void.menu");
-  const actions = canVoid || blockedReason ? (
+  const actions = canVoid || blockedReason || canDeliver ? (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon-sm" aria-label={t("fulfilled.actions")} title={t("fulfilled.actions")}>
@@ -394,7 +403,10 @@ function FulfilledCard({ order, group, number, money, returned }: {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        {blockedReason ? (
+        {canDeliver ? (
+          <DropdownMenuItem onSelect={() => delivered.mutate({ orderId: order.id })}>{t("primary.markDelivered")}</DropdownMenuItem>
+        ) : null}
+        {!canVoid && !blockedReason ? null : blockedReason ? (
           // A disabled item takes no pointer events: the tooltip hangs on its wrapper.
           <Tooltip>
             <TooltipTrigger asChild>
@@ -417,7 +429,7 @@ function FulfilledCard({ order, group, number, money, returned }: {
   return (
     <Card data-testid={`fulfilled-${group.type}`}>
       <GroupHeader
-        badge={t(DONE_BADGES[group.type])}
+        badge={t(badge)}
         badgeVariant="secondary"
         title={t("group.fulfilledTitle", { name: t(GROUP_TITLES[group.type]), number })}
         description={description || undefined}

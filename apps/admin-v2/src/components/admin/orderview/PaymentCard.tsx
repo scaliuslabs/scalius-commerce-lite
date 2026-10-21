@@ -573,6 +573,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
             onClose={() => setCodAction(null)}
             initialCollector={codCollector}
             hasBalanceDue={hasCashBalanceDueOnDelivery}
+            delivered={["delivered", "completed"].includes(order.status.toLowerCase())}
             collectTitle={collectTitle}
             cashAmount={cashCollectionAmount}
             amountDue={presentation.amountDue}
