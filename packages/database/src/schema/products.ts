@@ -395,6 +395,13 @@ export const categories = sqliteTable(
 export const collections = sqliteTable("collections", {
     id: text("id").primaryKey(),
     name: text("name").notNull(),
+    /**
+     * The collection's handle (migration 0170): unique in the store, trashed
+     * collections included, so a template names a collection before its id
+     * exists (`@collection:<handle>`). Every create sets one; NULL only on a
+     * row written outside the collections service.
+     */
+    slug: text("slug"),
     description: text("description"),
     content: text("content"),
     presentation: text("presentation", { enum: ["grid", "carousel"] }).notNull(),
@@ -418,6 +425,7 @@ export const collections = sqliteTable("collections", {
         .default(UNIX_NOW),
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
 }, (table) => [
+    uniqueIndex("collections_slug_idx").on(table.slug),
     index("collections_deleted_at_idx").on(table.deletedAt),
     check("collections_version_positive", sql`${table.version} >= 1`),
     check("collections_listing_template_shape", sql.raw(templateIdCheck("listing_template"))),

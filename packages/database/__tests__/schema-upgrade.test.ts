@@ -891,6 +891,18 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 22,
         postgresStatements: 22,
       },
+      {
+        version: 170,
+        name: "0170_collection_slugs_and_theme_permission",
+        sqliteStatements: 18,
+        postgresStatements: 15,
+      },
+      {
+        version: 171,
+        name: "0171_app_customer_roles_and_jobs",
+        sqliteStatements: 10,
+        postgresStatements: 6,
+      },
     ]);
   });
 
@@ -1151,6 +1163,8 @@ describe("provider-neutral schema upgrades", () => {
           { version: 167, name: "0167_promotion_exhaustion_dependency" },
           { version: 168, name: "0168_tax_document_commands" },
           { version: 169, name: "0169_fk_indexes_and_trigger_guards" },
+          { version: 170, name: "0170_collection_slugs_and_theme_permission" },
+          { version: 171, name: "0171_app_customer_roles_and_jobs" },
         ],
       });
     } finally {
