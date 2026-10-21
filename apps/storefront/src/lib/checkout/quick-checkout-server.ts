@@ -66,6 +66,20 @@ export type QuickCheckoutQuoteResult =
   | { ok: false; reason: "rate"; shippingRates: QuotedShippingRate[] | null }
   | { ok: false; reason: "items" | "location" | "unavailable"; message?: string };
 
+/**
+ * The quote client's headers with this server's own. Set on one `Headers`,
+ * never spread beside them: `Headers` lower-cases its names, and an object
+ * holding both `content-type` and `Content-Type` became a doubled
+ * "application/json, application/json" that the API could not read (buyer QA B2).
+ */
+export function quoteHeaders(clientHeaders: HeadersInit | undefined, customerSessionToken: string | null): Headers {
+  const headers = new Headers(clientHeaders);
+  headers.set("Accept", "application/json");
+  headers.set("Content-Type", "application/json");
+  if (customerSessionToken) headers.set("X-Customer-Session", customerSessionToken);
+  return headers;
+}
+
 export async function fetchQuickCheckoutQuote(
   input: Record<string, unknown>,
   customerSessionToken: string | null,
@@ -76,12 +90,7 @@ export async function fetchQuickCheckoutQuote(
       "/orders/tax-quote",
       {
         method: "POST",
-        headers: {
-          ...Object.fromEntries(new Headers(init?.headers)),
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          ...(customerSessionToken ? { "X-Customer-Session": customerSessionToken } : {}),
-        },
+        headers: quoteHeaders(init?.headers, customerSessionToken),
         body: init?.body,
         cache: "no-store",
       },
