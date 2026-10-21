@@ -26,11 +26,14 @@ export const STOREFRONT_DEV_CONFIG = "wrangler.dev.gen.json";
  * Writes a dev copy of a Wrangler config with `secrets.required` set, beside
  * the original so relative paths and .dev.vars resolve the same. Returns its path.
  */
-export function writeDevWranglerConfig(configUrl, required) {
+export function writeDevWranglerConfig(configUrl, required, { workerLoader = false } = {}) {
   const source = fileURLToPath(configUrl);
   const config = JSON.parse(stripJsonc(readFileSync(source, "utf8")));
   const out = join(dirname(source), STOREFRONT_DEV_CONFIG);
-  const text = `${JSON.stringify({ ...config, secrets: { required: [...required] } }, null, 2)}\n`;
+  // With the plugin sandbox on, the storefront draws uploaded apps' parts in
+  // the Worker Loader, as a Paid deploy's generated config gives it.
+  const loaders = workerLoader ? { worker_loaders: [{ binding: "LOADER" }] } : {};
+  const text = `${JSON.stringify({ ...config, ...loaders, secrets: { required: [...required] } }, null, 2)}\n`;
   if (!existsSync(out) || readFileSync(out, "utf8") !== text) writeFileSync(out, text);
   return out;
 }

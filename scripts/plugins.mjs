@@ -37,6 +37,7 @@ import {
   isPathSource,
   packForGenerated,
   packPlugin,
+  pluginSandboxEnabled,
   readLockfile,
   renderAssetsGen,
   renderBundledGen,
@@ -70,15 +71,10 @@ import { devPlugin, previewPlugin, readPreviewFixture } from "./plugin-dev.mjs";
 import { stripJsonc } from "./check-worker-env.mjs";
 import { resolvePlan, withPlanProfile } from "./plan.mjs";
 
-export { scaffoldFiles };
+export { pluginSandboxEnabled, scaffoldFiles };
 
 const PLUGIN_ID = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
 const API_DIR = join(root, "apps/api");
-
-/** The sandbox is on when the lockfile says so or the operator asks for it for one run. */
-export function pluginSandboxEnabled(lockfile, env = process.env, args = []) {
-  return args.includes("--plugin-sandbox") || env.SCALIUS_PLUGIN_SANDBOX === "1" || lockfile.sandbox === true;
-}
 
 /**
  * A Wrangler config with the Worker Loader binding added. The committed
