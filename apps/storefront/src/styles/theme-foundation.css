@@ -1,6 +1,10 @@
 @custom-variant dark (&:is(.dark *));
 
-:root {
+/* Fallback tokens at zero specificity: the theme writes its own on
+   `:root, .site-root` (theme-paint.ts), and that block must win at `:root`
+   too, wherever the stylesheets land in the head, or every `--color-*`
+   alias (resolved at `:root`) keeps these fallbacks instead of the brand. */
+:where(:root) {
   --product-sticky-height: 0px;
   --scalius-z-header: 50;
   --scalius-z-content-bar: 40;
@@ -218,6 +222,19 @@ body {
   .site-root {
     --theme-section-gap: var(--theme-section-gap-desktop, 3rem);
   }
+}
+
+/* The country and language choices under the footer: one bar on the page
+   container, so its edge lines up with the footer above it. */
+.site-root .footer-locale {
+  border-block-start: 1px solid var(--color-border);
+}
+.site-root .footer-locale-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 2rem;
+  padding-block: 0.75rem;
 }
 
 .site-root :where(header, footer) .max-w-7xl,
