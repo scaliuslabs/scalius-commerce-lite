@@ -55,6 +55,9 @@ export const orderMessages = defineMessages({
     "source.phone": "Phone",
     "source.walk_in": "Walk-in",
     checkHistoryFor: "Check delivery history for {name}",
+    // A customer's personal data was erased: the order keeps its money, lines and region.
+    erasedCustomer: "Erased customer",
+    erasedValue: "Erased",
   },
   bn: {
     "status.pending": "অপেক্ষমাণ",
@@ -103,6 +106,9 @@ export const orderMessages = defineMessages({
     "source.phone": "ফোন",
     "source.walk_in": "দোকানে এসে",
     checkHistoryFor: "{name}-এর ডেলিভারির ইতিহাস দেখুন",
+    // A customer's personal data was erased: the order keeps its money, lines and region.
+    erasedCustomer: "মুছে ফেলা কাস্টমার",
+    erasedValue: "মুছে ফেলা হয়েছে",
   },
 });
 

@@ -62,6 +62,24 @@ describe("order customer card", () => {
     expect(container.textContent).not.toContain("Ordered as");
   });
 
+  it("reads an erased customer's name, record and street as erased, in each language", () => {
+    const erased = {
+      ...baseOrder, customerName: "[erased]", customerPhone: null, shippingAddress: "[erased]", areaName: "Dhanmondi",
+      customerRecord: { id: "cust_owner", name: "[erased]", kind: "account", phone: null },
+    } as unknown as Order;
+    show(erased);
+    expect(container.textContent).not.toContain("[erased]");
+    expect(container.textContent).toContain("Erased customer");
+    expect(recordLink()?.textContent).toBe("Erased customer");
+    expect(container.textContent).toContain("Erased, Dhanmondi");
+    expect(container.textContent).not.toContain("Ordered as");
+    // No phone because it was erased, not because the order is digital.
+    expect(container.textContent).not.toContain("No phone number");
+    act(() => setLocale("bn"));
+    show({ ...erased });
+    expect(recordLink()?.textContent).toBe("মুছে ফেলা কাস্টমার");
+  });
+
   it("says 'Ordered as' when the account is named differently from the order", () => {
     show(orderWith({ id: "cust_owner", name: "Owner Rahman", kind: "account", phone }));
     expect(recordLink()?.textContent).toBe("Owner Rahman");

@@ -179,4 +179,20 @@ describe("CustomerActivity", () => {
     expect(link("Owner Rahman")?.getAttribute("href")).toBe("/admin/customers/cust_owner/edit");
     expect(container.querySelector("button")?.textContent ?? "").not.toMatch(/merge|claim/i);
   });
+  it("says who erased the personal data, and reads every erased name and order name as erased", async () => {
+    const erased = { ...snapshot("[erased]"), phone: null };
+    await show(payload({ name: "[erased]", phone: null, erasedAt: 1_760_000_000, deletedAt: 1_760_000_000 }, [
+      { id: "h3", changeType: "erased", createdAt: "2026-09-24T10:00:00.000Z", ...erased, author: { kind: "staff", name: "Nasrin" } },
+      { id: "h2", changeType: "updated", createdAt: "2026-09-23T10:00:00.000Z", ...erased },
+      { id: "h1", changeType: "created", createdAt: "2026-09-21T10:00:00.000Z", ...erased },
+    ], [{ id: "ord_1069", orderNumber: 1069, customerName: "[erased]", totalAmount: 500, status: "delivered", createdAt: "2026-09-21T10:00:00.000Z" }]));
+
+    const [erasure, created] = entries();
+    expect(erasure).toMatch(/^Personal data erased by Nasrin · .+$/);
+    // The scrubbed update changed nothing it can show; the creation names the customer as erased.
+    expect(entries()).toHaveLength(2);
+    expect(created).toContain("Name: Erased");
+    expect(container.textContent).toContain("#1069 · Erased customer");
+    expect(container.textContent).not.toContain("[erased]");
+  });
 });

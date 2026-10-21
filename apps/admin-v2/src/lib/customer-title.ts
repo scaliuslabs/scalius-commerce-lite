@@ -1,3 +1,4 @@
+import { isErasedText } from "@scalius/shared/customer-erasure";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { getStoreRegion } from "~/lib/store-time-zone";
 import type { customersMessages } from "~/i18n/customers";
@@ -23,16 +24,19 @@ export interface CustomerTitleInput {
  * with no order name left it is titled by its phone (or email) and says
  * "Guest orders". Accounts and customers the merchant created keep their own
  * name. `detailIsPhone` says the detail line is a phone number, to set in the
- * number style.
+ * number style. A customer whose personal data was erased reads "Erased
+ * customer", with nothing under it.
  */
 export function customerTitle(
   customer: CustomerTitleInput,
   t: Translate,
 ): { title: string; detail: string | null; detailIsPhone: boolean } {
+  if (isErasedText(customer.name)) return { title: t("erasedCustomer"), detail: null, detailIsPhone: false };
   const phone = customer.phone ? formatPhoneForDisplay(customer.phone, getStoreRegion()) : null;
   const email = customer.email?.trim() || null;
   if (customer.kind === "guest") {
-    const latest = customer.latestOrderName?.trim() || null;
+    // An erased order name is no one's name: the record falls back to its contact.
+    const latest = isErasedText(customer.latestOrderName) ? null : customer.latestOrderName?.trim() || null;
     const contact = phone ?? email;
     if (latest) return { title: latest, detail: contact, detailIsPhone: phone !== null };
     if (contact) return { title: contact, detail: t("guestOrders"), detailIsPhone: false };

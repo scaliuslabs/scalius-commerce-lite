@@ -39,6 +39,7 @@ import { shellMessages } from "~/i18n/shell";
 import { settingsNavMessages } from "~/i18n/settings";
 import { customersMessages } from "~/i18n/customers";
 import { customerTitle } from "~/lib/customer-title";
+import { shownText } from "~/lib/erased-text";
 import { settingsSearchMessages } from "~/i18n/settings-search";
 import { appSurfacesMessages } from "~/i18n/app-surfaces";
 import type { AppProviderKind } from "../apps/app-capabilities";
@@ -239,7 +240,7 @@ export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: Glob
       ...group("orders", t("orders"), data.orders.map((order) => ({
         id: `o:${order.id}`,
         label: formatOrderNumber(order.orderNumber, order.id),
-        detail: `${order.customerName} · ${orderStatusLabel(orderT, order.status)}`,
+        detail: `${shownText(order.customerName, orderT("erasedCustomer"))} · ${orderStatusLabel(orderT, order.status)}`,
         to: `/admin/orders/${order.id}`,
         icon: Inbox,
       })), all("orders", "/admin/orders", s("list.order"))),
