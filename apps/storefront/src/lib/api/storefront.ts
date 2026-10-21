@@ -210,6 +210,8 @@ export interface LayoutData {
    * `readStorefrontBrandAssets` (lib/storefront-theme-context) validates it.
    */
   brand?: unknown;
+  /** Images the published theme's unit skins name (app `image` skin settings); validated by `readSkinMedia`. */
+  skinMedia?: unknown;
   /** The store's shape for the theme fit rules; validated by `readStoreShape`. */
   storeShape?: unknown;
   media?: {
@@ -277,6 +279,8 @@ export interface ThemePreviewData {
   expiresAt: string | number;
   /** The draft's brand images resolved (`StorefrontBrandAssets`); validated like the layout's. */
   brand?: unknown;
+  /** The draft's unit skins' images; validated like the layout's. */
+  skinMedia?: unknown;
 }
 
 // =============================================

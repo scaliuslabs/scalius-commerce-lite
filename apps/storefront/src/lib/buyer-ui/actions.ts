@@ -1,6 +1,6 @@
 import type { BuyerUiBlock } from "@scalius/shared/plugins/buyer-ui";
 import type { PluginUiAction } from "@scalius/shared/plugins/ui";
-import { isCheckoutSlot } from "./state";
+import { isCartSlot } from "./state";
 import { PLUGIN_ID_PATTERN } from "@scalius/shared/plugins/ids";
 import type { ProductPageData } from "@/lib/api/products";
 import { browserApiUrl } from "@/lib/api/browser-url";
@@ -66,7 +66,7 @@ function message(value: unknown): string | undefined {
 /** Only explicit buyer clicks run these actions; the renderer sets attributes and opens pages itself. */
 export async function runBuyerUiAction(action: RunnableAction, block: BuyerUiBlock): Promise<{ message?: string }> {
   if (action.kind === "cart") {
-    if (!isCheckoutSlot(block.target)) throw new Error(FAILED);
+    if (!isCartSlot(block.target)) throw new Error(FAILED);
     if (action.op === "add_line") {
       await addLine(action);
       return { message: "Item added to your cart." };

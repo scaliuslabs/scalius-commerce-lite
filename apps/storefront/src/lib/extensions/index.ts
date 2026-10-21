@@ -18,6 +18,7 @@ import {
   type StorefrontComponentSlot,
   type StorefrontEmbedKind,
   type StorefrontExtension,
+  type StorefrontImage,
   type StorefrontRenderContext,
   type StorefrontResolvedSettings,
   type StorefrontSkinJob,
@@ -36,6 +37,7 @@ import { dateLocale } from "@scalius/shared/locale-format";
 import { markPageUnproven } from "@/lib/page-dependencies";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { ExtensionHost } from "./host";
+import { storefrontImageOf } from "./data";
 import type { ExtensionRuntime } from "./loaders";
 
 export { ExtensionHost } from "./host";
@@ -43,6 +45,8 @@ export { ExtensionHost } from "./host";
 interface RequestExtensions {
   list: StorefrontExtension[];
   byId: Map<string, StorefrontExtension>;
+  /** The component slots some active app's component targets (a unit leaves the others out). */
+  filled: ReadonlySet<string>;
   host: ExtensionHost;
 }
 
@@ -78,7 +82,8 @@ export function requestExtensions(locals: object, url: URL): Promise<RequestExte
   let pending = perRequest.get(locals);
   if (!pending) {
     pending = (async () => {
-      const [layout, theme] = await Promise.all([getLayoutData(), currentRequestTheme(locals)]);
+      // Outside a request (a unit rendered alone) there is no store, so no app draws.
+      const [layout, theme] = await Promise.all([getRuntime() ? getLayoutData() : null, currentRequestTheme(locals)]);
       // App components cannot name a page, so none renders on a buyer's page (lib/app-scripts.ts).
       // The page drawn: the request's, or the one the library previews.
       const path = previewPages.get(locals) ?? url.pathname;
@@ -115,7 +120,8 @@ export function requestExtensions(locals: object, url: URL): Promise<RequestExte
         // A page drawn with a fallback is never stored (it would stay until an unrelated write).
         degraded: () => markPageUnproven(dependencies),
       });
-      return { list, byId, host };
+      const filled = new Set(list.flatMap((extension) => extension.components.flatMap((component) => component.targets)));
+      return { list, byId, filled, host };
     })();
     perRequest.set(locals, pending);
   }
@@ -150,13 +156,16 @@ export async function appSkin(locals: object, url: URL, target: StorefrontSkinTa
   const extension = byId.get(key.pluginId);
   const declaration = extension?.skins.find((entry) => entry.id === key.type && entry.target === target);
   if (!extension || !declaration) return null;
-  const { bindingContext } = await currentRequestTheme(locals);
-  return { extension, target, component: declaration.id, settings: resolveSkinSettings(declaration.settings, resolvePluginSettingBindings(declaration.settings, chosen.values, chosen.bindings, bindingContext)) };
+  const { bindingContext, skinMedia } = await currentRequestTheme(locals);
+  const values = resolvePluginSettingBindings(declaration.settings, chosen.values, chosen.bindings, bindingContext);
+  // A unit skin's images came with the layout read (`skinMedia`); a section skin names none.
+  const image = ref === undefined ? (id: string) => storefrontImageOf(skinMedia.get(id)) : undefined;
+  return { extension, target, component: declaration.id, settings: resolveSkinSettings(declaration.settings, values, image) };
 }
 
-/** A skin's or component's settings: no images or products (the manifest forbids them), so nothing to read. */
-export function resolveSkinSettings(schema: PluginSettingsSchema, values: unknown): StorefrontResolvedSettings {
-  return resolveStorefrontSettings(schema, values, { image: () => null, products: () => [] });
+/** A skin's or component's settings: no products (the manifest forbids them); a unit skin's images from the layout read. */
+export function resolveSkinSettings(schema: PluginSettingsSchema, values: unknown, image: (mediaId: string) => StorefrontImage | null = () => null): StorefrontResolvedSettings {
+  return resolveStorefrontSettings(schema, values, { image, products: () => [] });
 }
 
 /** A component's checked markup, cut at its embeds, ready for AppComponent. */

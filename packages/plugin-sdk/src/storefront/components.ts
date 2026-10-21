@@ -5,6 +5,7 @@
 
 import type {
   StorefrontComponentSlot,
+  StorefrontDeferredHydration,
   StorefrontEmbedKind,
   StorefrontImage,
   StorefrontIslandHydration,
@@ -128,6 +129,62 @@ export function Island(props: IslandProps): Html {
     "data-props": json,
     class: props.class,
   })}>${children(props.children)}</scalius-island>`);
+}
+
+// ── Deferred markup ───────────────────────────────────────────────────────
+
+export interface DeferredProps {
+  /**
+   * When the markup enters the page: `visible` (default; as it nears the
+   * viewport), `idle`, or `interaction` (the first hover, focus or tap in
+   * the element that holds it, such as a tab panel's).
+   */
+  hydrate?: StorefrontDeferredHydration;
+  /**
+   * The space it holds until then, a CSS length (`24rem`, `480px`,
+   * `calc(…)`): about its height, so nothing moves when it appears.
+   */
+  minHeight?: string;
+  children?: Renderable;
+}
+
+const CSS_LENGTH = /^(?:0|\d{1,5}(?:\.\d{1,3})?(?:px|rem|em|vh|svh|dvh|lvh|vw|%)|(?:calc|min|max|clamp|var)\([\w\s.,%+*/()-]{1,120}\))$/;
+
+/**
+ * Markup the browser lays out only when its moment comes: a heavy part
+ * below the fold (a review wall, a long rail, a map) that should not compete
+ * with the page's largest paint. It ships in the page (and its cache); the
+ * store moves it in at its moment and mounts the islands inside. Without
+ * JavaScript it never appears, so use it for enhancements, never for content
+ * crawlers or every buyer must see. Core embeds inside render nothing.
+ *
+ *   <Deferred minHeight="28rem"><ReviewWall reviews={settings.reviews} /></Deferred>
+ */
+export function Deferred(props: DeferredProps): Html {
+  const minHeight = props.minHeight?.trim();
+  if (minHeight !== undefined && !CSS_LENGTH.test(minHeight)) {
+    throw new TypeError(`Deferred minHeight must be a CSS length such as "24rem", not ${JSON.stringify(props.minHeight)}.`);
+  }
+  return raw(`<scalius-deferred${attributes({
+    "data-hydrate": props.hydrate ?? "visible",
+    style: `display:block${minHeight ? `;min-block-size:${minHeight}` : ""}`,
+  })}><template>${children(props.children)}</template></scalius-deferred>`);
+}
+
+// ── Signed-in state ───────────────────────────────────────────────────────
+//
+// One header serves every buyer, so signed-in state is not render data. Mark
+// both versions; the store shows the right one in the buyer's browser (the
+// signed-out one until it knows, so a guest never sees signed-in UI).
+
+/** Shown only to a signed-in buyer: `<a href={data.routes.account} {...whenSignedIn()}>My account</a>`. */
+export function whenSignedIn(): Attributes {
+  return { "data-scalius-when": "signed-in" };
+}
+
+/** Shown only to a guest: `<a href={data.routes.account} {...whenSignedOut()} {...accountLink()}>Sign in</a>`. */
+export function whenSignedOut(): Attributes {
+  return { "data-scalius-when": "signed-out" };
 }
 
 // ── Core behaviours (no app JavaScript) ───────────────────────────────────

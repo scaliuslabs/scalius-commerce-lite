@@ -77,7 +77,7 @@ describe("an app sets up a store through the stable app API", () => {
     // The theme draft: the template applied with its handles resolved, one section re-pointed; nothing published.
     const workspace = await getThemeWorkspace(db);
     expect(workspace.published.revision).toBe(0);
-    expect(workspace.draft.theme.apps.template).toBe("acme.builder/launch");
+    expect(workspace.draft.theme.apps?.template).toBe("acme.builder/launch");
     const [tiles, deals, rail] = workspace.draft.theme.pages.home as Array<{ settings: Record<string, unknown> }>;
     const categoryId = (slug: string) => (rows(`SELECT id FROM categories WHERE slug = '${slug}'`)[0] as { id: string }).id;
     expect(tiles!.settings.categoryIds).toEqual([categoryId("laptops"), categoryId("phones")]);

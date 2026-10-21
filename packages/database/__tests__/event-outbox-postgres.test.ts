@@ -10,6 +10,7 @@ import { Client, types } from "pg";
 import { afterAll, describe, expect, it } from "vitest";
 
 import { parseEventFacts, type EventTopic } from "../../shared/src/events";
+import { EVENT_TOPICS_BEFORE_0164 } from "../scripts/event-outbox-triggers";
 import { compileCanonicalPostgresSchema } from "../scripts/postgres-schema";
 
 // Opt-in: point SCALIUS_TEST_POSTGRES_URL at a disposable server.
@@ -134,9 +135,12 @@ describe.runIf(postgresUrl)("0103 order channel and event outbox on PostgreSQL",
       INSERT INTO customers (id, name, phone) VALUES ('cust_1', 'Karim', '+8801722222222');
     `);
     const rows = (await client.query("SELECT id, topic, data FROM event_outbox ORDER BY topic, id")).rows as Array<{ id: string; topic: string; data: string }>;
+    // An 0103 store writes the names before 0164's renames; their facts are the renamed topics' facts.
+    const inventoryChanged = EVENT_TOPICS_BEFORE_0164["variant.inventory_changed"]!.topic;
+    const renamed = new Map(Object.entries(EVENT_TOPICS_BEFORE_0164).map(([topic, before]) => [before.topic, topic as EventTopic]));
     expect(rows.map((row) => row.topic)).toEqual([
       "customer.created",
-      "variant.inventory_changed",
+      inventoryChanged,
       "order.created",
       "order.paid",
       "order.updated",
@@ -144,9 +148,9 @@ describe.runIf(postgresUrl)("0103 order channel and event outbox on PostgreSQL",
     ]);
     for (const row of rows) {
       expect(row.id).toMatch(/^evt_\d{13}[0-9a-f]{12}$/);
-      expect(parseEventFacts(row.topic as EventTopic, row.data), row.data).not.toBeNull();
+      expect(parseEventFacts(renamed.get(row.topic) ?? row.topic as EventTopic, row.data), row.data).not.toBeNull();
     }
-    expect(JSON.parse(rows.find((row) => row.topic === "variant.inventory_changed")!.data)).toMatchObject({
+    expect(JSON.parse(rows.find((row) => row.topic === inventoryChanged)!.data)).toMatchObject({
       quantityDelta: 4,
       productId: "p1",
       locationId: "loc_default",

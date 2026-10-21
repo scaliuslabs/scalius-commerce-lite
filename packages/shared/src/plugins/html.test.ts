@@ -188,6 +188,81 @@ describe("app component HTML", () => {
     expect(shown(once)).toBe(once);
   });
 
+  describe("deferred markup", () => {
+    const open = '<scalius-deferred data-hydrate="visible" style="display:block;min-block-size:24rem">';
+
+    it("keeps its one template, its moment and safe style; nothing else of it", () => {
+      expect(shown(`${open}<template><section class="wall"><h2>Reviews</h2><img src="/media/a.webp" alt="A"></section></template></scalius-deferred>`))
+        .toBe(`${open}<template><section class="wall"><h2>Reviews</h2><img src="/media/a.webp" alt="A" loading="lazy" decoding="async"></section></template></scalius-deferred>`);
+      expect(shown('<scalius-deferred data-hydrate="idle">\n  <template><p>x</p></template>\n</scalius-deferred>'))
+        .toBe('<scalius-deferred data-hydrate="idle"><template><p>x</p></template></scalius-deferred>');
+      const odd = component('<scalius-deferred data-hydrate="load" class="x" id="theme-a" onclick="x()" data-props="{}" style="background:url(https://evil.test/x)"><template shadowrootmode="open"><p>x</p></template></scalius-deferred>');
+      expect(odd.html).toBe('<scalius-deferred data-hydrate="visible"><template><p>x</p></template></scalius-deferred>');
+      expect(odd.dropped).toBe(7);
+    });
+
+    it("unwraps any other shape and drops a template anywhere else", () => {
+      expect(shown('<div><template><p>t</p></template>b</div>')).toBe("<div>b</div>");
+      expect(shown("<scalius-deferred><p>shown now</p></scalius-deferred>")).toBe("<p>shown now</p>");
+      expect(shown("<scalius-deferred><template><p>a</p></template><template><p>b</p></template></scalius-deferred>")).toBe("");
+      expect(shown("<scalius-deferred>text<template><p>a</p></template></scalius-deferred>")).toBe("text");
+      expect(shown("<scalius-deferred><template><template><p>a</p></template><p>b</p></template></scalius-deferred>"))
+        .toBe('<scalius-deferred data-hydrate="visible"><template><p>b</p></template></scalius-deferred>');
+      expect(shown('<svg><scalius-deferred><template><rect width="1"/></template></scalius-deferred></svg>')).toBe("<svg></svg>");
+    });
+
+    it("checks its content with the same profile: no escape hatch", () => {
+      const hostile = '<div onclick="x()">a<script>alert(1)</script><iframe src="https://x.test"></iframe>'
+        + '<style>p{}</style><noscript>n</noscript><a href="javascript:alert(1)">l</a><img src="data:image/png;base64,AA">'
+        + '<form action="https://evil.test/"><input name="q"></form><p id="other-x" data-sx-app="b.app">b</p></div>';
+      const result = component(`<scalius-deferred><template>${hostile}</template></scalius-deferred>`);
+      expect(result.html).toBe('<scalius-deferred data-hydrate="visible"><template><div>a<a>l</a><input name="q"><p>b</p></div></template></scalius-deferred>');
+      // Exactly what the same markup loses outside it.
+      expect(result.dropped).toBe(component(hostile).dropped);
+      expect(result.dropped).toBe(12);
+    });
+
+    it("keeps islands and nested deferred markup, but no core embed or JSON-LD", () => {
+      const result = component('<scalius-deferred><template><scalius-island data-island="wall" data-hydrate="idle"><p>w</p></scalius-island>'
+        + '<scalius-embed kind="reviews"><p>placeholder</p></scalius-embed>'
+        + '<script type="application/ld+json">{"@context":"https://schema.org","@type":"Thing","name":"x"}</script>'
+        + '<scalius-deferred data-hydrate="interaction"><template><scalius-embed kind="slot" data-name="header.actions"></scalius-embed><b>deep</b></template></scalius-deferred>'
+        + '</template></scalius-deferred><scalius-embed kind="reviews"></scalius-embed>');
+      expect(result.html).toBe('<scalius-deferred data-hydrate="visible"><template><scalius-island data-island="wall" data-hydrate="idle"><p>w</p></scalius-island>'
+        + '<scalius-deferred data-hydrate="interaction"><template><b>deep</b></template></scalius-deferred></template></scalius-deferred>'
+        + '<scalius-embed kind="reviews"></scalius-embed>');
+      expect(result.dropped).toBe(3);
+    });
+
+    it("counts toward the depth and element bounds", () => {
+      const options = { pluginId: "acme.theme" };
+      const deep = (levels: number) => `<scalius-deferred><template>${"<div>".repeat(levels)}x${"</div>".repeat(levels)}</template></scalius-deferred>`;
+      // The deferred element and its template take two levels.
+      expect(sanitizePluginHtml(deep(STOREFRONT_COMPONENT_LIMITS.htmlDepth - 2), options).ok).toBe(true);
+      expect(sanitizePluginHtml(deep(STOREFRONT_COMPONENT_LIMITS.htmlDepth - 1), options)).toEqual({ ok: false, reason: "too_complex" });
+      const many = `<scalius-deferred><template>${"<b>x</b>".repeat(STOREFRONT_COMPONENT_LIMITS.htmlElements - 1)}</template></scalius-deferred>`;
+      expect(sanitizePluginHtml(many, options)).toEqual({ ok: false, reason: "too_complex" });
+      expect(sanitizePluginHtml(`<scalius-deferred><template>${"<b>x</b>".repeat(STOREFRONT_COMPONENT_LIMITS.htmlElements - 2)}</template></scalius-deferred>`, options).ok).toBe(true);
+    });
+
+    it.each([
+      ["template style breakout", "<scalius-deferred><template><style></template><img src=x onerror=alert(1)></style></template></scalius-deferred>"],
+      ["closing the template from text", "<scalius-deferred><template><p>&lt;/template&gt;&lt;img src=x onerror=alert(1)&gt;</p></template></scalius-deferred>"],
+      ["closing the template from a value", '<scalius-deferred><template><p title="</template><img src=x onerror=alert(1)>">x</p></template></scalius-deferred>'],
+      ["declarative shadow root", '<scalius-deferred><template shadowrootmode="open"><img src=x onerror=alert(1)></template></scalius-deferred>'],
+      ["noscript in the template", '<scalius-deferred><template><noscript><p title="</noscript><img src=x onerror=alert(1)>"></p></noscript></template></scalius-deferred>'],
+      ["svg in the template", '<scalius-deferred><template><svg><foreignObject><img src=x onerror=alert(1)></foreignObject><a href="javascript:alert(1)"><rect width="1"/></a></svg></template></scalius-deferred>'],
+      ["deferred in a style", "<style><scalius-deferred><template><img src=x onerror=alert(1)></template></scalius-deferred></style>"],
+    ])("is inert after a deferred vector: %s", (_name, input) => {
+      const once = shown(input);
+      // Every template is a deferred element's only child, without attributes.
+      expect(once.match(/<template/g)?.length ?? 0).toBe(once.match(/<scalius-deferred[^>]*><template>/g)?.length ?? 0);
+      expect(once.match(/<\/template>/g)?.length ?? 0).toBe(once.match(/<\/template><\/scalius-deferred>/g)?.length ?? 0);
+      expect(issuesOf(once.replace(/<\/?template>/g, ""))).toEqual([]);
+      expect(shown(once)).toBe(once);
+    });
+  });
+
   it("refuses markup over its bounds", () => {
     const options = { pluginId: "acme.theme" };
     expect(sanitizePluginHtml("x".repeat(STOREFRONT_COMPONENT_LIMITS.htmlBytes + 1), options)).toEqual({ ok: false, reason: "too_large" });

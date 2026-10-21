@@ -68,6 +68,8 @@ interface Props {
    * listing's own (`listingFilterColumnPx(resolved filters)`), 0 for a bar or drawer.
    */
   filterColumnPx?: number;
+  /** An app fills the `product_card.badges` slot (the `badges` slot): the badge row draws even without a core badge. */
+  appBadges?: boolean;
 }
 
 const {
@@ -118,6 +120,8 @@ const delivery = card.facts === "delivery" ? facts.delivery : null;
 const swatchWords = swatches.items.length > 0
   ? copy.colours([...swatches.items.map((swatch) => swatch.label), ...(swatches.more > 0 ? [copy.moreColours(swatches.more)] : [])].join(", "))
   : "";
+// Apps' card slots (`product_card.badges`, `.meta`): ProductCard fills the named slots when an app targets them.
+const appBadges = Astro.props.appBadges === true;
 ---
 
 <div
@@ -128,9 +132,10 @@ const swatchWords = swatches.items.length > 0
   data-action={card.action}
 >
   <CardMedia model={model} dimensions={CARD_IMAGE_DIMENSIONS[card.imageRatio]} sizes={sizes} loading={loading}>
-    {(model.soldOut || model.percentOff) && (
+    {(model.soldOut || model.percentOff || appBadges) && (
       <div class="product-card-badges">
-        {model.soldOut ? <Badge kind="sold-out" /> : <Badge kind="sale" label={model.percentOff} />}
+        {model.soldOut ? <Badge kind="sold-out" /> : model.percentOff ? <Badge kind="sale" label={model.percentOff} /> : null}
+        <slot name="badges" />
       </div>
     )}
     {card.action === "quick-add" && model.quickAddEligible && (
@@ -172,6 +177,7 @@ const swatchWords = swatches.items.length > 0
     )}
     <div class="product-card-foot">
       <Price amount={model.price.current} compareAt={model.price.regular} from={model.price.from} />
+      <slot name="meta" />
       {card.action === "full" && (
         model.quickAddEligible ? (
           <Button href={model.href} variant="secondary" size="sm" full class="product-card-action" data-card-quick-add data-astro-prefetch="false" rel="nofollow">

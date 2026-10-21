@@ -1966,7 +1966,7 @@ export type CustomerAccountSummary = {
     buyerUi: Array<{
         appId: string;
         releaseId: string;
-        target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'checkout.payment.after' | 'checkout.actions.before' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
+        target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
         ui: {
             type: 'page';
             title?: string;
@@ -3993,7 +3993,7 @@ export type ThemeAppSurfaces = {
         key: string;
         type: string;
         name: string;
-        targets: Array<'header.actions' | 'product.buy_box.before' | 'product.buy_box.after' | 'product.below' | 'footer.columns' | 'page'>;
+        targets: Array<'header.actions' | 'product.buy_box.before' | 'product.buy_box.after' | 'product.below' | 'footer.columns' | 'product_card.badges' | 'product_card.meta' | 'page'>;
         settings: Array<AppSettingField>;
     }>;
 };
@@ -4552,7 +4552,7 @@ export type AppSummary = {
      * Where the app shows content on the buyer's cart, checkout, receipt and account pages (storefront extensions).
      */
     extensions: Array<{
-        target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'checkout.payment.after' | 'checkout.actions.before' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
+        target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
         /**
          * The app's data the extension reads to draw its content.
          */
@@ -4944,7 +4944,7 @@ export type AppDetail = AppSummary & {
         components: Array<{
             type: string;
             name: string;
-            targets: Array<'header.actions' | 'product.buy_box.before' | 'product.buy_box.after' | 'product.below' | 'footer.columns' | 'page'>;
+            targets: Array<'header.actions' | 'product.buy_box.before' | 'product.buy_box.after' | 'product.below' | 'footer.columns' | 'product_card.badges' | 'product_card.meta' | 'page'>;
         }>;
         scripts: Array<{
             src: string;
@@ -5029,6 +5029,16 @@ export type AppDetail = AppSummary & {
          * The newest data update that ran.
          */
         applied: number;
+    };
+    /**
+     * The parts of the published theme this app draws (hidden sections left out): while the app is not active, the storefront shows the store's own design there instead.
+     */
+    themeUsage: {
+        parts: Array<ThemeAppPart>;
+        /**
+         * Parts left out of the list.
+         */
+        more: number;
     };
 };
 
@@ -5142,6 +5152,41 @@ export type AppFeature = {
      * The ids of the dashboard pages (`admin.pages`) this feature adds while it is on.
      */
     pages: Array<string>;
+};
+
+export type ThemeAppPart = {
+    /**
+     * A section the app draws, the app's skin of a store section, a skin of a store unit (header, footer, product card, product page, listing), or a product-page app block.
+     */
+    kind: 'section' | 'section_skin' | 'skin' | 'product_block';
+    /**
+     * The app's section type, skin id or component type.
+     */
+    type: string;
+    /**
+     * A skin's target: the unit, or section:<store section type>.
+     */
+    target?: string;
+    /**
+     * The theme document path of the reference.
+     */
+    path: string;
+    place: {
+        page: 'home' | 'landing' | 'template' | 'theme';
+        /**
+         * A landing page's handle.
+         */
+        slug?: string;
+        template?: 'product' | 'collection' | 'cart' | 'page';
+        /**
+         * The section's or block's position, from 0.
+         */
+        index?: number;
+    };
+    /**
+     * The app's name for the part; absent when it no longer declares it.
+     */
+    name?: string;
 };
 
 export type AppLogLine = {
@@ -8036,6 +8081,13 @@ export type GetApiV1StorefrontLayoutResponses = {
                     height: number | null;
                 } | null;
             };
+            skinMedia: Array<{
+                id: string;
+                url: string;
+                alt: string;
+                width: number | null;
+                height: number | null;
+            }>;
             storeShape: StorefrontStoreShape;
             media: {
                 canonicalCdnUrl: string;
@@ -8176,7 +8228,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                     /**
                      * Where it renders: component slots (storefront-protocol.ts) or page (the app's proxy pages).
                      */
-                    targets: Array<'header.actions' | 'product.buy_box.before' | 'product.buy_box.after' | 'product.below' | 'footer.columns' | 'page'>;
+                    targets: Array<'header.actions' | 'product.buy_box.before' | 'product.buy_box.after' | 'product.below' | 'footer.columns' | 'product_card.badges' | 'product_card.meta' | 'page'>;
                     settings: Array<{
                         [key: string]: unknown;
                     }>;
@@ -8350,6 +8402,13 @@ export type PostApiV1StorefrontThemePreviewResolveResponses = {
                     height: number | null;
                 } | null;
             };
+            skinMedia: Array<{
+                id: string;
+                url: string;
+                alt: string;
+                width: number | null;
+                height: number | null;
+            }>;
             draftRevision: number;
             basePublishedRevision: number;
             expiresAt?: unknown;
@@ -11884,7 +11943,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
             buyerUi: Array<{
                 appId: string;
                 releaseId: string;
-                target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'checkout.payment.after' | 'checkout.actions.before' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
+                target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
                 ui: {
                     type: 'page';
                     title?: string;
@@ -19728,7 +19787,7 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                 buyerUi: Array<{
                     appId: string;
                     releaseId: string;
-                    target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'checkout.payment.after' | 'checkout.actions.before' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
+                    target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
                     ui: {
                         type: 'page';
                         title?: string;
@@ -20718,7 +20777,7 @@ export type PostApiV1OrdersCartValidationResponses = {
             buyerUi: Array<{
                 appId: string;
                 releaseId: string;
-                target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'checkout.payment.after' | 'checkout.actions.before' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
+                target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
                 ui: {
                     type: 'page';
                     title?: string;
@@ -21476,7 +21535,7 @@ export type PostApiV1OrdersTaxQuoteResponses = {
             buyerUi: Array<{
                 appId: string;
                 releaseId: string;
-                target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'checkout.payment.after' | 'checkout.actions.before' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
+                target: 'checkout.contact.after' | 'checkout.delivery.after' | 'cart.page.summary' | 'cart.page.below' | 'checkout.payment.after' | 'checkout.actions.before' | 'checkout.summary.after' | 'cart_drawer.footer' | 'order.confirmation' | 'account.order' | 'account.overview' | 'account.profile';
                 ui: {
                     type: 'page';
                     title?: string;

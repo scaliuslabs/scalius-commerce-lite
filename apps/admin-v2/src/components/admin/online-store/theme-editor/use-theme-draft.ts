@@ -24,6 +24,7 @@ import { AdminApiResponseError, isAdminApiConflictError } from "~/lib/admin-api-
 import { apiData } from "~/lib/api";
 import { themeWorkspaceQueryOptions, type ThemeWorkspaceDocument } from "~/lib/api-query-options/online-store";
 import { actionErrorText } from "../action-error";
+import { themeAppsUnavailable, type ThemeAppsProblem } from "~/components/admin/apps/theme-app-parts";
 import { editorHistory, startHistory, type EditorAction } from "./editor-state";
 import type { SaveStatus } from "./EditorTopBar";
 import { saveableDraft, type DraftApps } from "./saveable-draft";
@@ -102,6 +103,8 @@ export function useThemeDraft({ workspace, refetch, canEdit, apps }: {
   const [failure, setFailure] = useState<{ for: Theme; message: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  /** The apps a refused publish named (`theme_apps_unavailable`): the publish dialog lists them. */
+  const [appsProblem, setAppsProblem] = useState<{ apps: ThemeAppsProblem[]; moreParts: number } | null>(null);
   /** Save without waiting (a change the preview shows only once saved). */
   const [urgent, setUrgent] = useState(false);
 
@@ -249,6 +252,7 @@ export function useThemeDraft({ workspace, refetch, canEdit, apps }: {
   /** Publishes: unsaved edits are saved first, then the exact saved revision goes live. */
   const publish = useCallback(async (note: string) => {
     setPublishing(true);
+    setAppsProblem(null);
     try {
       if (dirty && !(await save())) return false;
       const { saved: base } = latest.current;
@@ -264,7 +268,9 @@ export function useThemeDraft({ workspace, refetch, canEdit, apps }: {
       toast.success(t("published"));
       return true;
     } catch (error) {
-      if (isAdminApiConflictError(error)) void noteConflict();
+      const unavailable = themeAppsUnavailable(error);
+      if (unavailable) setAppsProblem(unavailable);
+      else if (isAdminApiConflictError(error)) void noteConflict();
       else toast.error(actionErrorText(error));
       return false;
     } finally {
@@ -314,5 +320,7 @@ export function useThemeDraft({ workspace, refetch, canEdit, apps }: {
     reload,
     replaceDraft,
     publish,
+    appsProblem,
+    clearAppsProblem: () => setAppsProblem(null),
   };
 }

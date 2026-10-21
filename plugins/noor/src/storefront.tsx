@@ -46,6 +46,7 @@ function Card({ data, settings, context }: ProductCardProps<CardSettings>) {
       showRating: settings.show_rating,
       showHover: settings.show_hover,
       eager: data.aboveFold,
+      slots: true,
     }} />
   );
 }

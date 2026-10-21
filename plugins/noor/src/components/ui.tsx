@@ -8,6 +8,7 @@ import {
   Image,
   Island,
   Price,
+  Slot,
   editable,
   formatNumber,
   plural,
@@ -164,6 +165,11 @@ export interface CardOptions {
   /** An eager photo that is not one of the likely largest: eager at normal priority. */
   normalPriority?: boolean;
   sizes?: string;
+  /**
+   * The card is the store's product card (Noor's card skin): it places the
+   * card slots, where other apps add badges and a line under the price.
+   */
+  slots?: boolean;
 }
 
 /**
@@ -195,6 +201,7 @@ export function ProductCard({ product, context, options = {} }: { product: Store
         {product.soldOut
           ? <span class="noor-badge is-muted">{t(context, { en: "Sold out", bn: "স্টক শেষ" })}</span>
           : product.percentOff ? <span class="noor-badge is-sale">−{percent(context, product.percentOff)}</span> : null}
+        {options.slots ? <div class="noor-card-apps"><Slot name="product_card.badges" /></div> : null}
         {canAdd && action === "bar" ? (
           <a class="noor-card-bar" {...quickAdd(product)} aria-label={addLabel}>
             <Icon name={product.quickAdd ? "plus" : "arrow"} size={16} /><span>{addWords}</span>
@@ -217,6 +224,7 @@ export function ProductCard({ product, context, options = {} }: { product: Store
           ) : null}
         </div>
         {product.facts[0] ? <p class="noor-card-fact">{product.facts[0]}</p> : null}
+        {options.slots ? <Slot name="product_card.meta" /> : null}
         {canAdd && action === "button" ? (
           <a class="noor-btn is-outline is-small noor-card-button" {...quickAdd(product)} aria-label={addLabel}>{addWords}</a>
         ) : null}

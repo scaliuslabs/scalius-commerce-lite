@@ -22,5 +22,6 @@ export * from "./storefront-theme/pages";
 export * from "./storefront-theme/templates";
 export * from "./storefront-theme/resolve";
 export * from "./storefront-theme/content";
+export * from "./storefront-theme/app-references";
 export * from "./storefront-theme/compare";
 export * from "./storefront-theme/preview";

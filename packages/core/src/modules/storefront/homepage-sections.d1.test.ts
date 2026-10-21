@@ -8,9 +8,9 @@ import {
     type StorefrontSection,
     type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
-import { withDependencyScope } from "../../cache-deps";
+import { deps, withDependencyScope } from "../../cache-deps";
 import { planHomeBrands } from "../catalog/home-brands";
-import { planHomePromotions, readThemeBrandAssets, readThemeMedia } from "./homepage-sections";
+import { planHomePromotions, planPublishedThemeBrandMedia, readThemeBrandAssets, readThemeMedia } from "./homepage-sections";
 
 describe("homepage brand wall and deal countdown reads", () => {
     it("counts only to a running promotion's stored end", async () => {
@@ -93,6 +93,46 @@ describe("homepage brand wall and deal countdown reads", () => {
                     .toEqual(["m:m_logo"]);
                 expect((await read()).value[0]!.logo).toMatchObject({ mediaId: "m_logo", alt: "Logo" });
             }
+        } finally {
+            sqlite.close();
+        }
+    });
+
+    it("reads a unit skin's images in the layout's brand statement and follows them", async () => {
+        const { sqlite, db } = createSqliteD1Database();
+        try {
+            sqlite.exec(`
+                INSERT INTO media (id, filename, kind, object_key, size, mime_type, status, width, height, variant_width, alt_text, trashed_at, deleted_at) VALUES
+                  ('med_logo', 'logo.png', 'image', 'media/logo.png', 1, 'image/png', 'ready', 400, 400, 400, 'Shop', NULL, NULL),
+                  ('med_promo', 'promo.jpg', 'image', 'media/promo.jpg', 1, 'image/jpeg', 'ready', 640, 320, 640, 'Eid offers', NULL, NULL),
+                  ('med_other', 'other.jpg', 'image', 'media/other.jpg', 1, 'image/jpeg', 'ready', 640, 320, 640, NULL, NULL, NULL);
+            `);
+            const stored = {
+                brand: { logo: "med_logo" },
+                apps: { skins: {
+                    header: { app: "acme.compose/compose_header", values: { promo: "med_promo", promo_link: "/sale", style: "start", heading: "Eid offers" } },
+                    footer: { app: "acme.compose/foot", values: { badge: "med_gone" } },
+                } },
+            };
+            sqlite.prepare("INSERT INTO theme_settings (id, colors) VALUES ('default', ?)").run(JSON.stringify(stored));
+            const read = () => withDependencyScope(async () => {
+                deps.theme();
+                const plan = planPublishedThemeBrandMedia(db);
+                const [rows] = await safeBatch(db, [plan.statement]);
+                return plan.resolve(rows, JSON.stringify(stored), { ...DEFAULT_STOREFRONT_THEME.brand, logo: "med_logo" });
+            }, { strict: true });
+            const first = await read();
+            // One statement: the brand logo and the skins' images, nothing they do not name.
+            expect(first.value.brand.logo).toMatchObject({ id: "med_logo" });
+            expect(first.value.skinMedia.map((asset) => [asset.id, asset.alt])).toEqual([["med_promo", "Eid offers"]]);
+            // Every image-shaped value is followed (a missing one too), plain text never.
+            expect(first.dependencies.keys).toEqual(expect.arrayContaining(["m:med_logo", "m:med_promo", "m:med_gone"]));
+            expect(first.dependencies.keys.some((key) => key.includes("start") || key.includes("sale"))).toBe(false);
+            const { seq } = sqlite.prepare("SELECT seq FROM cache_clock WHERE id = 1").get() as { seq: number };
+            sqlite.exec("UPDATE media SET alt_text = 'Eid sale' WHERE id = 'med_promo'");
+            const changed = sqlite.prepare("SELECT dep FROM cache_dep WHERE seq > ?").all(seq) as Array<{ dep: string }>;
+            expect(changed.map(({ dep }) => dep)).toContain("m:med_promo");
+            expect((await read()).value.skinMedia[0]).toMatchObject({ id: "med_promo", alt: "Eid sale" });
         } finally {
             sqlite.close();
         }
