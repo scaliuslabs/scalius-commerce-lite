@@ -137,7 +137,24 @@ function usableMethods(methods: PaymentMethods | undefined) {
 
 // ── Payment methods ─────────────────────────────────────────────────────
 
-function MethodMark({ row }: { row: PaymentMethodRow }) {
+function hasWordmark(row: PaymentMethodRow): boolean {
+  return row.kind === "built_in" && row.id in PROVIDER_MARKS && PROVIDER_MARKS[row.id as ProviderMarkId].kind === "wordmark";
+}
+
+/**
+ * Every row's mark sits in one column, so the method names line up. A
+ * wordmark (Stripe) keeps its brand minimum (80px); when one is listed, the
+ * column takes its width and the 32px icons start at the same edge.
+ */
+function MethodMark({ row, wide }: { row: PaymentMethodRow; wide: boolean }) {
+  return (
+    <span className={cn("flex shrink-0 items-center", wide && "w-20")}>
+      <MethodMarkImage row={row} />
+    </span>
+  );
+}
+
+function MethodMarkImage({ row }: { row: PaymentMethodRow }) {
   if (row.kind === "built_in" && row.id in PROVIDER_MARKS) {
     return <OfficialProviderMark provider={row.id as ProviderMarkId} />;
   }
@@ -443,6 +460,7 @@ export function PaymentMethodsCard() {
   const nameOf = (row: PaymentMethodRow) =>
     row.kind !== "app" && Object.hasOwn(paymentsMessages.en, row.id) ? t(row.id as keyof typeof paymentsMessages.en) : providerLabel(row.name);
   const names = new Map(methodRows.map((row) => [row.id, nameOf(row)]));
+  const wideMarks = methodRows.some(hasWordmark);
   const currencyText = (currencies: readonly string[]) =>
     currencies.length === 1 && currencies[0] === "BDT"
       ? t("needsTaka")
@@ -538,7 +556,7 @@ export function PaymentMethodsCard() {
     const hasActions = reorderable || keyForm !== null || (row.kind === "app" && ((row.canTestConnection && status?.usable) || (canViewApps && row.pluginId)));
     return (
       <li key={method} data-method={method} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
-        <MethodMark row={row} />
+        <MethodMark row={row} wide={wideMarks} />
         <div className="min-w-0 flex-1">
           <p className="flex flex-wrap items-center gap-2 text-body font-medium">
             {name}
