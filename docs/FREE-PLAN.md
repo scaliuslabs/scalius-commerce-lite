@@ -34,7 +34,7 @@ Code reads values from the profile and never branches on the plan name. Paid val
 | List total counted up to (`countCap`) | 1,000 | 10,000 |
 | Deepest numbered page (`maxOffset`) | 1,000 rows | 10,000 rows |
 
-The profile also sets the bulk page, the products refreshed after a catalogue write, the nightly sold-products refresh, the catalogue rebuild chunk and the backfill image limit.
+The profile also sets the bulk page, the products refreshed after a catalogue write, the nightly sold-products refresh, the catalogue rebuild and band-refresh chunks, the nightly projection drift window and the backfill image limit.
 
 ## The Cloudflare limits
 
@@ -98,7 +98,7 @@ A store has no queue: a queue is one more resource per store, and Free allows 10
 | Payment events | `webhook_events` (`payload`, `attempts`, `next_attempt_at`) | applied after the provider gets its 200 | 6 attempts, 1 to 16 minutes apart; then `failed`, a dead-letter issue on the order page |
 | Sign-in codes | `auth_otp_delivery_receipts` | up to 3 attempts, 2 s and 6 s apart | none after that: a code lives 5 minutes, so the buyer asks for a new one |
 | Automatic fulfilment | the settled order | `runOrderAutoFulfil` | `auto_fulfil_sweep` |
-| Projection rebuild | `system_kv` `catalog:projections:rebuild-cursor` | the first chunks | each drain continues from the cursor |
+| Projection rebuild | `system_kv` `catalog:projections:rebuild-cursor` (a lap: position, end, mode) | the first chunks | each drain continues the lap; a new request keeps its position and moves its end, so the lap never restarts |
 | Recommendations | `system_kv` `catalog:recommendations:rotation-cursor` | the written products and their peers | a daily lap visits every public product once (up to the per-run size times the runs in a day); the nightly tick refreshes products sold that day |
 | Image renditions | media rows with `variant_width` NULL (pending) | none: no Worker renders images | an open dashboard tab renders them in the background |
 
@@ -118,7 +118,7 @@ The cron runs every minute (`* * * * *` in `apps/api/wrangler.jsonc`). Every tic
 
 - Free runs the next job of the rotation on every tick, beside the drains. Each job runs every 23 minutes, and every tick of a whole rotation stays within 50 D1 queries with work due (`apps/api/src/maintenance-budget.test.ts`).
 - Paid runs every job on every fifteenth minute.
-- The 02:00 store-time minute runs only the nightly pass: sales stats, a projection rebuild request, the recommendations of products sold that day, app storage sizes and a sampled drift check.
+- The 02:00 store-time minute runs only the nightly pass: sales stats, a drift check of a rotating window of catalogue projections (a full rebuild lap only when it finds drift), the recommendations of products sold that day, app storage sizes and a sampled drift check of the order projections.
 - Hourly work inside a job (app exchange rates) runs on the job's first run of each hour (`firstSweepRunOfHour`).
 - A sweep's row limit is `floor(limit * limitScale)`, at least 1.
 

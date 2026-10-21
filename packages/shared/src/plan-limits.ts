@@ -70,6 +70,10 @@ export interface PlanLimits {
     readonly catalogRebuildChunk: number;
     /** Rebuild chunks one drain runs before it leaves the cursor to the next tick. */
     readonly catalogRebuildChunksPerDrain: number;
+    /** Products one band-only lap chunk recomputes (one statement: a card SKU probe each). */
+    readonly catalogBandRefreshChunk: number;
+    /** Products the nightly drift check compares with their sources (a rotating window). */
+    readonly catalogDriftCheckPerNight: number;
     /** Chunks (90 items each) of due bulk runs one drain commits; the rest continue next tick. */
     readonly bulkRunChunksPerDrain: number;
     /**
@@ -161,6 +165,8 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       nightlySoldRecommendationLimit: 5,
       catalogRebuildChunk: 90,
       catalogRebuildChunksPerDrain: 1,
+      catalogBandRefreshChunk: 1_000,
+      catalogDriftCheckPerNight: 450,
       bulkRunChunksPerDrain: 3, bundledAppSyncsPerTick: 1,
     }),
     maintenance: Object.freeze({
@@ -202,6 +208,8 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       nightlySoldRecommendationLimit: 200,
       catalogRebuildChunk: 900,
       catalogRebuildChunksPerDrain: 10,
+      catalogBandRefreshChunk: 5_000,
+      catalogDriftCheckPerNight: 9_000,
       bulkRunChunksPerDrain: 12, bundledAppSyncsPerTick: 1_000,
     }),
     maintenance: Object.freeze({
