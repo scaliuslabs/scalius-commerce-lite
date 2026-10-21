@@ -30,6 +30,7 @@ vi.mock("~/hooks/use-order-action-permissions", () => ({ useOrderActionPermissio
 vi.mock("~/lib/api-query-options/orders", () => ({
   orderPaymentsQueryOptions: (id: string) => ({ queryKey: ["payments", id], queryFn: mocks.read }),
   orderCodQueryOptions: (id: string) => ({ queryKey: ["cod", id], queryFn: mocks.cod }),
+  orderReturnsQueryOptions: (id: string) => ({ queryKey: ["returns", id] }),
 }));
 vi.mock("~/lib/api-mutations/orders", () => ({
   useUpdateOrderCod: () => ({ mutate: mocks.mutate, reset: vi.fn(), isPending: false }),

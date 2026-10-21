@@ -167,6 +167,24 @@ describe("manual COD order amendments on D1 storage", () => {
     },
   );
 
+  it("keeps a retained line's image snapshot after the product's image changes, and snapshots a new line's", async () => {
+    sqlite.exec(`
+      INSERT INTO media (id, filename, kind, object_key, size, mime_type, status) VALUES
+        ('media_new', 'new.webp', 'image', 'media/new.webp', 1, 'image/webp', 'ready');
+      INSERT INTO product_media (id, product_id, media_id, is_primary, sort_order) VALUES ('pmed_new01', 'product_1', 'media_new', 1, 0);
+    `);
+    await confirmManualOrderAmendment(db, "order_1", await confirmedInput({
+      items: [
+        { orderItemId: "item_1", productId: "product_1", variantId: "variant_1", quantity: 1 },
+        { productId: "product_1", variantId: "variant_1", quantity: 1 },
+      ],
+    }), "admin_1");
+    expect(sqlite.prepare("SELECT id, product_image_media_id FROM order_items ORDER BY id = 'item_1' DESC").all()).toEqual([
+      { id: "item_1", product_image_media_id: null },
+      { id: expect.any(String), product_image_media_id: "media_new" },
+    ]);
+  });
+
   it("keeps a retained line's frozen buyer inputs and prices a new line's from the schema", async () => {
     sqlite.exec(`UPDATE products SET customization_schema = '${JSON.stringify({
       version: 1,

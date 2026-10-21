@@ -72,6 +72,8 @@ export async function readInvoiceOrderSource(
       paymentStatus: orders.paymentStatus,
       paymentMethod: orders.paymentMethod,
       fulfillmentStatus: orders.fulfillmentStatus,
+      paymentTermsDays: orders.paymentTermsDays,
+      paymentDueAt: orders.paymentDueAt,
       createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
       updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`,
       deletedAt: sql<number | null>`CAST(${orders.deletedAt} AS INTEGER)`,
@@ -127,10 +129,16 @@ export async function readInvoiceOrderSource(
     paidAmountMinor: _paidAmountMinor,
     balanceDueMinor: _balanceDueMinor,
     refundedMinor,
+    paymentTermsDays,
+    paymentDueAt,
     ...orderFacts
   } = order;
   return {
     ...orderFacts,
+    // Net terms as placed: the invoice prints them with the due date.
+    paymentTerms: paymentTermsDays !== null && paymentDueAt
+      ? { kind: "net", days: paymentTermsDays, dueAt: paymentDueAt.toISOString() }
+      : null,
     ...orderMoneyAmounts(order),
     refundedAmount: fromMinor(Number(refundedMinor) || 0, order.currencyDecimalPlaces),
     // As on the order page: `amount` is everything saved, `shippingAmount` the part off delivery.

@@ -596,7 +596,6 @@ export async function confirmManualOrderAmendment(
         const itemValues = {
             productId: preparedItem.item.productId,
             variantId: preparedItem.item.variantId,
-            productImageMediaId: preparedItem.item.productImageMediaId,
             quantity: preparedItem.item.quantity,
             productName: preparedItem.item.productName,
             variantLabel: preparedItem.item.variantLabel,
@@ -609,6 +608,7 @@ export async function confirmManualOrderAmendment(
         };
         if (preparedItem.retained) {
             statements.push(
+                // A kept line keeps the image it was sold with (the snapshot is immutable).
                 db.update(orderItems).set(itemValues).where(and(
                     eq(orderItems.id, preparedItem.id),
                     eq(orderItems.orderId, orderId),
@@ -627,6 +627,7 @@ export async function confirmManualOrderAmendment(
                     id: preparedItem.id,
                     orderId,
                     ...itemValues,
+                    productImageMediaId: preparedItem.item.productImageMediaId,
                     fulfillmentType: preparedItem.item.fulfillmentType,
                     properties: preparedItem.item.properties,
                     propertiesPriceMinor: preparedItem.item.propertiesPriceMinor,

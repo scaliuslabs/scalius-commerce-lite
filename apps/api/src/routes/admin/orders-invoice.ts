@@ -116,6 +116,11 @@ const invoiceOrderSchema = z.object({
     /** The part off delivery, shown on the delivery line; absent on older invoices. */
     shippingAmount: z.number().optional(),
   })).optional(),
+  paymentTerms: z.object({
+    kind: z.literal("net"),
+    days: z.number().int().positive(),
+    dueAt: z.string().openapi({ description: "ISO 8601 due date: placement plus the net days." }),
+  }).nullable().optional().openapi({ description: "Net terms of an invoice paid later; null when the order is paid now, absent on invoices issued before terms were printed." }),
   createdAt: z.union([z.string(), z.number()]),
   updatedAt: z.union([z.string(), z.number()]),
   items: z.array(invoiceItemSchema),

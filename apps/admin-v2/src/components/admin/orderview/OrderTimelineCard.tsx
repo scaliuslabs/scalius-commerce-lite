@@ -28,11 +28,25 @@ import { readAdminApiErrorCode } from "~/lib/admin-api-error";
 import { ORDER_DETAIL_PREFETCH_STALE_MS } from "~/lib/order-detail-prefetch";
 import { formatSavedMajorAmount, resolveSavedOrderMoneySummary } from "~/lib/order-tax-presentation";
 import { describeTimelineEvent } from "~/lib/order-timeline-display";
-import { formatOrderTimestamp } from "./formatters";
+import { formatOrderDay, formatOrderTime, formatOrderTimestamp } from "./formatters";
 import type { Order } from "./types";
 import { matchesShortcut } from "../layout/shortcuts";
 
 const COMMENT_MAX_LENGTH = 2000;
+
+/** Consecutive events of one store calendar day, newest day first as the page reads them. */
+export function groupTimelineByDay<T extends { id: string; createdAt: Parameters<typeof formatOrderDay>[0] }>(
+  events: readonly T[],
+): Array<{ key: string; day: string | null; events: T[] }> {
+  const groups: Array<{ key: string; day: string | null; events: T[] }> = [];
+  for (const event of events) {
+    const day = formatOrderDay(event.createdAt);
+    const last = groups.at(-1);
+    if (last && last.day === day) last.events.push(event);
+    else groups.push({ key: `${day ?? "unknown"}:${event.id}`, day, events: [event] });
+  }
+  return groups;
+}
 
 /** Key request/focus state to the order, including an A → B → A revisit. */
 export function OrderTimelineCard({ order }: { order: Order }) {
@@ -186,28 +200,36 @@ function OrderTimeline({ order }: { order: Order }) {
         ) : events.length === 0 && !query.isError ? (
           <p className="text-muted-foreground">{t("timeline.empty")}</p>
         ) : (
-          <ol className="space-y-3 border-s ps-4">
-            {events.map((event) => {
-              const line = describeTimelineEvent(event, t, o, money);
-              const comment = event.kind === "comment";
-              return (
-                <li key={event.id} data-timeline-event={event.id} tabIndex={-1} className="space-y-0.5 wrap-anywhere rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                  <p className={comment ? "whitespace-pre-wrap" : undefined}>{line.text}</p>
-                  {line.detail ? <p className="whitespace-pre-wrap text-muted-foreground">{line.detail}</p> : null}
-                  <div className="flex flex-wrap items-center gap-x-2">
-                    <p className="text-muted-foreground">
-                      {/* "Order created by Rina" already names who. */}
-                      {[event.kind === "placed" ? null : event.actorName, formatOrderTimestamp(event.createdAt)].filter(Boolean).join(" · ")}
-                    </p>
-                    {comment && event.own ? (
-                      <Button type="button" variant="link" size="sm" onClick={() => setDeleting(event.id)}>
-                        {t("timeline.delete")}
-                      </Button>
-                    ) : null}
-                  </div>
-                </li>
-              );
-            })}
+          <ol className="space-y-4">
+            {/* One group per store calendar day; each row shows its time, and staff notes read as notes. */}
+            {groupTimelineByDay(events).map((group) => (
+              <li key={group.key} className="space-y-2">
+                <h3 className="text-body font-medium text-muted-foreground">{group.day}</h3>
+                <ol className="space-y-3 border-s ps-4">
+                  {group.events.map((event) => {
+                    const line = describeTimelineEvent(event, t, o, money);
+                    const comment = event.kind === "comment";
+                    return (
+                      <li key={event.id} data-timeline-event={event.id} tabIndex={-1} className="space-y-0.5 wrap-anywhere rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                        <p className={comment ? "whitespace-pre-wrap rounded-md bg-muted px-3 py-2" : undefined}>{line.text}</p>
+                        {line.detail ? <p className="whitespace-pre-wrap text-muted-foreground">{line.detail}</p> : null}
+                        <div className="flex flex-wrap items-center gap-x-2">
+                          <p className="text-muted-foreground">
+                            {/* "Order created by Rina" already names who. */}
+                            {[event.kind === "placed" ? null : event.actorName, group.day ? formatOrderTime(event.createdAt) : formatOrderTimestamp(event.createdAt)].filter(Boolean).join(" · ")}
+                          </p>
+                          {comment && event.own ? (
+                            <Button type="button" variant="link" size="sm" onClick={() => setDeleting(event.id)}>
+                              {t("timeline.delete")}
+                            </Button>
+                          ) : null}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </li>
+            ))}
           </ol>
         )}
         {query.isError && !historyError && !busy ? (

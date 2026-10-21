@@ -386,9 +386,11 @@ function seedCodTracking(orderId, { status, paidMinor, shippedAt, collectedAt, c
  * The delivery places every seeded Bangladesh order names (docs/PLACES.md): each
  * city in CITIES with three thanas of two areas, an "Inside Dhaka" zone (Dhaka)
  * and an "Outside Dhaka" zone (the rest), and one flat delivery rate per zone at
- * the fees the orders charge. Orders store the place ids, so editing a seeded
+ * the fees the orders charge, named apart from its zone ("Inside Dhaka · City
+ * rider (1-2 days)") as a merchant names them. Orders store the place ids, so editing a seeded
  * order's address or items resolves its City/Thana/Area like a checkout order's.
  */
+const DELIVERY_RATE_NAMES = { inside: "City rider (1-2 days)", outside: "Courier (2-4 days)" };
 function seedDeliveryPlaces() {
   const created = NOW - 900 * DAY;
   const insPlace = db.prepare("INSERT INTO places (id, country_code, level, parent_id, name, external_ids, metadata, is_active, sort_order, created_at, updated_at) VALUES (?, 'BD', ?, ?, ?, '{}', '{}', 1, ?, ?, ?)");
@@ -400,8 +402,8 @@ function seedDeliveryPlaces() {
   tx(() => {
     insZone.run("dz_scale_inside", "Inside Dhaka", 0, created, created);
     insZone.run("dz_scale_outside", "Outside Dhaka", 1, created, created);
-    insRate.run("sm_scale_inside", "Inside Dhaka", 6000, 0, created, created, "dz_scale_inside");
-    insRate.run("sm_scale_outside", "Outside Dhaka", 12000, 1, created, created, "dz_scale_outside");
+    insRate.run("sm_scale_inside", DELIVERY_RATE_NAMES.inside, 6000, 0, created, created, "dz_scale_inside");
+    insRate.run("sm_scale_outside", DELIVERY_RATE_NAMES.outside, 12000, 1, created, created, "dz_scale_outside");
     CITIES.forEach((city, cityIndex) => {
       const cityId = `plc_scale_${pad(cityIndex, 2)}`;
       insPlace.run(cityId, 1, null, city, cityIndex, created, created);
@@ -1006,7 +1008,7 @@ function seedHuge() {
       "BDT", c.market === 0 ? "1" : market.orderRate, c.market === 0 ? "same_currency" : "manual", c.market === 0 ? null : ts, c.market === 0 ? null : ts + 1800,
       subtotalShop, shippingShopMinor, discountShop, taxShop, totalShop,
       hrng.chance(0.08) ? "admin" : "online_store", c.market === 0 ? (c.city === "Dhaka" ? "sm_scale_inside" : "sm_scale_outside") : null,
-      c.market === 0 ? (priced.shipping === 0 ? "Free delivery" : "Standard delivery") : "International delivery",
+      c.market === 0 ? (priced.shipping === 0 ? "Free delivery" : c.city === "Dhaka" ? DELIVERY_RATE_NAMES.inside : DELIVERY_RATE_NAMES.outside) : "International delivery",
       hrng.chance(0.06) ? hrng.pick(NOTES) : null, archivedAt, deletedAt, ts, updatedAt);
     totals.orders += 1;
     totals.byStatus[life.status] = (totals.byStatus[life.status] ?? 0) + 1;
@@ -1364,6 +1366,8 @@ const STATUSES = ["pending", "processing", "confirmed", "shipped", "delivered", 
 const SHIPPED_STATUSES = new Set(["shipped", "delivered", "completed", "returned"]);
 let orderItems = 0;
 let fulfilledLines = 0;
+const insPaidPayment = db.prepare(`INSERT INTO order_payments (id, order_id, currency, payment_method, payment_type, status, cod_collected_at, created_at, updated_at, provider_ref, amount_minor, settlement_currency, settlement_amount_minor, settlement_rate)
+  VALUES (?, ?, 'BDT', ?, 'full', 'succeeded', ?, ?, ?, ?, ?, 'BDT', ?8, '1')`);
 for (let start = 0; start < ORDERS; start += 5000) {
   tx(() => {
     for (let index = start; index < Math.min(ORDERS, start + 5000); index += 1) {
@@ -1391,9 +1395,15 @@ for (let start = 0; start < ORDERS; start += 5000) {
       const updatedAt = createdAt + int(0, 10) * DAY;
       insOrder.run(id, 100000 + index, customer.name, customer.phone, null, address,
         location.city, location.zone, location.area, location.cityName, location.zoneName, location.areaName,
-        inside ? "sm_scale_inside" : "sm_scale_outside", shipping === 0 ? "Free delivery" : inside ? "Inside Dhaka" : "Outside Dhaka",
+        inside ? "sm_scale_inside" : "sm_scale_outside", shipping === 0 ? "Free delivery" : inside ? DELIVERY_RATE_NAMES.inside : DELIVERY_RATE_NAMES.outside,
         status, method, paid ? "paid" : "unpaid", fulfilment === "none" ? "pending" : fulfilment, customer.id,
         subtotal, shipping, total, paid, total - paid, netTerms ? 30 : null, netTerms ? createdAt + 30 * DAY : null, createdAt, updatedAt);
+      // A paid order carries the captured payment its paid amount comes from, so it can be refunded.
+      if (paid > 0) {
+        const paidAt = updatedAt;
+        insPaidPayment.run(`pay_scale_${pad(index, 6)}`, id, method, method === "cod" ? paidAt : null, paidAt, paidAt,
+          method === "cod" ? null : `${method}_${100000 + index}`, paid);
+      }
       lines.forEach((line, lineIndex) => {
         insOrderItem.run(`oi_scale_${pad(index, 6)}_${lineIndex}`, id, line.product_id, line.id, quantities[lineIndex],
           line.product_name, line.label, line.price_minor, line.price_minor * quantities[lineIndex], line.price_minor * quantities[lineIndex], createdAt);
@@ -1447,6 +1457,56 @@ db.exec(`UPDATE orders SET shop_currency = currency_code, subtotal_shop_minor = 
 log(`orders: ${ORDERS} (items ${orderItems}, fulfilled lines ${fulfilledLines})`);
 
 }
+
+// ---------------------------------------------------------- open-order stock
+// Open orders hold their units as checkout reserved them: one ledger-v2
+// `reserved` movement per order and SKU (regular pool, generation 1) in the
+// same transaction as the SKU's counter edge, and `inventory_action =
+// 'reserved'`, so staff item edits release and re-reserve exactly as on a live
+// order. A line copies its SKU's inventory tracking, as checkout does. The
+// seed drew order lines without checking stock, so a SKU short of the units an
+// open order holds is first counted up (an `adjusted` movement at the default
+// location) instead of over-reserving.
+function reserveOpenOrders() {
+  db.exec(`UPDATE order_items SET inventory_tracked = 0
+    WHERE inventory_tracked = 1 AND variant_id IN (SELECT id FROM product_variants WHERE track_inventory = 0)`);
+  const lines = db.prepare(`SELECT oi.order_id AS orderId, oi.variant_id AS variantId, SUM(oi.quantity) AS quantity, o.created_at AS at
+    FROM orders AS o JOIN order_items AS oi ON oi.order_id = o.id
+    WHERE o.status IN ('pending', 'processing', 'confirmed') AND o.deleted_at IS NULL AND oi.inventory_tracked = 1
+      AND NOT EXISTS (SELECT 1 FROM order_fulfillment_lines AS fl WHERE fl.order_id = o.id)
+    GROUP BY oi.order_id, oi.variant_id ORDER BY o.created_at, oi.order_id, oi.variant_id`).all();
+  const readSku = db.prepare("SELECT stock, reserved_stock AS reserved, preorder_stock AS preorder, stock_version AS version FROM product_variants WHERE id = ?");
+  const insMovement = db.prepare(`INSERT INTO inventory_movements (id, variant_id, order_id, type, quantity, previous_stock, new_stock, notes, created_by,
+    ledger_version, pool, reservation_generation, stock_version_before, stock_version_after, stock_delta, previous_reserved_stock, new_reserved_stock,
+    reserved_stock_delta, previous_preorder_stock, new_preorder_stock, preorder_stock_delta, created_at, location_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 2, 'regular', ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`);
+  const setCounters = db.prepare("UPDATE product_variants SET stock = ?, reserved_stock = ?, stock_version = ? WHERE id = ? AND stock_version = ?");
+  const reservedOrders = new Set();
+  let counted = 0;
+  tx(() => {
+    for (const line of lines) {
+      let sku = readSku.get(line.variantId);
+      const shortfall = line.quantity - (sku.stock - sku.reserved);
+      if (shortfall > 0) {
+        insMovement.run(`adj_scale_${line.orderId}_${line.variantId}`, line.variantId, null, "adjusted", shortfall, sku.stock, sku.stock + shortfall,
+          "Counted in before an open order reserved it", null, sku.version, sku.version + 1, shortfall, sku.reserved, sku.reserved, 0,
+          sku.preorder, sku.preorder, line.at - 60, "loc_default");
+        setCounters.run(sku.stock + shortfall, sku.reserved, sku.version + 1, line.variantId, sku.version);
+        sku = readSku.get(line.variantId);
+        counted += 1;
+      }
+      insMovement.run(`rsv_scale_${line.orderId}_${line.variantId}`, line.variantId, line.orderId, "reserved", line.quantity, sku.stock, sku.stock,
+        `Reserved ${line.quantity} units for order ${line.orderId}`, 1, sku.version, sku.version + 1, 0, sku.reserved, sku.reserved + line.quantity,
+        line.quantity, sku.preorder, sku.preorder, line.at, null);
+      setCounters.run(sku.stock, sku.reserved + line.quantity, sku.version + 1, line.variantId, sku.version);
+      reservedOrders.add(line.orderId);
+    }
+    const markReserved = db.prepare("UPDATE orders SET inventory_action = 'reserved', inventory_pool = 'regular' WHERE id = ?");
+    for (const orderId of reservedOrders) markReserved.run(orderId);
+  });
+  log(`open-order stock: ${lines.length} reservations on ${reservedOrders.size} orders (${counted} SKUs counted up first)`);
+}
+reserveOpenOrders();
 
 // ---------------------------------------------------------------- projections
 // The buyer state and facet projections every write keeps in its batch,

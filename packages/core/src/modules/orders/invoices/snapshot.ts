@@ -36,6 +36,14 @@ export interface InvoiceOrderItemSnapshot {
   properties?: InvoiceLinePropertySnapshot[];
 }
 
+/** Net terms frozen on the invoice: "Net 30, due 21 Nov 2026". */
+export interface InvoicePaymentTermsSnapshot {
+  kind: "net";
+  days: number;
+  /** ISO 8601. */
+  dueAt: string;
+}
+
 export interface InvoiceOrderSnapshot {
   id: string;
   /** "#1001"; absent on invoices issued before order numbers existed. */
@@ -104,19 +112,26 @@ export interface InvoiceOrderSnapshot {
    * Invoices issued before the split carry no `shippingAmount`.
    */
   discounts?: Array<{ name: string; code: string | null; kind?: string; amount: number; shippingAmount?: number }>;
+  /**
+   * An invoice paid later (net terms): its days and due date (ISO 8601), as
+   * placed. Null when the order is paid now; absent on invoices issued before
+   * schema version 3. Whether it is overdue is live state, never printed.
+   */
+  paymentTerms?: InvoicePaymentTermsSnapshot | null;
   createdAt: string | number;
   updatedAt: string | number;
   items: InvoiceOrderItemSnapshot[];
 }
 
 /**
- * 1: the original shape. 2: item lines may carry `properties`. Both read the
- * same way; a version-1 snapshot simply has no buyer inputs.
+ * 1: the original shape. 2: item lines may carry `properties`. 3: the order
+ * may carry `paymentTerms`. All read the same way; an older snapshot simply
+ * has no buyer inputs or terms.
  */
-export const INVOICE_SNAPSHOT_SCHEMA_VERSION = 2 as const;
+export const INVOICE_SNAPSHOT_SCHEMA_VERSION = 3 as const;
 
 export interface StoredInvoiceSnapshot {
-  schemaVersion: 1 | typeof INVOICE_SNAPSHOT_SCHEMA_VERSION;
+  schemaVersion: 1 | 2 | typeof INVOICE_SNAPSHOT_SCHEMA_VERSION;
   renderVersion: typeof INVOICE_RENDER_VERSION;
   invoiceNumber: number;
   formattedNumber: string;
@@ -247,6 +262,9 @@ export function snapshotInvoiceOrder(
       amount: discount.amount,
       shippingAmount: discount.shippingAmount ?? 0,
     })),
+    paymentTerms: order.paymentTerms
+      ? { kind: "net", days: order.paymentTerms.days, dueAt: order.paymentTerms.dueAt }
+      : null,
     createdAt: timestamp(order.createdAt),
     updatedAt: timestamp(order.updatedAt),
     items: order.items.map((item) => ({

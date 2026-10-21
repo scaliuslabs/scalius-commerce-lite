@@ -8,6 +8,7 @@ import { orderDetailMessages } from "./order-detail";
 const returnsCopy = defineMessages({
   en: {
     "returns.approveSummary": "Approve {approved}, reject {rejected}",
+    "returns.approveAll": "Approve {count}",
     "returns.title": "Returns",
     "returns.new": "Request return",
     "returns.newHelp": "Choose what the customer is sending back. Stock and money don't change yet.",
@@ -67,6 +68,7 @@ const returnsCopy = defineMessages({
   },
   bn: {
     "returns.approveSummary": "{approved}টি অনুমোদন, {rejected}টি বাতিল",
+    "returns.approveAll": "{count}টি অনুমোদন করুন",
     "returns.title": "রিটার্ন",
     "returns.new": "রিটার্ন অনুরোধ",
     "returns.newHelp": "কাস্টমার কী ফেরত পাঠাচ্ছেন বাছাই করুন। স্টক ও টাকা এখন বদলাবে না।",
