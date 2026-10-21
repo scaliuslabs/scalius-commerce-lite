@@ -9,6 +9,7 @@ import type { AgentPrincipal } from "../types";
 const mocks = vi.hoisted(() => ({
   authorizeOperation: vi.fn(),
   dispatchAgentOperation: vi.fn(),
+  validateOperation: vi.fn(),
   resolvePrincipal: vi.fn(),
   writeAudit: vi.fn(),
 }));
@@ -35,9 +36,16 @@ vi.mock("../backend", () => ({
   }),
 }));
 
+// A validate-only dispatch (the route's own validation, asked before any
+// approval) is recorded apart from the calls that run: it answers valid
+// unless a test says otherwise.
 vi.mock("../dispatch", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../dispatch")>();
-  return { ...actual, dispatchAgentOperation: mocks.dispatchAgentOperation };
+  return {
+    ...actual,
+    dispatchAgentOperation: (options: { validateOnly?: true; operation: { operationId: string } }) =>
+      options.validateOnly ? mocks.validateOperation(options) : mocks.dispatchAgentOperation(options),
+  };
 });
 
 import { writeAgentConfirmPolicy } from "./confirm";
@@ -103,6 +111,9 @@ describe("MCP surface v2 execution", () => {
     mocks.authorizeOperation.mockReset().mockResolvedValue(true);
     mocks.resolvePrincipal.mockReset().mockResolvedValue(principal);
     mocks.dispatchAgentOperation.mockReset();
+    mocks.validateOperation.mockReset().mockImplementation(async ({ operation }: { operation: { operationId: string } }) => ({
+      operationId: operation.operationId, status: 204, ok: true, requestId: "validate", contentType: null, data: null,
+    }));
     mocks.writeAudit.mockReset().mockResolvedValue(undefined);
     const harness = createSqliteD1Database();
     sqlite = harness.sqlite;
@@ -460,6 +471,22 @@ describe("MCP surface v2 execution", () => {
       const confirmed = await tool("scalius_write")({ steps, approvalId: confirmation.approvalId });
       expect(confirmed.structuredContent).toMatchObject({ ok: true });
       expect(mocks.dispatchAgentOperation.mock.calls.map(([options]) => options.confirmedBy)).toEqual([undefined, "approval"]);
+      // Both steps were checked against their routes before the owner was asked.
+      expect(mocks.validateOperation.mock.calls.slice(0, 2).map(([options]) => options.operation.operationId))
+        .toEqual([sequentialWrite.operationId, destructive.operationId]);
+    });
+
+    it("answers the route's own refusal and asks nobody when the input would not pass validation", async () => {
+      mocks.validateOperation.mockResolvedValue(result("dashboard.orders.refund", 400, {
+        success: false, error: { code: "unknown_body_property", message: "Unknown body property 'productIds'." },
+      }));
+      const refused = await tool("scalius_write")(refund);
+      expect(refused.isError).toBe(true);
+      expect(refused.structuredContent).toMatchObject({ error: { code: "unknown_body_property", status: 400 } });
+      expect(refused.structuredContent).not.toHaveProperty("confirmation");
+      expect(sqlite.prepare("SELECT COUNT(*) AS count FROM agent_browser_handoffs").get()).toEqual({ count: 0 });
+      expect(mocks.dispatchAgentOperation).not.toHaveBeenCalled();
+      expect(mocks.writeAudit).not.toHaveBeenCalled();
     });
   });
 
