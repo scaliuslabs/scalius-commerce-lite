@@ -1,5 +1,227 @@
 {
  "operations": {
+  "brands.batch_create": {
+   "operationId": "dashboard.brands.batch_create",
+   "method": "POST",
+   "path": "/api/v1/admin/brands/batch",
+   "risk": "write",
+   "idempotency": "supported",
+   "revision": "none",
+   "scopes": [
+    "write_products"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "items": {
+          "type": "array",
+          "items": {
+           "type": "object",
+           "properties": {
+            "name": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 120
+            },
+            "description": {
+             "type": "string",
+             "nullable": true,
+             "maxLength": 20000,
+             "description": "Buyer-facing brand story shown on the brand page (sanitised rich text)."
+            },
+            "logoMediaId": {
+             "type": "string",
+             "nullable": true,
+             "minLength": 1,
+             "maxLength": 180,
+             "description": "A ready image from Files, or null for no logo."
+            },
+            "sortOrder": {
+             "type": "integer",
+             "minimum": -1000000,
+             "maximum": 1000000,
+             "description": "Brand wall and brand list order, lowest first; ties sort by name."
+            },
+            "metaTitle": {
+             "type": "string",
+             "nullable": true,
+             "maxLength": 70
+            },
+            "metaDescription": {
+             "type": "string",
+             "nullable": true,
+             "maxLength": 200
+            },
+            "canonicalPath": {
+             "type": "string",
+             "nullable": true
+            },
+            "noIndex": {
+             "type": "boolean",
+             "default": false
+            },
+            "excludeFromSitemap": {
+             "type": "boolean",
+             "default": false
+            },
+            "listingTemplate": {
+             "type": "string",
+             "nullable": true,
+             "pattern": "^[a-z0-9][a-z0-9-]{0,39}$",
+             "description": "A listing template id from the theme, or null for the theme's default brand listing."
+            },
+            "slug": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 100,
+             "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+             "description": "Omit to derive the web address from the name; a taken one gets a -2, -3… suffix."
+            },
+            "status": {
+             "type": "string",
+             "enum": [
+              "draft",
+              "published"
+             ],
+             "default": "draft"
+            },
+            "key": {
+             "type": "string",
+             "pattern": "^[\\x20-\\x7E]{1,64}$",
+             "description": "Your name for this item (1 to 64 printable characters, unique in the request). Repeating a key returns the item created under it (`replayed`) instead of creating again."
+            }
+           },
+           "required": [
+            "name",
+            "key"
+           ]
+          },
+          "minItems": 1,
+          "maxItems": 50,
+          "description": "The items to create, each the single create's body plus `key`. At most the plan's bound per call (Free fewer than Paid): over it is refused with 400 and nothing is created."
+         }
+        },
+        "required": [
+         "items"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "items": {
+        "type": "array",
+        "items": {
+         "type": "object",
+         "properties": {
+          "key": {
+           "type": "string",
+           "maxLength": 64
+          },
+          "outcome": {
+           "type": "string",
+           "enum": [
+            "created",
+            "replayed",
+            "failed"
+           ],
+           "description": "`created` now; `replayed` was created earlier under this key (nothing was created); `failed` was refused, see `error` (the other items are unaffected)."
+          },
+          "brand": {
+           "type": "object",
+           "nullable": true,
+           "properties": {
+            "id": {
+             "type": "string",
+             "maxLength": 160
+            },
+            "slug": {
+             "type": "string",
+             "maxLength": 160
+            },
+            "revision": {
+             "type": "integer",
+             "minimum": 1
+            }
+           },
+           "required": [
+            "id",
+            "slug",
+            "revision"
+           ]
+          },
+          "error": {
+           "type": "object",
+           "nullable": true,
+           "properties": {
+            "code": {
+             "type": "string",
+             "maxLength": 64
+            },
+            "message": {
+             "type": "string",
+             "maxLength": 300
+            }
+           },
+           "required": [
+            "code",
+            "message"
+           ]
+          }
+         },
+         "required": [
+          "key",
+          "outcome",
+          "brand",
+          "error"
+         ]
+        },
+        "maxItems": 100
+       }
+      },
+      "required": [
+       "items"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
   "brands.create": {
    "operationId": "dashboard.brands.create",
    "method": "POST",
@@ -754,6 +976,262 @@
       "required": [
        "revision",
        "status"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "categories.batch_create": {
+   "operationId": "dashboard.categories.batch_create",
+   "method": "POST",
+   "path": "/api/v1/admin/categories/batch",
+   "risk": "write",
+   "idempotency": "supported",
+   "revision": "none",
+   "scopes": [
+    "write_products"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "items": {
+          "type": "array",
+          "items": {
+           "type": "object",
+           "properties": {
+            "name": {
+             "type": "string",
+             "minLength": 3,
+             "maxLength": 100
+            },
+            "description": {
+             "type": "string",
+             "nullable": true,
+             "maxLength": 100000
+            },
+            "content": {
+             "type": "string",
+             "nullable": true,
+             "maxLength": 100000
+            },
+            "slug": {
+             "type": "string",
+             "minLength": 3,
+             "maxLength": 100,
+             "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+             "description": "Omit to derive the web address from the name; a taken one gets a -2, -3… suffix."
+            },
+            "metaTitle": {
+             "type": "string",
+             "nullable": true,
+             "maxLength": 70
+            },
+            "metaDescription": {
+             "type": "string",
+             "nullable": true,
+             "maxLength": 200
+            },
+            "canonicalPath": {
+             "type": "string",
+             "nullable": true
+            },
+            "noIndex": {
+             "type": "boolean",
+             "default": false
+            },
+            "excludeFromSitemap": {
+             "type": "boolean",
+             "default": false
+            },
+            "image": {
+             "type": "object",
+             "nullable": true,
+             "properties": {
+              "id": {
+               "type": "string",
+               "minLength": 1,
+               "maxLength": 180
+              },
+              "url": {
+               "type": "string",
+               "maxLength": 2048
+              },
+              "filename": {
+               "type": "string",
+               "minLength": 1,
+               "maxLength": 255
+              },
+              "size": {
+               "type": "integer",
+               "minimum": 0,
+               "maximum": 100000000
+              },
+              "createdAt": {
+               "type": "string",
+               "format": "date-time"
+              }
+             },
+             "required": [
+              "id",
+              "url",
+              "filename",
+              "size"
+             ]
+            },
+            "parentId": {
+             "type": "string",
+             "nullable": true,
+             "minLength": 1,
+             "maxLength": 180,
+             "description": "The parent category's id, or null for a top-level category. The tree has at most four levels."
+            },
+            "listingTemplate": {
+             "type": "string",
+             "nullable": true,
+             "pattern": "^[a-z0-9][a-z0-9-]{0,39}$",
+             "description": "A listing template id from the theme, or null for the theme's default category listing."
+            },
+            "status": {
+             "type": "string",
+             "enum": [
+              "draft",
+              "published",
+              "internal"
+             ],
+             "default": "draft"
+            },
+            "key": {
+             "type": "string",
+             "pattern": "^[\\x20-\\x7E]{1,64}$",
+             "description": "Your name for this item (1 to 64 printable characters, unique in the request). Repeating a key returns the item created under it (`replayed`) instead of creating again."
+            }
+           },
+           "required": [
+            "name",
+            "key"
+           ]
+          },
+          "minItems": 1,
+          "maxItems": 50,
+          "description": "The items to create, each the single create's body plus `key`. At most the plan's bound per call (Free fewer than Paid): over it is refused with 400 and nothing is created."
+         }
+        },
+        "required": [
+         "items"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "items": {
+        "type": "array",
+        "items": {
+         "type": "object",
+         "properties": {
+          "key": {
+           "type": "string",
+           "maxLength": 64
+          },
+          "outcome": {
+           "type": "string",
+           "enum": [
+            "created",
+            "replayed",
+            "failed"
+           ],
+           "description": "`created` now; `replayed` was created earlier under this key (nothing was created); `failed` was refused, see `error` (the other items are unaffected)."
+          },
+          "category": {
+           "type": "object",
+           "nullable": true,
+           "properties": {
+            "id": {
+             "type": "string",
+             "maxLength": 160
+            },
+            "slug": {
+             "type": "string",
+             "maxLength": 160
+            },
+            "revision": {
+             "type": "integer",
+             "minimum": 1
+            }
+           },
+           "required": [
+            "id",
+            "slug",
+            "revision"
+           ]
+          },
+          "error": {
+           "type": "object",
+           "nullable": true,
+           "properties": {
+            "code": {
+             "type": "string",
+             "maxLength": 64
+            },
+            "message": {
+             "type": "string",
+             "maxLength": 300
+            }
+           },
+           "required": [
+            "code",
+            "message"
+           ]
+          }
+         },
+         "required": [
+          "key",
+          "outcome",
+          "category",
+          "error"
+         ]
+        },
+        "maxItems": 100
+       }
+      },
+      "required": [
+       "items"
       ]
      }
     },
@@ -1526,6 +2004,13 @@
           "minLength": 3,
           "maxLength": 100
          },
+         "slug": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 100,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "description": "The collection's handle: lower-case letters, digits and single dashes, unique in the store (trash included). Omit on create to derive it from the name."
+         },
          "description": {
           "type": "string",
           "nullable": true,
@@ -1658,11 +2143,16 @@
        "version": {
         "type": "integer",
         "minimum": 1
+       },
+       "slug": {
+        "type": "string",
+        "nullable": true
        }
       },
       "required": [
        "id",
-       "version"
+       "version",
+       "slug"
       ]
      }
     },
@@ -1915,6 +2405,13 @@
           "minLength": 3,
           "maxLength": 100
          },
+         "slug": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 100,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "description": "The collection's handle: lower-case letters, digits and single dashes, unique in the store (trash included). Omit on create to derive it from the name."
+         },
          "description": {
           "type": "string",
           "nullable": true,
@@ -2036,11 +2533,16 @@
        "version": {
         "type": "integer",
         "minimum": 1
+       },
+       "slug": {
+        "type": "string",
+        "nullable": true
        }
       },
       "required": [
        "id",
-       "version"
+       "version",
+       "slug"
       ]
      }
     },
@@ -2141,11 +2643,16 @@
        "version": {
         "type": "integer",
         "minimum": 1
+       },
+       "slug": {
+        "type": "string",
+        "nullable": true
        }
       },
       "required": [
        "id",
-       "version"
+       "version",
+       "slug"
       ]
      }
     },
@@ -12173,6 +12680,307 @@
     ]
    }
   },
+  "menus.create": {
+   "operationId": "dashboard.resources.menus.create",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/menus",
+   "risk": "write",
+   "idempotency": "supported",
+   "revision": "none",
+   "scopes": [
+    "write_navigation"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+         },
+         "handle": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Omit to derive it from the name; another live menu's handle is refused with 409."
+         },
+         "items": {
+          "type": "array",
+          "items": {
+           "$ref": "#/components/schemas/MenuLinkInput"
+          },
+          "maxItems": 150,
+          "default": [],
+          "description": "All the menu's links in tree order (a parent before its children), at most 150 and three levels."
+         },
+         "publish": {
+          "type": "boolean",
+          "default": false,
+          "description": "Publish the new menu in the same call."
+         }
+        },
+        "required": [
+         "name"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "menu": {
+        "$ref": "#/components/schemas/MenuResource"
+       },
+       "published": {
+        "type": "boolean",
+        "description": "Whether this call published the saved revision."
+       },
+       "publishError": {
+        "type": "object",
+        "nullable": true,
+        "properties": {
+         "code": {
+          "type": "string"
+         },
+         "message": {
+          "type": "string"
+         }
+        },
+        "required": [
+         "code",
+         "message"
+        ]
+       }
+      },
+      "required": [
+       "menu",
+       "published",
+       "publishError"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "menus.get": {
+   "operationId": "dashboard.resources.menus.get",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/menus/{menu}",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "write_navigation"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 200,
+       "description": "The menu's id, or the handle of a menu not in the trash."
+      },
+      "required": true,
+      "description": "The menu's id, or the handle of a menu not in the trash.",
+      "name": "menu",
+      "in": "path"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "menu": {
+        "$ref": "#/components/schemas/MenuResource"
+       }
+      },
+      "required": [
+       "menu"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "menus.update": {
+   "operationId": "dashboard.resources.menus.update",
+   "method": "PATCH",
+   "path": "/api/v1/admin/resources/menus/{menu}",
+   "risk": "write",
+   "idempotency": "supported",
+   "revision": "required",
+   "scopes": [
+    "write_navigation"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 200,
+       "description": "The menu's id, or the handle of a menu not in the trash."
+      },
+      "required": true,
+      "description": "The menu's id, or the handle of a menu not in the trash.",
+      "name": "menu",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "exclusiveMinimum": true,
+          "description": "The menu's `revision` you read; a menu changed since is refused with 409 and nothing is saved."
+         },
+         "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+         },
+         "handle": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+         },
+         "items": {
+          "type": "array",
+          "items": {
+           "$ref": "#/components/schemas/MenuLinkInput"
+          },
+          "maxItems": 150,
+          "description": "When given, all the menu's links: they replace the current ones."
+         },
+         "publish": {
+          "type": "boolean",
+          "default": false,
+          "description": "Publish the saved revision in the same call."
+         }
+        },
+        "required": [
+         "expectedRevision"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "menu": {
+        "$ref": "#/components/schemas/MenuResource"
+       },
+       "published": {
+        "type": "boolean",
+        "description": "Whether this call published the saved revision."
+       },
+       "publishError": {
+        "type": "object",
+        "nullable": true,
+        "properties": {
+         "code": {
+          "type": "string"
+         },
+         "message": {
+          "type": "string"
+         }
+        },
+        "required": [
+         "code",
+         "message"
+        ]
+       }
+      },
+      "required": [
+       "menu",
+       "published",
+       "publishError"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
   "orders.create": {
    "operationId": "dashboard.resources.orders.create",
    "method": "POST",
@@ -13662,6 +14470,353 @@
     ]
    }
   },
+  "products.batch_create": {
+   "operationId": "dashboard.resources.products.batch_create",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/products/batch",
+   "risk": "write",
+   "idempotency": "supported",
+   "revision": "none",
+   "scopes": [
+    "write_products"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "items": {
+          "type": "array",
+          "items": {
+           "type": "object",
+           "properties": {
+            "name": {
+             "type": "string",
+             "minLength": 3,
+             "maxLength": 100
+            },
+            "description": {
+             "type": "string",
+             "nullable": true,
+             "minLength": 10
+            },
+            "slug": {
+             "type": "string",
+             "minLength": 3,
+             "maxLength": 100,
+             "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+             "description": "Omit to derive the web address from the name; a taken one gets a -2, -3… suffix."
+            },
+            "status": {
+             "type": "string",
+             "enum": [
+              "active",
+              "draft"
+             ],
+             "default": "draft",
+             "description": "An active product needs a price above 0 on every SKU."
+            },
+            "condition": {
+             "type": "string",
+             "enum": [
+              "new",
+              "refurbished",
+              "used"
+             ]
+            },
+            "categoryId": {
+             "type": "string",
+             "nullable": true,
+             "minLength": 1,
+             "maxLength": 180
+            },
+            "brandId": {
+             "type": "string",
+             "nullable": true,
+             "minLength": 1,
+             "maxLength": 128
+            },
+            "metaTitle": {
+             "type": "string",
+             "nullable": true,
+             "maxLength": 200
+            },
+            "metaDescription": {
+             "type": "string",
+             "nullable": true,
+             "maxLength": 500
+            },
+            "options": {
+             "type": "array",
+             "items": {
+              "type": "object",
+              "properties": {
+               "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+               },
+               "values": {
+                "type": "array",
+                "items": {
+                 "type": "string",
+                 "minLength": 1,
+                 "maxLength": 100
+                },
+                "minItems": 1,
+                "maxItems": 150
+               },
+               "standardMapping": {
+                "type": "string",
+                "enum": [
+                 "size",
+                 "color",
+                 "material",
+                 "pattern",
+                 "none"
+                ],
+                "default": "none",
+                "description": "Which standard attribute it is for catalog feeds; each one at most once."
+               }
+              },
+              "required": [
+               "name",
+               "values"
+              ],
+              "additionalProperties": false
+             },
+             "maxItems": 5,
+             "default": [],
+             "description": "Merchant-named options (up to five). Leave empty for a product sold as one SKU."
+            },
+            "variants": {
+             "type": "array",
+             "items": {
+              "type": "object",
+              "properties": {
+               "sku": {
+                "type": "string",
+                "minLength": 3,
+                "maxLength": 100,
+                "description": "Unique in the store, any case."
+               },
+               "priceMinor": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991,
+                "description": "Its price, in minor units of the store currency at its price increment."
+               },
+               "optionValues": {
+                "type": "object",
+                "additionalProperties": {
+                 "type": "string",
+                 "minLength": 1,
+                 "maxLength": 100
+                },
+                "description": "One value of every option, by option name (`{ \"Size\": \"M\", \"Color\": \"Red\" }`); leave it out on a product without options."
+               },
+               "barcode": {
+                "type": "string",
+                "nullable": true,
+                "minLength": 1,
+                "maxLength": 50,
+                "description": "Omit or null to generate an internal barcode."
+               },
+               "barcodeType": {
+                "type": "string",
+                "nullable": true,
+                "enum": [
+                 "ean13",
+                 "upc",
+                 "isbn",
+                 "gtin",
+                 "code128",
+                 "custom",
+                 null
+                ],
+                "description": "Required with `barcode`."
+               },
+               "trackInventory": {
+                "type": "boolean",
+                "default": true,
+                "description": "Count its stock. It starts at 0: set quantities through inventory."
+               },
+               "weightGrams": {
+                "type": "number",
+                "nullable": true,
+                "minimum": 0,
+                "maximum": 1000000
+               }
+              },
+              "required": [
+               "sku",
+               "priceMinor"
+              ],
+              "additionalProperties": false
+             },
+             "minItems": 1,
+             "maxItems": 150,
+             "description": "With options, one SKU per combination, each using every option's value; without options, exactly one."
+            },
+            "mediaIds": {
+             "type": "array",
+             "items": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 160
+             },
+             "maxItems": 50,
+             "default": [],
+             "description": "Ready media library files (`dashboard.media.import_url`), in gallery order; the first is featured."
+            },
+            "salesChannelIds": {
+             "type": "array",
+             "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+             },
+             "maxItems": 50,
+             "description": "The sales channels to publish it to. Omit to publish it to every channel."
+            },
+            "key": {
+             "type": "string",
+             "pattern": "^[\\x20-\\x7E]{1,64}$",
+             "description": "Your name for this item (1 to 64 printable characters, unique in the request). Repeating a key returns the item created under it (`replayed`) instead of creating again."
+            }
+           },
+           "required": [
+            "name",
+            "condition",
+            "variants",
+            "key"
+           ],
+           "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 20,
+          "description": "The items to create, each the single create's body plus `key`. At most the plan's bound per call (Free fewer than Paid): over it is refused with 400 and nothing is created."
+         }
+        },
+        "required": [
+         "items"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "items": {
+        "type": "array",
+        "items": {
+         "type": "object",
+         "properties": {
+          "key": {
+           "type": "string",
+           "maxLength": 64
+          },
+          "outcome": {
+           "type": "string",
+           "enum": [
+            "created",
+            "replayed",
+            "failed"
+           ],
+           "description": "`created` now; `replayed` was created earlier under this key (nothing was created); `failed` was refused, see `error` (the other items are unaffected)."
+          },
+          "product": {
+           "type": "object",
+           "nullable": true,
+           "properties": {
+            "id": {
+             "type": "string",
+             "maxLength": 160
+            },
+            "slug": {
+             "type": "string",
+             "maxLength": 160
+            },
+            "revision": {
+             "type": "integer",
+             "minimum": 1
+            }
+           },
+           "required": [
+            "id",
+            "slug",
+            "revision"
+           ]
+          },
+          "error": {
+           "type": "object",
+           "nullable": true,
+           "properties": {
+            "code": {
+             "type": "string",
+             "maxLength": 64
+            },
+            "message": {
+             "type": "string",
+             "maxLength": 300
+            }
+           },
+           "required": [
+            "code",
+            "message"
+           ]
+          }
+         },
+         "required": [
+          "key",
+          "outcome",
+          "product",
+          "error"
+         ]
+        },
+        "maxItems": 100
+       }
+      },
+      "required": [
+       "items"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
   "products.bulk_publish": {
    "operationId": "dashboard.resources.products.bulk_publish",
    "method": "POST",
@@ -14714,6 +15869,345 @@
       },
       "required": [
        "shipments"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "theme.apply_template": {
+   "operationId": "dashboard.resources.theme.apply_template",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/theme/apply-template",
+   "risk": "destructive",
+   "idempotency": "supported",
+   "revision": "required",
+   "scopes": [
+    "write_themes"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "template": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "description": "The template: its id in the calling app's manifest (`storefront.templates[].id`), or `<app id>/<template id>`. An app applies only its own templates."
+         },
+         "expectedDraftRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "The draft `revision` you read (`theme.get`); 0 when no draft was ever saved. A draft changed since is refused with 409 and nothing is saved."
+         },
+         "basePublishedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "The draft's `basePublishedRevision` you read: the live theme it was based on."
+         }
+        },
+        "required": [
+         "template",
+         "expectedDraftRevision",
+         "basePublishedRevision"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "draft": {
+        "$ref": "#/components/schemas/ThemeDraftReceipt"
+       },
+       "template": {
+        "type": "string"
+       },
+       "unresolved": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/ThemeUnresolvedHandle"
+        },
+        "maxItems": 200
+       }
+      },
+      "required": [
+       "draft",
+       "template",
+       "unresolved"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "theme.get": {
+   "operationId": "dashboard.resources.theme.get",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/theme",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_settings",
+    "write_themes"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 100,
+       "description": "A landing page's slug; omit for the homepage."
+      },
+      "required": false,
+      "description": "A landing page's slug; omit for the homepage.",
+      "name": "landing",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "theme": {
+        "type": "object",
+        "properties": {
+         "documentVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "exclusiveMinimum": true,
+          "description": "The theme document version section settings follow."
+         },
+         "publishedRevision": {
+          "type": "integer",
+          "minimum": 0
+         },
+         "draft": {
+          "$ref": "#/components/schemas/ThemeDraftReceipt"
+         },
+         "draftDiffersFromLive": {
+          "type": "boolean"
+         },
+         "template": {
+          "type": "string",
+          "nullable": true,
+          "description": "The template the draft came from (`<app id>/<template id>`), if any."
+         },
+         "page": {
+          "type": "string",
+          "enum": [
+           "home",
+           "landing"
+          ]
+         },
+         "slug": {
+          "type": "string",
+          "nullable": true
+         },
+         "sections": {
+          "type": "array",
+          "items": {
+           "$ref": "#/components/schemas/ThemeSection"
+          },
+          "maxItems": 24
+         },
+         "landingPages": {
+          "type": "array",
+          "items": {
+           "type": "object",
+           "properties": {
+            "slug": {
+             "type": "string"
+            },
+            "title": {
+             "type": "string"
+            }
+           },
+           "required": [
+            "slug",
+            "title"
+           ]
+          },
+          "maxItems": 20
+         },
+         "readAt": {
+          "type": "string",
+          "format": "date-time"
+         }
+        },
+        "required": [
+         "documentVersion",
+         "publishedRevision",
+         "draft",
+         "draftDiffersFromLive",
+         "template",
+         "page",
+         "slug",
+         "sections",
+         "landingPages",
+         "readAt"
+        ]
+       }
+      },
+      "required": [
+       "theme"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "theme.section_settings_set": {
+   "operationId": "dashboard.resources.theme.section_settings_set",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/theme/section-settings",
+   "risk": "write",
+   "idempotency": "supported",
+   "revision": "required",
+   "scopes": [
+    "write_themes"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "page": {
+          "type": "string",
+          "enum": [
+           "home",
+           "landing"
+          ],
+          "default": "home"
+         },
+         "slug": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "The landing page's slug, with `page: \"landing\"`."
+         },
+         "sectionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+         },
+         "settings": {
+          "type": "object",
+          "additionalProperties": {},
+          "description": "Settings to merge at the top level (an app section: into its values). Catalogue handles resolve as in apply_template."
+         },
+         "expectedDraftRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "The draft `revision` you read (`theme.get`); 0 when no draft was ever saved. A draft changed since is refused with 409 and nothing is saved."
+         },
+         "basePublishedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "The draft's `basePublishedRevision` you read: the live theme it was based on."
+         }
+        },
+        "required": [
+         "sectionId",
+         "settings",
+         "expectedDraftRevision",
+         "basePublishedRevision"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "draft": {
+        "$ref": "#/components/schemas/ThemeDraftReceipt"
+       },
+       "section": {
+        "$ref": "#/components/schemas/ThemeSection"
+       }
+      },
+      "required": [
+       "draft",
+       "section"
       ]
      }
     },
@@ -17523,6 +19017,382 @@
     "createdAt"
    ]
   },
+  "MenuLinkInput": {
+   "type": "object",
+   "properties": {
+    "key": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 64,
+     "description": "Your name for this link, unique in the request: children name it as `parentKey`."
+    },
+    "parentKey": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 64,
+     "description": "The parent link's key (listed before it); omit for a top-level link."
+    },
+    "label": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 100
+    },
+    "labelMode": {
+     "type": "string",
+     "enum": [
+      "custom",
+      "resource"
+     ],
+     "default": "custom",
+     "description": "`resource` follows the linked resource's own title."
+    },
+    "target": {
+     "$ref": "#/components/schemas/MenuLinkTargetInput"
+    },
+    "openInNewTab": {
+     "type": "boolean"
+    },
+    "isEnabled": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "key",
+    "label",
+    "target"
+   ],
+   "additionalProperties": false
+  },
+  "MenuLinkTarget": {
+   "oneOf": [
+    {
+     "type": "object",
+     "properties": {
+      "type": {
+       "type": "string",
+       "enum": [
+        "resource"
+       ]
+      },
+      "resourceType": {
+       "type": "string",
+       "enum": [
+        "page",
+        "category",
+        "collection",
+        "product"
+       ]
+      },
+      "resourceId": {
+       "type": "string"
+      },
+      "query": {
+       "type": "string",
+       "nullable": true
+      }
+     },
+     "required": [
+      "type",
+      "resourceType",
+      "resourceId",
+      "query"
+     ]
+    },
+    {
+     "type": "object",
+     "properties": {
+      "type": {
+       "type": "string",
+       "enum": [
+        "system"
+       ]
+      },
+      "key": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "type",
+      "key"
+     ]
+    },
+    {
+     "type": "object",
+     "properties": {
+      "type": {
+       "type": "string",
+       "enum": [
+        "internal_path"
+       ]
+      },
+      "path": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "type",
+      "path"
+     ]
+    },
+    {
+     "type": "object",
+     "properties": {
+      "type": {
+       "type": "string",
+       "enum": [
+        "external_url"
+       ]
+      },
+      "url": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "type",
+      "url"
+     ]
+    },
+    {
+     "type": "object",
+     "properties": {
+      "type": {
+       "type": "string",
+       "enum": [
+        "label"
+       ]
+      }
+     },
+     "required": [
+      "type"
+     ]
+    }
+   ]
+  },
+  "MenuLinkTargetInput": {
+   "oneOf": [
+    {
+     "type": "object",
+     "properties": {
+      "type": {
+       "type": "string",
+       "enum": [
+        "resource"
+       ]
+      },
+      "resourceType": {
+       "type": "string",
+       "enum": [
+        "page",
+        "category",
+        "collection",
+        "product"
+       ]
+      },
+      "resourceId": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 200
+      },
+      "handle": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 100,
+       "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+       "description": "A category's or collection's handle, instead of `resourceId`."
+      },
+      "query": {
+       "type": "string",
+       "maxLength": 1024
+      }
+     },
+     "required": [
+      "type",
+      "resourceType"
+     ],
+     "additionalProperties": false
+    },
+    {
+     "type": "object",
+     "properties": {
+      "type": {
+       "type": "string",
+       "enum": [
+        "system"
+       ]
+      },
+      "key": {
+       "type": "string",
+       "enum": [
+        "home",
+        "catalog",
+        "search",
+        "account",
+        "cart",
+        "checkout",
+        "order_lookup"
+       ]
+      }
+     },
+     "required": [
+      "type",
+      "key"
+     ],
+     "additionalProperties": false
+    },
+    {
+     "type": "object",
+     "properties": {
+      "type": {
+       "type": "string",
+       "enum": [
+        "internal_path"
+       ]
+      },
+      "path": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 2048
+      }
+     },
+     "required": [
+      "type",
+      "path"
+     ],
+     "additionalProperties": false
+    },
+    {
+     "type": "object",
+     "properties": {
+      "type": {
+       "type": "string",
+       "enum": [
+        "external_url"
+       ]
+      },
+      "url": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 2048
+      }
+     },
+     "required": [
+      "type",
+      "url"
+     ],
+     "additionalProperties": false
+    },
+    {
+     "type": "object",
+     "properties": {
+      "type": {
+       "type": "string",
+       "enum": [
+        "label"
+       ]
+      }
+     },
+     "required": [
+      "type"
+     ],
+     "additionalProperties": false
+    }
+   ]
+  },
+  "MenuResource": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "name": {
+     "type": "string"
+    },
+    "handle": {
+     "type": "string"
+    },
+    "revision": {
+     "type": "integer",
+     "minimum": 0,
+     "exclusiveMinimum": true
+    },
+    "publishedRevision": {
+     "type": "integer",
+     "nullable": true,
+     "minimum": 0,
+     "exclusiveMinimum": true
+    },
+    "trashed": {
+     "type": "boolean"
+    },
+    "updatedAt": {
+     "type": "string",
+     "format": "date-time"
+    },
+    "deletedAt": {
+     "type": "string",
+     "nullable": true,
+     "format": "date-time"
+    },
+    "items": {
+     "type": "array",
+     "nullable": true,
+     "items": {
+      "type": "object",
+      "properties": {
+       "id": {
+        "type": "string"
+       },
+       "parentId": {
+        "type": "string",
+        "nullable": true
+       },
+       "label": {
+        "type": "string"
+       },
+       "labelMode": {
+        "type": "string",
+        "enum": [
+         "custom",
+         "resource"
+        ]
+       },
+       "target": {
+        "$ref": "#/components/schemas/MenuLinkTarget"
+       },
+       "openInNewTab": {
+        "type": "boolean"
+       },
+       "isEnabled": {
+        "type": "boolean"
+       }
+      },
+      "required": [
+       "id",
+       "parentId",
+       "label",
+       "labelMode",
+       "target",
+       "openInNewTab",
+       "isEnabled"
+      ]
+     },
+     "maxItems": 150,
+     "description": "Its links in tree order; null when it holds more than 150 (edit those in the dashboard)."
+    }
+   },
+   "required": [
+    "id",
+    "name",
+    "handle",
+    "revision",
+    "publishedRevision",
+    "trashed",
+    "updatedAt",
+    "deletedAt",
+    "items"
+   ]
+  },
   "ObjectField": {
    "type": "object",
    "properties": {
@@ -18835,6 +20705,85 @@
     "isDefault",
     "presences",
     "translatedResources"
+   ]
+  },
+  "ThemeDraftReceipt": {
+   "type": "object",
+   "properties": {
+    "revision": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "basePublishedRevision": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "updatedAt": {
+     "type": "string",
+     "nullable": true,
+     "format": "date-time"
+    }
+   },
+   "required": [
+    "revision",
+    "basePublishedRevision",
+    "updatedAt"
+   ]
+  },
+  "ThemeSection": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "type": {
+     "type": "string",
+     "description": "The section type (`hero`, `product_grid`…), or `app` for an app's own section."
+    },
+    "app": {
+     "type": "string",
+     "nullable": true,
+     "description": "An app section's `<app id>/<section type>`; null for the platform's."
+    },
+    "hidden": {
+     "type": "boolean"
+    },
+    "settings": {
+     "type": "object",
+     "additionalProperties": {},
+     "description": "The section's settings as the theme document stores them (an app section: its own values)."
+    }
+   },
+   "required": [
+    "id",
+    "type",
+    "app",
+    "hidden",
+    "settings"
+   ]
+  },
+  "ThemeUnresolvedHandle": {
+   "type": "object",
+   "properties": {
+    "kind": {
+     "type": "string",
+     "enum": [
+      "category",
+      "collection"
+     ]
+    },
+    "handle": {
+     "type": "string"
+    },
+    "sectionId": {
+     "type": "string",
+     "nullable": true
+    }
+   },
+   "required": [
+    "kind",
+    "handle",
+    "sectionId"
    ]
   },
   "VariantResource": {

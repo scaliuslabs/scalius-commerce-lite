@@ -153,7 +153,7 @@
    },
    "scopes": {
     "default": [],
-    "maxItems": 29,
+    "maxItems": 31,
     "type": "array",
     "items": {
      "type": "string",
@@ -186,6 +186,8 @@
       "write_gift_cards",
       "write_webhooks",
       "read_settings",
+      "write_themes",
+      "write_navigation",
       "write_places"
      ]
     }
@@ -1573,6 +1575,8 @@
           "write_gift_cards",
           "write_webhooks",
           "read_settings",
+          "write_themes",
+          "write_navigation",
           "write_places"
          ]
         }
@@ -1687,6 +1691,30 @@
      "required": [
       "name",
       "schedule"
+     ],
+     "additionalProperties": false
+    }
+   },
+   "jobs": {
+    "default": [],
+    "maxItems": 10,
+    "type": "array",
+    "items": {
+     "type": "object",
+     "properties": {
+      "name": {
+       "type": "string",
+       "pattern": "^[a-z][a-z0-9_]{0,47}$"
+      },
+      "title": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 80
+      }
+     },
+     "required": [
+      "name",
+      "title"
      ],
      "additionalProperties": false
     }
@@ -3225,7 +3253,7 @@
       },
       "scopes": {
        "default": [],
-       "maxItems": 29,
+       "maxItems": 31,
        "type": "array",
        "items": {
         "type": "string",
@@ -3258,6 +3286,8 @@
          "write_gift_cards",
          "write_webhooks",
          "read_settings",
+         "write_themes",
+         "write_navigation",
          "write_places"
         ]
        }
