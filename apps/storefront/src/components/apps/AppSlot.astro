@@ -5,37 +5,44 @@
 // that draws nothing, fails or is late renders nothing (and a failed one
 // keeps the page out of the cache). A slot nobody fills renders nothing and
 // reads nothing: the components come from the layout read the page already
-// has, and the product page's projection is built only when a product slot
-// draws.
+// has, and a product or card projection is built only when a component draws.
 //
 // - `product.buy_box.before` / `.after`: in the buy box, after the title and
 //   after the buttons; `product.below`: after the page's modules, each in a
 //   module container. The merchant arranges these (the product page's app blocks).
 // - `header.actions`: every active app's component, inline beside the
 //   account and cart; `footer.columns`: a row of columns after the menus.
-import type { StorefrontComponentSlot, StorefrontProductPage } from "@scalius/shared/plugins/storefront-protocol";
+// - `product_card.badges` / `.meta`: on every card, over the photo and under
+//   the price, with that card's projection, whoever draws the card.
+import type { StorefrontComponentSlot, StorefrontProductCardData, StorefrontProductPage } from "@scalius/shared/plugins/storefront-protocol";
 import AppComponent from "./AppComponent.astro";
 import { appMarkup, appSlotComponents, requestExtensions, type AppMarkup } from "@/lib/extensions";
 
+type SlotData = StorefrontProductPage | StorefrontProductCardData;
+
 interface Props {
   name: StorefrontComponentSlot;
-  /** The product page's projection (product slots), built only when a component draws. */
-  data?: () => StorefrontProductPage;
+  /** The unit's projection (product slots: the product page; card slots: the card), built only when a component draws. */
+  data?: () => SlotData | Promise<SlotData>;
 }
 
 const { name, data } = Astro.props;
 const components = await appSlotComponents(Astro.locals, Astro.url, name);
+const product = name.startsWith("product.");
+// Product and card slots draw from their unit's data; without it they draw nothing.
+const needsData = product || name.startsWith("product_card.");
 let drawn: Array<{ key: string; markup: AppMarkup }> = [];
 if (components.length > 0) {
   const { host } = await requestExtensions(Astro.locals, Astro.url);
-  const product = name.startsWith("product.") ? data?.() : undefined;
-  if (!name.startsWith("product.") || product) {
+  const unit = needsData ? await data?.() : undefined;
+  if (!needsData || unit) {
     const rendered = await Promise.all(components.map(async (component) => {
+      const base = { kind: "component", type: component.type, target: name, settings: component.settings };
       const job = product
-        ? { kind: "component", type: component.type, target: name, instanceId: component.instanceId ?? component.type, settings: component.settings, data: product }
-        : { kind: "component", type: component.type, target: name, settings: component.settings };
-      // Product slots keep JSON-LD out: the product page's structured data is core's.
-      const html = await host.render(component.extension, job as never, { jsonLd: !product });
+        ? { ...base, instanceId: component.instanceId ?? component.type, data: unit }
+        : unit ? { ...base, data: unit } : base;
+      // Product and card slots keep JSON-LD out: the page's structured data is core's.
+      const html = await host.render(component.extension, job as never, { jsonLd: !unit });
       const markup = appMarkup(component.extension, "component", html);
       return markup ? [{ key: `${component.extension.pluginId}/${component.instanceId ?? component.type}`, markup }] : [];
     }));
@@ -59,8 +66,13 @@ if (components.length > 0) {
     {drawn.map((component) => <div><AppComponent markup={component.markup} /></div>)}
   </div>
 )}
-{drawn.length > 0 && name === "header.actions" && (
+{drawn.length > 0 && (name === "header.actions" || name === "product_card.badges") && (
   <div class="contents" data-app-slot={name}>
+    {drawn.map((component) => <AppComponent markup={component.markup} />)}
+  </div>
+)}
+{drawn.length > 0 && name === "product_card.meta" && (
+  <div class="product-card-app-meta" data-app-slot={name}>
     {drawn.map((component) => <AppComponent markup={component.markup} />)}
   </div>
 )}

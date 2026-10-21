@@ -64,6 +64,9 @@ describe("buyer UI actions", () => {
   it("keeps codes local and refuses checkout mutations from account surfaces", async () => {
     await runBuyerUiAction({ kind: "cart", op: "apply_code", code: "PRIVATE" }, block);
     expect(addDiscountCode).toHaveBeenCalledWith("PRIVATE");
+    // The cart drawer is a cart surface too.
+    await runBuyerUiAction({ kind: "cart", op: "apply_code", code: "DRAWER" }, { ...block, target: "cart_drawer.footer" });
+    expect(addDiscountCode).toHaveBeenCalledWith("DRAWER");
     await expect(runBuyerUiAction({ kind: "cart", op: "add_line", variantId: "var_1", quantity: 1 },
       { ...block, target: "account.profile" })).rejects.toThrow();
     expect(fetchMock).not.toHaveBeenCalled();

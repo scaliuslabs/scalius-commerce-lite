@@ -294,7 +294,7 @@ describe("inventory status transition hardening", () => {
       applyInventoryForStatusChange(db as never, TRANSITION_ORDER_ID, "shipped"),
     ).rejects.toMatchObject({
       name: "ValidationError",
-      code: "VALIDATION_ERROR",
+      code: "validation_error",
       message: `Inventory deduct failed for order ${TRANSITION_ORDER_ID}: Inventory transition claim mismatch requires manual inventory reconciliation`,
     });
 
@@ -329,7 +329,7 @@ describe("inventory status transition hardening", () => {
       applyInventoryForStatusChange(db as never, TRANSITION_ORDER_ID, "shipped"),
     ).rejects.toMatchObject({
       name: "ValidationError",
-      code: "VALIDATION_ERROR",
+      code: "validation_error",
       message: `Inventory action update conflicted for order ${TRANSITION_ORDER_ID}`,
     });
   });
@@ -341,7 +341,7 @@ describe("inventory status transition hardening", () => {
       applyInventoryForStatusChange(db as never, TRANSITION_ORDER_ID, "cancelled"),
     ).rejects.toMatchObject({
       name: "ValidationError",
-      code: "VALIDATION_ERROR",
+      code: "validation_error",
       message: `Inventory release failed for order ${TRANSITION_ORDER_ID}: Missing variant: ${TRANSITION_ITEM.variantId}`,
     });
 
@@ -408,7 +408,7 @@ describe("inventory status transition hardening", () => {
       applyInventoryForStatusChange(db as never, TRANSITION_ORDER_ID, "pending"),
     ).rejects.toMatchObject({
       name: "ValidationError",
-      code: "VALIDATION_ERROR",
+      code: "validation_error",
       message: `Inventory reserve failed for order ${TRANSITION_ORDER_ID}: reserve failed`,
     });
 

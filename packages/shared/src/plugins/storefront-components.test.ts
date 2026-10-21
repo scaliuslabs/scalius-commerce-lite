@@ -85,7 +85,13 @@ describe("storefront manifest", () => {
       const parsed = parsePluginManifest({ ...base, ...input });
       return parsed.ok ? [] : parsed.issues.map((issue) => issue.message);
     };
-    expect(issues({ storefront: { skins: [{ id: "card", target: "product_card", name: "Card", settings: [{ key: "p", label: "P", type: "products" }] }] } }).join()).toMatch(/skin's settings cannot name images or products/);
+    expect(issues({ storefront: { skins: [{ id: "card", target: "product_card", name: "Card", settings: [{ key: "p", label: "P", type: "products" }] }] } }).join()).toMatch(/skin's settings cannot name products/);
+    // A unit skin's top-level images resolve with the layout read (8 at most); a section skin's never.
+    const image = (key: string) => ({ key, label: key, type: "image" as const });
+    expect(issues({ storefront: { skins: [{ id: "bar", target: "header", name: "Bar", settings: [image("promo"), image("badge")] }] } })).toEqual([]);
+    expect(issues({ storefront: { skins: [{ id: "bar", target: "header", name: "Bar", settings: Array.from({ length: 9 }, (_, index) => image(`i${index}`)) }] } }).join()).toMatch(/at most 8 image settings/);
+    expect(issues({ storefront: { skins: [{ id: "hero", target: "section:hero", name: "Hero", settings: [image("promo")] }] } }).join()).toMatch(/section skin's settings cannot name images/);
+    expect(issues({ storefront: { skins: [{ id: "bar", target: "header", name: "Bar", settings: [{ key: "logos", label: "Logos", type: "list", fields: [image("logo")] }] }] } }).join()).toMatch(/images inside a list/);
     expect(issues({ storefront: { components: [{ type: "b", name: "B", targets: ["product.below"], settings: [{ key: "i", label: "I", type: "image" }] }] } }).join()).toMatch(/component's settings cannot name images/);
     expect(issues({ storefront: { components: [{ type: "b", name: "B", targets: ["product.below", "product.buy_box.after"] }] } }).join()).toMatch(/at most one product slot/);
     expect(issues({ storefront: { components: [{ type: "b", name: "B", targets: ["header.actions", "header.actions"] }] } }).join()).toMatch(/Each target appears once/);

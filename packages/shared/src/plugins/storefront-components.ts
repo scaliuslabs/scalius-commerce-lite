@@ -54,8 +54,10 @@ export const STOREFRONT_SKINS_MAX = 30;
  * `product_main`, `listing_main`, or a core section `section:<type>`). It
  * gets the unit's public projection and the merchant's values for its
  * settings; core draws the unit whenever it is missing, fails or draws
- * nothing. A skin reads nothing, so its settings name no images or products
- * (ship images in the app's public files).
+ * nothing. A skin reads nothing of its own: its settings name no products,
+ * and only a unit skin's top-level `image` settings (at most
+ * `STOREFRONT_COMPONENT_LIMITS.skinImages`) name images, which resolve with
+ * the layout read (a section skin ships its images in the app's public files).
  */
 export const storefrontSkinDeclarationSchema = z.object({
   /** Unique per app: the theme names it `<plugin id>/<id>`. */

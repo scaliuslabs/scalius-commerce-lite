@@ -20,7 +20,7 @@ import { storefrontComponentsManifestSchema } from "./storefront-components";
 import { PLUGIN_SETTING_KEY, PLUGIN_STOREFRONT_SETTING_TYPES, pluginAppSettingsSchemaSchema, pluginSettingsSchemaSchema, type PluginSettingsSchema } from "./settings-schema";
 import { pluginProvidersSchema } from "./providers/descriptors";
 import { checkoutAttributeSchema, PURCHASE_OPTIONS_MAX, purchaseOptionDeclarationSchema } from "./buyer-ui";
-import { STOREFRONT_UI_SLOTS, type StorefrontUiSlot } from "./storefront-protocol";
+import { STOREFRONT_COMPONENT_LIMITS, STOREFRONT_SECTION_SKIN_PREFIX, STOREFRONT_UI_SLOTS, type StorefrontUiSlot } from "./storefront-protocol";
 import { objectTypeDeclarationSchema, OBJECT_TYPE_PATTERN, type ObjectTypeDeclaration } from "./objects";
 import { FUNCTION_READS_MAX, functionReadDeclarationSchema, functionReadIssues } from "./function-reads";
 import { PROVIDER_KINDS } from "./providers/kinds";
@@ -794,9 +794,21 @@ export const pluginManifestSchema = z.object({
       const path = ["storefront", "skins", index, "settings", fieldIndex];
       if (field.type === "secret") context.addIssue({ code: "custom", path: [...path, "type"], message: "Storefront settings are public: keep secrets in the app's settings." });
       if (field.group !== undefined) context.addIssue({ code: "custom", path: [...path, "group"], message: "Groups are for the app's own settings." });
-      // A skin draws from its unit's projection alone: its settings resolve at the edge, without a media or catalog read.
-      if (settingNeedsRead(field)) context.addIssue({ code: "custom", path: [...path, "type"], message: "A skin's settings cannot name images or products (ship images in the app's public files)." });
+      // A skin draws from its unit's projection alone: no catalog read. A unit
+      // skin's top-level images come with the layout read (bounded in all by
+      // STOREFRONT_SKIN_IMAGES_MAX); a section skin's settings resolve at the
+      // edge without any read.
+      const unitImage = field.type === "image" && !skin.target.startsWith(STOREFRONT_SECTION_SKIN_PREFIX);
+      if (settingNeedsRead(field) && !unitImage) {
+        context.addIssue({ code: "custom", path: [...path, "type"], message: skin.target.startsWith(STOREFRONT_SECTION_SKIN_PREFIX)
+          ? "A section skin's settings cannot name images or products (ship images in the app's public files)."
+          : "A skin's settings cannot name products, or images inside a list (use image settings, or ship images in the app's public files)." });
+      }
     });
+    const images = skin.settings.filter((field) => field.type === "image").length;
+    if (images > STOREFRONT_COMPONENT_LIMITS.skinImages) {
+      context.addIssue({ code: "custom", path: ["storefront", "skins", index, "settings"], message: `A skin may have at most ${STOREFRONT_COMPONENT_LIMITS.skinImages} image settings.` });
+    }
   });
   manifest.storefront.components.forEach((component, index) => {
     if (component.targets.includes("page") && !manifest.storefront.proxy) {

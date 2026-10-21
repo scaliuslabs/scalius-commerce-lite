@@ -634,14 +634,27 @@ async function upgradeSqliteSnapshotSchema(
     const ledgerMigrationCount = readReleaseLedgerMigrationCount(source, migrations);
     const matches: number[] = [];
     let targetSchema: SqliteSchemaFingerprint | undefined;
-    for (let migrationCount = 0; migrationCount <= migrations.length; migrationCount += 1) {
-      const fingerprint = fingerprintCanonicalSnapshotSchema(canonical);
-      if (fingerprint.sha256 === sourceSchema.sha256) matches.push(migrationCount);
-      if (migrationCount === migrations.length) {
-        targetSchema = fingerprint;
-        break;
+    // A release ledger names the source's boundary, and the target is the
+    // cached canonical image. Only a pre-ledger source is located by
+    // fingerprinting the canonical schema after each migration (seconds: a
+    // replay plus a fingerprint per migration).
+    if (ledgerMigrationCount !== undefined) {
+      const image = await createProviderSchemaDatabase(provider);
+      try {
+        targetSchema = fingerprintCanonicalSnapshotSchema(image);
+      } finally {
+        image.close();
       }
-      canonical.exec(migrations[migrationCount]!.compiled);
+    } else {
+      for (let migrationCount = 0; migrationCount <= migrations.length; migrationCount += 1) {
+        const fingerprint = fingerprintCanonicalSnapshotSchema(canonical);
+        if (fingerprint.sha256 === sourceSchema.sha256) matches.push(migrationCount);
+        if (migrationCount === migrations.length) {
+          targetSchema = fingerprint;
+          break;
+        }
+        canonical.exec(migrations[migrationCount]!.compiled);
+      }
     }
     if (ledgerMigrationCount === undefined && matches.length !== 1) {
       const sourceObjects = readCanonicalSnapshotSchemaObjects(source);

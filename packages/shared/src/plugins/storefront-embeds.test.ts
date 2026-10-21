@@ -61,4 +61,22 @@ describe("core embeds", () => {
       expect(splitStorefrontEmbeds('<scalius-embed kind="slot" data-name="header.actions"></scalius-embed>', storefrontEmbedRule(unit)).parts).toEqual([]);
     }
   });
+
+  it("places no embed inside deferred markup, checked or not, so a buy form there counts as missing", () => {
+    const raw = '<div><scalius-deferred data-hydrate="visible"><template><scalius-embed kind="buy_form"></scalius-embed>'
+      + '<scalius-deferred><template><scalius-embed kind="reviews"></scalius-embed></template></scalius-deferred>'
+      + '<scalius-embed kind="gallery"></scalius-embed></template></scalius-deferred><scalius-embed kind="reviews"></scalius-embed></div>';
+    const unchecked = splitStorefrontEmbeds(raw, storefrontEmbedRule("product_main"));
+    expect(unchecked.missing).toEqual(["buy_form"]);
+    expect(unchecked.dropped).toBe(3);
+    expect(unchecked.parts.filter((part) => part.kind === "embed")).toEqual([{ kind: "embed", embed: "reviews", data: {}, index: 0 }]);
+    // The host splits checked markup, which has already left them out.
+    const shown = splitStorefrontEmbeds(checked(raw), storefrontEmbedRule("product_main"));
+    expect(shown.missing).toEqual(["buy_form"]);
+    expect(shown.parts).toEqual([
+      { kind: "html", html: '<div><scalius-deferred data-hydrate="visible"><template><scalius-deferred data-hydrate="visible"><template></template></scalius-deferred></template></scalius-deferred>' },
+      { kind: "embed", embed: "reviews", data: {}, index: 0 },
+      { kind: "html", html: "</div>" },
+    ]);
+  });
 });

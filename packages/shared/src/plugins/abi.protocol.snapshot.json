@@ -3216,8 +3216,11 @@
       "checkout.contact.after",
       "checkout.delivery.after",
       "cart.page.summary",
+      "cart.page.below",
       "checkout.payment.after",
       "checkout.actions.before",
+      "checkout.summary.after",
+      "cart_drawer.footer",
       "order.confirmation",
       "account.order",
       "account.overview",
@@ -16092,12 +16095,18 @@
    "product.buy_box.before",
    "product.buy_box.after",
    "product.below",
-   "footer.columns"
+   "footer.columns",
+   "product_card.badges",
+   "product_card.meta"
   ],
   "STOREFRONT_PRODUCT_SLOTS": [
    "product.buy_box.before",
    "product.buy_box.after",
    "product.below"
+  ],
+  "STOREFRONT_PRODUCT_CARD_SLOTS": [
+   "product_card.badges",
+   "product_card.meta"
   ],
   "STOREFRONT_COMPONENT_TARGETS": [
    "header.actions",
@@ -16105,14 +16114,19 @@
    "product.buy_box.after",
    "product.below",
    "footer.columns",
+   "product_card.badges",
+   "product_card.meta",
    "page"
   ],
   "STOREFRONT_UI_SLOT_PAGES": {
    "checkout.contact.after": "checkout",
    "checkout.delivery.after": "checkout",
    "cart.page.summary": "checkout",
+   "cart.page.below": "checkout",
    "checkout.payment.after": "checkout",
    "checkout.actions.before": "checkout",
+   "checkout.summary.after": "checkout",
+   "cart_drawer.footer": "cart_drawer",
    "order.confirmation": "order",
    "account.order": "order",
    "account.overview": "account",
@@ -16122,8 +16136,11 @@
    "checkout.contact.after",
    "checkout.delivery.after",
    "cart.page.summary",
+   "cart.page.below",
    "checkout.payment.after",
    "checkout.actions.before",
+   "checkout.summary.after",
+   "cart_drawer.footer",
    "order.confirmation",
    "account.order",
    "account.overview",
@@ -16141,6 +16158,12 @@
    "slot"
   ],
   "STOREFRONT_EMBED_TAG": "scalius-embed",
+  "STOREFRONT_DEFERRED_TAG": "scalius-deferred",
+  "STOREFRONT_DEFERRED_HYDRATION": [
+   "idle",
+   "visible",
+   "interaction"
+  ],
   "STOREFRONT_ISLAND_HYDRATION": [
    "load",
    "idle",
@@ -16160,7 +16183,8 @@
    "htmlElements": 6000,
    "renderWallMs": 250,
    "renderCpuMs": 50,
-   "batchJobs": 120
+   "batchJobs": 120,
+   "skinImages": 8
   },
   "STOREFRONT_PUBLIC_FILE_TYPES": {
    "woff2": "font/woff2",

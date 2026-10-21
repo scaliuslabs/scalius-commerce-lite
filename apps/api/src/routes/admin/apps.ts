@@ -90,6 +90,11 @@ import { providerConnections } from "../../plugins/provider-connection";
 import { isPluginSandboxAvailable } from "../../plugins/loaders/sandbox-availability";
 import { planLimits } from "@scalius/shared/plan-limits";
 import { storefrontAppThemeProblems } from "@scalius/shared/storefront-theme/app-templates";
+import { STOREFRONT_PAGE_TEMPLATES } from "@scalius/shared/storefront-theme/pages";
+import { STOREFRONT_THEME_APP_PARTS_MAX, storefrontThemeAppParts, storefrontThemeAppReferences } from "@scalius/shared/storefront-theme/app-references";
+import type { Database } from "@scalius/database/client";
+import { ServiceUnavailableError } from "@scalius/core/errors";
+import { getThemeSettings } from "@scalius/core/modules/settings";
 import { registerAppLifecycleRoutes } from "./apps-lifecycle";
 
 // The plugin host with its lifecycle hooks and the operation catalogue (risk
@@ -282,6 +287,23 @@ const appFeatureSchema = z.object({
   pages: z.array(z.string()).openapi({ description: "The ids of the dashboard pages (`admin.pages`) this feature adds while it is on." }),
 }).openapi("AppFeature");
 
+/** A part of the store's theme an app draws, where it sits and the app's name for it. */
+const themeAppPartSchema = z.object({
+  kind: z.enum(["section", "section_skin", "skin", "product_block"]).openapi({
+    description: "A section the app draws, the app's skin of a store section, a skin of a store unit (header, footer, product card, product page, listing), or a product-page app block.",
+  }),
+  type: z.string().openapi({ description: "The app's section type, skin id or component type." }),
+  target: z.string().optional().openapi({ description: "A skin's target: the unit, or section:<store section type>." }),
+  path: z.string().openapi({ description: "The theme document path of the reference." }),
+  place: z.object({
+    page: z.enum(["home", "landing", "template", "theme"]),
+    slug: z.string().optional().openapi({ description: "A landing page's handle." }),
+    template: z.enum(STOREFRONT_PAGE_TEMPLATES).optional(),
+    index: z.number().int().nonnegative().optional().openapi({ description: "The section's or block's position, from 0." }),
+  }),
+  name: z.string().optional().openapi({ description: "The app's name for the part; absent when it no longer declares it." }),
+}).openapi("ThemeAppPart");
+
 const appDetailSchema = appSummarySchema.extend({
   ...listingDetailFields,
   grantKey: z.string().openapi({ description: "Send back on activation: approving a request nobody was shown is refused." }),
@@ -361,6 +383,12 @@ const appDetailSchema = appSummarySchema.extend({
   migrations: z.object({
     declared: z.array(z.object({ version: z.number().int(), description: z.string() })),
     applied: z.number().int().openapi({ description: "The newest data update that ran." }),
+  }),
+  themeUsage: z.object({
+    parts: z.array(themeAppPartSchema).max(STOREFRONT_THEME_APP_PARTS_MAX),
+    more: z.number().int().nonnegative().openapi({ description: "Parts left out of the list." }),
+  }).openapi({
+    description: "The parts of the published theme this app draws (hidden sections left out): while the app is not active, the storefront shows the store's own design there instead.",
   }),
 }).openapi("AppDetail");
 
@@ -528,13 +556,28 @@ async function featureRows(installation: PluginInstallation) {
   }));
 }
 
+/**
+ * The parts of the published theme an app draws, named by its manifest. An
+ * unreadable published theme renders the store's default, which names no app.
+ */
+async function themeUsage(db: Database, installation: PluginInstallation) {
+  const theme = await getThemeSettings(db).then((published) => published.theme, (error: unknown) => {
+    if (error instanceof ServiceUnavailableError) return null;
+    throw error;
+  });
+  if (!theme) return { parts: [], more: 0 };
+  const references = storefrontThemeAppReferences(theme)
+    .filter((reference) => reference.pluginId === installation.pluginId && !reference.hidden);
+  return storefrontThemeAppParts(references, [{ pluginId: installation.pluginId, manifest: installation.declaredManifest }]);
+}
+
 async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstallation) {
   const db = c.get("db");
   const { manifest } = installation;
   const request = pluginGrantRequest(installation.declaredManifest, installation.features);
   const described = describePluginSettings(installation);
   const caps = planLimits().plugins;
-  const [approver, lastRuns, scopes, registrySettings, features, uses, connections] = await Promise.all([
+  const [approver, lastRuns, scopes, registrySettings, features, uses, connections, usage] = await Promise.all([
     installation.activatedBy
       ? db.select({ id: userTable.id, name: userTable.name }).from(userTable).where(eq(userTable.id, installation.activatedBy)).get()
       : Promise.resolve(undefined),
@@ -544,6 +587,7 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
     featureRows(installation),
     providerUse(db, installation),
     providerConnections(db, installation, manifest.providers),
+    themeUsage(db, installation),
   ]);
   const available = runtimeAvailable(c, installation);
   return {
@@ -629,6 +673,7 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
       declared: manifest.migrations.map((migration) => ({ version: migration.version, description: migration.description })),
       applied: installation.migratedVersion,
     },
+    themeUsage: usage,
   };
 }
 

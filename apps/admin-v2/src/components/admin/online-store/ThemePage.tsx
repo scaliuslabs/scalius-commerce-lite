@@ -37,6 +37,8 @@ import { OnlineStorePage, SectionCard, actionErrorText } from "./shared";
 import { HeaderRows, ProductTile, Sketch, VisualChoice } from "./ThemeChoices";
 import { useOpenThemePreview } from "./theme-preview";
 import { TEMPLATE_THEMES, appTemplates, applyAppTemplate, applyTemplate, resolveThemeForStore, selectedTemplate } from "./theme-settings";
+import { ThemeAppsUnavailableAlert } from "~/components/admin/apps/ThemeAppParts";
+import { themeAppsUnavailable, type ThemeAppsProblem } from "~/components/admin/apps/theme-app-parts";
 
 type Theme = StorefrontThemeDocument;
 type MessageKey = keyof (typeof onlineStoreMessages)["en"];
@@ -132,6 +134,8 @@ function ThemeOverview({ workspace, refetch }: {
   const [pendingTemplate, setPendingTemplate] = useState<string | null>(null);
   const [confirmPublish, setConfirmPublish] = useState(false);
   const [busy, setBusy] = useState<"template" | "publish" | "preview" | null>(null);
+  /** The apps a refused publish named: listed in the card, each with a link to its page. */
+  const [appsProblem, setAppsProblem] = useState<{ apps: ThemeAppsProblem[]; moreParts: number } | null>(null);
   const option = (key: string) => t(key as MessageKey);
   // Each app template as this draft would look with it applied.
   const fromApps = useMemo(() => appTemplates(workspace.apps).map((template) => ({ template, theme: applyAppTemplate(template, draft) })), [workspace.apps, draft]);
@@ -172,6 +176,7 @@ function ThemeOverview({ workspace, refetch }: {
 
   const publish = async () => {
     setBusy("publish");
+    setAppsProblem(null);
     try {
       await apiData(postApiV1AdminSettingsThemePublish({
         body: { expectedPublishedRevision: workspace.published.revision, expectedDraftRevision: workspace.draft.revision },
@@ -179,7 +184,9 @@ function ThemeOverview({ workspace, refetch }: {
       toast.success(t("themePublished"));
       await refresh();
     } catch (error) {
-      await fail(error);
+      const unavailable = themeAppsUnavailable(error);
+      if (unavailable) setAppsProblem(unavailable);
+      else await fail(error);
     } finally {
       setBusy(null);
     }
@@ -217,6 +224,7 @@ function ThemeOverview({ workspace, refetch }: {
                 </p>
               ) : null}
             </div>
+            {appsProblem ? <ThemeAppsUnavailableAlert apps={appsProblem.apps} moreParts={appsProblem.moreParts} /> : null}
             <div className="flex flex-wrap gap-2">
               <Button asChild>
                 <Link to="/admin/online-store/theme/editor">{editor("customize")}</Link>

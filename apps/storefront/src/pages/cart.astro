@@ -675,6 +675,8 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
         </section>
         <div data-buyer-ui-target="cart.page.summary" class="mt-4"></div>
         </div>
+        {/* Store apps' blocks below the lines and summary (shown on phones even with the summary folded); hidden until one lands. */}
+        <div data-buyer-ui-target="cart.page.below" class="mt-4 space-y-3" hidden></div>
         {/* An empty cart still leads somewhere: the store's categories and popular products, shown while the cart is empty. */}
         <div class="mx-auto mt-8 hidden max-w-3xl space-y-8 group-data-[cart-state=empty]:block" data-cart-empty-extras>
           {emptyCartCategories.length > 0 && (

@@ -13,6 +13,7 @@ import {
   type StorefrontListingPage,
   type StorefrontModule,
   type StorefrontProductCardData,
+  type StorefrontProductCardSlot,
   type StorefrontProductPage,
   type StorefrontProductSlot,
   type StorefrontRenderBatch,
@@ -58,7 +59,8 @@ export type SectionSkinProps<Type extends StorefrontSkinnableSection = Storefron
 /**
  * What a component gets at one of its targets (`target` says which): its
  * settings; in a product slot also the product page (`data`) and the
- * placement's id; on `page` the app's proxy route's `props`.
+ * placement's id; in a card slot the card (`data`); on `page` the app's
+ * proxy route's `props`.
  */
 export type ComponentProps<Settings = StorefrontResolvedSettings, Props = Record<string, unknown>> =
   | {
@@ -70,7 +72,14 @@ export type ComponentProps<Settings = StorefrontResolvedSettings, Props = Record
     instanceId: string;
     context: StorefrontRenderContext;
   }
-  | { target: Exclude<StorefrontComponentSlot, StorefrontProductSlot>; settings: Settings; context: StorefrontRenderContext }
+  | {
+    target: StorefrontProductCardSlot;
+    settings: Settings;
+    /** The card it draws on, as a product_card skin gets it (another app's skin may own the card). */
+    data: StorefrontProductCardData;
+    context: StorefrontRenderContext;
+  }
+  | { target: Exclude<StorefrontComponentSlot, StorefrontProductSlot | StorefrontProductCardSlot>; settings: Settings; context: StorefrontRenderContext }
   | {
     target: "page";
     settings: Settings;

@@ -8,7 +8,12 @@
 // - `[data-scalius-cart-count]`: the cart's item count, kept current;
 // - `<scalius-island data-island data-hydrate data-props>`: loads the app's
 //   island module from its release's files when its moment comes (visible,
-//   idle, load or first interaction) and mounts it on the element.
+//   idle, load or first interaction) and mounts it on the element;
+// - `<scalius-deferred data-hydrate><template>`: moves the template's
+//   content into the page at its moment, where its islands then mount;
+// - `[data-scalius-when="signed-in" | "signed-out"]`: `<html
+//   data-scalius-signed-in>` follows the sign-in hint, global.css hides the
+//   other version.
 
 import type { StorefrontIslandContext, StorefrontIslandModule, StorefrontMoney } from "@scalius/shared/plugins/storefront-protocol";
 import { toMinor } from "@scalius/shared/money";
@@ -98,8 +103,45 @@ function contextFor(element: Element): StorefrontIslandContext | null {
     quickAdd,
     onCart,
     fetchApp: (path, init) => fetch(`/apps/${pluginId}/${path.replace(/^\/+/, "")}`, { credentials: "same-origin", ...init }),
+    signedIn: signedInHint,
     ...(product ? { product } : {}),
   };
+}
+
+/**
+ * Calls `start` once at the element's moment (`load`: now; `idle`; the first
+ * `interaction` within `interactive`; otherwise when it comes within `margin`
+ * of the viewport) and returns what cancels it before then.
+ */
+function atMoment(element: HTMLElement, hydrate: string, margin: string, start: () => void, interactive: HTMLElement = element): (() => void) | undefined {
+  if (hydrate === "load") {
+    start();
+    return undefined;
+  }
+  if (hydrate === "idle") {
+    if (window.requestIdleCallback) {
+      const id = window.requestIdleCallback(start, { timeout: 2000 });
+      return () => window.cancelIdleCallback?.(id);
+    }
+    const id = window.setTimeout(start, 200);
+    return () => window.clearTimeout(id);
+  }
+  if (hydrate === "interaction") {
+    const events = ["pointerenter", "focusin", "touchstart"] as const;
+    for (const name of events) interactive.addEventListener(name, start, { once: true, passive: true });
+    return () => {
+      for (const name of events) interactive.removeEventListener(name, start);
+    };
+  }
+  if (typeof IntersectionObserver === "undefined") {
+    start();
+    return undefined;
+  }
+  const observer = new IntersectionObserver((entries) => {
+    if (entries.some((entry) => entry.isIntersecting)) start();
+  }, { rootMargin: margin });
+  observer.observe(element);
+  return () => observer.disconnect();
 }
 
 const ISLAND_NAME = /^[a-z][a-z0-9_-]{0,47}$/;
@@ -122,33 +164,7 @@ export function createIslandElement(
       if (this.#connection) return;
       const connection: IslandConnection = { started: false, cleanups: new Set() };
       this.#connection = connection;
-      const hydrate = this.dataset.hydrate ?? "visible";
-      const start = () => void this.#mount(connection);
-      if (hydrate === "load") return start();
-      if (hydrate === "idle") {
-        if (window.requestIdleCallback) {
-          const id = window.requestIdleCallback(start, { timeout: 2000 });
-          connection.cancelStart = () => window.cancelIdleCallback?.(id);
-        } else {
-          const id = window.setTimeout(start, 200);
-          connection.cancelStart = () => window.clearTimeout(id);
-        }
-        return;
-      }
-      if (hydrate === "interaction") {
-        const events = ["pointerenter", "focusin", "touchstart"] as const;
-        for (const name of events) this.addEventListener(name, start, { once: true, passive: true });
-        connection.cancelStart = () => {
-          for (const name of events) this.removeEventListener(name, start);
-        };
-        return;
-      }
-      if (typeof IntersectionObserver === "undefined") return start();
-      const observer = new IntersectionObserver((entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) start();
-      }, { rootMargin: "200px" });
-      connection.cancelStart = () => observer.disconnect();
-      observer.observe(this);
+      connection.cancelStart = atMoment(this, this.dataset.hydrate ?? "visible", "200px", () => void this.#mount(connection));
     }
 
     disconnectedCallback(): void {
@@ -223,6 +239,75 @@ export function createIslandElement(
   };
 }
 
+/**
+ * `<scalius-deferred data-hydrate><template>…</template></scalius-deferred>`:
+ * at its moment the template's content replaces the template, moved (never
+ * reparsed), so islands and deferred markup inside connect and schedule
+ * themselves like any other; no observer watches the document.
+ */
+export function createDeferredElement(): CustomElementConstructor {
+  return class ScaliusDeferred extends HTMLElement {
+    #cancel: (() => void) | undefined;
+    #waiting = false;
+
+    connectedCallback(): void {
+      if (this.#waiting || !this.#template()) return;
+      this.#waiting = true;
+      // Its own box holds nothing to focus: `interaction` is the first hover,
+      // focus or tap in the element that holds it.
+      this.#cancel = atMoment(this, this.dataset.hydrate ?? "visible", "600px", () => this.#reveal(), this.parentElement ?? this);
+    }
+
+    disconnectedCallback(): void {
+      this.#stop();
+    }
+
+    #template(): HTMLTemplateElement | null {
+      const first = this.firstElementChild;
+      return first instanceof HTMLTemplateElement ? first : null;
+    }
+
+    #stop(): void {
+      this.#waiting = false;
+      const cancel = this.#cancel;
+      this.#cancel = undefined;
+      cancel?.();
+    }
+
+    #reveal(): void {
+      if (!this.#waiting || !this.isConnected) return;
+      this.#stop();
+      const template = this.#template();
+      if (!template) return;
+      template.replaceWith(template.content);
+      this.dataset.revealed = "";
+    }
+  };
+}
+
+/** The readable sign-in hint the store sets beside its httpOnly session cookie (a UI hint, never authority). */
+function signedInHint(): boolean {
+  try {
+    return document.cookie.split(";").some((cookie) => cookie.trim() === "cs_auth=1");
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * `<html data-scalius-signed-in>` while the hint says the buyer is signed in:
+ * global.css then shows `[data-scalius-when="signed-in"]` parts instead of
+ * `"signed-out"` ones. Kept current on sign-in, sign-out and back/forward.
+ */
+export function syncSignedInState(): void {
+  document.documentElement.toggleAttribute("data-scalius-signed-in", signedInHint());
+}
+
+function installSignedInState(): void {
+  syncSignedInState();
+  for (const name of ["customer-login", "customer-logout", "pageshow"]) window.addEventListener(name, syncSignedInState);
+}
+
 function installCartCount(): void {
   const counts = () => document.querySelectorAll<HTMLElement>("[data-scalius-cart-count]");
   if (counts().length === 0) return;
@@ -251,5 +336,8 @@ export function installAppComponents(): void {
   initQuickAddCards();
   installCartOpeners();
   installCartCount();
+  installSignedInState();
   if (!customElements.get("scalius-island")) customElements.define("scalius-island", createIslandElement());
+  // STOREFRONT_DEFERRED_TAG, spelled out so the page bundle imports no protocol values.
+  if (!customElements.get("scalius-deferred")) customElements.define("scalius-deferred", createDeferredElement());
 }

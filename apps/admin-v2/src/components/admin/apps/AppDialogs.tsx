@@ -1,7 +1,9 @@
 // The app lifecycle dialogs. Activation is a Super Admin's consent: the
 // dialog lists exactly the access the API reported and sends back its grant
 // key with the revision, so a request that changed meanwhile is refused and
-// shown again. Deactivate and uninstall are guarded by the revision too.
+// shown again. Deactivate and uninstall are guarded by the revision too, and
+// both list the published theme's parts the app draws, which then show the
+// store's own design.
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -32,6 +34,7 @@ import {
 } from "~/lib/api-query-options/apps";
 import { queryKeys } from "~/lib/query-keys";
 import { AppAccess } from "./AppAccess";
+import { ThemeAppFallbackNotice } from "./ThemeAppParts";
 
 interface DialogProps {
   app: AppDetail;
@@ -140,6 +143,7 @@ export function DeactivateAppDialog({ app, open, onOpenChange }: DialogProps) {
           <AlertDialogTitle>{t("deactivateTitle", { name: app.name })}</AlertDialogTitle>
           <AlertDialogDescription>{t("deactivateBody", { name: app.name })}</AlertDialogDescription>
         </AlertDialogHeader>
+        <ThemeAppFallbackNotice name={app.name} usage={app.themeUsage} action="deactivate" />
         <AlertDialogFooter>
           <AlertDialogCancel disabled={deactivate.isPending}>{t("cancel")}</AlertDialogCancel>
           <Button type="button" variant="destructive" loading={deactivate.isPending} onClick={() => deactivate.mutate()}>
@@ -189,6 +193,7 @@ export function UninstallAppDialog({ app, open, onOpenChange }: DialogProps) {
             {app.runtime === "bundled" ? t("uninstallBundled", { name: app.name }) : t("uninstallBody", { name: app.name })}
           </AlertDialogDescription>
         </AlertDialogHeader>
+        <ThemeAppFallbackNotice name={app.name} usage={app.themeUsage} action="uninstall" />
         <RadioGroup
           aria-label={t("dataChoice")}
           value={keepData ? "keep" : "delete"}

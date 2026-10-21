@@ -729,7 +729,7 @@ export declare class PluginPlatformError extends Error {
 export declare function invokePluginDefinition(module: unknown, invocation: PluginInvocation, seed: PluginContextSeed, bridge: PluginRuntimeBridge | null): Promise<PluginInvocationResult>;
 
 // packages/plugin-sdk/src/storefront/components.d.ts
-import type { StorefrontComponentSlot, StorefrontImage, StorefrontIslandHydration, StorefrontMoney, StorefrontProductCard, StorefrontRenderContext } from "@scalius/shared/plugins/storefront-protocol";
+import type { StorefrontComponentSlot, StorefrontDeferredHydration, StorefrontImage, StorefrontIslandHydration, StorefrontMoney, StorefrontProductCard, StorefrontRenderContext } from "@scalius/shared/plugins/storefront-protocol";
 import { type Html, type Renderable } from "./html";
 type Attributes = Record<string, string | number | boolean | null | undefined>;
 export interface ImageProps {
@@ -758,6 +758,14 @@ export interface IslandProps {
     class?: string;
 }
 export declare function Island(props: IslandProps): Html;
+export interface DeferredProps {
+    hydrate?: StorefrontDeferredHydration;
+    minHeight?: string;
+    children?: Renderable;
+}
+export declare function Deferred(props: DeferredProps): Html;
+export declare function whenSignedIn(): Attributes;
+export declare function whenSignedOut(): Attributes;
 export declare function stickyHeader(): Attributes;
 export declare function menuDrawer(): Attributes;
 export declare function searchOpener(): Attributes;
@@ -791,7 +799,7 @@ export declare function Slot(props: SlotProps): Html;
 export {};
 
 // packages/plugin-sdk/src/storefront/define.d.ts
-import { type StorefrontComponentSlot, type StorefrontFooterData, type StorefrontHeaderData, type StorefrontListingPage, type StorefrontModule, type StorefrontProductCardData, type StorefrontProductPage, type StorefrontProductSlot, type StorefrontRenderContext, type StorefrontRenderJob, type StorefrontResolvedSettings, type StorefrontSectionSkinData, type StorefrontSectionSkinSettings, type StorefrontSkinnableSection } from "@scalius/shared/plugins/storefront-protocol";
+import { type StorefrontComponentSlot, type StorefrontFooterData, type StorefrontHeaderData, type StorefrontListingPage, type StorefrontModule, type StorefrontProductCardData, type StorefrontProductCardSlot, type StorefrontProductPage, type StorefrontProductSlot, type StorefrontRenderContext, type StorefrontRenderJob, type StorefrontResolvedSettings, type StorefrontSectionSkinData, type StorefrontSectionSkinSettings, type StorefrontSkinnableSection } from "@scalius/shared/plugins/storefront-protocol";
 import { type Renderable } from "./html";
 export interface SectionProps<Settings = StorefrontResolvedSettings> {
     objects: NonNullable<Extract<StorefrontRenderJob, {
@@ -821,7 +829,12 @@ export type ComponentProps<Settings = StorefrontResolvedSettings, Props = Record
     instanceId: string;
     context: StorefrontRenderContext;
 } | {
-    target: Exclude<StorefrontComponentSlot, StorefrontProductSlot>;
+    target: StorefrontProductCardSlot;
+    settings: Settings;
+    data: StorefrontProductCardData;
+    context: StorefrontRenderContext;
+} | {
+    target: Exclude<StorefrontComponentSlot, StorefrontProductSlot | StorefrontProductCardSlot>;
     settings: Settings;
     context: StorefrontRenderContext;
 } | {
@@ -872,10 +885,10 @@ export { defineStorefront, storefrontDefinitionOf } from "./define";
 export type { AppComponent, ComponentProps, FooterComponent, FooterProps, HeaderComponent, HeaderProps, ListingMainComponent, ListingMainProps, ProductCardComponent, ProductCardProps, ProductMainComponent, ProductMainProps, SectionComponent, SectionProps, SectionSkinComponent, SectionSkinProps, SkinComponent, SkinProps, StorefrontDefinition, StorefrontModuleDefinition, } from "./define";
 export { EMPTY_HTML, escapeHtml, html, isHtml, raw, toHtml, type Html, type Renderable } from "./html";
 export { Fragment, jsx, jsxs, type Component, type JSX } from "./jsx-runtime";
-export { BuyForm, CartCount, Filters, Gallery, Image, Island, OrderForm, Pagination, Price, Recommendations, Reviews, Slot, Toolbar, accountLink, asset, editable, menuDrawer, openCart, quickAdd, searchOpener, stickyHeader, } from "./components";
+export { BuyForm, CartCount, Deferred, Filters, Gallery, Image, Island, OrderForm, Pagination, Price, Recommendations, Reviews, Slot, Toolbar, accountLink, asset, editable, menuDrawer, openCart, quickAdd, searchOpener, stickyHeader, whenSignedIn, whenSignedOut, } from "./components";
 export { formatDate, formatMoney, formatNumber, plural, storeTime, t, type Words } from "./locale";
-export type { BuyFormProps, ImageProps, IslandProps, OrderFormProps, PriceProps, SlotProps } from "./components";
-export type { StorefrontBannerMosaicSkinSettings, StorefrontBannerSkinSettings, StorefrontComponentSlot, StorefrontComponentTarget, StorefrontBrandWallSkinSettings, StorefrontCategoryTilesSkinSettings, StorefrontCollectionsSkinSettings, StorefrontDealBlockSkinSettings, StorefrontDeliveryFacts, StorefrontEditorialSkinSettings, StorefrontFaqSkinSettings, StorefrontFocalPoint, StorefrontFooterData, StorefrontHeaderData, StorefrontHeroSkinSettings, StorefrontImage, StorefrontLink, StorefrontListingPage, StorefrontLookbookSkinSettings, StorefrontMenuItem, StorefrontMoney, StorefrontNewsletterSkinSettings, StorefrontObjectFieldView, StorefrontProductCard, StorefrontProductCardData, StorefrontProductGridSkinSettings, StorefrontProductList, StorefrontProductPage, StorefrontProductSlot, StorefrontProductRailSkinSettings, StorefrontProductTabsSkinSettings, StorefrontPromotionEnd, StorefrontRenderContext, StorefrontResolvedSettings, StorefrontSectionSkinData, StorefrontSectionSkinSettings, StorefrontSeoTextSkinSettings, StorefrontShopBySkinSettings, StorefrontSkinnableSection, StorefrontSkinTarget, StorefrontSpecificationsSkinSettings, StorefrontStoreInfo, StorefrontTile, StorefrontUspStripSkinSettings, StorefrontUtilityCardsSkinSettings, } from "@scalius/shared/plugins/storefront-protocol";
+export type { BuyFormProps, DeferredProps, ImageProps, IslandProps, OrderFormProps, PriceProps, SlotProps } from "./components";
+export type { StorefrontBannerMosaicSkinSettings, StorefrontBannerSkinSettings, StorefrontComponentSlot, StorefrontComponentTarget, StorefrontBrandWallSkinSettings, StorefrontCategoryTilesSkinSettings, StorefrontCollectionsSkinSettings, StorefrontDealBlockSkinSettings, StorefrontDeferredHydration, StorefrontDeliveryFacts, StorefrontEditorialSkinSettings, StorefrontFaqSkinSettings, StorefrontFocalPoint, StorefrontFooterData, StorefrontHeaderData, StorefrontHeroSkinSettings, StorefrontImage, StorefrontLink, StorefrontListingPage, StorefrontLookbookSkinSettings, StorefrontMenuItem, StorefrontMoney, StorefrontNewsletterSkinSettings, StorefrontObjectFieldView, StorefrontProductCard, StorefrontProductCardData, StorefrontProductGridSkinSettings, StorefrontProductList, StorefrontProductPage, StorefrontProductSlot, StorefrontProductRailSkinSettings, StorefrontProductTabsSkinSettings, StorefrontPromotionEnd, StorefrontRenderContext, StorefrontResolvedSettings, StorefrontSectionSkinData, StorefrontSectionSkinSettings, StorefrontSeoTextSkinSettings, StorefrontShopBySkinSettings, StorefrontSkinnableSection, StorefrontSkinTarget, StorefrontSpecificationsSkinSettings, StorefrontStoreInfo, StorefrontTile, StorefrontUspStripSkinSettings, StorefrontUtilityCardsSkinSettings, } from "@scalius/shared/plugins/storefront-protocol";
 
 // packages/plugin-sdk/src/storefront/island.d.ts
 import { type StorefrontIslandContext, type StorefrontIslandModule } from "@scalius/shared/plugins/storefront-protocol";
@@ -1431,7 +1444,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
                 sections: string[];
                 components: string[];
                 skins: string[];
-                extensions: ("checkout.contact.after" | "checkout.delivery.after" | "cart.page.summary" | "checkout.payment.after" | "checkout.actions.before" | "order.confirmation" | "account.order" | "account.overview" | "account.profile")[];
+                extensions: ("checkout.contact.after" | "checkout.delivery.after" | "cart.page.summary" | "cart.page.below" | "checkout.payment.after" | "checkout.actions.before" | "checkout.summary.after" | "cart_drawer.footer" | "order.confirmation" | "account.order" | "account.overview" | "account.profile")[];
             };
         }[];
         admin: {
@@ -1495,7 +1508,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
             components: {
                 type: string;
                 name: string;
-                targets: ("header.actions" | "product.buy_box.before" | "product.buy_box.after" | "product.below" | "footer.columns" | "page")[];
+                targets: ("header.actions" | "product.buy_box.before" | "product.buy_box.after" | "product.below" | "footer.columns" | "product_card.badges" | "product_card.meta" | "page")[];
                 settings: ({
                     type: "text";
                     maxLength: number;
@@ -2189,7 +2202,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
             }[];
             proxy: boolean;
             extensions: {
-                target: "checkout.contact.after" | "checkout.delivery.after" | "cart.page.summary" | "checkout.payment.after" | "checkout.actions.before" | "order.confirmation" | "account.order" | "account.overview" | "account.profile";
+                target: "checkout.contact.after" | "checkout.delivery.after" | "cart.page.summary" | "cart.page.below" | "checkout.payment.after" | "checkout.actions.before" | "checkout.summary.after" | "cart_drawer.footer" | "order.confirmation" | "account.order" | "account.overview" | "account.profile";
                 reads: ({
                     as: string;
                     object: string;
@@ -2387,19 +2400,24 @@ export declare const STOREFRONT_SKIN_UNITS: readonly ["header", "footer", "produ
 export type StorefrontSkinUnit = (typeof STOREFRONT_SKIN_UNITS)[number];
 export declare const STOREFRONT_SECTION_SKIN_PREFIX = "section:";
 export type StorefrontSkinTarget = StorefrontSkinUnit | `section:${string}`;
-export declare const STOREFRONT_COMPONENT_SLOTS: readonly ["header.actions", "product.buy_box.before", "product.buy_box.after", "product.below", "footer.columns"];
+export declare const STOREFRONT_COMPONENT_SLOTS: readonly ["header.actions", "product.buy_box.before", "product.buy_box.after", "product.below", "footer.columns", "product_card.badges", "product_card.meta"];
 export type StorefrontComponentSlot = (typeof STOREFRONT_COMPONENT_SLOTS)[number];
 export declare const STOREFRONT_PRODUCT_SLOTS: readonly ["product.buy_box.before", "product.buy_box.after", "product.below"];
 export type StorefrontProductSlot = (typeof STOREFRONT_PRODUCT_SLOTS)[number];
+export declare const STOREFRONT_PRODUCT_CARD_SLOTS: readonly ["product_card.badges", "product_card.meta"];
+export type StorefrontProductCardSlot = (typeof STOREFRONT_PRODUCT_CARD_SLOTS)[number];
 export declare function storefrontComponentProductSlot(targets: readonly string[]): StorefrontProductSlot | null;
-export declare const STOREFRONT_COMPONENT_TARGETS: readonly ["header.actions", "product.buy_box.before", "product.buy_box.after", "product.below", "footer.columns", "page"];
+export declare const STOREFRONT_COMPONENT_TARGETS: readonly ["header.actions", "product.buy_box.before", "product.buy_box.after", "product.below", "footer.columns", "product_card.badges", "product_card.meta", "page"];
 export type StorefrontComponentTarget = (typeof STOREFRONT_COMPONENT_TARGETS)[number];
 export declare const STOREFRONT_UI_SLOT_PAGES: {
     readonly "checkout.contact.after": "checkout";
     readonly "checkout.delivery.after": "checkout";
     readonly "cart.page.summary": "checkout";
+    readonly "cart.page.below": "checkout";
     readonly "checkout.payment.after": "checkout";
     readonly "checkout.actions.before": "checkout";
+    readonly "checkout.summary.after": "checkout";
+    readonly "cart_drawer.footer": "cart_drawer";
     readonly "order.confirmation": "order";
     readonly "account.order": "order";
     readonly "account.overview": "account";
@@ -2412,6 +2430,9 @@ export declare function storefrontUiSlotsOn(page: StorefrontUiSlotPage): Storefr
 export declare const STOREFRONT_EMBED_KINDS: readonly ["buy_form", "reviews", "recommendations", "filters", "toolbar", "pagination", "order_form", "gallery", "slot"];
 export type StorefrontEmbedKind = (typeof STOREFRONT_EMBED_KINDS)[number];
 export declare const STOREFRONT_EMBED_TAG = "scalius-embed";
+export declare const STOREFRONT_DEFERRED_TAG = "scalius-deferred";
+export declare const STOREFRONT_DEFERRED_HYDRATION: readonly ["idle", "visible", "interaction"];
+export type StorefrontDeferredHydration = (typeof STOREFRONT_DEFERRED_HYDRATION)[number];
 export interface StorefrontEmbedRule {
     allowed: Partial<Record<StorefrontEmbedKind, number>>;
     required: readonly StorefrontEmbedKind[];
@@ -2435,6 +2456,7 @@ export declare const STOREFRONT_COMPONENT_LIMITS: {
     readonly renderWallMs: 250;
     readonly renderCpuMs: 50;
     readonly batchJobs: 120;
+    readonly skinImages: 8;
 };
 export declare const STOREFRONT_PUBLIC_FILE_TYPES: Readonly<Record<string, string>>;
 export declare const STOREFRONT_PACKAGE_DIR = "storefront";
@@ -2482,6 +2504,7 @@ export interface StorefrontMenuItem {
     title: string;
     url: string;
     children: StorefrontMenuItem[];
+    image?: StorefrontImage | null;
 }
 export interface StorefrontStoreInfo {
     name: string;
@@ -2502,8 +2525,29 @@ export interface StorefrontHeaderData {
         search: string;
         cart: string;
         account: string;
+        orders?: string;
+        trackOrder?: string;
     };
     searchParam: string;
+    searchScopes?: Array<{
+        title: string;
+        value: string;
+    }>;
+    searchScopeParam?: "category";
+    market?: {
+        country: string | null;
+        currency: string;
+        language: string;
+        selection: {
+            action: string;
+            returnTo: string;
+            countries: Array<{
+                code: string;
+                name: string;
+                currency: string;
+            }>;
+        } | null;
+    };
     phoneNavigation?: {
         menu: "accordion" | "drill";
         tabBar: boolean;
@@ -2561,6 +2605,11 @@ export interface StorefrontLink {
     title: string;
     url: string;
 }
+export interface StorefrontInstallments {
+    provider: string;
+    months: number;
+    monthly: StorefrontMoney;
+}
 export interface StorefrontProductPage {
     product: {
         id: string;
@@ -2584,8 +2633,11 @@ export interface StorefrontProductPage {
                 swatch: string | null;
             }>;
         }>;
+        sku?: string | null;
+        installments?: StorefrontInstallments | null;
         variants: Array<{
             id: string;
+            sku?: string | null;
             title: string;
             options: string[];
             price: StorefrontMoney;
@@ -2626,6 +2678,9 @@ export interface StorefrontListingPage {
     pageCount: number;
     breadcrumbs: StorefrontLink[];
     fields: StorefrontFieldValues;
+    children?: Array<StorefrontLink & {
+        image: StorefrontImage | null;
+    }>;
 }
 export interface StorefrontTile {
     id: string;
@@ -2959,7 +3014,10 @@ export type StorefrontComponentJob = (ComponentJobBase & {
     instanceId: string;
     data: StorefrontProductPage;
 }) | (ComponentJobBase & {
-    target: Exclude<StorefrontComponentSlot, StorefrontProductSlot>;
+    target: StorefrontProductCardSlot;
+    data: StorefrontProductCardData;
+}) | (ComponentJobBase & {
+    target: Exclude<StorefrontComponentSlot, StorefrontProductSlot | StorefrontProductCardSlot>;
 }) | (ComponentJobBase & {
     target: "page";
     props: Record<string, unknown>;
@@ -3000,6 +3058,7 @@ export interface StorefrontIslandContext {
         total: StorefrontMoney;
     }) => void): () => void;
     fetchApp(path: string, init?: RequestInit): Promise<Response>;
+    signedIn(): boolean;
     product?: {
         state(): StorefrontProductState;
         onChange(listener: (state: StorefrontProductState) => void): () => void;

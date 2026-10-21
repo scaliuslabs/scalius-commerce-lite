@@ -789,10 +789,10 @@ describe("facet display types", () => {
     expect(document.querySelector("[data-catalog-facet-search]")!.closest("details")!.querySelector("summary")!.textContent).toContain("Maker");
   });
 
-  it("renders a range as From/To number fields in the plain GET form", async () => {
+  it("renders a range as From/To number fields in the plain filter form", async () => {
     const document = await renderListing(DEFAULT_STOREFRONT_THEME, { ...plain(), facets: [...FACETS, DISPLAY_SIZE] });
     const form = document.querySelector("form[data-catalog-filters]")!;
-    expect(form.getAttribute("method")).toBe("get");
+    expect(form.getAttribute("method")).toBe("post");
     const range = form.querySelector("fieldset[data-catalog-facet-display='range']")!;
     expect(range.closest("details")!.querySelector("summary")!.textContent).toContain("Display size");
     expect(range.querySelector("legend")!.textContent).toBe("Display size (in)");
@@ -894,7 +894,7 @@ describe("filter styles (fidelity slice 3)", () => {
     expect(aside.querySelectorAll("[data-catalog-facet-row], [data-catalog-facet-label], [data-catalog-facet-count]")).toHaveLength(0);
     expect(aside.querySelector("fieldset[data-facet-kind='values'] .catalog-facet-label")!.textContent).toContain("Long value");
     const form = aside.querySelector("form")!;
-    expect([form.getAttribute("method"), form.getAttribute("action")]).toEqual(["get", "/categories/sarees"]);
+    expect([form.getAttribute("method"), form.getAttribute("action")]).toEqual(["post", "/categories/sarees"]);
     expect(form.querySelectorAll("fieldset[data-facet-kind='values'] input[type='checkbox'][name][value]")).toHaveLength(100);
   });
 
@@ -927,7 +927,7 @@ describe("filter styles (fidelity slice 3)", () => {
     expect([less.textContent!.trim(), less.getAttribute("href"), less.getAttribute("aria-expanded")]).toEqual(["See less", "/categories/sarees", "true"]);
   });
 
-  it("marketplace phones get one scrolling filter row and a split rail over the same GET form", async () => {
+  it("marketplace phones get one scrolling filter row and a split rail over the same filter form", async () => {
     const document = await renderListing(storefrontTemplateTheme("marketplace"), plain(), TREE_STORE_SHAPE);
     const bar = document.querySelector("[data-catalog-phone-bar]")!;
     expect(bar.className).toContain("catalog-marketplace-phone-bar");
@@ -942,7 +942,7 @@ describe("filter styles (fidelity slice 3)", () => {
     expect(bar.querySelector(".catalog-marketplace-phone-controls a[href='#catalog-facet-size']")).not.toBeNull();
     const rail = document.querySelector("#filter-section[data-marketplace-filter-rail]")!;
     const form = rail.querySelector("form")!;
-    expect([form.getAttribute("method"), form.getAttribute("action")]).toEqual(["get", "/categories/sarees"]);
+    expect([form.getAttribute("method"), form.getAttribute("action")]).toEqual(["post", "/categories/sarees"]);
     expect(form.querySelectorAll("details[data-catalog-mobile-facet]").length).toBeGreaterThan(0);
     expect(form.querySelector("#catalog-facet-size input[name='size']")).not.toBeNull();
   });

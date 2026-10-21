@@ -40,11 +40,13 @@ const mocks = vi.hoisted(() => ({
   readThemeMedia: vi.fn(),
   readStoreShape: vi.fn(),
   listPluginInstallations: vi.fn(async () => [] as unknown[]),
+  selectActivePluginInstallations: vi.fn(async () => [] as unknown[]),
 }));
 
 vi.mock("@scalius/core/modules/plugins", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/plugins")>()),
   listPluginInstallations: mocks.listPluginInstallations,
+  selectActivePluginInstallations: mocks.selectActivePluginInstallations,
 }));
 
 // The store's pricing currency: the shop currency at the backup market's increment.
@@ -889,7 +891,7 @@ describe("site settings write behavior", () => {
     });
 
     expect(response.status).toBe(409);
-    expect(mocks.publishThemeDraft).toHaveBeenCalledWith({ id: "db" }, 1, 2, null, null);
+    expect(mocks.publishThemeDraft).toHaveBeenCalledWith({ id: "db" }, 1, 2, null, null, { extensions: [], installed: [] });
   });
 
   it("saves theme drafts, and publishing goes only through the draft", async () => {
@@ -1064,7 +1066,8 @@ describe("site settings write behavior", () => {
     const { app, env } = createTestApp();
     const response = await requestJson(app, env, "POST", "/theme/publish", { expectedPublishedRevision: 1, expectedDraftRevision: 2, note: "Eid release" });
     expect(response.status).toBe(200);
-    expect(mocks.publishThemeDraft).toHaveBeenCalledWith({ id: "db" }, 1, 2, null, "Eid release");
+    // The draft is checked against the active apps (none here).
+    expect(mocks.publishThemeDraft).toHaveBeenCalledWith({ id: "db" }, 1, 2, null, "Eid release", { extensions: [], installed: [] });
     const invalid = await requestJson(app, env, "POST", "/theme/publish", { expectedPublishedRevision: 1, expectedDraftRevision: 2, note: "x".repeat(501) });
     expect(invalid.status).toBe(400);
   });

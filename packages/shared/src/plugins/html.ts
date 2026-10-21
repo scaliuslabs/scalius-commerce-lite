@@ -6,8 +6,18 @@
 // `id`s under the app's own prefix (`<app name>-…`, so markup never
 // clobbers the page's ids), forms posting to a same-store path (on an app
 // page, only to the app's own routes: `formsTo`; a POST form stamped with the
-// app's id, `APP_FORM_OWNER_ATTRIBUTE`), islands, core embeds and
-// schema.org JSON-LD (re-serialized; left out on a `noindex` page).
+// app's id, `APP_FORM_OWNER_ATTRIBUTE`), islands, core embeds,
+// deferred markup and schema.org JSON-LD (re-serialized; left out on a
+// `noindex` page).
+//
+// Deferred markup (`STOREFRONT_DEFERRED_TAG`) is the one place a `<template>`
+// is written: `<scalius-deferred data-hydrate="…" style="…"><template>…
+// </template></scalius-deferred>`, the template its only child (whitespace
+// aside) and written without attributes (no `shadowrootmode`). Its content
+// passes this same check, within the same bounds, and keeps no core embed
+// (the store cuts markup at embeds before it renders them) and no JSON-LD
+// (the page's facts are never deferred). Deferred markup may nest. Any other
+// shape is unwrapped, and a template anywhere else goes with its content.
 //
 // Always: no event handlers, no script-capable URLs (links: same-store
 // paths, https, mailto/tel and fragments; images and video: https or
@@ -31,7 +41,7 @@
 
 import { parseDocument } from "htmlparser2";
 import { isTag, isText, type ChildNode, type Element } from "domhandler";
-import { STOREFRONT_COMPONENT_LIMITS } from "./storefront-protocol";
+import { STOREFRONT_COMPONENT_LIMITS, STOREFRONT_DEFERRED_HYDRATION, STOREFRONT_DEFERRED_TAG } from "./storefront-protocol";
 import { APP_FORM_OWNER_ATTRIBUTE } from "./app-form";
 
 export interface PluginHtmlOptions {
@@ -270,6 +280,8 @@ interface Scope {
   elements: number;
   dropped: number;
   exceeded: boolean;
+  /** Inside deferred markup's template: no core embeds, no JSON-LD. */
+  deferred: boolean;
 }
 
 const ESCAPES: Readonly<Record<string, string>> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", " ": "&nbsp;" };
@@ -372,6 +384,41 @@ function attributes(tag: string, input: Record<string, string>, svg: boolean, sc
   return result;
 }
 
+const DEFERRED_HYDRATION: ReadonlySet<string> = new Set(STOREFRONT_DEFERRED_HYDRATION);
+
+/** Deferred markup's one child: a `<template>` (whitespace and comments aside), or null for any other shape. */
+function deferredTemplate(node: Element): Element | null {
+  let template: Element | null = null;
+  for (const child of node.children) {
+    if (isText(child)) {
+      if (child.data.trim() !== "") return null;
+    } else if (isTag(child)) {
+      if (template || child.name.toLowerCase() !== "template") return null;
+      template = child;
+    }
+  }
+  return template;
+}
+
+/** Deferred markup's attributes: its moment (`visible` unless valid) and inline style that loads nothing. */
+function deferredAttributes(input: Record<string, string>, scope: Scope): string {
+  let hydrate = "visible";
+  let style: string | null = null;
+  for (const [rawName, rawValue] of Object.entries(input)) {
+    const name = rawName.toLowerCase();
+    const value = String(rawValue ?? "");
+    if (name === "data-hydrate" && DEFERRED_HYDRATION.has(value)) {
+      hydrate = value;
+    } else if (name === "style") {
+      style = value.length <= MAX_ATTRIBUTE_VALUE ? safeStyle(value) : null;
+      if (!style) scope.dropped += 1;
+    } else {
+      scope.dropped += 1;
+    }
+  }
+  return ` data-hydrate="${hydrate}"${style ? ` style="${escapeAttribute(style)}"` : ""}`;
+}
+
 function textOf(nodes: ChildNode[]): string {
   return nodes.map((node) => (isText(node) ? node.data : isTag(node) ? textOf(node.children) : "")).join("");
 }
@@ -388,7 +435,7 @@ function walk(nodes: ChildNode[], depth: number, scope: Scope, inForm: boolean, 
     if (tag === "script" && (node.attribs.type ?? "").trim().toLowerCase() === "application/ld+json") {
       let json: string | null = null;
       try {
-        json = scope.jsonLd ? serializeSchemaJsonLd(JSON.parse(textOf(node.children))) : null;
+        json = scope.jsonLd && !scope.deferred ? serializeSchemaJsonLd(JSON.parse(textOf(node.children))) : null;
       } catch {
         json = null;
       }
@@ -403,6 +450,28 @@ function walk(nodes: ChildNode[], depth: number, scope: Scope, inForm: boolean, 
     if (depth > scope.maxDepth) {
       scope.exceeded = true;
       return;
+    }
+    // Deferred content places no core embed: the store would cut its template there.
+    if (tag === "scalius-embed" && scope.deferred) {
+      scope.dropped += 1;
+      continue;
+    }
+    const template = tag === STOREFRONT_DEFERRED_TAG && !svg ? deferredTemplate(node) : null;
+    if (template) {
+      scope.elements += 2;
+      if (scope.elements > scope.maxElements || depth + 1 > scope.maxDepth) {
+        scope.exceeded = true;
+        return;
+      }
+      // The template is written bare: no `shadowrootmode` or anything else of it.
+      scope.dropped += Object.keys(template.attribs).length;
+      out.push(`<${STOREFRONT_DEFERRED_TAG}${deferredAttributes(node.attribs, scope)}><template>`);
+      const outer = scope.deferred;
+      scope.deferred = true;
+      walk(template.children, depth + 2, scope, inForm, false, out);
+      scope.deferred = outer;
+      out.push(`</template></${STOREFRONT_DEFERRED_TAG}>`);
+      continue;
     }
     const allowed = TAGS.has(tag)
       && (svg ? SVG_TAGS[tag] !== undefined || tag === "a" : tag === "svg" || SVG_TAGS[tag] === undefined)
@@ -454,6 +523,7 @@ export function sanitizePluginHtml(html: string, options: PluginHtmlOptions): Pl
     elements: 0,
     dropped: 0,
     exceeded: false,
+    deferred: false,
   };
   const out: string[] = [];
   walk(document.children, 1, scope, false, false, out);

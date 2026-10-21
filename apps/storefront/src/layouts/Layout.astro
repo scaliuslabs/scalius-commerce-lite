@@ -396,6 +396,8 @@ const cdnDomain = sameOriginMediaSource ? null : cdnDomainUrl || null;
 const runtimeGlobalsScript = [
   // Consent first: Google's Consent Mode defaults precede every tag (components/consent).
   consentBoot,
+  // The sign-in hint before first paint: `whenSignedIn()` / `whenSignedOut()` parts never flash (scripts/app-components.ts keeps it current).
+  'document.cookie.split(";").some(function(c){return c.trim()==="cs_auth=1"})&&document.documentElement.setAttribute("data-scalius-signed-in","");',
   `window.__API_BASE_URL__=${serializeJsonForInlineScript(publicApiUrl)};`,
   `window.__CDN_DOMAIN__=${serializeJsonForInlineScript(cdnDomainUrl || "")};`,
   `window.__IMAGE_CDN_BASE_URL__=${serializeJsonForInlineScript(cdnDomainUrl || "")};`,

@@ -29,8 +29,9 @@ interface Props {
 }
 
 const { target, skin: ref, data, instanceId, embeds: pageEmbeds, editorMark } = Astro.props;
-// The embed rule already holds a slot to the unit's own slot names.
-const embeds: EmbedRenderers = { slot: ({ data: slot }) => ({ component: AppSlot as EmbedRender["component"], props: { name: slot.name } }), ...pageEmbeds };
+// The embed rule already holds a slot to the unit's own slot names; a card's
+// slots draw from the same card projection the skin got.
+const embeds: EmbedRenderers = { slot: ({ data: slot }) => ({ component: AppSlot as EmbedRender["component"], props: { name: slot.name, data } }), ...pageEmbeds };
 // A section without a skin of its own never looks up the theme's skins.
 const skin = ref === null ? null : await appSkin(Astro.locals, Astro.url, target, ref);
 const markup = skin

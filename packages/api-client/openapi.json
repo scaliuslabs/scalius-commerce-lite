@@ -9779,8 +9779,11 @@
                     "checkout.contact.after",
                     "checkout.delivery.after",
                     "cart.page.summary",
+                    "cart.page.below",
                     "checkout.payment.after",
                     "checkout.actions.before",
+                    "checkout.summary.after",
+                    "cart_drawer.footer",
                     "order.confirmation",
                     "account.order",
                     "account.overview",
@@ -19324,6 +19327,8 @@
                       "product.buy_box.after",
                       "product.below",
                       "footer.columns",
+                      "product_card.badges",
+                      "product_card.meta",
                       "page"
                     ]
                   }
@@ -21259,8 +21264,11 @@
                     "checkout.contact.after",
                     "checkout.delivery.after",
                     "cart.page.summary",
+                    "cart.page.below",
                     "checkout.payment.after",
                     "checkout.actions.before",
+                    "checkout.summary.after",
+                    "cart_drawer.footer",
                     "order.confirmation",
                     "account.order",
                     "account.overview",
@@ -22670,6 +22678,8 @@
                               "product.buy_box.after",
                               "product.below",
                               "footer.columns",
+                              "product_card.badges",
+                              "product_card.meta",
                               "page"
                             ]
                           }
@@ -23006,6 +23016,28 @@
                   "declared",
                   "applied"
                 ]
+              },
+              "themeUsage": {
+                "type": "object",
+                "properties": {
+                  "parts": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ThemeAppPart"
+                    },
+                    "maxItems": 20
+                  },
+                  "more": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Parts left out of the list."
+                  }
+                },
+                "required": [
+                  "parts",
+                  "more"
+                ],
+                "description": "The parts of the published theme this app draws (hidden sections left out): while the app is not active, the storefront shows the store's own design there instead."
               }
             },
             "required": [
@@ -23035,7 +23067,8 @@
               "limits",
               "storageUsage",
               "signer",
-              "migrations"
+              "migrations",
+              "themeUsage"
             ]
           }
         ]
@@ -23393,6 +23426,78 @@
           "grantKey",
           "settings",
           "pages"
+        ]
+      },
+      "ThemeAppPart": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "section",
+              "section_skin",
+              "skin",
+              "product_block"
+            ],
+            "description": "A section the app draws, the app's skin of a store section, a skin of a store unit (header, footer, product card, product page, listing), or a product-page app block."
+          },
+          "type": {
+            "type": "string",
+            "description": "The app's section type, skin id or component type."
+          },
+          "target": {
+            "type": "string",
+            "description": "A skin's target: the unit, or section:<store section type>."
+          },
+          "path": {
+            "type": "string",
+            "description": "The theme document path of the reference."
+          },
+          "place": {
+            "type": "object",
+            "properties": {
+              "page": {
+                "type": "string",
+                "enum": [
+                  "home",
+                  "landing",
+                  "template",
+                  "theme"
+                ]
+              },
+              "slug": {
+                "type": "string",
+                "description": "A landing page's handle."
+              },
+              "template": {
+                "type": "string",
+                "enum": [
+                  "product",
+                  "collection",
+                  "cart",
+                  "page"
+                ]
+              },
+              "index": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "The section's or block's position, from 0."
+              }
+            },
+            "required": [
+              "page"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "description": "The app's name for the part; absent when it no longer declares it."
+          }
+        },
+        "required": [
+          "kind",
+          "type",
+          "path",
+          "place"
         ]
       },
       "AppLogLine": {
@@ -33040,6 +33145,39 @@
                             "favicon"
                           ]
                         },
+                        "skinMedia": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "url": {
+                                "type": "string"
+                              },
+                              "alt": {
+                                "type": "string"
+                              },
+                              "width": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "height": {
+                                "type": "integer",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "url",
+                              "alt",
+                              "width",
+                              "height"
+                            ]
+                          },
+                          "maxItems": 40
+                        },
                         "storeShape": {
                           "$ref": "#/components/schemas/StorefrontStoreShape"
                         },
@@ -33602,6 +33740,8 @@
                                           "product.buy_box.after",
                                           "product.below",
                                           "footer.columns",
+                                          "product_card.badges",
+                                          "product_card.meta",
                                           "page"
                                         ]
                                       },
@@ -33728,6 +33868,7 @@
                         "markets",
                         "theme",
                         "brand",
+                        "skinMedia",
                         "storeShape",
                         "media",
                         "metaCapi",
@@ -34196,6 +34337,39 @@
                             "favicon"
                           ]
                         },
+                        "skinMedia": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "url": {
+                                "type": "string"
+                              },
+                              "alt": {
+                                "type": "string"
+                              },
+                              "width": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "height": {
+                                "type": "integer",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "url",
+                              "alt",
+                              "width",
+                              "height"
+                            ]
+                          },
+                          "maxItems": 40
+                        },
                         "draftRevision": {
                           "type": "integer",
                           "minimum": 0,
@@ -34210,6 +34384,7 @@
                       "required": [
                         "theme",
                         "brand",
+                        "skinMedia",
                         "draftRevision",
                         "basePublishedRevision"
                       ]
@@ -45494,8 +45669,11 @@
                                   "checkout.contact.after",
                                   "checkout.delivery.after",
                                   "cart.page.summary",
+                                  "cart.page.below",
                                   "checkout.payment.after",
                                   "checkout.actions.before",
+                                  "checkout.summary.after",
+                                  "cart_drawer.footer",
                                   "order.confirmation",
                                   "account.order",
                                   "account.overview",
@@ -73747,8 +73925,11 @@
                                       "checkout.contact.after",
                                       "checkout.delivery.after",
                                       "cart.page.summary",
+                                      "cart.page.below",
                                       "checkout.payment.after",
                                       "checkout.actions.before",
+                                      "checkout.summary.after",
+                                      "cart_drawer.footer",
                                       "order.confirmation",
                                       "account.order",
                                       "account.overview",
@@ -78718,8 +78899,11 @@
                                   "checkout.contact.after",
                                   "checkout.delivery.after",
                                   "cart.page.summary",
+                                  "cart.page.below",
                                   "checkout.payment.after",
                                   "checkout.actions.before",
+                                  "checkout.summary.after",
+                                  "cart_drawer.footer",
                                   "order.confirmation",
                                   "account.order",
                                   "account.overview",
@@ -82803,8 +82987,11 @@
                                   "checkout.contact.after",
                                   "checkout.delivery.after",
                                   "cart.page.summary",
+                                  "cart.page.below",
                                   "checkout.payment.after",
                                   "checkout.actions.before",
+                                  "checkout.summary.after",
+                                  "cart_drawer.footer",
                                   "order.confirmation",
                                   "account.order",
                                   "account.overview",

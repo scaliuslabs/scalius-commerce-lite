@@ -53,12 +53,20 @@ export const STOREFRONT_COMPONENT_SLOTS = [
   "product.below",
   // Footer columns, after the store's menus.
   "footer.columns",
+  // On every product card, whoever draws it (core or another app's card
+  // skin): a row of badges over the photo, and a line under the price.
+  "product_card.badges",
+  "product_card.meta",
 ] as const;
 export type StorefrontComponentSlot = (typeof STOREFRONT_COMPONENT_SLOTS)[number];
 
 /** The component slots the merchant arranges in the theme (the product page's app blocks). */
 export const STOREFRONT_PRODUCT_SLOTS = ["product.buy_box.before", "product.buy_box.after", "product.below"] as const satisfies readonly StorefrontComponentSlot[];
 export type StorefrontProductSlot = (typeof STOREFRONT_PRODUCT_SLOTS)[number];
+
+/** The component slots on a product card: each card's components get that card (`StorefrontProductCardData`). */
+export const STOREFRONT_PRODUCT_CARD_SLOTS = ["product_card.badges", "product_card.meta"] as const satisfies readonly StorefrontComponentSlot[];
+export type StorefrontProductCardSlot = (typeof STOREFRONT_PRODUCT_CARD_SLOTS)[number];
 
 /** The product slot a component targets, if any: where its product-page placements render (a component has at most one). */
 export function storefrontComponentProductSlot(targets: readonly string[]): StorefrontProductSlot | null {
@@ -75,9 +83,16 @@ export const STOREFRONT_UI_SLOT_PAGES = {
   "checkout.contact.after": "checkout",
   "checkout.delivery.after": "checkout",
   "cart.page.summary": "checkout",
+  // Below the cart page's lines and summary.
+  "cart.page.below": "checkout",
   // The payment step.
   "checkout.payment.after": "checkout",
   "checkout.actions.before": "checkout",
+  // Under the payment step's order summary.
+  "checkout.summary.after": "checkout",
+  // The cart drawer's footer, above its checkout button: on every public
+  // page, drawn by the store from the extension's `ui` tree (no app code).
+  "cart_drawer.footer": "cart_drawer",
   // The thank-you page.
   "order.confirmation": "order",
   // The order status page (signed in, or the receipt's status view).
@@ -89,7 +104,7 @@ export type StorefrontUiSlot = keyof typeof STOREFRONT_UI_SLOT_PAGES;
 export type StorefrontUiSlotPage = (typeof STOREFRONT_UI_SLOT_PAGES)[StorefrontUiSlot];
 export const STOREFRONT_UI_SLOTS = Object.keys(STOREFRONT_UI_SLOT_PAGES) as [StorefrontUiSlot, ...StorefrontUiSlot[]];
 
-/** The UI slots one buyer page group draws (`checkout`: the cart page and the payment step). */
+/** The UI slots one buyer page group draws (`checkout`: the cart page and the payment step; `cart_drawer`: the cart drawer). */
 export function storefrontUiSlotsOn(page: StorefrontUiSlotPage): StorefrontUiSlot[] {
   return STOREFRONT_UI_SLOTS.filter((slot) => STOREFRONT_UI_SLOT_PAGES[slot] === page);
 }
@@ -113,11 +128,25 @@ export function storefrontUiSlotsOn(page: StorefrontUiSlotPage): StorefrontUiSlo
  *   `data-submit-label`).
  * - `slot`: a component slot of the unit (`data-name`, `<Slot name="…" />`),
  *   where active apps' components render (a header skin places
- *   `header.actions`, a footer skin `footer.columns`).
+ *   `header.actions`, a footer skin `footer.columns`, a card skin
+ *   `product_card.badges` and `product_card.meta`).
  */
 export const STOREFRONT_EMBED_KINDS = ["buy_form", "reviews", "recommendations", "filters", "toolbar", "pagination", "order_form", "gallery", "slot"] as const;
 export type StorefrontEmbedKind = (typeof STOREFRONT_EMBED_KINDS)[number];
 export const STOREFRONT_EMBED_TAG = "scalius-embed";
+
+/**
+ * Deferred markup (`<Deferred>` in the SDK):
+ * `<scalius-deferred data-hydrate="idle|visible|interaction"><template>…</template></scalius-deferred>`.
+ * The markup ships in the page (and its cache), but the browser neither lays
+ * it out nor loads its images until its moment, when the store moves it into
+ * the page and mounts its islands, so a heavy part never competes with the
+ * page's largest paint. Reserve its height (`minHeight`) so nothing shifts.
+ */
+export const STOREFRONT_DEFERRED_TAG = "scalius-deferred";
+/** When deferred markup enters the page (`load` would defer nothing). */
+export const STOREFRONT_DEFERRED_HYDRATION = ["idle", "visible", "interaction"] as const;
+export type StorefrontDeferredHydration = (typeof STOREFRONT_DEFERRED_HYDRATION)[number];
 
 /**
  * What one render may embed: each allowed kind with how many render (any
@@ -145,6 +174,8 @@ export function storefrontEmbedRule(unit: "section" | "component" | StorefrontSk
       return { allowed: { slot: 1 }, required: [], appended: [], slots: ["header.actions"] };
     case "footer":
       return { allowed: { slot: 1 }, required: [], appended: [], slots: ["footer.columns"] };
+    case "product_card":
+      return { allowed: { slot: 2 }, required: [], appended: [], slots: ["product_card.badges", "product_card.meta"] };
     case "product_main":
       return { allowed: { "buy_form": 1, reviews: 1, recommendations: 1, gallery: 1 }, required: ["buy_form"], appended: [] };
     case "listing_main":
@@ -185,6 +216,8 @@ export const STOREFRONT_COMPONENT_LIMITS = {
   renderCpuMs: 50,
   /** Jobs one batch carries (a listing's cards, the chrome, the sections). */
   batchJobs: 120,
+  /** `image` settings one unit skin (header, footer, card, product page, listing) declares; they resolve with the layout read. */
+  skinImages: 8,
 } as const;
 
 /** Public file types an app may ship (fonts and images). */
@@ -296,6 +329,8 @@ export interface StorefrontMenuItem {
   title: string;
   url: string;
   children: StorefrontMenuItem[];
+  /** The linked category's photo, when the item links a category that has one (a mega menu's tiles). */
+  image?: StorefrontImage | null;
 }
 
 export interface StorefrontStoreInfo {
@@ -314,10 +349,42 @@ export interface StorefrontHeaderData {
   /** The top categories with their children, for a category menu. */
   categories: StorefrontMenuItem[];
   announcement: { text: string; url: string | null } | null;
-  /** Core routes: put them in links and forms, never hard-code them. */
-  routes: { home: string; search: string; cart: string; account: string };
+  /**
+   * Core routes: put them in links and forms, never hard-code them.
+   * `orders` is the signed-in buyer's order history, `trackOrder` the guest
+   * order lookup (absent from older stores).
+   */
+  routes: { home: string; search: string; cart: string; account: string; orders?: string; trackOrder?: string };
   /** The search form's query parameter. */
   searchParam: string;
+  /**
+   * Search within a category: the search form may also send
+   * `searchScopeParam` (`category`) with one of these values (a category
+   * handle; empty for the whole store), and the store answers from that
+   * category's listing. The store's top published categories (40 at
+   * most), in order. Absent from older stores.
+   */
+  searchScopes?: Array<{ title: string; value: string }>;
+  searchScopeParam?: "category";
+  /**
+   * The page's market (Settings -> Markets): its country, currency and
+   * language. `selection` is the country form (POST to `action` with
+   * `country_code` and `return_to`), present only while the store sells at
+   * more than one URL. Signed-in state is not data: one header serves every
+   * buyer, so mark parts with the SDK's `whenSignedIn()` / `whenSignedOut()`
+   * and the store shows the right ones in the buyer's browser. Absent from
+   * older stores.
+   */
+  market?: {
+    country: string | null;
+    currency: string;
+    language: string;
+    selection: {
+      action: string;
+      returnTo: string;
+      countries: Array<{ code: string; name: string; currency: string }>;
+    } | null;
+  };
   /**
    * The theme's phone navigation (Online store -> Theme): the menu drawer as
    * an accordion or one level at a time (`drill`), and whether the store
@@ -380,6 +447,13 @@ export interface StorefrontLink {
   url: string;
 }
 
+/** EMI: the store's lowest monthly instalment for a product (informational; the plan is chosen at checkout). */
+export interface StorefrontInstallments {
+  provider: string;
+  months: number;
+  monthly: StorefrontMoney;
+}
+
 /**
  * What a product_main skin and a product block get: the product as the core
  * product page shows it, priced in the page's market. Availability is a
@@ -406,8 +480,14 @@ export interface StorefrontProductPage {
     /** The merchant's option axes, in order, with their values. */
     options: Array<{ name: string; values: Array<{ label: string; swatch: string | null }> }>;
     /** The buyer's SKUs (100 at most; sold-out ones `available: false`), each with its value of every option, in option order. */
+    /** The SKU code of a product without options (its one SKU); null otherwise or without one. Absent from older stores. */
+    sku?: string | null;
+    /** Instalments (EMI) available for this product; null when none applies. Absent from older stores. */
+    installments?: StorefrontInstallments | null;
     variants: Array<{
       id: string;
+      /** The merchant's SKU code (a "Product code"); null without one. Absent from older stores. */
+      sku?: string | null;
       title: string;
       options: string[];
       price: StorefrontMoney;
@@ -465,6 +545,8 @@ export interface StorefrontListingPage {
   /** Home and the published ancestors (empty on search). */
   breadcrumbs: StorefrontLink[];
   fields: StorefrontFieldValues;
+  /** A category's published child categories, in order (empty on other listings). Absent from older stores. */
+  children?: Array<StorefrontLink & { image: StorefrontImage | null }>;
 }
 
 /** A category, collection or brand as a tile shows it. */
@@ -761,7 +843,7 @@ interface SkinJobBase {
   kind: "skin";
   /** The manifest skin id. */
   component: string;
-  /** The merchant's values for the skin (no images or products: a skin reads nothing). */
+  /** The merchant's values for the skin: no products; a unit skin's `image` settings as `StorefrontImage | null`. */
   settings: StorefrontResolvedSettings;
 }
 
@@ -810,7 +892,12 @@ export type StorefrontComponentJob =
     instanceId: string;
     data: StorefrontProductPage;
   })
-  | (ComponentJobBase & { target: Exclude<StorefrontComponentSlot, StorefrontProductSlot> })
+  | (ComponentJobBase & {
+    target: StorefrontProductCardSlot;
+    /** The card it draws on (the projection a product_card skin gets). */
+    data: StorefrontProductCardData;
+  })
+  | (ComponentJobBase & { target: Exclude<StorefrontComponentSlot, StorefrontProductSlot | StorefrontProductCardSlot> })
   | (ComponentJobBase & {
     target: "page";
     /** What the app's proxy route answered as the page's `props` (JSON; escaped like any other text). */
@@ -860,6 +947,8 @@ export interface StorefrontIslandContext {
   onCart(listener: (cart: { count: number; total: StorefrontMoney }) => void): () => void;
   /** Calls the app's public routes through the storefront proxy (`/apps/<plugin id>/<path>`). */
   fetchApp(path: string, init?: RequestInit): Promise<Response>;
+  /** Whether the buyer is signed in: the store's hint for showing UI (its account pages stay server-authoritative). */
+  signedIn(): boolean;
   /**
    * On a product page: the store's buy form, read through the store (never
    * its markup). `onChange` calls the listener when the variant, quantity or

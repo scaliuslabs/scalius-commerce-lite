@@ -142,7 +142,7 @@ describe("order amendment inventory atomicity", () => {
     const before = state();
     await expect(confirmManualOrderAmendment(db, "order_1", data, "admin_1")).rejects.toMatchObject({
       name,
-      code: name === "ValidationError" ? "VALIDATION_ERROR" : "CONFLICT",
+      code: name === "ValidationError" ? "validation_error" : "conflict",
       message: typeof message === "string" ? message : expect.stringMatching(message),
     });
     expect(state()).toEqual(before);

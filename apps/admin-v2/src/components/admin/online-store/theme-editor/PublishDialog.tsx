@@ -3,7 +3,9 @@
  * grouped as the pages it touches and the store-wide settings (marked as
  * site-wide), a warning for AI-drafted sections no one has opened yet, and
  * a note for the version history. This one dialog is also the review point
- * for AI drafts: it warns, it never forces a tick.
+ * for AI drafts: it warns, it never forces a tick. A publish refused because
+ * the theme draws with apps that are not ready lists them here, each with a
+ * link to its page.
  */
 import { useEffect, useState } from "react";
 import { Sparkles, TriangleAlert } from "lucide-react";
@@ -16,8 +18,10 @@ import { useMessages } from "~/i18n";
 import { themeEditorMessages } from "~/i18n/theme-editor";
 import { useChangeText } from "./ThemeHistory";
 import { Field } from "~/components/ui/field";
+import { ThemeAppsUnavailableAlert } from "~/components/admin/apps/ThemeAppParts";
+import type { ThemeAppsProblem } from "~/components/admin/apps/theme-app-parts";
 
-export function PublishDialog({ open, onOpenChange, live, draft, held, unopenedAi, sectionName, publishing, onOpenSection, onShowProblem, onPublish }: {
+export function PublishDialog({ open, onOpenChange, live, draft, held, unopenedAi, sectionName, publishing, appsProblem = null, onOpenSection, onShowProblem, onPublish }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   live: StorefrontThemeDocument;
@@ -28,6 +32,8 @@ export function PublishDialog({ open, onOpenChange, live, draft, held, unopenedA
   unopenedAi: readonly StorefrontSection[];
   sectionName: (section: StorefrontSection) => string;
   publishing: boolean;
+  /** Apps a refused publish named: each app's parts and a link to its page. */
+  appsProblem?: { apps: readonly ThemeAppsProblem[]; moreParts: number } | null;
   onOpenSection: (id: string) => void;
   /** Closes the dialog and puts the cursor in the first setting to fix. */
   onShowProblem: () => void;
@@ -50,6 +56,7 @@ export function PublishDialog({ open, onOpenChange, live, draft, held, unopenedA
           <DialogDescription>{t("publishHelp")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
+          {appsProblem ? <ThemeAppsUnavailableAlert apps={appsProblem.apps} moreParts={appsProblem.moreParts} /> : null}
           {unopenedAi.length > 0 ? (
             <Alert variant="warning">
               <Sparkles aria-hidden="true" />

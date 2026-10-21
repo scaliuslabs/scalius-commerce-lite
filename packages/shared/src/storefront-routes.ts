@@ -22,3 +22,10 @@ export const STOREFRONT_CORE_ROUTES = Object.freeze({
 });
 
 export type StorefrontCoreRoutes = typeof STOREFRONT_CORE_ROUTES;
+
+/**
+ * Search within a category: `/search?q=…&category=<category handle>` answers
+ * from that category's listing (`/categories/<handle>?q=…`), so a header's
+ * department select works without JavaScript.
+ */
+export const STOREFRONT_SEARCH_SCOPE_PARAM = "category" as const;
