@@ -631,7 +631,7 @@ const pagePresets = [
 export const manifest = {
   id: "scalius.noor",
   name: "Noor theme",
-  version: "2.0.0",
+  version: "2.0.1",
   apiVersion: PLUGIN_API_VERSION,
   description: "An editorial storefront theme with its own header, footer, product card and product page, a look for the store's own sections, nine sections of its own, and a landing kit for single-product campaign pages. The order form follows the store’s checkout readiness. Everything is customisable in the theme editor.",
   tagline: "An editorial theme with campaign landing pages",

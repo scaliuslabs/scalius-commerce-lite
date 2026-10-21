@@ -23,13 +23,17 @@ interface ProductSkinSettings {
 export function ProductPage({ settings, data, context }: ProductMainProps<ProductSkinSettings>) {
   const { product } = data;
   const side = choice(settings.media_side, ["start", "end"] as const, "start");
-  const crumbs = product.breadcrumbs.slice(0, -1);
+  const crumbs = product.breadcrumbs;
   return (
     <section class="noor-s noor-s-pdp" data-tone="plain" data-space="s">
       <div class="noor-wrap">
-        {settings.show_breadcrumbs && crumbs.length > 0 ? (
+        {settings.show_breadcrumbs && crumbs.length > 1 ? (
           <nav class="noor-crumbs" aria-label={t(context, { en: "Breadcrumb", bn: "ব্রেডক্রাম্ব" })}>
-            <ol>{crumbs.map((crumb) => <li><a href={crumb.url}>{crumb.title}</a><Icon name="chevron" size={12} /></li>)}</ol>
+            <ol>
+              {crumbs.map((crumb, index) => index < crumbs.length - 1
+                ? <li><a href={crumb.url}>{crumb.title}</a><Icon name="chevron" size={12} /></li>
+                : <li><span aria-current="page">{crumb.title}</span></li>)}
+            </ol>
           </nav>
         ) : null}
         <div class={cx("noor-pdp", side === "end" && "is-flipped")}>

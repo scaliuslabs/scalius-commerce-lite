@@ -226,6 +226,8 @@ describe("Noor skins of the store's sections", () => {
     expect(html).toContain('<div class="noor-pdp-media"><scalius-embed kind="gallery"></scalius-embed></div>');
     expect(html.match(/<scalius-embed/g)).toHaveLength(4);
     expect(html).toContain('<h1 class="noor-h1">Linen shirt</h1>');
+    // The trail ends on the product itself, so no separator dangles after the last link.
+    expect(html).toMatch(/<nav class="noor-crumbs"[^>]*><ol>.*<span aria-current="page">Linen shirt<\/span><\/li><\/ol><\/nav>/);
     expect(html).toContain("Breathable linen, cut for the heat.");
     expect(storefrontShown(html, "scalius.noor").dropped).toBe(0);
     const bare = renderSkin(storefront, "noor_product", "product_main", skinSettings("noor_product", { show_reviews: false, show_related: false, show_breadcrumbs: false, show_description: false }));
