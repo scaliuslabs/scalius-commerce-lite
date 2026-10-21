@@ -98,7 +98,7 @@ describe("app egress through the bundled loader", () => {
     expect(body.plainOther).toMatch(/not permitted to access the internet/);
     expect(body.plainLater).toMatch(/not permitted to access the internet/);
     expect(body.http).toBe("reached");
-    expect(body.httpOther).toBe("http.not_allowed");
+    expect(body.httpOther).toBe("http_not_allowed");
     expect(reached).toEqual([`https://${ALLOWED}/guarded`]);
   });
 
