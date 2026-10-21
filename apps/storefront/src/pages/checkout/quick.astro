@@ -603,6 +603,7 @@ const secondaryButtonClass =
                 <div class="min-w-0">
                   <p class="font-medium text-foreground">{item.productName}</p>
                   {item.variantLabel && <p class="text-muted-foreground">{item.variantLabel}</p>}
+                  {item.purchaseOption && <p class="font-medium text-foreground">{item.purchaseOption.title}</p>}
                   {item.properties.map((property) => (
                     <p class="text-muted-foreground">{property.label}: {property.displayValue}</p>
                   ))}

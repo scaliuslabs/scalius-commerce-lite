@@ -182,6 +182,7 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
             productName: item.name,
             variantLabel: cartItemVariantLabel(item.options),
             ...(item.properties?.length ? { properties: cartLinePropertyInputs(item) } : {}),
+            ...(item.purchaseOption ? { purchaseOption: item.purchaseOption.id } : {}),
           })),
           // Answers to the apps' checkout questions: their rules and blocks read them.
           ...(Object.keys(attributes).length > 0 ? { attributes } : {}),
@@ -604,6 +605,11 @@ export default function CartFlyout({ onReady }: Props) {
                               ))}
                             </div>
                           )}
+                          {item.purchaseOption && (
+                            <p className="text-xs font-medium text-foreground" data-cart-line-purchase-option>
+                              {item.purchaseOption.title}
+                            </p>
+                          )}
                           {item.adjustments && item.adjustments.length > 0 && !(item.properties && item.properties.length > 0) && (
                             <ul className="text-xs text-muted-foreground">
                               {item.adjustments.map((adjustment, position) => (
@@ -640,6 +646,7 @@ export default function CartFlyout({ onReady }: Props) {
                                       variantId: item.variantId,
                                       quantity: item.quantity,
                                       properties: cartLinePropertyInputs(item),
+                                      ...(item.purchaseOption ? { purchaseOption: item.purchaseOption.id } : {}),
                                     });
                                   }}
                                 >

@@ -1396,6 +1396,7 @@ export type PluginUiNode = {
             op: 'add_line';
             variantId: string;
             quantity: number;
+            purchaseOption?: string;
         } | {
             kind: 'cart';
             op: 'apply_code';
@@ -1460,6 +1461,7 @@ export type PluginUiNode = {
             op: 'add_line';
             variantId: string;
             quantity: number;
+            purchaseOption?: string;
         } | {
             kind: 'cart';
             op: 'apply_code';
@@ -1542,6 +1544,7 @@ export type PluginUiNode = {
             op: 'add_line';
             variantId: string;
             quantity: number;
+            purchaseOption?: string;
         } | {
             kind: 'cart';
             op: 'apply_code';
@@ -1679,6 +1682,7 @@ export type PluginUiNode = {
             op: 'add_line';
             variantId: string;
             quantity: number;
+            purchaseOption?: string;
         } | {
             kind: 'cart';
             op: 'apply_code';
@@ -1765,6 +1769,7 @@ export type PluginUiNode = {
         op: 'add_line';
         variantId: string;
         quantity: number;
+        purchaseOption?: string;
     } | {
         kind: 'cart';
         op: 'apply_code';
@@ -2007,6 +2012,7 @@ export type CustomerAccountSummary = {
                     op: 'add_line';
                     variantId: string;
                     quantity: number;
+                    purchaseOption?: string;
                 } | {
                     kind: 'cart';
                     op: 'apply_code';
@@ -2071,6 +2077,7 @@ export type CustomerAccountSummary = {
                     op: 'add_line';
                     variantId: string;
                     quantity: number;
+                    purchaseOption?: string;
                 } | {
                     kind: 'cart';
                     op: 'apply_code';
@@ -2153,6 +2160,7 @@ export type CustomerAccountSummary = {
                     op: 'add_line';
                     variantId: string;
                     quantity: number;
+                    purchaseOption?: string;
                 } | {
                     kind: 'cart';
                     op: 'apply_code';
@@ -2290,6 +2298,7 @@ export type CustomerAccountSummary = {
                     op: 'add_line';
                     variantId: string;
                     quantity: number;
+                    purchaseOption?: string;
                 } | {
                     kind: 'cart';
                     op: 'apply_code';
@@ -2376,6 +2385,7 @@ export type CustomerAccountSummary = {
                 op: 'add_line';
                 variantId: string;
                 quantity: number;
+                purchaseOption?: string;
             } | {
                 kind: 'cart';
                 op: 'apply_code';
@@ -8353,6 +8363,17 @@ export type GetApiV1StorefrontLayoutResponses = {
                 stylesheet: boolean;
                 connect: Array<string>;
             }>;
+            /**
+             * Ways to buy a line the active apps offer (manifest `checkout.purchaseOptions`: a subscription, a rental), the ones checkout accepts. The product page's buy form lists them beside a one-time purchase; the app prices the line at checkout.
+             */
+            purchaseOptions?: Array<{
+                /**
+                 * `<app id>.<key>`: what a cart, tax-quote or order line sends as its `purchaseOption`.
+                 */
+                id: string;
+                title: string;
+                description: string | null;
+            }>;
             appServices: {
                 /**
                  * The search app predictive search passes as `provider` to /search; null: built-in search.
@@ -12100,6 +12121,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                             op: 'add_line';
                             variantId: string;
                             quantity: number;
+                            purchaseOption?: string;
                         } | {
                             kind: 'cart';
                             op: 'apply_code';
@@ -12164,6 +12186,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                             op: 'add_line';
                             variantId: string;
                             quantity: number;
+                            purchaseOption?: string;
                         } | {
                             kind: 'cart';
                             op: 'apply_code';
@@ -12246,6 +12269,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                             op: 'add_line';
                             variantId: string;
                             quantity: number;
+                            purchaseOption?: string;
                         } | {
                             kind: 'cart';
                             op: 'apply_code';
@@ -12383,6 +12407,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                             op: 'add_line';
                             variantId: string;
                             quantity: number;
+                            purchaseOption?: string;
                         } | {
                             kind: 'cart';
                             op: 'apply_code';
@@ -12469,6 +12494,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                         op: 'add_line';
                         variantId: string;
                         quantity: number;
+                        purchaseOption?: string;
                     } | {
                         kind: 'cart';
                         op: 'apply_code';
@@ -19944,6 +19970,7 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                                 op: 'add_line';
                                 variantId: string;
                                 quantity: number;
+                                purchaseOption?: string;
                             } | {
                                 kind: 'cart';
                                 op: 'apply_code';
@@ -20008,6 +20035,7 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                                 op: 'add_line';
                                 variantId: string;
                                 quantity: number;
+                                purchaseOption?: string;
                             } | {
                                 kind: 'cart';
                                 op: 'apply_code';
@@ -20090,6 +20118,7 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                                 op: 'add_line';
                                 variantId: string;
                                 quantity: number;
+                                purchaseOption?: string;
                             } | {
                                 kind: 'cart';
                                 op: 'apply_code';
@@ -20227,6 +20256,7 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                                 op: 'add_line';
                                 variantId: string;
                                 quantity: number;
+                                purchaseOption?: string;
                             } | {
                                 kind: 'cart';
                                 op: 'apply_code';
@@ -20313,6 +20343,7 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                             op: 'add_line';
                             variantId: string;
                             quantity: number;
+                            purchaseOption?: string;
                         } | {
                             kind: 'cart';
                             op: 'apply_code';
@@ -20938,6 +20969,7 @@ export type PostApiV1OrdersCartValidationResponses = {
                             op: 'add_line';
                             variantId: string;
                             quantity: number;
+                            purchaseOption?: string;
                         } | {
                             kind: 'cart';
                             op: 'apply_code';
@@ -21002,6 +21034,7 @@ export type PostApiV1OrdersCartValidationResponses = {
                             op: 'add_line';
                             variantId: string;
                             quantity: number;
+                            purchaseOption?: string;
                         } | {
                             kind: 'cart';
                             op: 'apply_code';
@@ -21084,6 +21117,7 @@ export type PostApiV1OrdersCartValidationResponses = {
                             op: 'add_line';
                             variantId: string;
                             quantity: number;
+                            purchaseOption?: string;
                         } | {
                             kind: 'cart';
                             op: 'apply_code';
@@ -21221,6 +21255,7 @@ export type PostApiV1OrdersCartValidationResponses = {
                             op: 'add_line';
                             variantId: string;
                             quantity: number;
+                            purchaseOption?: string;
                         } | {
                             kind: 'cart';
                             op: 'apply_code';
@@ -21307,6 +21342,7 @@ export type PostApiV1OrdersCartValidationResponses = {
                         op: 'add_line';
                         variantId: string;
                         quantity: number;
+                        purchaseOption?: string;
                     } | {
                         kind: 'cart';
                         op: 'apply_code';
@@ -21707,6 +21743,7 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                             op: 'add_line';
                             variantId: string;
                             quantity: number;
+                            purchaseOption?: string;
                         } | {
                             kind: 'cart';
                             op: 'apply_code';
@@ -21771,6 +21808,7 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                             op: 'add_line';
                             variantId: string;
                             quantity: number;
+                            purchaseOption?: string;
                         } | {
                             kind: 'cart';
                             op: 'apply_code';
@@ -21853,6 +21891,7 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                             op: 'add_line';
                             variantId: string;
                             quantity: number;
+                            purchaseOption?: string;
                         } | {
                             kind: 'cart';
                             op: 'apply_code';
@@ -21990,6 +22029,7 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                             op: 'add_line';
                             variantId: string;
                             quantity: number;
+                            purchaseOption?: string;
                         } | {
                             kind: 'cart';
                             op: 'apply_code';
@@ -22076,6 +22116,7 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                         op: 'add_line';
                         variantId: string;
                         quantity: number;
+                        purchaseOption?: string;
                     } | {
                         kind: 'cart';
                         op: 'apply_code';

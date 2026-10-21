@@ -10,6 +10,7 @@ import {
   type TaxQuoteRequest,
 } from "./tax-quote-contract";
 import { cartItemVariantLabel } from "../cart/item-options";
+import { cartLinePurchaseOptionId } from "../cart/purchase-option";
 import { isCheckoutDeliveryMode } from "./delivery-mode";
 import { giftCardRequestFields } from "./gift-cards";
 import type { CartRuleError, CartValidationIssue } from "../api/orders";
@@ -32,6 +33,7 @@ type CheckoutCartLine = {
   name?: unknown;
   options?: unknown;
   properties?: unknown;
+  purchaseOption?: unknown;
 };
 
 /** A cart line's buyer inputs as the order routes take them (`{key, value}` only). */
@@ -152,6 +154,7 @@ export function buildTaxQuoteRequest(
     productName: cleanOptionalText(item.name, 200),
     variantLabel: variantLabel(item),
     properties: cartLineInputs(item.properties),
+    purchaseOption: cartLinePurchaseOptionId(item.purchaseOption),
   }));
   // The address goes only with a delivery quote: pickup and carts with
   // nothing physical are quoted without one (store-wide tax only).

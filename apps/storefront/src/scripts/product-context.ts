@@ -29,14 +29,16 @@ export function readProductState(root: Document = document): StorefrontProductSt
       inputs[key] = element instanceof HTMLInputElement && element.type === "checkbox" ? (element.checked ? "true" : "") : element.value;
     }
   }
-  return { variantId: variant || null, quantity: Number.isInteger(quantity) && quantity > 0 ? quantity : 1, inputs };
+  // The buy form's way to buy: an app's option, or "" for a one-time purchase.
+  const option = root.querySelector<HTMLInputElement>('[data-product-purchase-options] input[name="purchaseOption"]:checked')?.value ?? "";
+  return { variantId: variant || null, quantity: Number.isInteger(quantity) && quantity > 0 ? quantity : 1, inputs, purchaseOption: option || null };
 }
 
 /** `context.product` on a product page; undefined elsewhere. */
 export function productContext(root: Document = document): ProductContext | undefined {
   if (!buyForm(root)) return undefined;
   return {
-    state: () => readProductState(root) ?? { variantId: null, quantity: 1, inputs: {} },
+    state: () => readProductState(root) ?? { variantId: null, quantity: 1, inputs: {}, purchaseOption: null },
     onChange(listener) {
       let last = JSON.stringify(readProductState(root));
       let queued = false;

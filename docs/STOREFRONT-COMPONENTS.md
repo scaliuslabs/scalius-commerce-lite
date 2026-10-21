@@ -249,7 +249,7 @@ export default defineIsland<{ step: number }>((element, props, context) => {
 });
 ```
 
-An island's module loads from `/_x/...` only when its moment comes, once per page however many times it appears. `context` carries the app's file base (`assets`), the store's `language` and `currency`, `formatMoney({ amountMinor, currency })`, the cart (`openCart`, `quickAdd(url)`, `onCart(listener)`, whose `total` is a `StorefrontMoney`) and `fetchApp(path)`, which reaches the app's public routes through the storefront proxy (`/apps/<id>/...`, same origin, no CSP host needed).
+An island's module loads from `/_x/...` only when its moment comes, once per page however many times it appears. `context` carries the app's file base (`assets`), the store's `language` and `currency`, `formatMoney({ amountMinor, currency })`, the cart (`openCart`, `quickAdd(url)`, `addLine({ variantId, quantity?, purchaseOption? })` for a SKU without buyer inputs, one-time or under one of the app's own purchase options, `onCart(listener)`, whose `total` is a `StorefrontMoney`) and `fetchApp(path)`, which reaches the app's public routes through the storefront proxy (`/apps/<id>/...`, same origin, no CSP host needed).
 
 Return a cleanup for your listeners, timers and observers. The host cancels
 pending hydration on removal, ignores imports from an old connection and

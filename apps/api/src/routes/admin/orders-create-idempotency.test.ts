@@ -17,7 +17,7 @@ vi.mock("@scalius/core/modules/orders", async (importOriginal) => ({
 
 vi.mock("@scalius/core/modules/plugins", async (importOriginal) => ({
     ...await importOriginal<typeof import("@scalius/core/modules/plugins")>(),
-    listActiveFunctionRegistrations: async () => [],
+    listActiveCheckoutRegistrations: async () => [],
 }));
 
 

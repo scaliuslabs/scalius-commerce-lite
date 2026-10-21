@@ -27,6 +27,7 @@ import { toLatinDigits } from "@scalius/shared/phone-input";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 import { quickBuyNoScriptForm } from "@/lib/checkout/quick-checkout";
 import { serverPagePath } from "@/lib/server-presence";
+import { validateNewCartLine } from "@/lib/cart/new-line";
 
 export const prerender = false;
 
@@ -74,6 +75,8 @@ function issueToQuickBuyError(issue: CartValidationIssue | undefined): string {
       return "customization_required";
     case "properties_invalid":
       return "customization_invalid";
+    case "purchase_option_unavailable":
+      return "purchase_option_unavailable";
     default:
       return "validation_unavailable";
   }
@@ -98,6 +101,8 @@ interface QuickBuyRequest {
   quantity: string | null;
   /** Buyer inputs from the product-page form (POST); null for a quick-buy link. */
   properties: LinePropertyInput[] | null;
+  /** An app's purchase option chosen in the form (POST); null: one-time. */
+  purchaseOption: string | null;
   redirectStatus: 303 | 307;
 }
 
@@ -111,6 +116,7 @@ export const GET: APIRoute = async ({ params, url }) => {
     requestedVariantId: url.searchParams.get("variant"),
     quantity: url.searchParams.get("qty"),
     properties: null,
+    purchaseOption: null,
     redirectStatus: 307,
   });
 };
@@ -156,6 +162,7 @@ export const POST: APIRoute = async ({ params, request }) => {
     requestedVariantId: posted.variantId,
     quantity: posted.quantity,
     properties: posted.properties,
+    purchaseOption: posted.purchaseOption,
     redirectStatus: 303,
   });
 };
@@ -165,6 +172,7 @@ async function quickBuy({
   requestedVariantId,
   quantity: requestedQuantity,
   properties: postedProperties,
+  purchaseOption,
   redirectStatus,
 }: QuickBuyRequest): Promise<Response> {
   const productRedirect = (target: string, error: string) =>
@@ -250,7 +258,14 @@ async function quickBuy({
       moneyPlaces(layoutData?.currency?.decimalPlaces, currencyCode),
     );
 
-    const validation = await validateCartItems([{
+    // A purchase option's price is its app's (checked again at the store's price).
+    let failed = false;
+    const checked = await validateNewCartLine(async (items) => {
+      const result = await validateCartItems(items);
+      if (result.success) return result.data;
+      failed = true;
+      return null;
+    }, {
       cartKey: `quick_buy:${product.id}:${itemToAdd.id}`,
       productId: product.id,
       variantId: itemToAdd.id,
@@ -259,7 +274,9 @@ async function quickBuy({
       productName: product.name,
       variantLabel: variantLabel(itemToAdd),
       ...(resolvedProperties.canonical.length > 0 ? { properties: resolvedProperties.canonical } : {}),
-    }]);
+      ...(purchaseOption ? { purchaseOption } : {}),
+    });
+    const validation = !failed && checked ? { success: true as const, data: checked } : { success: false as const };
     if (!validation.success) {
       return productRedirect(slug, "validation_unavailable");
     }
@@ -306,6 +323,7 @@ async function quickBuy({
       ...(options.length > 0 ? { options } : {}),
       freeDelivery: validatedItem.freeDelivery,
       ...(properties.length > 0 ? { properties } : {}),
+      ...(validatedItem.purchaseOption ? { purchaseOption: validatedItem.purchaseOption } : {}),
       ...(fulfillmentKind ? { fulfillmentKind } : {}),
     };
 

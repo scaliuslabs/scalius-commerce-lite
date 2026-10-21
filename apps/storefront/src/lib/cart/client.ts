@@ -528,6 +528,7 @@ function cartValidationPayload(items: Record<string, VariantCartItem>) {
       productName: item.name,
       variantLabel: cartItemVariantLabel(item),
       ...(properties.length > 0 ? { properties } : {}),
+      ...(item.purchaseOption ? { purchaseOption: item.purchaseOption.id } : {}),
     };
   });
 }
@@ -1417,7 +1418,9 @@ function renderCartLine(
   ));
   const variantInfo = options
     .map((option) => `<span class="block">${escapeHtml(option.name)}: ${escapeHtml(option.label)}</span>`)
-    .join("") + renderCartLineProperties(item, {
+    .join("") + (item.purchaseOption
+      ? `<span class="block font-medium text-foreground" data-cart-line-purchase-option>${escapeHtml(item.purchaseOption.title)}</span>`
+      : "") + renderCartLineProperties(item, {
       surchargeText: copy.customizationSurchargeText,
       editText: copy.editLineText,
       editLabelText: copy.editLineLabelText,
@@ -1773,6 +1776,7 @@ export async function initCartFunctionality() {
         variantId: item.variantId,
         quantity: item.quantity,
         properties: cartLinePropertyInputs(item),
+        ...(item.purchaseOption ? { purchaseOption: item.purchaseOption.id } : {}),
       });
     }
     return true;

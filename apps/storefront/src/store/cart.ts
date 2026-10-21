@@ -2,6 +2,7 @@ import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
 import { map } from "nanostores";
 import {
   lineCartKey,
+  lineIdentityProperties,
   linePropertiesHash,
   LINE_PROPERTY_INPUT_LIMITS,
   NO_PROPERTIES_HASH,
@@ -13,8 +14,13 @@ import {
   normalizeCartItemOptions,
   type CartItemOption,
 } from "@/lib/cart/item-options";
+import {
+  normalizeCartLinePurchaseOption,
+  type CartLinePurchaseOption,
+} from "@/lib/cart/purchase-option";
 
 export type { CartItemOption } from "@/lib/cart/item-options";
+export type { CartLinePurchaseOption } from "@/lib/cart/purchase-option";
 
 /**
  * The browser cart lives here. v3 keys lines by product, SKU and the hash of
@@ -66,7 +72,12 @@ export type CartItem = {
   freeDelivery?: boolean;
   /** Buyer inputs (engraving, gift wrap…), canonical: schema keys, schema order, no empties. */
   properties?: CartLineProperty[];
-  /** `linePropertiesHash` of `properties`; "none" without inputs. Part of the line key. */
+  /**
+   * An app's way to buy the line (a subscription): its id joins the line's
+   * identity and is sent to checkout; the app prices the line.
+   */
+  purchaseOption?: CartLinePurchaseOption;
+  /** `linePropertiesHash` of `properties` then `purchaseOption` (`lineIdentityProperties`); "none" without either. Part of the line key. */
   propertiesHash?: string;
   /** Apps' add-ons from the last cart check (display only, never identity). */
   adjustments?: CartLineAdjustment[];
@@ -351,11 +362,17 @@ export function cartLinePropertyInputs(
   return (item.properties ?? []).map(({ key, value }) => ({ key, value }));
 }
 
-/** The shared WebCrypto hash of a line's inputs ("none" without inputs). */
+/** The shared WebCrypto hash of a line's identity: its inputs, then its purchase option ("none" without either). */
 export function cartLinePropertiesHash(
   properties: readonly Pick<CartLineProperty, "key" | "value">[] | undefined,
+  purchaseOption?: Pick<CartLinePurchaseOption, "id"> | null,
 ): Promise<string> {
-  return linePropertiesHash((properties ?? []).map(({ key, value }) => ({ key, value })));
+  return linePropertiesHash(lineIdentityProperties((properties ?? []).map(({ key, value }) => ({ key, value })), purchaseOption?.id));
+}
+
+/** Whether a line has an identity beyond its SKU (inputs or a purchase option), so a hash other than "none". */
+function hasLineIdentity(item: Pick<CartItem, "properties" | "purchaseOption">): boolean {
+  return (item.properties?.length ?? 0) > 0 || Boolean(item.purchaseOption);
 }
 
 function isPropertiesHash(value: unknown): value is string {
@@ -387,9 +404,11 @@ function normalizeStoredCartItem(value: unknown): VariantCartItem | null {
   }
   const properties = normalizeCartLineProperties(value.properties);
   if (properties === null) return null;
-  // The stored hash is the line's identity; inputs without one (or "none"
-  // with inputs) cannot be keyed, so the line is dropped.
-  const propertiesHash = properties.length === 0
+  const purchaseOption = normalizeCartLinePurchaseOption(value.purchaseOption);
+  if (purchaseOption === null) return null;
+  // The stored hash is the line's identity; inputs or an option without one
+  // (or "none" with them) cannot be keyed, so the line is dropped.
+  const propertiesHash = properties.length === 0 && !purchaseOption
     ? NO_PROPERTIES_HASH
     : isPropertiesHash(value.propertiesHash) && value.propertiesHash !== NO_PROPERTIES_HASH
       ? value.propertiesHash
@@ -415,6 +434,7 @@ function normalizeStoredCartItem(value: unknown): VariantCartItem | null {
     freeDelivery:
       typeof value.freeDelivery === "boolean" ? value.freeDelivery : undefined,
     ...(properties.length > 0 ? { properties } : {}),
+    ...(purchaseOption ? { purchaseOption } : {}),
     propertiesHash,
     ...(adjustmentsOf(value.adjustments)),
     ...(isFulfillmentKind(value.fulfillmentKind) ? { fulfillmentKind: value.fulfillmentKind } : {}),
@@ -571,14 +591,19 @@ export function createCartItemKey(
   return lineCartKey(productId, variantId, hash);
 }
 
-/** The v3 line key from the line's inputs, hashed with the shared WebCrypto function. */
+/** The v3 line key from the line's inputs and purchase option, hashed with the shared WebCrypto function. */
 export async function cartLineKeyFor(
-  item: { id: string; variantId: string; properties?: readonly Pick<CartLineProperty, "key" | "value">[] },
+  item: {
+    id: string;
+    variantId: string;
+    properties?: readonly Pick<CartLineProperty, "key" | "value">[];
+    purchaseOption?: Pick<CartLinePurchaseOption, "id"> | null;
+  },
 ): Promise<string> {
   return createCartItemKey({
     id: item.id,
     variantId: item.variantId,
-    propertiesHash: await cartLinePropertiesHash(item.properties),
+    propertiesHash: await cartLinePropertiesHash(item.properties, item.purchaseOption),
   });
 }
 
@@ -621,14 +646,17 @@ async function prepareNewLine(
   }
   const properties = normalizeCartLineProperties(item.properties);
   if (properties === null) return null;
-  const propertiesHash = await cartLinePropertiesHash(properties);
+  const purchaseOption = normalizeCartLinePurchaseOption(item.purchaseOption);
+  if (purchaseOption === null) return null;
+  const propertiesHash = await cartLinePropertiesHash(properties, purchaseOption);
   const options = normalizeCartItemOptions(item.options);
-  const { properties: _ignored, quantity: requested, ...rest } = item;
+  const { properties: _ignored, purchaseOption: _option, quantity: requested, ...rest } = item;
   const line: Omit<CartItem, "quantity"> = {
     ...rest,
     variantId,
     ...(options ? { options } : { options: undefined }),
     ...(properties.length > 0 ? { properties } : {}),
+    ...(purchaseOption ? { purchaseOption } : {}),
     propertiesHash,
     ...(isFulfillmentKind(item.fulfillmentKind) ? { fulfillmentKind: item.fulfillmentKind } : { fulfillmentKind: undefined }),
   };
@@ -761,7 +789,7 @@ export function rekeyCartLine(
   const existing = current.items[lineKey];
   const normalized = normalizeCartLineProperties(properties);
   if (!existing || normalized === null || !isPropertiesHash(propertiesHash)) return false;
-  if ((normalized.length === 0) !== (propertiesHash === NO_PROPERTIES_HASH)) return false;
+  if (hasLineIdentity({ properties: normalized, purchaseOption: existing.purchaseOption }) === (propertiesHash === NO_PROPERTIES_HASH)) return false;
   const nextKey = createCartItemKey({ id: existing.id, variantId: existing.variantId, propertiesHash });
   if (nextKey === lineKey) return false;
   const target = current.items[nextKey];
@@ -875,6 +903,8 @@ export function updateCartItemsByKeyAtomically(
         ? { freeDelivery: refreshed.freeDelivery }
         : {}),
       ...(properties ? { properties } : {}),
+      // Identity: never changed by a refresh.
+      ...(existingItem.purchaseOption ? { purchaseOption: existingItem.purchaseOption } : {}),
       propertiesHash: existingItem.propertiesHash ?? NO_PROPERTIES_HASH,
       ...(adjustments.length > 0 ? { adjustments } : {}),
       ...(isFulfillmentKind(refreshed.fulfillmentKind)
@@ -983,8 +1013,7 @@ function patchFailure(
 /** The key a stored line must live under; null when it can't be keyed. */
 function storedLineKey(item: Omit<CartItem, "quantity">): string | null {
   if (!item.variantId) return null;
-  const hasInputs = (item.properties?.length ?? 0) > 0;
-  if (hasInputs === ((item.propertiesHash ?? NO_PROPERTIES_HASH) === NO_PROPERTIES_HASH)) return null;
+  if (hasLineIdentity(item) === ((item.propertiesHash ?? NO_PROPERTIES_HASH) === NO_PROPERTIES_HASH)) return null;
   try {
     return createCartItemKey({
       id: item.id,

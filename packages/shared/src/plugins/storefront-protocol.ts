@@ -526,6 +526,8 @@ export interface StorefrontProductState {
   quantity: number;
   /** Buyer input answers by key (`buyerInputs`); a checkbox is "true" when ticked. */
   inputs: Record<string, string>;
+  /** The purchase option the buyer chose (`<app id>.<key>`, a subscription); null for a one-time purchase. Absent from older stores. */
+  purchaseOption?: string | null;
 }
 
 /** What a listing_main skin gets: the listing as the core listing page shows it (this page of it). */
@@ -943,6 +945,14 @@ export interface StorefrontIslandContext {
    * buyer input, sold out): navigate there.
    */
   quickAdd(productUrl: string): Promise<boolean>;
+  /**
+   * Adds a SKU to the cart and opens the cart: a product without buyer
+   * inputs, one-time or under one of this app's own purchase options
+   * (`<app id>.<key>`), which the app prices at checkout. False when it can't
+   * be added here (sold out, buyer inputs, another app's option): navigate
+   * to its page. Absent from older stores.
+   */
+  addLine?(line: { variantId: string; quantity?: number; purchaseOption?: string }): Promise<boolean>;
   /** Calls the cart's listener now and on every change; returns the unsubscribe. */
   onCart(listener: (cart: { count: number; total: StorefrontMoney }) => void): () => void;
   /** Calls the app's public routes through the storefront proxy (`/apps/<plugin id>/<path>`). */

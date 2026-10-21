@@ -21,6 +21,7 @@
 
 import { z } from "zod";
 import { PLUGIN_KEY_PATTERN, PLUGIN_KEY_RULE, PLUGIN_URL_NAME_PATTERN, PLUGIN_URL_NAME_RULE } from "./manifest-patterns";
+import { PURCHASE_OPTION_ID_MAX_LENGTH, PURCHASE_OPTION_ID_PATTERN } from "./ids";
 
 export const PLUGIN_UI_VERSION = 1 as const;
 
@@ -156,11 +157,19 @@ export const pluginUiRouteActionSchema = z.object({
 }).strict();
 export type PluginUiRouteAction = z.input<typeof pluginUiRouteActionSchema>;
 
-/** What a button does: its app's route, a cart operation (buyer: add a line, apply a code, set a checkout attribute), or open a page. */
+/**
+ * What a button does: its app's route, a cart operation (buyer: add a line,
+ * apply a code, set a checkout attribute), or open a page. `add_line` may name
+ * one of the app's own purchase options (`<app id>.<key>`): the line is bought
+ * under it and the app prices it.
+ */
 export const pluginUiActionSchema = z.union([
   pluginUiRouteActionSchema,
   z.object({ kind: z.literal("navigate"), to: pluginUiTargetSchema }).strict(),
-  z.object({ kind: z.literal("cart"), op: z.literal("add_line"), variantId: z.string().min(1).max(128), quantity: z.number().int().min(1).max(10) }).strict(),
+  z.object({
+    kind: z.literal("cart"), op: z.literal("add_line"), variantId: z.string().min(1).max(128), quantity: z.number().int().min(1).max(10),
+    purchaseOption: z.string().max(PURCHASE_OPTION_ID_MAX_LENGTH).regex(PURCHASE_OPTION_ID_PATTERN).optional(),
+  }).strict(),
   z.object({ kind: z.literal("cart"), op: z.literal("apply_code"), code: z.string().min(1).max(64) }).strict(),
   /** `key` is one of the app's `checkout.attributes`. */
   z.object({ kind: z.literal("cart"), op: z.literal("set_attribute"), key: attributeKey, value: z.string().max(500) }).strict(),
