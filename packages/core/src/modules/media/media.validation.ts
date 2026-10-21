@@ -20,7 +20,10 @@ export const updateMediaSchema = z.object({
     durationMs: z.number().int().positive().nullable().optional(),
     posterMediaId: resourceId.nullable().optional(),
     folderId,
-}).superRefine((value, context) => {
+}).superRefine(checkMediaDimensions);
+
+/** Width and height change together: both set, or both empty. */
+export function checkMediaDimensions(value: { width?: number | null; height?: number | null }, context: z.RefinementCtx): void {
     const hasWidth = Object.prototype.hasOwnProperty.call(value, "width");
     const hasHeight = Object.prototype.hasOwnProperty.call(value, "height");
     if (hasWidth !== hasHeight || (hasWidth && ((value.width === null) !== (value.height === null)))) {
@@ -30,7 +33,7 @@ export const updateMediaSchema = z.object({
             path: ["width"],
         });
     }
-});
+}
 
 export const mediaVersionCommandSchema = z.object({
     expectedVersion: z.number().int().min(1),

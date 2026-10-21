@@ -379,7 +379,7 @@ export function draftToInput(draft: DiscountDraft, currencyCode: string): Discou
   const code = draft.code.trim().toUpperCase();
   const value = () => draft.valueKind === "percentage"
     ? { kind: "percentage_off" as const, config: { basisPoints: percentToBasisPoints(draft.value)! } }
-    : { kind: "fixed_amount_off" as const, config: { amountMinor: majorToMinor(draft.value, currency)!, currencyCode: currency } };
+    : { kind: "fixed_amount_off" as const, config: { amountMinor: majorToMinor(draft.value, currency)!, currency } };
   let effect: DiscountInput["effects"][number];
   if (draft.type === "shipping") {
     effect = { kind: "free", target: "shipping", allocation: "once", config: {} };
@@ -410,7 +410,7 @@ export function draftToInput(draft: DiscountDraft, currencyCode: string): Discou
         buy: {
           ...(draft.buyKind === "quantity"
             ? { quantity: positiveInteger(draft.buyValue)! }
-            : { amountMinor: majorToMinor(draft.buyValue, currency)!, currencyCode: currency }),
+            : { amountMinor: majorToMinor(draft.buyValue, currency)!, currency }),
           ...scopeConfig(draft.buyScope),
         },
         ...(draft.limitUsesPerOrder ? { maxUsesPerOrder: positiveInteger(draft.usesPerOrder)! } : {}),
@@ -422,7 +422,7 @@ export function draftToInput(draft: DiscountDraft, currencyCode: string): Discou
   const conditions: DiscountInput["conditions"] = draft.type === "buy_get" || draft.minimum === "none"
     ? []
     : draft.minimum === "amount"
-      ? [{ kind: "minimum_merchandise_subtotal", config: { amountMinor: majorToMinor(draft.minimumValue, currency)!, currencyCode: currency, ...minimumScope } }]
+      ? [{ kind: "minimum_merchandise_subtotal", config: { amountMinor: majorToMinor(draft.minimumValue, currency)!, currency, ...minimumScope } }]
       : [{ kind: "minimum_item_quantity", config: { quantity: positiveInteger(draft.minimumValue)!, ...minimumScope } }];
   const effects: DiscountInput["effects"] = [effect];
   if (bundlesShipping(draft)) {
@@ -430,7 +430,7 @@ export function draftToInput(draft: DiscountDraft, currencyCode: string): Discou
     if (draft.freeShippingMinimum.trim()) {
       conditions.push({
         kind: "minimum_merchandise_subtotal",
-        config: { amountMinor: majorToMinor(draft.freeShippingMinimum, currency)!, currencyCode: currency, shippingOnly: true },
+        config: { amountMinor: majorToMinor(draft.freeShippingMinimum, currency)!, currency, shippingOnly: true },
       });
     }
   }
@@ -446,11 +446,11 @@ export function draftToInput(draft: DiscountDraft, currencyCode: string): Discou
     },
     startsAt: epochIso(storeTimeToEpoch(draft.startDate, draft.startTime)),
     endsAt: draft.hasEnd ? epochIso(storeTimeToEpoch(draft.endDate, draft.endTime)) : null,
-    timezone: getStoreTimeZone(),
+    timeZone: getStoreTimeZone(),
     maxRedemptions: isCode && draft.limitTotal ? positiveInteger(draft.totalUses) : null,
     maxRedemptionsPerCustomer: isCode && draft.oncePerCustomer ? 1 : null,
     maxDiscountSpendMinor: isCode ? draft.spendBudgetMinor : null,
-    budgetCurrencyCode: isCode && draft.spendBudgetMinor !== null ? currency : null,
+    budgetCurrency: isCode && draft.spendBudgetMinor !== null ? currency : null,
     codes: isCode ? [{ code, isActive: true }] : [],
     conditions,
     effects,

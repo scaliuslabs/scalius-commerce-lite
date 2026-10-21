@@ -71,7 +71,7 @@ function EditCollectionPage() {
       products={productLookup?.products ?? []}
       defaultValues={{
         id: c.id,
-        version: c.version,
+        version: c.revision,
         name: c.name,
         description: c.description,
         content: c.content,

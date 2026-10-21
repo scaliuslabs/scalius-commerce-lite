@@ -16,7 +16,7 @@ const REFRESH_MS = 10 * 60_000;
 export default function StoreReachProbe({ languages, priceLists }: { languages: boolean; priceLists: boolean }) {
   const languageList = useQuery({
     queryKey: translationKeys.languages(),
-    queryFn: async () => (await apiData(getApiV1AdminSettingsLanguages())).items,
+    queryFn: async () => (await apiData(getApiV1AdminSettingsLanguages())).languages,
     enabled: languages,
     staleTime: REFRESH_MS,
     refetchOnWindowFocus: false,

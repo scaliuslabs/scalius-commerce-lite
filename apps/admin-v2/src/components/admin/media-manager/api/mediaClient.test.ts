@@ -18,7 +18,7 @@ function dto(posterUrl: string | null): MediaFileDto {
     posterUrl,
     folderId: null,
     status: "ready",
-    version: 2,
+    revision: 2,
     createdAt: "1970-01-01T00:00:01.000Z",
     updatedAt: "1970-01-01T00:00:01.000Z",
     trashedAt: null,

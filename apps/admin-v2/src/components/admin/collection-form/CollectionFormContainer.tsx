@@ -173,17 +173,17 @@ export function CollectionForm({
         if (!entityId || !expectedVersion) throw new SaveNotCompleted(tr("saveFailedHelp"));
         const result = await apiData(putApiV1AdminCollectionsById({
           path: { id: entityId },
-          body: { ...submission, expectedVersion },
+          body: { ...submission, expectedRevision: expectedVersion },
         })).catch((error: unknown) => {
           if (error instanceof AdminApiResponseError && error.code === "collection_revision_conflict") throw new SaveConflict();
           throw error;
         });
-        saved = { id: result.id, version: result.version };
+        saved = { id: result.collection.id, version: result.collection.revision };
         savedCollectionId = entityId;
       } else {
-        const result = await apiData(postApiV1AdminCollections({ body: submission }));
-        saved = { id: result.id, version: result.version };
-        savedCollectionId = result.id;
+        const { collection } = await apiData(postApiV1AdminCollections({ body: submission }));
+        saved = { id: collection.id, version: collection.revision };
+        savedCollectionId = collection.id;
       }
 
       await Promise.all([
@@ -265,6 +265,7 @@ export function CollectionForm({
         const config = normalizeCollectionConfig(latest.config);
         rebaseForm(form, copyValues(form.formState.defaultValues as CollectionFormInput), {
           ...latest,
+          version: latest.revision,
           config: { ...config, categoryIds: sortedUniqueStrings(config.categoryIds) },
         });
       } : undefined}

@@ -56,6 +56,7 @@ import { ok, created, noContent } from "../../utils/api-response";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 import { conflictResponse, errorResponses, namedSharedSchema, noContentResponse, successEnvelope } from "../../schemas/responses";
 import { customerSummarySchema } from "../../schemas/entities";
+import { customerEnvelope, readCustomerResource } from "./customer-resource";
 import { matchingResultSchema, matchingSchema, requireOneSelection, type MatchingResult } from "../../schemas/bulk-matching";
 import { appListQuerySchema, planAppList } from "../../plugins/list-columns";
 import { BULK_MATCHING_SLICE, readMatchingCursor } from "@scalius/core/utils/bulk-matching";
@@ -229,14 +230,16 @@ const setTagsRoute = createRoute({
         body: { required: true, content: { "application/json": { schema: z.object({ tags: tagList }).strict() } } },
     },
     responses: {
-        200: { description: "Tags saved", content: { "application/json": { schema: successEnvelope(z.object({ tags: z.array(z.string()) })) } } },
+        200: { description: "The customer with its new tags", content: { "application/json": { schema: customerEnvelope } } },
         ...errorResponses,
     },
 });
 
 app.openapi(setTagsRoute, async (c) => {
+    const db = c.get("db");
     const { id } = c.req.valid("param");
-    return ok(c, { tags: await setCustomerTags(c.get("db"), id, c.req.valid("json").tags) });
+    await setCustomerTags(db, id, c.req.valid("json").tags);
+    return ok(c, { customer: await readCustomerResource(db, id) });
 });
 
 // ── Export ──────────────────────────────────────────────────────────────

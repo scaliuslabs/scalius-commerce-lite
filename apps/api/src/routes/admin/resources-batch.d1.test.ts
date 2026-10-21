@@ -190,8 +190,9 @@ describe("categories.batch_create", () => {
     ] }, { idempotencyKey: "retry-key-cats" });
     expect(wire.status).toBe(200);
     expect(outcomes(wire)).toEqual([["root", "replayed"], ["child", "created"], ["clash", "failed"], ["orphan", "failed"]]);
-    expect(wire.body.data.items[0].category).toEqual({ id: rootId, slug: "tea-shelf", revision: 1 });
-    expect(wire.body.data.items[1].category).toMatchObject({ id: expect.stringMatching(/^cat_/), slug: "shelf-child", revision: 1 });
+    // Each item carries the category as categories.get reads it.
+    expect(wire.body.data.items[0].category).toMatchObject({ id: rootId, slug: "tea-shelf", revision: 1, status: "draft", parentId: null, depth: 0, deletedAt: null });
+    expect(wire.body.data.items[1].category).toMatchObject({ id: expect.stringMatching(/^cat_/), slug: "shelf-child", revision: 1, parentId: rootId, depth: 1 });
     expect(wire.body.data.items[2].error.code).toBe("conflict");
     expect(wire.body.data.items[3].error.code).toMatch(/^[a-z][a-z0-9_]*$/);
     expect(count("categories")).toBe(2);
@@ -215,7 +216,8 @@ describe("brands.batch_create", () => {
 
   it("creates, fails a taken slug, and replays by key", async () => {
     const first = await post(BRANDS, { items: [brand("one", { slug: "maker-one" })] });
-    expect(first.body.data.items[0].brand).toEqual({ id: expect.stringMatching(/^brd_/), slug: "maker-one", revision: 1 });
+    // Each item carries the brand as brands.get reads it.
+    expect(first.body.data.items[0].brand).toMatchObject({ id: expect.stringMatching(/^brd_/), slug: "maker-one", revision: 1, productCount: 0, logo: null, deletedAt: null });
     const wire = await post(BRANDS, { items: [brand("one", { slug: "maker-one" }), brand("two"), brand("three", { slug: "maker-one" })] });
     expect(outcomes(wire)).toEqual([["one", "replayed"], ["two", "created"], ["three", "failed"]]);
     expect(wire.body.data.items[0].brand).toEqual(first.body.data.items[0].brand);

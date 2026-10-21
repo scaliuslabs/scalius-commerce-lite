@@ -40,10 +40,12 @@ import { planLimits } from "@scalius/shared/plan-limits";
 import { appListQuerySchema, appListValuesSchema, planAppList } from "../../plugins/list-columns";
 
 import { ok, created, noContent } from "../../utils/api-response";
-import { successEnvelope, keysetPaginatedEnvelope, keysetQuerySchema, idResponse, noContentResponse, errorResponses } from "../../schemas/responses";
+import { successEnvelope, keysetPaginatedEnvelope, keysetQuerySchema, noContentResponse, errorResponses } from "../../schemas/responses";
 import { customerAddressSchema, customerSummarySchema, customerDetailSchema } from "../../schemas/entities";
 import { relatedObjectsProjection, withRelatedObjects } from "./related-objects";
 import { relatedObjectRecordSchema } from "../../schemas/related-objects";
+import { postalAddressInputSchema, type PostalAddressInput } from "../../schemas/postal-address";
+import { customerEnvelope, readCustomerResource } from "./customer-resource";
 import { timestampSchema, nullableTimestampSchema, optionalNullableTimestampSchema } from "../../schemas/timestamps";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -176,6 +178,30 @@ app.openapi(listRoute, async (c) => {
 
 // ── Create Customer ──
 
+// The first address is the one postal address shape (schemas/postal-address.ts):
+// the store's delivery place ids only under `placeIds`.
+const createCustomerBody = z.object({
+    name: createCustomerSchema.shape.name,
+    email: createCustomerSchema.shape.email,
+    phone: createCustomerSchema.shape.phone,
+    address: postalAddressInputSchema.nullable().optional().openapi({ description: "The first address, which becomes the default." }),
+    skipAddressValidation: z.boolean().optional().openapi({
+        description: "Save the address as given, without the country's address rules.",
+    }),
+});
+
+/** A postal address as the customers service takes it (place ids beside the canonical fields). */
+function serviceAddress(address: PostalAddressInput, skipValidation: boolean | undefined) {
+    const { placeIds, ...lines } = address;
+    return {
+        ...lines,
+        city: placeIds?.city ?? null,
+        zone: placeIds?.zone ?? null,
+        area: placeIds?.area ?? null,
+        ...(skipValidation === undefined ? {} : { skipValidation }),
+    };
+}
+
 const createCustomerRoute = createRoute({
     operationId: "dashboard.customers.create",
     method: "post",
@@ -183,19 +209,22 @@ const createCustomerRoute = createRoute({
     tags: ["Admin - Customers"],
     summary: "Create a customer",
     request: {
-        body: { content: { "application/json": { schema: createCustomerSchema } } }
+        body: { content: { "application/json": { schema: createCustomerBody } } }
     },
     responses: {
-        201: { description: "Customer created", content: { "application/json": { schema: idResponse } } },
+        201: { description: "The new customer", content: { "application/json": { schema: customerEnvelope } } },
         ...errorResponses,
     }
 });
 
 app.openapi(createCustomerRoute, async (c) => {
     const db = c.get("db");
-    const data = c.req.valid("json");
-    const result = await createCustomer(db, data, staffId(c));
-    return created(c, result);
+    const { address, skipAddressValidation, ...contact } = c.req.valid("json");
+    const { id } = await createCustomer(db, {
+        ...contact,
+        address: address ? serviceAddress(address, skipAddressValidation) : address,
+    }, staffId(c));
+    return created(c, { customer: await readCustomerResource(db, id) });
 });
 
 // ── Bulk Delete Customers ──
@@ -317,7 +346,7 @@ const updateCustomerRoute = createRoute({
         body: { content: { "application/json": { schema: updateCustomerSchema } } }
     },
     responses: {
-        200: { description: "Customer updated", content: { "application/json": { schema: successEnvelope(z.object({})) } } },
+        200: { description: "The customer as updated", content: { "application/json": { schema: customerEnvelope } } },
         ...errorResponses,
     }
 });
@@ -326,7 +355,7 @@ app.openapi(updateCustomerRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await updateCustomer(db, id, c.req.valid("json"), staffId(c));
-    return ok(c, {});
+    return ok(c, { customer: await readCustomerResource(db, id) });
 });
 
 // ── Delete Customer ──

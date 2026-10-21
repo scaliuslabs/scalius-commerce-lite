@@ -102,7 +102,7 @@ describe("OrganizationCard category create", () => {
   });
 
   it("creates a Bangla-named category without sending a web address", async () => {
-    api.create.mockResolvedValue({ id: "cat_new", revision: 1, status: "draft" });
+    api.create.mockResolvedValue({ category: { id: "cat_new", revision: 1, status: "draft" } });
     await openAndSearch("কুর্তা");
 
     await act(async () => createButton().click());

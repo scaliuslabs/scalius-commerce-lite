@@ -229,7 +229,9 @@ describe("ctx.api.call as a plugin principal", () => {
     expect(await call("settings.email_get")).toMatchObject({ ok: false, status: 403, error: { code: "api_operation_not_stable" } });
     expect(await call("team.users.list")).toMatchObject({ ok: false, status: 403, error: { code: "api_operation_not_stable" } });
     expect(audit()).toContainEqual({ plugin_id: "acme.rbac", operation_id: "dashboard.orders.invoice_get", outcome: "denied", http_status: 403, error_class: "operation_forbidden" });
-    expect((await call("settings.get_business")).ok).toBe(true);
+    // The business settings form is the dashboard's (beta); the store's languages are stable.
+    expect(await call("settings.business_get")).toMatchObject({ ok: false, status: 403, error: { code: "api_operation_not_stable" } });
+    expect((await call("languages.list")).ok).toBe(true);
   });
 
   it("lets a bundled first-party app call beta operations, never internal or security ones", async () => {

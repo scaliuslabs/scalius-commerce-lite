@@ -279,8 +279,11 @@ function paginationProblems(operations: readonly AgentOperationManifestEntry[], 
     for (const name of query) if (PAGE_PARAMETERS.has(name)) problems.push(`${operation.operationId}: pages by ${name}; take cursor and limit.`);
     const envelope = resolve(operation.outputSchema);
     const data = resolve(((envelope?.properties ?? {}) as Record<string, unknown>).data);
-    const keys = Object.keys((data?.properties ?? {}) as Record<string, unknown>);
-    for (const key of keys) if (PAGE_RESPONSE_KEYS.has(key)) problems.push(`${operation.operationId}: returns ${key}; return nextCursor.`);
+    const properties = (data?.properties ?? {}) as Record<string, unknown>;
+    const keys = Object.keys(properties);
+    // A CMS page resource answers `{ page: PageResource }`: an object is a resource, never a page number.
+    const isResource = (key: string) => resolve(properties[key])?.type === "object";
+    for (const key of keys) if (PAGE_RESPONSE_KEYS.has(key) && !isResource(key)) problems.push(`${operation.operationId}: returns ${key}; return nextCursor.`);
     const pages = query.has("cursor") || keys.includes("nextCursor");
     if (pages && !(query.has("cursor") && query.has("limit") && keys.includes("nextCursor"))) {
       problems.push(`${operation.operationId}: a cursor list takes cursor and limit and returns nextCursor.`);

@@ -65,6 +65,8 @@ function createTestApp(
 
   mocks.createPage.mockResolvedValue({ id: "page_1", revision: 1 });
   mocks.updatePage.mockResolvedValue({ revision: 2 });
+  // Create and update answer the page as pages.get reads it.
+  mocks.getPageById.mockResolvedValue({ id: "page_1", title: "About Scalius", revision: 2 });
   mocks.deletePage.mockResolvedValue(undefined);
   mocks.bulkDeletePages.mockResolvedValue(undefined);
   mocks.bulkPublishPages.mockResolvedValue(undefined);

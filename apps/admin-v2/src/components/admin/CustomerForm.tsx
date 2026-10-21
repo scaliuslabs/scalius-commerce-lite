@@ -14,9 +14,9 @@ import { Input } from "../ui/input";
 import { CustomerActivity } from "./CustomerActivity";
 import { AddressFields, SkipAddressValidation, useAddressErrors } from "./address/AddressFields";
 import {
-  addressDraftInput,
   emptyAddressDraft,
   isAddressDraftEmpty,
+  postalAddressDraftInput,
   readAddressProblems,
   type AddressProblem,
 } from "./address/address-draft";
@@ -92,14 +92,18 @@ function toCustomerUpdate(values: CustomerFormValues): ApiBody<typeof putApiV1Ad
   };
 }
 
-/** A new customer: the contact and, when one was entered, the first address. */
-function toNewCustomerInput(values: CustomerFormValues): ApiBody<typeof postApiV1AdminCustomers> {
-  const address = values.address && !isAddressDraftEmpty(values.address) ? values.address : null;
+/**
+ * A new customer: the contact and, when one was entered, the first address
+ * (null when it has no first line yet, which every address needs).
+ */
+function toNewCustomerInput(values: CustomerFormValues): ApiBody<typeof postApiV1AdminCustomers> | null {
+  const draft = values.address && !isAddressDraftEmpty(values.address) ? values.address : null;
+  const address = draft ? postalAddressDraftInput(draft) : null;
+  if (draft && !address) return null;
   return {
     ...toCustomerInput(values),
-    address: address
-      ? { ...addressDraftInput(address), ...(values.skipAddressValidation ? { skipValidation: true } : {}) }
-      : null,
+    address,
+    ...(address && values.skipAddressValidation ? { skipAddressValidation: true } : {}),
   };
 }
 
@@ -142,11 +146,18 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
   const { isSubmitting, handleSubmit: submitEntity } = useEntityFormSubmit<CustomerFormValues>({
     isEdit,
     entityId: defaultValues?.id,
-    createFn: (data) => apiData(postApiV1AdminCustomers({ body: toNewCustomerInput(data) })),
+    createFn: async (data) => {
+      const body = toNewCustomerInput(data);
+      if (!body) {
+        setAddressProblems([{ field: "line1", code: "required" }]);
+        throw new Error(ta("addressInvalid"));
+      }
+      return (await apiData(postApiV1AdminCustomers({ body }))).customer;
+    },
     updateFn: (data) => apiData(putApiV1AdminCustomersById({ path: { id: data.id }, body: toCustomerUpdate(data) })),
     invalidateKeys: [queryKeys.customers.all, queryKeys.dashboard.all],
     onSuccess: (result) => {
-      const id = (result as Partial<ApiResult<typeof postApiV1AdminCustomers>>).id;
+      const id = (result as Partial<ApiResult<typeof postApiV1AdminCustomers>["customer"]>).id;
       if (!isEdit && id) {
         void navigate({ to: "/admin/customers/$customerId/edit", params: { customerId: id }, replace: true });
       }

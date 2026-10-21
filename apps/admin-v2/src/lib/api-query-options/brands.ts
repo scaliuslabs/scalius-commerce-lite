@@ -5,7 +5,7 @@ import { queryKeys } from "../query-keys";
 
 export type BrandsQuery = ApiQuery<typeof getApiV1AdminBrands>;
 export type BrandListItem = ApiResult<typeof getApiV1AdminBrands>["brands"][number];
-export type BrandDetail = ApiResult<typeof getApiV1AdminBrandsById>;
+export type BrandDetail = ApiResult<typeof getApiV1AdminBrandsById>["brand"];
 
 export const brandsQueryOptions = (query: BrandsQuery) =>
   queryOptions({
@@ -17,6 +17,6 @@ export const brandsQueryOptions = (query: BrandsQuery) =>
 export const brandQueryOptions = (id: string) =>
   queryOptions({
     queryKey: queryKeys.brands.detail(id),
-    queryFn: () => apiData(getApiV1AdminBrandsById({ path: { id } })),
+    queryFn: async () => (await apiData(getApiV1AdminBrandsById({ path: { id } }))).brand,
     staleTime: 0,
   });

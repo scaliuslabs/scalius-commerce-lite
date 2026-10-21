@@ -34,10 +34,10 @@ import {
     paginationSchema,
     errorResponses,
     conflictResponse,
-    messageResponse,
     noContentResponse,
 } from "../../schemas/responses";
 import { buyerPriceRangeSchema, collectionSchema, collectionSummarySchema } from "../../schemas/entities";
+import { CollectionResource, presentCollection, readCollectionResource } from "./resources-catalog-content";
 
 import { categoryStatusSchema } from "@scalius/shared/category-publication";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -77,15 +77,21 @@ function parseLookupIds(ids: string | undefined): string[] {
 const collectionIdsSchema = z.array(z.string().trim().min(1).max(180)).min(1).max(90);
 const collectionSectionSchema = z.enum(["summary", "text"]);
 const collectionTextFieldSchema = z.enum(["description", "content"]);
-const collectionMutationResultSchema = z.object({
-    id: z.string(),
-    version: z.number().int().min(1),
-    /** Its handle (`@collection:<handle>` in templates). */
-    slug: z.string().nullable(),
-});
+/** Every collection write answers the collection as `collections.get` reads it. */
+const collectionEnvelope = successEnvelope(z.object({ collection: CollectionResource }));
 
-function toCollectionMutationResult(collection: { id: string; version: number; slug: string | null }) {
-    return { id: collection.id, version: collection.version, slug: collection.slug };
+// A collection exposes `revision` and every write takes `expectedRevision`
+// (the collections service keeps its `version` column and parameter names).
+const expectedRevisionField = z.number().int().min(1).openapi({
+    description: "The collection's `revision` you read; a collection changed since is refused with 409 and nothing changes.",
+});
+const updateCollectionBody = updateCollectionSchema.omit({ expectedVersion: true }).extend({ expectedRevision: expectedRevisionField });
+const updateCollectionProductsBody = updateCollectionProductsSchema.omit({ expectedVersion: true }).extend({ expectedRevision: expectedRevisionField });
+
+/** A collection row or projection as the dashboard's own reads carry it: `version` is its `revision`. */
+function withRevision<T extends { version: number }>(row: T): Omit<T, "version"> & { revision: number } {
+    const { version, ...rest } = row;
+    return { ...rest, revision: version };
 }
 
 function parseProductOptionCategoryIds(ids: string | undefined): string[] {
@@ -266,7 +272,7 @@ app.openapi(listRoute, async (c) => {
         sort: q.sort,
         order: q.order
     });
-    return ok(c, result);
+    return ok(c, { ...result, collections: result.collections.map(withRevision) });
 });
 
 // ── Collection Picker Summaries ──
@@ -319,8 +325,8 @@ const createCollectionRoute = createRoute({
     },
     responses: {
         201: {
-            description: "Collection created",
-            content: { "application/json": { schema: successEnvelope(collectionMutationResultSchema) } },
+            description: "The new collection",
+            content: { "application/json": { schema: collectionEnvelope } },
         },
         ...errorResponses,
     }
@@ -330,8 +336,7 @@ app.openapi(createCollectionRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     const collection = await createCollection(db, data);
-
-    return created(c, toCollectionMutationResult(collection));
+    return created(c, { collection: presentCollection(collection) });
 });
 
 // ── Bulk Delete Collections ──
@@ -452,19 +457,16 @@ const restoreRoute = createRoute({
     path: "/{id}/restore",
     operationId: "dashboard.collections.restore",
     tags: ["Admin - Collections"],
-    summary: "Restore a soft-deleted collection",
+    summary: "Restore a collection from the trash",
+    description: "Answers the restored collection.",
     request: {
         params: z.object({ id: z.string() }),
-        query: z.object({
-            expectedVersion: z.coerce.number().int().min(1).optional().openapi({
-                description: "The collection version you read; a change since is refused with 409. Omit to act whatever happened since.",
-            }),
-        }),
+        body: { required: true, content: { "application/json": { schema: z.object({ expectedRevision: expectedRevisionField }) } } },
     },
     responses: {
         200: {
-            description: "Collection restored",
-            content: { "application/json": { schema: messageResponse } },
+            description: "The restored collection",
+            content: { "application/json": { schema: collectionEnvelope } },
         },
         409: conflictResponse,
         ...errorResponses,
@@ -474,11 +476,8 @@ const restoreRoute = createRoute({
 app.openapi(restoreRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    // Note: do NOT call getCollectionById here — it filters deletedAt IS NULL,
-    // which would always 404 for soft-deleted collections being restored
-    await restoreCollections(db, [id], { expectedVersion: c.req.valid("query").expectedVersion });
-
-    return ok(c, { message: "Collection restored" });
+    await restoreCollections(db, [id], { expectedVersion: c.req.valid("json").expectedRevision });
+    return ok(c, { collection: await readCollectionResource(db, id) });
 });
 
 // ── Reorder Collections ──
@@ -497,7 +496,7 @@ const reorderRoute = createRoute({
                         items: z.array(z.object({
                             id: z.string().trim().min(1).max(180),
                             sortOrder: z.number().int().min(0),
-                            expectedVersion: z.number().int().min(1),
+                            expectedRevision: expectedRevisionField,
                         })).min(1).max(90)
                     })
                 }
@@ -517,7 +516,7 @@ const reorderRoute = createRoute({
 app.openapi(reorderRoute, async (c) => {
     const db = c.get("db");
     const { items } = c.req.valid("json");
-    await reorderCollections(db, items);
+    await reorderCollections(db, items.map(({ expectedRevision, ...item }) => ({ ...item, expectedVersion: expectedRevision })));
 
     return ok(c, {});
 });
@@ -570,7 +569,7 @@ app.openapi(getCollectionSectionRoute, async (c) => {
     const query = c.req.valid("query");
     const result = await getCollectionSection(c.get("db"), id, section, query);
     if (!result) throw new NotFoundError("Collection not found");
-    return ok(c, result);
+    return ok(c, result.section === "summary" ? { ...result, collection: withRevision(result.collection) } : result);
 });
 
 // ── Get Collection By ID ──
@@ -598,7 +597,7 @@ app.openapi(getByIdRoute, async (c) => {
     const { id } = c.req.valid("param");
     const collection = await getCollectionById(db, id);
     if (!collection) throw new NotFoundError("Collection not found");
-    return ok(c, collection);
+    return ok(c, withRevision(collection));
 });
 
 // ── Update Collection ──
@@ -611,12 +610,12 @@ const updateCollectionRoute = createRoute({
     summary: "Update a collection",
     request: {
         params: z.object({ id: z.string() }),
-        body: { content: { "application/json": { schema: updateCollectionSchema } } }
+        body: { content: { "application/json": { schema: updateCollectionBody } } }
     },
     responses: {
         200: {
-            description: "Collection updated",
-            content: { "application/json": { schema: successEnvelope(collectionMutationResultSchema) } },
+            description: "The collection as updated",
+            content: { "application/json": { schema: collectionEnvelope } },
         },
         409: conflictResponse,
         ...errorResponses,
@@ -626,9 +625,9 @@ const updateCollectionRoute = createRoute({
 app.openapi(updateCollectionRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const result = await updateCollection(db, id, c.req.valid("json"));
-
-    return ok(c, toCollectionMutationResult(result));
+    const { expectedRevision, ...changes } = c.req.valid("json");
+    const collection = await updateCollection(db, id, { ...changes, expectedVersion: expectedRevision });
+    return ok(c, { collection: presentCollection(collection) });
 });
 
 // ── Add / remove products (manual collections) ──
@@ -641,12 +640,12 @@ const updateCollectionProductsRoute = createRoute({
     summary: "Add or remove products in a manual collection",
     request: {
         params: z.object({ id: z.string() }),
-        body: { content: { "application/json": { schema: updateCollectionProductsSchema } } },
+        body: { content: { "application/json": { schema: updateCollectionProductsBody } } },
     },
     responses: {
         200: {
-            description: "Collection products updated",
-            content: { "application/json": { schema: successEnvelope(collectionMutationResultSchema) } },
+            description: "The collection with its new products",
+            content: { "application/json": { schema: collectionEnvelope } },
         },
         409: conflictResponse,
         ...errorResponses,
@@ -656,9 +655,9 @@ const updateCollectionProductsRoute = createRoute({
 app.openapi(updateCollectionProductsRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const result = await updateCollectionProducts(db, id, c.req.valid("json"));
-
-    return ok(c, toCollectionMutationResult(result));
+    const { expectedRevision, ...change } = c.req.valid("json");
+    await updateCollectionProducts(db, id, { ...change, expectedVersion: expectedRevision });
+    return ok(c, { collection: await readCollectionResource(db, id) });
 });
 
 // ── Delete Collection ──
@@ -668,17 +667,21 @@ const deleteCollectionRoute = createRoute({
     path: "/{id}",
     operationId: "dashboard.collections.trash",
     tags: ["Admin - Collections"],
-    summary: "Soft-delete a collection",
+    summary: "Move a collection to the trash",
+    description: "Answers the trashed collection.",
     request: {
         params: z.object({ id: z.string() }),
         query: z.object({
-            expectedVersion: z.coerce.number().int().min(1).optional().openapi({
-                description: "The collection version you read; a change since is refused with 409. Omit to act whatever happened since.",
+            expectedRevision: z.coerce.number().int().min(1).openapi({
+                description: "The collection's `revision` you read; a collection changed since is refused with 409 and nothing changes.",
             }),
         }),
     },
     responses: {
-        204: noContentResponse,
+        200: {
+            description: "The trashed collection",
+            content: { "application/json": { schema: collectionEnvelope } },
+        },
         409: conflictResponse,
         ...errorResponses,
     }
@@ -687,9 +690,8 @@ const deleteCollectionRoute = createRoute({
 app.openapi(deleteCollectionRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    await deleteCollection(db, id, { expectedVersion: c.req.valid("query").expectedVersion });
-
-    return noContent(c);
+    await deleteCollection(db, id, { expectedVersion: c.req.valid("query").expectedRevision });
+    return ok(c, { collection: await readCollectionResource(db, id) });
 });
 
 // ── Permanent Delete Collection ──

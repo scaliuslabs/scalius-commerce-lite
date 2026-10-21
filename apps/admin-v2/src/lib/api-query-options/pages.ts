@@ -17,7 +17,7 @@ import { queryKeys } from "../query-keys";
 
 const MODERATE_STALE_TIME_MS = 1000 * 60 * 2;
 
-export type PageDto = ApiResult<typeof getApiV1AdminPagesById>;
+export type PageDto = ApiResult<typeof getApiV1AdminPagesById>["page"];
 export type PageListItem = ApiResult<typeof getApiV1AdminPages>["pages"][number];
 export type CreatePageInput = ApiBody<typeof postApiV1AdminPages>;
 export type UpdatePageInput = ApiBody<typeof putApiV1AdminPagesById>;
@@ -33,7 +33,7 @@ export const pagesQueryOptions = (query: ApiQuery<typeof getApiV1AdminPages>) =>
 export const pageQueryOptions = (id: string) =>
   queryOptions({
     queryKey: queryKeys.pages.detail(id),
-    queryFn: () => apiData(getApiV1AdminPagesById({ path: { id } })),
+    queryFn: async () => (await apiData(getApiV1AdminPagesById({ path: { id } }))).page,
     staleTime: 0,
   });
 

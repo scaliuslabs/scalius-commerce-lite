@@ -11,6 +11,7 @@ import { mediaFolderSchema, mediaSchema } from "../../schemas/entities";
 import { timestampSchema } from "../../schemas/timestamps";
 import {
     abortMediaUpload,
+    checkMediaDimensions,
     completeMediaUpload,
     createFolderSchema,
     createMediaFolder,
@@ -23,7 +24,6 @@ import {
     listMediaFolders,
     loadMediaUsage,
     MEDIA_USAGE_KINDS,
-    mediaVersionCommandSchema,
     moveMediaFiles,
     moveMediaSchema,
     permanentlyDeleteMediaFile,
@@ -50,6 +50,31 @@ import { importMediaFromUrl } from "./media-url-import";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const mediaErrorResponses = { ...errorResponses, 409: conflictResponse };
 const idParam = z.object({ id: z.string().min(8).max(160) });
+
+// A file exposes `revision` and every file write takes `expectedRevision`
+// (the core media service keeps its `version` column and parameter names).
+const expectedRevisionField = z.number().int().min(1).openapi({
+    description: "The file's `revision` you read; a file changed since is refused with 409 and nothing changes.",
+});
+const mediaRevisionBody = z.object({ expectedRevision: expectedRevisionField });
+const { expectedVersion: _expectedVersion, ...mediaUpdateFields } = updateMediaSchema.shape;
+const updateMediaBody = z.object({ expectedRevision: expectedRevisionField, ...mediaUpdateFields }).superRefine(checkMediaDimensions);
+const moveMediaBody = z.object({
+    items: z.array(z.object({
+        id: moveMediaSchema.shape.items.element.shape.id,
+        expectedRevision: expectedRevisionField,
+    })).min(1, "Media items are required").max(90),
+    folderId: moveMediaSchema.shape.folderId,
+}).refine((value) => new Set(value.items.map((item) => item.id)).size === value.items.length, {
+    message: "Media IDs must be unique",
+    path: ["items"],
+});
+
+/** A file as the HTTP contract carries it: the service's `version` is its `revision`. */
+function fileWire<T extends { version: number }>(file: T): Omit<T, "version"> & { revision: number } {
+    const { version, ...rest } = file;
+    return { ...rest, revision: version };
+}
 const cursorPaginationSchema = z.object({
     limit: z.number().int().positive(),
     hasMore: z.boolean(),
@@ -106,7 +131,10 @@ const listRoute = createRoute({
         ...mediaErrorResponses,
     },
 });
-app.openapi(listRoute, async (c) => ok(c, await listMediaFiles(c.get("db"), c.req.valid("query"))));
+app.openapi(listRoute, async (c) => {
+    const page = await listMediaFiles(c.get("db"), c.req.valid("query"));
+    return ok(c, { ...page, files: page.files.map(fileWire) });
+});
 
 const initiateRoute = createRoute({
     method: "post",
@@ -151,7 +179,7 @@ app.openapi(importUrlRoute, async (c) => {
         filename: input.filename,
         folderId: input.folderId,
     });
-    return created(c, { file });
+    return created(c, { file: fileWire(file) });
 });
 
 const getUploadRoute = createRoute({
@@ -241,7 +269,7 @@ const completeRoute = createRoute({
 });
 app.openapi(completeRoute, async (c) => {
     const file = await completeMediaUpload(c.get("db"), c.req.valid("param").id, c.env.BUCKET);
-    return ok(c, { file });
+    return ok(c, { file: fileWire(file) });
 });
 
 const abortRoute = createRoute({
@@ -294,15 +322,16 @@ const patchMediaRoute = createRoute({
     tags: ["Admin - Media"],
     summary: "Update ready media metadata with CAS",
     operationId: "dashboard.media.update",
-    request: { params: idParam, body: { content: { "application/json": { schema: updateMediaSchema } } } },
+    request: { params: idParam, body: { content: { "application/json": { schema: updateMediaBody } } } },
     responses: { 200: { description: "Media updated", content: { "application/json": { schema: successEnvelope(z.object({ file: mediaSchema })) } } }, ...mediaErrorResponses },
 });
 app.openapi(patchMediaRoute, async (c) => {
     const db = c.get("db");
     const id = c.req.valid("param").id;
-    const file = await updateMediaFile(db, id, c.req.valid("json"));
+    const { expectedRevision, ...fields } = c.req.valid("json");
+    const file = await updateMediaFile(db, id, { ...fields, expectedVersion: expectedRevision });
 
-    return ok(c, { file });
+    return ok(c, { file: fileWire(file) });
 });
 
 for (const [path, summary, operationId, action] of [
@@ -315,15 +344,15 @@ for (const [path, summary, operationId, action] of [
         tags: ["Admin - Media"],
         summary,
         operationId,
-        request: { params: idParam, body: { content: { "application/json": { schema: mediaVersionCommandSchema } } } },
+        request: { params: idParam, body: { content: { "application/json": { schema: mediaRevisionBody } } } },
         responses: { 200: { description: summary, content: { "application/json": { schema: successEnvelope(z.object({ file: mediaSchema })) } } }, ...mediaErrorResponses },
     });
     app.openapi(route, async (c) => {
         const db = c.get("db");
         const id = c.req.valid("param").id;
-        const file = await action(db, id, c.req.valid("json").expectedVersion);
+        const file = await action(db, id, c.req.valid("json").expectedRevision);
 
-        return ok(c, { file });
+        return ok(c, { file: fileWire(file) });
     });
 }
 
@@ -349,7 +378,7 @@ app.openapi(saveVariantsRoute, async (c) => {
     const id = c.req.valid("param").id;
     const file = await saveMediaVariants(db, id, await readMediaVariantsForm(c.req), c.env.BUCKET);
 
-    return ok(c, { file });
+    return ok(c, { file: fileWire(file) });
 });
 
 const originalRoute = createRoute({
@@ -407,11 +436,11 @@ const permanentDeleteRoute = createRoute({
     summary: "Permanently delete unreferenced trashed media",
     description: "Refused with 409 media_dependency_conflict while the file is used anywhere (see dashboard.media.usage) or kept by past orders.",
     operationId: "dashboard.media.permanently_delete",
-    request: { params: idParam, query: z.object({ expectedVersion: z.coerce.number().int().min(1) }) },
+    request: { params: idParam, query: z.object({ expectedRevision: z.coerce.number().int().min(1) }) },
     responses: { 204: noContentResponse, ...mediaErrorResponses, 503: serviceUnavailableResponse },
 });
 app.openapi(permanentDeleteRoute, async (c) => {
-    await permanentlyDeleteMediaFile(c.get("db"), c.req.valid("param").id, c.req.valid("query").expectedVersion, c.env.BUCKET);
+    await permanentlyDeleteMediaFile(c.get("db"), c.req.valid("param").id, c.req.valid("query").expectedRevision, c.env.BUCKET);
     return noContent(c);
 });
 
@@ -421,12 +450,12 @@ const moveRoute = createRoute({
     tags: ["Admin - Media"],
     summary: "Move ready media with per-item CAS",
     operationId: "dashboard.media.move",
-    request: { body: { content: { "application/json": { schema: moveMediaSchema } } } },
+    request: { body: { content: { "application/json": { schema: moveMediaBody } } } },
     responses: { 200: { description: "Media moved", content: { "application/json": { schema: successEnvelope(z.object({ movedCount: z.number().int() })) } } }, ...mediaErrorResponses },
 });
 app.openapi(moveRoute, async (c) => {
     const body = c.req.valid("json");
-    return ok(c, await moveMediaFiles(c.get("db"), body.items, body.folderId ?? null));
+    return ok(c, await moveMediaFiles(c.get("db"), body.items.map((item) => ({ id: item.id, expectedVersion: item.expectedRevision })), body.folderId ?? null));
 });
 
 const listFoldersRoute = createRoute({
@@ -478,7 +507,7 @@ app.openapi(deleteFolderRoute, async (c) => {
 // Static reads must precede the single-segment detail route.
 app.openapi(getMediaRoute, async (c) => {
     c.header("Cache-Control", "no-store");
-    return ok(c, { file: await getMediaFile(c.get("db"), c.req.valid("param").id) });
+    return ok(c, { file: fileWire(await getMediaFile(c.get("db"), c.req.valid("param").id)) });
 });
 
 export { app as adminMediaRoutes };

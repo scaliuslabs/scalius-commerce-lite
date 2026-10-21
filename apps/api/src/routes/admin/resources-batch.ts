@@ -21,9 +21,10 @@
 //   trash (permanently delete it, or use a new key). A Worker that dies after
 //   the insert, and two concurrent calls with one key, still make one
 //   resource: the second insert loses on the primary key and replays.
-// - The response carries slim refs `{ id, slug, revision }` read once at the
-//   end (so a replayed item shows the resource as it is now); read the full
-//   resource with `products.get` and the like.
+// - Each result carries its resource, read once at the end in one batched
+//   read (so a replayed item shows the resource as it is now): the resource
+//   the single create answers (`BrandResource`, `CategoryResource`), or a
+//   slim ref `{ id, slug, revision }` where a route passes none.
 // - The bound is a plan value (`planLimits().batchCreates`): see the
 //   measurement beside each route.
 import { z } from "@hono/zod-openapi";
@@ -57,30 +58,30 @@ export function batchRequestSchema<T extends z.ZodType>(item: T, maxItems: numbe
   }).strict();
 }
 
-/** The response data of a batch create: one result per request item, in request order. */
-export function batchResultSchema<N extends string>(noun: N) {
+/** The response data of a batch create: one result per request item, in request order, each with its `resource` (a slim ref by default). */
+export function batchResultSchema<N extends string>(noun: N, resource: z.ZodType = refSchema) {
   return z.object({
     items: z.array(z.object({
       key: z.string().max(64),
       outcome: z.enum(["created", "replayed", "failed"]).openapi({
         description: "`created` now; `replayed` was created earlier under this key (nothing was created); `failed` was refused, see `error` (the other items are unaffected).",
       }),
-      [noun]: refSchema.nullable(),
+      [noun]: resource.nullable(),
       error: z.object({ code: z.string().max(64), message: z.string().max(MAX_ERROR_MESSAGE) }).nullable(),
     })).max(100),
   });
 }
 
 /** A batch create's response data for one noun, as `batchResultSchema(noun)` states it. */
-export type BatchCreateData<N extends "product" | "category" | "brand"> = {
-  items: Array<{ key: string; outcome: ItemOutcome; error: ItemError | null } & { [K in N]: BatchRef | null }>;
+export type BatchCreateData<N extends "product" | "category" | "brand", R = BatchRef> = {
+  items: Array<{ key: string; outcome: ItemOutcome; error: ItemError | null } & { [K in N]: R | null }>;
 };
 
 type ItemOutcome = "created" | "replayed" | "failed";
 type ItemError = { code: string; message: string };
 type Settled = { key: string; outcome: ItemOutcome; id: string | null; error: ItemError | null };
 
-export interface BatchCreateSpec<Item extends { key: string }> {
+export interface BatchCreateSpec<Item extends { key: string }, R = BatchRef> {
   /** The stable operation id: the scope of the item keys. */
   operationId: string;
   noun: "product" | "category" | "brand";
@@ -95,8 +96,8 @@ export interface BatchCreateSpec<Item extends { key: string }> {
   create: (item: Item, id: string) => Promise<unknown>;
   /** Which of these ids exist, live or in the trash (a create made them). */
   existing: (ids: readonly string[]) => Promise<Set<string>>;
-  /** The live resources among these ids, by id. Trashed and deleted ones are absent. */
-  readRefs: (ids: readonly string[]) => Promise<Map<string, BatchRef>>;
+  /** The live resources among these ids, by id, in one read. Trashed and deleted ones are absent. */
+  readRefs: (ids: readonly string[]) => Promise<Map<string, R>>;
 }
 
 export interface BatchCreateResult {
@@ -116,9 +117,9 @@ async function itemId(prefix: string, scopedKey: string): Promise<string> {
 }
 
 /** Runs a batch create (see the file comment) and returns the response data. */
-export async function runBatchCreate<Item extends { key: string }>(
+export async function runBatchCreate<Item extends { key: string }, R = BatchRef>(
   c: Context,
-  spec: BatchCreateSpec<Item>,
+  spec: BatchCreateSpec<Item, R>,
 ): Promise<BatchCreateResult> {
   const { items } = spec;
   if (items.length > spec.bound) {
@@ -163,7 +164,7 @@ export async function runBatchCreate<Item extends { key: string }>(
   }
 
   const resolvedIds = settled.flatMap((entry) => (entry.id ? [entry.id] : []));
-  const refs = resolvedIds.length > 0 ? await spec.readRefs(resolvedIds) : new Map<string, BatchRef>();
+  const refs = resolvedIds.length > 0 ? await spec.readRefs(resolvedIds) : new Map<string, R>();
   const result = settled.map((entry) => {
     const ref = entry.id ? refs.get(entry.id) ?? null : null;
     if (entry.id && !ref) {

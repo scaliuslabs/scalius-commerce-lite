@@ -9,7 +9,7 @@ import {
 import { apiData, type ApiBody, type ApiResult } from "../api";
 import { queryKeys } from "../query-keys";
 
-export type DiscountRecord = ApiResult<typeof getApiV1AdminDiscountsById>;
+export type DiscountRecord = ApiResult<typeof getApiV1AdminDiscountsById>["discount"];
 export type DiscountInput = ApiBody<typeof postApiV1AdminDiscounts>;
 export type DiscountUpdateInput = ApiBody<typeof putApiV1AdminDiscountsById>;
 
@@ -30,6 +30,6 @@ export const discountsQueryOptions = (query: DiscountListQuery = {}) =>
 export const discountQueryOptions = (id: string) =>
   queryOptions({
     queryKey: queryKeys.discounts.detail(id),
-    queryFn: () => apiData(getApiV1AdminDiscountsById({ path: { id } })),
+    queryFn: async () => (await apiData(getApiV1AdminDiscountsById({ path: { id } }))).discount,
     staleTime: 0,
   });

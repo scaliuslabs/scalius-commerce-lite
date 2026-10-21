@@ -69,7 +69,7 @@ export function toMediaFile(file: MediaFileDto): LibraryMediaFile {
     posterUrl: file.posterUrl,
     folderId: file.folderId,
     status: file.status,
-    version: file.version,
+    version: file.revision,
     createdAt: date(file.createdAt),
     updatedAt: date(file.updatedAt),
     trashedAt: file.trashedAt == null ? null : date(file.trashedAt),
@@ -172,11 +172,11 @@ export class MediaApiClient {
 
   static async updateFile(
     file: LibraryMediaFile,
-    updates: Omit<ApiBody<typeof patchApiV1AdminMediaById>, "expectedVersion">,
+    updates: Omit<ApiBody<typeof patchApiV1AdminMediaById>, "expectedRevision">,
   ): Promise<LibraryMediaFile> {
     const data = await apiData(patchApiV1AdminMediaById({
       path: { id: file.id },
-      body: { expectedVersion: file.version, ...updates },
+      body: { expectedRevision: file.version, ...updates },
     }));
     return toMediaFile(data.file);
   }
@@ -184,7 +184,7 @@ export class MediaApiClient {
   static async trashFile(file: LibraryMediaFile): Promise<LibraryMediaFile> {
     const data = await apiData(postApiV1AdminMediaByIdTrash({
       path: { id: file.id },
-      body: { expectedVersion: file.version },
+      body: { expectedRevision: file.version },
     }));
     return toMediaFile(data.file);
   }
@@ -192,7 +192,7 @@ export class MediaApiClient {
   static async restoreFile(file: LibraryMediaFile): Promise<LibraryMediaFile> {
     const data = await apiData(postApiV1AdminMediaByIdRestore({
       path: { id: file.id },
-      body: { expectedVersion: file.version },
+      body: { expectedRevision: file.version },
     }));
     return toMediaFile(data.file);
   }
@@ -200,13 +200,13 @@ export class MediaApiClient {
   static async permanentlyDeleteFile(file: LibraryMediaFile): Promise<void> {
     await apiData(deleteApiV1AdminMediaByIdPermanent({
       path: { id: file.id },
-      query: { expectedVersion: file.version },
+      query: { expectedRevision: file.version },
     }));
   }
 
   static async moveFiles(files: LibraryMediaFile[], folderId: string | null): Promise<number> {
     const data = await apiData(postApiV1AdminMediaMove({ body: {
-      items: files.map((file) => ({ id: file.id, expectedVersion: file.version })),
+      items: files.map((file) => ({ id: file.id, expectedRevision: file.version })),
       folderId,
     } }));
     return data.movedCount;

@@ -144,14 +144,14 @@ export function ProductBulkActions({ target, filter, done, run }: {
       await update({ categoryId: id }, t("changingCategory"));
       return;
     }
-    let expectedVersion = manualCollections.find((collection) => collection.id === id)?.version ?? 1;
+    let expectedRevision = manualCollections.find((collection) => collection.id === id)?.revision ?? 1;
     await inChunks(rows, async (chunk) => {
       const ids = chunk.map((row) => row.id);
       const result = await apiData(postApiV1AdminCollectionsByIdProducts({
         path: { id },
-        body: { expectedVersion, ...(kind === "addToCollection" ? { add: ids } : { remove: ids }) },
+        body: { expectedRevision, ...(kind === "addToCollection" ? { add: ids } : { remove: ids }) },
       }));
-      expectedVersion = result.version;
+      expectedRevision = result.collection.revision;
     });
   }, INVALIDATE);
 

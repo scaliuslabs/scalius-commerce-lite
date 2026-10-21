@@ -130,14 +130,16 @@ export const STABLE_APP_OPERATIONS = {
   "brands.set_status": "dashboard.brands.set_status",
   "brands.trash": "dashboard.brands.trash",
   "brands.restore": "dashboard.brands.restore",
-  "categories.list_children": "dashboard.categories.list_children",
+  "categories.list": "dashboard.resources.categories.list",
+  "categories.get": "dashboard.resources.categories.get",
   "categories.create": "dashboard.categories.create",
   "categories.batch_create": "dashboard.categories.batch_create",
   "categories.update": "dashboard.categories.update",
   "categories.set_status": "dashboard.categories.set_status",
   "categories.trash": "dashboard.categories.trash",
   "categories.restore": "dashboard.categories.restore",
-  "collections.get_by_ids": "dashboard.collections.get_by_ids",
+  "collections.list": "dashboard.resources.collections.list",
+  "collections.get": "dashboard.resources.collections.get",
   "collections.create": "dashboard.collections.create",
   "collections.update": "dashboard.collections.update",
   "collections.update_products": "dashboard.collections.update_products",
@@ -171,9 +173,6 @@ export const STABLE_APP_OPERATIONS = {
   "customers.update": "dashboard.customers.update",
   "customers.set_tags": "dashboard.customers.tags_set",
   "customers.bulk_tag": "dashboard.resources.customers.bulk_tag",
-  "customers.get_marketing": "dashboard.customers.marketing_get",
-  "customer_addresses.list": "dashboard.customers.addresses_list",
-  "customer_tags.list": "dashboard.customers.tags_list",
 
   // ── Gift cards ──
   "gift_cards.list": "dashboard.resources.gift_cards.list",
@@ -214,7 +213,6 @@ export const STABLE_APP_OPERATIONS = {
   "objects.delete": "objects.delete",
 
   // ── Store settings and webhooks ──
-  "settings.get_business": "dashboard.settings.business_get",
   "languages.list": "dashboard.languages.list",
   "delivery_locations.import": "dashboard.delivery_locations.import",
   "webhook_subscriptions.list": "dashboard.resources.webhook_subscriptions.list",

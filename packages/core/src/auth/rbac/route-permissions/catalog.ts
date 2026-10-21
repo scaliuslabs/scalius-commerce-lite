@@ -99,6 +99,19 @@ export const CATALOG_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/collections/*/permanent": {
     DELETE: { permission: PERMISSIONS.COLLECTIONS_DELETE },
   },
+  // The stable app API's category and collection reads (resources-catalog-content.ts).
+  "/api/v1/admin/resources/categories": {
+    GET: { permission: PERMISSIONS.CATEGORIES_VIEW },
+  },
+  "/api/v1/admin/resources/categories/*": {
+    GET: { permission: PERMISSIONS.CATEGORIES_VIEW },
+  },
+  "/api/v1/admin/resources/collections": {
+    GET: { permission: PERMISSIONS.COLLECTIONS_VIEW },
+  },
+  "/api/v1/admin/resources/collections/*": {
+    GET: { permission: PERMISSIONS.COLLECTIONS_VIEW },
+  },
   // =============================================
   // Attributes API (under /api/v1/admin/)
   // =============================================

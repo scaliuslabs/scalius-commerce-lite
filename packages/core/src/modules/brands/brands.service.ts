@@ -9,7 +9,7 @@ import {
     safeBatch,
     type Database,
 } from "@scalius/database/client";
-import { and, asc, desc, eq, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
 import { containsText, handleOrNumberedCopy } from "../../utils/text-match";
 import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
@@ -233,34 +233,35 @@ export async function listBrandOptions(db: Database, options: { search?: string;
         .all();
 }
 
-export async function getBrandById(db: Database, id: string) {
-    const row = await db
-        .select({
-            id: brands.id,
-            name: brands.name,
-            slug: brands.slug,
-            description: brands.description,
-            status: brands.status,
-            sortOrder: brands.sortOrder,
-            metaTitle: brands.metaTitle,
-            metaDescription: brands.metaDescription,
-            canonicalPath: brands.canonicalPath,
-            noIndex: brands.noIndex,
-            excludeFromSitemap: brands.excludeFromSitemap,
-            listingTemplate: brands.listingTemplate,
-            revision: brands.revision,
-            productCount: productCountProjection(),
-            createdAt: sql<number>`CAST(${brands.createdAt} AS INTEGER)`,
-            updatedAt: sql<number>`CAST(${brands.updatedAt} AS INTEGER)`,
-            deletedAt: sql<number | null>`CAST(${brands.deletedAt} AS INTEGER)`,
-            storedLogoMediaId: brands.logoMediaId,
-            ...brandLogoColumns,
-        })
-        .from(brands)
-        .leftJoin(media, brandLogoJoinCondition())
-        .where(eq(brands.id, id))
-        .get();
-    if (!row) return null;
+const brandDetailColumns = () => ({
+    id: brands.id,
+    name: brands.name,
+    slug: brands.slug,
+    description: brands.description,
+    status: brands.status,
+    sortOrder: brands.sortOrder,
+    metaTitle: brands.metaTitle,
+    metaDescription: brands.metaDescription,
+    canonicalPath: brands.canonicalPath,
+    noIndex: brands.noIndex,
+    excludeFromSitemap: brands.excludeFromSitemap,
+    listingTemplate: brands.listingTemplate,
+    revision: brands.revision,
+    productCount: productCountProjection(),
+    createdAt: sql<number>`CAST(${brands.createdAt} AS INTEGER)`,
+    updatedAt: sql<number>`CAST(${brands.updatedAt} AS INTEGER)`,
+    deletedAt: sql<number | null>`CAST(${brands.deletedAt} AS INTEGER)`,
+    storedLogoMediaId: brands.logoMediaId,
+    ...brandLogoColumns,
+});
+
+function selectBrandDetails(db: Database) {
+    return db.select(brandDetailColumns()).from(brands).leftJoin(media, brandLogoJoinCondition());
+}
+
+type BrandDetailRow = Awaited<ReturnType<ReturnType<typeof selectBrandDetails>["all"]>>[number];
+
+function presentBrandDetail(row: BrandDetailRow) {
     const { logoMediaId, logoObjectKey, logoVariantWidth, logoAltText, logoWidth, logoHeight, storedLogoMediaId, ...brand } = row;
     return {
         ...brand,
@@ -271,6 +272,22 @@ export async function getBrandById(db: Database, id: string) {
         updatedAt: toIso(brand.updatedAt),
         deletedAt: toIso(brand.deletedAt),
     };
+}
+
+/** One brand, in the trash or not. */
+export async function getBrandById(db: Database, id: string) {
+    const row = await selectBrandDetails(db).where(eq(brands.id, id)).get();
+    return row ? presentBrandDetail(row) : null;
+}
+
+/** Brands by id (at most {@link BRAND_BATCH_LIMIT}), in the trash or not, in the order asked; unknown ids are left out. */
+export async function getBrandsByIds(db: Database, ids: readonly string[]) {
+    const unique = [...new Set(ids)];
+    if (unique.length === 0) return [];
+    if (unique.length > BRAND_BATCH_LIMIT) throw new ValidationError(`Read at most ${BRAND_BATCH_LIMIT} brands at once.`);
+    const rows = await selectBrandDetails(db).where(inArray(brands.id, unique)).all();
+    const byId = new Map(rows.map((row) => [row.id, presentBrandDetail(row)]));
+    return unique.flatMap((id) => byId.get(id) ?? []);
 }
 
 // ─────────────────────────────────────────

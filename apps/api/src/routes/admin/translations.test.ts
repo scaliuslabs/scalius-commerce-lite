@@ -55,8 +55,14 @@ describe("Settings → Languages", () => {
     await expect(published.json()).resolves.toMatchObject({ data: { language: { published: true } } });
     expect((await call("/admin/settings/languages/en", { method: "PATCH", body: { published: false } })).status).toBe(400);
 
-    const list = await (await call("/admin/settings/languages")).json() as { data: { items: Array<{ locale: string; isDefault: boolean }> } };
-    expect(list.data.items.map((language) => [language.locale, language.isDefault])).toEqual([["en", true], ["bn", false]]);
+    const list = await (await call("/admin/settings/languages")).json() as { data: { languages: Array<{ locale: string; isDefault: boolean }>; nextCursor: string | null } };
+    expect(list.data.languages.map((language) => [language.locale, language.isDefault])).toEqual([["en", true], ["bn", false]]);
+    expect(list.data.nextCursor).toBeNull();
+    // One page at a time: the default first, then by code.
+    const first = await (await call("/admin/settings/languages?limit=1")).json() as { data: { languages: Array<{ locale: string }>; nextCursor: string | null } };
+    expect(first.data.languages.map((language) => language.locale)).toEqual(["en"]);
+    const next = await (await call(`/admin/settings/languages?limit=1&cursor=${first.data.nextCursor}`)).json() as { data: { languages: Array<{ locale: string }>; nextCursor: string | null } };
+    expect(next.data).toEqual({ languages: [expect.objectContaining({ locale: "bn" })], nextCursor: null });
     expect((await call("/admin/settings/languages/bn", { method: "DELETE" })).status).toBe(200);
   });
 });

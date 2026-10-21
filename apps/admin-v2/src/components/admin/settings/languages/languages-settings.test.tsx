@@ -53,7 +53,7 @@ describe("languages settings", () => {
   });
 
   async function render(items: unknown[]) {
-    sdk.getApiV1AdminSettingsLanguages.mockImplementation(() => envelope({ items }));
+    sdk.getApiV1AdminSettingsLanguages.mockImplementation(() => envelope({ languages: items, nextCursor: null }));
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     await act(async () => {
       root.render(
