@@ -35,7 +35,12 @@ mirror a dashboard screen, an editor section or a summary card.
   receiver and an API reader see one representation, and a truncated
   delivery's `fetch` names the matching `get`. Lists page by cursor in
   `updatedAt, id` order (`updatedSince` starts a sync) and stop early before a
-  page would pass the response budget.
+  page would pass the response budget. Order, payment, refund, return,
+  shipment and fulfilment states are sealed enums
+  (`@scalius/shared/resource-states`): a new state is a reviewed additive
+  change. `paymentStatus` answers money questions and `fulfillmentStatus`
+  (with the fulfilments) hand-over questions; the order `status` is the
+  workflow stage that summarises both for people.
 - **Apps place orders for customers.** `dashboard.resources.orders.create`
   places a confirmed order the way staff do (stock reserved, tax and app
   discounts priced, app attributes checked) for a `customerId`, whose contact

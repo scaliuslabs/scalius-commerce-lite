@@ -66,6 +66,15 @@ function sealed<T extends EventRepresentationType>(type: T, value: EventRepresen
   return buildEventRepresentation(type, value, allProtectedData());
 }
 
+/**
+ * A stored state column read as its sealed enum. The sealed parse in `sealed`
+ * refuses a value outside the enum (a bug, never a guess); the stored lists
+ * mirror the sealed ones (`packages/database/__tests__/resource-states.test.ts`).
+ */
+function storedState<T extends EventRepresentationType, K extends keyof EventRepresentationInput<T>>(_type: T, _field: K, value: string): EventRepresentationInput<T>[K] {
+  return value as EventRepresentationInput<T>[K];
+}
+
 type OrderRow = typeof orders.$inferSelect;
 
 function shippingAddress(order: OrderRow) {
@@ -175,9 +184,9 @@ function orderFrom(order: OrderRow, lines: readonly OrderLineRow[]) {
   return sealed("order", {
     id: order.id,
     orderNumber: order.orderNumber ?? null,
-    status: order.status,
-    paymentStatus: order.paymentStatus,
-    fulfillmentStatus: order.fulfillmentStatus,
+    status: storedState("order", "status", order.status),
+    paymentStatus: storedState("order", "paymentStatus", order.paymentStatus),
+    fulfillmentStatus: storedState("order", "fulfillmentStatus", order.fulfillmentStatus),
     channel: order.channel,
     salesChannelId: order.salesChannelId,
     marketId: order.marketId ?? null,
@@ -536,6 +545,7 @@ async function readShipmentRepresentations(db: Database, where: { id: string } |
     .orderBy(asc(deliveryShipments.createdAt), asc(deliveryShipments.id)).limit(MAX_LINES).all();
   return rows.map(({ lastChecked, ...fields }) => sealed("shipment", {
     ...fields,
+    status: storedState("shipment", "status", fields.status),
     providerId: fields.providerId ?? null,
     rawStatus: fields.rawStatus ?? null,
     externalId: fields.externalId ?? null,
@@ -566,9 +576,9 @@ async function readPaymentRepresentations(db: Database, where: { id: string } | 
   return rows.map((row) => sealed("payment", {
     id: row.id,
     orderId: row.orderId,
-    status: row.status,
+    status: storedState("payment", "status", row.status),
     method: row.paymentMethod,
-    type: row.paymentType,
+    type: storedState("payment", "type", row.paymentType),
     currency: row.currency,
     amountMinor: row.amountMinor,
     settlementCurrency: row.settlementCurrency,

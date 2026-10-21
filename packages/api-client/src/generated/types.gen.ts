@@ -2951,10 +2951,10 @@ export type BuyerWarrantyClaim = {
 export type OrderResource = {
     id: string;
     orderNumber: number | null;
-    status: string;
-    paymentStatus: string;
-    fulfillmentStatus: string;
-    channel: string;
+    status: 'pending' | 'processing' | 'confirmed' | 'shipped' | 'delivered' | 'completed' | 'cancelled' | 'returned' | 'refunded' | 'incomplete';
+    paymentStatus: 'unpaid' | 'partial' | 'paid' | 'partially_refunded' | 'refunded' | 'failed';
+    fulfillmentStatus: 'pending' | 'partial' | 'complete';
+    channel: 'online_store' | 'admin' | 'pos' | 'agent' | 'app';
     salesChannelId: string;
     marketId: string | null;
     currency: string;
@@ -3039,9 +3039,9 @@ export type OrderResource = {
 export type PaymentResource = {
     id: string;
     orderId: string;
-    status: string;
+    status: 'pending' | 'confirmed' | 'succeeded' | 'failed' | 'refunded' | 'cancelled' | 'authorized';
     method: string;
-    type: string;
+    type: 'full' | 'deposit' | 'balance' | 'refund';
     currency: string;
     amountMinor: number;
     settlementCurrency: string;
@@ -3054,8 +3054,8 @@ export type PaymentResource = {
 export type FulfillmentResource = {
     id: string;
     orderId: string;
-    kind: string;
-    status: string;
+    kind: 'ship' | 'pickup' | 'digital' | 'gift_card' | 'service';
+    status: 'active' | 'voided';
     shipmentId: string | null;
     locationId: string | null;
     currency: string;
@@ -3074,7 +3074,7 @@ export type ShipmentResource = {
     orderId: string;
     providerId: string | null;
     providerType: string;
-    status: string;
+    status: 'pending' | 'pickup_assigned' | 'picked_up' | 'pickup_failed' | 'in_transit' | 'out_for_delivery' | 'delivered' | 'partial_delivered' | 'delivery_failed' | 'on_hold' | 'failed' | 'cancelled' | 'returned' | 'unknown' | 'creating' | 'processing' | 'reconcile_required';
     rawStatus: string | null;
     externalId: string | null;
     trackingId: string | null;
@@ -3340,10 +3340,10 @@ export type GiftCardTransactionResource = {
 export type RefundResource = {
     id: string;
     orderId: string;
-    status: string;
+    status: 'pending' | 'refunded' | 'failed' | 'partial';
     currency: string;
     amountMinor: number;
-    settlement: string;
+    settlement: 'original' | 'store_credit';
     lines: Array<{
         orderItemId: string;
         variantId: string | null;

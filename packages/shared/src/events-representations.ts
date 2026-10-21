@@ -13,6 +13,21 @@
 
 import { z } from "zod";
 import { PROTECTED_FIELD_KEYWORD, protectedPathsOf, redactProtectedData, type ProtectedCustomerData, type ProtectedPath } from "./plugins/protected-data";
+import {
+  FULFILLMENT_RECORD_STATUSES,
+  FULFILLMENT_STATUSES,
+  FULFILLMENT_TYPES,
+  ORDER_CHANNELS,
+  ORDER_STATUSES,
+  PAYMENT_RECORD_STATUSES,
+  PAYMENT_RECORD_TYPES,
+  PAYMENT_STATUSES,
+  REFUND_SETTLEMENTS,
+  REFUND_STATUSES,
+  RETURN_SOURCES,
+  RETURN_STATUSES,
+  SHIPMENT_STATUSES,
+} from "./resource-states";
 
 const id = z.string().min(1).max(128);
 const text = z.string().max(4000);
@@ -66,10 +81,13 @@ const orderLineSchema = z.object({
 export const orderRepresentationSchema = z.object({
   id,
   orderNumber: z.number().int().nullable(),
-  status: state,
-  paymentStatus: state,
-  fulfillmentStatus: state,
-  channel: state,
+  /** The workflow stage. Money questions read `paymentStatus`, hand-over questions `fulfillmentStatus` (`resource-states.ts`). */
+  status: z.enum(ORDER_STATUSES),
+  /** The authority for money: paid, partly paid, refunded. */
+  paymentStatus: z.enum(PAYMENT_STATUSES),
+  /** The authority for hand-over, with the order's fulfilments. */
+  fulfillmentStatus: z.enum(FULFILLMENT_STATUSES),
+  channel: z.enum(ORDER_CHANNELS),
   salesChannelId: id,
   marketId: id.nullable(),
   currency,
@@ -118,9 +136,9 @@ export const orderRepresentationSchema = z.object({
 export const returnRepresentationSchema = z.object({
   id,
   orderId: id,
-  status: state,
+  status: z.enum(RETURN_STATUSES),
   reason: text,
-  source: state,
+  source: z.enum(RETURN_SOURCES),
   /** Advances with every change: the `expectedRevision` a write takes. */
   revision: z.number().int(),
   requestedAt: iso,
@@ -255,8 +273,8 @@ export const inventoryTransferRepresentationSchema = z.object({
 export const fulfillmentRepresentationSchema = z.object({
   id,
   orderId: id,
-  kind: state,
-  status: state,
+  kind: z.enum(FULFILLMENT_TYPES),
+  status: z.enum(FULFILLMENT_RECORD_STATUSES),
   shipmentId: id.nullable(),
   locationId: id.nullable(),
   currency,
@@ -275,11 +293,11 @@ export const refundRepresentationSchema = z.object({
   id,
   orderId: id,
   /** `pending` until each of its payments settles; then `refunded`, `failed` or `partial`. */
-  status: state,
+  status: z.enum(REFUND_STATUSES),
   currency,
   amountMinor: minor,
   /** `original` (back to the payments) or `store_credit` (one new gift card). */
-  settlement: state,
+  settlement: z.enum(REFUND_SETTLEMENTS),
   lines: z.array(z.object({ orderItemId: id, variantId: id.nullable(), quantity: z.number().int() })),
   paymentIds: z.array(id),
   createdAt: iso,
@@ -292,7 +310,8 @@ export const shipmentRepresentationSchema = z.object({
   /** A qualified app courier id (`<app id>:<provider id>`) or a built-in courier's. */
   providerId: id.nullable(),
   providerType: state,
-  status: state,
+  /** The normalized state; `rawStatus` is the courier's own word. */
+  status: z.enum(SHIPMENT_STATUSES),
   rawStatus: text.nullable(),
   externalId: text.nullable(),
   trackingId: text.nullable(),
@@ -309,9 +328,9 @@ export const shipmentRepresentationSchema = z.object({
 export const paymentRepresentationSchema = z.object({
   id,
   orderId: id,
-  status: state,
+  status: z.enum(PAYMENT_RECORD_STATUSES),
   method: text,
-  type: state,
+  type: z.enum(PAYMENT_RECORD_TYPES),
   currency,
   amountMinor: minor,
   settlementCurrency: currency,

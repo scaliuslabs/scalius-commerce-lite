@@ -19259,13 +19259,20 @@
     },
     "kind": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "ship",
+      "pickup",
+      "digital",
+      "gift_card",
+      "service"
+     ]
     },
     "status": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "active",
+      "voided"
+     ]
     },
     "shipmentId": {
      "type": "string",
@@ -20287,23 +20294,47 @@
     },
     "status": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "pending",
+      "processing",
+      "confirmed",
+      "shipped",
+      "delivered",
+      "completed",
+      "cancelled",
+      "returned",
+      "refunded",
+      "incomplete"
+     ]
     },
     "paymentStatus": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "unpaid",
+      "partial",
+      "paid",
+      "partially_refunded",
+      "refunded",
+      "failed"
+     ]
     },
     "fulfillmentStatus": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "pending",
+      "partial",
+      "complete"
+     ]
     },
     "channel": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "online_store",
+      "admin",
+      "pos",
+      "agent",
+      "app"
+     ]
     },
     "salesChannelId": {
      "type": "string",
@@ -20910,8 +20941,15 @@
     },
     "status": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "pending",
+      "confirmed",
+      "succeeded",
+      "failed",
+      "refunded",
+      "cancelled",
+      "authorized"
+     ]
     },
     "method": {
      "type": "string",
@@ -20919,8 +20957,12 @@
     },
     "type": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "full",
+      "deposit",
+      "balance",
+      "refund"
+     ]
     },
     "currency": {
      "type": "string",
@@ -21296,8 +21338,12 @@
     },
     "status": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "pending",
+      "refunded",
+      "failed",
+      "partial"
+     ]
     },
     "currency": {
      "type": "string",
@@ -21309,8 +21355,10 @@
     },
     "settlement": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "original",
+      "store_credit"
+     ]
     },
     "lines": {
      "type": "array",
@@ -21399,8 +21447,25 @@
     },
     "status": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "pending",
+      "pickup_assigned",
+      "picked_up",
+      "pickup_failed",
+      "in_transit",
+      "out_for_delivery",
+      "delivered",
+      "partial_delivered",
+      "delivery_failed",
+      "on_hold",
+      "failed",
+      "cancelled",
+      "returned",
+      "unknown",
+      "creating",
+      "processing",
+      "reconcile_required"
+     ]
     },
     "rawStatus": {
      "type": "string",
